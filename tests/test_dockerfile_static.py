@@ -9,5 +9,6 @@ def test_dockerfile_invariants():
     assert "COPY requirements.txt" in dockerfile
     assert "pip install --no-cache-dir -r requirements.txt" in dockerfile
     assert "COPY app ./app" in dockerfile
+    assert "COPY public ./public" in dockerfile
     assert "EXPOSE 8787" in dockerfile
     assert "python -m app.main" in dockerfile or "\"python\", \"-m\", \"app.main\"" in dockerfile

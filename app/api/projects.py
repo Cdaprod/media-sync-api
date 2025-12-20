@@ -7,9 +7,8 @@ Example call:
 
 from __future__ import annotations
 
-from pathlib import Path
+import logging
 from typing import List
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -17,6 +16,9 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.storage.index import load_index, seed_index
 from app.storage.paths import ensure_subdirs, project_path, validate_project_name
+
+
+logger = logging.getLogger("media_sync_api.projects")
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -29,6 +31,10 @@ class ProjectCreateRequest(BaseModel):
 class ProjectResponse(BaseModel):
     name: str
     index_exists: bool
+    instructions: str | None = Field(
+        None,
+        description="Human-friendly guidance about next steps for the project.",
+    )
 
 
 @router.get("", response_model=List[ProjectResponse])
@@ -40,8 +46,16 @@ async def list_projects() -> List[ProjectResponse]:
         if not path.is_dir():
             continue
         index_exists = (path / "index.json").exists()
-        projects.append(ProjectResponse(name=path.name, index_exists=index_exists))
-    return sorted(projects, key=lambda p: p.name)
+        projects.append(
+            ProjectResponse(
+                name=path.name,
+                index_exists=index_exists,
+                instructions="Uploads land in ingest/originals; use /public/index.html for the adapter UI.",
+            )
+        )
+    sorted_projects = sorted(projects, key=lambda p: p.name)
+    logger.info("listed_projects", extra={"count": len(sorted_projects)})
+    return sorted_projects
 
 
 @router.post("", response_model=ProjectResponse, status_code=201)
@@ -59,7 +73,12 @@ async def create_project(payload: ProjectCreateRequest) -> ProjectResponse:
     index_path = target / "index.json"
     if not index_path.exists():
         seed_index(target, name, notes=payload.notes)
-    return ProjectResponse(name=name, index_exists=index_path.exists())
+    logger.info("project_created", extra={"project": name, "path": str(target)})
+    return ProjectResponse(
+        name=name,
+        index_exists=index_path.exists(),
+        instructions=f"Use /api/projects/{name}/upload then reindex after manual edits.",
+    )
 
 
 @router.get("/{project_name}")
@@ -74,6 +93,9 @@ async def get_project(project_name: str):
     if not target.exists():
         raise HTTPException(status_code=404, detail="Project not found")
     try:
-        return load_index(target)
+        payload = load_index(target)
+        payload["instructions"] = "Uploads append to index.json; run /reindex if you change files manually."
+        logger.info("project_loaded", extra={"project": name})
+        return payload
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Missing index") from exc

@@ -272,3 +272,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Uploads log manifest events, enforce upload size limits, and track index counts (videos, duplicates skipped, removed records).
 - Reindex cleans up missing files from both the index and sqlite manifest.
 - Comprehensive pytest suite added under `tests/` plus Makefile and dev requirements for local runs.
+- Static adapter UI lives at `/public/index.html` (also served at `/`) and ships with the image; keep it in sync with README usage steps.
+- API responses now include `instructions` hints where possible; keep them actionable and LAN-specific.
+- Logging namespace `media_sync_api.*` emits INFO-level breadcrumbs for project creation, uploads, duplicates, sync events, and reindex runs.

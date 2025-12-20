@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>media-sync-api adapter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; line-height: 1.6; color: #0f172a; }
+    code { background: #e2e8f0; padding: 0.15rem 0.35rem; border-radius: 4px; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+    h1, h2, h3 { color: #0b132b; }
+    .callout { background: #f8fafc; border-left: 4px solid #2563eb; padding: 0.75rem 1rem; margin: 1rem 0; }
+    .step { margin-bottom: 1.25rem; }
+    ul { margin-top: 0.35rem; }
+  </style>
+</head>
+<body>
+  <h1>media-sync-api</h1>
+  <p>This lightweight, LAN-only API sits between your phone and host project storage. Mount <code>../Projects</code> on the host to <code>/data/projects</code> in the container, then use the endpoints below or the iPhone Shortcut flow to ingest media reliably.</p>
+
+  <div class="callout">
+    <strong>Host/LAN defaults</strong><br />
+    API: <code>http://192.168.0.25:8787</code><br />
+    Projects root: Host <code>B:\Video\Projects</code> → Container <code>/data/projects</code>
+  </div>
+
+  <h2>Playbook: verify → create projects → ingest → dedupe → reindex</h2>
+
+  <div class="step">
+    <h3>1) Verify it is running and writing to your Projects folder</h3>
+    <ul>
+      <li>Health: <code>http://192.168.0.25:8787/health</code></li>
+      <li>List projects: <code>http://192.168.0.25:8787/api/projects</code></li>
+    </ul>
+    <p>If <code>/api/projects</code> returns an empty list, create one and confirm <code>index.json</code>, <code>ingest/</code>, and <code>_manifest/</code> exist under <code>../Projects/&lt;project&gt;</code> on the host.</p>
+  </div>
+
+  <div class="step">
+    <h3>2) Create your first project (API)</h3>
+    <p>Use curl from the host:</p>
+    <pre>curl -X POST http://127.0.0.1:8787/api/projects \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"Project-1-Public-Accountability\",\"notes\":\"Main production ingest\"}"</pre>
+    <p>Then confirm: <code>curl http://127.0.0.1:8787/api/projects</code></p>
+  </div>
+
+  <div class="step">
+    <h3>3) iPhone Shortcut outline</h3>
+    <p>Select project → optional create → prompt for label → pick videos → upload → optional sync log.</p>
+    <ol>
+      <li>GET <code>/api/projects</code> → build list (append "➕ Create New Project").</li>
+      <li>If creating: POST <code>/api/projects</code> with <code>{ "name": NewName, "notes": Notes }</code>.</li>
+      <li>Ask for input <em>EntryLabel</em>, choose videos.</li>
+      <li>Optional audit: POST <code>/api/projects/{Project}/sync-album</code> with JSON <code>{ "album_name": EntryLabel, "device": "iphone", "note": "Shortcut ingest" }</code>.</li>
+      <li>For each file: POST <code>/api/projects/{Project}/upload</code> form field <code>file</code>.</li>
+    </ol>
+    <p>No duplicate handling is needed client-side—the API hashes and skips repeats automatically.</p>
+  </div>
+
+  <div class="step">
+    <h3>4) Prove de-dupe is working</h3>
+    <p>Upload 2–3 videos, then run the Shortcut again selecting the same files. Expected:</p>
+    <ul>
+      <li>Second run returns <code>"status": "duplicate"</code>.</li>
+      <li><code>index.json</code> increments <code>duplicates_skipped</code>.</li>
+      <li>No new media is stored.</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <h3>5) Sync album ➜ project folder (practical meaning)</h3>
+    <p>Pick the album in Photos, upload through the Shortcut, and let the API de-dupe. For a future "true sync," send filename/size/date fingerprints and receive "upload-needed" decisions.</p>
+  </div>
+
+  <div class="step">
+    <h3>6) Reindex after manual changes</h3>
+    <p>Any time you drag, rename, or delete files manually, run:</p>
+    <pre>curl -X POST http://127.0.0.1:8787/api/projects/Project-1-Public-Accountability/reindex</pre>
+    <p>This reconciles disk ↔ sqlite, updates counts, and prunes missing records.</p>
+  </div>
+
+  <div class="step">
+    <h3>7) Recommended daily workflow</h3>
+    <ul>
+      <li>Create/select project before recording.</li>
+      <li>Use the Shortcut to push clips; let API de-dupe.</li>
+      <li>Run <code>/reindex</code> if you reorganize manually.</li>
+      <li>Use <code>_manifest/files.jsonl</code> for auditing.</li>
+      <li>Treat <code>ingest/originals/</code> as the source of truth.</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <h3>8) Quick troubleshooting</h3>
+    <ul>
+      <li>iPhone cannot reach API: container must bind <code>0.0.0.0:8787</code> and firewall must allow it.</li>
+      <li>Projects not appearing: verify the volume mount points to your Projects folder.</li>
+      <li>Upload fails: file exceeds <code>MEDIA_SYNC_MAX_UPLOAD_MB</code> or extension unsupported.</li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    Paste your <code>docker-compose.yaml</code> volume line and a sample project path if you need confirmation the mount is correct. The API will respond with guidance in <code>instructions</code> fields too.</div>
+</body>
+</html>

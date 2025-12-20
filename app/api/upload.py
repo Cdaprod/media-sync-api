@@ -12,6 +12,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+import logging
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -21,6 +23,9 @@ from app.storage.index import append_file_entry, load_index, save_index, bump_co
 from app.storage.paths import ensure_subdirs, project_path, validate_project_name, safe_filename
 
 router = APIRouter(prefix="/api/projects", tags=["upload"])
+
+
+logger = logging.getLogger("media_sync_api.upload")
 
 
 @router.post("/{project_name}/upload")
@@ -65,9 +70,18 @@ async def upload_file(project_name: str, file: UploadFile = File(...)):
         bump_count(index, "duplicates_skipped", amount=1)
         save_index(project, index)
         append_event(project, "upload_duplicate_skipped", {"path": existing_path, "sha256": sha})
+        logger.info(
+            "upload_duplicate",
+            extra={"project": name, "sha256": sha, "path": existing_path, "bytes": written},
+        )
         return JSONResponse(
             status_code=200,
-            content={"status": "duplicate", "path": existing_path, "sha256": sha},
+            content={
+                "status": "duplicate",
+                "path": existing_path,
+                "sha256": sha,
+                "instructions": "File already recorded; you can safely retry uploads or run /reindex after manual edits.",
+            },
         )
 
     dest_path = ingest_dir / filename
@@ -83,8 +97,17 @@ async def upload_file(project_name: str, file: UploadFile = File(...)):
     }
     append_file_entry(project, entry)
     append_event(project, "upload_ingested", entry)
+    logger.info(
+        "upload_stored",
+        extra={"project": name, "sha256": sha, "path": entry["relative_path"], "bytes": entry["size"]},
+    )
 
-    return {"status": "stored", "path": entry["relative_path"], "sha256": sha}
+    return {
+        "status": "stored",
+        "path": entry["relative_path"],
+        "sha256": sha,
+        "instructions": f"Use /api/projects/{name}/sync-album to log runs and /reindex if you move files.",
+    }
 
 
 @router.post("/{project_name}/sync-album")
@@ -94,6 +117,7 @@ async def sync_album(project_name: str, payload: dict):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    settings = get_settings()
     project = project_path(settings.project_root, name)
     ensure_subdirs(project, ["_manifest"])
     events_path = project / "_manifest/events.jsonl"
@@ -104,4 +128,9 @@ async def sync_album(project_name: str, payload: dict):
     }
     with events_path.open("a", encoding="utf-8") as f:
         f.write(f"{record}\n")
-    return {"status": "recorded", "event": record}
+    logger.info("sync_album_recorded", extra={"project": name, "keys": list(payload.keys())})
+    return {
+        "status": "recorded",
+        "event": record,
+        "instructions": "Uploads still flow through /upload; this endpoint is for audit trail entries.",
+    }

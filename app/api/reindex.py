@@ -6,6 +6,8 @@ Example call:
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from app.config import get_settings
@@ -13,6 +15,9 @@ from app.storage.paths import project_path, validate_project_name
 from app.storage.reindex import reindex_project
 
 router = APIRouter(prefix="/api/projects", tags=["reindex"])
+
+
+logger = logging.getLogger("media_sync_api.reindex")
 
 
 @router.post("/{project_name}/reindex")
@@ -28,4 +33,7 @@ async def reindex(project_name: str):
         raise HTTPException(status_code=404, detail="Project not found")
     if not (project / "index.json").exists():
         raise HTTPException(status_code=404, detail="Project index missing")
-    return reindex_project(project)
+    result = reindex_project(project)
+    result["instructions"] = "Use this after manual file moves; see /public/index.html for workflow steps."
+    logger.info("project_reindexed", extra={"project": name, **{k: result.get(k) for k in ("indexed", "removed")}})
+    return result
