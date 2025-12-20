@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  media-sync-api:
+    build: .
+    container_name: media-sync-api
+    ports:
+      - "8787:8787"
+    volumes:
+      - "B:/Video/Projects:/data/projects"
+    environment:
+      - PROJECT_ROOT=/data/projects
+      - PORT=8787
+    restart: always

@@ -236,7 +236,7 @@ docker compose down
 1. ✅ Compose + volume mount stable on Windows (`B:` drive).
 2. ✅ Upload endpoint w/ sha256 de-dupe to sqlite.
 3. ✅ Project create/list/get + seed index.
-4. ⏭ Reindex endpoint (scan disk, reconcile db/index).
+4. ✅ Reindex endpoint (scan disk, reconcile db/index).
 5. ⏭ Minimal web UI (optional) for local admin.
 6. ⏭ Optional OBS integration + Resolve bridge (separate services).
 
@@ -257,5 +257,11 @@ If anything conflicts:
 - **B:\Video\Projects** is the canonical store.
 - Container filesystem is disposable.
 - LAN-only first. Everything else is secondary.
+
+### Latest Implementation Notes (2024-06-06)
+- FastAPI app lives under `app/` with routers for projects, upload, and reindex.
+- Dedupe uses sqlite stored at `<project>/_manifest/manifest.db` with sha256 primary key.
+- `index.json` is created on project init and appended to on upload/reindex; reindex rescans `ingest/originals`.
+- Docker Compose binds `B:/Video/Projects` to `/data/projects` and exposes `8787`.
 
 The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerfile** that uses `B:/Video/Projects:/data/projects` and binds `0.0.0.0:8787`.
