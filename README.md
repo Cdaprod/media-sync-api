@@ -53,7 +53,7 @@ Create a virtual environment and install dependencies:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 Run the API locally:
@@ -63,7 +63,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8787
 
 Run tests:
 ```bash
-pytest
+make test
 ```
 
 ## License

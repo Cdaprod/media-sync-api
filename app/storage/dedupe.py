@@ -55,3 +55,25 @@ def compute_sha256_from_path(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             hash_obj.update(chunk)
     return hash_obj.hexdigest()
+
+
+def get_recorded_paths(db_path: Path) -> dict[str, str]:
+    """Return mapping of sha256 -> relative_path from the manifest database."""
+
+    ensure_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT sha256, relative_path FROM files").fetchall()
+    return {row["sha256"]: row["relative_path"] for row in rows}
+
+
+def remove_file_record(db_path: Path, sha256: str, relative_path: str) -> None:
+    """Remove a hash record if it matches the stored relative path."""
+
+    ensure_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "DELETE FROM files WHERE sha256 = ? AND relative_path = ?",
+            (sha256, relative_path),
+        )
+        conn.commit()

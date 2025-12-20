@@ -265,3 +265,10 @@ If anything conflicts:
 - Docker Compose binds `B:/Video/Projects` to `/data/projects` and exposes `8787`.
 
 The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerfile** that uses `B:/Video/Projects:/data/projects` and binds `0.0.0.0:8787`.
+
+### Latest Implementation Notes (2024-06-21)
+- Environment variables renamed to `MEDIA_SYNC_PROJECTS_ROOT`, `MEDIA_SYNC_PORT`, and `MEDIA_SYNC_MAX_UPLOAD_MB` (legacy fallbacks remain for compatibility).
+- Health endpoint now available at `/health` with service metadata.
+- Uploads log manifest events, enforce upload size limits, and track index counts (videos, duplicates skipped, removed records).
+- Reindex cleans up missing files from both the index and sqlite manifest.
+- Comprehensive pytest suite added under `tests/` plus Makefile and dev requirements for local runs.
