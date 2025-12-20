@@ -8,6 +8,6 @@ services:
     volumes:
       - "B:/Video/Projects:/data/projects"
     environment:
-      - PROJECT_ROOT=/data/projects
-      - PORT=8787
+      - MEDIA_SYNC_PROJECTS_ROOT=/data/projects
+      - MEDIA_SYNC_PORT=8787
     restart: always

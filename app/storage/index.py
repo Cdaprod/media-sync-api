@@ -9,16 +9,32 @@ Example:
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any, Dict, List
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Iterable, List
 
 
 INDEX_FILENAME = "index.json"
+DEFAULT_COUNTS = {"videos": 0, "duplicates_skipped": 0, "removed_missing_records": 0}
+EVENTS_PATH = "_manifest/events.jsonl"
 
 
 def index_file_path(project_path: Path) -> Path:
     return project_path / INDEX_FILENAME
+
+
+def _ensure_counts(index: Dict[str, Any]) -> Dict[str, Any]:
+    counts = index.get("counts", {}) or {}
+    for key, value in DEFAULT_COUNTS.items():
+        counts.setdefault(key, value)
+    index["counts"] = counts
+    return index
+
+
+def bump_count(index: Dict[str, Any], key: str, amount: int = 1) -> None:
+    counts = _ensure_counts(index).get("counts", {})
+    counts[key] = max(0, counts.get(key, 0) + amount)
+    index["counts"] = counts
 
 
 def load_index(project_path: Path) -> Dict[str, Any]:
@@ -26,7 +42,8 @@ def load_index(project_path: Path) -> Dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Missing index for project at {project_path}")
     with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    return _ensure_counts(data)
 
 
 def save_index(project_path: Path, index: Dict[str, Any]) -> None:
@@ -43,6 +60,7 @@ def seed_index(project_path: Path, project_name: str, notes: str | None = None) 
         "notes": notes or "",
         "created_at": now,
         "files": [],
+        "counts": DEFAULT_COUNTS.copy(),
     }
     save_index(project_path, data)
     return data
@@ -53,5 +71,33 @@ def append_file_entry(project_path: Path, entry: Dict[str, Any]) -> Dict[str, An
     files: List[Dict[str, Any]] = index.get("files", [])
     files.append(entry)
     index["files"] = files
+    bump_count(index, "videos", amount=1)
     save_index(project_path, index)
     return index
+
+
+def remove_entries(project_path: Path, relative_paths: Iterable[str]) -> Dict[str, Any]:
+    index = load_index(project_path)
+    paths_to_remove = set(relative_paths)
+    files: List[Dict[str, Any]] = [
+        entry for entry in index.get("files", []) if entry.get("relative_path") not in paths_to_remove
+    ]
+    removed = len(index.get("files", [])) - len(files)
+    index["files"] = files
+    if removed:
+        bump_count(index, "videos", amount=-removed)
+        bump_count(index, "removed_missing_records", amount=removed)
+    save_index(project_path, index)
+    return index
+
+
+def append_event(project_path: Path, event: str, payload: Dict[str, Any]) -> None:
+    events_path = project_path / EVENTS_PATH
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": event,
+        "payload": payload,
+    }
+    with events_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")

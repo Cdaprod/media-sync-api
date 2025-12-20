@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app.config import get_settings
 from app.storage.index import load_index, seed_index
 from app.storage.paths import ensure_subdirs, project_path, validate_project_name
 
@@ -33,6 +33,7 @@ class ProjectResponse(BaseModel):
 
 @router.get("", response_model=List[ProjectResponse])
 async def list_projects() -> List[ProjectResponse]:
+    settings = get_settings()
     root = settings.project_root
     projects = []
     for path in root.iterdir():
@@ -50,6 +51,7 @@ async def create_project(payload: ProjectCreateRequest) -> ProjectResponse:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    settings = get_settings()
     target = project_path(settings.project_root, name)
     target.mkdir(parents=True, exist_ok=True)
     ensure_subdirs(target, ["ingest/originals", "_manifest"])
@@ -67,6 +69,7 @@ async def get_project(project_name: str):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    settings = get_settings()
     target = project_path(settings.project_root, name)
     if not target.exists():
         raise HTTPException(status_code=404, detail="Project not found")
