@@ -7,10 +7,12 @@ import yaml
 
 def test_compose_invariants():
     content = yaml.safe_load(Path("docker-compose.yml").read_text())
+    assert "version" not in content
     services = content.get("services", {})
     assert "media-sync-api" in services
     service = services["media-sync-api"]
 
+    assert service.get("pull_policy") == "never"
     assert service.get("restart") == "always"
     assert "8787:8787" in service.get("ports", [])
 

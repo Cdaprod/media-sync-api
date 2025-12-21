@@ -275,3 +275,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Static adapter UI lives at `/public/index.html` (also served at `/`) and ships with the image; keep it in sync with README usage steps.
 - API responses now include `instructions` hints where possible; keep them actionable and LAN-specific.
 - Logging namespace `media_sync_api.*` emits INFO-level breadcrumbs for project creation, uploads, duplicates, sync events, and reindex runs.
+- `docker-compose.yml` drops the obsolete `version` key and sets `pull_policy: never` on the service so `docker compose up -d` works without registry authentication.
