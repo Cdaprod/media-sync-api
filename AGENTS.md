@@ -298,3 +298,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Static adapter at `/public/index.html` now includes a browser-native explorer to list projects, browse media, and play clips inline.
 - Tests cover media listing/streaming and auto-organize idempotency; keep adding coverage with new endpoints.
 - Reindex endpoint now accepts GET in addition to POST so manual filesystem edits can be reconciled directly from a browser.
+
+### Latest Implementation Notes (2025-02-21)
+- Root-level `GET|POST /reindex` reindexes every enabled source and project, seeding missing indexes and skipping invalid directory names.
+- Bulk reindex responses now summarize indexed files/projects across sources; logging uses `project_reindexed_bulk` and `root_reindex_complete` events.
+- Tests cover cross-source root reindexing to ensure manual file drops are indexed everywhere.

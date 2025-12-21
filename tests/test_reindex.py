@@ -55,3 +55,43 @@ def test_reindex_allows_get_and_indexes_manual_moves(client, env_settings: Path)
 
     index_data = json.loads((project_dir / "index.json").read_text())
     assert any(entry["relative_path"] == "ingest/originals/relocated.mp4" for entry in index_data["files"])
+
+
+def test_root_reindex_scans_all_sources(client, env_settings: Path):
+    primary = client.post("/api/projects", json={"name": "bulk-primary"})
+    assert primary.status_code == 201
+    primary_name = primary.json()["name"]
+
+    secondary_root = env_settings.parent / "secondary-projects"
+    secondary_root.mkdir(parents=True, exist_ok=True)
+    secondary_source = client.post(
+        "/api/sources",
+        json={"name": "secondary", "root": str(secondary_root), "type": "local"},
+    )
+    assert secondary_source.status_code == 201
+
+    secondary = client.post(
+        "/api/projects?source=secondary",
+        json={"name": "bulk-secondary"},
+    )
+    assert secondary.status_code == 201
+    secondary_name = secondary.json()["name"]
+
+    primary_dir = env_settings / primary_name / "ingest" / "originals"
+    secondary_dir = secondary_root / secondary_name / "ingest" / "originals"
+    primary_dir.mkdir(parents=True, exist_ok=True)
+    secondary_dir.mkdir(parents=True, exist_ok=True)
+    (primary_dir / "manual.mov").write_bytes(b"primary-bytes")
+    (secondary_dir / "manual.mov").write_bytes(b"secondary-bytes")
+
+    response = client.post("/reindex")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["indexed_projects"] >= 2
+    assert payload["indexed_files"] >= 2
+
+    primary_index = json.loads((env_settings / primary_name / "index.json").read_text())
+    assert any(entry["relative_path"] == "ingest/originals/manual.mov" for entry in primary_index["files"])
+
+    secondary_index = json.loads((secondary_root / secondary_name / "index.json").read_text())
+    assert any(entry["relative_path"] == "ingest/originals/manual.mov" for entry in secondary_index["files"])

@@ -76,7 +76,13 @@ curl http://127.0.0.1:8787/api/projects/Project-1-Public-Accountability/reindex
 ```
 Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you move/rename/delete files manually.
 
-7) Recommended daily workflow
+7) Reindex everything in one sweep
+```bash
+curl http://127.0.0.1:8787/reindex
+```
+Run this to reconcile every enabled source and project after bulk filesystem edits.
+
+8) Recommended daily workflow
 - Create/select project before recording
 - Use the Shortcut to push clips; let the API de-dupe
 - Run `/reindex` if you reorganize manually
@@ -98,6 +104,7 @@ Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
+- `GET|POST /reindex` – reconcile every enabled source and project in one sweep
 - `POST /api/projects/auto-organize` – move loose files sitting in the projects root into `Unsorted-Loose` and reindex
 - `GET /api/sources` – list configured project roots and their accessibility
 - `POST /api/sources` – register an additional source (e.g., NAS share mounted on the host)
