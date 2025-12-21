@@ -24,6 +24,7 @@ from app.storage.paths import (
     validate_project_name,
 )
 from app.storage.reindex import reindex_project
+from app.storage.sources import SourceRegistry
 
 
 logger = logging.getLogger("media_sync_api.projects")
@@ -38,6 +39,8 @@ class ProjectCreateRequest(BaseModel):
 
 class ProjectResponse(BaseModel):
     name: str
+    source: str
+    source_accessible: bool
     index_exists: bool
     instructions: str | None = Field(
         None,
@@ -46,35 +49,49 @@ class ProjectResponse(BaseModel):
 
 
 @router.get("", response_model=List[ProjectResponse])
-async def list_projects() -> List[ProjectResponse]:
+async def list_projects(source: str | None = None) -> List[ProjectResponse]:
     settings = get_settings()
-    root = settings.project_root
-    _bootstrap_existing_projects(root)
-    projects = []
-    for path in root.iterdir():
-        if not path.is_dir():
+    registry = SourceRegistry(settings.project_root)
+    try:
+        sources = [registry.require(source)] if source else registry.list_enabled()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    projects: List[ProjectResponse] = []
+    for src in sources:
+        if not src.accessible:
+            logger.warning("source_unreachable", extra={"source": src.name, "root": str(src.root)})
             continue
-        index_exists = (path / "index.json").exists()
-        projects.append(
-            ProjectResponse(
-                name=path.name,
-                index_exists=index_exists,
-                instructions="Uploads land in ingest/originals; use /public/index.html for the adapter UI.",
+        _bootstrap_existing_projects(src.root)
+        for path in src.root.iterdir():
+            if not path.is_dir():
+                continue
+            index_exists = (path / "index.json").exists()
+            projects.append(
+                ProjectResponse(
+                    name=path.name,
+                    source=src.name,
+                    source_accessible=src.accessible,
+                    index_exists=index_exists,
+                    instructions="Uploads land in ingest/originals; use /public/index.html for the adapter UI.",
+                )
             )
-        )
-    sorted_projects = sorted(projects, key=lambda p: p.name)
+    sorted_projects = sorted(projects, key=lambda p: (p.source, p.name))
     logger.info("listed_projects", extra={"count": len(sorted_projects)})
     return sorted_projects
 
 
 @router.post("", response_model=ProjectResponse, status_code=201)
-async def create_project(payload: ProjectCreateRequest) -> ProjectResponse:
+async def create_project(payload: ProjectCreateRequest, source: str | None = None) -> ProjectResponse:
     settings = get_settings()
+    registry = SourceRegistry(settings.project_root)
     try:
-        name = _resolve_project_name(settings.project_root, payload.name)
+        active_source = registry.require(source)
+        name = _resolve_project_name(active_source.root, payload.name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    target = project_path(settings.project_root, name)
+    if not active_source.accessible:
+        raise HTTPException(status_code=503, detail="Source root is not reachable")
+    target = project_path(active_source.root, name)
     target.mkdir(parents=True, exist_ok=True)
     ensure_subdirs(target, ["ingest/originals", "_manifest"])
 
@@ -82,30 +99,40 @@ async def create_project(payload: ProjectCreateRequest) -> ProjectResponse:
     if not index_path.exists():
         seed_index(target, name, notes=payload.notes)
         reindex_project(target)
-    logger.info("project_created", extra={"project": name, "path": str(target)})
+    logger.info(
+        "project_created",
+        extra={"project": name, "path": str(target), "source": active_source.name},
+    )
     return ProjectResponse(
         name=name,
+        source=active_source.name,
+        source_accessible=active_source.accessible,
         index_exists=index_path.exists(),
-        instructions=f"Use /api/projects/{name}/upload then reindex after manual edits.",
+        instructions=f"Use /api/projects/{name}/upload?source={active_source.name} then reindex after manual edits.",
     )
 
 
 @router.get("/{project_name}")
-async def get_project(project_name: str):
+async def get_project(project_name: str, source: str | None = None):
     try:
         name = validate_project_name(project_name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     settings = get_settings()
-    target = project_path(settings.project_root, name)
-    _bootstrap_existing_projects(settings.project_root)
+    registry = SourceRegistry(settings.project_root)
+    try:
+        active_source = registry.require(source)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    target = project_path(active_source.root, name)
+    _bootstrap_existing_projects(active_source.root)
     if not target.exists():
         raise HTTPException(status_code=404, detail="Project not found")
     try:
         payload = load_index(target)
         payload["instructions"] = "Uploads append to index.json; run /reindex if you change files manually."
-        logger.info("project_loaded", extra={"project": name})
+        logger.info("project_loaded", extra={"project": name, "source": active_source.name})
         return payload
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Missing index") from exc

@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.projects import router as projects_router
+from app.api.sources import router as sources_router
 from app.api.upload import router as upload_router
 from app.api.reindex import router as reindex_router
 from app.config import get_settings
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     _configure_logging()
     application = FastAPI(title="media-sync-api", version="0.1.0")
     application.include_router(projects_router)
+    application.include_router(sources_router)
     application.include_router(upload_router)
     application.include_router(reindex_router)
 
