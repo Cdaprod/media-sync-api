@@ -303,3 +303,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Root-level `GET|POST /reindex` reindexes every enabled source and project, seeding missing indexes and skipping invalid directory names.
 - Bulk reindex responses now summarize indexed files/projects across sources; logging uses `project_reindexed_bulk` and `root_reindex_complete` events.
 - Tests cover cross-source root reindexing to ensure manual file drops are indexed everywhere.
+
+### Latest Implementation Notes (2025-02-22)
+- Media listing entries now include `download_url`, and `/media/{project}/download/{relative_path}` forces attachments for offline use.
+- Reindexing now relocates supported media files that were dropped outside `ingest/originals/` back into the ingest tree, skipping unsupported extensions.
+- Only common media types are indexed (`.mp4`, `.mov`, `.avi`, `.mkv`, `.mp3`, `.wav`, `.flac`, `.aac`, `.jpg`, `.jpeg`, `.png`, `.heic`); others are ignored and pruned from the index during reindex runs.
