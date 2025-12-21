@@ -280,3 +280,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2024-06-30)
 - Upload filenames now reject separators/traversal rather than stripping them; unsafe names return HTTP 400 with a clear error.
 - Dedupe records are written after the final destination path (post-collision rename) so duplicate lookups always point to the stored file.
+- Project names are auto-sequenced as `P{n}-<label>`; existing `P{n}-*` folders are bootstrapped (index + reindex of `ingest/originals`) on first list/get so host-created projects are ingested idempotently.

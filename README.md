@@ -3,7 +3,7 @@
 LAN-first, Dockerized Python API for deterministic media ingest and project hygiene.
 
 ## What it does
-- Creates and lists projects stored on the host filesystem
+- Creates and lists projects stored on the host filesystem (auto-prefixed as `P{n}-<label>`)
 - Streams uploads into project folders with sha256 de-duplication backed by sqlite
 - Maintains `index.json` per project and reconciles manual filesystem edits
 - Records sync events for iOS Shortcuts auditing
@@ -29,7 +29,7 @@ Verify the service and volume:
 curl http://localhost:8787/health
 curl http://localhost:8787/api/projects
 ```
-If `/api/projects` is empty, create one project and confirm `index.json`, `ingest/`, and `_manifest/` appear under your host Projects folder.
+Existing folders under `B:\\Video\\Projects` that follow the `P{n}-<name>` pattern are bootstrapped automatically on the first `/api/projects` call: missing indexes are created and files under `ingest/originals` are recorded idempotently. If `/api/projects` is empty, create one project and confirm `index.json`, `ingest/`, and `_manifest/` appear under your host Projects folder.
 
 Troubleshooting:
 - Ensure Docker Desktop has file sharing enabled for drive `B:`
@@ -45,9 +45,9 @@ Troubleshooting:
 ```bash
 curl -X POST http://127.0.0.1:8787/api/projects \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"Project-1-Public-Accountability\",\"notes\":\"Main production ingest\"}"
+  -d "{\"name\":\"Public-Accountability\",\"notes\":\"Main production ingest\"}"
 ```
-Then confirm: `curl http://127.0.0.1:8787/api/projects`
+Project names are assigned as `P{n}-<label>` automatically (e.g., `P1-Public-Accountability`, `P2-New-Project`). Then confirm: `curl http://127.0.0.1:8787/api/projects`
 
 3) Build the iPhone Shortcut
 - GET `/api/projects` and append "➕ Create New Project"
@@ -85,7 +85,7 @@ Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you
 
 ## API overview
 - `GET /api/projects` – list projects
-- `POST /api/projects` – create project `{ "name": "demo", "notes": "optional" }`
+- `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
 - `POST /api/projects/{project}/sync-album` – record audit event
