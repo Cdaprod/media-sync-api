@@ -1,7 +1,7 @@
 """Reindex endpoint for reconciling filesystem state.
 
 Example call:
-    curl -X POST http://localhost:8787/api/projects/demo/reindex
+    curl http://localhost:8787/api/projects/demo/reindex
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/projects", tags=["reindex"])
 logger = logging.getLogger("media_sync_api.reindex")
 
 
-@router.post("/{project_name}/reindex")
+@router.api_route("/{project_name}/reindex", methods=["GET", "POST"])
 async def reindex(project_name: str, source: str | None = None):
     try:
         name = validate_project_name(project_name)
