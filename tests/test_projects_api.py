@@ -4,8 +4,14 @@ import importlib
 import json
 from pathlib import Path
 
+import importlib
+import json
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
+
+from app.storage.sources import SourceRegistry
 
 
 @pytest.fixture()
@@ -20,7 +26,12 @@ def test_create_and_list_project(client, project_root: Path):
 
     listing = client.get("/api/projects")
     payload = listing.json()
-    assert any(project["name"] == project_name and project["index_exists"] for project in payload)
+    assert any(
+        project["name"] == project_name
+        and project["index_exists"]
+        and project["source"] == "primary"
+        for project in payload
+    )
 
     index_path = project_root / project_name / "index.json"
     assert index_path.exists()
@@ -77,3 +88,23 @@ def test_bootstrap_indexes_existing_project(env_settings: Path, monkeypatch: pyt
     index = json.loads((project_dir / "index.json").read_text())
     assert index["project"] == "P1-Existing"
     assert any(entry["relative_path"] == "ingest/originals/clip.mov" for entry in index["files"])
+
+
+def test_lists_projects_from_multiple_sources(client, env_settings: Path, tmp_path: Path):
+    created = client.post("/api/projects", json={"name": "demo"})
+    assert created.status_code == 201
+
+    secondary_root = tmp_path / "nas"
+    ingest = secondary_root / "P99-Other" / "ingest" / "originals"
+    ingest.mkdir(parents=True)
+    (ingest / "clip.mov").write_bytes(b"nas")
+
+    registry = SourceRegistry(env_settings)
+    registry.upsert(name="nas", root=secondary_root)
+
+    all_projects = client.get("/api/projects").json()
+    assert any(project["source"] == "primary" for project in all_projects)
+    assert any(project["source"] == "nas" for project in all_projects)
+
+    filtered = client.get("/api/projects", params={"source": "nas"}).json()
+    assert all(project["source"] == "nas" for project in filtered)

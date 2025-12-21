@@ -281,3 +281,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Upload filenames now reject separators/traversal rather than stripping them; unsafe names return HTTP 400 with a clear error.
 - Dedupe records are written after the final destination path (post-collision rename) so duplicate lookups always point to the stored file.
 - Project names are auto-sequenced as `P{n}-<label>`; existing `P{n}-*` folders are bootstrapped (index + reindex of `ingest/originals`) on first list/get so host-created projects are ingested idempotently.
+
+### Latest Implementation Notes (2025-02-15)
+- Source registry added: `/api/sources` lists/creates/toggles logical project roots, persisting configuration at `<projects_root>/_sources/sources.json`.
+- Project, upload, sync, and reindex endpoints accept `?source=<name>` (default `primary` mapped to `/data/projects`) so additional NAS mounts can be indexed without redeploying.
+- Makefile test target now uses proper tabs; `make test` runs the pytest suite after installing requirements.

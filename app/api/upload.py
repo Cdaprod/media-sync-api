@@ -21,6 +21,7 @@ from app.config import get_settings
 from app.storage.dedupe import record_file_hash, compute_sha256_from_path, lookup_file_hash
 from app.storage.index import append_file_entry, load_index, save_index, bump_count, append_event
 from app.storage.paths import ensure_subdirs, project_path, validate_project_name, safe_filename
+from app.storage.sources import SourceRegistry
 
 router = APIRouter(prefix="/api/projects", tags=["upload"])
 
@@ -29,14 +30,21 @@ logger = logging.getLogger("media_sync_api.upload")
 
 
 @router.post("/{project_name}/upload")
-async def upload_file(project_name: str, file: UploadFile = File(...)):
+async def upload_file(project_name: str, file: UploadFile = File(...), source: str | None = None):
     try:
         name = validate_project_name(project_name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     settings = get_settings()
-    project = project_path(settings.project_root, name)
+    registry = SourceRegistry(settings.project_root)
+    try:
+        active_source = registry.require(source)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not active_source.accessible:
+        raise HTTPException(status_code=503, detail="Source root is not reachable")
+    project = project_path(active_source.root, name)
     ensure_subdirs(project, ["ingest/originals", "_manifest"])
     if not (project / "index.json").exists():
         raise HTTPException(status_code=404, detail="Project index missing")
@@ -74,7 +82,13 @@ async def upload_file(project_name: str, file: UploadFile = File(...)):
         append_event(project, "upload_duplicate_skipped", {"path": existing_path, "sha256": sha})
         logger.info(
             "upload_duplicate",
-            extra={"project": name, "sha256": sha, "path": existing_path, "bytes": written},
+            extra={
+                "project": name,
+                "source": active_source.name,
+                "sha256": sha,
+                "path": existing_path,
+                "bytes": written,
+            },
         )
         return JSONResponse(
             status_code=200,
@@ -103,26 +117,39 @@ async def upload_file(project_name: str, file: UploadFile = File(...)):
     append_event(project, "upload_ingested", entry)
     logger.info(
         "upload_stored",
-        extra={"project": name, "sha256": sha, "path": entry["relative_path"], "bytes": entry["size"]},
+        extra={
+            "project": name,
+            "source": active_source.name,
+            "sha256": sha,
+            "path": entry["relative_path"],
+            "bytes": entry["size"],
+        },
     )
 
     return {
         "status": "stored",
         "path": entry["relative_path"],
         "sha256": sha,
-        "instructions": f"Use /api/projects/{name}/sync-album to log runs and /reindex if you move files.",
+        "instructions": f"Use /api/projects/{name}/sync-album?source={active_source.name} to log runs and /reindex if you move files.",
     }
 
 
 @router.post("/{project_name}/sync-album")
-async def sync_album(project_name: str, payload: dict):
+async def sync_album(project_name: str, payload: dict, source: str | None = None):
     try:
         name = validate_project_name(project_name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     settings = get_settings()
-    project = project_path(settings.project_root, name)
+    registry = SourceRegistry(settings.project_root)
+    try:
+        active_source = registry.require(source)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not active_source.accessible:
+        raise HTTPException(status_code=503, detail="Source root is not reachable")
+    project = project_path(active_source.root, name)
     ensure_subdirs(project, ["_manifest"])
     events_path = project / "_manifest/events.jsonl"
     record = {

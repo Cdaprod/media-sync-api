@@ -8,6 +8,7 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 - Maintains `index.json` per project and reconciles manual filesystem edits
 - Records sync events for iOS Shortcuts auditing
 - Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples
+- Tracks multiple storage sources so additional NAS paths can be indexed without redeploying the container
 
 The container is stateless; the host path is the source of truth.
 
@@ -15,6 +16,7 @@ The container is stateless; the host path is the source of truth.
 - LAN URL: `http://192.168.0.25:8787`
 - Host path: `B:\\Video\\Projects`
 - Container mount: `/data/projects`
+- Default source name: `primary` (points to `/data/projects`); register new sources via `/api/sources`
 
 ## Quick start with Docker Compose
 ```bash
@@ -28,6 +30,7 @@ Verify the service and volume:
 ```bash
 curl http://localhost:8787/health
 curl http://localhost:8787/api/projects
+curl http://localhost:8787/api/sources
 ```
 Existing folders under `B:\\Video\\Projects` that follow the `P{n}-<name>` pattern are bootstrapped automatically on the first `/api/projects` call: missing indexes are created and files under `ingest/originals` are recorded idempotently. If `/api/projects` is empty, create one project and confirm `index.json`, `ingest/`, and `_manifest/` appear under your host Projects folder.
 
@@ -82,6 +85,7 @@ Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you
 - iPhone cannot reach API: ensure container binds `0.0.0.0:8787` and firewall allows it
 - Projects not appearing: verify the volume mount points to your Projects folder
 - Upload fails: file exceeds `MEDIA_SYNC_MAX_UPLOAD_MB` or extension unsupported
+- Secondary source missing: confirm the additional path is mounted on the host and `enabled` in `/api/sources`
 
 ## API overview
 - `GET /api/projects` – list projects
@@ -90,6 +94,10 @@ Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
+- `GET /api/sources` – list configured project roots and their accessibility
+- `POST /api/sources` – register an additional source (e.g., NAS share mounted on the host)
+- `POST /api/sources/{name}/toggle` – enable/disable an existing source
+- All project endpoints accept `?source=<name>` to target a specific root (defaults to `primary`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)
 
 ## Response guidance & logging
