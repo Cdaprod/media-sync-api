@@ -55,6 +55,19 @@ def test_invalid_project_names_rejected(client):
         assert resp.status_code == 400
 
 
+def test_projects_include_upload_url(client):
+    create = client.post("/api/projects", json={"name": "demo"})
+    assert create.status_code == 201
+    created_payload = create.json()
+    project_name = created_payload["name"]
+    assert created_payload["upload_url"].startswith(f"/api/projects/{project_name}/upload")
+
+    listing = client.get("/api/projects").json()
+    project = next(p for p in listing if p["name"] == project_name)
+    assert project["upload_url"].startswith(f"/api/projects/{project_name}/upload")
+    assert f"source={project['source']}" in project["upload_url"]
+
+
 def test_auto_sequences_project_names(client, project_root: Path):
     first = client.post("/api/projects", json={"name": "Alpha"})
     second = client.post("/api/projects", json={"name": "Beta"})

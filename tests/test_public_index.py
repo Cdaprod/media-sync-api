@@ -8,6 +8,7 @@ def test_root_serves_adapter(client):
     body = response.text
     assert "media-sync-api" in body
     assert "Playbook" in body
+    assert "upload media" in body.lower()
 
 
 def test_public_path_alias(client):

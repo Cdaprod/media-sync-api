@@ -42,6 +42,7 @@ class ProjectResponse(BaseModel):
     source: str
     source_accessible: bool
     index_exists: bool
+    upload_url: str
     instructions: str | None = Field(
         None,
         description="Human-friendly guidance about next steps for the project.",
@@ -72,6 +73,7 @@ async def list_projects(source: str | None = None) -> List[ProjectResponse]:
                     source=src.name,
                     source_accessible=src.accessible,
                     index_exists=index_exists,
+                    upload_url=f"/api/projects/{path.name}/upload?source={src.name}",
                     instructions="Uploads land in ingest/originals; use /public/index.html for the adapter UI.",
                 )
             )
@@ -108,6 +110,7 @@ async def create_project(payload: ProjectCreateRequest, source: str | None = Non
         source=active_source.name,
         source_accessible=active_source.accessible,
         index_exists=index_path.exists(),
+        upload_url=f"/api/projects/{name}/upload?source={active_source.name}",
         instructions=f"Use /api/projects/{name}/upload?source={active_source.name} then reindex after manual edits.",
     )
 
