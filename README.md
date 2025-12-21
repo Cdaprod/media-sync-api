@@ -22,6 +22,8 @@ docker compose build
 docker compose up -d
 ```
 
+The Compose file intentionally omits the legacy `version` key and sets `pull_policy: never` so it builds locally without needing a Docker Hub login.
+
 Verify the service and volume:
 ```bash
 curl http://localhost:8787/health
