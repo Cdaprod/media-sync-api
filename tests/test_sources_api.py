@@ -29,6 +29,10 @@ def test_register_and_toggle_source(client, env_settings: Path, tmp_path: Path):
     assert toggled.status_code == 200
     assert toggled.json()["enabled"] is False
 
+    reenabled = client.post("/api/sources/nas/toggle", params={"enabled": True})
+    assert reenabled.status_code == 200
+    assert reenabled.json()["enabled"] is True
+
     registry = SourceRegistry(env_settings)
     sources = {source.name: source for source in registry.list_all()}
-    assert sources["nas"].enabled is False
+    assert sources["nas"].enabled is True

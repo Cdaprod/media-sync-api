@@ -98,7 +98,7 @@ async def toggle_source(source_name: str, enabled: bool = True) -> SourceRespons
         raise HTTPException(status_code=400, detail="Primary source cannot be disabled")
 
     try:
-        current = registry.require(source_name)
+        current = registry.require(source_name, include_disabled=True)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

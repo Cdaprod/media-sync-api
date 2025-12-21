@@ -286,3 +286,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Source registry added: `/api/sources` lists/creates/toggles logical project roots, persisting configuration at `<projects_root>/_sources/sources.json`.
 - Project, upload, sync, and reindex endpoints accept `?source=<name>` (default `primary` mapped to `/data/projects`) so additional NAS mounts can be indexed without redeploying.
 - Makefile test target now uses proper tabs; `make test` runs the pytest suite after installing requirements.
+
+### Latest Implementation Notes (2025-02-18)
+- Source toggling now honors disabled entries so previously disabled sources can be re-enabled via `/api/sources/{name}/toggle` without manual file edits.

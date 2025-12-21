@@ -101,11 +101,13 @@ class SourceRegistry:
     def list_enabled(self) -> List[Source]:
         return [source for source in self.list_all() if source.enabled]
 
-    def require(self, name: str | None) -> Source:
+    def require(self, name: str | None, *, include_disabled: bool = False) -> Source:
+        """Return a source by name, optionally allowing disabled entries."""
+
         validated = validate_source_name(name) if name else "primary"
         for source in self.list_all():
             if source.name == validated:
-                if not source.enabled:
+                if not include_disabled and not source.enabled:
                     raise ValueError(f"Source '{validated}' is disabled")
                 return source
         raise ValueError(f"Source '{validated}' not found")
