@@ -20,6 +20,11 @@
     .media-row:last-child { border-bottom: none; }
     .media-actions button { padding: 0.35rem 0.75rem; border: none; background: #2563eb; color: white; border-radius: 4px; cursor: pointer; }
     .media-actions button:hover { background: #1e4fc8; }
+    .upload-panel { margin-top: 0.75rem; padding: 0.75rem; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; }
+    .upload-panel input[type="file"] { margin-bottom: 0.5rem; }
+    .upload-panel button { padding: 0.35rem 0.75rem; border: none; background: #047857; color: white; border-radius: 4px; cursor: pointer; }
+    .upload-panel button:hover { background: #065f46; }
+    .muted { color: #475569; font-size: 0.95rem; }
   </style>
 </head>
 <body>
@@ -37,6 +42,14 @@
     <div id="projects" class="panel"></div>
     <div id="media" class="panel hidden">
       <h3 id="media-title">Media</h3>
+      <div id="upload" class="upload-panel hidden" aria-live="polite">
+        <p class="muted" id="upload-caption">Select a project to upload media.</p>
+        <input type="file" id="upload-file" aria-label="Select media to upload" />
+        <div>
+          <button id="upload-button" type="button">Upload</button>
+        </div>
+        <div id="upload-status" class="muted"></div>
+      </div>
       <div id="media-list"></div>
       <div id="player" class="hidden">
         <h4>Preview</h4>
@@ -138,6 +151,13 @@
     const player = document.getElementById('player');
     const videoPlayer = document.getElementById('video-player');
     const mediaMeta = document.getElementById('media-meta');
+    const uploadPanel = document.getElementById('upload');
+    const uploadCaption = document.getElementById('upload-caption');
+    const uploadFile = document.getElementById('upload-file');
+    const uploadButton = document.getElementById('upload-button');
+    const uploadStatus = document.getElementById('upload-status');
+
+    let activeProject = null;
 
     async function loadProjects() {
       projectsEl.textContent = 'Loading projects...';
@@ -162,30 +182,46 @@
         pill.className = 'pill';
         pill.textContent = `${project.name}`;
         pill.title = project.instructions || 'Browse media in this project';
-        pill.onclick = () => loadMedia(project.name, project.source);
+        pill.onclick = () => selectProject(project);
         projectsEl.appendChild(pill);
       });
     }
 
-    async function loadMedia(projectName, source) {
+    function selectProject(project) {
+      activeProject = project;
+      uploadPanel.classList.remove('hidden');
+      mediaEl.classList.remove('hidden');
+      mediaTitle.textContent = `Media in ${project.name}`;
+      uploadCaption.textContent = `Upload to ${project.name} (${project.source})`;
+      uploadStatus.textContent = '';
+      uploadFile.value = '';
+      loadMedia();
+    }
+
+    async function loadMedia() {
+      if (!activeProject) {
+        mediaList.textContent = 'Select a project to view media.';
+        return;
+      }
+      const { name, source } = activeProject;
       mediaList.textContent = 'Loading media...';
       mediaEl.classList.remove('hidden');
       player.classList.add('hidden');
       videoPlayer.pause();
       videoPlayer.removeAttribute('src');
-      mediaTitle.textContent = `Media in ${projectName}`;
+      mediaTitle.textContent = `Media in ${name}`;
       const query = source ? `?source=${encodeURIComponent(source)}` : '';
       try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/media${query}`);
+        const response = await fetch(`/api/projects/${encodeURIComponent(name)}/media${query}`);
         if (!response.ok) throw new Error('Failed to load media list');
         const payload = await response.json();
-        renderMedia(payload.media, projectName);
+        renderMedia(payload.media);
       } catch (err) {
         mediaList.textContent = `Error loading media: ${err.message}`;
       }
     }
 
-    function renderMedia(items, projectName) {
+    function renderMedia(items) {
       mediaList.textContent = '';
       if (!items.length) {
         mediaList.textContent = 'No indexed files yet. Upload then run /reindex.';
@@ -217,6 +253,38 @@
       videoPlayer.load();
       mediaMeta.textContent = `${item.relative_path} • ${item.size || 0} bytes`;
     }
+
+    uploadButton.addEventListener('click', async () => {
+      if (!activeProject) {
+        uploadStatus.textContent = 'Choose a project before uploading.';
+        return;
+      }
+      if (!uploadFile.files.length) {
+        uploadStatus.textContent = 'Pick a file to upload first.';
+        return;
+      }
+      const form = new FormData();
+      form.append('file', uploadFile.files[0]);
+      uploadButton.disabled = true;
+      uploadStatus.textContent = 'Uploading...';
+      try {
+        const targetUrl = activeProject.upload_url || `/api/projects/${encodeURIComponent(activeProject.name)}/upload?source=${encodeURIComponent(activeProject.source || '')}`;
+        const response = await fetch(targetUrl, { method: 'POST', body: form });
+        const payload = await response.json();
+        if (!response.ok) {
+          const detail = payload.detail || payload.message || 'Upload failed';
+          throw new Error(detail);
+        }
+        uploadStatus.textContent = payload.status === 'duplicate'
+          ? 'Duplicate skipped — already on disk.'
+          : 'Upload stored. Run /reindex if you moved files manually.';
+        loadMedia();
+      } catch (err) {
+        uploadStatus.textContent = `Upload failed: ${err.message}`;
+      } finally {
+        uploadButton.disabled = false;
+      }
+    });
 
     document.addEventListener('DOMContentLoaded', loadProjects);
   </script>

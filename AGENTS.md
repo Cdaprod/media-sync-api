@@ -308,3 +308,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Media listing entries now include `download_url`, and `/media/{project}/download/{relative_path}` forces attachments for offline use.
 - Reindexing now relocates supported media files that were dropped outside `ingest/originals/` back into the ingest tree, skipping unsupported extensions.
 - Only common media types are indexed (`.mp4`, `.mov`, `.avi`, `.mkv`, `.mp3`, `.wav`, `.flac`, `.aac`, `.jpg`, `.jpeg`, `.png`, `.heic`); others are ignored and pruned from the index during reindex runs.
+
+### Latest Implementation Notes (2025-02-23)
+- Project listings now return an `upload_url` scoped to the active source for copy-paste and UI use.
+- The static adapter at `/public/index.html` includes a browser upload panel that posts files to the selected project and refreshes media listings after completion.

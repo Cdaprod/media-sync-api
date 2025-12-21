@@ -7,7 +7,7 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 - Streams uploads into project folders with sha256 de-duplication backed by sqlite
 - Maintains `index.json` per project and reconciles manual filesystem edits
 - Records sync events for iOS Shortcuts auditing
-- Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples and a browser-native media explorer
+- Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples, a browser-native media explorer, and upload controls
 - Tracks multiple storage sources so additional NAS paths can be indexed without redeploying the container
 - Streams indexed media directly from `/media/<project>/<relative_path>` for in-browser playback
 - Forces direct downloads from `/media/<project>/download/<relative_path>` so files listed in the UI can be saved offline
@@ -98,7 +98,7 @@ Run this to reconcile every enabled source and project after bulk filesystem edi
 - Loose files appear in the projects root: POST `/api/projects/auto-organize` to relocate them into `Unsorted-Loose` and browse via `/public/index.html`
 
 ## API overview
-- `GET /api/projects` – list projects
+- `GET /api/projects` – list projects (includes `upload_url` for browser uploads)
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
