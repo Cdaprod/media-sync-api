@@ -237,7 +237,7 @@ docker compose down
 2. ✅ Upload endpoint w/ sha256 de-dupe to sqlite.
 3. ✅ Project create/list/get + seed index.
 4. ✅ Reindex endpoint (scan disk, reconcile db/index).
-5. ⏭ Minimal web UI (optional) for local admin.
+5. ✅ Minimal web UI for local admin with project/media browsing.
 6. ⏭ Optional OBS integration + Resolve bridge (separate services).
 
 ---
@@ -289,3 +289,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-02-18)
 - Source toggling now honors disabled entries so previously disabled sources can be re-enabled via `/api/sources/{name}/toggle` without manual file edits.
+
+### Latest Implementation Notes (2025-02-20)
+- Media explorer endpoints added:
+  - `GET /api/projects/{project}/media` lists indexed files with stream URLs.
+  - `GET /media/{project}/{relative_path}` streams media with range support.
+- `/api/projects/auto-organize` sweeps loose files in the projects root into `Unsorted-Loose`, seeds index if missing, and reindexes after moves.
+- Static adapter at `/public/index.html` now includes a browser-native explorer to list projects, browse media, and play clips inline.
+- Tests cover media listing/streaming and auto-organize idempotency; keep adding coverage with new endpoints.

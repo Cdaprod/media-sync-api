@@ -12,11 +12,39 @@
     .callout { background: #f8fafc; border-left: 4px solid #2563eb; padding: 0.75rem 1rem; margin: 1rem 0; }
     .step { margin-bottom: 1.25rem; }
     ul { margin-top: 0.35rem; }
+    .panel { border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; margin: 0.75rem 0; }
+    .hidden { display: none; }
+    .pill { display: inline-block; padding: 0.35rem 0.6rem; border-radius: 999px; background: #eef2ff; color: #312e81; margin: 0.2rem 0.25rem; cursor: pointer; border: 1px solid #c7d2fe; }
+    .pill:hover { background: #c7d2fe; }
+    .media-row { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid #e2e8f0; }
+    .media-row:last-child { border-bottom: none; }
+    .media-actions button { padding: 0.35rem 0.75rem; border: none; background: #2563eb; color: white; border-radius: 4px; cursor: pointer; }
+    .media-actions button:hover { background: #1e4fc8; }
   </style>
 </head>
 <body>
   <h1>media-sync-api</h1>
   <p>This lightweight, LAN-only API sits between your phone and host project storage. Mount <code>../Projects</code> on the host to <code>/data/projects</code> in the container, then use the endpoints below or the iPhone Shortcut flow to ingest media reliably.</p>
+
+  <div class="callout">
+    <strong>New: Browser-native explorer</strong><br />
+    Use the panel below to list projects, browse indexed files, and play media directly from the Projects volume without downloading.
+  </div>
+
+  <section id="browser-explorer">
+    <h2>Browser explorer</h2>
+    <p>Click a project to view its indexed media. Files stream via the API with HTTP range support, so large clips play inline.</p>
+    <div id="projects" class="panel"></div>
+    <div id="media" class="panel hidden">
+      <h3 id="media-title">Media</h3>
+      <div id="media-list"></div>
+      <div id="player" class="hidden">
+        <h4>Preview</h4>
+        <video id="video-player" controls style="max-width: 100%; height: auto;" aria-label="Media preview"></video>
+        <p id="media-meta"></p>
+      </div>
+    </div>
+  </section>
 
   <div class="callout">
     <strong>Host/LAN defaults</strong><br />
@@ -101,5 +129,96 @@
 
   <div class="callout">
     Paste your <code>docker-compose.yaml</code> volume line and a sample project path if you need confirmation the mount is correct. The API will respond with guidance in <code>instructions</code> fields too.</div>
+
+  <script>
+    const projectsEl = document.getElementById('projects');
+    const mediaEl = document.getElementById('media');
+    const mediaList = document.getElementById('media-list');
+    const mediaTitle = document.getElementById('media-title');
+    const player = document.getElementById('player');
+    const videoPlayer = document.getElementById('video-player');
+    const mediaMeta = document.getElementById('media-meta');
+
+    async function loadProjects() {
+      projectsEl.textContent = 'Loading projects...';
+      try {
+        const response = await fetch('/api/projects');
+        if (!response.ok) throw new Error('Failed to list projects');
+        const projects = await response.json();
+        renderProjects(projects);
+      } catch (err) {
+        projectsEl.textContent = `Error: ${err.message}`;
+      }
+    }
+
+    function renderProjects(projects) {
+      if (!projects.length) {
+        projectsEl.textContent = 'No projects yet — create one via /api/projects then refresh.';
+        return;
+      }
+      projectsEl.textContent = '';
+      projects.forEach((project) => {
+        const pill = document.createElement('div');
+        pill.className = 'pill';
+        pill.textContent = `${project.name}`;
+        pill.title = project.instructions || 'Browse media in this project';
+        pill.onclick = () => loadMedia(project.name, project.source);
+        projectsEl.appendChild(pill);
+      });
+    }
+
+    async function loadMedia(projectName, source) {
+      mediaList.textContent = 'Loading media...';
+      mediaEl.classList.remove('hidden');
+      player.classList.add('hidden');
+      videoPlayer.pause();
+      videoPlayer.removeAttribute('src');
+      mediaTitle.textContent = `Media in ${projectName}`;
+      const query = source ? `?source=${encodeURIComponent(source)}` : '';
+      try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/media${query}`);
+        if (!response.ok) throw new Error('Failed to load media list');
+        const payload = await response.json();
+        renderMedia(payload.media, projectName);
+      } catch (err) {
+        mediaList.textContent = `Error loading media: ${err.message}`;
+      }
+    }
+
+    function renderMedia(items, projectName) {
+      mediaList.textContent = '';
+      if (!items.length) {
+        mediaList.textContent = 'No indexed files yet. Upload then run /reindex.';
+        return;
+      }
+      items.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'media-row';
+
+        const label = document.createElement('div');
+        label.textContent = item.relative_path;
+
+        const actions = document.createElement('div');
+        actions.className = 'media-actions';
+        const play = document.createElement('button');
+        play.textContent = 'Play';
+        play.onclick = () => playMedia(item.stream_url, item);
+        actions.appendChild(play);
+
+        row.appendChild(label);
+        row.appendChild(actions);
+        mediaList.appendChild(row);
+      });
+    }
+
+    function playMedia(url, item) {
+      player.classList.remove('hidden');
+      videoPlayer.src = url;
+      videoPlayer.load();
+      mediaMeta.textContent = `${item.relative_path} • ${item.size || 0} bytes`;
+    }
+
+    document.addEventListener('DOMContentLoaded', loadProjects);
+  </script>
 </body>
 </html>
