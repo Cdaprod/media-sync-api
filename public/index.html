@@ -46,6 +46,9 @@
         <p class="muted" id="upload-caption">Select a project to upload media.</p>
         <input type="file" id="upload-file" aria-label="Select media to upload" />
         <div>
+          <button id="upload-picker" type="button">Choose file</button>
+        </div>
+        <div>
           <button id="upload-button" type="button">Upload</button>
         </div>
         <div id="upload-status" class="muted"></div>
@@ -154,6 +157,7 @@
     const uploadPanel = document.getElementById('upload');
     const uploadCaption = document.getElementById('upload-caption');
     const uploadFile = document.getElementById('upload-file');
+    const uploadPicker = document.getElementById('upload-picker');
     const uploadButton = document.getElementById('upload-button');
     const uploadStatus = document.getElementById('upload-status');
 
@@ -254,6 +258,20 @@
       mediaMeta.textContent = `${item.relative_path} • ${item.size || 0} bytes`;
     }
 
+    function openPicker() {
+      if (!uploadFile) return;
+      if (typeof uploadFile.showPicker === 'function') {
+        uploadFile.showPicker();
+      } else {
+        uploadFile.click();
+      }
+    }
+
+    uploadPicker.addEventListener('click', () => {
+      uploadStatus.textContent = '';
+      openPicker();
+    });
+
     uploadButton.addEventListener('click', async () => {
       if (!activeProject) {
         uploadStatus.textContent = 'Choose a project before uploading.';
@@ -261,6 +279,7 @@
       }
       if (!uploadFile.files.length) {
         uploadStatus.textContent = 'Pick a file to upload first.';
+        openPicker();
         return;
       }
       const form = new FormData();

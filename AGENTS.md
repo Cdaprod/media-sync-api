@@ -312,3 +312,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-02-23)
 - Project listings now return an `upload_url` scoped to the active source for copy-paste and UI use.
 - The static adapter at `/public/index.html` includes a browser upload panel that posts files to the selected project and refreshes media listings after completion.
+- Upload UI now exposes a native file picker button (falls back to `.click()` when `showPicker` is unavailable) and prompts users to open it if they try uploading without selecting a file.
