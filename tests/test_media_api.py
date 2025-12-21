@@ -39,6 +39,66 @@ def test_list_media_and_stream(client: TestClient, env_settings: Path) -> None:
     assert traversal.status_code == 400
 
 
+def test_download_media_and_link_in_listing(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "downloadable.mov"
+    payload = b"download-me"
+    media_path.write_bytes(payload)
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    media_entry = listing.json()["media"][0]
+    assert media_entry["download_url"].startswith(f"/media/{project_name}/download/")
+
+    download = client.get(media_entry["download_url"])
+    assert download.status_code == 200
+    assert "attachment" in download.headers.get("content-disposition", "").lower()
+    assert download.content == payload
+
+
+def test_reindex_moves_misplaced_media(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    project_dir = env_settings / project_name
+    misplaced = project_dir / "floating.mov"
+    misplaced.write_bytes(b"floating")
+
+    response = client.post(f"/api/projects/{project_name}/reindex")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["relocated"] == 1
+
+    relocated_path = project_dir / "ingest" / "originals" / misplaced.name
+    assert relocated_path.exists()
+
+    index_listing = client.get(f"/api/projects/{project_name}/media")
+    assert index_listing.status_code == 200
+    media_entries = index_listing.json()["media"]
+    assert any(entry["relative_path"].endswith("floating.mov") for entry in media_entries)
+
+
+def test_reindex_skips_non_media_files(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    ignored = ingest / "notes.txt"
+    ignored.write_text("not media")
+
+    response = client.post(f"/api/projects/{project_name}/reindex")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["indexed"] == 0
+    assert payload["skipped_unsupported"] == 1
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    assert not listing.json()["media"]
+
+
 def test_auto_organize_loose_files(client: TestClient, env_settings: Path) -> None:
     loose_file = env_settings / "loose.mov"
     loose_file.write_bytes(b"orphaned")

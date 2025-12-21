@@ -86,6 +86,7 @@ async def list_media(project_name: str, source: str | None = None):
         item = dict(entry)
         item["relative_path"] = safe_relative
         item["stream_url"] = _build_stream_url(resolved.name, safe_relative, resolved.source_name)
+        item["download_url"] = _build_download_url(resolved.name, safe_relative, resolved.source_name)
         media.append(item)
     sorted_media = sorted(media, key=lambda m: m.get("relative_path", ""))
 
@@ -96,6 +97,36 @@ async def list_media(project_name: str, source: str | None = None):
         "counts": index.get("counts", {}),
         "instructions": "Use stream_url to play media directly; run /reindex after manual moves.",
     }
+
+
+@media_router.get("/{project_name}/download/{relative_path:path}")
+async def download_media(project_name: str, relative_path: str, source: str | None = None):
+    """Force-download a media file within a project.
+
+    Example:
+        curl -OJ "http://localhost:8787/media/demo/download/ingest/originals/file.mov"
+    """
+
+    resolved = _require_source_and_project(project_name, source)
+    try:
+        safe_relative = _validate_relative_media_path(relative_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    target = (resolved.root / safe_relative).resolve()
+    project_root = resolved.root.resolve()
+    if project_root not in target.parents and target != project_root:
+        raise HTTPException(status_code=400, detail="Requested path is outside the project")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Media not found")
+
+    media_type, _ = mimetypes.guess_type(target.name)
+    headers = {"Content-Disposition": f"attachment; filename={quote(target.name)}"}
+    logger.info(
+        "download_media",
+        extra={"project": resolved.name, "source": resolved.source_name, "path": safe_relative},
+    )
+    return FileResponse(target, media_type=media_type, headers=headers)
 
 
 @media_router.get("/{project_name}/{relative_path:path}")
@@ -211,3 +242,9 @@ def _build_stream_url(project: str, relative_path: str, source: str | None) -> s
     encoded_path = quote(relative_path, safe="/")
     suffix = f"?source={quote(source)}" if source is not None else ""
     return f"/media/{quote(project)}" + (f"/{encoded_path}" if encoded_path else "") + suffix
+
+
+def _build_download_url(project: str, relative_path: str, source: str | None) -> str:
+    encoded_path = quote(relative_path, safe="/")
+    suffix = f"?source={quote(source)}" if source is not None else ""
+    return f"/media/{quote(project)}/download" + (f"/{encoded_path}" if encoded_path else "") + suffix
