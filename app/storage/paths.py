@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Iterable
 
 PROJECT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
+PROJECT_SEQUENCE_PATTERN = re.compile(r"^P(?P<num>\d+)-(?P<label>.+)$")
 
 
 def validate_project_name(name: str) -> str:
@@ -24,6 +25,39 @@ def validate_project_name(name: str) -> str:
     if ".." in name or "/" in name or "\\" in name:
         raise ValueError("Project name cannot contain path traversal characters")
     return name
+
+
+def _slugify_label(label: str | None) -> str:
+    cleaned = (label or "Project").strip()
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", cleaned)
+    cleaned = cleaned.strip("-") or "Project"
+    return cleaned
+
+
+def next_project_sequence(root: Path) -> int:
+    """Return the next available project sequence number based on P{n}- prefixes."""
+
+    highest = 0
+    if root.exists():
+        for path in root.iterdir():
+            if not path.is_dir():
+                continue
+            match = PROJECT_SEQUENCE_PATTERN.match(path.name)
+            if match:
+                highest = max(highest, int(match.group("num")))
+    return highest + 1
+
+
+def sequenced_project_name(root: Path, label: str | None = None) -> str:
+    """Generate a project name using the P{n}-<label> convention idempotently."""
+
+    suffix = _slugify_label(label)
+    seq = next_project_sequence(root)
+    candidate = f"P{seq}-{suffix}"
+    while (root / candidate).exists():
+        seq += 1
+        candidate = f"P{seq}-{suffix}"
+    return validate_project_name(candidate)
 
 
 def project_path(root: Path, name: str) -> Path:

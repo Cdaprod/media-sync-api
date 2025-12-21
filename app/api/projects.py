@@ -1,13 +1,14 @@
 """Project management endpoints for media-sync-api.
 
-Example call:
+Example call (label auto-prefixes to P{n}-<label>):
     curl -X POST http://localhost:8787/api/projects -H 'Content-Type: application/json' \
-        -d '{"name":"demo","notes":"first run"}'
+        -d '{"name":"MyProject","notes":"first run"}'
 """
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, HTTPException
@@ -15,7 +16,14 @@ from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.storage.index import load_index, seed_index
-from app.storage.paths import ensure_subdirs, project_path, validate_project_name
+from app.storage.paths import (
+    PROJECT_SEQUENCE_PATTERN,
+    ensure_subdirs,
+    project_path,
+    sequenced_project_name,
+    validate_project_name,
+)
+from app.storage.reindex import reindex_project
 
 
 logger = logging.getLogger("media_sync_api.projects")
@@ -24,7 +32,7 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
 class ProjectCreateRequest(BaseModel):
-    name: str = Field(..., description="Name of the project")
+    name: str | None = Field(None, description="Optional project label; auto-prefixed with P{n}-")
     notes: str | None = Field(None, description="Optional notes to include in the index")
 
 
@@ -41,6 +49,7 @@ class ProjectResponse(BaseModel):
 async def list_projects() -> List[ProjectResponse]:
     settings = get_settings()
     root = settings.project_root
+    _bootstrap_existing_projects(root)
     projects = []
     for path in root.iterdir():
         if not path.is_dir():
@@ -60,12 +69,11 @@ async def list_projects() -> List[ProjectResponse]:
 
 @router.post("", response_model=ProjectResponse, status_code=201)
 async def create_project(payload: ProjectCreateRequest) -> ProjectResponse:
+    settings = get_settings()
     try:
-        name = validate_project_name(payload.name)
+        name = _resolve_project_name(settings.project_root, payload.name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    settings = get_settings()
     target = project_path(settings.project_root, name)
     target.mkdir(parents=True, exist_ok=True)
     ensure_subdirs(target, ["ingest/originals", "_manifest"])
@@ -73,6 +81,7 @@ async def create_project(payload: ProjectCreateRequest) -> ProjectResponse:
     index_path = target / "index.json"
     if not index_path.exists():
         seed_index(target, name, notes=payload.notes)
+        reindex_project(target)
     logger.info("project_created", extra={"project": name, "path": str(target)})
     return ProjectResponse(
         name=name,
@@ -90,6 +99,7 @@ async def get_project(project_name: str):
 
     settings = get_settings()
     target = project_path(settings.project_root, name)
+    _bootstrap_existing_projects(settings.project_root)
     if not target.exists():
         raise HTTPException(status_code=404, detail="Project not found")
     try:
@@ -99,3 +109,23 @@ async def get_project(project_name: str):
         return payload
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Missing index") from exc
+
+
+def _bootstrap_existing_projects(root: Path) -> None:
+    for path in root.iterdir() if root.exists() else []:
+        if not path.is_dir():
+            continue
+        ensure_subdirs(path, ["ingest/originals", "_manifest"])
+        index_path = path / "index.json"
+        if not index_path.exists():
+            seed_index(path, path.name)
+            reindex_project(path)
+
+
+def _resolve_project_name(root: Path, requested: str | None) -> str:
+    label = requested.strip() if requested else None
+    if label and PROJECT_SEQUENCE_PATTERN.match(label):
+        return validate_project_name(label)
+    if label:
+        validate_project_name(label)
+    return sequenced_project_name(root, label)

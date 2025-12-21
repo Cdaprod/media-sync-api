@@ -10,14 +10,15 @@ from app.storage.dedupe import get_recorded_paths
 def test_reindex_handles_new_and_missing_files(client, env_settings: Path):
     created = client.post("/api/projects", json={"name": "demo"})
     assert created.status_code == 201
+    project_name = created.json()["name"]
 
-    project_dir = env_settings / "demo"
+    project_dir = env_settings / project_name
     ingest_dir = project_dir / "ingest" / "originals"
     ingest_dir.mkdir(parents=True, exist_ok=True)
     manual_file = ingest_dir / "manual.mov"
     manual_file.write_bytes(b"manual-bytes")
 
-    reindex_response = client.post("/api/projects/demo/reindex")
+    reindex_response = client.post(f"/api/projects/{project_name}/reindex")
     assert reindex_response.status_code == 200
     index_data = json.loads((project_dir / "index.json").read_text())
     assert any(entry["relative_path"] == "ingest/originals/manual.mov" for entry in index_data["files"])
@@ -27,7 +28,7 @@ def test_reindex_handles_new_and_missing_files(client, env_settings: Path):
     assert any(path == "ingest/originals/manual.mov" for path in records.values())
 
     manual_file.unlink()
-    reindex_again = client.post("/api/projects/demo/reindex")
+    reindex_again = client.post(f"/api/projects/{project_name}/reindex")
     assert reindex_again.status_code == 200
     updated_index = json.loads((project_dir / "index.json").read_text())
     assert not any(entry["relative_path"] == "ingest/originals/manual.mov" for entry in updated_index.get("files", []))
