@@ -297,3 +297,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - `/api/projects/auto-organize` sweeps loose files in the projects root into `Unsorted-Loose`, seeds index if missing, and reindexes after moves.
 - Static adapter at `/public/index.html` now includes a browser-native explorer to list projects, browse media, and play clips inline.
 - Tests cover media listing/streaming and auto-organize idempotency; keep adding coverage with new endpoints.
+- Reindex endpoint now accepts GET in addition to POST so manual filesystem edits can be reconciled directly from a browser.

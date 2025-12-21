@@ -72,7 +72,7 @@ Project names are assigned as `P{n}-<label>` automatically (e.g., `P1-Public-Acc
 
 6) Reindex after manual changes
 ```bash
-curl -X POST http://127.0.0.1:8787/api/projects/Project-1-Public-Accountability/reindex
+curl http://127.0.0.1:8787/api/projects/Project-1-Public-Accountability/reindex
 ```
 Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you move/rename/delete files manually.
 
@@ -97,7 +97,7 @@ Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
 - `POST /api/projects/{project}/sync-album` – record audit event
-- `POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
+- `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
 - `POST /api/projects/auto-organize` – move loose files sitting in the projects root into `Unsorted-Loose` and reindex
 - `GET /api/sources` – list configured project roots and their accessibility
 - `POST /api/sources` – register an additional source (e.g., NAS share mounted on the host)
