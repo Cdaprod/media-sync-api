@@ -276,3 +276,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - API responses now include `instructions` hints where possible; keep them actionable and LAN-specific.
 - Logging namespace `media_sync_api.*` emits INFO-level breadcrumbs for project creation, uploads, duplicates, sync events, and reindex runs.
 - `docker-compose.yml` drops the obsolete `version` key and sets `pull_policy: never` on the service so `docker compose up -d` works without registry authentication.
+
+### Latest Implementation Notes (2024-06-30)
+- Upload filenames now reject separators/traversal rather than stripping them; unsafe names return HTTP 400 with a clear error.
+- Dedupe records are written after the final destination path (post-collision rename) so duplicate lookups always point to the stored file.

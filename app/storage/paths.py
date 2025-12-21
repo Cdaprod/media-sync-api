@@ -50,7 +50,11 @@ def relpath_posix(target: Path, base: Path) -> str:
 def safe_filename(name: str) -> str:
     """Strip path separators to keep filenames within expected folder."""
 
-    cleaned = name.split("/")[-1].split("\\")[-1]
+    if "/" in name or "\\" in name:
+        raise ValueError("Filename cannot contain path separators")
+    if ".." in name:
+        raise ValueError("Filename cannot include traversal sequences")
+    cleaned = name.strip()
     if not cleaned:
         raise ValueError("Filename cannot be empty")
     return cleaned

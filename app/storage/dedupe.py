@@ -30,6 +30,18 @@ def ensure_db(db_path: Path) -> None:
         conn.commit()
 
 
+def lookup_file_hash(db_path: Path, sha256: str) -> Optional[str]:
+    """Return the recorded path for a hash, if present."""
+
+    ensure_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT relative_path FROM files WHERE sha256 = ?", (sha256,)).fetchone()
+        if row:
+            return row["relative_path"]
+        return None
+
+
 def record_file_hash(db_path: Path, sha256: str, relative_path: str) -> Optional[str]:
     """Record a file hash if it does not exist. Returns existing path when duplicate."""
 

@@ -18,7 +18,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.storage.dedupe import record_file_hash, compute_sha256_from_path
+from app.storage.dedupe import record_file_hash, compute_sha256_from_path, lookup_file_hash
 from app.storage.index import append_file_entry, load_index, save_index, bump_count, append_event
 from app.storage.paths import ensure_subdirs, project_path, validate_project_name, safe_filename
 
@@ -43,7 +43,10 @@ async def upload_file(project_name: str, file: UploadFile = File(...)):
 
     ingest_dir = project / "ingest/originals"
     manifest_db = project / "_manifest/manifest.db"
-    filename = safe_filename(file.filename)
+    try:
+        filename = safe_filename(file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # stream upload to temp file to avoid memory use
     max_bytes = settings.max_upload_mb * 1024 * 1024
@@ -61,8 +64,7 @@ async def upload_file(project_name: str, file: UploadFile = File(...)):
                 raise HTTPException(status_code=413, detail="Upload exceeds configured limit")
 
     sha = compute_sha256_from_path(temp_path)
-    relative_dest = f"ingest/originals/{filename}"
-    existing_path = record_file_hash(manifest_db, sha, relative_dest)
+    existing_path = lookup_file_hash(manifest_db, sha)
 
     if existing_path:
         temp_path.unlink(missing_ok=True)
@@ -88,6 +90,8 @@ async def upload_file(project_name: str, file: UploadFile = File(...)):
     if dest_path.exists():
         dest_path = ingest_dir / f"{datetime.now(timezone.utc).timestamp()}_{filename}"
     shutil.move(str(temp_path), dest_path)
+    relative_dest = f"ingest/originals/{dest_path.name}"
+    record_file_hash(manifest_db, sha, relative_dest)
 
     entry = {
         "relative_path": str(dest_path.relative_to(project)),
