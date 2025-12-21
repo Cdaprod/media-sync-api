@@ -7,8 +7,10 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 - Streams uploads into project folders with sha256 de-duplication backed by sqlite
 - Maintains `index.json` per project and reconciles manual filesystem edits
 - Records sync events for iOS Shortcuts auditing
-- Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples
+- Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples and a browser-native media explorer
 - Tracks multiple storage sources so additional NAS paths can be indexed without redeploying the container
+- Streams indexed media directly from `/media/<project>/<relative_path>` for in-browser playback
+- Sweeps loose files sitting in the projects root into an `Unsorted-Loose` project so uploads that land in the wrong spot are still indexed
 
 The container is stateless; the host path is the source of truth.
 
@@ -86,18 +88,22 @@ Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you
 - Projects not appearing: verify the volume mount points to your Projects folder
 - Upload fails: file exceeds `MEDIA_SYNC_MAX_UPLOAD_MB` or extension unsupported
 - Secondary source missing: confirm the additional path is mounted on the host and `enabled` in `/api/sources`
+- Loose files appear in the projects root: POST `/api/projects/auto-organize` to relocate them into `Unsorted-Loose` and browse via `/public/index.html`
 
 ## API overview
 - `GET /api/projects` – list projects
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index
+- `GET /api/projects/{project}/media` – list indexed media with streamable URLs
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
+- `POST /api/projects/auto-organize` – move loose files sitting in the projects root into `Unsorted-Loose` and reindex
 - `GET /api/sources` – list configured project roots and their accessibility
 - `POST /api/sources` – register an additional source (e.g., NAS share mounted on the host)
 - `POST /api/sources/{name}/toggle` – enable/disable an existing source
 - All project endpoints accept `?source=<name>` to target a specific root (defaults to `primary`)
+- `GET /media/{project}/{relative_path}` – stream a stored media file directly (respects `?source=`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)
 
 ## Response guidance & logging
