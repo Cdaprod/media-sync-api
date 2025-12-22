@@ -320,3 +320,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-02-25)
 - The adapter page lists configured sources and provides a form to register new destinations via `/api/sources`; `_sources` remains reserved for registry metadata and is hidden from project listings/upload UI.
 - The upload picker uses a single native file chooser (input visually hidden, dedicated button triggers `showPicker`/`.click()`); duplicate default browser buttons removed.
+
+### Latest Implementation Notes (2025-02-26)
+- Docker/build assets now live under `/docker/` with Compose using `context: ..` and `docker/Dockerfile` so build context stays at the repo root.
+- Root-level `docker-compose.yaml` includes `/docker/docker-compose.yaml` for convenience, and the Makefile pins `COMPOSE_FILE := docker/docker-compose.yaml` for `make up|down|build|logs|ps`.
+- README references updated compose/bake commands; Bake still runs from repo root with `docker buildx bake -f docker/docker-bake.hcl`.

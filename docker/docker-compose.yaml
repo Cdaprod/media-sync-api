@@ -1,0 +1,26 @@
+services:
+  media-sync-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: media-sync-api
+    restart: always
+
+    ports:
+      - "8787:8787"
+
+    environment:
+      - MEDIA_SYNC_HOST=0.0.0.0
+      - MEDIA_SYNC_PORT=8787
+      - MEDIA_SYNC_PROJECTS_ROOT=/data/projects
+      - MEDIA_SYNC_MAX_UPLOAD_MB=4096
+      - MEDIA_SYNC_CORS_ORIGINS=*
+
+    volumes:
+      - "B:/Video/Projects:/data/projects"
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health').read()"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
