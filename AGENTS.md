@@ -332,3 +332,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-02-28)
 - The stray root-level `docker-compose.yml` has been removed; the canonical stack lives at `docker/docker-compose.yaml` (included via the root `docker-compose.yaml`) and now carries the DaVinci Resolve PostgreSQL service alongside `media-sync-api`.
 - Resolve bridge added: `/api/resolve/open` queues jobs for a LAN-only resolve-agent that polls `/api/resolve/jobs/next` then marks `/complete` or `/fail`. UI now exposes an "Open in DaVinci Resolve" control that posts selected media paths from the browser explorer. Keep Resolve path alignment via SMB + Resolve mapped mounts; do not attempt to shell out to launch Resolve from the browser.
+
+### Latest Implementation Notes (2025-03-01)
+- Removed the legacy root-level Docker build assets (`Dockerfile`, `docker-bake.hcl`); use the canonical definitions under `/docker/` for Compose and Bake.
