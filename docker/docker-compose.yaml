@@ -1,3 +1,8 @@
+## Verification
+# docker compose -f docker/docker-compose.yaml up -d
+# docker compose -f docker/docker-compose.yaml ps
+# docker compose -f docker/docker-compose.yaml exec resolve-postgres pg_isready -U ${RESOLVE_POSTGRES_USER:-resolve}
+
 services:
   media-sync-api:
     build:
@@ -24,3 +29,31 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
+
+  resolve-postgres:
+    image: postgres:15-alpine
+    container_name: resolve-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${RESOLVE_POSTGRES_DB:-resolve_projects}
+      - POSTGRES_USER=${RESOLVE_POSTGRES_USER:-resolve}
+      - POSTGRES_PASSWORD=${RESOLVE_POSTGRES_PASSWORD:-resolve_change_me}
+    volumes:
+      - resolve_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # DaVinci Resolve Project Server (PostgreSQL library)
+    # Connect Resolve to this host by adding a PostgreSQL library with:
+    # Host: Docker host LAN IP (e.g., 192.168.0.25)
+    # Port: 5432
+    # Database: resolve_projects
+    # User: resolve
+    # Password: resolve_change_me (set RESOLVE_POSTGRES_PASSWORD to override)
+
+volumes:
+  resolve_pg_data:
