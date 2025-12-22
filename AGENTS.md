@@ -328,3 +328,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-02-27)
 - Bake context updated to `..` in `/docker/docker-bake.hcl` so builds continue to use the repo root even though the bake file lives under `/docker/`.
+
+### Latest Implementation Notes (2025-02-28)
+- The stray root-level `docker-compose.yml` has been removed; the canonical stack lives at `docker/docker-compose.yaml` (included via the root `docker-compose.yaml`) and now carries the DaVinci Resolve PostgreSQL service alongside `media-sync-api`.
