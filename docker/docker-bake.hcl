@@ -3,7 +3,7 @@ group "default" {
 }
 
 target "media-sync-api" {
-  context    = "."
+  context    = ".."
   dockerfile = "docker/Dockerfile"
 
   tags = [
