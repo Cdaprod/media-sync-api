@@ -20,6 +20,18 @@
     .media-row:last-child { border-bottom: none; }
     .media-actions button { padding: 0.35rem 0.75rem; border: none; background: #2563eb; color: white; border-radius: 4px; cursor: pointer; }
     .media-actions button:hover { background: #1e4fc8; }
+    .upload-panel { margin-top: 0.75rem; padding: 0.75rem; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; }
+    .upload-panel input[type="file"] { margin-bottom: 0.5rem; }
+    .upload-panel button { padding: 0.35rem 0.75rem; border: none; background: #047857; color: white; border-radius: 4px; cursor: pointer; }
+    .upload-panel button:hover { background: #065f46; }
+    .muted { color: #475569; font-size: 0.95rem; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+    .sources-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.5rem; }
+    .sources-grid div { padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc; }
+    .source-form label { display: block; margin-bottom: 0.35rem; }
+    .source-form input { width: 100%; padding: 0.4rem; margin-top: 0.15rem; box-sizing: border-box; }
+    .source-form button { margin-top: 0.35rem; padding: 0.35rem 0.75rem; border: none; background: #1d4ed8; color: white; border-radius: 4px; cursor: pointer; }
+    .source-form button:hover { background: #1e40af; }
   </style>
 </head>
 <body>
@@ -31,12 +43,40 @@
     Use the panel below to list projects, browse indexed files, and play media directly from the Projects volume without downloading.
   </div>
 
+  <section id="sources-panel" class="panel">
+    <h2>Sources</h2>
+    <p>Destinations for projects and uploads. Use this to confirm mounts and register additional roots (e.g., NAS shares).</p>
+    <div id="sources" class="sources-grid"></div>
+    <div class="source-form" aria-live="polite">
+      <h3>Add a source</h3>
+      <label for="source-name">Name</label>
+      <input id="source-name" name="source-name" placeholder="nas" />
+      <label for="source-root">Absolute path on host</label>
+      <input id="source-root" name="source-root" placeholder="/mnt/nas/projects" />
+      <label for="source-type">Type (optional)</label>
+      <input id="source-type" name="source-type" placeholder="local|smb|nfs" />
+      <button id="source-add" type="button">Save source</button>
+      <div id="source-status" class="muted"></div>
+    </div>
+  </section>
+
   <section id="browser-explorer">
     <h2>Browser explorer</h2>
     <p>Click a project to view its indexed media. Files stream via the API with HTTP range support, so large clips play inline.</p>
     <div id="projects" class="panel"></div>
     <div id="media" class="panel hidden">
       <h3 id="media-title">Media</h3>
+      <div id="upload" class="upload-panel hidden" aria-live="polite">
+        <p class="muted" id="upload-caption">Select a project to upload media.</p>
+        <input type="file" id="upload-file" class="visually-hidden" aria-label="Select media to upload" />
+        <div>
+          <button id="upload-picker" type="button">Choose file</button>
+        </div>
+        <div>
+          <button id="upload-button" type="button">Upload</button>
+        </div>
+        <div id="upload-status" class="muted"></div>
+      </div>
       <div id="media-list"></div>
       <div id="player" class="hidden">
         <h4>Preview</h4>
@@ -138,6 +178,49 @@
     const player = document.getElementById('player');
     const videoPlayer = document.getElementById('video-player');
     const mediaMeta = document.getElementById('media-meta');
+    const sourcesEl = document.getElementById('sources');
+    const sourceName = document.getElementById('source-name');
+    const sourceRoot = document.getElementById('source-root');
+    const sourceType = document.getElementById('source-type');
+    const sourceAdd = document.getElementById('source-add');
+    const sourceStatus = document.getElementById('source-status');
+    const uploadPanel = document.getElementById('upload');
+    const uploadCaption = document.getElementById('upload-caption');
+    const uploadFile = document.getElementById('upload-file');
+    const uploadPicker = document.getElementById('upload-picker');
+    const uploadButton = document.getElementById('upload-button');
+    const uploadStatus = document.getElementById('upload-status');
+
+    let activeProject = null;
+
+    async function loadSources() {
+      sourcesEl.textContent = 'Loading sources...';
+      try {
+        const response = await fetch('/api/sources');
+        if (!response.ok) throw new Error('Failed to list sources');
+        const sources = await response.json();
+        renderSources(sources);
+      } catch (err) {
+        sourcesEl.textContent = `Error loading sources: ${err.message}`;
+      }
+    }
+
+    function renderSources(sources) {
+      sourcesEl.textContent = '';
+      if (!sources.length) {
+        sourcesEl.textContent = 'Only the primary source is available — add another path below.';
+        return;
+      }
+      sources.forEach((source) => {
+        const card = document.createElement('div');
+        const reachability = source.accessible ? 'reachable' : 'unreachable (check mount)';
+        const enabled = source.enabled ? 'enabled' : 'disabled';
+        card.innerHTML = `<strong>${source.name}</strong><br />`
+          + `<span class="muted">${source.root}</span><br />`
+          + `${enabled} • ${reachability}`;
+        sourcesEl.appendChild(card);
+      });
+    }
 
     async function loadProjects() {
       projectsEl.textContent = 'Loading projects...';
@@ -162,30 +245,46 @@
         pill.className = 'pill';
         pill.textContent = `${project.name}`;
         pill.title = project.instructions || 'Browse media in this project';
-        pill.onclick = () => loadMedia(project.name, project.source);
+        pill.onclick = () => selectProject(project);
         projectsEl.appendChild(pill);
       });
     }
 
-    async function loadMedia(projectName, source) {
+    function selectProject(project) {
+      activeProject = project;
+      uploadPanel.classList.remove('hidden');
+      mediaEl.classList.remove('hidden');
+      mediaTitle.textContent = `Media in ${project.name}`;
+      uploadCaption.textContent = `Upload to ${project.name} (${project.source})`;
+      uploadStatus.textContent = '';
+      uploadFile.value = '';
+      loadMedia();
+    }
+
+    async function loadMedia() {
+      if (!activeProject) {
+        mediaList.textContent = 'Select a project to view media.';
+        return;
+      }
+      const { name, source } = activeProject;
       mediaList.textContent = 'Loading media...';
       mediaEl.classList.remove('hidden');
       player.classList.add('hidden');
       videoPlayer.pause();
       videoPlayer.removeAttribute('src');
-      mediaTitle.textContent = `Media in ${projectName}`;
+      mediaTitle.textContent = `Media in ${name}`;
       const query = source ? `?source=${encodeURIComponent(source)}` : '';
       try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(projectName)}/media${query}`);
+        const response = await fetch(`/api/projects/${encodeURIComponent(name)}/media${query}`);
         if (!response.ok) throw new Error('Failed to load media list');
         const payload = await response.json();
-        renderMedia(payload.media, projectName);
+        renderMedia(payload.media);
       } catch (err) {
         mediaList.textContent = `Error loading media: ${err.message}`;
       }
     }
 
-    function renderMedia(items, projectName) {
+    function renderMedia(items) {
       mediaList.textContent = '';
       if (!items.length) {
         mediaList.textContent = 'No indexed files yet. Upload then run /reindex.';
@@ -218,7 +317,87 @@
       mediaMeta.textContent = `${item.relative_path} • ${item.size || 0} bytes`;
     }
 
-    document.addEventListener('DOMContentLoaded', loadProjects);
+    function openPicker() {
+      if (!uploadFile) return;
+      if (typeof uploadFile.showPicker === 'function') {
+        uploadFile.showPicker();
+      } else {
+        uploadFile.click();
+      }
+    }
+
+    sourceAdd.addEventListener('click', async () => {
+      sourceStatus.textContent = '';
+      const name = (sourceName.value || '').trim();
+      const root = (sourceRoot.value || '').trim();
+      const type = (sourceType.value || 'local').trim() || 'local';
+      if (!name || !root) {
+        sourceStatus.textContent = 'Name and root are required to add a source.';
+        return;
+      }
+      try {
+        const response = await fetch('/api/sources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, root, type, enabled: true }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          const detail = payload.detail || payload.message || 'Failed to save source';
+          throw new Error(detail);
+        }
+        sourceStatus.textContent = `Saved source ${payload.name}.`;
+        sourceName.value = '';
+        sourceRoot.value = '';
+        sourceType.value = '';
+        loadSources();
+      } catch (err) {
+        sourceStatus.textContent = `Source save failed: ${err.message}`;
+      }
+    });
+
+    uploadPicker.addEventListener('click', () => {
+      uploadStatus.textContent = '';
+      openPicker();
+    });
+
+    uploadButton.addEventListener('click', async () => {
+      if (!activeProject) {
+        uploadStatus.textContent = 'Choose a project before uploading.';
+        return;
+      }
+      if (!uploadFile.files.length) {
+        uploadStatus.textContent = 'Pick a file to upload first.';
+        openPicker();
+        return;
+      }
+      const form = new FormData();
+      form.append('file', uploadFile.files[0]);
+      uploadButton.disabled = true;
+      uploadStatus.textContent = 'Uploading...';
+      try {
+        const targetUrl = activeProject.upload_url || `/api/projects/${encodeURIComponent(activeProject.name)}/upload?source=${encodeURIComponent(activeProject.source || '')}`;
+        const response = await fetch(targetUrl, { method: 'POST', body: form });
+        const payload = await response.json();
+        if (!response.ok) {
+          const detail = payload.detail || payload.message || 'Upload failed';
+          throw new Error(detail);
+        }
+        uploadStatus.textContent = payload.status === 'duplicate'
+          ? 'Duplicate skipped — already on disk.'
+          : 'Upload stored. Run /reindex if you moved files manually.';
+        loadMedia();
+      } catch (err) {
+        uploadStatus.textContent = `Upload failed: ${err.message}`;
+      } finally {
+        uploadButton.disabled = false;
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadSources();
+      loadProjects();
+    });
   </script>
 </body>
 </html>

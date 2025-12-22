@@ -42,6 +42,7 @@ class ProjectResponse(BaseModel):
     source: str
     source_accessible: bool
     index_exists: bool
+    upload_url: str
     instructions: str | None = Field(
         None,
         description="Human-friendly guidance about next steps for the project.",
@@ -65,6 +66,8 @@ async def list_projects(source: str | None = None) -> List[ProjectResponse]:
         for path in src.root.iterdir():
             if not path.is_dir():
                 continue
+            if path.name.startswith("_"):
+                continue
             index_exists = (path / "index.json").exists()
             projects.append(
                 ProjectResponse(
@@ -72,6 +75,7 @@ async def list_projects(source: str | None = None) -> List[ProjectResponse]:
                     source=src.name,
                     source_accessible=src.accessible,
                     index_exists=index_exists,
+                    upload_url=f"/api/projects/{path.name}/upload?source={src.name}",
                     instructions="Uploads land in ingest/originals; use /public/index.html for the adapter UI.",
                 )
             )
@@ -108,6 +112,7 @@ async def create_project(payload: ProjectCreateRequest, source: str | None = Non
         source=active_source.name,
         source_accessible=active_source.accessible,
         index_exists=index_path.exists(),
+        upload_url=f"/api/projects/{name}/upload?source={active_source.name}",
         instructions=f"Use /api/projects/{name}/upload?source={active_source.name} then reindex after manual edits.",
     )
 
@@ -141,6 +146,8 @@ async def get_project(project_name: str, source: str | None = None):
 def _bootstrap_existing_projects(root: Path) -> None:
     for path in root.iterdir() if root.exists() else []:
         if not path.is_dir():
+            continue
+        if path.name.startswith("_"):
             continue
         ensure_subdirs(path, ["ingest/originals", "_manifest"])
         index_path = path / "index.json"

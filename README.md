@@ -7,9 +7,11 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 - Streams uploads into project folders with sha256 de-duplication backed by sqlite
 - Maintains `index.json` per project and reconciles manual filesystem edits
 - Records sync events for iOS Shortcuts auditing
-- Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples and a browser-native media explorer
+- Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples, a browser-native media explorer, and upload controls
 - Tracks multiple storage sources so additional NAS paths can be indexed without redeploying the container
+- Shows configured sources in the adapter UI so you can confirm mounts or register a new destination path without touching the API directly
 - Streams indexed media directly from `/media/<project>/<relative_path>` for in-browser playback
+- Forces direct downloads from `/media/<project>/download/<relative_path>` so files listed in the UI can be saved offline
 - Sweeps loose files sitting in the projects root into an `Unsorted-Loose` project so uploads that land in the wrong spot are still indexed
 
 The container is stateless; the host path is the source of truth.
@@ -26,7 +28,7 @@ docker compose build
 docker compose up -d
 ```
 
-The Compose file intentionally omits the legacy `version` key and sets `pull_policy: never` so it builds locally without needing a Docker Hub login.
+The Compose file intentionally omits the legacy `version` key and sets `pull_policy: never` so it builds locally without needing a Docker Hub login. It also mounts the working directory into `/app` and runs Uvicorn with `--reload` so code edits on the host trigger hot reloads without rebuilding the image.
 
 Verify the service and volume:
 ```bash
@@ -70,13 +72,19 @@ Project names are assigned as `P{n}-<label>` automatically (e.g., `P1-Public-Acc
 - Pick the album in Photos, upload through the Shortcut, and let the API de-dupe
 - Future improvement: send filename/size/date fingerprints to receive "upload-needed" decisions
 
-6) Reindex after manual changes
+6) Reindex after manual changes (only media files are indexed)
 ```bash
 curl http://127.0.0.1:8787/api/projects/Project-1-Public-Accountability/reindex
 ```
-Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you move/rename/delete files manually.
+Reconcile disk ↔ sqlite, update counts, prune missing records, and automatically relocate any supported media that was dropped outside `ingest/originals/` back into that folder tree.
 
-7) Recommended daily workflow
+7) Reindex everything in one sweep
+```bash
+curl http://127.0.0.1:8787/reindex
+```
+Run this to reconcile every enabled source and project after bulk filesystem edits.
+
+8) Recommended daily workflow
 - Create/select project before recording
 - Use the Shortcut to push clips; let the API de-dupe
 - Run `/reindex` if you reorganize manually
@@ -91,17 +99,20 @@ Reconcile disk ↔ sqlite, update counts, and prune missing records whenever you
 - Loose files appear in the projects root: POST `/api/projects/auto-organize` to relocate them into `Unsorted-Loose` and browse via `/public/index.html`
 
 ## API overview
-- `GET /api/projects` – list projects
+- `GET /api/projects` – list projects (includes `upload_url` for browser uploads)
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
+- `GET /media/{project}/download/{relative_path}` – download a stored media file with `Content-Disposition: attachment`
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
+- `GET|POST /reindex` – reconcile every enabled source and project in one sweep
 - `POST /api/projects/auto-organize` – move loose files sitting in the projects root into `Unsorted-Loose` and reindex
 - `GET /api/sources` – list configured project roots and their accessibility
 - `POST /api/sources` – register an additional source (e.g., NAS share mounted on the host)
 - `POST /api/sources/{name}/toggle` – enable/disable an existing source
+- The `_sources` registry directory is reserved for source metadata and is excluded from project listings and upload UI.
 - All project endpoints accept `?source=<name>` to target a specific root (defaults to `primary`)
 - `GET /media/{project}/{relative_path}` – stream a stored media file directly (respects `?source=`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)

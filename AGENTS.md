@@ -298,3 +298,25 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Static adapter at `/public/index.html` now includes a browser-native explorer to list projects, browse media, and play clips inline.
 - Tests cover media listing/streaming and auto-organize idempotency; keep adding coverage with new endpoints.
 - Reindex endpoint now accepts GET in addition to POST so manual filesystem edits can be reconciled directly from a browser.
+
+### Latest Implementation Notes (2025-02-21)
+- Root-level `GET|POST /reindex` reindexes every enabled source and project, seeding missing indexes and skipping invalid directory names.
+- Bulk reindex responses now summarize indexed files/projects across sources; logging uses `project_reindexed_bulk` and `root_reindex_complete` events.
+- Tests cover cross-source root reindexing to ensure manual file drops are indexed everywhere.
+
+### Latest Implementation Notes (2025-02-22)
+- Media listing entries now include `download_url`, and `/media/{project}/download/{relative_path}` forces attachments for offline use.
+- Reindexing now relocates supported media files that were dropped outside `ingest/originals/` back into the ingest tree, skipping unsupported extensions.
+- Only common media types are indexed (`.mp4`, `.mov`, `.avi`, `.mkv`, `.mp3`, `.wav`, `.flac`, `.aac`, `.jpg`, `.jpeg`, `.png`, `.heic`); others are ignored and pruned from the index during reindex runs.
+
+### Latest Implementation Notes (2025-02-23)
+- Project listings now return an `upload_url` scoped to the active source for copy-paste and UI use.
+- The static adapter at `/public/index.html` includes a browser upload panel that posts files to the selected project and refreshes media listings after completion.
+- Upload UI now exposes a native file picker button (falls back to `.click()` when `showPicker` is unavailable) and prompts users to open it if they try uploading without selecting a file.
+
+### Latest Implementation Notes (2025-02-24)
+- `docker-compose.yml` now mounts the working copy into `/app` and runs `uvicorn app.main:app --reload` so code edits on the host trigger hot reloads without rebuilding the image. Remove or override the bind mount/command if running in production.
+
+### Latest Implementation Notes (2025-02-25)
+- The adapter page lists configured sources and provides a form to register new destinations via `/api/sources`; `_sources` remains reserved for registry metadata and is hidden from project listings/upload UI.
+- The upload picker uses a single native file chooser (input visually hidden, dedicated button triggers `showPicker`/`.click()`); duplicate default browser buttons removed.

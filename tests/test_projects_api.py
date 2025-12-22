@@ -55,6 +55,19 @@ def test_invalid_project_names_rejected(client):
         assert resp.status_code == 400
 
 
+def test_projects_include_upload_url(client):
+    create = client.post("/api/projects", json={"name": "demo"})
+    assert create.status_code == 201
+    created_payload = create.json()
+    project_name = created_payload["name"]
+    assert created_payload["upload_url"].startswith(f"/api/projects/{project_name}/upload")
+
+    listing = client.get("/api/projects").json()
+    project = next(p for p in listing if p["name"] == project_name)
+    assert project["upload_url"].startswith(f"/api/projects/{project_name}/upload")
+    assert f"source={project['source']}" in project["upload_url"]
+
+
 def test_auto_sequences_project_names(client, project_root: Path):
     first = client.post("/api/projects", json={"name": "Alpha"})
     second = client.post("/api/projects", json={"name": "Beta"})
@@ -108,3 +121,16 @@ def test_lists_projects_from_multiple_sources(client, env_settings: Path, tmp_pa
 
     filtered = client.get("/api/projects", params={"source": "nas"}).json()
     assert all(project["source"] == "nas" for project in filtered)
+
+
+def test_internal_sources_folder_is_not_listed_as_project(client, env_settings: Path):
+    internal = env_settings / "_sources"
+    internal.mkdir(parents=True, exist_ok=True)
+    project_dir = env_settings / "P1-Visible"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.get("/api/projects")
+    names = [project["name"] for project in response.json()]
+
+    assert "_sources" not in names
+    assert "P1-Visible" in names
