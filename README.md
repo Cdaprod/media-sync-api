@@ -13,6 +13,7 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 - Streams indexed media directly from `/media/<project>/<relative_path>` for in-browser playback
 - Forces direct downloads from `/media/<project>/download/<relative_path>` so files listed in the UI can be saved offline
 - Sweeps loose files sitting in the projects root into an `Unsorted-Loose` project so uploads that land in the wrong spot are still indexed
+- Queues Resolve host actions so a local resolve-agent can open/import selected media deterministically
 
 The container is stateless; the host path is the source of truth.
 
@@ -103,6 +104,23 @@ Run this to reconcile every enabled source and project after bulk filesystem edi
 - Secondary source missing: confirm the additional path is mounted on the host and `enabled` in `/api/sources`
 - Loose files appear in the projects root: POST `/api/projects/auto-organize` to relocate them into `Unsorted-Loose` and browse via `/public/index.html`
 
+## DaVinci Resolve bridge (resolve-agent)
+Browsers cannot launch Resolve directly. The supported pattern is:
+
+1. Browser UI → `POST /api/resolve/open`
+2. Local `resolve-agent` (running on the Resolve workstation) polls `POST /api/resolve/jobs/next`
+3. Agent opens/creates the Resolve project and imports the selected `media_rel_paths`, then calls `/complete` or `/fail`
+
+Endpoint notes:
+- `POST /api/resolve/open` body: `{ "project": "Project-1" | "__select__" | "__new__", "new_project_name": "optional", "media_rel_paths": ["ingest/originals/clip.mp4"], "mode": "import" | "reveal_in_explorer" }`
+- `POST /api/resolve/jobs/next?limit=1&claimed_by=resolve-agent` – claims pending jobs for the polling agent
+- `POST /api/resolve/jobs/{id}/complete` or `/fail` – mark outcome
+
+Path alignment for Resolve:
+- Keep media on the shared Projects mount (e.g., host `B:\\Video\\Projects` ⇄ macOS `/Volumes/Video/Projects`)
+- Configure Resolve "Mapped Mounts" to translate the Windows root to the macOS root so shared Postgres libraries can relink automatically
+- Do **not** mount `/data/projects` into `resolve-postgres`; only the API uses the media mount. Resolve desktop accesses media through your SMB/NAS mapping.
+
 ## API overview
 - `GET /api/projects` – list projects (includes `upload_url` for browser uploads)
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
@@ -121,6 +139,7 @@ Run this to reconcile every enabled source and project after bulk filesystem edi
 - All project endpoints accept `?source=<name>` to target a specific root (defaults to `primary`)
 - `GET /media/{project}/{relative_path}` – stream a stored media file directly (respects `?source=`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)
+- Resolve bridge endpoints: `POST /api/resolve/open`, `POST /api/resolve/jobs/next`, `POST /api/resolve/jobs/{id}/complete`, `POST /api/resolve/jobs/{id}/fail`
 
 ## Response guidance & logging
 - Most responses include an `instructions` field with next-step hints (mounts, reindexing, adapter URL)
