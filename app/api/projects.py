@@ -66,6 +66,8 @@ async def list_projects(source: str | None = None) -> List[ProjectResponse]:
         for path in src.root.iterdir():
             if not path.is_dir():
                 continue
+            if path.name.startswith("_"):
+                continue
             index_exists = (path / "index.json").exists()
             projects.append(
                 ProjectResponse(
@@ -144,6 +146,8 @@ async def get_project(project_name: str, source: str | None = None):
 def _bootstrap_existing_projects(root: Path) -> None:
     for path in root.iterdir() if root.exists() else []:
         if not path.is_dir():
+            continue
+        if path.name.startswith("_"):
             continue
         ensure_subdirs(path, ["ingest/originals", "_manifest"])
         index_path = path / "index.json"

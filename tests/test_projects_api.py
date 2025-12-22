@@ -121,3 +121,16 @@ def test_lists_projects_from_multiple_sources(client, env_settings: Path, tmp_pa
 
     filtered = client.get("/api/projects", params={"source": "nas"}).json()
     assert all(project["source"] == "nas" for project in filtered)
+
+
+def test_internal_sources_folder_is_not_listed_as_project(client, env_settings: Path):
+    internal = env_settings / "_sources"
+    internal.mkdir(parents=True, exist_ok=True)
+    project_dir = env_settings / "P1-Visible"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.get("/api/projects")
+    names = [project["name"] for project in response.json()]
+
+    assert "_sources" not in names
+    assert "P1-Visible" in names

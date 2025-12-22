@@ -9,6 +9,7 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 - Records sync events for iOS Shortcuts auditing
 - Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples, a browser-native media explorer, and upload controls
 - Tracks multiple storage sources so additional NAS paths can be indexed without redeploying the container
+- Shows configured sources in the adapter UI so you can confirm mounts or register a new destination path without touching the API directly
 - Streams indexed media directly from `/media/<project>/<relative_path>` for in-browser playback
 - Forces direct downloads from `/media/<project>/download/<relative_path>` so files listed in the UI can be saved offline
 - Sweeps loose files sitting in the projects root into an `Unsorted-Loose` project so uploads that land in the wrong spot are still indexed
@@ -27,7 +28,7 @@ docker compose build
 docker compose up -d
 ```
 
-The Compose file intentionally omits the legacy `version` key and sets `pull_policy: never` so it builds locally without needing a Docker Hub login.
+The Compose file intentionally omits the legacy `version` key and sets `pull_policy: never` so it builds locally without needing a Docker Hub login. It also mounts the working directory into `/app` and runs Uvicorn with `--reload` so code edits on the host trigger hot reloads without rebuilding the image.
 
 Verify the service and volume:
 ```bash
@@ -111,6 +112,7 @@ Run this to reconcile every enabled source and project after bulk filesystem edi
 - `GET /api/sources` – list configured project roots and their accessibility
 - `POST /api/sources` – register an additional source (e.g., NAS share mounted on the host)
 - `POST /api/sources/{name}/toggle` – enable/disable an existing source
+- The `_sources` registry directory is reserved for source metadata and is excluded from project listings and upload UI.
 - All project endpoints accept `?source=<name>` to target a specific root (defaults to `primary`)
 - `GET /media/{project}/{relative_path}` – stream a stored media file directly (respects `?source=`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)

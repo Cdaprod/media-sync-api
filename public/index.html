@@ -25,6 +25,13 @@
     .upload-panel button { padding: 0.35rem 0.75rem; border: none; background: #047857; color: white; border-radius: 4px; cursor: pointer; }
     .upload-panel button:hover { background: #065f46; }
     .muted { color: #475569; font-size: 0.95rem; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+    .sources-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.5rem; }
+    .sources-grid div { padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc; }
+    .source-form label { display: block; margin-bottom: 0.35rem; }
+    .source-form input { width: 100%; padding: 0.4rem; margin-top: 0.15rem; box-sizing: border-box; }
+    .source-form button { margin-top: 0.35rem; padding: 0.35rem 0.75rem; border: none; background: #1d4ed8; color: white; border-radius: 4px; cursor: pointer; }
+    .source-form button:hover { background: #1e40af; }
   </style>
 </head>
 <body>
@@ -36,6 +43,23 @@
     Use the panel below to list projects, browse indexed files, and play media directly from the Projects volume without downloading.
   </div>
 
+  <section id="sources-panel" class="panel">
+    <h2>Sources</h2>
+    <p>Destinations for projects and uploads. Use this to confirm mounts and register additional roots (e.g., NAS shares).</p>
+    <div id="sources" class="sources-grid"></div>
+    <div class="source-form" aria-live="polite">
+      <h3>Add a source</h3>
+      <label for="source-name">Name</label>
+      <input id="source-name" name="source-name" placeholder="nas" />
+      <label for="source-root">Absolute path on host</label>
+      <input id="source-root" name="source-root" placeholder="/mnt/nas/projects" />
+      <label for="source-type">Type (optional)</label>
+      <input id="source-type" name="source-type" placeholder="local|smb|nfs" />
+      <button id="source-add" type="button">Save source</button>
+      <div id="source-status" class="muted"></div>
+    </div>
+  </section>
+
   <section id="browser-explorer">
     <h2>Browser explorer</h2>
     <p>Click a project to view its indexed media. Files stream via the API with HTTP range support, so large clips play inline.</p>
@@ -44,7 +68,7 @@
       <h3 id="media-title">Media</h3>
       <div id="upload" class="upload-panel hidden" aria-live="polite">
         <p class="muted" id="upload-caption">Select a project to upload media.</p>
-        <input type="file" id="upload-file" aria-label="Select media to upload" />
+        <input type="file" id="upload-file" class="visually-hidden" aria-label="Select media to upload" />
         <div>
           <button id="upload-picker" type="button">Choose file</button>
         </div>
@@ -154,6 +178,12 @@
     const player = document.getElementById('player');
     const videoPlayer = document.getElementById('video-player');
     const mediaMeta = document.getElementById('media-meta');
+    const sourcesEl = document.getElementById('sources');
+    const sourceName = document.getElementById('source-name');
+    const sourceRoot = document.getElementById('source-root');
+    const sourceType = document.getElementById('source-type');
+    const sourceAdd = document.getElementById('source-add');
+    const sourceStatus = document.getElementById('source-status');
     const uploadPanel = document.getElementById('upload');
     const uploadCaption = document.getElementById('upload-caption');
     const uploadFile = document.getElementById('upload-file');
@@ -162,6 +192,35 @@
     const uploadStatus = document.getElementById('upload-status');
 
     let activeProject = null;
+
+    async function loadSources() {
+      sourcesEl.textContent = 'Loading sources...';
+      try {
+        const response = await fetch('/api/sources');
+        if (!response.ok) throw new Error('Failed to list sources');
+        const sources = await response.json();
+        renderSources(sources);
+      } catch (err) {
+        sourcesEl.textContent = `Error loading sources: ${err.message}`;
+      }
+    }
+
+    function renderSources(sources) {
+      sourcesEl.textContent = '';
+      if (!sources.length) {
+        sourcesEl.textContent = 'Only the primary source is available — add another path below.';
+        return;
+      }
+      sources.forEach((source) => {
+        const card = document.createElement('div');
+        const reachability = source.accessible ? 'reachable' : 'unreachable (check mount)';
+        const enabled = source.enabled ? 'enabled' : 'disabled';
+        card.innerHTML = `<strong>${source.name}</strong><br />`
+          + `<span class="muted">${source.root}</span><br />`
+          + `${enabled} • ${reachability}`;
+        sourcesEl.appendChild(card);
+      });
+    }
 
     async function loadProjects() {
       projectsEl.textContent = 'Loading projects...';
@@ -267,6 +326,36 @@
       }
     }
 
+    sourceAdd.addEventListener('click', async () => {
+      sourceStatus.textContent = '';
+      const name = (sourceName.value || '').trim();
+      const root = (sourceRoot.value || '').trim();
+      const type = (sourceType.value || 'local').trim() || 'local';
+      if (!name || !root) {
+        sourceStatus.textContent = 'Name and root are required to add a source.';
+        return;
+      }
+      try {
+        const response = await fetch('/api/sources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, root, type, enabled: true }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          const detail = payload.detail || payload.message || 'Failed to save source';
+          throw new Error(detail);
+        }
+        sourceStatus.textContent = `Saved source ${payload.name}.`;
+        sourceName.value = '';
+        sourceRoot.value = '';
+        sourceType.value = '';
+        loadSources();
+      } catch (err) {
+        sourceStatus.textContent = `Source save failed: ${err.message}`;
+      }
+    });
+
     uploadPicker.addEventListener('click', () => {
       uploadStatus.textContent = '';
       openPicker();
@@ -305,7 +394,10 @@
       }
     });
 
-    document.addEventListener('DOMContentLoaded', loadProjects);
+    document.addEventListener('DOMContentLoaded', () => {
+      loadSources();
+      loadProjects();
+    });
   </script>
 </body>
 </html>

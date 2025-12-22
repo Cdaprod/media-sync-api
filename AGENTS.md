@@ -313,3 +313,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Project listings now return an `upload_url` scoped to the active source for copy-paste and UI use.
 - The static adapter at `/public/index.html` includes a browser upload panel that posts files to the selected project and refreshes media listings after completion.
 - Upload UI now exposes a native file picker button (falls back to `.click()` when `showPicker` is unavailable) and prompts users to open it if they try uploading without selecting a file.
+
+### Latest Implementation Notes (2025-02-24)
+- `docker-compose.yml` now mounts the working copy into `/app` and runs `uvicorn app.main:app --reload` so code edits on the host trigger hot reloads without rebuilding the image. Remove or override the bind mount/command if running in production.
+
+### Latest Implementation Notes (2025-02-25)
+- The adapter page lists configured sources and provides a form to register new destinations via `/api/sources`; `_sources` remains reserved for registry metadata and is hidden from project listings/upload UI.
+- The upload picker uses a single native file chooser (input visually hidden, dedicated button triggers `showPicker`/`.click()`); duplicate default browser buttons removed.
