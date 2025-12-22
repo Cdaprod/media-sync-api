@@ -108,7 +108,7 @@
     <p>Use curl from the host:</p>
     <pre>curl -X POST http://127.0.0.1:8787/api/projects \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"Project-1-Public-Accountability\",\"notes\":\"Main production ingest\"}"</pre>
+  -d "{\"name\":\"P1-Public-Accountability\",\"notes\":\"Main production ingest\"}"</pre>
     <p>Then confirm: <code>curl http://127.0.0.1:8787/api/projects</code></p>
   </div>
 
@@ -143,7 +143,7 @@
   <div class="step">
     <h3>6) Reindex after manual changes</h3>
     <p>Any time you drag, rename, or delete files manually, run:</p>
-    <pre>curl -X POST http://127.0.0.1:8787/api/projects/Project-1-Public-Accountability/reindex</pre>
+    <pre>curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/reindex</pre>
     <p>This reconciles disk ↔ sqlite, updates counts, and prunes missing records.</p>
   </div>
 
