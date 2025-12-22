@@ -21,6 +21,7 @@ from app.api.sources import router as sources_router
 from app.api.upload import router as upload_router
 from app.api.reindex import all_router as reindex_all_router
 from app.api.reindex import router as reindex_router
+from app.api.resolve_actions import router as resolve_router
 from app.config import get_settings
 
 
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     application.include_router(reindex_router)
     application.include_router(reindex_all_router)
     application.include_router(media_router)
+    application.include_router(resolve_router)
 
     application.mount(
         "/public",

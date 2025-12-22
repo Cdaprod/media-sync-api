@@ -20,6 +20,7 @@
     .media-row:last-child { border-bottom: none; }
     .media-actions button { padding: 0.35rem 0.75rem; border: none; background: #2563eb; color: white; border-radius: 4px; cursor: pointer; }
     .media-actions button:hover { background: #1e4fc8; }
+    .media-actions input[type="checkbox"] { margin-right: 0.5rem; }
     .upload-panel { margin-top: 0.75rem; padding: 0.75rem; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; }
     .upload-panel input[type="file"] { margin-bottom: 0.5rem; }
     .upload-panel button { padding: 0.35rem 0.75rem; border: none; background: #047857; color: white; border-radius: 4px; cursor: pointer; }
@@ -76,6 +77,28 @@
           <button id="upload-button" type="button">Upload</button>
         </div>
         <div id="upload-status" class="muted"></div>
+      </div>
+      <div id="resolve-panel" class="panel hidden" aria-live="polite">
+        <h4>DaVinci Resolve bridge</h4>
+        <p class="muted">Select clips, then send them to the Resolve host agent to open/import.</p>
+        <label for="resolve-project-mode">Project</label>
+        <select id="resolve-project-mode">
+          <option value="current">Use current project</option>
+          <option value="__select__">Let host choose</option>
+          <option value="__new__">Create new project</option>
+        </select>
+        <label for="resolve-project-name">Project name (override existing)</label>
+        <input id="resolve-project-name" placeholder="P1-Public-Accountability" />
+        <label for="resolve-new-name">New project name (if creating)</label>
+        <input id="resolve-new-name" placeholder="P3-Editorial" />
+        <label for="resolve-mode">Action</label>
+        <select id="resolve-mode">
+          <option value="import">Import into media pool</option>
+          <option value="reveal_in_explorer">Reveal in Explorer/Finder</option>
+        </select>
+        <button id="resolve-send" type="button">Open in DaVinci Resolve</button>
+        <div id="selection-status" class="muted"></div>
+        <div id="resolve-status" class="muted"></div>
       </div>
       <div id="media-list"></div>
       <div id="player" class="hidden">
@@ -190,8 +213,17 @@
     const uploadPicker = document.getElementById('upload-picker');
     const uploadButton = document.getElementById('upload-button');
     const uploadStatus = document.getElementById('upload-status');
+    const resolvePanel = document.getElementById('resolve-panel');
+    const resolveProjectMode = document.getElementById('resolve-project-mode');
+    const resolveProjectName = document.getElementById('resolve-project-name');
+    const resolveNewName = document.getElementById('resolve-new-name');
+    const resolveMode = document.getElementById('resolve-mode');
+    const resolveSend = document.getElementById('resolve-send');
+    const resolveStatus = document.getElementById('resolve-status');
+    const selectionStatus = document.getElementById('selection-status');
 
     let activeProject = null;
+    const selectedMedia = new Set();
 
     async function loadSources() {
       sourcesEl.textContent = 'Loading sources...';
@@ -258,6 +290,11 @@
       uploadCaption.textContent = `Upload to ${project.name} (${project.source})`;
       uploadStatus.textContent = '';
       uploadFile.value = '';
+      resolveProjectMode.value = 'current';
+      resolveProjectName.value = project.name;
+      resolveNewName.value = '';
+      resolveStatus.textContent = '';
+      resolvePanel.classList.remove('hidden');
       loadMedia();
     }
 
@@ -285,6 +322,8 @@
     }
 
     function renderMedia(items) {
+      selectedMedia.clear();
+      updateSelectionStatus();
       mediaList.textContent = '';
       if (!items.length) {
         mediaList.textContent = 'No indexed files yet. Upload then run /reindex.';
@@ -299,9 +338,16 @@
 
         const actions = document.createElement('div');
         actions.className = 'media-actions';
+        const selector = document.createElement('input');
+        selector.type = 'checkbox';
+        selector.title = 'Include in Resolve request';
+        selector.addEventListener('change', (evt) => {
+          toggleSelection(item.relative_path, evt.target.checked);
+        });
         const play = document.createElement('button');
         play.textContent = 'Play';
         play.onclick = () => playMedia(item.stream_url, item);
+        actions.appendChild(selector);
         actions.appendChild(play);
 
         row.appendChild(label);
@@ -323,6 +369,69 @@
         uploadFile.showPicker();
       } else {
         uploadFile.click();
+      }
+    }
+
+    function toggleSelection(path, checked) {
+      if (checked) {
+        selectedMedia.add(path);
+      } else {
+        selectedMedia.delete(path);
+      }
+      updateSelectionStatus();
+    }
+
+    function updateSelectionStatus() {
+      if (!selectionStatus) return;
+      const count = selectedMedia.size;
+      selectionStatus.textContent = count
+        ? `${count} item(s) queued for Resolve.`
+        : 'Select clips to send to Resolve.';
+    }
+
+    async function sendToResolve() {
+      resolveStatus.textContent = '';
+      if (!activeProject) {
+        resolveStatus.textContent = 'Choose a project first.';
+        return;
+      }
+      if (!selectedMedia.size) {
+        resolveStatus.textContent = 'Select one or more clips to send to Resolve.';
+        return;
+      }
+
+      const projectMode = resolveProjectMode.value;
+      let projectValue = activeProject.name;
+      if (projectMode === '__new__') {
+        projectValue = '__new__';
+      } else if (projectMode === '__select__') {
+        projectValue = '__select__';
+      } else if (resolveProjectName.value) {
+        projectValue = resolveProjectName.value.trim();
+      }
+
+      const body = {
+        project: projectValue,
+        new_project_name: projectMode === '__new__' ? resolveNewName.value.trim() || null : null,
+        media_rel_paths: Array.from(selectedMedia),
+        mode: resolveMode.value || 'import',
+      };
+
+      const sourceQuery = activeProject.source ? `?source=${encodeURIComponent(activeProject.source)}` : '';
+      try {
+        const res = await fetch(`/api/resolve/open${sourceQuery}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          const detail = json.detail || json.message || 'Resolve request failed';
+          throw new Error(detail);
+        }
+        resolveStatus.textContent = `Sent to Resolve host. Job: ${json.job_id}`;
+      } catch (err) {
+        resolveStatus.textContent = `Resolve request failed: ${err.message}`;
       }
     }
 
@@ -392,6 +501,10 @@
       } finally {
         uploadButton.disabled = false;
       }
+    });
+
+    resolveSend.addEventListener('click', () => {
+      sendToResolve();
     });
 
     document.addEventListener('DOMContentLoaded', () => {
