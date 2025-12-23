@@ -4,7 +4,9 @@ from pathlib import Path
 
 
 def test_dockerfile_invariants():
-    dockerfile = Path("Dockerfile").read_text()
+    dockerfile_path = Path("docker/Dockerfile")
+    assert dockerfile_path.exists(), "docker/Dockerfile must exist for Compose/Bake builds"
+    dockerfile = dockerfile_path.read_text()
     assert "FROM python:3.12-slim" in dockerfile
     assert "COPY requirements.txt" in dockerfile
     assert "pip install --no-cache-dir -r requirements.txt" in dockerfile
