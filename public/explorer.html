@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>media-sync-api — Explorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root{
+      --bg: #0b1020;
+      --panel: rgba(255,255,255,0.06);
+      --panel2: rgba(255,255,255,0.09);
+      --border: rgba(255,255,255,0.10);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.65);
+      --muted2: rgba(255,255,255,0.45);
+      --brand: #7c3aed;   /* violet */
+      --brand2:#22c55e;   /* green */
+      --warn: #f59e0b;
+      --bad:  #ef4444;
+      --shadow: 0 16px 50px rgba(0,0,0,0.45);
+      --radius: 18px;
+      --radius2: 12px;
+      --ring: 0 0 0 3px rgba(124,58,237,0.25);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body{
+      margin:0;
+      font-family: var(--sans);
+      background:
+        radial-gradient(1200px 600px at 10% 0%, rgba(124,58,237,0.25), transparent 60%),
+        radial-gradient(1000px 500px at 90% 10%, rgba(34,197,94,0.18), transparent 55%),
+        radial-gradient(900px 500px at 50% 90%, rgba(59,130,246,0.12), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    a { color: inherit; }
+    code { font-family: var(--mono); }
+
+    .app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    /* Top bar */
+    .topbar{
+      position: sticky;
+      top:0;
+      z-index: 40;
+      backdrop-filter: blur(14px);
+      background: rgba(11,16,32,0.72);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-inner{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .brand{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      min-width: 240px;
+    }
+    .logo{
+      width: 36px; height: 36px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(124,58,237,0.9), rgba(34,197,94,0.75));
+      box-shadow: 0 10px 30px rgba(124,58,237,0.25);
+    }
+    .brand h1{
+      margin:0;
+      font-size: 16px;
+      letter-spacing: 0.3px;
+      font-weight: 750;
+    }
+    .brand .sub{
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .toolbar{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex: 1;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+
+    .search{
+      flex: 1;
+      max-width: 560px;
+      min-width: 200px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+    }
+    .search input{
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .search input::placeholder{ color: var(--muted2); }
+
+    .pillbar{
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .btn{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 9px 12px;
+      font-size: 12px;
+      cursor:pointer;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+      user-select:none;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.16); }
+    .btn:active{ transform: translateY(0px); }
+    .btn.primary{ border-color: rgba(124,58,237,0.45); background: rgba(124,58,237,0.18); }
+    .btn.good{ border-color: rgba(34,197,94,0.45); background: rgba(34,197,94,0.14); }
+    .btn.bad{ border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.14); }
+    .btn[disabled]{ opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .seg{
+      display:flex;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow:hidden;
+      background: rgba(255,255,255,0.05);
+    }
+    .seg button{
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      padding: 9px 12px;
+      font-size: 12px;
+      cursor:pointer;
+    }
+    .seg button.active{
+      background: rgba(255,255,255,0.10);
+      color: var(--text);
+    }
+
+    /* Main layout */
+    .main{
+      flex: 1;
+      min-height: 0;
+      display:flex;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 16px 18px 18px;
+      gap: 14px;
+    }
+
+    .sidebar{
+      width: 330px;
+      min-width: 260px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display:flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .content{
+      flex:1;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .section-h{
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      display:flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .section-h h2{
+      margin:0;
+      font-size: 13px;
+      letter-spacing: 0.35px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .meta-line{
+      font-size: 12px;
+      color: var(--muted);
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .kbd{
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+    }
+
+    .scroll{
+      overflow: auto;
+      min-height: 0;
+    }
+    .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
+    .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
+    .scroll::-webkit-scrollbar-track{ background: rgba(255,255,255,0.04); }
+
+    /* Project chips */
+    .chips{
+      padding: 12px;
+      display:flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      cursor:pointer;
+      transition: background 120ms ease, transform 120ms ease, border-color 120ms ease;
+      max-width: 100%;
+      display:flex;
+      gap: 8px;
+      align-items:center;
+    }
+    .chip:hover{ background: rgba(255,255,255,0.09); transform: translateY(-1px); }
+    .chip.active{
+      border-color: rgba(124,58,237,0.55);
+      background: rgba(124,58,237,0.16);
+      box-shadow: 0 0 0 3px rgba(124,58,237,0.12) inset;
+    }
+    .chip .dot{
+      width: 8px; height: 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.25);
+    }
+    .chip.active .dot{
+      background: linear-gradient(135deg, rgba(124,58,237,0.9), rgba(34,197,94,0.8));
+    }
+    .chip .name{
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 250px;
+    }
+
+    /* Sources */
+    .sources{
+      padding: 12px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .card{
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,0.05);
+      padding: 10px 10px;
+    }
+    .card strong { font-size: 12px; }
+    .card .small { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .tagrow{ display:flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag{
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(255,255,255,0.04);
+    }
+    .tag.good{ border-color: rgba(34,197,94,0.35); color: rgba(187,247,208,0.85); background: rgba(34,197,94,0.12); }
+    .tag.bad{ border-color: rgba(239,68,68,0.35); color: rgba(254,202,202,0.85); background: rgba(239,68,68,0.12); }
+
+    /* Grid/List */
+    .grid{
+      padding: 14px;
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 12px;
+    }
+    .list{
+      padding: 10px 12px;
+      display:flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .asset{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      border-radius: var(--radius2);
+      overflow:hidden;
+      cursor:pointer;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+      position: relative;
+    }
+    .asset:hover{ transform: translateY(-2px); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); }
+
+    .thumb{
+      aspect-ratio: 16/10;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position: relative;
+      overflow:hidden;
+    }
+    .thumb img{
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display:block;
+      filter: saturate(1.05) contrast(1.03);
+    }
+    .thumb .fallback{
+      font-size: 12px;
+      color: var(--muted);
+      padding: 14px;
+      text-align:center;
+    }
+
+    .asset .body{
+      padding: 10px 10px 10px;
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .asset .title{
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.25;
+      overflow:hidden;
+      display:-webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .asset .sub{
+      font-size: 11px;
+      color: var(--muted);
+      overflow:hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .badges{
+      position:absolute;
+      top: 10px; left: 10px;
+      display:flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      max-width: calc(100% - 20px);
+    }
+    .badge{
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      color: rgba(255,255,255,0.85);
+      backdrop-filter: blur(8px);
+    }
+    .badge.kind-video{ border-color: rgba(59,130,246,0.35); }
+    .badge.kind-image{ border-color: rgba(34,197,94,0.35); }
+    .badge.kind-audio{ border-color: rgba(245,158,11,0.35); }
+    .badge.kind-doc{ border-color: rgba(124,58,237,0.35); }
+
+    .selector{
+      position:absolute;
+      top: 10px; right: 10px;
+      width: 34px; height: 34px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      backdrop-filter: blur(8px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .selector input{ width: 16px; height: 16px; }
+
+    .asset.selected{
+      border-color: rgba(124,58,237,0.55);
+      box-shadow: 0 0 0 3px rgba(124,58,237,0.12) inset;
+    }
+
+    /* List row variant */
+    .row{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      padding: 10px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,0.05);
+    }
+    .row:hover{ border-color: rgba(255,255,255,0.16); background: rgba(255,255,255,0.07); }
+    .row .mini{
+      width: 86px; height: 54px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow:hidden;
+      background: rgba(255,255,255,0.04);
+      flex-shrink:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .row .mini img{ width:100%; height:100%; object-fit: cover; display:block; }
+    .row .info{ flex:1; min-width:0; }
+    .row .info .t{ font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .info .s{ font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
+    .row .actions{ display:flex; align-items:center; gap: 8px; }
+    .iconbtn{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor:pointer;
+    }
+    .iconbtn:hover{ background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.16); }
+    .row .actions input{ width: 16px; height: 16px; }
+
+    /* Inspector drawer */
+    .drawer{
+      position: fixed;
+      top: 0; right: 0;
+      height: 100%;
+      width: min(520px, 100vw);
+      background: rgba(11,16,32,0.88);
+      backdrop-filter: blur(16px);
+      border-left: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      transform: translateX(110%);
+      transition: transform 160ms ease;
+      z-index: 60;
+      display:flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .drawer.open{ transform: translateX(0%); }
+    .drawer-h{
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      display:flex;
+      align-items:flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .drawer-h .title{
+      min-width:0;
+    }
+    .drawer-h .title h3{
+      margin:0;
+      font-size: 14px;
+      font-weight: 780;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 360px;
+    }
+    .drawer-h .title .sub{
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 420px;
+    }
+    .xbtn{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      cursor:pointer;
+    }
+    .xbtn:hover{ background: rgba(255,255,255,0.10); }
+
+    .drawer-body{
+      padding: 14px;
+      display:flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow:auto;
+      min-height: 0;
+    }
+    .preview{
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,0.04);
+      overflow:hidden;
+    }
+    .preview video, .preview img{
+      width: 100%;
+      height: auto;
+      display:block;
+      background: rgba(0,0,0,0.25);
+    }
+
+    .kv{
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,0.04);
+      padding: 10px;
+      display:grid;
+      grid-template-columns: 120px 1fr;
+      gap: 8px 10px;
+      font-size: 12px;
+      align-items:center;
+    }
+    .kv .k{ color: var(--muted); }
+    .kv .v{ color: var(--text); overflow-wrap:anywhere; }
+
+    .drawer-actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+
+    /* Bottom selection bar */
+    .selectbar{
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 16px;
+      z-index: 55;
+      display:none;
+      background: rgba(11,16,32,0.75);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 10px 12px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+      gap: 10px;
+      align-items:center;
+      max-width: min(980px, calc(100vw - 24px));
+      width: fit-content;
+    }
+    .selectbar.show{ display:flex; }
+    .selectbar .count{ font-size: 12px; color: var(--muted); }
+    .selectbar .sep{ width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
+    .selectbar .btn{ padding: 8px 11px; }
+
+    /* Toasts */
+    .toasts{
+      position: fixed;
+      top: 74px;
+      right: 16px;
+      z-index: 80;
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast{
+      border: 1px solid var(--border);
+      background: rgba(11,16,32,0.78);
+      backdrop-filter: blur(14px);
+      border-radius: 14px;
+      padding: 10px 12px;
+      min-width: 260px;
+      max-width: 360px;
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      color: var(--text);
+    }
+    .toast .t{ font-weight: 700; margin-bottom: 3px; }
+    .toast .m{ color: var(--muted); }
+    .toast.good{ border-color: rgba(34,197,94,0.35); }
+    .toast.warn{ border-color: rgba(245,158,11,0.35); }
+    .toast.bad{ border-color: rgba(239,68,68,0.35); }
+
+    /* Mobile */
+    @media (max-width: 980px){
+      .sidebar{ width: 320px; }
+    }
+    @media (max-width: 860px){
+      body{ overflow:auto; }
+      .main{ flex-direction: column; overflow:auto; }
+      .sidebar{ width: 100%; }
+      .content{ width: 100%; }
+      .drawer{ width: 100vw; }
+      .topbar-inner{ flex-wrap: wrap; }
+      .brand{ min-width: 0; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div class="brand" title="LAN-only media-sync-api explorer">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <h1>media-sync-api</h1>
+            <div class="sub">Explorer • projects → ingest → index → preview → Resolve</div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="search" role="search">
+            <span class="kbd">⌘K</span>
+            <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
+          </div>
+
+          <div class="seg" aria-label="View mode">
+            <button id="viewGrid" class="active" type="button">Grid</button>
+            <button id="viewList" type="button">List</button>
+          </div>
+
+          <div class="pillbar">
+            <button id="refreshBtn" class="btn" type="button">↻ Refresh</button>
+            <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
+            <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
+            <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="section-h">
+          <h2>Projects</h2>
+          <div class="meta-line">
+            <span id="projCount">…</span>
+            <span class="kbd">Click</span>
+          </div>
+        </div>
+        <div class="scroll">
+          <div id="projects" class="chips"></div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Sources</h2>
+            <div class="meta-line"><span class="kbd">/api/sources</span></div>
+          </div>
+          <div id="sources" class="sources"></div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Resolve</h2>
+            <div class="meta-line"><span class="kbd">/api/resolve/open</span></div>
+          </div>
+          <div style="padding: 12px;">
+            <div class="card">
+              <strong>Mode</strong>
+              <div class="small">Queue selected clips, then dispatch.</div>
+              <div style="display:grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px;">
+                <label style="font-size:12px; color:var(--muted);">Project mode</label>
+                <select id="resolveProjectMode" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
+                  <option value="current">Use current project</option>
+                  <option value="__select__">Let host choose</option>
+                  <option value="__new__">Create new project</option>
+                </select>
+
+                <label style="font-size:12px; color:var(--muted);">Project name</label>
+                <input id="resolveProjectName" placeholder="P1-Public-Accountability"
+                  style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+
+                <label style="font-size:12px; color:var(--muted);">New project name (if creating)</label>
+                <input id="resolveNewName" placeholder="P3-Editorial"
+                  style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+
+                <label style="font-size:12px; color:var(--muted);">Action</label>
+                <select id="resolveMode" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
+                  <option value="import">Import into media pool</option>
+                  <option value="reveal_in_explorer">Reveal in Explorer/Finder</option>
+                </select>
+
+                <div class="small" id="resolveHint">Select clips to enable.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Upload</h2>
+            <div class="meta-line"><span class="kbd">/api/projects/*/upload</span></div>
+          </div>
+          <div style="padding: 12px;">
+            <div class="card">
+              <strong>Upload to active project</strong>
+              <div class="small" id="uploadCaption">Pick a project first.</div>
+              <div style="display:flex; gap:10px; align-items:center; margin-top: 10px; flex-wrap: wrap;">
+                <input id="uploadFile" type="file" style="max-width: 100%; color: var(--muted);" />
+                <button id="uploadBtn" class="btn good" type="button" disabled>Upload</button>
+              </div>
+              <div class="small" id="uploadStatus" style="margin-top:8px;"></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Content -->
+      <section class="content">
+        <div class="section-h">
+          <h2 id="contentTitle">Media</h2>
+          <div class="meta-line">
+            <span id="mediaCount">0 items</span>
+            <span>•</span>
+            <span id="activePath" class="kbd">no project</span>
+          </div>
+        </div>
+
+        <div class="scroll" id="mediaScroll">
+          <div id="mediaGrid" class="grid"></div>
+          <div id="mediaList" class="list" style="display:none;"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Bottom selection bar -->
+    <div id="selectBar" class="selectbar" role="status" aria-live="polite">
+      <div class="count"><span id="selCount">0</span> selected</div>
+      <div class="sep"></div>
+      <button id="selPlayBtn" class="btn" type="button">▶ Preview</button>
+      <button id="selResolveBtn" class="btn primary" type="button">⇢ Send to Resolve</button>
+      <button id="selClearBtn" class="btn" type="button">✕ Clear</button>
+    </div>
+
+    <!-- Inspector drawer -->
+    <aside id="drawer" class="drawer" aria-hidden="true">
+      <div class="drawer-h">
+        <div class="title">
+          <h3 id="drawerTitle">—</h3>
+          <div id="drawerSub" class="sub">—</div>
+        </div>
+        <button id="drawerClose" class="xbtn" type="button" aria-label="Close inspector">✕</button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="preview" id="drawerPreview"></div>
+
+        <div class="drawer-actions">
+          <button id="drawerPlay" class="btn" type="button">▶ Play</button>
+          <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
+          <button id="drawerToggleSelect" class="btn primary" type="button">＋ Select</button>
+        </div>
+
+        <div class="kv" id="drawerKV"></div>
+      </div>
+    </aside>
+
+    <!-- Toasts -->
+    <div class="toasts" id="toasts"></div>
+  </div>
+
+  <script>
+    // -------------------------
+    // Config / state
+    // -------------------------
+    const API = ''; // same-origin; keep '' for container-served index.html
+    const el = (id) => document.getElementById(id);
+
+    const state = {
+      projects: [],
+      sources: [],
+      activeProject: null,   // {name, source, ...}
+      media: [],             // items from /media
+      view: 'grid',          // grid|list
+      q: '',
+      selected: new Set(),   // relative_path
+      focused: null,         // item
+    };
+
+    // -------------------------
+    // Utils
+    // -------------------------
+    function toast(type, title, message){
+      const t = document.createElement('div');
+      t.className = `toast ${type || ''}`;
+      t.innerHTML = `<div class="t">${escapeHtml(title || 'Info')}</div><div class="m">${escapeHtml(message || '')}</div>`;
+      el('toasts').appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(-4px)'; }, 2600);
+      setTimeout(() => t.remove(), 3100);
+    }
+
+    function escapeHtml(s){
+      return String(s ?? '')
+        .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+        .replaceAll('"','&quot;').replaceAll("'","&#039;");
+    }
+
+    function formatBytes(bytes){
+      const n = Number(bytes || 0);
+      if (!isFinite(n) || n <= 0) return '0 B';
+      const units = ['B','KB','MB','GB','TB'];
+      let i = 0;
+      let v = n;
+      while (v >= 1024 && i < units.length - 1){ v /= 1024; i++; }
+      return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    function guessKind(item){
+      // Prefer backend-provided kind/mime if present.
+      const k = (item.kind || item.type || '').toLowerCase();
+      if (k) return k;
+      const p = (item.relative_path || '').toLowerCase();
+      if (/\.(mp4|mov|mkv|webm|m4v)$/.test(p)) return 'video';
+      if (/\.(jpg|jpeg|png|gif|webp|heic)$/.test(p)) return 'image';
+      if (/\.(mp3|wav|m4a|aac|flac)$/.test(p)) return 'audio';
+      return 'document';
+    }
+
+    function kindBadgeClass(kind){
+      if (kind === 'video') return 'kind-video';
+      if (kind === 'image') return 'kind-image';
+      if (kind === 'audio') return 'kind-audio';
+      return 'kind-doc';
+    }
+
+    function mediaQuery(){
+      const p = state.activeProject;
+      if (!p) return '';
+      return p.source ? `?source=${encodeURIComponent(p.source)}` : '';
+    }
+
+    function updateTopCounts(){
+      el('projCount').textContent = `${state.projects.length} total`;
+      const name = state.activeProject?.name || 'no project';
+      el('activePath').textContent = name;
+      el('contentTitle').textContent = state.activeProject ? `Media — ${name}` : 'Media';
+      el('mediaCount').textContent = `${filteredMedia().length} items`;
+    }
+
+    function filteredMedia(){
+      const q = state.q.trim().toLowerCase();
+      if (!q) return state.media.slice();
+      return state.media.filter(it => (it.relative_path || '').toLowerCase().includes(q));
+    }
+
+    function updateSelectionUI(){
+      const count = state.selected.size;
+      el('selCount').textContent = String(count);
+      const show = count > 0;
+      el('selectBar').classList.toggle('show', show);
+
+      // enable/disable action buttons
+      el('sendResolveBtn').disabled = !show || !state.activeProject;
+      el('clearSelBtn').disabled = !show;
+      el('selResolveBtn').disabled = !show || !state.activeProject;
+
+      // drawer select button label
+      if (state.focused){
+        const isSel = state.selected.has(state.focused.relative_path);
+        el('drawerToggleSelect').textContent = isSel ? '− Deselect' : '＋ Select';
+        el('drawerToggleSelect').classList.toggle('primary', !isSel);
+      }
+    }
+
+    function setView(view){
+      state.view = view;
+      el('viewGrid').classList.toggle('active', view === 'grid');
+      el('viewList').classList.toggle('active', view === 'list');
+      el('mediaGrid').style.display = (view === 'grid') ? '' : 'none';
+      el('mediaList').style.display = (view === 'list') ? '' : 'none';
+      renderMedia();
+    }
+
+    // -------------------------
+    // Fetchers
+    // -------------------------
+    async function loadSources(){
+      try{
+        const r = await fetch(`${API}/api/sources`);
+        if (!r.ok) throw new Error('Failed to list sources');
+        state.sources = await r.json();
+        renderSources();
+      }catch(e){
+        toast('bad','Sources', e.message);
+      }
+    }
+
+    async function loadProjects(){
+      try{
+        const r = await fetch(`${API}/api/projects`);
+        if (!r.ok) throw new Error('Failed to list projects');
+        state.projects = await r.json();
+        renderProjects();
+        updateTopCounts();
+      }catch(e){
+        toast('bad','Projects', e.message);
+      }
+    }
+
+    async function loadMedia(){
+      if (!state.activeProject){
+        state.media = [];
+        renderMedia();
+        updateTopCounts();
+        return;
+      }
+      const name = state.activeProject.name;
+      try{
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/media${mediaQuery()}`);
+        if (!r.ok) throw new Error('Failed to load media list');
+        const payload = await r.json();
+        state.media = Array.isArray(payload.media) ? payload.media : [];
+        // clear selection if selected files disappeared
+        const existing = new Set(state.media.map(m => m.relative_path));
+        for (const s of Array.from(state.selected)){
+          if (!existing.has(s)) state.selected.delete(s);
+        }
+        renderMedia();
+        updateTopCounts();
+        updateSelectionUI();
+      }catch(e){
+        toast('bad','Media', e.message);
+      }
+    }
+
+    // -------------------------
+    // Renderers
+    // -------------------------
+    function renderSources(){
+      const root = el('sources');
+      root.innerHTML = '';
+      if (!state.sources.length){
+        root.innerHTML = `<div class="card"><strong>No sources</strong><div class="small">Only the primary mount is available.</div></div>`;
+        return;
+      }
+      for (const s of state.sources){
+        const card = document.createElement('div');
+        card.className = 'card';
+        const reach = s.accessible ? 'reachable' : 'unreachable';
+        const enabled = s.enabled ? 'enabled' : 'disabled';
+        card.innerHTML =
+          `<strong>${escapeHtml(s.name)}</strong>
+           <div class="small">${escapeHtml(s.root || '')}</div>
+           <div class="tagrow">
+             <span class="tag ${s.enabled ? 'good':''}">${escapeHtml(enabled)}</span>
+             <span class="tag ${s.accessible ? 'good':'bad'}">${escapeHtml(reach)}</span>
+             <span class="tag">${escapeHtml(s.type || 'local')}</span>
+           </div>`;
+        root.appendChild(card);
+      }
+    }
+
+    function renderProjects(){
+      const root = el('projects');
+      root.innerHTML = '';
+      if (!state.projects.length){
+        root.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;">No projects yet — create via <code>/api/projects</code>.</div>`;
+        return;
+      }
+      for (const p of state.projects){
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        if (state.activeProject && state.activeProject.name === p.name) chip.classList.add('active');
+        chip.title = p.instructions || 'Browse this project';
+        chip.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="name">${escapeHtml(p.name)}</span>`;
+        chip.addEventListener('click', () => selectProject(p));
+        root.appendChild(chip);
+      }
+      el('projCount').textContent = `${state.projects.length} total`;
+    }
+
+    function renderMedia(){
+      const items = filteredMedia();
+
+      // GRID
+      const g = el('mediaGrid');
+      g.innerHTML = '';
+      // LIST
+      const l = el('mediaList');
+      l.innerHTML = '';
+
+      if (!state.activeProject){
+        const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
+          Select a project to view media.
+        </div>`;
+        g.innerHTML = empty;
+        l.innerHTML = empty;
+        return;
+      }
+
+      if (!items.length){
+        const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
+          No indexed files yet. Upload then run <code>/reindex</code>.
+        </div>`;
+        g.innerHTML = empty;
+        l.innerHTML = empty;
+        return;
+      }
+
+      for (const it of items){
+        const kind = guessKind(it);
+        const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
+        const sub = it.relative_path || '';
+        const size = formatBytes(it.size);
+
+        // If your API can provide a lightweight thumbnail URL (recommended), use it:
+        // - it.thumb_url (image/jpg) for videos/images
+        // Otherwise we can still show the actual stream_url for images (not always great for big video files).
+        const thumbUrl = it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null);
+
+        // ---- grid card
+        const card = document.createElement('div');
+        card.className = 'asset';
+        if (state.selected.has(it.relative_path)) card.classList.add('selected');
+
+        card.innerHTML = `
+          <div class="thumb">
+            ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
+                       : `<div class="fallback">No thumbnail</div>`}
+            <div class="badges">
+              <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
+              <span class="badge">${escapeHtml(size)}</span>
+            </div>
+            <div class="selector" title="Select">
+              <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} aria-label="Select media" />
+            </div>
+          </div>
+          <div class="body">
+            <div class="title">${escapeHtml(title)}</div>
+            <div class="sub">${escapeHtml(sub)}</div>
+          </div>
+        `;
+
+        // checkbox toggles selection without opening drawer
+        card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          toggleSelected(it.relative_path);
+        });
+
+        // click card opens inspector
+        card.addEventListener('click', () => openDrawer(it));
+        g.appendChild(card);
+
+        // ---- list row
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `
+          <div class="mini">
+            ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
+                       : `<span style="font-size:11px;color:var(--muted);">${escapeHtml(kind)}</span>`}
+          </div>
+          <div class="info">
+            <div class="t">${escapeHtml(title)}</div>
+            <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
+          </div>
+          <div class="actions">
+            <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} title="Select" />
+            <button class="iconbtn" type="button">Preview</button>
+          </div>
+        `;
+        row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it.relative_path));
+        row.querySelector('button').addEventListener('click', () => openDrawer(it));
+        l.appendChild(row);
+      }
+    }
+
+    // -------------------------
+    // Project selection + upload
+    // -------------------------
+    async function selectProject(p){
+      state.activeProject = p;
+      state.selected.clear();
+      state.focused = null;
+
+      // prefill resolve name
+      el('resolveProjectMode').value = 'current';
+      el('resolveProjectName').value = p.name || '';
+      el('resolveNewName').value = '';
+
+      el('uploadCaption').textContent = `Upload to ${p.name}${p.source ? ` (${p.source})` : ''}`;
+      el('uploadBtn').disabled = false;
+
+      renderProjects();
+      updateTopCounts();
+      updateSelectionUI();
+      toast('good', 'Project', `Selected ${p.name}`);
+      await loadMedia();
+    }
+
+    async function uploadActive(){
+      const p = state.activeProject;
+      if (!p){ toast('warn','Upload','Select a project first'); return; }
+      const f = el('uploadFile').files?.[0];
+      if (!f){ toast('warn','Upload','Pick a file first'); return; }
+
+      el('uploadBtn').disabled = true;
+      el('uploadStatus').textContent = 'Uploading…';
+
+      try{
+        const form = new FormData();
+        form.append('file', f);
+
+        const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery()}`;
+        const r = await fetch(url, { method:'POST', body: form });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
+
+        const msg = payload.status === 'duplicate'
+          ? 'Duplicate skipped — already on disk.'
+          : 'Upload stored.';
+        el('uploadStatus').textContent = msg;
+        toast(payload.status === 'duplicate' ? 'warn' : 'good', 'Upload', msg);
+        await loadMedia();
+      }catch(e){
+        el('uploadStatus').textContent = `Upload failed: ${e.message}`;
+        toast('bad','Upload', e.message);
+      }finally{
+        el('uploadBtn').disabled = false;
+      }
+    }
+
+    // -------------------------
+    // Selection + Resolve
+    // -------------------------
+    function toggleSelected(relPath){
+      if (!relPath) return;
+      if (state.selected.has(relPath)) state.selected.delete(relPath);
+      else state.selected.add(relPath);
+
+      // update selected CSS quickly without full re-render
+      // simplest: re-render; media lists are small enough on LAN.
+      renderMedia();
+      updateSelectionUI();
+    }
+
+    function clearSelection(){
+      state.selected.clear();
+      renderMedia();
+      updateSelectionUI();
+    }
+
+    async function sendToResolve(){
+      const p = state.activeProject;
+      if (!p){ toast('warn','Resolve','Select a project first'); return; }
+      if (!state.selected.size){ toast('warn','Resolve','Select one or more clips'); return; }
+
+      const projectMode = el('resolveProjectMode').value;
+      let projectValue = p.name;
+
+      if (projectMode === '__new__') projectValue = '__new__';
+      else if (projectMode === '__select__') projectValue = '__select__';
+      else {
+        const v = (el('resolveProjectName').value || '').trim();
+        if (v) projectValue = v;
+      }
+
+      const body = {
+        project: projectValue,
+        new_project_name: projectMode === '__new__'
+          ? ((el('resolveNewName').value || '').trim() || null)
+          : null,
+        media_rel_paths: Array.from(state.selected),
+        mode: el('resolveMode').value || 'import',
+      };
+
+      try{
+        const r = await fetch(`${API}/api/resolve/open${mediaQuery()}`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify(body),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Resolve request failed');
+        toast('good','Resolve', `Sent. Job: ${payload.job_id || 'ok'}`);
+      }catch(e){
+        toast('bad','Resolve', e.message);
+      }
+    }
+
+    // -------------------------
+    // Drawer / inspector
+    // -------------------------
+    function openDrawer(item){
+      state.focused = item;
+
+      const kind = guessKind(item);
+      const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
+      el('drawerTitle').textContent = title;
+      el('drawerSub').textContent = item.relative_path || '';
+
+      // preview
+      const preview = el('drawerPreview');
+      preview.innerHTML = '';
+      if (kind === 'video'){
+        const v = document.createElement('video');
+        v.controls = true;
+        v.src = item.stream_url || '';
+        v.preload = 'metadata';
+        preview.appendChild(v);
+      }else if (kind === 'image'){
+        const img = document.createElement('img');
+        img.src = item.stream_url || item.thumb_url || item.thumbnail_url || '';
+        img.alt = title;
+        preview.appendChild(img);
+      }else if (kind === 'audio'){
+        const a = document.createElement('audio');
+        a.controls = true;
+        a.src = item.stream_url || '';
+        preview.appendChild(a);
+      }else{
+        const box = document.createElement('div');
+        box.style.padding = '14px';
+        box.style.color = 'var(--muted)';
+        box.style.fontSize = '12px';
+        box.innerHTML = `No native preview for this type.<br><span class="kbd">${escapeHtml(kind)}</span>`;
+        preview.appendChild(box);
+      }
+
+      // metadata table (show what you have; hides gracefully if missing)
+      const kv = el('drawerKV');
+      const rows = [
+        ['Kind', kind],
+        ['Size', formatBytes(item.size)],
+        ['Stream', item.stream_url || '(none)'],
+        ['Source', state.activeProject?.source || '(primary)'],
+        ['Project', state.activeProject?.name || '(none)'],
+        ['Relative', item.relative_path || '(none)'],
+        // Optional fields if your API provides them:
+        ['MIME', item.mime || item.content_type || ''],
+        ['Hash', item.sha256 || item.hash || ''],
+        ['Created', item.created_at || item.createdAt || ''],
+        ['Modified', item.updated_at || item.updatedAt || ''],
+        ['Duration', item.duration ? `${item.duration}s` : ''],
+        ['Resolution', (item.width && item.height) ? `${item.width}×${item.height}` : ''],
+      ].filter(([_, v]) => String(v || '').trim().length > 0);
+
+      kv.innerHTML = rows.map(([k,v]) => `
+        <div class="k">${escapeHtml(k)}</div>
+        <div class="v">${escapeHtml(v)}</div>
+      `).join('');
+
+      // actions
+      el('drawerPlay').onclick = () => {
+        const media = preview.querySelector('video, audio');
+        if (media) media.play?.();
+      };
+
+      el('drawerCopy').onclick = async () => {
+        const u = item.stream_url || '';
+        try{
+          await navigator.clipboard.writeText(u);
+          toast('good','Copied', 'Stream URL copied to clipboard');
+        }catch{
+          toast('warn','Clipboard', 'Copy failed (browser permission)');
+        }
+      };
+
+      el('drawerToggleSelect').onclick = () => {
+        toggleSelected(item.relative_path);
+      };
+
+      // open
+      const d = el('drawer');
+      d.classList.add('open');
+      d.setAttribute('aria-hidden', 'false');
+      updateSelectionUI();
+    }
+
+    function closeDrawer(){
+      const d = el('drawer');
+      d.classList.remove('open');
+      d.setAttribute('aria-hidden', 'true');
+    }
+
+    // -------------------------
+    // Events / bindings
+    // -------------------------
+    el('refreshBtn').addEventListener('click', async () => {
+      await loadSources();
+      await loadProjects();
+      await loadMedia();
+      toast('good','Refresh','Reloaded projects + media');
+    });
+
+    el('viewGrid').addEventListener('click', () => setView('grid'));
+    el('viewList').addEventListener('click', () => setView('list'));
+
+    el('q').addEventListener('input', (e) => {
+      state.q = e.target.value || '';
+      renderMedia();
+      updateTopCounts();
+    });
+
+    // Upload
+    el('uploadBtn').addEventListener('click', uploadActive);
+    el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
+
+    // Resolve
+    el('sendResolveBtn').addEventListener('click', sendToResolve);
+    el('selResolveBtn').addEventListener('click', sendToResolve);
+
+    // Clear selection
+    el('clearSelBtn').addEventListener('click', clearSelection);
+    el('selClearBtn').addEventListener('click', clearSelection);
+
+    // Preview (first selected)
+    el('selPlayBtn').addEventListener('click', () => {
+      const first = Array.from(state.selected)[0];
+      const item = state.media.find(m => m.relative_path === first);
+      if (item) openDrawer(item);
+    });
+
+    // Drawer close
+    el('drawerClose').addEventListener('click', closeDrawer);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeDrawer();
+      // cheap "cmd+k" focus
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){
+        e.preventDefault();
+        el('q').focus();
+      }
+    });
+
+    // Resolve hint updates
+    function syncResolveHint(){
+      const c = state.selected.size;
+      el('resolveHint').textContent = c
+        ? `${c} item(s) queued.`
+        : 'Select clips to enable.';
+    }
+    const _origUpdateSelectionUI = updateSelectionUI;
+    updateSelectionUI = function(){
+      _origUpdateSelectionUI();
+      syncResolveHint();
+    };
+
+    // Boot
+    document.addEventListener('DOMContentLoaded', async () => {
+      toast('good','Boot','Loading sources + projects…');
+      await loadSources();
+      await loadProjects();
+      setView('grid');
+      updateTopCounts();
+      updateSelectionUI();
+    });
+  </script>
+</body>
+</html>
