@@ -5,34 +5,88 @@
   <title>media-sync-api adapter</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; line-height: 1.6; color: #0f172a; }
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --accent: #6366f1;
+      --accent-strong: #4338ca;
+      --text: #0f172a;
+    }
+
+    body { font-family: Arial, sans-serif; margin: 2rem; line-height: 1.6; color: var(--text); background: var(--bg); }
     code { background: #e2e8f0; padding: 0.15rem 0.35rem; border-radius: 4px; }
     pre { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 6px; overflow-x: auto; }
-    h1, h2, h3 { color: #0b132b; }
-    .callout { background: #f8fafc; border-left: 4px solid #2563eb; padding: 0.75rem 1rem; margin: 1rem 0; }
+    h1, h2, h3 { color: #0b132b; margin-top: 0; }
+    .callout { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 1rem 1.25rem; margin: 1rem 0; }
     .step { margin-bottom: 1.25rem; }
     ul { margin-top: 0.35rem; }
-    .panel { border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; margin: 0.75rem 0; }
+    .panel { border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin: 0.75rem 0; background: var(--panel); }
     .hidden { display: none; }
-    .pill { display: inline-block; padding: 0.35rem 0.6rem; border-radius: 999px; background: #eef2ff; color: #312e81; margin: 0.2rem 0.25rem; cursor: pointer; border: 1px solid #c7d2fe; }
-    .pill:hover { background: #c7d2fe; }
-    .media-row { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid #e2e8f0; }
-    .media-row:last-child { border-bottom: none; }
-    .media-actions button { padding: 0.35rem 0.75rem; border: none; background: #2563eb; color: white; border-radius: 4px; cursor: pointer; }
-    .media-actions button:hover { background: #1e4fc8; }
-    .media-actions input[type="checkbox"] { margin-right: 0.5rem; }
-    .upload-panel { margin-top: 0.75rem; padding: 0.75rem; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; }
-    .upload-panel input[type="file"] { margin-bottom: 0.5rem; }
-    .upload-panel button { padding: 0.35rem 0.75rem; border: none; background: #047857; color: white; border-radius: 4px; cursor: pointer; }
-    .upload-panel button:hover { background: #065f46; }
-    .muted { color: #475569; font-size: 0.95rem; }
+    .muted { color: var(--muted); font-size: 0.95rem; }
     .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
-    .sources-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.5rem; }
-    .sources-grid div { padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc; }
-    .source-form label { display: block; margin-bottom: 0.35rem; }
-    .source-form input { width: 100%; padding: 0.4rem; margin-top: 0.15rem; box-sizing: border-box; }
-    .source-form button { margin-top: 0.35rem; padding: 0.35rem 0.75rem; border: none; background: #1d4ed8; color: white; border-radius: 4px; cursor: pointer; }
-    .source-form button:hover { background: #1e40af; }
+
+    .explorer-shell { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start; }
+    .explorer-sidebar { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
+    .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .sidebar-title { font-size: 1.1rem; font-weight: 700; }
+    .search { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f4f5fb; box-sizing: border-box; }
+    .sidebar-block { margin-bottom: 1rem; }
+    .section-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .badge { background: #e0e7ff; color: #312e81; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.8rem; }
+    .pill-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto; }
+    .pill { display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.7rem; border-radius: 10px; background: #f8fafc; color: #0f172a; border: 1px solid var(--border); cursor: pointer; transition: background 120ms ease, border-color 120ms ease; }
+    .pill:hover, .pill.active { background: #eef2ff; border-color: #c7d2fe; }
+    .pill .subtext { color: var(--muted); font-size: 0.85rem; }
+
+    .sources-grid { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
+    .source-card { padding: 0.5rem 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: #f8fafc; font-size: 0.95rem; }
+    .source-status { display: inline-flex; gap: 0.25rem; align-items: center; color: #047857; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+    .source-status.disabled { color: #b91c1c; }
+
+    .source-form label { display: block; margin-bottom: 0.25rem; font-size: 0.9rem; }
+    .source-form input { width: 100%; padding: 0.4rem 0.5rem; margin-top: 0.15rem; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--border); }
+    .source-form button { margin-top: 0.35rem; padding: 0.45rem 0.75rem; border: none; background: var(--accent); color: white; border-radius: 8px; cursor: pointer; }
+    .source-form button:hover { background: var(--accent-strong); }
+
+    .explorer-main { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; min-height: 540px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; gap: 0.75rem; }
+    .main-top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .main-top h3 { margin: 0; }
+    .crumb { color: var(--muted); font-size: 0.95rem; }
+    .actions-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .btn { border: 1px solid var(--border); padding: 0.5rem 0.85rem; border-radius: 10px; background: #eef2ff; color: #1e3a8a; cursor: pointer; font-weight: 600; }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.primary:hover { background: var(--accent-strong); }
+    .btn:hover { background: #e0e7ff; }
+
+    .upload-panel { padding: 0.75rem; border: 1px dashed var(--border); border-radius: 10px; background: #f8fafc; margin: 0; }
+    .upload-panel button { padding: 0.4rem 0.75rem; border: none; background: #047857; color: white; border-radius: 8px; cursor: pointer; }
+    .upload-panel button:hover { background: #065f46; }
+
+    .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; }
+    .file-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; background: #f8fafc; display: flex; flex-direction: column; gap: 0.35rem; justify-content: space-between; min-height: 150px; }
+    .file-card .name { font-weight: 700; word-break: break-word; }
+    .file-card .meta { color: var(--muted); font-size: 0.9rem; }
+    .file-card.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .file-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .menu { position: relative; }
+    .menu button { background: #e2e8f0; border: 1px solid var(--border); border-radius: 8px; padding: 0.35rem 0.6rem; cursor: pointer; }
+    .menu button:hover { background: #c7d2fe; }
+    .menu-list { position: absolute; right: 0; top: 110%; border: 1px solid var(--border); border-radius: 8px; background: white; min-width: 180px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1); padding: 0.25rem 0; z-index: 10; }
+    .menu-list.hidden { display: none; }
+    .menu-list button, .menu-list a { display: block; width: 100%; text-align: left; padding: 0.5rem 0.75rem; border: none; background: transparent; cursor: pointer; color: var(--text); text-decoration: none; }
+    .menu-list button:hover, .menu-list a:hover { background: #eef2ff; }
+
+    .resolve-panel { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; background: #f8fafc; }
+
+    .empty-state { padding: 1.25rem; border: 1px dashed var(--border); border-radius: 10px; text-align: center; color: var(--muted); }
+
+    @media (max-width: 960px) {
+      body { margin: 1rem; }
+      .explorer-shell { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -40,45 +94,69 @@
   <p>This lightweight, LAN-only API sits between your phone and host project storage. Mount <code>../Projects</code> on the host to <code>/data/projects</code> in the container, then use the endpoints below or the iPhone Shortcut flow to ingest media reliably.</p>
 
   <div class="callout">
-    <strong>New: Browser-native explorer</strong><br />
-    Use the panel below to list projects, browse indexed files, and play media directly from the Projects volume without downloading.
+    <strong>New: unified asset explorer</strong><br />
+    Browse sources, projects, and indexed media from a single split-pane layout. Use per-file menus to preview, download, or queue clips for Resolve.
   </div>
 
-  <section id="sources-panel" class="panel">
-    <h2>Sources</h2>
-    <p>Destinations for projects and uploads. Use this to confirm mounts and register additional roots (e.g., NAS shares).</p>
-    <div id="sources" class="sources-grid"></div>
-    <div class="source-form" aria-live="polite">
-      <h3>Add a source</h3>
-      <label for="source-name">Name</label>
-      <input id="source-name" name="source-name" placeholder="nas" />
-      <label for="source-root">Absolute path on host</label>
-      <input id="source-root" name="source-root" placeholder="/mnt/nas/projects" />
-      <label for="source-type">Type (optional)</label>
-      <input id="source-type" name="source-type" placeholder="local|smb|nfs" />
-      <button id="source-add" type="button">Save source</button>
-      <div id="source-status" class="muted"></div>
-    </div>
-  </section>
+  <div class="explorer-shell" id="browser-explorer">
+    <aside class="explorer-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Asset Explorer</div>
+      </div>
+      <input id="asset-filter" class="search" placeholder="Search assets, tags, names" aria-label="Filter assets" />
 
-  <section id="browser-explorer">
-    <h2>Browser explorer</h2>
-    <p>Click a project to view its indexed media. Files stream via the API with HTTP range support, so large clips play inline.</p>
-    <div id="projects" class="panel"></div>
-    <div id="media" class="panel hidden">
-      <h3 id="media-title">Media</h3>
+      <div class="sidebar-block">
+        <div class="section-title">Sources <span class="badge" aria-live="polite">active</span></div>
+        <div id="sources" class="sources-grid"></div>
+      </div>
+
+      <div class="sidebar-block">
+        <div class="section-title">Projects <span class="badge" aria-live="polite">folders</span></div>
+        <div id="projects" class="pill-list" aria-live="polite"></div>
+      </div>
+
+      <div class="sidebar-block">
+        <div class="section-title">Tags</div>
+        <p class="muted">Tag filtering will use project metadata; for now, use the search box above to narrow files.</p>
+      </div>
+
+      <div class="sidebar-block">
+        <div class="section-title">Add a source</div>
+        <div class="source-form" aria-live="polite">
+          <label for="source-name">Name</label>
+          <input id="source-name" name="source-name" placeholder="nas" />
+          <label for="source-root">Absolute path on host</label>
+          <input id="source-root" name="source-root" placeholder="/mnt/nas/projects" />
+          <label for="source-type">Type (optional)</label>
+          <input id="source-type" name="source-type" placeholder="local|smb|nfs" />
+          <button id="source-add" type="button">Save source</button>
+          <div id="source-status" class="muted"></div>
+        </div>
+      </div>
+    </aside>
+
+    <div id="media" class="explorer-main">
+      <div class="main-top">
+        <div>
+          <h3 id="media-title">Browse projects</h3>
+          <div id="crumb-text" class="crumb">Select a folder on the left to view its contents.</div>
+        </div>
+        <div class="actions-row">
+          <span id="selection-status" class="muted">Select clips to send to Resolve.</span>
+        </div>
+      </div>
+
       <div id="upload" class="upload-panel hidden" aria-live="polite">
         <p class="muted" id="upload-caption">Select a project to upload media.</p>
         <input type="file" id="upload-file" class="visually-hidden" aria-label="Select media to upload" />
-        <div>
+        <div class="actions-row">
           <button id="upload-picker" type="button">Choose file</button>
-        </div>
-        <div>
           <button id="upload-button" type="button">Upload</button>
         </div>
         <div id="upload-status" class="muted"></div>
       </div>
-      <div id="resolve-panel" class="panel hidden" aria-live="polite">
+
+      <div id="resolve-panel" class="resolve-panel hidden" aria-live="polite">
         <h4>DaVinci Resolve bridge</h4>
         <p class="muted">Select clips, then send them to the Resolve host agent to open/import.</p>
         <label for="resolve-project-mode">Project</label>
@@ -96,18 +174,21 @@
           <option value="import">Import into media pool</option>
           <option value="reveal_in_explorer">Reveal in Explorer/Finder</option>
         </select>
-        <button id="resolve-send" type="button">Open in DaVinci Resolve</button>
-        <div id="selection-status" class="muted"></div>
-        <div id="resolve-status" class="muted"></div>
+        <div class="actions-row">
+          <button id="resolve-send" type="button" class="btn primary">Open in DaVinci Resolve</button>
+          <div id="resolve-status" class="muted"></div>
+        </div>
       </div>
-      <div id="media-list"></div>
-      <div id="player" class="hidden">
+
+      <div id="media-list" class="file-grid" aria-live="polite"></div>
+
+      <div id="player" class="panel hidden">
         <h4>Preview</h4>
         <video id="video-player" controls style="max-width: 100%; height: auto;" aria-label="Media preview"></video>
         <p id="media-meta"></p>
       </div>
     </div>
-  </section>
+  </div>
 
   <div class="callout">
     <strong>Host/LAN defaults</strong><br />
@@ -221,9 +302,20 @@
     const resolveSend = document.getElementById('resolve-send');
     const resolveStatus = document.getElementById('resolve-status');
     const selectionStatus = document.getElementById('selection-status');
+    const assetFilter = document.getElementById('asset-filter');
+    const crumbText = document.getElementById('crumb-text');
 
     let activeProject = null;
     const selectedMedia = new Set();
+    let currentMedia = [];
+
+    const formatBytes = (bytes) => {
+      if (!bytes || Number.isNaN(bytes)) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      const size = bytes / (1024 ** power);
+      return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[power]}`;
+    };
 
     async function loadSources() {
       sourcesEl.textContent = 'Loading sources...';
@@ -245,11 +337,13 @@
       }
       sources.forEach((source) => {
         const card = document.createElement('div');
+        card.className = 'source-card';
         const reachability = source.accessible ? 'reachable' : 'unreachable (check mount)';
         const enabled = source.enabled ? 'enabled' : 'disabled';
         card.innerHTML = `<strong>${source.name}</strong><br />`
           + `<span class="muted">${source.root}</span><br />`
-          + `${enabled} • ${reachability}`;
+          + `<span class="source-status ${source.enabled ? '' : 'disabled'}">${enabled}</span>`
+          + ` • ${reachability}`;
         sourcesEl.appendChild(card);
       });
     }
@@ -267,16 +361,25 @@
     }
 
     function renderProjects(projects) {
+      projectsEl.textContent = '';
       if (!projects.length) {
         projectsEl.textContent = 'No projects yet — create one via /api/projects then refresh.';
         return;
       }
-      projectsEl.textContent = '';
       projects.forEach((project) => {
         const pill = document.createElement('div');
         pill.className = 'pill';
-        pill.textContent = `${project.name}`;
+        if (activeProject && activeProject.name === project.name) {
+          pill.classList.add('active');
+        }
+        const label = document.createElement('div');
+        label.textContent = project.name;
+        const sub = document.createElement('div');
+        sub.className = 'subtext';
+        sub.textContent = project.source || 'primary';
         pill.title = project.instructions || 'Browse media in this project';
+        pill.appendChild(label);
+        pill.appendChild(sub);
         pill.onclick = () => selectProject(project);
         projectsEl.appendChild(pill);
       });
@@ -284,9 +387,12 @@
 
     function selectProject(project) {
       activeProject = project;
+      selectedMedia.clear();
+      updateSelectionStatus();
       uploadPanel.classList.remove('hidden');
       mediaEl.classList.remove('hidden');
       mediaTitle.textContent = `Media in ${project.name}`;
+      crumbText.textContent = `${project.source || 'primary'} • ${project.name}`;
       uploadCaption.textContent = `Upload to ${project.name} (${project.source})`;
       uploadStatus.textContent = '';
       uploadFile.value = '';
@@ -296,71 +402,143 @@
       resolveStatus.textContent = '';
       resolvePanel.classList.remove('hidden');
       loadMedia();
+      loadProjects();
     }
 
     async function loadMedia() {
       if (!activeProject) {
-        mediaList.textContent = 'Select a project to view media.';
+        mediaList.innerHTML = '<div class="empty-state">Select a project to view media.</div>';
         return;
       }
       const { name, source } = activeProject;
-      mediaList.textContent = 'Loading media...';
+      mediaList.innerHTML = '<div class="empty-state">Loading media...</div>';
       mediaEl.classList.remove('hidden');
       player.classList.add('hidden');
       videoPlayer.pause();
       videoPlayer.removeAttribute('src');
+      mediaMeta.textContent = '';
       mediaTitle.textContent = `Media in ${name}`;
       const query = source ? `?source=${encodeURIComponent(source)}` : '';
       try {
         const response = await fetch(`/api/projects/${encodeURIComponent(name)}/media${query}`);
         if (!response.ok) throw new Error('Failed to load media list');
         const payload = await response.json();
-        renderMedia(payload.media);
+        currentMedia = payload.media || [];
+        applyMediaFilter();
       } catch (err) {
-        mediaList.textContent = `Error loading media: ${err.message}`;
+        mediaList.innerHTML = `<div class="empty-state">Error loading media: ${err.message}</div>`;
       }
     }
 
-    function renderMedia(items) {
-      selectedMedia.clear();
-      updateSelectionStatus();
-      mediaList.textContent = '';
-      if (!items.length) {
-        mediaList.textContent = 'No indexed files yet. Upload then run /reindex.';
+    function applyMediaFilter() {
+      if (!activeProject) {
+        mediaList.innerHTML = '<div class="empty-state">Select a project to view media.</div>';
         return;
       }
-      items.forEach((item) => {
-        const row = document.createElement('div');
-        row.className = 'media-row';
+      const term = (assetFilter.value || '').toLowerCase();
+      const filtered = term
+        ? currentMedia.filter((item) => (item.relative_path || '').toLowerCase().includes(term))
+        : currentMedia.slice();
+      renderMediaGrid(filtered);
+    }
 
-        const label = document.createElement('div');
-        label.textContent = item.relative_path;
+    function renderMediaGrid(items) {
+      mediaList.textContent = '';
+      if (!items.length) {
+        mediaList.innerHTML = '<div class="empty-state">No assets found for this folder or filter.</div>';
+        return;
+      }
+
+      items.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'file-card';
+        const isSelected = selectedMedia.has(item.relative_path);
+        if (isSelected) card.classList.add('selected');
+
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = item.relative_path.split('/').pop();
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = `${item.relative_path} • ${formatBytes(item.size || 0)}`;
 
         const actions = document.createElement('div');
-        actions.className = 'media-actions';
-        const selector = document.createElement('input');
-        selector.type = 'checkbox';
-        selector.title = 'Include in Resolve request';
-        selector.addEventListener('change', (evt) => {
-          toggleSelection(item.relative_path, evt.target.checked);
-        });
-        const play = document.createElement('button');
-        play.textContent = 'Play';
-        play.onclick = () => playMedia(item.stream_url, item);
-        actions.appendChild(selector);
-        actions.appendChild(play);
+        actions.className = 'file-actions';
 
-        row.appendChild(label);
-        row.appendChild(actions);
-        mediaList.appendChild(row);
+        const preview = document.createElement('button');
+        preview.className = 'btn primary';
+        preview.textContent = 'Preview';
+        preview.onclick = () => playMedia(item.stream_url, item);
+
+        const queue = document.createElement('button');
+        queue.className = 'btn';
+        queue.textContent = isSelected ? 'Queued for Resolve' : 'Queue for Resolve';
+        queue.onclick = () => {
+          toggleSelection(item.relative_path, !selectedMedia.has(item.relative_path));
+          card.classList.toggle('selected', selectedMedia.has(item.relative_path));
+          queue.textContent = selectedMedia.has(item.relative_path) ? 'Queued for Resolve' : 'Queue for Resolve';
+        };
+
+        const menu = document.createElement('div');
+        menu.className = 'menu';
+        const menuButton = document.createElement('button');
+        menuButton.type = 'button';
+        menuButton.textContent = '⋯';
+        const menuList = document.createElement('div');
+        menuList.className = 'menu-list hidden';
+
+        const downloadUrl = item.download_url || item.stream_url;
+        const download = document.createElement('a');
+        download.href = downloadUrl;
+        download.textContent = 'Download';
+        download.setAttribute('download', '');
+
+        const copyLink = document.createElement('button');
+        copyLink.type = 'button';
+        copyLink.textContent = 'Copy stream URL';
+        copyLink.onclick = async () => {
+          const text = item.stream_url || '';
+          if (navigator.clipboard && text) {
+            await navigator.clipboard.writeText(text);
+          }
+        };
+
+        const reveal = document.createElement('button');
+        reveal.type = 'button';
+        reveal.textContent = 'Preview & details';
+        reveal.onclick = () => playMedia(item.stream_url, item);
+
+        menuList.appendChild(reveal);
+        menuList.appendChild(download);
+        menuList.appendChild(copyLink);
+        menu.appendChild(menuButton);
+        menu.appendChild(menuList);
+
+        menuButton.addEventListener('click', (evt) => {
+          evt.stopPropagation();
+          menuList.classList.toggle('hidden');
+        });
+        menu.addEventListener('click', (evt) => evt.stopPropagation());
+        document.addEventListener('click', () => menuList.classList.add('hidden'), { once: true });
+
+        actions.appendChild(preview);
+        actions.appendChild(queue);
+        actions.appendChild(menu);
+
+        card.appendChild(name);
+        card.appendChild(meta);
+        card.appendChild(actions);
+        mediaList.appendChild(card);
       });
     }
 
     function playMedia(url, item) {
+      if (!url) return;
       player.classList.remove('hidden');
       videoPlayer.src = url;
       videoPlayer.load();
-      mediaMeta.textContent = `${item.relative_path} • ${item.size || 0} bytes`;
+      mediaMeta.textContent = `${item.relative_path} • ${formatBytes(item.size || 0)}`;
     }
 
     function openPicker() {
@@ -507,9 +685,12 @@
       sendToResolve();
     });
 
+    assetFilter.addEventListener('input', () => applyMediaFilter());
+
     document.addEventListener('DOMContentLoaded', () => {
       loadSources();
       loadProjects();
+      applyMediaFilter();
     });
   </script>
 </body>
