@@ -87,6 +87,7 @@
       gap:12px;
       align-items:center;
       min-width: 240px;
+      flex: 0 1 auto;
     }
 
     .hamburger{
@@ -692,6 +693,24 @@
     .toast.bad{ border-color: rgba(239,68,68,0.35); }
 
     /* Mobile */
+    @media (max-width: 1180px){
+      .topbar-inner{
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .toolbar{
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: space-between;
+      }
+      .search{
+        flex: 1 1 320px;
+        max-width: none;
+      }
+      .pillbar{
+        justify-content: flex-start;
+      }
+    }
     @media (max-width: 980px){
       .sidebar{ width: 320px; }
     }

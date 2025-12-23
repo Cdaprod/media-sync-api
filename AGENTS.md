@@ -348,3 +348,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-12)
 - Explorer inspector drawer now renders its blur background via a pseudo-element so preview controls stay crisp and clickable.
 - Test harness now bootstraps the repo root into `sys.path`, and public explorer HTML is covered by the static page tests.
+
+### Latest Implementation Notes (2025-03-13)
+- Explorer top bar now wraps toolbar controls at mid-width breakpoints to prevent search/buttons overlap.

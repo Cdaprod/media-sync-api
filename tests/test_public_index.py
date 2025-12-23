@@ -25,3 +25,4 @@ def test_public_explorer_path(client):
     assert "media-sync-api — Explorer" in body
     assert "drawerPreview" in body
     assert "drawerBackdrop" in body
+    assert "@media (max-width: 1180px)" in body
