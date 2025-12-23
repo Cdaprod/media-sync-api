@@ -9,6 +9,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: media-sync-api
+    pull_policy: never
     restart: always
 
     ports:
@@ -33,6 +34,7 @@ services:
   resolve-postgres:
     image: postgres:15-alpine
     container_name: resolve-postgres
+    pull_policy: never
     restart: always
     ports:
       - "5432:5432"
