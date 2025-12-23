@@ -335,3 +335,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-01)
 - Removed the legacy root-level Docker build assets (`Dockerfile`, `docker-bake.hcl`); use the canonical definitions under `/docker/` for Compose and Bake.
+
+### Latest Implementation Notes (2025-03-05)
+- The static adapter now ships a unified asset explorer: left rail lists sources + projects with a shared search bar, right pane renders file cards with per-file menus (preview, download, copy stream URL, Resolve queue). Keep future UI tweaks contained to `public/index.html` and preserve the split-pane layout.
