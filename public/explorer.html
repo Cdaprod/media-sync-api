@@ -197,6 +197,12 @@
       align-items: center;
       justify-content: flex-end;
     }
+    .action-buttons{
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
     .tagfilter{
       display:flex;
       align-items:center;
@@ -809,6 +815,8 @@
       .toolbar{ width: 100%; flex-direction: column; align-items: stretch; }
       .search{ flex:1; max-width: none; width: 100%; }
       .pillbar{ width: 100%; justify-content: flex-start; }
+      .action-buttons{ display:none; width: 100%; flex-direction: column; align-items: stretch; }
+      .action-buttons.open{ display:flex; }
       .btn{ padding: 7px 10px; font-size:11px; }
       .seg button{ padding: 8px 10px; font-size:11px; }
       .topbar-inner{ padding: 12px 12px; }
@@ -857,10 +865,13 @@
           </div>
 
           <div class="pillbar">
-            <button id="refreshBtn" class="btn" type="button">↻ Refresh</button>
-            <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
-            <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
-            <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
+            <button id="actionsToggle" class="btn mobile-only" type="button">⋯ Actions</button>
+            <div id="actionButtons" class="action-buttons">
+              <button id="refreshBtn" class="btn" type="button">↻ Refresh</button>
+              <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
+              <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
+              <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
+            </div>
           </div>
 
           <div class="seg" aria-label="View mode">
@@ -885,10 +896,45 @@
           <div id="projects" class="chips"></div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Libraries</h2>
+            <div class="meta-line">
+              <span id="libCount">…</span>
+              <span class="kbd">Bridge</span>
+            </div>
+          </div>
+          <div id="libraries" class="chips"></div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Buckets</h2>
+            <div class="meta-line">
+              <span id="bucketCount">…</span>
+              <button id="discoverBucketsBtn" class="btn" type="button" style="padding:4px 8px;font-size:10px;">Discover</button>
+            </div>
+          </div>
+          <div id="buckets" class="chips"></div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
             <h2>Sources</h2>
             <div class="meta-line"><span class="kbd">/api/sources</span></div>
           </div>
           <div id="sources" class="sources"></div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Bridge</h2>
+            <div class="meta-line"><span class="kbd">/api/sources</span></div>
+          </div>
+          <div style="padding: 12px;">
+            <div class="card">
+              <strong>Add library source</strong>
+              <div class="small">Root must be under the configured parent mount.</div>
+              <div style="display:grid; gap:8px; margin-top:10px;">
+                <input id="bridgeName" placeholder="library-nas" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+                <input id="bridgeRoot" placeholder="/mnt/media-sources/NAS" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+                <button id="bridgeBtn" class="btn good" type="button">Register library</button>
+                <div class="small" id="bridgeStatus"></div>
+              </div>
+            </div>
+          </div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
             <h2>Resolve</h2>
@@ -1011,13 +1057,17 @@
     const state = {
       projects: [],
       sources: [],
+      libraries: [],
+      buckets: [],
       activeProject: null,   // {name, source, ...}
+      activeLibrary: null,   // {name, ...}
+      activeBucket: null,    // {bucket_id, ...}
       media: [],             // items from /media
       view: 'grid',          // grid|list
       q: '',
-      selected: new Set(),   // relative_path
+      selected: new Set(),   // asset_id
       focused: null,         // item
-      tagMap: {},            // asset_key -> [tags]
+      tagMap: {},            // asset_id -> [tags]
       tagMeta: {},           // tag -> {color, description}
       tagFilter: '',
       tagMode: 'all',
@@ -1028,6 +1078,7 @@
       sidebarOpen: false,
       inspectorOpen: false,
       filtersOpen: false,
+      actionsOpen: false,
     };
 
     const thumbCache = new Map();
@@ -1117,11 +1168,9 @@
       return window.matchMedia('(max-width: 860px)').matches;
     }
 
-    function mediaQuery(){
-      const p = state.activeProject;
-      if (!p) return '';
+    function mediaQuery(opts = {}){
       const params = new URLSearchParams();
-      if (p.source) params.set('source', p.source);
+      if (opts.source) params.set('source', opts.source);
       const tagFilter = (state.tagFilter || '').trim();
       if (tagFilter){
         params.set(state.tagMode === 'any' ? 'any_tags' : 'tags', tagFilter);
@@ -1133,28 +1182,43 @@
 
     function updateTopCounts(){
       el('projCount').textContent = `${state.projects.length} total`;
-      const name = state.activeProject?.name || 'no project';
-      el('activePath').textContent = name;
-      el('contentTitle').textContent = state.activeProject ? `Media — ${name}` : 'Media';
+      const activeProject = state.activeProject?.name;
+      const activeLibrary = state.activeLibrary?.name;
+      const activeBucket = state.activeBucket?.title || state.activeBucket?.bucket_rel_root;
+      let label = 'no selection';
+      if (activeProject){
+        label = activeProject;
+      }else if (activeLibrary && activeBucket){
+        label = `${activeLibrary} / ${activeBucket}`;
+      }else if (activeLibrary){
+        label = `${activeLibrary} (buckets)`;
+      }
+      el('activePath').textContent = label;
+      if (activeProject){
+        el('contentTitle').textContent = `Media — ${activeProject}`;
+      }else if (activeLibrary && activeBucket){
+        el('contentTitle').textContent = `Library — ${activeBucket}`;
+      }else if (activeLibrary){
+        el('contentTitle').textContent = `Library — ${activeLibrary}`;
+      }else{
+        el('contentTitle').textContent = 'Media';
+      }
       el('mediaCount').textContent = `${filteredMedia().length} items`;
     }
 
     function filteredMedia(){
       const q = state.q.trim().toLowerCase();
       if (!q) return state.media.slice();
-      return state.media.filter(it => (it.relative_path || '').toLowerCase().includes(q));
+      return state.media.filter(it => (it.relative_path || it.rel_path || '').toLowerCase().includes(q));
     }
 
-    function assetKeyFor(item){
-      const p = state.activeProject;
-      if (!p || !item?.relative_path) return null;
-      const source = p.source || 'primary';
-      return `${source}::${p.name}::${item.relative_path}`;
+    function assetIdFor(item){
+      return item?.asset_id || null;
     }
 
     function getTagsForItem(item){
       if (Array.isArray(item?.tags)) return item.tags;
-      const key = assetKeyFor(item);
+      const key = assetIdFor(item);
       return key && state.tagMap[key] ? state.tagMap[key] : [];
     }
 
@@ -1178,7 +1242,7 @@
     function hydrateTagMapFromMedia(){
       const map = {};
       for (const item of state.media){
-        const key = assetKeyFor(item);
+        const key = assetIdFor(item);
         if (key && Array.isArray(item.tags)){
           map[key] = item.tags;
         }
@@ -1199,7 +1263,7 @@
 
       // drawer select button label
       if (state.focused){
-        const isSel = state.selected.has(state.focused.relative_path);
+        const isSel = state.selected.has(state.focused.asset_id);
         el('drawerToggleSelect').textContent = isSel ? '− Deselect' : '＋ Select';
         el('drawerToggleSelect').classList.toggle('primary', !isSel);
       }
@@ -1253,6 +1317,13 @@
       el('drawerBackdrop')?.classList.toggle('show', open);
     }
 
+    function setActionsOpen(open){
+      const actions = el('actionButtons');
+      if (!actions) return;
+      ui.actionsOpen = open;
+      actions.classList.toggle('open', open);
+    }
+
     function syncSidebarMode(){
       const sb = el('sidebar');
       if (!sb) return;
@@ -1264,8 +1335,10 @@
         ui.sidebarOpen = false;
         sb.style.transform = '';
         sb.style.pointerEvents = 'auto';
+        setActionsOpen(false);
       }else{
         setSidebarOpen(false);
+        setActionsOpen(false);
       }
     }
 
@@ -1284,12 +1357,12 @@
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
           thumbObserver.unobserve(entry.target);
-          const rel = entry.target.dataset.rel;
+          const assetId = entry.target.dataset.assetId;
           const url = entry.target.dataset.url;
           const duration = Number(entry.target.dataset.duration) || 0;
           const itemKind = entry.target.dataset.kind;
           if (itemKind !== 'video') return;
-          requestIdle(() => generateThumb(rel, url, duration, entry.target));
+          requestIdle(() => generateThumb(assetId, url, duration, entry.target));
         });
       }, { root: el('mediaScroll'), rootMargin: '200px 0px', threshold: 0.1 });
       return thumbObserver;
@@ -1308,15 +1381,15 @@
       target.innerHTML = `<img src="${escapeHtml(dataUrl)}" alt="Video thumbnail" loading="lazy" />`;
     }
 
-    async function generateThumb(relPath, url, durationHint, target){
-      if (!url || !relPath) return;
-      if (thumbCache.has(relPath)){
-        setThumbImage(target, thumbCache.get(relPath));
+    async function generateThumb(assetId, url, durationHint, target){
+      if (!url || !assetId) return;
+      if (thumbCache.has(assetId)){
+        setThumbImage(target, thumbCache.get(assetId));
         return;
       }
       try{
         const data = await extractVideoFrame(url, durationHint);
-        thumbCache.set(relPath, data);
+        thumbCache.set(assetId, data);
         setThumbImage(target, data);
       }catch{
         if (target){
@@ -1380,7 +1453,15 @@
         const r = await fetch(`${API}/api/sources`);
         if (!r.ok) throw new Error('Failed to list sources');
         state.sources = await r.json();
+        state.libraries = state.sources.filter(s => s.mode === 'library' && s.enabled);
+        if (state.activeLibrary && !state.libraries.find(s => s.name === state.activeLibrary.name)){
+          state.activeLibrary = null;
+          state.activeBucket = null;
+          state.buckets = [];
+        }
         renderSources();
+        renderLibraries();
+        renderBuckets();
       }catch(e){
         toast('bad','Sources', e.message);
       }
@@ -1398,22 +1479,68 @@
       }
     }
 
+    async function loadBuckets(){
+      if (!state.activeLibrary){
+        state.buckets = [];
+        renderBuckets();
+        return;
+      }
+      try{
+        const r = await fetch(`${API}/api/sources/${encodeURIComponent(state.activeLibrary.name)}/buckets`);
+        if (!r.ok) throw new Error('Failed to list buckets');
+        const payload = await r.json();
+        state.buckets = Array.isArray(payload.buckets) ? payload.buckets : [];
+        if (state.activeBucket && !state.buckets.find(b => b.bucket_id === state.activeBucket.bucket_id)){
+          state.activeBucket = null;
+        }
+        renderBuckets();
+      }catch(e){
+        toast('bad','Buckets', e.message);
+      }
+    }
+
+    async function discoverBuckets(){
+      if (!state.activeLibrary){
+        toast('warn','Buckets','Select a library first');
+        return;
+      }
+      try{
+        const r = await fetch(`${API}/api/sources/${encodeURIComponent(state.activeLibrary.name)}/discover-buckets`, { method:'POST' });
+        if (!r.ok) throw new Error('Bucket discovery failed');
+        const payload = await r.json();
+        state.buckets = Array.isArray(payload.buckets) ? payload.buckets : [];
+        state.activeBucket = null;
+        renderBuckets();
+        toast('good','Buckets', `Discovered ${payload.count || state.buckets.length} buckets`);
+      }catch(e){
+        toast('bad','Buckets', e.message);
+      }
+    }
+
     async function loadMedia(){
-      if (!state.activeProject){
+      let url = null;
+      if (state.activeProject){
+        const name = state.activeProject.name;
+        url = `${API}/api/projects/${encodeURIComponent(name)}/media${mediaQuery({ source: state.activeProject.source })}`;
+      }else if (state.activeBucket){
+        url = `${API}/api/buckets/${encodeURIComponent(state.activeBucket.bucket_id)}/media${mediaQuery()}`;
+      }
+
+      if (!url){
         state.media = [];
         state.tagMap = {};
         renderMedia();
         updateTopCounts();
         return;
       }
-      const name = state.activeProject.name;
+
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/media${mediaQuery()}`);
+        const r = await fetch(url);
         if (!r.ok) throw new Error('Failed to load media list');
         const payload = await r.json();
         state.media = Array.isArray(payload.media) ? payload.media : [];
         // clear selection if selected files disappeared
-        const existing = new Set(state.media.map(m => m.relative_path));
+        const existing = new Set(state.media.map(m => m.asset_id));
         for (const s of Array.from(state.selected)){
           if (!existing.has(s)) state.selected.delete(s);
         }
@@ -1448,6 +1575,7 @@
            <div class="tagrow">
              <span class="tag ${s.enabled ? 'good':''}">${escapeHtml(enabled)}</span>
              <span class="tag ${s.accessible ? 'good':'bad'}">${escapeHtml(reach)}</span>
+             <span class="tag">${escapeHtml(s.mode || 'project')}</span>
              <span class="tag">${escapeHtml(s.type || 'local')}</span>
            </div>`;
         root.appendChild(card);
@@ -1473,6 +1601,52 @@
       el('projCount').textContent = `${state.projects.length} total`;
     }
 
+    function renderLibraries(){
+      const root = el('libraries');
+      root.innerHTML = '';
+      if (!state.libraries.length){
+        root.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;">No libraries yet — register a bridge below.</div>`;
+        el('libCount').textContent = '0 total';
+        return;
+      }
+      for (const s of state.libraries){
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        if (state.activeLibrary && state.activeLibrary.name === s.name) chip.classList.add('active');
+        chip.title = s.root || 'Browse library';
+        chip.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="name">${escapeHtml(s.name)}</span>`;
+        chip.addEventListener('click', () => selectLibrary(s));
+        root.appendChild(chip);
+      }
+      el('libCount').textContent = `${state.libraries.length} total`;
+    }
+
+    function renderBuckets(){
+      const root = el('buckets');
+      root.innerHTML = '';
+      el('discoverBucketsBtn').disabled = !state.activeLibrary;
+      if (!state.activeLibrary){
+        root.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;">Select a library to load buckets.</div>`;
+        el('bucketCount').textContent = '—';
+        return;
+      }
+      if (!state.buckets.length){
+        root.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;">No buckets yet — run discovery.</div>`;
+        el('bucketCount').textContent = '0 total';
+        return;
+      }
+      for (const b of state.buckets){
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        if (state.activeBucket && state.activeBucket.bucket_id === b.bucket_id) chip.classList.add('active');
+        chip.title = b.bucket_rel_root || b.title || 'Bucket';
+        chip.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="name">${escapeHtml(b.title || b.bucket_rel_root || 'Bucket')}</span>`;
+        chip.addEventListener('click', () => selectBucket(b));
+        root.appendChild(chip);
+      }
+      el('bucketCount').textContent = `${state.buckets.length} total`;
+    }
+
     function renderMedia(){
       const items = filteredMedia();
 
@@ -1483,9 +1657,18 @@
       const l = el('mediaList');
       l.innerHTML = '';
 
-      if (!state.activeProject){
+      if (!state.activeProject && !state.activeLibrary){
         const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
-          Select a project to view media.
+          Select a project or library to view media.
+        </div>`;
+        g.innerHTML = empty;
+        l.innerHTML = empty;
+        return;
+      }
+
+      if (state.activeLibrary && !state.activeBucket){
+        const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
+          Select a bucket to browse this library.
         </div>`;
         g.innerHTML = empty;
         l.innerHTML = empty;
@@ -1494,7 +1677,7 @@
 
       if (!items.length){
         const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
-          No indexed files yet. Upload then run <code>/reindex</code>.
+          No media found. Upload to a project or pick a different bucket.
         </div>`;
         g.innerHTML = empty;
         l.innerHTML = empty;
@@ -1503,8 +1686,9 @@
 
       for (const it of items){
         const kind = guessKind(it);
-        const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
-        const sub = it.relative_path || '';
+        const relPath = it.relative_path || it.rel_path || '';
+        const title = relPath.split('/').pop() || relPath || 'unnamed';
+        const sub = relPath || '';
         const size = formatBytes(it.size);
         const tags = getTagsForItem(it);
         const tagsHtml = renderTagPills(tags, 3);
@@ -1512,16 +1696,16 @@
         // If your API can provide a lightweight thumbnail URL (recommended), use it:
         // - it.thumb_url (image/jpg) for videos/images
         // Otherwise we can still show the actual stream_url for images (not always great for big video files).
-        const cachedThumb = thumbCache.get(it.relative_path);
+        const cachedThumb = thumbCache.get(it.asset_id);
         const thumbUrl = cachedThumb || it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null);
 
         // ---- grid card
         const card = document.createElement('div');
         card.className = 'asset';
-        if (state.selected.has(it.relative_path)) card.classList.add('selected');
+        if (state.selected.has(it.asset_id)) card.classList.add('selected');
 
         card.innerHTML = `
-          <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
+          <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-asset-id="${escapeHtml(it.asset_id || '')}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
             ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
                        : (kind === 'video' ? `<div class="fallback">VIDEO</div>` : `<div class="fallback">No thumbnail</div>`) }
             <div class="badges">
@@ -1529,7 +1713,7 @@
               <span class="badge">${escapeHtml(size)}</span>
             </div>
             <div class="selector" title="Select">
-              <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} aria-label="Select media" />
+              <input type="checkbox" ${state.selected.has(it.asset_id) ? 'checked':''} aria-label="Select media" />
             </div>
           </div>
           <div class="body">
@@ -1542,7 +1726,7 @@
         // checkbox toggles selection without opening drawer
         card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
           ev.stopPropagation();
-          toggleSelected(it.relative_path);
+          toggleSelected(it.asset_id);
         });
 
         // click card opens inspector
@@ -1558,7 +1742,7 @@
         const row = document.createElement('div');
         row.className = 'row';
         row.innerHTML = `
-          <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
+          <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-asset-id="${escapeHtml(it.asset_id || '')}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
             ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
                        : (kind === 'video' ? `<span style="font-size:11px;color:var(--muted);">VIDEO</span>` : `<span style="font-size:11px;color:var(--muted);">${escapeHtml(kind)}</span>`) }
           </div>
@@ -1568,11 +1752,11 @@
             ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
           </div>
           <div class="actions">
-            <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} title="Select" />
+            <input type="checkbox" ${state.selected.has(it.asset_id) ? 'checked':''} title="Select" />
             <button class="iconbtn" type="button">Preview</button>
           </div>
         `;
-        row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it.relative_path));
+        row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it.asset_id));
         row.querySelector('button').addEventListener('click', () => openDrawer(it));
         if (!thumbUrl && kind === 'video'){
           const t2 = row.querySelector('.mini');
@@ -1587,6 +1771,9 @@
     // -------------------------
     async function selectProject(p){
       state.activeProject = p;
+      state.activeLibrary = null;
+      state.activeBucket = null;
+      state.buckets = [];
       state.selected.clear();
       state.focused = null;
       setSidebarOpen(false);
@@ -1600,10 +1787,43 @@
       el('uploadBtn').disabled = false;
 
       renderProjects();
+      renderLibraries();
+      renderBuckets();
       updateTopCounts();
       updateSelectionUI();
       toast('good', 'Project', `Selected ${p.name}`);
       await loadMedia();
+    }
+
+    async function selectLibrary(source){
+      state.activeLibrary = source;
+      state.activeProject = null;
+      state.activeBucket = null;
+      state.selected.clear();
+      state.focused = null;
+      setSidebarOpen(false);
+
+      el('uploadCaption').textContent = 'Select a project to upload.';
+      el('uploadBtn').disabled = true;
+
+      renderProjects();
+      renderLibraries();
+      updateTopCounts();
+      updateSelectionUI();
+      await loadBuckets();
+      await loadMedia();
+      toast('good', 'Library', `Selected ${source.name}`);
+    }
+
+    async function selectBucket(bucket){
+      state.activeBucket = bucket;
+      state.selected.clear();
+      state.focused = null;
+      renderBuckets();
+      updateTopCounts();
+      updateSelectionUI();
+      await loadMedia();
+      toast('good', 'Bucket', `Browsing ${bucket.title || bucket.bucket_rel_root}`);
     }
 
     async function uploadActive(){
@@ -1619,7 +1839,7 @@
         const form = new FormData();
         form.append('file', f);
 
-        const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery()}`;
+        const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery({ source: p.source })}`;
         const r = await fetch(url, { method:'POST', body: form });
         const payload = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
@@ -1638,13 +1858,40 @@
       }
     }
 
+    async function registerBridge(){
+      const name = (el('bridgeName').value || '').trim();
+      const root = (el('bridgeRoot').value || '').trim();
+      if (!name || !root){
+        toast('warn', 'Bridge', 'Provide a name and root path');
+        return;
+      }
+      el('bridgeStatus').textContent = 'Registering…';
+      try{
+        const r = await fetch(`${API}/api/sources`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, root, mode: 'library', read_only: true }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || 'Registration failed');
+        el('bridgeStatus').textContent = `Registered ${payload.name}`;
+        el('bridgeName').value = '';
+        el('bridgeRoot').value = '';
+        await loadSources();
+        toast('good', 'Bridge', `Registered ${payload.name}`);
+      }catch(e){
+        el('bridgeStatus').textContent = `Failed: ${e.message}`;
+        toast('bad','Bridge', e.message);
+      }
+    }
+
     // -------------------------
     // Selection + Resolve
     // -------------------------
-    function toggleSelected(relPath){
-      if (!relPath) return;
-      if (state.selected.has(relPath)) state.selected.delete(relPath);
-      else state.selected.add(relPath);
+    function toggleSelected(assetId){
+      if (!assetId) return;
+      if (state.selected.has(assetId)) state.selected.delete(assetId);
+      else state.selected.add(assetId);
 
       // update selected CSS quickly without full re-render
       // simplest: re-render; media lists are small enough on LAN.
@@ -1678,12 +1925,14 @@
         new_project_name: projectMode === '__new__'
           ? ((el('resolveNewName').value || '').trim() || null)
           : null,
-        media_rel_paths: Array.from(state.selected),
+        media_rel_paths: state.media
+          .filter(m => state.selected.has(m.asset_id))
+          .map(m => m.relative_path),
         mode: el('resolveMode').value || 'import',
       };
 
       try{
-        const r = await fetch(`${API}/api/resolve/open${mediaQuery()}`, {
+        const r = await fetch(`${API}/api/resolve/open${mediaQuery({ source: p.source })}`, {
           method:'POST',
           headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify(body),
@@ -1703,9 +1952,10 @@
       state.focused = item;
 
       const kind = guessKind(item);
-      const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
+      const relPath = item.relative_path || item.rel_path || '';
+      const title = relPath.split('/').pop() || relPath || 'unnamed';
       el('drawerTitle').textContent = title;
-      el('drawerSub').textContent = item.relative_path || '';
+      el('drawerSub').textContent = relPath || '';
 
       // preview
       const preview = el('drawerPreview');
@@ -1757,9 +2007,9 @@
         ['Kind', kind],
         ['Size', formatBytes(item.size)],
         ['Stream', item.stream_url || '(none)'],
-        ['Source', state.activeProject?.source || '(primary)'],
+        ['Source', state.activeProject?.source || state.activeLibrary?.name || '(primary)'],
         ['Project', state.activeProject?.name || '(none)'],
-        ['Relative', item.relative_path || '(none)'],
+        ['Relative', relPath || '(none)'],
         // Optional fields if your API provides them:
         ['MIME', item.mime || item.content_type || ''],
         ['Hash', item.sha256 || item.hash || ''],
@@ -1801,9 +2051,9 @@
         const adds = entries.filter(t => !t.startsWith('-'));
         const removes = entries.filter(t => t.startsWith('-')).map(t => t.slice(1)).filter(Boolean);
 
-        const p = state.activeProject;
-        if (!p){ toast('warn','Tags','Select a project first'); return; }
-        const base = `${API}/api/projects/${encodeURIComponent(p.name)}/assets/tags?rel_path=${encodeURIComponent(item.relative_path)}${p.source ? `&source=${encodeURIComponent(p.source)}` : ''}`;
+        const assetId = item.asset_id;
+        if (!assetId){ toast('warn','Tags','No asset_id available'); return; }
+        const base = `${API}/api/assets/tags?asset_id=${encodeURIComponent(assetId)}`;
 
         try{
           if (adds.length){
@@ -1832,7 +2082,7 @@
       };
 
       el('drawerToggleSelect').onclick = () => {
-        toggleSelected(item.relative_path);
+        toggleSelected(item.asset_id);
       };
 
       // open
@@ -1850,6 +2100,7 @@
     el('refreshBtn').addEventListener('click', async () => {
       await loadSources();
       await loadProjects();
+      await loadBuckets();
       await loadMedia();
       toast('good','Refresh','Reloaded projects + media');
     });
@@ -1860,6 +2111,7 @@
 
     el('viewGrid').addEventListener('click', () => setView('grid'));
     el('viewList').addEventListener('click', () => setView('list'));
+    el('actionsToggle').addEventListener('click', () => setActionsOpen(!ui.actionsOpen));
 
     el('q').addEventListener('input', (e) => {
       state.q = e.target.value || '';
@@ -1909,6 +2161,10 @@
     el('uploadBtn').addEventListener('click', uploadActive);
     el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
 
+    // Bridge + Buckets
+    el('bridgeBtn').addEventListener('click', registerBridge);
+    el('discoverBucketsBtn').addEventListener('click', discoverBuckets);
+
     // Resolve
     el('sendResolveBtn').addEventListener('click', sendToResolve);
     el('selResolveBtn').addEventListener('click', sendToResolve);
@@ -1920,7 +2176,7 @@
     // Preview (first selected)
     el('selPlayBtn').addEventListener('click', () => {
       const first = Array.from(state.selected)[0];
-      const item = state.media.find(m => m.relative_path === first);
+      const item = state.media.find(m => m.asset_id === first);
       if (item) openDrawer(item);
     });
 
@@ -1975,6 +2231,7 @@
       toast('good','Boot','Loading sources + projects…');
       await loadSources();
       await loadProjects();
+      await loadBuckets();
       setView('grid');
       updateTagFilterUI();
       updateTopCounts();

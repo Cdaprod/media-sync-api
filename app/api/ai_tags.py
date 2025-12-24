@@ -18,7 +18,7 @@ from app.ai_tagging import AITaggingError, enqueue_ai_tagging, tag_asset
 from app.config import get_settings
 from app.storage.paths import project_path, validate_project_name, validate_relative_path
 from app.storage.sources import SourceRegistry
-from app.storage.tags_store import TagStore, asset_key
+from app.storage.tags_store import TagStore, asset_id_for_project
 
 
 logger = logging.getLogger("media_sync_api.ai_tags")
@@ -46,11 +46,14 @@ def _resolve_project(project_name: str, source: str | None) -> _ResolvedProject:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    registry = SourceRegistry(get_settings().project_root)
+    settings = get_settings()
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         active_source = registry.require(source)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if active_source.mode != "project":
+        raise HTTPException(status_code=400, detail="Selected source is not a project source")
     if not active_source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
 
@@ -88,15 +91,15 @@ async def ai_tag_status(project_name: str, rel_path: str, source: str | None = N
     resolved = _resolve_project(project_name, source)
     safe_rel = _resolve_asset(resolved.root, rel_path)
     store = _store()
-    key = asset_key(resolved.name, safe_rel, resolved.source_name)
-    run = store.get_asset_tag_run(key)
+    asset_id = asset_id_for_project(resolved.source_name, resolved.name, safe_rel)
+    run = store.get_asset_tag_run(asset_id)
     return {
-        "asset_key": key,
+        "asset_id": asset_id,
         "project": resolved.name,
         "relative_path": safe_rel,
         "source": resolved.source_name,
-        "tags": store.get_asset_tags(key),
-        "tag_source_counts": store.get_asset_tag_counts(key),
+        "tags": store.get_asset_tags(asset_id),
+        "tag_source_counts": store.get_asset_tag_counts(asset_id),
         "tag_run": run.__dict__ if run else None,
         "instructions": "POST to the same endpoint to generate AI tags.",
     }

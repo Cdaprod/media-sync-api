@@ -19,7 +19,7 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def _parse_origins(raw: str | None) -> List[str]:
@@ -37,6 +37,12 @@ class Settings(BaseModel):
         os.getenv("MEDIA_SYNC_PROJECTS_ROOT")
         or os.getenv("PROJECT_ROOT", "/data/projects")
     ))
+    sources_parent_root: Path = Field(
+        default_factory=lambda: Path(os.getenv("MEDIA_SYNC_SOURCES_PARENT_ROOT", "/mnt/media-sources"))
+    )
+    cache_root: Path = Field(
+        default_factory=lambda: Path(os.getenv("MEDIA_SYNC_CACHE_ROOT", "/app/storage/cache"))
+    )
     port: int = Field(default_factory=lambda: int(os.getenv("MEDIA_SYNC_PORT", os.getenv("PORT", "8787"))))
     max_upload_mb: int = Field(default_factory=lambda: int(os.getenv("MEDIA_SYNC_MAX_UPLOAD_MB", "512")))
     cors_origins: List[str] = Field(
@@ -79,6 +85,7 @@ def get_settings() -> Settings:
 
     settings = Settings()
     ensure_project_root(settings.project_root)
+    settings.cache_root.mkdir(parents=True, exist_ok=True)
     return settings
 
 

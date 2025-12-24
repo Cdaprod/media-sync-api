@@ -239,7 +239,8 @@ docker compose down
 4. ✅ Reindex endpoint (scan disk, reconcile db/index).
 5. ✅ Minimal web UI for local admin with project/media browsing.
 6. ✅ AI tagging pipeline (DEIM + WhisperX) for automatic semantic labels.
-7. ⏭ Optional OBS integration + Resolve bridge (separate services).
+7. ✅ Library bridge + virtual buckets for read-only NAS browsing.
+8. ⏭ Optional OBS integration + Resolve bridge (separate services).
 
 ---
 
@@ -381,3 +382,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - AI tagging endpoints added at `/api/projects/{project}/assets/ai-tags` with optional background execution; tags are stored with source `ai` and appear in media listings automatically.
 - Uploads and per-project reindex now optionally enqueue AI tagging when `MEDIA_SYNC_AI_TAGGING_ENABLED=1` and `MEDIA_SYNC_AI_TAGGING_AUTO=1`.
 - AI tagging expects local WhisperX (`MEDIA_SYNC_WHISPERX_URL`) and DEIM (`MEDIA_SYNC_DEIM_URL`) endpoints; status is tracked in `_tags/tags.sqlite` under `asset_tag_runs`.
+
+### Latest Implementation Notes (2025-03-22)
+- Source registry upgraded to `B:/Video/Projects/_sources/index.json` with `mode`, `read_only`, capability, and `id_strategy` fields plus atomic writes and name normalization.
+- Library sources (`mode=library`) must live under `MEDIA_SYNC_SOURCES_PARENT_ROOT` and stream via `/media/source/{source}/{rel_path}`; project routes reject read-only/library sources.
+- Tags now key on `asset_id` (`sha256(source:rel_path)`), with batch/tag endpoints accepting asset IDs and legacy keys migrated on startup.
+- Virtual buckets persist in `_sources/buckets.sqlite`, with `/api/sources/{source}/discover-buckets` and `/api/buckets/{bucket_id}/media` for browsing.
+- Derived cache artifacts live under `/app/storage/cache/{asset_id}` and serve via `/api/cache/{asset_id}/{artifact}`; `/api/sources/{source}/derive` triggers thumb/transcript generation when available.
+- Explorer UI now supports library selection, buckets, bridge registration, and a compact mobile actions toggle while keeping tag pills and asset IDs in sync.
