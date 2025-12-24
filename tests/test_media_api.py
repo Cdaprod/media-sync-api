@@ -61,6 +61,45 @@ def test_download_media_and_link_in_listing(client: TestClient, env_settings: Pa
     assert download.content == payload
 
 
+def test_media_tags_and_filters(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    tagged_path = ingest / "tagged.mov"
+    untagged_path = ingest / "untagged.mov"
+    tagged_path.write_bytes(b"tagged")
+    untagged_path.write_bytes(b"untagged")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    tag_response = client.post(
+        f"/api/projects/{project_name}/assets/tags",
+        params={"rel_path": "ingest/originals/tagged.mov"},
+        json={"tags": ["wf:select", "topic:foia"]},
+    )
+    assert tag_response.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    payload = listing.json()
+    tagged = next(item for item in payload["media"] if item["relative_path"].endswith("tagged.mov"))
+    assert tagged["tags"] == ["topic:foia", "wf:select"]
+    assert tagged["tag_source_counts"]["user"] == 2
+
+    filtered_all = client.get(f"/api/projects/{project_name}/media", params={"tags": "wf:select,topic:foia"})
+    assert filtered_all.status_code == 200
+    assert len(filtered_all.json()["media"]) == 1
+
+    filtered_any = client.get(f"/api/projects/{project_name}/media", params={"any_tags": "topic:missing,topic:foia"})
+    assert filtered_any.status_code == 200
+    assert len(filtered_any.json()["media"]) == 1
+
+    no_tags = client.get(f"/api/projects/{project_name}/media", params={"no_tags": "true"})
+    assert no_tags.status_code == 200
+    assert len(no_tags.json()["media"]) == 1
+
+
 def test_reindex_moves_misplaced_media(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     project_dir = env_settings / project_name
