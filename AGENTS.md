@@ -341,3 +341,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-06)
 - A standalone DAM-style explorer now lives at `public/explorer.html` alongside the adapter, keeping the same API endpoints while adding grid/list toggle, inspector drawer, multi-select action bar, and Resolve/upload controls. Keep this page no-build and in sync with API shapes; prefer reusing the existing endpoints over adding new ones for UI-only tweaks.
+
+### Latest Implementation Notes (2025-03-08)
+- Stream URL copy actions in `public/index.html` and `public/explorer.html` now normalize to absolute URLs based on the current host origin so clipboard copies include the active domain.
