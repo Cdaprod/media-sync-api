@@ -369,3 +369,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-18)
 - Explorer tag filtering now lives inside the search bar's advanced filter dropdown for a compact toolbar layout.
+
+### Latest Implementation Notes (2025-03-19)
+- Explorer search bar now uses an inline right-aligned Filters button for a cleaner pill layout.

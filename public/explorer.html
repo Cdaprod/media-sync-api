@@ -138,30 +138,26 @@
       min-width: 200px;
       display:flex;
       align-items:center;
-      gap: 10px;
-      padding: 10px 12px;
+      gap: 8px;
+      padding: 6px 8px 6px 12px;
       border-radius: 999px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
       position: relative;
       flex-wrap: wrap;
     }
-    .search-actions{
-      display:flex;
-      align-items:center;
-      gap: 6px;
-    }
     .search .filter-toggle{
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
       color: var(--text);
       border-radius: 999px;
-      padding: 6px 10px;
+      padding: 6px 12px;
       font-size: 11px;
       cursor:pointer;
       display:flex;
       align-items:center;
       gap: 6px;
+      margin-left: auto;
     }
     .search .filter-toggle.active{
       border-color: rgba(124,58,237,0.45);
@@ -190,6 +186,7 @@
       background: transparent;
       color: var(--text);
       font-size: 13px;
+      flex: 1;
     }
     .search input::placeholder{ color: var(--muted2); }
 
@@ -846,9 +843,7 @@
           <div class="search" role="search">
             <span class="kbd">⌘K</span>
             <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
-            <div class="search-actions">
-              <button id="filterToggle" class="filter-toggle" type="button" aria-expanded="false">Filters ▾</button>
-            </div>
+            <button id="filterToggle" class="filter-toggle" type="button" aria-expanded="false">Filters ▾</button>
             <div id="searchPanel" class="search-panel" role="dialog" aria-label="Advanced filters">
               <div class="tagfilter" role="search" aria-label="Tag filter">
                 <span class="kbd">tags</span>
