@@ -14,9 +14,10 @@ from pathlib import Path
 
 import logging
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
+from app.ai_tagging import enqueue_ai_tagging
 from app.config import get_settings
 from app.storage.dedupe import record_file_hash, compute_sha256_from_path, lookup_file_hash
 from app.storage.index import append_file_entry, load_index, save_index, bump_count, append_event
@@ -30,7 +31,12 @@ logger = logging.getLogger("media_sync_api.upload")
 
 
 @router.post("/{project_name}/upload")
-async def upload_file(project_name: str, file: UploadFile = File(...), source: str | None = None):
+async def upload_file(
+    project_name: str,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    source: str | None = None,
+):
     try:
         name = validate_project_name(project_name)
     except ValueError as exc:
@@ -126,10 +132,21 @@ async def upload_file(project_name: str, file: UploadFile = File(...), source: s
         },
     )
 
+    ai_queued = False
+    if background_tasks and settings.ai_tagging_enabled and settings.ai_tagging_auto:
+        ai_queued = enqueue_ai_tagging(
+            background_tasks,
+            project,
+            name,
+            entry["relative_path"],
+            active_source.name,
+        )
+
     return {
         "status": "stored",
         "path": entry["relative_path"],
         "sha256": sha,
+        "ai_tagging": "queued" if ai_queued else "disabled",
         "instructions": f"Use /api/projects/{name}/sync-album?source={active_source.name} to log runs and /reindex if you move files.",
     }
 

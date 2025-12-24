@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.media import media_router, router as media_api_router
+from app.api.ai_tags import router as ai_tags_router
 from app.api.projects import router as projects_router
 from app.api.sources import router as sources_router
 from app.api.tags import router as tags_router
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     application.include_router(media_router)
     application.include_router(resolve_router)
     application.include_router(tags_router)
+    application.include_router(ai_tags_router)
 
     application.mount(
         "/public",

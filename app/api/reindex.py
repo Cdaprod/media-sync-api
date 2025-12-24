@@ -11,8 +11,9 @@ import logging
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from app.ai_tagging import enqueue_ai_tagging
 from app.config import get_settings
 from app.storage.index import seed_index
 from app.storage.paths import ensure_subdirs
@@ -28,7 +29,12 @@ logger = logging.getLogger("media_sync_api.reindex")
 
 
 @router.api_route("/{project_name}/reindex", methods=["GET", "POST"])
-async def reindex(project_name: str, source: str | None = None):
+async def reindex(
+    project_name: str,
+    background_tasks: BackgroundTasks,
+    source: str | None = None,
+    auto_tag: bool | None = None,
+):
     try:
         name = validate_project_name(project_name)
     except ValueError as exc:
@@ -48,6 +54,17 @@ async def reindex(project_name: str, source: str | None = None):
     if not (project / "index.json").exists():
         raise HTTPException(status_code=404, detail="Project index missing")
     result = reindex_project(project)
+    ai_queued = 0
+    if background_tasks and settings.ai_tagging_enabled:
+        should_auto_tag = settings.ai_tagging_auto if auto_tag is None else auto_tag
+        if should_auto_tag:
+            for entry in result.get("files", []):
+                rel_path = entry.get("relative_path")
+                if isinstance(rel_path, str):
+                    if enqueue_ai_tagging(background_tasks, project, name, rel_path, active_source.name):
+                        ai_queued += 1
+    if ai_queued:
+        result["ai_tagging_queued"] = ai_queued
     result["instructions"] = "Use this after manual file moves; see /public/index.html for workflow steps."
     logger.info(
         "project_reindexed",
