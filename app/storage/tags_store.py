@@ -25,7 +25,7 @@ def _utc_now() -> str:
 def normalize_tag(tag: str) -> str:
     t = (tag or "").strip().lower()
     t = re.sub(r"\s+", "-", t)
-    t = re.sub(r"[^a-z0-9._-]+", "", t)
+    t = re.sub(r"[^a-z0-9._:-]+", "", t)
     return t
 
 
@@ -239,6 +239,34 @@ class TagStore:
                     ).fetchall()
                     for row in rows:
                         out[row["asset_key"]].append(row["tag"])
+                return out
+            finally:
+                conn.close()
+
+    def batch_get_asset_tag_counts(self, asset_keys: list[str]) -> dict[str, dict[str, int]]:
+        if not asset_keys:
+            return {}
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                out: dict[str, dict[str, int]] = {k: {} for k in asset_keys}
+                chunk = 400
+                for i in range(0, len(asset_keys), chunk):
+                    keys = asset_keys[i : i + chunk]
+                    placeholders = ",".join(["?"] * len(keys))
+                    rows = conn.execute(
+                        f"""
+                        SELECT asset_key, source, COUNT(*) as count
+                        FROM asset_tags
+                        WHERE asset_key IN ({placeholders})
+                        GROUP BY asset_key, source
+                        """,
+                        keys,
+                    ).fetchall()
+                    for row in rows:
+                        counts = out.setdefault(row["asset_key"], {})
+                        counts[row["source"]] = int(row["count"])
                 return out
             finally:
                 conn.close()

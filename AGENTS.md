@@ -358,3 +358,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-15)
 - Tagging is now backed by `_tags/tags.sqlite` with `/api` endpoints for listing tags, patching metadata, and per-asset tag CRUD.
 - Explorer fetches tags in batch and renders tag pills on cards with a drawer tag prompt for add/remove.
+
+### Latest Implementation Notes (2025-03-16)
+- Media listings now embed `tags` (and `tag_source_counts`) plus support `tags`, `any_tags`, and `no_tags` query filtering.
+- Explorer includes a tag filter input with AND/OR toggles and an untagged toggle that drive the media query params.

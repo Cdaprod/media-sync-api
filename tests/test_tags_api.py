@@ -7,17 +7,17 @@ def test_asset_tag_roundtrip(client):
     add = client.post(
         f"/api/projects/{project}/assets/tags",
         params={"rel_path": rel_path},
-        json={"tags": ["My Tag", "b-roll"]},
+        json={"tags": ["My Tag", "b-roll", "WF:Select"]},
     )
     assert add.status_code == 200
-    assert sorted(add.json()["tags"]) == ["b-roll", "my-tag"]
+    assert sorted(add.json()["tags"]) == ["b-roll", "my-tag", "wf:select"]
 
     fetched = client.get(
         f"/api/projects/{project}/assets/tags",
         params={"rel_path": rel_path},
     )
     assert fetched.status_code == 200
-    assert fetched.json()["tags"] == ["b-roll", "my-tag"]
+    assert fetched.json()["tags"] == ["b-roll", "my-tag", "wf:select"]
 
     removed = client.request(
         "DELETE",
@@ -26,7 +26,7 @@ def test_asset_tag_roundtrip(client):
         json={"tags": ["my-tag"]},
     )
     assert removed.status_code == 200
-    assert removed.json()["tags"] == ["b-roll"]
+    assert removed.json()["tags"] == ["b-roll", "wf:select"]
 
 
 def test_batch_tags(client):
