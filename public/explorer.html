@@ -143,7 +143,46 @@
       border-radius: 999px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
+      position: relative;
+      flex-wrap: wrap;
     }
+    .search-actions{
+      display:flex;
+      align-items:center;
+      gap: 6px;
+    }
+    .search .filter-toggle{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 11px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      gap: 6px;
+    }
+    .search .filter-toggle.active{
+      border-color: rgba(124,58,237,0.45);
+      background: rgba(124,58,237,0.18);
+    }
+    .search-panel{
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: rgba(11,16,32,0.92);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 10px;
+      box-shadow: var(--shadow);
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 20;
+    }
+    .search-panel.open{ display:flex; }
     .search input{
       width: 100%;
       border: none;
@@ -162,9 +201,6 @@
       justify-content: flex-end;
     }
     .tagfilter{
-      flex: 1 1 240px;
-      max-width: 320px;
-      min-width: 180px;
       display:flex;
       align-items:center;
       gap: 10px;
@@ -760,9 +796,6 @@
       .pillbar{
         justify-content: flex-start;
       }
-      .tagfilter{
-        max-width: none;
-      }
     }
     @media (max-width: 980px){
       .sidebar{ width: 320px; }
@@ -778,7 +811,6 @@
       .hamburger{ display:block; }
       .toolbar{ width: 100%; flex-direction: column; align-items: stretch; }
       .search{ flex:1; max-width: none; width: 100%; }
-      .tagfilter{ width: 100%; max-width: none; }
       .pillbar{ width: 100%; justify-content: flex-start; }
       .btn{ padding: 7px 10px; font-size:11px; }
       .seg button{ padding: 8px 10px; font-size:11px; }
@@ -814,16 +846,19 @@
           <div class="search" role="search">
             <span class="kbd">⌘K</span>
             <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
-          </div>
-
-          <div class="tagfilter" role="search" aria-label="Tag filter">
-            <span class="kbd">tags</span>
-            <input id="tagFilter" placeholder="Filter tags (comma)" autocomplete="off" />
-          </div>
-
-          <div class="pillbar">
-            <button id="tagModeBtn" class="btn toggle" type="button">All tags</button>
-            <button id="noTagsBtn" class="btn toggle" type="button">Untagged</button>
+            <div class="search-actions">
+              <button id="filterToggle" class="filter-toggle" type="button" aria-expanded="false">Filters ▾</button>
+            </div>
+            <div id="searchPanel" class="search-panel" role="dialog" aria-label="Advanced filters">
+              <div class="tagfilter" role="search" aria-label="Tag filter">
+                <span class="kbd">tags</span>
+                <input id="tagFilter" placeholder="Filter tags (comma)" autocomplete="off" />
+              </div>
+              <div class="pillbar">
+                <button id="tagModeBtn" class="btn toggle" type="button">All tags</button>
+                <button id="noTagsBtn" class="btn toggle" type="button">Untagged</button>
+              </div>
+            </div>
           </div>
 
           <div class="pillbar">
@@ -997,6 +1032,7 @@
     const ui = {
       sidebarOpen: false,
       inspectorOpen: false,
+      filtersOpen: false,
     };
 
     const thumbCache = new Map();
@@ -1169,12 +1205,19 @@
     function updateTagFilterUI(){
       const modeBtn = el('tagModeBtn');
       const noTagsBtn = el('noTagsBtn');
+      const toggle = el('filterToggle');
+      const panel = el('searchPanel');
       if (modeBtn){
         modeBtn.textContent = state.tagMode === 'any' ? 'Any tags' : 'All tags';
         modeBtn.classList.toggle('active', state.tagMode === 'any');
       }
       if (noTagsBtn){
         noTagsBtn.classList.toggle('active', state.noTags);
+      }
+      if (toggle && panel){
+        toggle.classList.toggle('active', ui.filtersOpen);
+        toggle.setAttribute('aria-expanded', ui.filtersOpen ? 'true' : 'false');
+        panel.classList.toggle('open', ui.filtersOpen);
       }
     }
 
@@ -1805,6 +1848,23 @@
       updateTopCounts();
     });
 
+    el('filterToggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      ui.filtersOpen = !ui.filtersOpen;
+      updateTagFilterUI();
+    });
+
+    document.addEventListener('click', (e) => {
+      const panel = el('searchPanel');
+      const toggle = el('filterToggle');
+      if (!panel || !toggle) return;
+      if (panel.contains(e.target) || toggle.contains(e.target)) return;
+      if (ui.filtersOpen){
+        ui.filtersOpen = false;
+        updateTagFilterUI();
+      }
+    });
+
     let tagFilterTimer = null;
     el('tagFilter').addEventListener('input', (e) => {
       state.tagFilter = e.target.value || '';
@@ -1849,6 +1909,12 @@
     el('drawerClose').addEventListener('click', closeDrawer);
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape'){
+        if (ui.filtersOpen){
+          ui.filtersOpen = false;
+          updateTagFilterUI();
+          e.preventDefault();
+          return;
+        }
         if (ui.inspectorOpen){
           closeDrawer();
           e.preventDefault();

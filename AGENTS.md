@@ -366,3 +366,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-17)
 - Explorer sidebar glass panel is more opaque, the mobile projects toggle lives alongside the title, and selecting a project closes the drawer.
 - Stream URL copy now falls back to a manual prompt when clipboard permissions fail.
+
+### Latest Implementation Notes (2025-03-18)
+- Explorer tag filtering now lives inside the search bar's advanced filter dropdown for a compact toolbar layout.
