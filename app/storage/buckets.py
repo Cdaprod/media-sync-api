@@ -13,9 +13,23 @@ import sqlite3
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from app.storage.reindex import ALLOWED_MEDIA_EXTENSIONS
+
+IGNORED_DIRS = {
+    ".ds_store",
+    "@eadir",
+    "__pycache__",
+    "cache",
+    "caches",
+    "tmp",
+    "temp",
+    "_manifest",
+    "_sources",
+    "_tags",
+}
+IGNORED_FILES = {"thumbs.db", ".ds_store"}
 
 
 @dataclass(frozen=True)
@@ -120,9 +134,24 @@ class BucketStore:
             finally:
                 conn.close()
 
-    def discover(self, source_name: str, source_root: Path) -> list[Bucket]:
-        candidates = _collect_candidates(source_root)
-        buckets = _collapse_candidates(candidates)
+    def discover(
+        self,
+        source_name: str,
+        source_root: Path,
+        *,
+        min_files: int = 1,
+        max_depth: int = 8,
+        max_buckets: int = 200,
+        overlap_threshold: float = 0.9,
+    ) -> list[Bucket]:
+        candidates = _collect_candidates(source_root, max_depth=max_depth)
+        buckets = _collapse_candidates(
+            candidates,
+            min_files=min_files,
+            max_depth=max_depth,
+            max_buckets=max_buckets,
+            overlap_threshold=overlap_threshold,
+        )
         buckets = [
             Bucket(
                 bucket_id=bucket_id_for(source_name, bucket.bucket_rel_root),
@@ -167,29 +196,49 @@ class BucketStore:
         return buckets
 
 
-def _collect_candidates(source_root: Path) -> dict[str, set[str]]:
+def _collect_candidates(source_root: Path, *, max_depth: int = 8) -> dict[str, set[str]]:
     candidates: dict[str, set[str]] = {}
     for path in source_root.rglob("*") if source_root.exists() else []:
-        if not path.is_file() or path.suffix.lower() not in ALLOWED_MEDIA_EXTENSIONS:
+        if not path.is_file():
+            continue
+        if path.name.lower() in IGNORED_FILES:
+            continue
+        if _contains_ignored_dir(path.relative_to(source_root).parts):
+            continue
+        if path.suffix.lower() not in ALLOWED_MEDIA_EXTENSIONS:
             continue
         rel_path = path.relative_to(source_root).as_posix()
         parent = Path(rel_path).parent
         if parent == Path("."):
             parent_parts: Iterable[Path] = [Path(".")]
         else:
-            parent_parts = [Path(*parent.parts[: i + 1]) for i in range(len(parent.parts))]
+            depth_limit = max_depth if max_depth > 0 else len(parent.parts)
+            parent_parts = [
+                Path(*parent.parts[: i + 1]) for i in range(min(len(parent.parts), depth_limit))
+            ]
         for ancestor in parent_parts:
             rel_root = ancestor.as_posix()
             candidates.setdefault(rel_root, set()).add(rel_path)
     return candidates
 
 
-def _collapse_candidates(candidates: dict[str, set[str]], overlap_threshold: float = 0.9) -> list[Bucket]:
+def _collapse_candidates(
+    candidates: dict[str, set[str]],
+    *,
+    min_files: int = 1,
+    max_depth: int = 8,
+    max_buckets: int = 200,
+    overlap_threshold: float = 0.9,
+) -> list[Bucket]:
     scored: list[tuple[str, set[str], dict]] = []
     for rel_root, assets in candidates.items():
         if not assets:
             continue
         depth = 0 if rel_root == "." else len(Path(rel_root).parts)
+        if max_depth > 0 and depth > max_depth:
+            continue
+        if len(assets) < max(min_files, 1):
+            continue
         ext_counts: dict[str, int] = {}
         for item in assets:
             ext = Path(item).suffix.lower()
@@ -202,7 +251,7 @@ def _collapse_candidates(candidates: dict[str, set[str]], overlap_threshold: flo
         }
         scored.append((rel_root, assets, stats))
 
-    scored.sort(key=lambda item: (item[2]["depth"], item[2]["count"]), reverse=True)
+    scored.sort(key=lambda item: (item[2]["count"], item[2]["depth"]), reverse=True)
     kept: list[tuple[str, set[str], dict]] = []
     for rel_root, assets, stats in scored:
         redundant = False
@@ -214,6 +263,9 @@ def _collapse_candidates(candidates: dict[str, set[str]], overlap_threshold: flo
                     break
         if not redundant:
             kept.append((rel_root, assets, stats))
+
+    if max_buckets > 0 and len(kept) > max_buckets:
+        kept = kept[:max_buckets]
 
     buckets: list[Bucket] = []
     for rel_root, assets, stats in kept:
@@ -237,3 +289,10 @@ def _is_ancestor(candidate: str, descendant: str) -> bool:
     candidate_path = Path(candidate)
     descendant_path = Path(descendant)
     return candidate_path == descendant_path or candidate_path in descendant_path.parents
+
+
+def _contains_ignored_dir(parts: Sequence[str]) -> bool:
+    for part in parts:
+        if part.lower() in IGNORED_DIRS:
+            return True
+    return False

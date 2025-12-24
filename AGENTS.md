@@ -390,3 +390,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Virtual buckets persist in `_sources/buckets.sqlite`, with `/api/sources/{source}/discover-buckets` and `/api/buckets/{bucket_id}/media` for browsing.
 - Derived cache artifacts live under `/app/storage/cache/{asset_id}` and serve via `/api/cache/{asset_id}/{artifact}`; `/api/sources/{source}/derive` triggers thumb/transcript generation when available.
 - Explorer UI now supports library selection, buckets, bridge registration, and a compact mobile actions toggle while keeping tag pills and asset IDs in sync.
+
+### Latest Implementation Notes (2025-03-23)
+- Bucket discovery now skips noisy folders (`cache`, `_manifest`, `_tags`, `.DS_Store`, etc.) and honors guardrails (`MEDIA_SYNC_BUCKETS_MIN_FILES`, `MEDIA_SYNC_BUCKETS_MAX_DEPTH`, `MEDIA_SYNC_BUCKETS_MAX_COUNT`) to avoid bucket explosion.
+- Bucket discovery logging includes guardrail settings, and derive runs emit `derive_started` logs for traceability.

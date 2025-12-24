@@ -220,6 +220,10 @@ async def derive_source_artifacts(source_name: str, payload: DeriveRequest):
     if not source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
 
+    logger.info(
+        "derive_started",
+        extra={"source": source.name, "kinds": payload.kinds, "limit": payload.limit, "force": payload.force},
+    )
     results: List[Dict[str, object]] = []
     total = 0
     for path in _iter_media_files(source.root):
@@ -271,7 +275,24 @@ async def discover_buckets(source_name: str):
         raise HTTPException(status_code=503, detail="Source root is not reachable")
 
     store = BucketStore(settings.project_root / "_sources" / "buckets.sqlite")
-    buckets = store.discover(source.name, source.root)
+    buckets = store.discover(
+        source.name,
+        source.root,
+        min_files=settings.buckets_min_files,
+        max_depth=settings.buckets_max_depth,
+        max_buckets=settings.buckets_max_count,
+        overlap_threshold=settings.buckets_overlap_threshold,
+    )
+    logger.info(
+        "bucket_discovery_completed",
+        extra={
+            "source": source.name,
+            "count": len(buckets),
+            "min_files": settings.buckets_min_files,
+            "max_depth": settings.buckets_max_depth,
+            "max_buckets": settings.buckets_max_count,
+        },
+    )
     return {
         "source": source.name,
         "count": len(buckets),

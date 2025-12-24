@@ -72,6 +72,18 @@ class Settings(BaseModel):
     ai_deim_url: str | None = Field(
         default_factory=lambda: os.getenv("MEDIA_SYNC_DEIM_URL")
     )
+    buckets_min_files: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_BUCKETS_MIN_FILES", "1"))
+    )
+    buckets_max_depth: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_BUCKETS_MAX_DEPTH", "8"))
+    )
+    buckets_max_count: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_BUCKETS_MAX_COUNT", "200"))
+    )
+    buckets_overlap_threshold: float = Field(
+        default_factory=lambda: float(os.getenv("MEDIA_SYNC_BUCKETS_OVERLAP", "0.9"))
+    )
 
 def ensure_project_root(path: Path) -> None:
     """Ensure the configured project root exists and is a directory."""
