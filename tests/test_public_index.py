@@ -27,3 +27,4 @@ def test_public_explorer_path(client):
     assert "drawerBackdrop" in body
     assert "@media (max-width: 1180px)" in body
     assert "@media (max-width: 860px)" in body
+    assert "tagFiltersToggle" in body

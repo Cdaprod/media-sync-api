@@ -138,6 +138,7 @@
       border-radius: 999px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
+      position: relative;
     }
     .search input{
       width: 100%;
@@ -148,6 +149,57 @@
       font-size: 13px;
     }
     .search input::placeholder{ color: var(--muted2); }
+    .search-actions{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-toggle{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .filter-toggle:hover{ background: rgba(255,255,255,0.10); }
+    .filter-toggle.active{
+      border-color: rgba(124,58,237,0.45);
+      background: rgba(124,58,237,0.18);
+    }
+    .filter-menu{
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 260px;
+      max-width: 320px;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(11,16,32,0.92);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      padding: 12px;
+      display: none;
+      z-index: 70;
+    }
+    .filter-menu.show{ display: block; }
+    .filter-row{
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .filter-title{
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
 
     .pillbar{
       display:flex;
@@ -157,9 +209,7 @@
       justify-content: flex-end;
     }
     .tagfilter{
-      flex: 1 1 240px;
-      max-width: 320px;
-      min-width: 180px;
+      width: 100%;
       display:flex;
       align-items:center;
       gap: 10px;
@@ -753,9 +803,6 @@
       .pillbar{
         justify-content: flex-start;
       }
-      .tagfilter{
-        max-width: none;
-      }
     }
     @media (max-width: 980px){
       .sidebar{ width: 320px; }
@@ -771,7 +818,7 @@
       .hamburger{ display:block; }
       .toolbar{ width: 100%; flex-direction: column; align-items: stretch; }
       .search{ flex:1; max-width: none; width: 100%; }
-      .tagfilter{ width: 100%; max-width: none; }
+      .filter-menu{ right: 0; left: 0; }
       .pillbar{ width: 100%; justify-content: flex-start; }
       .btn{ padding: 7px 10px; font-size:11px; }
       .seg button{ padding: 8px 10px; font-size:11px; }
@@ -805,21 +852,30 @@
           <div class="search" role="search">
             <span class="kbd">⌘K</span>
             <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
+            <div class="search-actions">
+              <button id="tagFiltersToggle" class="filter-toggle" type="button" aria-expanded="false">
+                ⛭ Filters
+              </button>
+            </div>
+
+            <div id="tagFiltersMenu" class="filter-menu" role="menu" aria-label="Tag filters">
+              <div class="filter-row">
+                <div class="filter-title">Tags</div>
+                <div class="tagfilter" role="search">
+                  <span class="kbd">tags</span>
+                  <input id="tagFilter" placeholder="Filter tags (comma)" autocomplete="off" />
+                </div>
+                <div class="pillbar">
+                  <button id="tagModeBtn" class="btn toggle" type="button">All tags</button>
+                  <button id="noTagsBtn" class="btn toggle" type="button">Untagged</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="seg" aria-label="View mode">
             <button id="viewGrid" class="active" type="button">Grid</button>
             <button id="viewList" type="button">List</button>
-          </div>
-
-          <div class="tagfilter" role="search" aria-label="Tag filter">
-            <span class="kbd">tags</span>
-            <input id="tagFilter" placeholder="Filter tags (comma)" autocomplete="off" />
-          </div>
-
-          <div class="pillbar">
-            <button id="tagModeBtn" class="btn toggle" type="button">All tags</button>
-            <button id="noTagsBtn" class="btn toggle" type="button">Untagged</button>
           </div>
 
           <div class="pillbar">
@@ -1135,12 +1191,17 @@
     function updateTagFilterUI(){
       const modeBtn = el('tagModeBtn');
       const noTagsBtn = el('noTagsBtn');
+      const toggle = el('tagFiltersToggle');
       if (modeBtn){
         modeBtn.textContent = state.tagMode === 'any' ? 'Any tags' : 'All tags';
         modeBtn.classList.toggle('active', state.tagMode === 'any');
       }
       if (noTagsBtn){
         noTagsBtn.classList.toggle('active', state.noTags);
+      }
+      if (toggle){
+        const active = Boolean((state.tagFilter || '').trim()) || state.noTags || state.tagMode === 'any';
+        toggle.classList.toggle('active', active);
       }
     }
 
@@ -1771,6 +1832,7 @@
     let tagFilterTimer = null;
     el('tagFilter').addEventListener('input', (e) => {
       state.tagFilter = e.target.value || '';
+      updateTagFilterUI();
       if (tagFilterTimer) window.clearTimeout(tagFilterTimer);
       tagFilterTimer = window.setTimeout(async () => {
         await loadMedia();
@@ -1788,6 +1850,28 @@
       updateTagFilterUI();
       await loadMedia();
     });
+
+    const tagMenu = el('tagFiltersMenu');
+    const tagToggle = el('tagFiltersToggle');
+    if (tagToggle && tagMenu){
+      tagToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = tagMenu.classList.toggle('show');
+        tagToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      document.addEventListener('click', (e) => {
+        if (!tagMenu.classList.contains('show')) return;
+        if (tagMenu.contains(e.target) || tagToggle.contains(e.target)) return;
+        tagMenu.classList.remove('show');
+        tagToggle.setAttribute('aria-expanded', 'false');
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && tagMenu.classList.contains('show')){
+          tagMenu.classList.remove('show');
+          tagToggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
 
     // Upload
     el('uploadBtn').addEventListener('click', uploadActive);

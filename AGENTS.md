@@ -362,3 +362,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-16)
 - Media listings now embed `tags` (and `tag_source_counts`) plus support `tags`, `any_tags`, and `no_tags` query filtering.
 - Explorer includes a tag filter input with AND/OR toggles and an untagged toggle that drive the media query params.
+
+### Latest Implementation Notes (2025-03-17)
+- Explorer tag filtering moved into the search bar as a dropdown to avoid consuming header space.
