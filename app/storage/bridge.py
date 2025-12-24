@@ -37,6 +37,8 @@ class StageScan:
     source_name: str
     created_at: str
     tree: dict
+    target_path: str
+    name_hint: str | None
 
 
 def _utc_now() -> str:
@@ -76,7 +78,9 @@ class BridgeStore:
                         scan_id TEXT PRIMARY KEY,
                         source_name TEXT NOT NULL,
                         created_at TEXT NOT NULL,
-                        tree_json TEXT NOT NULL
+                        tree_json TEXT NOT NULL,
+                        target_path TEXT,
+                        name_hint TEXT
                     );
 
                     CREATE TABLE IF NOT EXISTS library_roots (
@@ -90,11 +94,16 @@ class BridgeStore:
                     CREATE INDEX IF NOT EXISTS idx_library_roots_source ON library_roots(source_name);
                     """
                 )
+                columns = {row["name"] for row in conn.execute("PRAGMA table_info(stage_scans)").fetchall()}
+                if "target_path" not in columns:
+                    conn.execute("ALTER TABLE stage_scans ADD COLUMN target_path TEXT")
+                if "name_hint" not in columns:
+                    conn.execute("ALTER TABLE stage_scans ADD COLUMN name_hint TEXT")
                 conn.commit()
             finally:
                 conn.close()
 
-    def create_scan(self, source_name: str, tree: dict) -> str:
+    def create_scan(self, source_name: str, tree: dict, target_path: str, name_hint: str | None) -> str:
         scan_id = str(uuid.uuid4())
         created_at = _utc_now()
         with self._lock:
@@ -102,10 +111,10 @@ class BridgeStore:
             try:
                 conn.execute(
                     """
-                    INSERT INTO stage_scans(scan_id, source_name, created_at, tree_json)
-                    VALUES(?,?,?,?)
+                    INSERT INTO stage_scans(scan_id, source_name, created_at, tree_json, target_path, name_hint)
+                    VALUES(?,?,?,?,?,?)
                     """,
-                    (scan_id, source_name, created_at, json.dumps(tree)),
+                    (scan_id, source_name, created_at, json.dumps(tree), target_path, name_hint),
                 )
                 conn.commit()
             finally:
@@ -117,7 +126,10 @@ class BridgeStore:
             conn = self._connect()
             try:
                 row = conn.execute(
-                    "SELECT scan_id, source_name, created_at, tree_json FROM stage_scans WHERE scan_id=?",
+                    """
+                    SELECT scan_id, source_name, created_at, tree_json, target_path, name_hint
+                    FROM stage_scans WHERE scan_id=?
+                    """,
                     (scan_id,),
                 ).fetchone()
                 if not row:
@@ -132,6 +144,8 @@ class BridgeStore:
                     source_name=row["source_name"],
                     created_at=row["created_at"],
                     tree=json.loads(row["tree_json"]),
+                    target_path=row["target_path"] or "",
+                    name_hint=row["name_hint"],
                 )
             finally:
                 conn.close()

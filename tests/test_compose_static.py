@@ -21,11 +21,11 @@ def test_compose_invariants():
 
     env_vars = api_service.get("environment", [])
     assert "MEDIA_SYNC_PROJECTS_ROOT=/data/projects" in env_vars
-    assert "MEDIA_SYNC_SOURCES_PARENT_ROOT=/mnt/media-sources" in env_vars
+    assert "MEDIA_SYNC_SOURCES_PARENT_ROOT=/data/projects/_bridge" in env_vars
 
     volumes = api_service.get("volumes", [])
     assert any("/data/projects" in volume for volume in volumes)
-    assert any("/mnt/media-sources" in volume for volume in volumes)
+    assert not any("/mnt/media-sources" in volume for volume in volumes)
 
     assert "resolve-postgres" in services
     resolve_service = services["resolve-postgres"]

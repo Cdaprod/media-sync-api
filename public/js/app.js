@@ -105,34 +105,81 @@ function mediaQuery(opts = {}){
   return query ? `?${query}` : '';
 }
 
-function updateStageStatus(message){
-  state.stageStatus = message || '';
+function updateBridgeMessage(message){
+  state.bridgeMessage = message || '';
   const target = el('bridgeStageStatus');
-  if (target) target.textContent = state.stageStatus;
+  if (target) target.textContent = state.bridgeMessage;
+}
+
+function loadBridgeRecents(){
+  try{
+    const raw = localStorage.getItem('media-sync-bridge-recents');
+    const parsed = raw ? JSON.parse(raw) : [];
+    state.bridgeRecents = Array.isArray(parsed) ? parsed : [];
+  }catch{
+    state.bridgeRecents = [];
+  }
+}
+
+function saveBridgeRecent(path){
+  if (!path) return;
+  const items = [path, ...state.bridgeRecents.filter(item => item !== path)].slice(0, 6);
+  state.bridgeRecents = items;
+  try{
+    localStorage.setItem('media-sync-bridge-recents', JSON.stringify(items));
+  }catch{
+    // ignore storage failures
+  }
+}
+
+function renderBridgeRecents(){
+  const root = el('bridgeRecents');
+  if (!root) return;
+  root.innerHTML = '';
+  if (!state.bridgeRecents.length){
+    root.innerHTML = '<div class="small">No recent bridges yet.</div>';
+    return;
+  }
+  for (const path of state.bridgeRecents){
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="name">${escapeHtml(path)}</span>`;
+    chip.addEventListener('click', () => {
+      state.bridgeTarget = path;
+      el('bridgeTarget').value = path;
+      updateBridgeMessage('');
+      syncBridgeControls();
+    });
+    root.appendChild(chip);
+  }
 }
 
 function syncBridgeControls(){
-  const hasLibrary = Boolean(state.activeLibrary);
-  const target = el('bridgeStageTarget');
-  if (target){
-    target.textContent = hasLibrary
-      ? `Target: ${state.activeLibrary.name}`
-      : 'Select a library in the sidebar to stage a scan.';
-  }
+  const agentOk = state.bridgeStatus?.agent_ok ?? false;
+  const scanReady = Boolean(state.bridgeTree);
+  const hasSelection = state.bridgeSelection.size > 0;
   const stageBtn = el('bridgeStageBtn');
-  if (stageBtn) stageBtn.disabled = !hasLibrary;
+  if (stageBtn) stageBtn.disabled = !agentOk || !state.bridgeTarget;
   const commitBtn = el('bridgeCommitBtn');
-  if (commitBtn){
-    commitBtn.disabled = !hasLibrary || !state.stageScan || state.stageSelection.size === 0;
+  if (commitBtn) commitBtn.disabled = !agentOk || !scanReady || !hasSelection;
+  const statusEl = el('bridgeAgentStatus');
+  if (statusEl){
+    statusEl.textContent = agentOk ? 'Bridge helper online' : 'Bridge helper offline';
+    statusEl.classList.toggle('good', agentOk);
+    statusEl.classList.toggle('bad', !agentOk);
   }
+  const rescanBtn = el('bridgeRescanBtn');
+  if (rescanBtn) rescanBtn.disabled = !state.activeLibrary;
+  const deriveBtn = el('bridgeDeriveBtn');
+  if (deriveBtn) deriveBtn.disabled = !state.activeLibrary;
 }
 
-function resetStageScan(){
-  state.stageScan = null;
-  state.stageTree = null;
-  state.stageSelection.clear();
-  updateStageStatus('');
-  renderStageScan();
+function resetBridgeScan(){
+  state.bridgeScanId = null;
+  state.bridgeTree = null;
+  state.bridgeSelection.clear();
+  updateBridgeMessage('');
+  renderBridgeScan();
 }
 
 function flattenStageTree(tree){
@@ -148,21 +195,16 @@ function flattenStageTree(tree){
   return output;
 }
 
-function renderStageScan(){
+function renderBridgeScan(){
   const container = el('bridgeStageTree');
   if (!container) return;
   container.innerHTML = '';
-  if (!state.activeLibrary){
-    container.innerHTML = `<div class="small">Select a library to run a staged scan.</div>`;
-    syncBridgeControls();
-    return;
-  }
-  if (!state.stageTree){
+  if (!state.bridgeTree){
     container.innerHTML = `<div class="small">Run a stage scan to preview folders before committing.</div>`;
     syncBridgeControls();
     return;
   }
-  const nodes = flattenStageTree(state.stageTree);
+  const nodes = flattenStageTree(state.bridgeTree);
   for (const node of nodes){
     const path = node.path || '.';
     const title = path === '.' ? 'Root' : path.split('/').pop();
@@ -174,15 +216,15 @@ function renderStageScan(){
     row.className = `stage-item ${suggested}`.trim();
     row.style.marginLeft = `${Math.min(depth, 6) * 12}px`;
     row.innerHTML = `
-      <input type="checkbox" ${state.stageSelection.has(path) ? 'checked' : ''} />
+      <input type="checkbox" ${state.bridgeSelection.has(path) ? 'checked' : ''} />
       <div>
         <div><strong>${escapeHtml(title || path)}</strong> <span class="stage-path">${escapeHtml(path)}</span></div>
         <div class="small">files: ${escapeHtml(count)}${kinds ? ` • ${escapeHtml(kinds)}` : ''}</div>
       </div>
     `;
     row.querySelector('input').addEventListener('change', (ev) => {
-      if (ev.target.checked) state.stageSelection.add(path);
-      else state.stageSelection.delete(path);
+      if (ev.target.checked) state.bridgeSelection.add(path);
+      else state.bridgeSelection.delete(path);
       syncBridgeControls();
     });
     container.appendChild(row);
@@ -468,12 +510,12 @@ async function loadSources(){
       state.activeLibrary = null;
       state.activeBucket = null;
       state.buckets = [];
-      resetStageScan();
+      resetBridgeScan();
     }
     renderSources();
     renderLibraries();
     renderBuckets();
-    renderStageScan();
+    renderBridgeScan();
     syncBridgeControls();
   }catch(e){
     toast('bad','Sources', e.message);
@@ -504,7 +546,7 @@ async function loadBuckets(){
     const payload = await r.json();
     state.buckets = Array.isArray(payload.buckets) ? payload.buckets : [];
     if (payload.instructions){
-      updateStageStatus(payload.instructions);
+      updateBridgeMessage(payload.instructions);
     }
     if (state.activeBucket && !state.buckets.find(b => b.bucket_id === state.activeBucket.bucket_id)){
       state.activeBucket = null;
@@ -533,71 +575,110 @@ async function discoverBuckets(){
   }
 }
 
-async function runStageScan(){
-  if (!state.activeLibrary){
-    toast('warn', 'Bridge', 'Select a library first');
+async function loadBridgeStatus(){
+  try{
+    const res = await fetch(`${API}/api/bridge/status`);
+    if (!res.ok) throw new Error('Bridge status unavailable');
+    state.bridgeStatus = await res.json();
+    syncBridgeControls();
+  }catch(e){
+    state.bridgeStatus = { agent_ok: false, agent_detail: e.message };
+    syncBridgeControls();
+  }
+}
+
+function validateBridgeTarget(path){
+  if (!path) return '';
+  const winDrive = /^[a-zA-Z]:\\/;
+  const unc = /^\\\\/;
+  if (!winDrive.test(path) && !unc.test(path)){
+    return 'Path should be an absolute Windows path (drive letter or UNC).';
+  }
+  return '';
+}
+
+async function runBridgeScan(){
+  const targetPath = (el('bridgeTarget').value || '').trim();
+  const nameHint = (el('bridgeNameHint').value || '').trim();
+  state.bridgeTarget = targetPath;
+  state.bridgeNameHint = nameHint;
+  const warning = validateBridgeTarget(targetPath);
+  if (warning){
+    updateBridgeMessage(warning);
+    toast('warn', 'Bridge', warning);
     return;
   }
-  updateStageStatus('Scanning…');
+  updateBridgeMessage('Scanning…');
   try{
-    const sourceName = state.activeLibrary.name;
-    const scanRes = await fetch(`${API}/api/sources/${encodeURIComponent(sourceName)}/stage-scan`, { method:'POST' });
+    const scanRes = await fetch(`${API}/api/bridge/stage-scan`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ target_path: targetPath, name_hint: nameHint }),
+    });
     const scanPayload = await scanRes.json().catch(() => ({}));
     if (!scanRes.ok) throw new Error(scanPayload.detail || 'Stage scan failed');
-    const scanId = scanPayload.scan_id;
-    const treeRes = await fetch(`${API}/api/stage-scans/${encodeURIComponent(scanId)}`);
-    const treePayload = await treeRes.json().catch(() => ({}));
-    if (!treeRes.ok) throw new Error(treePayload.detail || 'Stage scan fetch failed');
-    state.stageScan = treePayload;
-    state.stageTree = treePayload.tree || null;
-    state.stageSelection.clear();
-    const nodes = flattenStageTree(state.stageTree || {});
+    state.bridgeScanId = scanPayload.scan_id;
+    state.bridgeTree = scanPayload.tree || null;
+    state.bridgeSelection.clear();
+    const nodes = flattenStageTree(state.bridgeTree || {});
     for (const node of nodes){
       if (node.suggested){
-        state.stageSelection.add(node.path || '.');
+        state.bridgeSelection.add(node.path || '.');
       }
     }
-    if (!state.stageSelection.size && nodes.length){
-      state.stageSelection.add(nodes[0].path || '.');
+    if (!state.bridgeSelection.size && nodes.length){
+      state.bridgeSelection.add(nodes[0].path || '.');
     }
-    updateStageStatus(`Scan ready (${nodes.length} nodes). Select roots to commit.`);
-    renderStageScan();
+    if (scanPayload.suggested_name && !nameHint){
+      el('bridgeNameHint').value = scanPayload.suggested_name;
+      state.bridgeNameHint = scanPayload.suggested_name;
+    }
+    saveBridgeRecent(targetPath);
+    renderBridgeRecents();
+    updateBridgeMessage(`Scan ready (${nodes.length} nodes). Select roots to commit.`);
+    renderBridgeScan();
   }catch(e){
-    updateStageStatus(`Scan failed: ${e.message}`);
+    updateBridgeMessage(`Scan failed: ${e.message}`);
     toast('bad', 'Bridge', e.message);
   }
 }
 
-async function commitStageScan(){
-  if (!state.stageScan){
-    toast('warn', 'Bridge', 'Run a stage scan first');
+async function commitBridge(){
+  const targetPath = (el('bridgeTarget').value || '').trim();
+  const junctionName = (el('bridgeNameHint').value || '').trim();
+  const selected = Array.from(state.bridgeSelection);
+  if (!targetPath || !junctionName){
+    toast('warn', 'Bridge', 'Provide a target path and junction name');
     return;
   }
-  const selected = Array.from(state.stageSelection);
   if (!selected.length){
     toast('warn', 'Bridge', 'Select at least one root to commit');
     return;
   }
-  updateStageStatus('Committing selections…');
+  updateBridgeMessage('Committing selections…');
   try{
-    const scanId = state.stageScan.scan_id;
-    const res = await fetch(`${API}/api/stage-scans/${encodeURIComponent(scanId)}/commit`, {
+    const res = await fetch(`${API}/api/bridge/commit`, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ selected_paths: selected }),
+      body: JSON.stringify({
+        items: [{
+          junction_name: junctionName,
+          target_path: targetPath,
+          selected_paths: selected,
+          scan_id: state.bridgeScanId,
+        }],
+      }),
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload.detail || 'Commit failed');
-    updateStageStatus(`Committed ${payload.committed?.length || selected.length} roots.`);
-    state.stageScan = null;
-    state.stageTree = null;
-    state.stageSelection.clear();
+    updateBridgeMessage('Bridge committed. Library registered.');
+    resetBridgeScan();
+    await loadSources();
     await loadBuckets();
     await loadMedia();
-    renderStageScan();
-    toast('good', 'Bridge', 'Library roots committed.');
+    toast('good', 'Bridge', 'Library registered.');
   }catch(e){
-    updateStageStatus(`Commit failed: ${e.message}`);
+    updateBridgeMessage(`Commit failed: ${e.message}`);
     toast('bad', 'Bridge', e.message);
   }
 }
@@ -625,7 +706,7 @@ async function loadMedia(){
     const payload = await r.json();
     state.media = Array.isArray(payload.media) ? payload.media : [];
     if (payload.instructions && state.activeLibrary){
-      updateStageStatus(payload.instructions);
+      updateBridgeMessage(payload.instructions);
     }
     // clear selection if selected files disappeared
     const existing = new Set(state.media.map(m => m.asset_id));
@@ -719,7 +800,7 @@ function renderBuckets(){
     return;
   }
   if (!state.buckets.length){
-    const msg = state.stageStatus || 'No buckets yet — run discovery or commit staged roots.';
+    const msg = state.bridgeMessage || 'No buckets yet — run discovery or commit staged roots.';
     root.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;">${escapeHtml(msg)}</div>`;
     el('bucketCount').textContent = '0 total';
     return;
@@ -865,7 +946,7 @@ async function selectProject(p){
   state.buckets = [];
   state.selected.clear();
   state.focused = null;
-  resetStageScan();
+  resetBridgeScan();
   setSidebarOpen(false);
 
   // prefill resolve name
@@ -881,6 +962,7 @@ async function selectProject(p){
   renderBuckets();
   updateTopCounts();
   updateSelectionUI();
+  syncBridgeControls();
   toast('good', 'Project', `Selected ${p.name}`);
   await loadMedia();
 }
@@ -891,7 +973,7 @@ async function selectLibrary(source){
   state.activeBucket = null;
   state.selected.clear();
   state.focused = null;
-  resetStageScan();
+  resetBridgeScan();
   setSidebarOpen(false);
 
   el('uploadCaption').textContent = 'Select a project to upload.';
@@ -901,7 +983,8 @@ async function selectLibrary(source){
   renderLibraries();
   updateTopCounts();
   updateSelectionUI();
-  renderStageScan();
+  syncBridgeControls();
+  renderBridgeScan();
   await loadBuckets();
   await loadMedia();
   toast('good', 'Library', `Selected ${source.name}`);
@@ -947,34 +1030,6 @@ async function uploadActive(){
     toast('bad','Upload', e.message);
   }finally{
     el('uploadBtn').disabled = false;
-  }
-}
-
-async function registerBridge(){
-  const name = (el('bridgeName').value || '').trim();
-  const root = (el('bridgeRoot').value || '').trim();
-  if (!name || !root){
-    toast('warn', 'Bridge', 'Provide a name and root path');
-    return;
-  }
-  el('bridgeStatus').textContent = 'Registering…';
-  try{
-    const r = await fetch(`${API}/api/sources`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, root, mode: 'library', read_only: true }),
-    });
-    const payload = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(payload.detail || 'Registration failed');
-    el('bridgeStatus').textContent = `Registered ${payload.name}`;
-    el('bridgeName').value = '';
-    el('bridgeRoot').value = '';
-    await loadSources();
-    syncBridgeControls();
-    toast('good', 'Bridge', `Registered ${payload.name}`);
-  }catch(e){
-    el('bridgeStatus').textContent = `Failed: ${e.message}`;
-    toast('bad','Bridge', e.message);
   }
 }
 
@@ -1255,9 +1310,55 @@ el('uploadBtn').addEventListener('click', uploadActive);
 el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
 
 // Bridge + Buckets
-el('bridgeBtn').addEventListener('click', registerBridge);
-el('bridgeStageBtn').addEventListener('click', runStageScan);
-el('bridgeCommitBtn').addEventListener('click', commitStageScan);
+el('bridgeStageBtn').addEventListener('click', runBridgeScan);
+el('bridgeCommitBtn').addEventListener('click', commitBridge);
+el('bridgeBrowseBtn').addEventListener('click', () => el('bridgeBrowseInput').click());
+el('bridgeBrowseInput').addEventListener('change', (event) => {
+  const files = Array.from(event.target.files || []);
+  if (!files.length){
+    updateBridgeMessage('No folder selected.');
+    return;
+  }
+  const sample = files[0];
+  const rel = sample.webkitRelativePath || '';
+  const folder = rel.split('/')[0];
+  if (folder){
+    el('bridgeNameHint').value = folder;
+    state.bridgeNameHint = folder;
+  }
+  updateBridgeMessage('Browser selection captured. Paste the full Windows path to continue.');
+});
+el('bridgeTarget').addEventListener('input', (event) => {
+  state.bridgeTarget = event.target.value || '';
+  updateBridgeMessage('');
+  syncBridgeControls();
+});
+el('bridgeNameHint').addEventListener('input', (event) => {
+  state.bridgeNameHint = event.target.value || '';
+  syncBridgeControls();
+});
+el('bridgeRefreshBtn').addEventListener('click', loadBridgeStatus);
+el('bridgeRescanBtn').addEventListener('click', async () => {
+  await discoverBuckets();
+});
+el('bridgeDeriveBtn').addEventListener('click', async () => {
+  if (!state.activeLibrary){
+    toast('warn', 'Bridge', 'Select a library first');
+    return;
+  }
+  try{
+    const res = await fetch(`${API}/api/sources/${encodeURIComponent(state.activeLibrary.name)}/derive`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ kinds: ['thumb'], limit: 50 }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.detail || 'Derive failed');
+    toast('good', 'Bridge', `Derived ${payload.processed || 0} assets.`);
+  }catch(e){
+    toast('bad', 'Bridge', e.message);
+  }
+});
 el('discoverBucketsBtn').addEventListener('click', discoverBuckets);
 
 // Resolve
@@ -1324,6 +1425,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   toast('good','Boot','Loading sources + projects…');
+  loadBridgeRecents();
+  renderBridgeRecents();
+  await loadBridgeStatus();
   await loadSources();
   await loadProjects();
   await loadBuckets();
@@ -1331,6 +1435,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateTagFilterUI();
   updateTopCounts();
   updateSelectionUI();
-  renderStageScan();
+  renderBridgeScan();
   syncBridgeControls();
 });

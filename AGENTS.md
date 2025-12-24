@@ -399,3 +399,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Library sources now require a staged scan/commit flow (`/api/sources/{source}/stage-scan`, `/api/stage-scans/{id}`, `/api/stage-scans/{id}/commit`) before media or buckets can be browsed.
 - Library browsing, bucket discovery, and streaming are constrained to committed roots stored in `_sources/bridge.sqlite`; pinned buckets are seeded from committed roots.
 - Explorer UI script is now modularized under `/public/js/` and includes a staged Bridge panel for committing library roots.
+
+### Latest Implementation Notes (2025-03-25)
+- Bridge flow now runs through `/api/bridge/*` endpoints and a host-side bridge agent (`public/bridge-agent.ps1`) that creates NTFS junctions and scans target paths.
+- Library sources now live under `/data/projects/_bridge`, so Compose only mounts `B:/Video/Projects` and sets `MEDIA_SYNC_SOURCES_PARENT_ROOT=/data/projects/_bridge`.
+- Explorer Bridge panel supports staged scans, commit, recent targets, and per-library bucket/derive actions.

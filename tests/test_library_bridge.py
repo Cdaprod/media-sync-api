@@ -2,45 +2,75 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from app.api import bridge as bridge_api
+from app.storage.bridge import stage_scan_tree
 from app.storage.tags_store import asset_id_for_source_relpath
 
 
-def _register_library_source(client, root: Path, name: str = "library"):
-    payload = {
-        "name": name,
-        "root": str(root),
-        "mode": "library",
-        "read_only": True,
-        "type": "smb",
-    }
-    response = client.post("/api/sources", json=payload)
-    assert response.status_code == 201
-    return response.json()
+class FakeBridgeAgent:
+    def __init__(self):
+        self.created: list[tuple[str, str]] = []
 
-def _stage_scan_and_commit(client, source_name: str, selected_paths: list[str]):
-    scan = client.post(f"/api/sources/{source_name}/stage-scan")
+    def health(self):
+        return bridge_api.BridgeAgentStatus(ok=True, detail="ok")
+
+    def scan_tree(self, target_path: str, max_depth=None, min_files=None, timeout: float = 30.0) -> dict:
+        return stage_scan_tree(
+            Path(target_path),
+            max_depth=max_depth or 6,
+            min_files=min_files or 1,
+        )
+
+    def create_junction(self, link_path: str, target_path: str, timeout: float = 20.0) -> None:
+        self.created.append((link_path, target_path))
+
+    def delete_junction(self, link_path: str, timeout: float = 20.0) -> None:
+        return None
+
+
+@pytest.fixture()
+def fake_bridge_agent(monkeypatch: pytest.MonkeyPatch):
+    agent = FakeBridgeAgent()
+    monkeypatch.setattr(bridge_api, "get_bridge_agent", lambda settings=None: agent)
+    return agent
+
+
+def _stage_scan_and_commit(client, target_path: Path, junction_name: str, selected_paths: list[str]):
+    scan = client.post(
+        "/api/bridge/stage-scan",
+        json={"target_path": str(target_path), "name_hint": junction_name},
+    )
     assert scan.status_code == 200
     scan_payload = scan.json()
-    scan_id = scan_payload["scan_id"]
-    tree = client.get(f"/api/stage-scans/{scan_id}")
-    assert tree.status_code == 200
     commit = client.post(
-        f"/api/stage-scans/{scan_id}/commit",
-        json={"selected_paths": selected_paths},
+        "/api/bridge/commit",
+        json={
+            "items": [
+                {
+                    "junction_name": junction_name,
+                    "target_path": str(target_path),
+                    "selected_paths": selected_paths,
+                    "scan_id": scan_payload["scan_id"],
+                }
+            ]
+        },
     )
     assert commit.status_code == 200
-    return tree.json(), commit.json()
+    return scan_payload, commit.json()
 
 
-def test_library_media_listing_and_asset_id(client, env_settings: Path):
+def test_library_media_listing_and_asset_id(client, env_settings: Path, fake_bridge_agent: FakeBridgeAgent):
     sources_root = env_settings.parent / "sources"
-    library_root = sources_root / "library"
-    (library_root / "Sub").mkdir(parents=True, exist_ok=True)
-    media_path = library_root / "Sub" / "clip.mov"
-    media_path.write_bytes(b"library-media")
+    bridge_target = env_settings.parent / "bridge-target"
+    (bridge_target / "Sub").mkdir(parents=True, exist_ok=True)
+    (bridge_target / "Sub" / "clip.mov").write_bytes(b"library-media")
 
-    _register_library_source(client, library_root, name="library")
-    _stage_scan_and_commit(client, "library", ["Sub"])
+    _stage_scan_and_commit(client, bridge_target, "library", ["Sub"])
+
+    library_root = sources_root / "library" / "Sub"
+    library_root.mkdir(parents=True, exist_ok=True)
+    (library_root / "clip.mov").write_bytes(b"library-media")
 
     listing = client.get("/api/sources/library/media")
     assert listing.status_code == 200
@@ -52,18 +82,25 @@ def test_library_media_listing_and_asset_id(client, env_settings: Path):
     assert item["stream_url"].startswith("/media/source/library/")
     expected = asset_id_for_source_relpath("library", "Sub/clip.mov")
     assert item["asset_id"] == expected
+    assert fake_bridge_agent.created
 
 
-def test_bucket_discovery_and_listing(client, env_settings: Path):
+def test_bucket_discovery_and_listing(client, env_settings: Path, fake_bridge_agent: FakeBridgeAgent):
     sources_root = env_settings.parent / "sources"
-    library_root = sources_root / "archive"
-    (library_root / "Events" / "2024" / "Day1").mkdir(parents=True, exist_ok=True)
-    (library_root / "Events" / "2024" / "Day1" / "a.mov").write_bytes(b"a")
-    (library_root / "Events" / "2024" / "Day2").mkdir(parents=True, exist_ok=True)
-    (library_root / "Events" / "2024" / "Day2" / "b.mov").write_bytes(b"b")
+    bridge_target = env_settings.parent / "bridge-target-archive"
+    (bridge_target / "Events" / "2024" / "Day1").mkdir(parents=True, exist_ok=True)
+    (bridge_target / "Events" / "2024" / "Day1" / "a.mov").write_bytes(b"a")
+    (bridge_target / "Events" / "2024" / "Day2").mkdir(parents=True, exist_ok=True)
+    (bridge_target / "Events" / "2024" / "Day2" / "b.mov").write_bytes(b"b")
 
-    _register_library_source(client, library_root, name="archive")
-    _stage_scan_and_commit(client, "archive", ["Events"])
+    _stage_scan_and_commit(client, bridge_target, "archive", ["Events"])
+
+    library_root = sources_root / "archive" / "Events" / "2024"
+    library_root.mkdir(parents=True, exist_ok=True)
+    (library_root / "Day1").mkdir(parents=True, exist_ok=True)
+    (library_root / "Day1" / "a.mov").write_bytes(b"a")
+    (library_root / "Day2").mkdir(parents=True, exist_ok=True)
+    (library_root / "Day2" / "b.mov").write_bytes(b"b")
 
     discovered = client.post("/api/sources/archive/discover-buckets")
     assert discovered.status_code == 200
@@ -77,19 +114,23 @@ def test_bucket_discovery_and_listing(client, env_settings: Path):
     assert media_payload["media"]
 
 
-def test_stage_scan_commit_limits_library_root(client, env_settings: Path):
+def test_stage_scan_commit_limits_library_root(client, env_settings: Path, fake_bridge_agent: FakeBridgeAgent):
     sources_root = env_settings.parent / "sources"
+    bridge_target = env_settings.parent / "bridge-target-vault"
+    (bridge_target / "Keep").mkdir(parents=True, exist_ok=True)
+    (bridge_target / "Keep" / "clip.mov").write_bytes(b"keep")
+    (bridge_target / "Skip").mkdir(parents=True, exist_ok=True)
+    (bridge_target / "Skip" / "clip.mov").write_bytes(b"skip")
+
+    scan_payload, commit_payload = _stage_scan_and_commit(client, bridge_target, "vault", ["Keep"])
+    assert scan_payload["tree"]["path"] == "."
+    assert "vault" in {item["source"] for item in commit_payload["sources"]}
+
     library_root = sources_root / "vault"
     (library_root / "Keep").mkdir(parents=True, exist_ok=True)
     (library_root / "Keep" / "clip.mov").write_bytes(b"keep")
     (library_root / "Skip").mkdir(parents=True, exist_ok=True)
     (library_root / "Skip" / "clip.mov").write_bytes(b"skip")
-
-    _register_library_source(client, library_root, name="vault")
-
-    tree_payload, commit_payload = _stage_scan_and_commit(client, "vault", ["Keep"])
-    assert tree_payload["tree"]["path"] == "."
-    assert "Keep" in commit_payload["committed"]
 
     listing = client.get("/api/sources/vault/media")
     assert listing.status_code == 200

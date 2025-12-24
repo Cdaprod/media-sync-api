@@ -26,7 +26,8 @@ The container is stateless; the host path is the source of truth.
 - Host path: `B:\\Video\\Projects`
 - Container mount: `/data/projects`
 - Default source name: `primary` (points to `/data/projects`); register new sources via `/api/sources`
-- Library sources parent root: `B:\\Video\\Projects\\_bridge` → `/mnt/media-sources` (mount junctions here)
+- Library sources parent root: `B:\\Video\\Projects\\_bridge` → `/data/projects/_bridge` (junctions live under Projects)
+- Bridge helper URL: `http://127.0.0.1:8790` (`MEDIA_SYNC_BRIDGE_AGENT_URL`)
 
 ## Quick start with Docker Compose
 ```bash
@@ -57,27 +58,33 @@ Troubleshooting:
 ## Library bridge (junction workflow)
 The library browser is intentionally staged and read-only. Only folders you commit are indexed/browsable.
 
-1) Create junctions inside `B:\Video\Projects\_bridge` to point at larger libraries/NAS shares:
+1) Start the lightweight bridge helper on the Windows host:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\public\\bridge-agent.ps1
+```
+Verify it is reachable:
+```bash
+curl http://127.0.0.1:8790/health
+curl http://127.0.0.1:8787/api/bridge/status
+```
+
+2) (Optional) create junctions manually inside `B:\Video\Projects\_bridge` to point at larger libraries/NAS shares:
 ```powershell
 mklink /J B:\Video\Projects\_bridge\NAS \\NAS\MediaShare
 mklink /J B:\Video\Projects\_bridge\Vault X:\Media\Vault
 ```
-2) Register each junction as a library source:
+
+3) Use the staged scan + commit flow to create junctions and register sources:
 ```bash
-curl -X POST http://127.0.0.1:8787/api/sources \
+curl -X POST http://127.0.0.1:8787/api/bridge/stage-scan \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"nas\",\"root\":\"/mnt/media-sources/NAS\",\"mode\":\"library\",\"read_only\":true}"
-```
-3) Run a staged scan (no indexing yet) and inspect the tree:
-```bash
-curl -X POST http://127.0.0.1:8787/api/sources/nas/stage-scan
-curl http://127.0.0.1:8787/api/stage-scans/<scan_id>
+  -d "{\"target_path\":\"Z:\\\\Audio\",\"name_hint\":\"Audio\"}"
 ```
 4) Commit only the folders you want indexed:
 ```bash
-curl -X POST http://127.0.0.1:8787/api/stage-scans/<scan_id>/commit \
+curl -X POST http://127.0.0.1:8787/api/bridge/commit \
   -H "Content-Type: application/json" \
-  -d "{\"selected_paths\":[\"Events/2024\",\"B-Roll\"]}"
+  -d "{\"items\":[{\"junction_name\":\"Audio\",\"target_path\":\"Z:\\\\Audio\",\"selected_paths\":[\"Events/2024\",\"B-Roll\"]}]}"
 ```
 After commit, bucket discovery and `/api/sources/{source}/media` are constrained to those selections.
 

@@ -16,10 +16,14 @@ export const state = {
   tagFilter: '',
   tagMode: 'all',
   noTags: false,
-  stageStatus: '',
-  stageScan: null,
-  stageTree: null,
-  stageSelection: new Set(),
+  bridgeStatus: null,
+  bridgeTarget: '',
+  bridgeNameHint: '',
+  bridgeScanId: null,
+  bridgeTree: null,
+  bridgeSelection: new Set(),
+  bridgeRecents: [],
+  bridgeMessage: '',
 };
 
 export const ui = {

@@ -948,28 +948,40 @@
 
           <div class="section-h" style="border-top:1px solid var(--border);">
             <h2>Bridge</h2>
-            <div class="meta-line"><span class="kbd">/api/sources</span></div>
+            <div class="meta-line"><span class="kbd">/api/bridge</span></div>
           </div>
           <div style="padding: 12px;">
             <div class="card">
-              <strong>Add library source</strong>
-              <div class="small">Root must be under the configured parent mount.</div>
+              <strong>Bridge a host library</strong>
+              <div class="tag" id="bridgeAgentStatus">Bridge helper offline</div>
+              <div class="small" style="margin-top:6px;">Paste a Windows/UNC path, scan, then commit.</div>
               <div style="display:grid; gap:8px; margin-top:10px;">
-                <input id="bridgeName" placeholder="library-nas" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
-                <input id="bridgeRoot" placeholder="/mnt/media-sources/NAS" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
-                <button id="bridgeBtn" class="btn good" type="button">Register library</button>
-                <div class="small" id="bridgeStatus"></div>
+                <input id="bridgeTarget" placeholder="Z:\\Media\\Audio or \\\\NAS\\Share\\Media" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+                <div style="display:flex; gap:8px; flex-wrap: wrap;">
+                  <input id="bridgeNameHint" placeholder="junction name (Audio)" style="flex:1;padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+                  <button id="bridgeBrowseBtn" class="btn" type="button">Browse…</button>
+                  <input id="bridgeBrowseInput" type="file" webkitdirectory style="display:none;" />
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap: wrap;">
+                  <button id="bridgeStageBtn" class="btn" type="button" disabled>Stage scan</button>
+                  <button id="bridgeCommitBtn" class="btn primary" type="button" disabled>Commit selection</button>
+                  <button id="bridgeRefreshBtn" class="btn" type="button">Check helper</button>
+                </div>
+                <div class="small" id="bridgeStageStatus"></div>
               </div>
+              <div id="bridgeStageTree" class="stage-tree"></div>
             </div>
             <div class="card" style="margin-top:12px;">
-              <strong>Stage library scan</strong>
-              <div class="small" id="bridgeStageTarget">Select a library in the sidebar to stage a scan.</div>
+              <strong>Recently bridged</strong>
+              <div id="bridgeRecents" class="chips" style="padding:0;margin-top:8px;"></div>
+            </div>
+            <div class="card" style="margin-top:12px;">
+              <strong>Library actions</strong>
+              <div class="small">Select a library in the sidebar to re-scan buckets or derive thumbs.</div>
               <div style="display:flex; flex-wrap: wrap; gap:8px; margin-top:10px;">
-                <button id="bridgeStageBtn" class="btn" type="button" disabled>Stage scan</button>
-                <button id="bridgeCommitBtn" class="btn primary" type="button" disabled>Commit selection</button>
+                <button id="bridgeRescanBtn" class="btn" type="button">Rescan buckets</button>
+                <button id="bridgeDeriveBtn" class="btn" type="button">Re-derive thumbs</button>
               </div>
-              <div class="small" id="bridgeStageStatus" style="margin-top:8px;"></div>
-              <div id="bridgeStageTree" class="stage-tree"></div>
             </div>
           </div>
 

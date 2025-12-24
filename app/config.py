@@ -38,7 +38,18 @@ class Settings(BaseModel):
         or os.getenv("PROJECT_ROOT", "/data/projects")
     ))
     sources_parent_root: Path = Field(
-        default_factory=lambda: Path(os.getenv("MEDIA_SYNC_SOURCES_PARENT_ROOT", "/mnt/media-sources"))
+        default_factory=lambda: Path(
+            os.getenv(
+                "MEDIA_SYNC_SOURCES_PARENT_ROOT",
+                str(Path(os.getenv("MEDIA_SYNC_PROJECTS_ROOT", "/data/projects")) / "_bridge"),
+            )
+        )
+    )
+    bridge_root_host: str = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_BRIDGE_ROOT_HOST", r"B:\Video\Projects\_bridge")
+    )
+    bridge_agent_url: str = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_BRIDGE_AGENT_URL", "http://127.0.0.1:8790")
     )
     cache_root: Path = Field(
         default_factory=lambda: Path(os.getenv("MEDIA_SYNC_CACHE_ROOT", "/app/storage/cache"))
@@ -107,6 +118,7 @@ def get_settings() -> Settings:
     settings = Settings()
     ensure_project_root(settings.project_root)
     settings.cache_root.mkdir(parents=True, exist_ok=True)
+    settings.sources_parent_root.mkdir(parents=True, exist_ok=True)
     return settings
 
 
