@@ -22,6 +22,7 @@ from app.storage.index import load_index, seed_index
 from app.storage.paths import ensure_subdirs, project_path, safe_filename, validate_project_name
 from app.storage.reindex import reindex_project
 from app.storage.sources import SourceRegistry
+from app.storage.tags_store import TagStore, normalize_tag, asset_key
 
 
 logger = logging.getLogger("media_sync_api.media")
@@ -61,7 +62,13 @@ def _require_source_and_project(project_name: str, source: str | None) -> _Resol
 
 
 @router.get("/{project_name}/media")
-async def list_media(project_name: str, source: str | None = None):
+async def list_media(
+    project_name: str,
+    source: str | None = None,
+    tags: str | None = None,
+    any_tags: str | None = None,
+    no_tags: bool = False,
+):
     """List all media recorded in a project's index with streamable URLs."""
 
     resolved = _require_source_and_project(project_name, source)
@@ -71,6 +78,7 @@ async def list_media(project_name: str, source: str | None = None):
     index = load_index(resolved.root)
 
     media: List[Dict[str, object]] = []
+    asset_keys: List[str] = []
     for entry in index.get("files", []):
         relative_path = entry.get("relative_path")
         if not isinstance(relative_path, str):
@@ -88,7 +96,30 @@ async def list_media(project_name: str, source: str | None = None):
         item["stream_url"] = _build_stream_url(resolved.name, safe_relative, resolved.source_name)
         item["download_url"] = _build_download_url(resolved.name, safe_relative, resolved.source_name)
         media.append(item)
-    sorted_media = sorted(media, key=lambda m: m.get("relative_path", ""))
+        asset_keys.append(asset_key(resolved.name, safe_relative, resolved.source_name))
+
+    store = TagStore(get_settings().project_root / "_tags" / "tags.sqlite")
+    tags_map = store.batch_get_asset_tags(asset_keys)
+    counts_map = store.batch_get_asset_tag_counts(asset_keys)
+
+    for item in media:
+        key = asset_key(resolved.name, item["relative_path"], resolved.source_name)
+        item_tags = tags_map.get(key, [])
+        item["tags"] = item_tags
+        item["tag_source_counts"] = counts_map.get(key, {})
+
+    required_tags = _parse_tag_filter(tags)
+    any_tag_list = _parse_tag_filter(any_tags)
+
+    filtered = media
+    if required_tags:
+        filtered = [m for m in filtered if _has_all_tags(m.get("tags", []), required_tags)]
+    if any_tag_list:
+        filtered = [m for m in filtered if _has_any_tags(m.get("tags", []), any_tag_list)]
+    if no_tags:
+        filtered = [m for m in filtered if not m.get("tags")]
+
+    sorted_media = sorted(filtered, key=lambda m: m.get("relative_path", ""))
 
     return {
         "project": resolved.name,
@@ -97,6 +128,31 @@ async def list_media(project_name: str, source: str | None = None):
         "counts": index.get("counts", {}),
         "instructions": "Use stream_url to play media directly; run /reindex after manual moves.",
     }
+
+
+def _parse_tag_filter(value: str | None) -> List[str]:
+    if not value:
+        return []
+    normalized: List[str] = []
+    for raw in value.split(","):
+        tag = normalize_tag(raw)
+        if tag:
+            normalized.append(tag)
+    return normalized
+
+
+def _has_all_tags(tags: List[str], required: List[str]) -> bool:
+    if not required:
+        return True
+    tag_set = set(tags)
+    return all(tag in tag_set for tag in required)
+
+
+def _has_any_tags(tags: List[str], candidates: List[str]) -> bool:
+    if not candidates:
+        return True
+    tag_set = set(tags)
+    return any(tag in tag_set for tag in candidates)
 
 
 @media_router.get("/{project_name}/download/{relative_path:path}")
