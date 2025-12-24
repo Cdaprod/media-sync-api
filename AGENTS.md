@@ -354,3 +354,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-14)
 - Explorer mobile breakpoint stacks the toolbar below the brand to keep controls on-screen.
+
+### Latest Implementation Notes (2025-03-15)
+- Tagging is now backed by `_tags/tags.sqlite` with `/api` endpoints for listing tags, patching metadata, and per-asset tag CRUD.
+- Explorer fetches tags in batch and renders tag pills on cards with a drawer tag prompt for add/remove.

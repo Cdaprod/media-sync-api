@@ -456,6 +456,24 @@
     .badge.kind-image{ border-color: rgba(34,197,94,0.35); }
     .badge.kind-audio{ border-color: rgba(245,158,11,0.35); }
     .badge.kind-doc{ border-color: rgba(124,58,237,0.35); }
+    .tagpill{
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.88);
+      white-space: nowrap;
+    }
+    .tagpill[data-color]{
+      border-color: rgba(255,255,255,0.10);
+    }
+    .tagwrap{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
 
     .selector{
       position:absolute;
@@ -695,9 +713,10 @@
     /* Mobile */
     @media (max-width: 1180px){
       .topbar-inner{
-        flex-wrap: wrap;
-        align-items: flex-start;
+        flex-direction: column;
+        align-items: stretch;
       }
+      .brand{ width: 100%; min-width: 0; }
       .toolbar{
         width: 100%;
         flex-wrap: wrap;
@@ -892,6 +911,7 @@
         <div class="drawer-actions">
           <button id="drawerPlay" class="btn" type="button">▶ Play</button>
           <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
+          <button id="drawerTag" class="btn" type="button">🏷 Tag</button>
           <button id="drawerToggleSelect" class="btn primary" type="button">＋ Select</button>
         </div>
 
@@ -921,6 +941,8 @@
       q: '',
       selected: new Set(),   // relative_path
       focused: null,         // item
+      tagMap: {},            // asset_key -> [tags]
+      tagMeta: {},           // tag -> {color, description}
     };
 
     const ui = {
@@ -999,6 +1021,35 @@
       const q = state.q.trim().toLowerCase();
       if (!q) return state.media.slice();
       return state.media.filter(it => (it.relative_path || '').toLowerCase().includes(q));
+    }
+
+    function assetKeyFor(item){
+      const p = state.activeProject;
+      if (!p || !item?.relative_path) return null;
+      const source = p.source || 'primary';
+      return `${source}::${p.name}::${item.relative_path}`;
+    }
+
+    function getTagsForItem(item){
+      const key = assetKeyFor(item);
+      return key && state.tagMap[key] ? state.tagMap[key] : [];
+    }
+
+    function tagPillHtml(tag){
+      const meta = state.tagMeta?.[tag];
+      const color = meta?.color;
+      const style = color ? ` style="background:${escapeHtml(color)}33;border-color:${escapeHtml(color)};"` : '';
+      const dataColor = color ? ` data-color="${escapeHtml(color)}"` : '';
+      return `<span class="tagpill"${dataColor}${style}>${escapeHtml(tag)}</span>`;
+    }
+
+    function renderTagPills(tags, max = 3){
+      if (!tags || !tags.length) return '';
+      const visible = tags.slice(0, max);
+      const hidden = tags.length - visible.length;
+      const pills = visible.map(tagPillHtml).join('');
+      const more = hidden > 0 ? `<span class="tagpill">+${hidden}</span>` : '';
+      return pills + more;
     }
 
     function updateSelectionUI(){
@@ -1197,6 +1248,7 @@
     async function loadMedia(){
       if (!state.activeProject){
         state.media = [];
+        state.tagMap = {};
         renderMedia();
         updateTopCounts();
         return;
@@ -1212,11 +1264,37 @@
         for (const s of Array.from(state.selected)){
           if (!existing.has(s)) state.selected.delete(s);
         }
+        await loadTagBatchForActiveMedia();
         renderMedia();
         updateTopCounts();
         updateSelectionUI();
       }catch(e){
         toast('bad','Media', e.message);
+      }
+    }
+
+    async function loadTagBatchForActiveMedia(){
+      const p = state.activeProject;
+      if (!p){
+        state.tagMap = {};
+        return;
+      }
+      const rels = state.media.map(m => m.relative_path).filter(Boolean);
+      if (!rels.length){
+        state.tagMap = {};
+        return;
+      }
+      try{
+        const r = await fetch(`${API}/api/tags/batch`, {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ project: p.name, source: p.source || null, rel_paths: rels }),
+        });
+        if (!r.ok) throw new Error('Tag batch failed');
+        const payload = await r.json();
+        state.tagMap = payload.map || {};
+      }catch{
+        state.tagMap = {};
       }
     }
 
@@ -1299,6 +1377,8 @@
         const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
         const sub = it.relative_path || '';
         const size = formatBytes(it.size);
+        const tags = getTagsForItem(it);
+        const tagsHtml = renderTagPills(tags, 3);
 
         // If your API can provide a lightweight thumbnail URL (recommended), use it:
         // - it.thumb_url (image/jpg) for videos/images
@@ -1326,6 +1406,7 @@
           <div class="body">
             <div class="title">${escapeHtml(title)}</div>
             <div class="sub">${escapeHtml(sub)}</div>
+            ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
           </div>
         `;
 
@@ -1355,6 +1436,7 @@
           <div class="info">
             <div class="t">${escapeHtml(title)}</div>
             <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
+            ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
           </div>
           <div class="actions">
             <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} title="Select" />
@@ -1559,6 +1641,45 @@
           toast('good','Copied', 'Stream URL copied to clipboard');
         }catch{
           toast('warn','Clipboard', 'Copy failed (browser permission)');
+        }
+      };
+
+      el('drawerTag').onclick = async () => {
+        const raw = prompt('Add tags (comma separated, prefix "-" to remove):', '');
+        if (!raw) return;
+        const entries = raw.split(',').map(s => s.trim()).filter(Boolean);
+        if (!entries.length) return;
+        const adds = entries.filter(t => !t.startsWith('-'));
+        const removes = entries.filter(t => t.startsWith('-')).map(t => t.slice(1)).filter(Boolean);
+
+        const p = state.activeProject;
+        if (!p){ toast('warn','Tags','Select a project first'); return; }
+        const base = `${API}/api/projects/${encodeURIComponent(p.name)}/assets/tags?rel_path=${encodeURIComponent(item.relative_path)}${p.source ? `&source=${encodeURIComponent(p.source)}` : ''}`;
+
+        try{
+          if (adds.length){
+            const addRes = await fetch(base, {
+              method:'POST',
+              headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify({ tags: adds }),
+            });
+            const payload = await addRes.json().catch(() => ({}));
+            if (!addRes.ok) throw new Error(payload.detail || 'Tag add failed');
+          }
+          if (removes.length){
+            const removeRes = await fetch(base, {
+              method:'DELETE',
+              headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify({ tags: removes }),
+            });
+            const payload = await removeRes.json().catch(() => ({}));
+            if (!removeRes.ok) throw new Error(payload.detail || 'Tag remove failed');
+          }
+          await loadTagBatchForActiveMedia();
+          renderMedia();
+          toast('good','Tags','Updated tags');
+        }catch(e){
+          toast('bad','Tags', e.message);
         }
       };
 
