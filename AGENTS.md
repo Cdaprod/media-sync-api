@@ -351,3 +351,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-13)
 - Explorer top bar now wraps toolbar controls at mid-width breakpoints to prevent search/buttons overlap.
+
+### Latest Implementation Notes (2025-03-14)
+- Explorer mobile breakpoint stacks the toolbar below the brand to keep controls on-screen.
