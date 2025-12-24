@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 
 from app.config import get_settings
 from app.storage.index import load_index, seed_index
-from app.storage.paths import ensure_subdirs, project_path, safe_filename, validate_project_name
+from app.storage.paths import ensure_subdirs, project_path, safe_filename, validate_project_name, validate_relative_path
 from app.storage.reindex import reindex_project
 from app.storage.sources import SourceRegistry
 from app.storage.tags_store import TagStore, normalize_tag, asset_key
@@ -84,7 +84,7 @@ async def list_media(
         if not isinstance(relative_path, str):
             continue
         try:
-            safe_relative = _validate_relative_media_path(relative_path)
+            safe_relative = validate_relative_path(relative_path)
         except ValueError:
             logger.warning(
                 "skipping_invalid_media_path",
@@ -165,7 +165,7 @@ async def download_media(project_name: str, relative_path: str, source: str | No
 
     resolved = _require_source_and_project(project_name, source)
     try:
-        safe_relative = _validate_relative_media_path(relative_path)
+        safe_relative = validate_relative_path(relative_path)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -191,7 +191,7 @@ async def stream_media(project_name: str, relative_path: str, source: str | None
 
     resolved = _require_source_and_project(project_name, source)
     try:
-        safe_relative = _validate_relative_media_path(relative_path)
+        safe_relative = validate_relative_path(relative_path)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -280,18 +280,6 @@ def _organize_source_root(root: Path) -> Dict[str, object]:
         extra={"destination": destination.name, "moved": len(moved), "root": str(root)},
     )
     return {"moved": len(moved), "destination_project": destination.name, "files": moved}
-
-
-def _validate_relative_media_path(relative_path: str) -> str:
-    path = Path(relative_path)
-    if path.is_absolute():
-        raise ValueError("Relative path cannot be absolute")
-    if ".." in path.parts:
-        raise ValueError("Relative path cannot traverse directories")
-    cleaned = path.as_posix().lstrip("/")
-    if not cleaned:
-        raise ValueError("Relative path cannot be empty")
-    return cleaned
 
 
 def _build_stream_url(project: str, relative_path: str, source: str | None) -> str:

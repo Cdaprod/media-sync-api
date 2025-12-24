@@ -238,7 +238,8 @@ docker compose down
 3. ✅ Project create/list/get + seed index.
 4. ✅ Reindex endpoint (scan disk, reconcile db/index).
 5. ✅ Minimal web UI for local admin with project/media browsing.
-6. ⏭ Optional OBS integration + Resolve bridge (separate services).
+6. ✅ AI tagging pipeline (DEIM + WhisperX) for automatic semantic labels.
+7. ⏭ Optional OBS integration + Resolve bridge (separate services).
 
 ---
 
@@ -375,3 +376,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-20)
 - Drawer video previews now seek a small offset on load (and use poster thumbnails when available) so a frame renders before pressing play.
+
+### Latest Implementation Notes (2025-03-21)
+- AI tagging endpoints added at `/api/projects/{project}/assets/ai-tags` with optional background execution; tags are stored with source `ai` and appear in media listings automatically.
+- Uploads and per-project reindex now optionally enqueue AI tagging when `MEDIA_SYNC_AI_TAGGING_ENABLED=1` and `MEDIA_SYNC_AI_TAGGING_AUTO=1`.
+- AI tagging expects local WhisperX (`MEDIA_SYNC_WHISPERX_URL`) and DEIM (`MEDIA_SYNC_DEIM_URL`) endpoints; status is tracked in `_tags/tags.sqlite` under `asset_tag_runs`.

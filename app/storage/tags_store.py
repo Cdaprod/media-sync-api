@@ -41,6 +41,18 @@ class TagMeta:
     description: str | None = None
 
 
+@dataclass(frozen=True)
+class TagRun:
+    asset_key: str
+    status: str
+    updated_at: str
+    source: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    model: str | None = None
+    error: str | None = None
+
+
 class TagStore:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
@@ -78,6 +90,17 @@ class TagStore:
                         description TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS asset_tag_runs (
+                        asset_key TEXT PRIMARY KEY,
+                        status TEXT NOT NULL,
+                        started_at TEXT,
+                        completed_at TEXT,
+                        updated_at TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        model TEXT,
+                        error TEXT
                     );
                     """
                 )
@@ -268,5 +291,113 @@ class TagStore:
                         counts = out.setdefault(row["asset_key"], {})
                         counts[row["source"]] = int(row["count"])
                 return out
+            finally:
+                conn.close()
+
+    def get_asset_tag_counts(self, asset_key: str) -> dict[str, int]:
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT source, COUNT(*) as count
+                    FROM asset_tags
+                    WHERE asset_key=?
+                    GROUP BY source
+                    """,
+                    (asset_key,),
+                ).fetchall()
+                return {row["source"]: int(row["count"]) for row in rows}
+            finally:
+                conn.close()
+
+    def start_asset_tag_run(self, asset_key: str, source: str, model: str | None = None) -> TagRun:
+        now = _utc_now()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO asset_tag_runs(
+                        asset_key, status, started_at, completed_at, updated_at, source, model, error
+                    )
+                    VALUES(?,?,?,?,?,?,?,?)
+                    ON CONFLICT(asset_key) DO UPDATE SET
+                        status=excluded.status,
+                        started_at=excluded.started_at,
+                        completed_at=NULL,
+                        updated_at=excluded.updated_at,
+                        source=excluded.source,
+                        model=COALESCE(excluded.model, asset_tag_runs.model),
+                        error=NULL
+                    """,
+                    (asset_key, "running", now, None, now, source, model, None),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        return self.get_asset_tag_run(asset_key) or TagRun(
+            asset_key=asset_key,
+            status="running",
+            updated_at=now,
+            started_at=now,
+            completed_at=None,
+            source=source,
+            model=model,
+            error=None,
+        )
+
+    def finish_asset_tag_run(self, asset_key: str, status: str, error: str | None = None) -> TagRun:
+        now = _utc_now()
+        completed = now if status in {"complete", "failed"} else None
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """
+                    UPDATE asset_tag_runs
+                    SET status=?, updated_at=?, completed_at=?, error=?
+                    WHERE asset_key=?
+                    """,
+                    (status, now, completed, error, asset_key),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        return self.get_asset_tag_run(asset_key) or TagRun(
+            asset_key=asset_key,
+            status=status,
+            updated_at=now,
+            started_at=None,
+            completed_at=completed,
+            source="ai",
+            model=None,
+            error=error,
+        )
+
+    def get_asset_tag_run(self, asset_key: str) -> Optional[TagRun]:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    """
+                    SELECT asset_key, status, started_at, completed_at, updated_at, source, model, error
+                    FROM asset_tag_runs
+                    WHERE asset_key=?
+                    """,
+                    (asset_key,),
+                ).fetchone()
+                if not row:
+                    return None
+                return TagRun(
+                    asset_key=row["asset_key"],
+                    status=row["status"],
+                    updated_at=row["updated_at"],
+                    source=row["source"],
+                    started_at=row["started_at"],
+                    completed_at=row["completed_at"],
+                    model=row["model"],
+                    error=row["error"],
+                )
             finally:
                 conn.close()

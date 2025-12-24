@@ -92,3 +92,17 @@ def safe_filename(name: str) -> str:
     if not cleaned:
         raise ValueError("Filename cannot be empty")
     return cleaned
+
+
+def validate_relative_path(relative_path: str) -> str:
+    """Ensure a path stays relative and traversal-safe."""
+
+    path = Path(relative_path)
+    if path.is_absolute():
+        raise ValueError("Relative path cannot be absolute")
+    if ".." in path.parts:
+        raise ValueError("Relative path cannot traverse directories")
+    cleaned = path.as_posix().lstrip("/")
+    if not cleaned:
+        raise ValueError("Relative path cannot be empty")
+    return cleaned

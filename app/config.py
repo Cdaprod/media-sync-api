@@ -13,6 +13,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 
+
+def _parse_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -35,6 +41,30 @@ class Settings(BaseModel):
     max_upload_mb: int = Field(default_factory=lambda: int(os.getenv("MEDIA_SYNC_MAX_UPLOAD_MB", "512")))
     cors_origins: List[str] = Field(
         default_factory=lambda: _parse_origins(os.getenv("MEDIA_SYNC_CORS_ORIGINS", ""))
+    )
+    ai_tagging_enabled: bool = Field(
+        default_factory=lambda: _parse_bool(os.getenv("MEDIA_SYNC_AI_TAGGING_ENABLED"), default=False)
+    )
+    ai_tagging_auto: bool = Field(
+        default_factory=lambda: _parse_bool(os.getenv("MEDIA_SYNC_AI_TAGGING_AUTO"), default=False)
+    )
+    ai_tagging_timeout_s: float = Field(
+        default_factory=lambda: float(os.getenv("MEDIA_SYNC_AI_TAGGING_TIMEOUT_S", "180"))
+    )
+    ai_tagging_max_tags: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_AI_TAGGING_MAX_TAGS", "12"))
+    )
+    ai_tagging_source: str = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_AI_TAGGING_SOURCE", "ai")
+    )
+    ai_tagging_language: str | None = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_AI_TAGGING_LANGUAGE")
+    )
+    ai_whisperx_url: str | None = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_WHISPERX_URL")
+    )
+    ai_deim_url: str | None = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_DEIM_URL")
     )
 
 def ensure_project_root(path: Path) -> None:

@@ -108,6 +108,25 @@ Run this to reconcile every enabled source and project after bulk filesystem edi
 - Secondary source missing: confirm the additional path is mounted on the host and `enabled` in `/api/sources`
 - Loose files appear in the projects root: POST `/api/projects/auto-organize` to relocate them into `Unsorted-Loose` and browse via `/public/index.html`
 
+## AI tagging (DEIM + WhisperX)
+The API can tag assets locally using WhisperX (transcription) and DEIM (semantic labels). Configure both services to run on the same LAN host and point the API at their local URLs.
+
+Environment variables:
+- `MEDIA_SYNC_AI_TAGGING_ENABLED=1` to enable AI tagging
+- `MEDIA_SYNC_DEIM_URL=http://127.0.0.1:9001/tag` (DEIM tagging endpoint)
+- `MEDIA_SYNC_WHISPERX_URL=http://127.0.0.1:9002/transcribe` (WhisperX transcription endpoint)
+- `MEDIA_SYNC_AI_TAGGING_AUTO=1` to auto-tag new uploads and reindexed files
+- `MEDIA_SYNC_AI_TAGGING_MAX_TAGS=12` to cap tag count
+- `MEDIA_SYNC_AI_TAGGING_TIMEOUT_S=180` to control backend request timeouts
+- `MEDIA_SYNC_AI_TAGGING_SOURCE=ai` to label stored tags by source
+- `MEDIA_SYNC_AI_TAGGING_LANGUAGE=en` to hint WhisperX language (optional)
+
+Endpoints:
+- `GET /api/projects/{project}/assets/ai-tags?rel_path=ingest/originals/clip.mov` – view AI tag status
+- `POST /api/projects/{project}/assets/ai-tags?rel_path=...` – run tagging (body: `{ "force": false, "background": true }`)
+
+Once tags are stored, they appear automatically in `/api/projects/{project}/media` and in the explorer UI without any UI changes.
+
 ## DaVinci Resolve bridge (resolve-agent)
 Browsers cannot launch Resolve directly. The supported pattern is:
 
@@ -133,6 +152,7 @@ Path alignment for Resolve:
 - `GET /media/{project}/download/{relative_path}` – download a stored media file with `Content-Disposition: attachment`
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
 - `POST /api/projects/{project}/sync-album` – record audit event
+- `GET|POST /api/projects/{project}/assets/ai-tags` – read/run AI tagging for a single asset
 - `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
 - `GET|POST /reindex` – reconcile every enabled source and project in one sweep
 - `POST /api/projects/auto-organize` – move loose files sitting in the projects root into `Unsorted-Loose` and reindex
