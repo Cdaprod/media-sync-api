@@ -91,7 +91,7 @@ class BucketStore:
                     SELECT bucket_id, source_name, bucket_rel_root, title, stats_json, pinned
                     FROM buckets
                     WHERE source_name=?
-                    ORDER BY title
+                    ORDER BY pinned DESC, title
                     """,
                     (source_name,),
                 ).fetchall()
@@ -134,6 +134,58 @@ class BucketStore:
             finally:
                 conn.close()
 
+    def list_pinned(self, source_name: str) -> list[Bucket]:
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT bucket_id, source_name, bucket_rel_root, title, stats_json, pinned
+                    FROM buckets
+                    WHERE source_name=? AND pinned=1
+                    ORDER BY title
+                    """,
+                    (source_name,),
+                ).fetchall()
+                return [
+                    Bucket(
+                        bucket_id=row["bucket_id"],
+                        source_name=row["source_name"],
+                        bucket_rel_root=row["bucket_rel_root"],
+                        title=row["title"],
+                        stats=json.loads(row["stats_json"]),
+                        pinned=True,
+                    )
+                    for row in rows
+                ]
+            finally:
+                conn.close()
+
+    def seed_roots(self, source_name: str, roots: Iterable[Bucket]) -> None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                for root in roots:
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO buckets(
+                            bucket_id, source_name, bucket_rel_root, title, stats_json, pinned
+                        )
+                        VALUES(?,?,?,?,?,?)
+                        """,
+                        (
+                            root.bucket_id,
+                            source_name,
+                            root.bucket_rel_root,
+                            root.title,
+                            json.dumps(root.stats),
+                            1,
+                        ),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
     def discover(
         self,
         source_name: str,
@@ -143,8 +195,13 @@ class BucketStore:
         max_depth: int = 8,
         max_buckets: int = 200,
         overlap_threshold: float = 0.9,
+        include_roots: Sequence[str] | None = None,
     ) -> list[Bucket]:
-        candidates = _collect_candidates(source_root, max_depth=max_depth)
+        candidates = _collect_candidates(
+            source_root,
+            max_depth=max_depth,
+            include_roots=include_roots,
+        )
         buckets = _collapse_candidates(
             candidates,
             min_files=min_files,
@@ -152,6 +209,8 @@ class BucketStore:
             max_buckets=max_buckets,
             overlap_threshold=overlap_threshold,
         )
+        pinned_existing = self.list_pinned(source_name)
+        pinned_map = {bucket.bucket_rel_root: bucket for bucket in pinned_existing}
         buckets = [
             Bucket(
                 bucket_id=bucket_id_for(source_name, bucket.bucket_rel_root),
@@ -159,21 +218,16 @@ class BucketStore:
                 bucket_rel_root=bucket.bucket_rel_root,
                 title=bucket.title,
                 stats=bucket.stats,
-                pinned=bucket.pinned,
+                pinned=bucket.bucket_rel_root in pinned_map,
             )
             for bucket in buckets
         ]
         with self._lock:
             conn = self._connect()
             try:
-                existing = conn.execute(
-                    "SELECT bucket_rel_root, pinned FROM buckets WHERE source_name=?",
-                    (source_name,),
-                ).fetchall()
-                pinned_map = {row["bucket_rel_root"]: bool(row["pinned"]) for row in existing}
-                conn.execute("DELETE FROM buckets WHERE source_name=?", (source_name,))
+                conn.execute("DELETE FROM buckets WHERE source_name=? AND pinned=0", (source_name,))
                 for bucket in buckets:
-                    pinned = pinned_map.get(bucket.bucket_rel_root, False)
+                    pinned = 1 if bucket.pinned else 0
                     conn.execute(
                         """
                         INSERT OR REPLACE INTO buckets(
@@ -187,7 +241,27 @@ class BucketStore:
                             bucket.bucket_rel_root,
                             bucket.title,
                             json.dumps(bucket.stats),
-                            1 if pinned else 0,
+                            pinned,
+                        ),
+                    )
+                discovered_roots = {b.bucket_rel_root for b in buckets}
+                for rel_root, bucket in pinned_map.items():
+                    if rel_root in discovered_roots:
+                        continue
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO buckets(
+                            bucket_id, source_name, bucket_rel_root, title, stats_json, pinned
+                        )
+                        VALUES(?,?,?,?,?,?)
+                        """,
+                        (
+                            bucket.bucket_id,
+                            source_name,
+                            bucket.bucket_rel_root,
+                            bucket.title,
+                            json.dumps(bucket.stats),
+                            1,
                         ),
                     )
                 conn.commit()
@@ -196,29 +270,36 @@ class BucketStore:
         return buckets
 
 
-def _collect_candidates(source_root: Path, *, max_depth: int = 8) -> dict[str, set[str]]:
+def _collect_candidates(
+    source_root: Path,
+    *,
+    max_depth: int = 8,
+    include_roots: Sequence[str] | None = None,
+) -> dict[str, set[str]]:
     candidates: dict[str, set[str]] = {}
-    for path in source_root.rglob("*") if source_root.exists() else []:
-        if not path.is_file():
-            continue
-        if path.name.lower() in IGNORED_FILES:
-            continue
-        if _contains_ignored_dir(path.relative_to(source_root).parts):
-            continue
-        if path.suffix.lower() not in ALLOWED_MEDIA_EXTENSIONS:
-            continue
-        rel_path = path.relative_to(source_root).as_posix()
-        parent = Path(rel_path).parent
-        if parent == Path("."):
-            parent_parts: Iterable[Path] = [Path(".")]
-        else:
-            depth_limit = max_depth if max_depth > 0 else len(parent.parts)
-            parent_parts = [
-                Path(*parent.parts[: i + 1]) for i in range(min(len(parent.parts), depth_limit))
-            ]
-        for ancestor in parent_parts:
-            rel_root = ancestor.as_posix()
-            candidates.setdefault(rel_root, set()).add(rel_path)
+    roots = _resolve_include_roots(source_root, include_roots)
+    for base in roots:
+        for path in base.rglob("*") if base.exists() else []:
+            if not path.is_file():
+                continue
+            if path.name.lower() in IGNORED_FILES:
+                continue
+            rel_path = path.relative_to(source_root).as_posix()
+            if _contains_ignored_dir(Path(rel_path).parts):
+                continue
+            if path.suffix.lower() not in ALLOWED_MEDIA_EXTENSIONS:
+                continue
+            parent = Path(rel_path).parent
+            if parent == Path("."):
+                parent_parts: Iterable[Path] = [Path(".")]
+            else:
+                depth_limit = max_depth if max_depth > 0 else len(parent.parts)
+                parent_parts = [
+                    Path(*parent.parts[: i + 1]) for i in range(min(len(parent.parts), depth_limit))
+                ]
+            for ancestor in parent_parts:
+                rel_root = ancestor.as_posix()
+                candidates.setdefault(rel_root, set()).add(rel_path)
     return candidates
 
 
@@ -296,3 +377,18 @@ def _contains_ignored_dir(parts: Sequence[str]) -> bool:
         if part.lower() in IGNORED_DIRS:
             return True
     return False
+
+
+def _resolve_include_roots(source_root: Path, include_roots: Sequence[str] | None) -> list[Path]:
+    if not include_roots:
+        return [source_root]
+    roots: list[Path] = []
+    for rel in include_roots:
+        rel_path = Path(rel)
+        if rel_path.is_absolute() or ".." in rel_path.parts:
+            continue
+        candidate = (source_root / rel_path).resolve()
+        if source_root.resolve() not in candidate.parents and candidate != source_root.resolve():
+            continue
+        roots.append(candidate)
+    return roots or [source_root]

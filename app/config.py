@@ -84,6 +84,15 @@ class Settings(BaseModel):
     buckets_overlap_threshold: float = Field(
         default_factory=lambda: float(os.getenv("MEDIA_SYNC_BUCKETS_OVERLAP", "0.9"))
     )
+    stage_scan_ttl_minutes: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_STAGE_SCAN_TTL_MINUTES", "60"))
+    )
+    stage_scan_max_depth: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_STAGE_SCAN_MAX_DEPTH", "6"))
+    )
+    stage_scan_min_files: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_STAGE_SCAN_MIN_FILES", "1"))
+    )
 
 def ensure_project_root(path: Path) -> None:
     """Ensure the configured project root exists and is a directory."""

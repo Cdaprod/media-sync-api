@@ -24,7 +24,7 @@ services:
 
     volumes:
       - "B:/Video/Projects:/data/projects"
-      - "B:/Video:/mnt/media-sources"
+      - "B:/Video/Projects/_bridge:/mnt/media-sources"
 
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health').read()"]

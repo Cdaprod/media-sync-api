@@ -25,6 +25,7 @@ from app.storage.reindex import ALLOWED_MEDIA_EXTENSIONS, reindex_project
 from app.storage.sources import SourceRegistry
 from app.storage.tags_store import TagStore, asset_id_for_source_relpath, normalize_tag
 from app.storage.buckets import BucketStore
+from app.storage.bridge import BridgeStore
 from app.storage.derive import cache_artifact_path, derive_artifacts_for_asset
 
 
@@ -165,9 +166,21 @@ async def list_source_media(
     if not source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
 
+    bridge_store = BridgeStore(settings.project_root / "_sources" / "bridge.sqlite")
+    library_roots = bridge_store.list_library_roots(source.name)
+    if not library_roots:
+        return {
+            "source": source.name,
+            "mode": source.mode,
+            "media": [],
+            "counts": {"total": 0},
+            "instructions": "Run /api/sources/{source}/stage-scan and commit selections before browsing.",
+        }
+    allowed_roots = [root.rel_root for root in library_roots]
+
     media: List[Dict[str, object]] = []
     asset_ids: List[str] = []
-    for path in _iter_media_files(source.root):
+    for path in _iter_media_files(source.root, allowed_roots):
         rel_path = path.relative_to(source.root).as_posix()
         asset_id = asset_id_for_source_relpath(source.name, rel_path)
         item = _item_for_media_path(path, rel_path, asset_id, source.name, include_download=False)
@@ -220,13 +233,22 @@ async def derive_source_artifacts(source_name: str, payload: DeriveRequest):
     if not source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
 
+    bridge_store = BridgeStore(settings.project_root / "_sources" / "bridge.sqlite")
+    library_roots = bridge_store.list_library_roots(source.name)
+    if not library_roots:
+        raise HTTPException(
+            status_code=400,
+            detail="No committed library roots; run stage-scan and commit selections first",
+        )
+    allowed_roots = [root.rel_root for root in library_roots]
+
     logger.info(
         "derive_started",
         extra={"source": source.name, "kinds": payload.kinds, "limit": payload.limit, "force": payload.force},
     )
     results: List[Dict[str, object]] = []
     total = 0
-    for path in _iter_media_files(source.root):
+    for path in _iter_media_files(source.root, allowed_roots):
         if total >= payload.limit:
             break
         rel_path = path.relative_to(source.root).as_posix()
@@ -274,6 +296,15 @@ async def discover_buckets(source_name: str):
     if not source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
 
+    bridge_store = BridgeStore(settings.project_root / "_sources" / "bridge.sqlite")
+    library_roots = bridge_store.list_library_roots(source.name)
+    if not library_roots:
+        raise HTTPException(
+            status_code=400,
+            detail="No committed library roots; run stage-scan and commit selections first",
+        )
+    allowed_roots = [root.rel_root for root in library_roots]
+
     store = BucketStore(settings.project_root / "_sources" / "buckets.sqlite")
     buckets = store.discover(
         source.name,
@@ -282,6 +313,7 @@ async def discover_buckets(source_name: str):
         max_depth=settings.buckets_max_depth,
         max_buckets=settings.buckets_max_count,
         overlap_threshold=settings.buckets_overlap_threshold,
+        include_roots=allowed_roots,
     )
     logger.info(
         "bucket_discovery_completed",
@@ -312,6 +344,15 @@ async def list_buckets(source_name: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if source.mode != "library":
         raise HTTPException(status_code=400, detail="Selected source is not a library source")
+    bridge_store = BridgeStore(settings.project_root / "_sources" / "bridge.sqlite")
+    library_roots = bridge_store.list_library_roots(source.name)
+    if not library_roots:
+        return {
+            "source": source.name,
+            "count": 0,
+            "buckets": [],
+            "instructions": "Run stage-scan and commit selections to create library roots.",
+        }
     store = BucketStore(settings.project_root / "_sources" / "buckets.sqlite")
     buckets = store.list_buckets(source.name)
     return {
@@ -344,10 +385,18 @@ async def list_bucket_media(
     if not source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
 
+    bridge_store = BridgeStore(settings.project_root / "_sources" / "bridge.sqlite")
+    library_roots = bridge_store.list_library_roots(source.name)
+    if not library_roots:
+        raise HTTPException(status_code=404, detail="No committed library roots")
+    allowed_roots = [root.rel_root for root in library_roots]
+    if not _path_allowed(bucket.bucket_rel_root, allowed_roots):
+        raise HTTPException(status_code=404, detail="Bucket is outside committed library roots")
+
     base_root = source.root if bucket.bucket_rel_root == "." else source.root / bucket.bucket_rel_root
     media: List[Dict[str, object]] = []
     asset_ids: List[str] = []
-    for path in _iter_media_files(base_root):
+    for path in _iter_media_files(base_root, None):
         rel_path = path.relative_to(source.root).as_posix()
         asset_id = asset_id_for_source_relpath(source.name, rel_path)
         item = _item_for_media_path(path, rel_path, asset_id, source.name, include_download=False)
@@ -505,6 +554,13 @@ async def download_source_media(source_name: str, relative_path: str):
         safe_relative = validate_relative_path(relative_path)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    bridge_store = BridgeStore(settings.project_root / "_sources" / "bridge.sqlite")
+    library_roots = bridge_store.list_library_roots(source.name)
+    if not library_roots:
+        raise HTTPException(status_code=404, detail="No committed library roots")
+    allowed_roots = [root.rel_root for root in library_roots]
+    if not _path_allowed(safe_relative, allowed_roots):
+        raise HTTPException(status_code=404, detail="Media not available in committed library roots")
     target = (source.root / safe_relative).resolve()
     source_root = source.root.resolve()
     if source_root not in target.parents and target != source_root:
@@ -533,6 +589,13 @@ async def stream_source_media(source_name: str, relative_path: str):
         safe_relative = validate_relative_path(relative_path)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    bridge_store = BridgeStore(settings.project_root / "_sources" / "bridge.sqlite")
+    library_roots = bridge_store.list_library_roots(source.name)
+    if not library_roots:
+        raise HTTPException(status_code=404, detail="No committed library roots")
+    allowed_roots = [root.rel_root for root in library_roots]
+    if not _path_allowed(safe_relative, allowed_roots):
+        raise HTTPException(status_code=404, detail="Media not available in committed library roots")
     target = (source.root / safe_relative).resolve()
     source_root = source.root.resolve()
     if source_root not in target.parents and target != source_root:
@@ -629,10 +692,14 @@ def _build_download_url(project: str, relative_path: str, source: str | None) ->
     return f"/media/{quote(project)}/download" + (f"/{encoded_path}" if encoded_path else "") + suffix
 
 
-def _iter_media_files(root: Path):
-    for path in root.rglob("*") if root.exists() else []:
-        if path.is_file() and path.suffix.lower() in ALLOWED_MEDIA_EXTENSIONS:
-            yield path
+def _iter_media_files(root: Path, allowed_roots: List[str] | None):
+    if not root.exists():
+        return
+    roots = _resolve_allowed_roots(root, allowed_roots)
+    for base in roots:
+        for path in base.rglob("*"):
+            if path.is_file() and path.suffix.lower() in ALLOWED_MEDIA_EXTENSIONS:
+                yield path
 
 
 def _media_kind_for_path(path: Path) -> str:
@@ -679,3 +746,32 @@ def _build_source_stream_url(source_name: str, rel_path: str) -> str:
 def _build_source_download_url(source_name: str, rel_path: str) -> str:
     encoded_path = quote(rel_path, safe="/")
     return f"/media/source/{quote(source_name)}/download/{encoded_path}"
+
+
+def _resolve_allowed_roots(root: Path, allowed_roots: List[str] | None) -> List[Path]:
+    if not allowed_roots:
+        return [root]
+    resolved_root = root.resolve()
+    output: List[Path] = []
+    for rel_root in allowed_roots:
+        rel_path = Path(rel_root)
+        if rel_path.is_absolute() or ".." in rel_path.parts:
+            continue
+        candidate = (resolved_root / rel_path).resolve()
+        if resolved_root not in candidate.parents and candidate != resolved_root:
+            continue
+        output.append(candidate)
+    return output or [root]
+
+
+def _path_allowed(rel_path: str, allowed_roots: List[str]) -> bool:
+    if not allowed_roots:
+        return True
+    rel = Path(rel_path)
+    for root in allowed_roots:
+        root_path = Path(root)
+        if root_path == Path("."):
+            return True
+        if root_path == rel or root_path in rel.parents:
+            return True
+    return False

@@ -26,6 +26,7 @@ The container is stateless; the host path is the source of truth.
 - Host path: `B:\\Video\\Projects`
 - Container mount: `/data/projects`
 - Default source name: `primary` (points to `/data/projects`); register new sources via `/api/sources`
+- Library sources parent root: `B:\\Video\\Projects\\_bridge` → `/mnt/media-sources` (mount junctions here)
 
 ## Quick start with Docker Compose
 ```bash
@@ -52,6 +53,33 @@ Troubleshooting:
 - Ensure Docker Desktop has file sharing enabled for drive `B:`
 - Bind to `0.0.0.0` so iOS devices on `192.168.0.x` can reach the API
 - If requests fail, check firewall rules and `docker compose -f docker/docker-compose.yaml logs -f`
+
+## Library bridge (junction workflow)
+The library browser is intentionally staged and read-only. Only folders you commit are indexed/browsable.
+
+1) Create junctions inside `B:\Video\Projects\_bridge` to point at larger libraries/NAS shares:
+```powershell
+mklink /J B:\Video\Projects\_bridge\NAS \\NAS\MediaShare
+mklink /J B:\Video\Projects\_bridge\Vault X:\Media\Vault
+```
+2) Register each junction as a library source:
+```bash
+curl -X POST http://127.0.0.1:8787/api/sources \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"nas\",\"root\":\"/mnt/media-sources/NAS\",\"mode\":\"library\",\"read_only\":true}"
+```
+3) Run a staged scan (no indexing yet) and inspect the tree:
+```bash
+curl -X POST http://127.0.0.1:8787/api/sources/nas/stage-scan
+curl http://127.0.0.1:8787/api/stage-scans/<scan_id>
+```
+4) Commit only the folders you want indexed:
+```bash
+curl -X POST http://127.0.0.1:8787/api/stage-scans/<scan_id>/commit \
+  -H "Content-Type: application/json" \
+  -d "{\"selected_paths\":[\"Events/2024\",\"B-Roll\"]}"
+```
+After commit, bucket discovery and `/api/sources/{source}/media` are constrained to those selections.
 
 ## Usage playbook (verify → create → ingest → dedupe → reindex)
 1) Verify it is running

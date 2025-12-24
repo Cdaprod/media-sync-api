@@ -1,0 +1,30 @@
+export const state = {
+  projects: [],
+  sources: [],
+  libraries: [],
+  buckets: [],
+  activeProject: null,
+  activeLibrary: null,
+  activeBucket: null,
+  media: [],
+  view: 'grid',
+  q: '',
+  selected: new Set(),
+  focused: null,
+  tagMap: {},
+  tagMeta: {},
+  tagFilter: '',
+  tagMode: 'all',
+  noTags: false,
+  stageStatus: '',
+  stageScan: null,
+  stageTree: null,
+  stageSelection: new Set(),
+};
+
+export const ui = {
+  sidebarOpen: false,
+  inspectorOpen: false,
+  filtersOpen: false,
+  actionsOpen: false,
+};

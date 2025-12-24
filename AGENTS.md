@@ -394,3 +394,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-23)
 - Bucket discovery now skips noisy folders (`cache`, `_manifest`, `_tags`, `.DS_Store`, etc.) and honors guardrails (`MEDIA_SYNC_BUCKETS_MIN_FILES`, `MEDIA_SYNC_BUCKETS_MAX_DEPTH`, `MEDIA_SYNC_BUCKETS_MAX_COUNT`) to avoid bucket explosion.
 - Bucket discovery logging includes guardrail settings, and derive runs emit `derive_started` logs for traceability.
+
+### Latest Implementation Notes (2025-03-24)
+- Library sources now require a staged scan/commit flow (`/api/sources/{source}/stage-scan`, `/api/stage-scans/{id}`, `/api/stage-scans/{id}/commit`) before media or buckets can be browsed.
+- Library browsing, bucket discovery, and streaming are constrained to committed roots stored in `_sources/bridge.sqlite`; pinned buckets are seeded from committed roots.
+- Explorer UI script is now modularized under `/public/js/` and includes a staged Bridge panel for committing library roots.

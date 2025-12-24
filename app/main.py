@@ -24,6 +24,7 @@ from app.api.media import (
     source_router,
 )
 from app.api.ai_tags import router as ai_tags_router
+from app.api.bridge import router as bridge_router
 from app.api.projects import router as projects_router
 from app.api.sources import router as sources_router
 from app.api.tags import router as tags_router
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     application.include_router(source_media_router)
     application.include_router(cache_router)
     application.include_router(bucket_router)
+    application.include_router(bridge_router)
     application.include_router(resolve_router)
     application.include_router(tags_router)
     application.include_router(ai_tags_router)
