@@ -341,3 +341,28 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-06)
 - A standalone DAM-style explorer now lives at `public/explorer.html` alongside the adapter, keeping the same API endpoints while adding grid/list toggle, inspector drawer, multi-select action bar, and Resolve/upload controls. Keep this page no-build and in sync with API shapes; prefer reusing the existing endpoints over adding new ones for UI-only tweaks.
+
+### Latest Implementation Notes (2025-03-10)
+- Explorer inspector backdrop now sits behind the drawer so previews and metadata remain clickable; keep new overlays below their paired panels.
+
+### Latest Implementation Notes (2025-03-12)
+- Explorer inspector drawer now renders its blur background via a pseudo-element so preview controls stay crisp and clickable.
+- Test harness now bootstraps the repo root into `sys.path`, and public explorer HTML is covered by the static page tests.
+
+### Latest Implementation Notes (2025-03-13)
+- Explorer top bar now wraps toolbar controls at mid-width breakpoints to prevent search/buttons overlap.
+
+### Latest Implementation Notes (2025-03-14)
+- Explorer mobile breakpoint stacks the toolbar below the brand to keep controls on-screen.
+
+### Latest Implementation Notes (2025-03-15)
+- Tagging is now backed by `_tags/tags.sqlite` with `/api` endpoints for listing tags, patching metadata, and per-asset tag CRUD.
+- Explorer fetches tags in batch and renders tag pills on cards with a drawer tag prompt for add/remove.
+
+### Latest Implementation Notes (2025-03-16)
+- Media listings now embed `tags` (and `tag_source_counts`) plus support `tags`, `any_tags`, and `no_tags` query filtering.
+- Explorer includes a tag filter input with AND/OR toggles and an untagged toggle that drive the media query params.
+
+### Latest Implementation Notes (2025-03-17)
+- Explorer sidebar glass panel is more opaque, the mobile projects toggle lives alongside the title, and selecting a project closes the drawer.
+- Stream URL copy now falls back to a manual prompt when clipboard permissions fail.

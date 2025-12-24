@@ -87,6 +87,12 @@
       gap:12px;
       align-items:center;
       min-width: 240px;
+      flex: 0 1 auto;
+    }
+    .brand-title{
+      display:flex;
+      align-items:center;
+      gap:10px;
     }
 
     .hamburger{
@@ -155,6 +161,30 @@
       align-items: center;
       justify-content: flex-end;
     }
+    .tagfilter{
+      flex: 1 1 240px;
+      max-width: 320px;
+      min-width: 180px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+    }
+    .tagfilter input{
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .btn.toggle.active{
+      border-color: rgba(124,58,237,0.45);
+      background: rgba(124,58,237,0.18);
+    }
     .btn{
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
@@ -183,6 +213,8 @@
       border-radius: 999px;
       overflow:hidden;
       background: rgba(255,255,255,0.05);
+      flex: 0 0 auto;
+      margin-left: auto;
     }
     .seg button{
       border: none;
@@ -214,7 +246,7 @@
       min-width: 260px;
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      background: var(--panel);
+      background: rgba(15,20,36,0.85);
       box-shadow: var(--shadow);
       overflow: hidden;
       display:flex;
@@ -455,6 +487,24 @@
     .badge.kind-image{ border-color: rgba(34,197,94,0.35); }
     .badge.kind-audio{ border-color: rgba(245,158,11,0.35); }
     .badge.kind-doc{ border-color: rgba(124,58,237,0.35); }
+    .tagpill{
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.88);
+      white-space: nowrap;
+    }
+    .tagpill[data-color]{
+      border-color: rgba(255,255,255,0.10);
+    }
+    .tagwrap{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
 
     .selector{
       position:absolute;
@@ -520,16 +570,28 @@
       top: 0; right: 0;
       height: 100%;
       width: min(520px, 100vw);
-      background: rgba(11,16,32,0.88);
-      backdrop-filter: blur(16px);
+      background: transparent;
       border-left: 1px solid var(--border);
       box-shadow: var(--shadow);
       transform: translateX(110%);
       transition: transform 160ms ease;
-      z-index: 60;
+      z-index: 78;
       display:flex;
       flex-direction: column;
       min-height: 0;
+    }
+    .drawer::before{
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(11,16,32,0.88);
+      backdrop-filter: blur(16px);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .drawer > *{
+      position: relative;
+      z-index: 1;
     }
     .drawer.open{ transform: translateX(0%); }
     .drawer-h{
@@ -680,6 +742,28 @@
     .toast.bad{ border-color: rgba(239,68,68,0.35); }
 
     /* Mobile */
+    @media (max-width: 1180px){
+      .topbar-inner{
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .brand{ width: 100%; min-width: 0; }
+      .toolbar{
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: space-between;
+      }
+      .search{
+        flex: 1 1 320px;
+        max-width: none;
+      }
+      .pillbar{
+        justify-content: flex-start;
+      }
+      .tagfilter{
+        max-width: none;
+      }
+    }
     @media (max-width: 980px){
       .sidebar{ width: 320px; }
     }
@@ -689,11 +773,13 @@
       .sidebar{ display:block; width: 100%; }
       .content{ width: 100%; }
       .drawer{ width: 100vw; }
-      .topbar-inner{ flex-wrap: wrap; gap:10px; }
-      .brand{ min-width: 0; }
+      .topbar-inner{ flex-direction: column; align-items: stretch; gap:10px; }
+      .brand{ min-width: 0; width: 100%; }
       .hamburger{ display:block; }
-      .toolbar{ width: 100%; }
-      .search{ flex:1; max-width: none; }
+      .toolbar{ width: 100%; flex-direction: column; align-items: stretch; }
+      .search{ flex:1; max-width: none; width: 100%; }
+      .tagfilter{ width: 100%; max-width: none; }
+      .pillbar{ width: 100%; justify-content: flex-start; }
       .btn{ padding: 7px 10px; font-size:11px; }
       .seg button{ padding: 8px 10px; font-size:11px; }
       .topbar-inner{ padding: 12px 12px; }
@@ -713,11 +799,13 @@
   <div class="app">
     <div class="topbar">
       <div class="topbar-inner">
-        <button id="sidebarToggle" class="hamburger mobile-only" type="button" aria-label="Toggle projects">☰</button>
         <div class="brand" title="LAN-only media-sync-api explorer">
           <div class="logo" aria-hidden="true"></div>
           <div>
-            <h1>media-sync-api</h1>
+            <div class="brand-title">
+              <h1>media-sync-api</h1>
+              <button id="sidebarToggle" class="hamburger mobile-only" type="button" aria-label="Toggle projects">☰</button>
+            </div>
             <div class="sub">Explorer • projects → ingest → index → preview → Resolve</div>
           </div>
         </div>
@@ -728,9 +816,14 @@
             <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
           </div>
 
-          <div class="seg" aria-label="View mode">
-            <button id="viewGrid" class="active" type="button">Grid</button>
-            <button id="viewList" type="button">List</button>
+          <div class="tagfilter" role="search" aria-label="Tag filter">
+            <span class="kbd">tags</span>
+            <input id="tagFilter" placeholder="Filter tags (comma)" autocomplete="off" />
+          </div>
+
+          <div class="pillbar">
+            <button id="tagModeBtn" class="btn toggle" type="button">All tags</button>
+            <button id="noTagsBtn" class="btn toggle" type="button">Untagged</button>
           </div>
 
           <div class="pillbar">
@@ -738,6 +831,11 @@
             <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
             <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
             <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
+          </div>
+
+          <div class="seg" aria-label="View mode">
+            <button id="viewGrid" class="active" type="button">Grid</button>
+            <button id="viewList" type="button">List</button>
           </div>
         </div>
       </div>
@@ -842,7 +940,6 @@
       <button id="selClearBtn" class="btn" type="button">✕ Clear</button>
     </div>
 
-    <button id="mobileProjectsBtn" class="mobile-fab mobile-only" type="button">Projects</button>
 
     <!-- Inspector drawer -->
     <aside id="drawer" class="drawer" aria-hidden="true">
@@ -860,6 +957,7 @@
         <div class="drawer-actions">
           <button id="drawerPlay" class="btn" type="button">▶ Play</button>
           <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
+          <button id="drawerTag" class="btn" type="button">🏷 Tag</button>
           <button id="drawerToggleSelect" class="btn primary" type="button">＋ Select</button>
         </div>
 
@@ -870,7 +968,7 @@
     <!-- Toasts -->
     <div class="toasts" id="toasts"></div>
     <div id="sidebarBackdrop" class="backdrop"></div>
-    <div id="drawerBackdrop" class="backdrop" style="z-index:70;"></div>
+    <div id="drawerBackdrop" class="backdrop"></div>
   </div>
 
   <script>
@@ -889,6 +987,11 @@
       q: '',
       selected: new Set(),   // relative_path
       focused: null,         // item
+      tagMap: {},            // asset_key -> [tags]
+      tagMeta: {},           // tag -> {color, description}
+      tagFilter: '',
+      tagMode: 'all',
+      noTags: false,
     };
 
     const ui = {
@@ -915,6 +1018,32 @@
       return String(s ?? '')
         .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
         .replaceAll('"','&quot;').replaceAll("'","&#039;");
+    }
+
+    async function copyToClipboard(text){
+      if (!text) return false;
+      try{
+        if (navigator.clipboard && window.isSecureContext){
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      }catch{
+        // fall through to legacy copy
+      }
+      try{
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return ok;
+      }catch{
+        return false;
+      }
     }
 
     function formatBytes(bytes){
@@ -952,7 +1081,15 @@
     function mediaQuery(){
       const p = state.activeProject;
       if (!p) return '';
-      return p.source ? `?source=${encodeURIComponent(p.source)}` : '';
+      const params = new URLSearchParams();
+      if (p.source) params.set('source', p.source);
+      const tagFilter = (state.tagFilter || '').trim();
+      if (tagFilter){
+        params.set(state.tagMode === 'any' ? 'any_tags' : 'tags', tagFilter);
+      }
+      if (state.noTags) params.set('no_tags', 'true');
+      const query = params.toString();
+      return query ? `?${query}` : '';
     }
 
     function updateTopCounts(){
@@ -967,6 +1104,47 @@
       const q = state.q.trim().toLowerCase();
       if (!q) return state.media.slice();
       return state.media.filter(it => (it.relative_path || '').toLowerCase().includes(q));
+    }
+
+    function assetKeyFor(item){
+      const p = state.activeProject;
+      if (!p || !item?.relative_path) return null;
+      const source = p.source || 'primary';
+      return `${source}::${p.name}::${item.relative_path}`;
+    }
+
+    function getTagsForItem(item){
+      if (Array.isArray(item?.tags)) return item.tags;
+      const key = assetKeyFor(item);
+      return key && state.tagMap[key] ? state.tagMap[key] : [];
+    }
+
+    function tagPillHtml(tag){
+      const meta = state.tagMeta?.[tag];
+      const color = meta?.color;
+      const style = color ? ` style="background:${escapeHtml(color)}33;border-color:${escapeHtml(color)};"` : '';
+      const dataColor = color ? ` data-color="${escapeHtml(color)}"` : '';
+      return `<span class="tagpill"${dataColor}${style}>${escapeHtml(tag)}</span>`;
+    }
+
+    function renderTagPills(tags, max = 3){
+      if (!tags || !tags.length) return '';
+      const visible = tags.slice(0, max);
+      const hidden = tags.length - visible.length;
+      const pills = visible.map(tagPillHtml).join('');
+      const more = hidden > 0 ? `<span class="tagpill">+${hidden}</span>` : '';
+      return pills + more;
+    }
+
+    function hydrateTagMapFromMedia(){
+      const map = {};
+      for (const item of state.media){
+        const key = assetKeyFor(item);
+        if (key && Array.isArray(item.tags)){
+          map[key] = item.tags;
+        }
+      }
+      state.tagMap = map;
     }
 
     function updateSelectionUI(){
@@ -985,6 +1163,18 @@
         const isSel = state.selected.has(state.focused.relative_path);
         el('drawerToggleSelect').textContent = isSel ? '− Deselect' : '＋ Select';
         el('drawerToggleSelect').classList.toggle('primary', !isSel);
+      }
+    }
+
+    function updateTagFilterUI(){
+      const modeBtn = el('tagModeBtn');
+      const noTagsBtn = el('noTagsBtn');
+      if (modeBtn){
+        modeBtn.textContent = state.tagMode === 'any' ? 'Any tags' : 'All tags';
+        modeBtn.classList.toggle('active', state.tagMode === 'any');
+      }
+      if (noTagsBtn){
+        noTagsBtn.classList.toggle('active', state.noTags);
       }
     }
 
@@ -1165,6 +1355,7 @@
     async function loadMedia(){
       if (!state.activeProject){
         state.media = [];
+        state.tagMap = {};
         renderMedia();
         updateTopCounts();
         return;
@@ -1180,6 +1371,7 @@
         for (const s of Array.from(state.selected)){
           if (!existing.has(s)) state.selected.delete(s);
         }
+        hydrateTagMapFromMedia();
         renderMedia();
         updateTopCounts();
         updateSelectionUI();
@@ -1187,6 +1379,7 @@
         toast('bad','Media', e.message);
       }
     }
+
 
     // -------------------------
     // Renderers
@@ -1267,6 +1460,8 @@
         const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
         const sub = it.relative_path || '';
         const size = formatBytes(it.size);
+        const tags = getTagsForItem(it);
+        const tagsHtml = renderTagPills(tags, 3);
 
         // If your API can provide a lightweight thumbnail URL (recommended), use it:
         // - it.thumb_url (image/jpg) for videos/images
@@ -1294,6 +1489,7 @@
           <div class="body">
             <div class="title">${escapeHtml(title)}</div>
             <div class="sub">${escapeHtml(sub)}</div>
+            ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
           </div>
         `;
 
@@ -1323,6 +1519,7 @@
           <div class="info">
             <div class="t">${escapeHtml(title)}</div>
             <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
+            ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
           </div>
           <div class="actions">
             <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} title="Select" />
@@ -1346,6 +1543,7 @@
       state.activeProject = p;
       state.selected.clear();
       state.focused = null;
+      setSidebarOpen(false);
 
       // prefill resolve name
       el('resolveProjectMode').value = 'current';
@@ -1522,11 +1720,52 @@
 
       el('drawerCopy').onclick = async () => {
         const u = item.stream_url || '';
-        try{
-          await navigator.clipboard.writeText(u);
+        const ok = await copyToClipboard(u);
+        if (ok){
           toast('good','Copied', 'Stream URL copied to clipboard');
-        }catch{
-          toast('warn','Clipboard', 'Copy failed (browser permission)');
+          return;
+        }
+        const fallback = prompt('Copy stream URL:', u);
+        if (fallback !== null){
+          toast('warn','Clipboard', 'Use the prompt to copy the URL.');
+        }
+      };
+
+      el('drawerTag').onclick = async () => {
+        const raw = prompt('Add tags (comma separated, prefix "-" to remove):', '');
+        if (!raw) return;
+        const entries = raw.split(',').map(s => s.trim()).filter(Boolean);
+        if (!entries.length) return;
+        const adds = entries.filter(t => !t.startsWith('-'));
+        const removes = entries.filter(t => t.startsWith('-')).map(t => t.slice(1)).filter(Boolean);
+
+        const p = state.activeProject;
+        if (!p){ toast('warn','Tags','Select a project first'); return; }
+        const base = `${API}/api/projects/${encodeURIComponent(p.name)}/assets/tags?rel_path=${encodeURIComponent(item.relative_path)}${p.source ? `&source=${encodeURIComponent(p.source)}` : ''}`;
+
+        try{
+          if (adds.length){
+            const addRes = await fetch(base, {
+              method:'POST',
+              headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify({ tags: adds }),
+            });
+            const payload = await addRes.json().catch(() => ({}));
+            if (!addRes.ok) throw new Error(payload.detail || 'Tag add failed');
+          }
+          if (removes.length){
+            const removeRes = await fetch(base, {
+              method:'DELETE',
+              headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify({ tags: removes }),
+            });
+            const payload = await removeRes.json().catch(() => ({}));
+            if (!removeRes.ok) throw new Error(payload.detail || 'Tag remove failed');
+          }
+          await loadMedia();
+          toast('good','Tags','Updated tags');
+        }catch(e){
+          toast('bad','Tags', e.message);
         }
       };
 
@@ -1554,7 +1793,6 @@
     });
 
     el('sidebarToggle').addEventListener('click', () => setSidebarOpen(!ui.sidebarOpen));
-    el('mobileProjectsBtn').addEventListener('click', () => setSidebarOpen(true));
     el('sidebarBackdrop').addEventListener('click', () => setSidebarOpen(false));
     el('drawerBackdrop').addEventListener('click', closeDrawer);
 
@@ -1565,6 +1803,27 @@
       state.q = e.target.value || '';
       renderMedia();
       updateTopCounts();
+    });
+
+    let tagFilterTimer = null;
+    el('tagFilter').addEventListener('input', (e) => {
+      state.tagFilter = e.target.value || '';
+      if (tagFilterTimer) window.clearTimeout(tagFilterTimer);
+      tagFilterTimer = window.setTimeout(async () => {
+        await loadMedia();
+      }, 250);
+    });
+
+    el('tagModeBtn').addEventListener('click', async () => {
+      state.tagMode = state.tagMode === 'any' ? 'all' : 'any';
+      updateTagFilterUI();
+      await loadMedia();
+    });
+
+    el('noTagsBtn').addEventListener('click', async () => {
+      state.noTags = !state.noTags;
+      updateTagFilterUI();
+      await loadMedia();
     });
 
     // Upload
@@ -1632,6 +1891,7 @@
       await loadSources();
       await loadProjects();
       setView('grid');
+      updateTagFilterUI();
       updateTopCounts();
       updateSelectionUI();
     });
