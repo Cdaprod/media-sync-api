@@ -293,13 +293,14 @@
       min-height: 0;
       position: relative;
       z-index: 50;
+      max-height: calc(100vh - 120px);
     }
 
     .sidebar.sidebar-drawer{
       position: fixed;
       top: 70px;
       left: 0;
-      height: calc(100% - 70px);
+      height: calc(100vh - 70px);
       width: min(420px, 100vw - 24px);
       max-width: 100%;
       transform: translateX(-105%);
@@ -360,6 +361,10 @@
 
     .scroll{
       overflow: auto;
+      min-height: 0;
+    }
+    .sidebar .scroll{
+      flex: 1;
       min-height: 0;
     }
     .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
@@ -850,10 +855,10 @@
       .grid{ gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
       .asset .title{ font-size: 11px; }
       .section-h{ padding: 12px 12px 9px; }
-      .sidebar{ border-radius: 0; }
+      .sidebar{ border-radius: 0; max-height: none; }
       .drawer{ height: 85%; top: auto; bottom: 0; border-left: none; border-top: 1px solid var(--border); transform: translateY(110%); right:0; width:100%; }
       .drawer.open{ transform: translateY(0%); }
-      .sidebar.sidebar-drawer{ top: 58px; height: calc(100% - 58px); border-radius: 0; }
+      .sidebar.sidebar-drawer{ top: 58px; height: calc(100vh - 58px); border-radius: 0; }
       .mobile-only{ display:block; }
     }
   </style>
@@ -897,6 +902,7 @@
               <button id="refreshBtn" class="btn" type="button">↻ Refresh</button>
               <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
               <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
+              <button id="tagSelectedBtn" class="btn" type="button" disabled>🏷 Tag selected</button>
               <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
             </div>
           </div>
@@ -1062,6 +1068,7 @@
       <div class="sep"></div>
       <button id="selPlayBtn" class="btn" type="button">▶ Preview</button>
       <button id="selResolveBtn" class="btn primary" type="button">⇢ Send to Resolve</button>
+      <button id="selTagBtn" class="btn" type="button">🏷 Tag</button>
       <button id="selClearBtn" class="btn" type="button">✕ Clear</button>
     </div>
 

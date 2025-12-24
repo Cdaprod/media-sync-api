@@ -404,3 +404,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Bridge flow now runs through `/api/bridge/*` endpoints and a host-side bridge agent (`public/bridge-agent.ps1`) that creates NTFS junctions and scans target paths.
 - Library sources now live under `/data/projects/_bridge`, so Compose only mounts `B:/Video/Projects` and sets `MEDIA_SYNC_SOURCES_PARENT_ROOT=/data/projects/_bridge`.
 - Explorer Bridge panel supports staged scans, commit, recent targets, and per-library bucket/derive actions.
+
+### Latest Implementation Notes (2025-03-26)
+- Explorer sidebar now respects mobile viewport height with scrollable panels, and multi-select tag/untag actions are available in the top toolbar and selection bar.
