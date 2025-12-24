@@ -16,3 +16,15 @@ def test_public_path_alias(client):
     response = client.get("/public/index.html")
     assert response.status_code == 200
     assert "media-sync-api adapter" in response.text
+
+
+def test_stream_url_copy_includes_origin_helper(client):
+    response = client.get("/public/index.html")
+    assert response.status_code == 200
+    assert "toAbsoluteUrl" in response.text
+    assert "window.location.origin" in response.text
+
+    explorer = client.get("/public/explorer.html")
+    assert explorer.status_code == 200
+    assert "toAbsoluteUrl" in explorer.text
+    assert "window.location.origin" in explorer.text

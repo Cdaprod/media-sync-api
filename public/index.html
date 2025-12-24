@@ -317,6 +317,14 @@
       return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[power]}`;
     };
 
+    const toAbsoluteUrl = (path) => {
+      if (!path) return '';
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path;
+      }
+      return new URL(path, window.location.origin).toString();
+    };
+
     async function loadSources() {
       sourcesEl.textContent = 'Loading sources...';
       try {
@@ -498,7 +506,7 @@
         copyLink.type = 'button';
         copyLink.textContent = 'Copy stream URL';
         copyLink.onclick = async () => {
-          const text = item.stream_url || '';
+          const text = toAbsoluteUrl(item.stream_url);
           if (navigator.clipboard && text) {
             await navigator.clipboard.writeText(text);
           }
