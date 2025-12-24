@@ -1707,6 +1707,22 @@
         v.controls = true;
         v.src = item.stream_url || '';
         v.preload = 'metadata';
+        v.playsInline = true;
+        v.muted = true;
+        const poster = item.thumb_url || item.thumbnail_url || '';
+        if (poster) v.setAttribute('poster', poster);
+        v.addEventListener('loadedmetadata', () => {
+          if (!v.duration || Number.isNaN(v.duration)) return;
+          const target = Math.min(0.1, v.duration / 2);
+          try{
+            v.currentTime = target;
+          }catch{
+            // ignore seek failures; poster will still render if provided
+          }
+        });
+        v.addEventListener('seeked', () => {
+          v.pause();
+        });
         preview.appendChild(v);
       }else if (kind === 'image'){
         const img = document.createElement('img');

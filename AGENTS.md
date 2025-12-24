@@ -372,3 +372,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-19)
 - Explorer search bar now uses an inline right-aligned Filters button for a cleaner pill layout.
+
+### Latest Implementation Notes (2025-03-20)
+- Drawer video previews now seek a small offset on load (and use poster thumbnails when available) so a frame renders before pressing play.
