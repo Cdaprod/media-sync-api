@@ -19,7 +19,7 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def _parse_origins(raw: str | None) -> List[str]:
@@ -37,6 +37,26 @@ class Settings(BaseModel):
         os.getenv("MEDIA_SYNC_PROJECTS_ROOT")
         or os.getenv("PROJECT_ROOT", "/data/projects")
     ))
+    sources_parent_root: Path = Field(
+        default_factory=lambda: Path(
+            os.getenv(
+                "MEDIA_SYNC_SOURCES_PARENT_ROOT",
+                str(Path(os.getenv("MEDIA_SYNC_PROJECTS_ROOT", "/data/projects")) / "_bridge"),
+            )
+        )
+    )
+    bridge_root_host: str = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_BRIDGE_ROOT_HOST", r"B:\Video\Projects\_bridge")
+    )
+    bridge_agent_url: str = Field(
+        default_factory=lambda: os.getenv(
+            "MEDIA_SYNC_BRIDGE_AGENT_URL",
+            "http://host.docker.internal:8790",
+        )
+    )
+    cache_root: Path = Field(
+        default_factory=lambda: Path(os.getenv("MEDIA_SYNC_CACHE_ROOT", "/app/storage/cache"))
+    )
     port: int = Field(default_factory=lambda: int(os.getenv("MEDIA_SYNC_PORT", os.getenv("PORT", "8787"))))
     max_upload_mb: int = Field(default_factory=lambda: int(os.getenv("MEDIA_SYNC_MAX_UPLOAD_MB", "512")))
     cors_origins: List[str] = Field(
@@ -66,6 +86,27 @@ class Settings(BaseModel):
     ai_deim_url: str | None = Field(
         default_factory=lambda: os.getenv("MEDIA_SYNC_DEIM_URL")
     )
+    buckets_min_files: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_BUCKETS_MIN_FILES", "1"))
+    )
+    buckets_max_depth: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_BUCKETS_MAX_DEPTH", "8"))
+    )
+    buckets_max_count: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_BUCKETS_MAX_COUNT", "200"))
+    )
+    buckets_overlap_threshold: float = Field(
+        default_factory=lambda: float(os.getenv("MEDIA_SYNC_BUCKETS_OVERLAP", "0.9"))
+    )
+    stage_scan_ttl_minutes: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_STAGE_SCAN_TTL_MINUTES", "60"))
+    )
+    stage_scan_max_depth: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_STAGE_SCAN_MAX_DEPTH", "6"))
+    )
+    stage_scan_min_files: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_STAGE_SCAN_MIN_FILES", "1"))
+    )
 
 def ensure_project_root(path: Path) -> None:
     """Ensure the configured project root exists and is a directory."""
@@ -79,6 +120,8 @@ def get_settings() -> Settings:
 
     settings = Settings()
     ensure_project_root(settings.project_root)
+    settings.cache_root.mkdir(parents=True, exist_ok=True)
+    settings.sources_parent_root.mkdir(parents=True, exist_ok=True)
     return settings
 
 

@@ -239,7 +239,8 @@ docker compose down
 4. ✅ Reindex endpoint (scan disk, reconcile db/index).
 5. ✅ Minimal web UI for local admin with project/media browsing.
 6. ✅ AI tagging pipeline (DEIM + WhisperX) for automatic semantic labels.
-7. ⏭ Optional OBS integration + Resolve bridge (separate services).
+7. ✅ Library bridge + virtual buckets for read-only NAS browsing.
+8. ⏭ Optional OBS integration + Resolve bridge (separate services).
 
 ---
 
@@ -381,3 +382,26 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - AI tagging endpoints added at `/api/projects/{project}/assets/ai-tags` with optional background execution; tags are stored with source `ai` and appear in media listings automatically.
 - Uploads and per-project reindex now optionally enqueue AI tagging when `MEDIA_SYNC_AI_TAGGING_ENABLED=1` and `MEDIA_SYNC_AI_TAGGING_AUTO=1`.
 - AI tagging expects local WhisperX (`MEDIA_SYNC_WHISPERX_URL`) and DEIM (`MEDIA_SYNC_DEIM_URL`) endpoints; status is tracked in `_tags/tags.sqlite` under `asset_tag_runs`.
+
+### Latest Implementation Notes (2025-03-22)
+- Source registry upgraded to `B:/Video/Projects/_sources/index.json` with `mode`, `read_only`, capability, and `id_strategy` fields plus atomic writes and name normalization.
+- Library sources (`mode=library`) must live under `MEDIA_SYNC_SOURCES_PARENT_ROOT` and stream via `/media/source/{source}/{rel_path}`; project routes reject read-only/library sources.
+- Tags now key on `asset_id` (`sha256(source:rel_path)`), with batch/tag endpoints accepting asset IDs and legacy keys migrated on startup.
+- Virtual buckets persist in `_sources/buckets.sqlite`, with `/api/sources/{source}/discover-buckets` and `/api/buckets/{bucket_id}/media` for browsing.
+- Derived cache artifacts live under `/app/storage/cache/{asset_id}` and serve via `/api/cache/{asset_id}/{artifact}`; `/api/sources/{source}/derive` triggers thumb/transcript generation when available.
+- Explorer UI now supports library selection, buckets, bridge registration, and a compact mobile actions toggle while keeping tag pills and asset IDs in sync.
+
+### Latest Implementation Notes (2025-03-23)
+- Bucket discovery now skips noisy folders (`cache`, `_manifest`, `_tags`, `.DS_Store`, etc.) and honors guardrails (`MEDIA_SYNC_BUCKETS_MIN_FILES`, `MEDIA_SYNC_BUCKETS_MAX_DEPTH`, `MEDIA_SYNC_BUCKETS_MAX_COUNT`) to avoid bucket explosion.
+- Bucket discovery logging includes guardrail settings, and derive runs emit `derive_started` logs for traceability.
+
+### Latest Implementation Notes (2025-03-24)
+- Library sources now require a staged scan/commit flow (`/api/sources/{source}/stage-scan`, `/api/stage-scans/{id}`, `/api/stage-scans/{id}/commit`) before media or buckets can be browsed.
+- Library browsing, bucket discovery, and streaming are constrained to committed roots stored in `_sources/bridge.sqlite`; pinned buckets are seeded from committed roots.
+- Explorer UI script is now modularized under `/public/js/` and includes a staged Bridge panel for committing library roots.
+
+### Latest Implementation Notes (2025-03-25)
+- Bridge flow now runs through `/api/bridge/*` endpoints and a host-side bridge agent (`public/bridge-agent.ps1`) that creates NTFS junctions and scans target paths.
+- Library sources now live under `/data/projects/_bridge`, so Compose only mounts `B:/Video/Projects` and sets `MEDIA_SYNC_SOURCES_PARENT_ROOT=/data/projects/_bridge`.
+- Explorer Bridge panel supports staged scans, commit, recent targets, and per-library bucket/derive actions.
+- Bridge agent URL defaults to `http://host.docker.internal:8790` so the container can reach the Windows host helper without extra networking.

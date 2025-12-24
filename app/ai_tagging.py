@@ -16,7 +16,7 @@ import httpx
 from app.config import get_settings
 from app.storage.index import append_event
 from app.storage.paths import validate_relative_path
-from app.storage.tags_store import TagMeta, TagStore, asset_key, normalize_tag
+from app.storage.tags_store import TagMeta, TagStore, asset_id_for_project, normalize_tag
 
 
 logger = logging.getLogger("media_sync_api.ai_tagging")
@@ -164,21 +164,21 @@ def tag_asset(
         raise AITaggingError("Unsupported file type for AI tagging")
 
     store = TagStore(settings.project_root / "_tags" / "tags.sqlite")
-    key = asset_key(project_name, safe_rel, source_name)
-    counts = store.get_asset_tag_counts(key)
+    asset_id = asset_id_for_project(source_name, project_name, safe_rel)
+    counts = store.get_asset_tag_counts(asset_id)
     if not force and counts.get(settings.ai_tagging_source, 0) > 0:
-        existing = store.get_asset_tags(key)
-        run = store.get_asset_tag_run(key)
+        existing = store.get_asset_tags(asset_id)
+        run = store.get_asset_tag_run(asset_id)
         return {
             "status": "skipped",
-            "asset_key": key,
+            "asset_id": asset_id,
             "tags": existing,
             "tag_source_counts": counts,
             "tag_run": run.__dict__ if run else None,
             "detail": "AI tags already present; pass force=true to recompute.",
         }
 
-    run = store.start_asset_tag_run(key, source=settings.ai_tagging_source, model="deim+whisperx")
+    run = store.start_asset_tag_run(asset_id, source=settings.ai_tagging_source, model="deim+whisperx")
     transcript: str | None = None
     owned_client = client is None
     client = client or create_http_client(settings.ai_tagging_timeout_s)
@@ -200,10 +200,10 @@ def tag_asset(
             transcript,
             max_tags or settings.ai_tagging_max_tags,
         )
-        stored = store.add_asset_tags(key, tags, source=settings.ai_tagging_source)
+        stored = store.add_asset_tags(asset_id, tags, source=settings.ai_tagging_source)
         for meta in metas:
             store.upsert_tag_meta(meta)
-        run = store.finish_asset_tag_run(key, "complete")
+        run = store.finish_asset_tag_run(asset_id, "complete")
         append_event(
             project_dir,
             "ai_tagging_complete",
@@ -217,15 +217,15 @@ def tag_asset(
         )
         return {
             "status": "complete",
-            "asset_key": key,
+            "asset_id": asset_id,
             "tags": stored,
-            "tag_source_counts": store.get_asset_tag_counts(key),
+            "tag_source_counts": store.get_asset_tag_counts(asset_id),
             "tag_run": run.__dict__,
             "transcript": transcript,
         }
     except Exception as exc:
         error = str(exc)
-        run = store.finish_asset_tag_run(key, "failed", error=error)
+        run = store.finish_asset_tag_run(asset_id, "failed", error=error)
         append_event(
             project_dir,
             "ai_tagging_failed",

@@ -71,11 +71,14 @@ _ALLOWED_MODES = {"import", "reveal_in_explorer", "reveal"}
 
 def _require_source(source: str | None) -> Source:
     settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
-        return registry.require(source)
+        resolved = registry.require(source)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if resolved.mode != "project":
+        raise HTTPException(status_code=400, detail="Selected source is not a project source")
+    return resolved
 
 
 def _validate_relpath(rel: str) -> Path:

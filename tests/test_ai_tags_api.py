@@ -12,7 +12,11 @@ from app import config
 
 def _build_ai_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, transport: httpx.MockTransport) -> tuple[TestClient, Path]:
     root = tmp_path / "projects"
+    sources_root = tmp_path / "sources"
+    cache_root = tmp_path / "cache"
     monkeypatch.setenv("MEDIA_SYNC_PROJECTS_ROOT", str(root))
+    monkeypatch.setenv("MEDIA_SYNC_SOURCES_PARENT_ROOT", str(sources_root))
+    monkeypatch.setenv("MEDIA_SYNC_CACHE_ROOT", str(cache_root))
     monkeypatch.setenv("MEDIA_SYNC_MAX_UPLOAD_MB", "5")
     monkeypatch.setenv("MEDIA_SYNC_CORS_ORIGINS", "*")
     monkeypatch.setenv("MEDIA_SYNC_AI_TAGGING_ENABLED", "1")

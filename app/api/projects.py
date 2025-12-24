@@ -52,11 +52,14 @@ class ProjectResponse(BaseModel):
 @router.get("", response_model=List[ProjectResponse])
 async def list_projects(source: str | None = None) -> List[ProjectResponse]:
     settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         sources = [registry.require(source)] if source else registry.list_enabled()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    sources = [src for src in sources if src.mode == "project"]
+    if source and not sources:
+        raise HTTPException(status_code=400, detail="Selected source is not a project source")
     projects: List[ProjectResponse] = []
     for src in sources:
         if not src.accessible:
@@ -87,9 +90,13 @@ async def list_projects(source: str | None = None) -> List[ProjectResponse]:
 @router.post("", response_model=ProjectResponse, status_code=201)
 async def create_project(payload: ProjectCreateRequest, source: str | None = None) -> ProjectResponse:
     settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         active_source = registry.require(source)
+        if active_source.mode != "project":
+            raise ValueError("Selected source is not a project source")
+        if active_source.read_only:
+            raise ValueError("Selected source is read-only")
         name = _resolve_project_name(active_source.root, payload.name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -125,11 +132,13 @@ async def get_project(project_name: str, source: str | None = None):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         active_source = registry.require(source)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if active_source.mode != "project":
+        raise HTTPException(status_code=400, detail="Selected source is not a project source")
     target = project_path(active_source.root, name)
     _bootstrap_existing_projects(active_source.root)
     if not target.exists():
