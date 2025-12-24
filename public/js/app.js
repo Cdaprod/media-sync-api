@@ -310,6 +310,7 @@ function updateSelectionUI(){
 
   // enable/disable action buttons
   el('sendResolveBtn').disabled = !show || !state.activeProject;
+  el('tagSelBtn').disabled = !show;
   el('clearSelBtn').disabled = !show;
   el('selResolveBtn').disabled = !show || !state.activeProject;
 
@@ -1053,6 +1054,46 @@ function clearSelection(){
   updateSelectionUI();
 }
 
+async function tagSelectedAssets(){
+  if (!state.selected.size){
+    toast('warn','Tags','Select one or more items first');
+    return;
+  }
+  const raw = prompt('Add tags (comma separated, prefix "-" to remove):', '');
+  if (!raw) return;
+  const entries = raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (!entries.length) return;
+  const adds = entries.filter(t => !t.startsWith('-'));
+  const removes = entries.filter(t => t.startsWith('-')).map(t => t.slice(1)).filter(Boolean);
+
+  try{
+    for (const assetId of state.selected){
+      if (adds.length){
+        const addRes = await fetch(`${API}/api/assets/tags?asset_id=${encodeURIComponent(assetId)}`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ tags: adds }),
+        });
+        const payload = await addRes.json().catch(() => ({}));
+        if (!addRes.ok) throw new Error(payload.detail || 'Tag add failed');
+      }
+      if (removes.length){
+        const removeRes = await fetch(`${API}/api/assets/tags?asset_id=${encodeURIComponent(assetId)}`, {
+          method:'DELETE',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ tags: removes }),
+        });
+        const payload = await removeRes.json().catch(() => ({}));
+        if (!removeRes.ok) throw new Error(payload.detail || 'Tag remove failed');
+      }
+    }
+    await loadMedia();
+    toast('good','Tags','Updated selected items');
+  }catch(e){
+    toast('bad','Tags', e.message);
+  }
+}
+
 async function sendToResolve(){
   const p = state.activeProject;
   if (!p){ toast('warn','Resolve','Select a project first'); return; }
@@ -1364,6 +1405,7 @@ el('discoverBucketsBtn').addEventListener('click', discoverBuckets);
 // Resolve
 el('sendResolveBtn').addEventListener('click', sendToResolve);
 el('selResolveBtn').addEventListener('click', sendToResolve);
+el('tagSelBtn').addEventListener('click', tagSelectedAssets);
 
 // Clear selection
 el('clearSelBtn').addEventListener('click', clearSelection);

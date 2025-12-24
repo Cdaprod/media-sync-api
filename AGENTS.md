@@ -405,3 +405,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Library sources now live under `/data/projects/_bridge`, so Compose only mounts `B:/Video/Projects` and sets `MEDIA_SYNC_SOURCES_PARENT_ROOT=/data/projects/_bridge`.
 - Explorer Bridge panel supports staged scans, commit, recent targets, and per-library bucket/derive actions.
 - Bridge agent URL defaults to `http://host.docker.internal:8790` so the container can reach the Windows host helper without extra networking.
+- Explorer UI now exposes multi-select tagging via the Actions bar and ensures the sidebar scroll container flexes to show the full project panel.
