@@ -9,6 +9,7 @@ Example calls:
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -18,7 +19,7 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.storage.paths import validate_project_name
 from app.storage.sources import SourceRegistry
-from app.storage.tags_store import TagMeta, TagStore, asset_key
+from app.storage.tags_store import TagMeta, TagStore, asset_id_for_project
 
 
 logger = logging.getLogger("media_sync_api.tags")
@@ -40,7 +41,8 @@ def _normalize_project(name: str) -> str:
 
 
 def _normalize_source(source: str | None) -> str:
-    registry = SourceRegistry(get_settings().project_root)
+    settings = get_settings()
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         resolved = registry.require(source, include_disabled=True)
     except ValueError as exc:
@@ -60,6 +62,15 @@ def _normalize_rel_path(rel_path: str) -> str:
     return rel_path
 
 
+def _normalize_asset_id(asset_id: str | None) -> str | None:
+    if not asset_id:
+        return None
+    cleaned = asset_id.strip().lower()
+    if not re.fullmatch(r"[a-f0-9]{64}", cleaned):
+        raise HTTPException(status_code=400, detail="asset_id must be a 64-character hex sha256")
+    return cleaned
+
+
 class TagPatch(BaseModel):
     color: Optional[str] = Field(default=None, description="Hex like #22c55e")
     description: Optional[str] = None
@@ -70,9 +81,10 @@ class TagsBody(BaseModel):
 
 
 class BatchReq(BaseModel):
-    project: str
+    project: Optional[str] = None
     source: Optional[str] = None
     rel_paths: list[str] = Field(default_factory=list)
+    asset_ids: list[str] = Field(default_factory=list)
 
 
 @router.get("/tags")
@@ -91,53 +103,130 @@ async def patch_tag(tag: str, patch: TagPatch):
 
 
 @router.get("/projects/{project}/assets/tags")
-async def get_asset_tags(project: str, rel_path: str, source: str | None = None):
+async def get_asset_tags(
+    project: str,
+    rel_path: str | None = None,
+    source: str | None = None,
+    asset_id: str | None = None,
+):
     project_name = _normalize_project(project)
-    safe_rel = _normalize_rel_path(rel_path)
     source_name = _normalize_source(source)
+    resolved_asset_id = _normalize_asset_id(asset_id)
+    safe_rel = _normalize_rel_path(rel_path) if not resolved_asset_id else None
+    resolved_asset_id = resolved_asset_id or asset_id_for_project(source_name, project_name, safe_rel or "")
     store = _store()
-    key = asset_key(project=project_name, relative_path=safe_rel, source=source_name)
+    if not resolved_asset_id:
+        raise HTTPException(status_code=400, detail="rel_path or asset_id is required")
     return {
-        "asset_key": key,
+        "asset_id": resolved_asset_id,
         "project": project_name,
         "relative_path": safe_rel,
         "source": source_name,
-        "tags": store.get_asset_tags(key),
+        "tags": store.get_asset_tags(resolved_asset_id),
     }
 
 
 @router.post("/projects/{project}/assets/tags")
-async def add_asset_tags(project: str, rel_path: str, body: TagsBody, source: str | None = None, tag_source: str = "user"):
+async def add_asset_tags(
+    project: str,
+    body: TagsBody,
+    rel_path: str | None = None,
+    source: str | None = None,
+    tag_source: str = "user",
+    asset_id: str | None = None,
+):
     project_name = _normalize_project(project)
-    safe_rel = _normalize_rel_path(rel_path)
     source_name = _normalize_source(source)
+    resolved_asset_id = _normalize_asset_id(asset_id)
+    safe_rel = _normalize_rel_path(rel_path) if not resolved_asset_id else None
+    resolved_asset_id = resolved_asset_id or asset_id_for_project(source_name, project_name, safe_rel or "")
     store = _store()
-    key = asset_key(project=project_name, relative_path=safe_rel, source=source_name)
-    tags = store.add_asset_tags(key, body.tags, source=tag_source)
-    logger.info("asset_tags_added", extra={"asset_key": key, "count": len(tags)})
-    return {"asset_key": key, "tags": tags}
+    if not resolved_asset_id:
+        raise HTTPException(status_code=400, detail="rel_path or asset_id is required")
+    tags = store.add_asset_tags(resolved_asset_id, body.tags, source=tag_source)
+    logger.info("asset_tags_added", extra={"asset_id": resolved_asset_id, "count": len(tags)})
+    return {"asset_id": resolved_asset_id, "tags": tags}
 
 
 @router.delete("/projects/{project}/assets/tags")
-async def remove_asset_tags(project: str, rel_path: str, body: TagsBody, source: str | None = None):
+async def remove_asset_tags(
+    project: str,
+    body: TagsBody,
+    rel_path: str | None = None,
+    source: str | None = None,
+    asset_id: str | None = None,
+):
     project_name = _normalize_project(project)
-    safe_rel = _normalize_rel_path(rel_path)
     source_name = _normalize_source(source)
+    resolved_asset_id = _normalize_asset_id(asset_id)
+    safe_rel = _normalize_rel_path(rel_path) if not resolved_asset_id else None
+    resolved_asset_id = resolved_asset_id or asset_id_for_project(source_name, project_name, safe_rel or "")
     store = _store()
-    key = asset_key(project=project_name, relative_path=safe_rel, source=source_name)
-    tags = store.remove_asset_tags(key, body.tags)
-    logger.info("asset_tags_removed", extra={"asset_key": key, "count": len(tags)})
-    return {"asset_key": key, "tags": tags}
+    if not resolved_asset_id:
+        raise HTTPException(status_code=400, detail="rel_path or asset_id is required")
+    tags = store.remove_asset_tags(resolved_asset_id, body.tags)
+    logger.info("asset_tags_removed", extra={"asset_id": resolved_asset_id, "count": len(tags)})
+    return {"asset_id": resolved_asset_id, "tags": tags}
+
+
+@router.get("/assets/tags")
+async def get_asset_tags_by_id(asset_id: str):
+    """Fetch tags for an asset_id (library or project)."""
+
+    resolved = _normalize_asset_id(asset_id)
+    if not resolved:
+        raise HTTPException(status_code=400, detail="asset_id is required")
+    store = _store()
+    return {
+        "asset_id": resolved,
+        "tags": store.get_asset_tags(resolved),
+        "tag_source_counts": store.get_asset_tag_counts(resolved),
+    }
+
+
+@router.post("/assets/tags")
+async def add_asset_tags_by_id(asset_id: str, body: TagsBody, tag_source: str = "user"):
+    """Attach tags to an asset_id (library or project)."""
+
+    resolved = _normalize_asset_id(asset_id)
+    if not resolved:
+        raise HTTPException(status_code=400, detail="asset_id is required")
+    store = _store()
+    tags = store.add_asset_tags(resolved, body.tags, source=tag_source)
+    logger.info("asset_tags_added", extra={"asset_id": resolved, "count": len(tags)})
+    return {"asset_id": resolved, "tags": tags}
+
+
+@router.delete("/assets/tags")
+async def remove_asset_tags_by_id(asset_id: str, body: TagsBody):
+    """Remove tags from an asset_id (library or project)."""
+
+    resolved = _normalize_asset_id(asset_id)
+    if not resolved:
+        raise HTTPException(status_code=400, detail="asset_id is required")
+    store = _store()
+    tags = store.remove_asset_tags(resolved, body.tags)
+    logger.info("asset_tags_removed", extra={"asset_id": resolved, "count": len(tags)})
+    return {"asset_id": resolved, "tags": tags}
 
 
 @router.post("/tags/batch")
 async def batch_tags(req: BatchReq):
+    if req.asset_ids:
+        asset_ids = [_normalize_asset_id(aid) for aid in req.asset_ids if aid]
+        asset_ids = [aid for aid in asset_ids if aid]
+        store = _store()
+        mapping = store.batch_get_asset_tags(asset_ids)
+        return {"asset_ids": asset_ids, "map": mapping}
+
+    if not req.project:
+        raise HTTPException(status_code=400, detail="project is required when asset_ids are not provided")
     project_name = _normalize_project(req.project)
     source_name = _normalize_source(req.source)
     if not req.rel_paths:
         return {"project": project_name, "source": source_name, "map": {}}
     rels = [_normalize_rel_path(path) for path in req.rel_paths]
-    keys = [asset_key(project=project_name, relative_path=path, source=source_name) for path in rels]
+    asset_ids = [asset_id_for_project(source_name, project_name, path) for path in rels]
     store = _store()
-    mapping = store.batch_get_asset_tags(keys)
+    mapping = store.batch_get_asset_tags(asset_ids)
     return {"project": project_name, "source": source_name, "map": mapping}

@@ -15,8 +15,16 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.media import media_router, router as media_api_router
+from app.api.media import (
+    bucket_router,
+    cache_router,
+    media_router,
+    router as media_api_router,
+    source_media_router,
+    source_router,
+)
 from app.api.ai_tags import router as ai_tags_router
+from app.api.bridge import router as bridge_router
 from app.api.projects import router as projects_router
 from app.api.sources import router as sources_router
 from app.api.tags import router as tags_router
@@ -52,11 +60,16 @@ def create_app() -> FastAPI:
     application = FastAPI(title="media-sync-api", version="0.1.0")
     application.include_router(projects_router)
     application.include_router(media_api_router)
+    application.include_router(source_router)
     application.include_router(sources_router)
     application.include_router(upload_router)
     application.include_router(reindex_router)
     application.include_router(reindex_all_router)
     application.include_router(media_router)
+    application.include_router(source_media_router)
+    application.include_router(cache_router)
+    application.include_router(bucket_router)
+    application.include_router(bridge_router)
     application.include_router(resolve_router)
     application.include_router(tags_router)
     application.include_router(ai_tags_router)

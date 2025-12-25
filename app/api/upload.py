@@ -43,11 +43,15 @@ async def upload_file(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         active_source = registry.require(source)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if active_source.mode != "project":
+        raise HTTPException(status_code=400, detail="Selected source is not a project source")
+    if active_source.read_only:
+        raise HTTPException(status_code=400, detail="Selected source is read-only")
     if not active_source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
     project = project_path(active_source.root, name)
@@ -159,11 +163,13 @@ async def sync_album(project_name: str, payload: dict, source: str | None = None
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         active_source = registry.require(source)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if active_source.mode != "project":
+        raise HTTPException(status_code=400, detail="Selected source is not a project source")
     if not active_source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
     project = project_path(active_source.root, name)
