@@ -18,13 +18,18 @@ ALLOWED_MEDIA_EXTENSIONS = {
     ".mov",
     ".avi",
     ".mkv",
+    ".webm",
+    ".m4v",
     ".mp3",
     ".wav",
+    ".m4a",
     ".flac",
     ".aac",
     ".jpg",
     ".jpeg",
     ".png",
+    ".gif",
+    ".webp",
     ".heic",
 }
 

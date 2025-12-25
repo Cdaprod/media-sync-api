@@ -41,11 +41,13 @@ async def reindex(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         active_source = registry.require(source)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if active_source.mode != "project":
+        raise HTTPException(status_code=400, detail="Selected source is not a project source")
     if not active_source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
     project = project_path(active_source.root, name)
@@ -88,11 +90,12 @@ async def reindex_all(source: str | None = None):
     """Reindex every accessible project across enabled sources."""
 
     settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
+    registry = SourceRegistry(settings.project_root, settings.sources_parent_root)
     try:
         sources = [registry.require(source)] if source else registry.list_enabled()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    sources = [src for src in sources if src.mode == "project"]
 
     total_projects = 0
     total_indexed = 0
