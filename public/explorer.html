@@ -963,27 +963,20 @@
           <div style="padding: 12px;">
             <div class="card">
               <strong>Bridge a host library</strong>
-              <div class="tag" id="bridgeAgentStatus">Bridge helper offline</div>
-              <div class="small" style="margin-top:6px;">Paste a Windows/UNC path, scan, then commit.</div>
+              <div class="tag" id="bridgeAgentStatus">Bridge ready</div>
+              <div class="small" style="margin-top:6px;">Select a server-visible junction, scan, then commit.</div>
               <div style="display:grid; gap:8px; margin-top:10px;">
-                <input id="bridgeTarget" placeholder="Z:\\Media\\Audio or \\\\NAS\\Share\\Media" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
-                <div style="display:flex; gap:8px; flex-wrap: wrap;">
-                  <input id="bridgeNameHint" placeholder="junction name (Audio)" style="flex:1;padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
-                  <button id="bridgeBrowseBtn" class="btn" type="button">Browse…</button>
-                  <input id="bridgeBrowseInput" type="file" webkitdirectory style="display:none;" />
-                </div>
+                <select id="bridgeCandidate" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
+                  <option value="">Select a junction…</option>
+                </select>
                 <div style="display:flex; gap:8px; flex-wrap: wrap;">
                   <button id="bridgeStageBtn" class="btn" type="button" disabled>Stage scan</button>
                   <button id="bridgeCommitBtn" class="btn primary" type="button" disabled>Commit selection</button>
-                  <button id="bridgeRefreshBtn" class="btn" type="button">Check helper</button>
+                  <button id="bridgeRefreshBtn" class="btn" type="button">Refresh</button>
                 </div>
                 <div class="small" id="bridgeStageStatus"></div>
               </div>
               <div id="bridgeStageTree" class="stage-tree"></div>
-            </div>
-            <div class="card" style="margin-top:12px;">
-              <strong>Recently bridged</strong>
-              <div id="bridgeRecents" class="chips" style="padding:0;margin-top:8px;"></div>
             </div>
             <div class="card" style="margin-top:12px;">
               <strong>Library actions</strong>

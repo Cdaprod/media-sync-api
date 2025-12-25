@@ -74,17 +74,18 @@ mklink /J B:\Video\Projects\_bridge\NAS \\NAS\MediaShare
 mklink /J B:\Video\Projects\_bridge\Vault X:\Media\Vault
 ```
 
-3) Use the staged scan + commit flow to create junctions and register sources:
+3) Use the staged scan + commit flow to register existing junctions as sources:
 ```bash
+curl http://127.0.0.1:8787/api/bridge/candidates
 curl -X POST http://127.0.0.1:8787/api/bridge/stage-scan \
   -H "Content-Type: application/json" \
-  -d "{\"target_path\":\"Z:\\\\Audio\",\"name_hint\":\"Audio\"}"
+  -d "{\"junction_name\":\"Audio\"}"
 ```
 4) Commit only the folders you want indexed:
 ```bash
 curl -X POST http://127.0.0.1:8787/api/bridge/commit \
   -H "Content-Type: application/json" \
-  -d "{\"items\":[{\"junction_name\":\"Audio\",\"target_path\":\"Z:\\\\Audio\",\"selected_paths\":[\"Events/2024\",\"B-Roll\"]}]}"
+  -d "{\"junction_name\":\"Audio\",\"selected_roots\":[\"Events/2024\",\"B-Roll\"]}"
 ```
 After commit, bucket discovery and `/api/sources/{source}/media` are constrained to those selections.
 

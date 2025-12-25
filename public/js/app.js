@@ -111,60 +111,17 @@ function updateBridgeMessage(message){
   if (target) target.textContent = state.bridgeMessage;
 }
 
-function loadBridgeRecents(){
-  try{
-    const raw = localStorage.getItem('media-sync-bridge-recents');
-    const parsed = raw ? JSON.parse(raw) : [];
-    state.bridgeRecents = Array.isArray(parsed) ? parsed : [];
-  }catch{
-    state.bridgeRecents = [];
-  }
-}
-
-function saveBridgeRecent(path){
-  if (!path) return;
-  const items = [path, ...state.bridgeRecents.filter(item => item !== path)].slice(0, 6);
-  state.bridgeRecents = items;
-  try{
-    localStorage.setItem('media-sync-bridge-recents', JSON.stringify(items));
-  }catch{
-    // ignore storage failures
-  }
-}
-
-function renderBridgeRecents(){
-  const root = el('bridgeRecents');
-  if (!root) return;
-  root.innerHTML = '';
-  if (!state.bridgeRecents.length){
-    root.innerHTML = '<div class="small">No recent bridges yet.</div>';
-    return;
-  }
-  for (const path of state.bridgeRecents){
-    const chip = document.createElement('div');
-    chip.className = 'chip';
-    chip.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="name">${escapeHtml(path)}</span>`;
-    chip.addEventListener('click', () => {
-      state.bridgeTarget = path;
-      el('bridgeTarget').value = path;
-      updateBridgeMessage('');
-      syncBridgeControls();
-    });
-    root.appendChild(chip);
-  }
-}
-
 function syncBridgeControls(){
-  const agentOk = state.bridgeStatus?.agent_ok ?? false;
+  const agentOk = state.bridgeStatus?.ok ?? true;
   const scanReady = Boolean(state.bridgeTree);
   const hasSelection = state.bridgeSelection.size > 0;
   const stageBtn = el('bridgeStageBtn');
-  if (stageBtn) stageBtn.disabled = !agentOk || !state.bridgeTarget;
+  if (stageBtn) stageBtn.disabled = !agentOk || !state.bridgeCandidate;
   const commitBtn = el('bridgeCommitBtn');
   if (commitBtn) commitBtn.disabled = !agentOk || !scanReady || !hasSelection;
   const statusEl = el('bridgeAgentStatus');
   if (statusEl){
-    statusEl.textContent = agentOk ? 'Bridge helper online' : 'Bridge helper offline';
+    statusEl.textContent = agentOk ? 'Bridge ready' : 'Bridge unavailable';
     statusEl.classList.toggle('good', agentOk);
     statusEl.classList.toggle('bad', !agentOk);
   }
@@ -583,30 +540,43 @@ async function loadBridgeStatus(){
     state.bridgeStatus = await res.json();
     syncBridgeControls();
   }catch(e){
-    state.bridgeStatus = { agent_ok: false, agent_detail: e.message };
+    state.bridgeStatus = { ok: false, detail: e.message };
     syncBridgeControls();
   }
 }
 
-function validateBridgeTarget(path){
-  if (!path) return '';
-  const winDrive = /^[a-zA-Z]:\\/;
-  const unc = /^\\\\/;
-  if (!winDrive.test(path) && !unc.test(path)){
-    return 'Path should be an absolute Windows path (drive letter or UNC).';
+async function loadBridgeCandidates(){
+  try{
+    const res = await fetch(`${API}/api/bridge/candidates`);
+    if (!res.ok) throw new Error('Bridge candidates unavailable');
+    const payload = await res.json();
+    state.bridgeCandidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+    renderBridgeCandidates();
+  }catch(e){
+    updateBridgeMessage(`Failed to load candidates: ${e.message}`);
   }
-  return '';
+}
+
+function renderBridgeCandidates(){
+  const select = el('bridgeCandidate');
+  if (!select) return;
+  select.innerHTML = '<option value="">Select a junction…</option>';
+  for (const candidate of state.bridgeCandidates){
+    const option = document.createElement('option');
+    option.value = candidate.name;
+    option.textContent = candidate.name;
+    select.appendChild(option);
+  }
+  if (state.bridgeCandidate){
+    select.value = state.bridgeCandidate;
+  }
 }
 
 async function runBridgeScan(){
-  const targetPath = (el('bridgeTarget').value || '').trim();
-  const nameHint = (el('bridgeNameHint').value || '').trim();
-  state.bridgeTarget = targetPath;
-  state.bridgeNameHint = nameHint;
-  const warning = validateBridgeTarget(targetPath);
-  if (warning){
-    updateBridgeMessage(warning);
-    toast('warn', 'Bridge', warning);
+  const junctionName = (el('bridgeCandidate').value || '').trim();
+  state.bridgeCandidate = junctionName;
+  if (!junctionName){
+    updateBridgeMessage('Select a junction first.');
     return;
   }
   updateBridgeMessage('Scanning…');
@@ -614,7 +584,7 @@ async function runBridgeScan(){
     const scanRes = await fetch(`${API}/api/bridge/stage-scan`, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ target_path: targetPath, name_hint: nameHint }),
+      body: JSON.stringify({ junction_name: junctionName }),
     });
     const scanPayload = await scanRes.json().catch(() => ({}));
     if (!scanRes.ok) throw new Error(scanPayload.detail || 'Stage scan failed');
@@ -630,12 +600,6 @@ async function runBridgeScan(){
     if (!state.bridgeSelection.size && nodes.length){
       state.bridgeSelection.add(nodes[0].path || '.');
     }
-    if (scanPayload.suggested_name && !nameHint){
-      el('bridgeNameHint').value = scanPayload.suggested_name;
-      state.bridgeNameHint = scanPayload.suggested_name;
-    }
-    saveBridgeRecent(targetPath);
-    renderBridgeRecents();
     updateBridgeMessage(`Scan ready (${nodes.length} nodes). Select roots to commit.`);
     renderBridgeScan();
   }catch(e){
@@ -645,11 +609,10 @@ async function runBridgeScan(){
 }
 
 async function commitBridge(){
-  const targetPath = (el('bridgeTarget').value || '').trim();
-  const junctionName = (el('bridgeNameHint').value || '').trim();
+  const junctionName = (el('bridgeCandidate').value || '').trim();
   const selected = Array.from(state.bridgeSelection);
-  if (!targetPath || !junctionName){
-    toast('warn', 'Bridge', 'Provide a target path and junction name');
+  if (!junctionName){
+    toast('warn', 'Bridge', 'Select a junction first');
     return;
   }
   if (!selected.length){
@@ -662,12 +625,9 @@ async function commitBridge(){
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({
-        items: [{
-          junction_name: junctionName,
-          target_path: targetPath,
-          selected_paths: selected,
-          scan_id: state.bridgeScanId,
-        }],
+        junction_name: junctionName,
+        selected_roots: selected,
+        scan_id: state.bridgeScanId,
       }),
     });
     const payload = await res.json().catch(() => ({}));
@@ -1353,32 +1313,16 @@ el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
 // Bridge + Buckets
 el('bridgeStageBtn').addEventListener('click', runBridgeScan);
 el('bridgeCommitBtn').addEventListener('click', commitBridge);
-el('bridgeBrowseBtn').addEventListener('click', () => el('bridgeBrowseInput').click());
-el('bridgeBrowseInput').addEventListener('change', (event) => {
-  const files = Array.from(event.target.files || []);
-  if (!files.length){
-    updateBridgeMessage('No folder selected.');
-    return;
-  }
-  const sample = files[0];
-  const rel = sample.webkitRelativePath || '';
-  const folder = rel.split('/')[0];
-  if (folder){
-    el('bridgeNameHint').value = folder;
-    state.bridgeNameHint = folder;
-  }
-  updateBridgeMessage('Browser selection captured. Paste the full Windows path to continue.');
-});
-el('bridgeTarget').addEventListener('input', (event) => {
-  state.bridgeTarget = event.target.value || '';
+el('bridgeCandidate').addEventListener('change', (event) => {
+  state.bridgeCandidate = event.target.value || '';
   updateBridgeMessage('');
+  resetBridgeScan();
   syncBridgeControls();
 });
-el('bridgeNameHint').addEventListener('input', (event) => {
-  state.bridgeNameHint = event.target.value || '';
-  syncBridgeControls();
+el('bridgeRefreshBtn').addEventListener('click', async () => {
+  await loadBridgeStatus();
+  await loadBridgeCandidates();
 });
-el('bridgeRefreshBtn').addEventListener('click', loadBridgeStatus);
 el('bridgeRescanBtn').addEventListener('click', async () => {
   await discoverBuckets();
 });
@@ -1467,9 +1411,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   toast('good','Boot','Loading sources + projects…');
-  loadBridgeRecents();
-  renderBridgeRecents();
   await loadBridgeStatus();
+  await loadBridgeCandidates();
   await loadSources();
   await loadProjects();
   await loadBuckets();
