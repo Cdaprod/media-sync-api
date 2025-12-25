@@ -408,3 +408,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer UI now exposes multi-select tagging via the Actions bar and ensures the sidebar scroll container flexes to show the full project panel.
 - Explorer scroll containers for sidebar and main content now flex to allow long lists to scroll.
 - Scroll containers now opt into flex sizing globally to keep sidebar and media panes scrollable.
+- Bridge UI now uses a server-side junction picker (`/api/bridge/candidates`) and rejects file uploads for Bridge actions.

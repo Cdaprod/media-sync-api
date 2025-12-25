@@ -17,12 +17,11 @@ export const state = {
   tagMode: 'all',
   noTags: false,
   bridgeStatus: null,
-  bridgeTarget: '',
-  bridgeNameHint: '',
+  bridgeCandidates: [],
+  bridgeCandidate: '',
   bridgeScanId: null,
   bridgeTree: null,
   bridgeSelection: new Set(),
-  bridgeRecents: [],
   bridgeMessage: '',
 };
 
