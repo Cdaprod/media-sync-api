@@ -33,6 +33,13 @@ def test_public_explorer_path(client):
     assert response.status_code == 200
     body = response.text
     assert "media-sync-api — Explorer" in body
+    assert 'id="sidebar"' in body
+    assert 'id="sidebarScroll"' in body
+    assert 'id="projects"' in body
+    assert 'id="libraries"' in body
+    assert 'id="buckets"' in body
+    assert 'id="sources"' in body
+    assert 'id="bridgeStageTree"' in body
     assert "drawerPreview" in body
     assert "drawerBackdrop" in body
     assert "@media (max-width: 1180px)" in body

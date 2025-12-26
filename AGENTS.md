@@ -410,3 +410,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Scroll containers now opt into flex sizing globally to keep sidebar and media panes scrollable.
 - Bridge UI now uses a server-side junction picker (`/api/bridge/candidates`) and rejects file uploads for Bridge actions.
 - Compose defaults now enable AI auto-tagging with host.docker.internal URLs for DEIM and WhisperX.
+
+### Latest Implementation Notes (2025-03-26)
+- Explorer sidebar drawer scroll now includes mobile-friendly overscroll handling and a dedicated sidebar scroll anchor for tests.

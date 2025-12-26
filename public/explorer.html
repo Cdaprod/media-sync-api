@@ -362,10 +362,14 @@
       flex: 1;
       overflow: auto;
       min-height: 0;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     .sidebar .scroll{
       flex: 1;
       min-height: 0;
+      overflow-x: hidden;
+      padding-bottom: 18px;
     }
     .content .scroll{
       flex: 1;
@@ -929,7 +933,7 @@
             <span class="kbd">Click</span>
           </div>
         </div>
-        <div class="scroll">
+        <div id="sidebarScroll" class="scroll sidebar-scroll">
           <div id="projects" class="chips"></div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
