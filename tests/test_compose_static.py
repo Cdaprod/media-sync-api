@@ -23,6 +23,10 @@ def test_compose_invariants():
     assert "MEDIA_SYNC_PROJECTS_ROOT=/data/projects" in env_vars
     assert "MEDIA_SYNC_SOURCES_PARENT_ROOT=/data/projects/_bridge" in env_vars
     assert "MEDIA_SYNC_BRIDGE_AGENT_URL=http://host.docker.internal:8790" in env_vars
+    assert "MEDIA_SYNC_AI_TAGGING_ENABLED=1" in env_vars
+    assert "MEDIA_SYNC_AI_TAGGING_AUTO=1" in env_vars
+    assert "MEDIA_SYNC_DEIM_URL=http://host.docker.internal:9001/tag" in env_vars
+    assert "MEDIA_SYNC_WHISPERX_URL=http://host.docker.internal:9002/transcribe" in env_vars
 
     volumes = api_service.get("volumes", [])
     assert any("/data/projects" in volume for volume in volumes)

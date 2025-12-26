@@ -154,6 +154,8 @@ Environment variables:
 - `MEDIA_SYNC_AI_TAGGING_AUTO=1` to auto-tag new uploads and reindexed files
 - `MEDIA_SYNC_AI_TAGGING_MAX_TAGS=12` to cap tag count
 - `MEDIA_SYNC_AI_TAGGING_TIMEOUT_S=180` to control backend request timeouts
+
+The default Compose stack sets `MEDIA_SYNC_AI_TAGGING_ENABLED=1` and `MEDIA_SYNC_AI_TAGGING_AUTO=1` with URLs pointing to `host.docker.internal` (ports `9001`/`9002`). Ensure both services are running on the host for automatic tagging to activate.
 - `MEDIA_SYNC_AI_TAGGING_SOURCE=ai` to label stored tags by source
 - `MEDIA_SYNC_AI_TAGGING_LANGUAGE=en` to hint WhisperX language (optional)
 

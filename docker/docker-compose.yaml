@@ -23,6 +23,10 @@ services:
       - MEDIA_SYNC_CORS_ORIGINS=*
       - MEDIA_SYNC_BRIDGE_AGENT_URL=http://host.docker.internal:8790
       - MEDIA_SYNC_BRIDGE_ROOT_HOST=B:\\Video\\Projects\\_bridge
+      - MEDIA_SYNC_AI_TAGGING_ENABLED=1
+      - MEDIA_SYNC_AI_TAGGING_AUTO=1
+      - MEDIA_SYNC_DEIM_URL=http://host.docker.internal:9001/tag
+      - MEDIA_SYNC_WHISPERX_URL=http://host.docker.internal:9002/transcribe
 
     volumes:
       - "B:/Video/Projects:/data/projects"
