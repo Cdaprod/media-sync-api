@@ -23,6 +23,7 @@ export const state = {
   bridgeTree: null,
   bridgeSelection: new Set(),
   bridgeMessage: '',
+  uploadQueue: [],
 };
 
 export const ui = {

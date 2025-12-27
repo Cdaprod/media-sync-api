@@ -416,3 +416,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-27)
 - Explorer sidebar sections are now collapsible with persisted state per section to keep the drawer manageable on mobile.
+
+### Latest Implementation Notes (2025-03-28)
+- Explorer upload picker now stages multiple files before posting, only enables Upload when files are staged, and refreshes listings from the API after server confirmation.
