@@ -42,6 +42,9 @@ def test_public_explorer_path(client):
     assert 'data-section-toggle="bridge"' in body
     assert 'data-section-toggle="resolve"' in body
     assert 'data-section-toggle="upload"' in body
+    assert 'id="uploadFile"' in body
+    assert 'type="file"' in body
+    assert "multiple" in body
     assert 'id="projects"' in body
     assert 'id="libraries"' in body
     assert 'id="buckets"' in body

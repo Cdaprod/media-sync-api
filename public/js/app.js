@@ -945,6 +945,24 @@ function renderMedia(){
 // -------------------------
 // Project selection + upload
 // -------------------------
+function updateUploadUI({ preserveStatus = false } = {}){
+  const p = state.activeProject;
+  const count = state.uploadQueue.length;
+  el('uploadCaption').textContent = p
+    ? `Upload to ${p.name}${p.source ? ` (${p.source})` : ''}`
+    : 'Pick a project first.';
+  if (!preserveStatus){
+    if (!p){
+      el('uploadStatus').textContent = 'Select a project to stage uploads.';
+    }else if (!count){
+      el('uploadStatus').textContent = 'Select files to stage for upload.';
+    }else{
+      el('uploadStatus').textContent = `Ready to upload ${count} file${count === 1 ? '' : 's'}.`;
+    }
+  }
+  el('uploadBtn').disabled = !p || !count;
+}
+
 async function selectProject(p){
   state.activeProject = p;
   state.activeLibrary = null;
@@ -960,8 +978,9 @@ async function selectProject(p){
   el('resolveProjectName').value = p.name || '';
   el('resolveNewName').value = '';
 
-  el('uploadCaption').textContent = `Upload to ${p.name}${p.source ? ` (${p.source})` : ''}`;
-  el('uploadBtn').disabled = false;
+  state.uploadQueue = [];
+  el('uploadFile').value = '';
+  updateUploadUI();
 
   renderProjects();
   renderLibraries();
@@ -982,8 +1001,9 @@ async function selectLibrary(source){
   resetBridgeScan();
   setSidebarOpen(false);
 
-  el('uploadCaption').textContent = 'Select a project to upload.';
-  el('uploadBtn').disabled = true;
+  state.uploadQueue = [];
+  el('uploadFile').value = '';
+  updateUploadUI();
 
   renderProjects();
   renderLibraries();
@@ -1010,32 +1030,43 @@ async function selectBucket(bucket){
 async function uploadActive(){
   const p = state.activeProject;
   if (!p){ toast('warn','Upload','Select a project first'); return; }
-  const f = el('uploadFile').files?.[0];
-  if (!f){ toast('warn','Upload','Pick a file first'); return; }
+  const files = state.uploadQueue.length
+    ? state.uploadQueue
+    : Array.from(el('uploadFile').files || []);
+  if (!files.length){ toast('warn','Upload','Pick one or more files first'); return; }
+  state.uploadQueue = files;
 
   el('uploadBtn').disabled = true;
-  el('uploadStatus').textContent = 'Uploading…';
+  el('uploadStatus').textContent = `Uploading 1 of ${files.length}…`;
 
   try{
-    const form = new FormData();
-    form.append('file', f);
-
     const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery({ source: p.source })}`;
-    const r = await fetch(url, { method:'POST', body: form });
-    const payload = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
-
-    const msg = payload.status === 'duplicate'
-      ? 'Duplicate skipped — already on disk.'
-      : 'Upload stored.';
+    let stored = 0;
+    let duplicates = 0;
+    for (let i = 0; i < files.length; i += 1){
+      const f = files[i];
+      el('uploadStatus').textContent = `Uploading ${i + 1} of ${files.length}: ${f.name}`;
+      const form = new FormData();
+      form.append('file', f);
+      const r = await fetch(url, { method:'POST', body: form });
+      const payload = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
+      if (payload.status === 'duplicate') duplicates += 1;
+      else stored += 1;
+    }
+    const parts = [`Uploaded ${stored} file${stored === 1 ? '' : 's'}.`];
+    if (duplicates) parts.push(`Duplicates skipped: ${duplicates}.`);
+    const msg = parts.join(' ');
     el('uploadStatus').textContent = msg;
-    toast(payload.status === 'duplicate' ? 'warn' : 'good', 'Upload', msg);
+    toast(duplicates ? 'warn' : 'good', 'Upload', msg);
+    state.uploadQueue = [];
+    el('uploadFile').value = '';
     await loadMedia();
   }catch(e){
     el('uploadStatus').textContent = `Upload failed: ${e.message}`;
     toast('bad','Upload', e.message);
   }finally{
-    el('uploadBtn').disabled = false;
+    updateUploadUI({ preserveStatus: true });
   }
 }
 
@@ -1353,7 +1384,17 @@ el('noTagsBtn').addEventListener('click', async () => {
 
 // Upload
 el('uploadBtn').addEventListener('click', uploadActive);
-el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
+el('uploadFile').addEventListener('change', (event) => {
+  state.uploadQueue = Array.from(event.target.files || []);
+  updateUploadUI();
+});
+el('pickUploadBtn').addEventListener('click', () => {
+  if (!state.activeProject){
+    toast('warn','Upload','Select a project first');
+    return;
+  }
+  el('uploadFile').click();
+});
 
 // Bridge + Buckets
 el('bridgeStageBtn').addEventListener('click', runBridgeScan);
