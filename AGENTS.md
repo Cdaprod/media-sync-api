@@ -413,3 +413,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-26)
 - Explorer sidebar drawer scroll now includes mobile-friendly overscroll handling and a dedicated sidebar scroll anchor for tests.
+
+### Latest Implementation Notes (2025-03-27)
+- Explorer sidebar sections are now collapsible with persisted state per section to keep the drawer manageable on mobile.

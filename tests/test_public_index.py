@@ -35,6 +35,13 @@ def test_public_explorer_path(client):
     assert "media-sync-api — Explorer" in body
     assert 'id="sidebar"' in body
     assert 'id="sidebarScroll"' in body
+    assert 'data-section-toggle="projects"' in body
+    assert 'data-section-toggle="libraries"' in body
+    assert 'data-section-toggle="buckets"' in body
+    assert 'data-section-toggle="sources"' in body
+    assert 'data-section-toggle="bridge"' in body
+    assert 'data-section-toggle="resolve"' in body
+    assert 'data-section-toggle="upload"' in body
     assert 'id="projects"' in body
     assert 'id="libraries"' in body
     assert 'id="buckets"' in body

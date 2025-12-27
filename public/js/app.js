@@ -298,6 +298,51 @@ function updateTagFilterUI(){
   }
 }
 
+const sidebarSectionStorageKey = 'mediaSyncExplorer.sidebarSections';
+
+function readSidebarSectionState(){
+  if (!window.localStorage) return {};
+  try{
+    const raw = window.localStorage.getItem(sidebarSectionStorageKey);
+    return raw ? JSON.parse(raw) : {};
+  }catch{
+    return {};
+  }
+}
+
+function writeSidebarSectionState(state){
+  if (!window.localStorage) return;
+  try{
+    window.localStorage.setItem(sidebarSectionStorageKey, JSON.stringify(state));
+  }catch{
+    // ignore storage errors
+  }
+}
+
+function applySidebarSectionState(section, collapsed, body, toggle){
+  if (!body || !toggle) return;
+  body.classList.toggle('collapsed', collapsed);
+  toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  toggle.textContent = collapsed ? '＋' : '−';
+}
+
+function initSidebarSections(){
+  const saved = readSidebarSectionState();
+  const toggles = document.querySelectorAll('[data-section-toggle]');
+  toggles.forEach((toggle) => {
+    const section = toggle.dataset.sectionToggle;
+    const body = document.querySelector(`.section-body[data-section="${section}"]`);
+    const collapsed = Boolean(saved[section]);
+    applySidebarSectionState(section, collapsed, body, toggle);
+    toggle.addEventListener('click', () => {
+      const next = !body?.classList.contains('collapsed');
+      applySidebarSectionState(section, next, body, toggle);
+      saved[section] = next;
+      writeSidebarSectionState(saved);
+    });
+  });
+}
+
 function setSidebarOpen(open){
   const sb = el('sidebar');
   if (!sb) return;
@@ -1405,6 +1450,7 @@ updateSelectionUI = function(){
 
 // Boot
 document.addEventListener('DOMContentLoaded', async () => {
+  initSidebarSections();
   syncSidebarMode();
   window.matchMedia('(max-width: 860px)').addEventListener('change', () => {
     syncSidebarMode();
