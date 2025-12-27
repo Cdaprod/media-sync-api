@@ -332,6 +332,28 @@
       justify-content: space-between;
       gap: 10px;
     }
+    .section-h .section-title{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .section-toggle{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor:pointer;
+    }
+    .section-toggle:hover{ background: rgba(255,255,255,0.10); }
+    .section-body{
+      display:block;
+    }
+    .section-body.collapsed{
+      display:none;
+    }
     .section-h h2{
       margin:0;
       font-size: 13px;
@@ -927,119 +949,154 @@
       <!-- Sidebar -->
       <aside id="sidebar" class="sidebar">
         <div class="section-h">
-          <h2>Projects</h2>
+          <div class="section-title">
+            <button class="section-toggle" type="button" data-section-toggle="projects" aria-expanded="true">−</button>
+            <h2>Projects</h2>
+          </div>
           <div class="meta-line">
             <span id="projCount">…</span>
             <span class="kbd">Click</span>
           </div>
         </div>
         <div id="sidebarScroll" class="scroll sidebar-scroll">
-          <div id="projects" class="chips"></div>
+          <div class="section-body" data-section="projects">
+            <div id="projects" class="chips"></div>
+          </div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
-            <h2>Libraries</h2>
+            <div class="section-title">
+              <button class="section-toggle" type="button" data-section-toggle="libraries" aria-expanded="true">−</button>
+              <h2>Libraries</h2>
+            </div>
             <div class="meta-line">
               <span id="libCount">…</span>
               <span class="kbd">Bridge</span>
             </div>
           </div>
-          <div id="libraries" class="chips"></div>
+          <div class="section-body" data-section="libraries">
+            <div id="libraries" class="chips"></div>
+          </div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
-            <h2>Buckets</h2>
+            <div class="section-title">
+              <button class="section-toggle" type="button" data-section-toggle="buckets" aria-expanded="true">−</button>
+              <h2>Buckets</h2>
+            </div>
             <div class="meta-line">
               <span id="bucketCount">…</span>
               <button id="discoverBucketsBtn" class="btn" type="button" style="padding:4px 8px;font-size:10px;">Discover</button>
             </div>
           </div>
-          <div id="buckets" class="chips"></div>
+          <div class="section-body" data-section="buckets">
+            <div id="buckets" class="chips"></div>
+          </div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
-            <h2>Sources</h2>
+            <div class="section-title">
+              <button class="section-toggle" type="button" data-section-toggle="sources" aria-expanded="true">−</button>
+              <h2>Sources</h2>
+            </div>
             <div class="meta-line"><span class="kbd">/api/sources</span></div>
           </div>
-          <div id="sources" class="sources"></div>
+          <div class="section-body" data-section="sources">
+            <div id="sources" class="sources"></div>
+          </div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
-            <h2>Bridge</h2>
+            <div class="section-title">
+              <button class="section-toggle" type="button" data-section-toggle="bridge" aria-expanded="true">−</button>
+              <h2>Bridge</h2>
+            </div>
             <div class="meta-line"><span class="kbd">/api/bridge</span></div>
           </div>
-          <div style="padding: 12px;">
-            <div class="card">
-              <strong>Bridge a host library</strong>
-              <div class="tag" id="bridgeAgentStatus">Bridge ready</div>
-              <div class="small" style="margin-top:6px;">Select a server-visible junction, scan, then commit.</div>
-              <div style="display:grid; gap:8px; margin-top:10px;">
-                <select id="bridgeCandidate" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
-                  <option value="">Select a junction…</option>
-                </select>
-                <div style="display:flex; gap:8px; flex-wrap: wrap;">
-                  <button id="bridgeStageBtn" class="btn" type="button" disabled>Stage scan</button>
-                  <button id="bridgeCommitBtn" class="btn primary" type="button" disabled>Commit selection</button>
-                  <button id="bridgeRefreshBtn" class="btn" type="button">Refresh</button>
+          <div class="section-body" data-section="bridge">
+            <div style="padding: 12px;">
+              <div class="card">
+                <strong>Bridge a host library</strong>
+                <div class="tag" id="bridgeAgentStatus">Bridge ready</div>
+                <div class="small" style="margin-top:6px;">Select a server-visible junction, scan, then commit.</div>
+                <div style="display:grid; gap:8px; margin-top:10px;">
+                  <select id="bridgeCandidate" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
+                    <option value="">Select a junction…</option>
+                  </select>
+                  <div style="display:flex; gap:8px; flex-wrap: wrap;">
+                    <button id="bridgeStageBtn" class="btn" type="button" disabled>Stage scan</button>
+                    <button id="bridgeCommitBtn" class="btn primary" type="button" disabled>Commit selection</button>
+                    <button id="bridgeRefreshBtn" class="btn" type="button">Refresh</button>
+                  </div>
+                  <div class="small" id="bridgeStageStatus"></div>
                 </div>
-                <div class="small" id="bridgeStageStatus"></div>
+                <div id="bridgeStageTree" class="stage-tree"></div>
               </div>
-              <div id="bridgeStageTree" class="stage-tree"></div>
-            </div>
-            <div class="card" style="margin-top:12px;">
-              <strong>Library actions</strong>
-              <div class="small">Select a library in the sidebar to re-scan buckets or derive thumbs.</div>
-              <div style="display:flex; flex-wrap: wrap; gap:8px; margin-top:10px;">
-                <button id="bridgeRescanBtn" class="btn" type="button">Rescan buckets</button>
-                <button id="bridgeDeriveBtn" class="btn" type="button">Re-derive thumbs</button>
+              <div class="card" style="margin-top:12px;">
+                <strong>Library actions</strong>
+                <div class="small">Select a library in the sidebar to re-scan buckets or derive thumbs.</div>
+                <div style="display:flex; flex-wrap: wrap; gap:8px; margin-top:10px;">
+                  <button id="bridgeRescanBtn" class="btn" type="button">Rescan buckets</button>
+                  <button id="bridgeDeriveBtn" class="btn" type="button">Re-derive thumbs</button>
+                </div>
               </div>
             </div>
           </div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
-            <h2>Resolve</h2>
+            <div class="section-title">
+              <button class="section-toggle" type="button" data-section-toggle="resolve" aria-expanded="true">−</button>
+              <h2>Resolve</h2>
+            </div>
             <div class="meta-line"><span class="kbd">/api/resolve/open</span></div>
           </div>
-          <div style="padding: 12px;">
-            <div class="card">
-              <strong>Mode</strong>
-              <div class="small">Queue selected clips, then dispatch.</div>
-              <div style="display:grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px;">
-                <label style="font-size:12px; color:var(--muted);">Project mode</label>
-                <select id="resolveProjectMode" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
-                  <option value="current">Use current project</option>
-                  <option value="__select__">Let host choose</option>
-                  <option value="__new__">Create new project</option>
-                </select>
+          <div class="section-body" data-section="resolve">
+            <div style="padding: 12px;">
+              <div class="card">
+                <strong>Mode</strong>
+                <div class="small">Queue selected clips, then dispatch.</div>
+                <div style="display:grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px;">
+                  <label style="font-size:12px; color:var(--muted);">Project mode</label>
+                  <select id="resolveProjectMode" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
+                    <option value="current">Use current project</option>
+                    <option value="__select__">Let host choose</option>
+                    <option value="__new__">Create new project</option>
+                  </select>
 
-                <label style="font-size:12px; color:var(--muted);">Project name</label>
-                <input id="resolveProjectName" placeholder="P1-Public-Accountability"
-                  style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+                  <label style="font-size:12px; color:var(--muted);">Project name</label>
+                  <input id="resolveProjectName" placeholder="P1-Public-Accountability"
+                    style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
 
-                <label style="font-size:12px; color:var(--muted);">New project name (if creating)</label>
-                <input id="resolveNewName" placeholder="P3-Editorial"
-                  style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+                  <label style="font-size:12px; color:var(--muted);">New project name (if creating)</label>
+                  <input id="resolveNewName" placeholder="P3-Editorial"
+                    style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
 
-                <label style="font-size:12px; color:var(--muted);">Action</label>
-                <select id="resolveMode" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
-                  <option value="import">Import into media pool</option>
-                  <option value="reveal_in_explorer">Reveal in Explorer/Finder</option>
-                </select>
+                  <label style="font-size:12px; color:var(--muted);">Action</label>
+                  <select id="resolveMode" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
+                    <option value="import">Import into media pool</option>
+                    <option value="reveal_in_explorer">Reveal in Explorer/Finder</option>
+                  </select>
 
-                <div class="small" id="resolveHint">Select clips to enable.</div>
+                  <div class="small" id="resolveHint">Select clips to enable.</div>
+                </div>
               </div>
             </div>
           </div>
 
           <div class="section-h" style="border-top:1px solid var(--border);">
-            <h2>Upload</h2>
+            <div class="section-title">
+              <button class="section-toggle" type="button" data-section-toggle="upload" aria-expanded="true">−</button>
+              <h2>Upload</h2>
+            </div>
             <div class="meta-line"><span class="kbd">/api/projects/*/upload</span></div>
           </div>
-          <div style="padding: 12px;">
-            <div class="card">
-              <strong>Upload to active project</strong>
-              <div class="small" id="uploadCaption">Pick a project first.</div>
-              <div style="display:flex; gap:10px; align-items:center; margin-top: 10px; flex-wrap: wrap;">
-                <input id="uploadFile" type="file" style="max-width: 100%; color: var(--muted);" />
-                <button id="uploadBtn" class="btn good" type="button" disabled>Upload</button>
+          <div class="section-body" data-section="upload">
+            <div style="padding: 12px;">
+              <div class="card">
+                <strong>Upload to active project</strong>
+                <div class="small" id="uploadCaption">Pick a project first.</div>
+                <div style="display:flex; gap:10px; align-items:center; margin-top: 10px; flex-wrap: wrap;">
+                  <input id="uploadFile" type="file" style="max-width: 100%; color: var(--muted);" />
+                  <button id="uploadBtn" class="btn good" type="button" disabled>Upload</button>
+                </div>
+                <div class="small" id="uploadStatus" style="margin-top:8px;"></div>
               </div>
-              <div class="small" id="uploadStatus" style="margin-top:8px;"></div>
             </div>
           </div>
         </div>
