@@ -422,3 +422,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-29)
 - Explorer upload controls now disable the file picker and toolbar button until a project is selected to avoid staging uploads against no target.
+
+### Latest Implementation Notes (2025-03-30)
+- Resolve PostgreSQL now binds on all interfaces in Compose (`listen_addresses=*`, `0.0.0.0:5432`) so LAN clients can connect to the DaVinci Resolve project server.
