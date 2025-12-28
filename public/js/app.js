@@ -951,9 +951,11 @@ function updateUploadUI({ preserveStatus = false } = {}){
   el('uploadCaption').textContent = p
     ? `Upload to ${p.name}${p.source ? ` (${p.source})` : ''}`
     : 'Pick a project first.';
+  el('uploadFile').disabled = !p;
+  el('pickUploadBtn').disabled = !p;
   if (!preserveStatus){
     if (!p){
-      el('uploadStatus').textContent = 'Select a project to stage uploads.';
+      el('uploadStatus').textContent = 'Select a project before staging uploads.';
     }else if (!count){
       el('uploadStatus').textContent = 'Select files to stage for upload.';
     }else{
