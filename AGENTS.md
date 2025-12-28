@@ -419,3 +419,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-28)
 - Explorer upload picker now stages multiple files before posting, only enables Upload when files are staged, and refreshes listings from the API after server confirmation.
+
+### Latest Implementation Notes (2025-03-29)
+- Explorer upload controls now disable the file picker and toolbar button until a project is selected to avoid staging uploads against no target.
