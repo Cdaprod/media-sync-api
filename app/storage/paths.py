@@ -13,6 +13,12 @@ from typing import Iterable
 
 PROJECT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 PROJECT_SEQUENCE_PATTERN = re.compile(r"^P(?P<num>\d+)-(?P<label>.+)$")
+CAPTURE_SEGMENT_PATTERN = re.compile(r"^[a-z0-9_-]+$")
+CAPTURE_FILENAME_PATTERN = re.compile(
+    r"^(?P<ts>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?P<hostnode>[^_]+)_(?P<role>[^_]+)(?:_(?P<seq>\d+))?$"
+)
+
+CAPTURE_SCHEMA_VERSION = "p1_hostapp_device_v1"
 
 
 def validate_project_name(name: str) -> str:
@@ -106,3 +112,62 @@ def validate_relative_path(relative_path: str) -> str:
     if not cleaned:
         raise ValueError("Relative path cannot be empty")
     return cleaned
+
+
+def derive_ingest_metadata(relative_path: str) -> dict[str, object]:
+    """Derive capture metadata from canonical ingest/originals paths."""
+
+    metadata: dict[str, object] = {
+        "schema_version": "legacy",
+        "ingest_tier": "unknown",
+        "host_app": "unknown",
+        "device_id": "unknown",
+        "date": None,
+        "ts": None,
+        "hostnode": None,
+        "role": None,
+        "seq": None,
+    }
+    path = Path(relative_path)
+    parts = path.parts
+    if len(parts) >= 2 and parts[0] == "ingest" and parts[1] == "originals":
+        metadata["ingest_tier"] = "originals"
+    if len(parts) < 8:
+        return metadata
+    if parts[0] != "ingest" or parts[1] != "originals":
+        return metadata
+
+    host_app, device_id, year, month, day = parts[2], parts[3], parts[4], parts[5], parts[6]
+    if not _valid_date_parts(year, month, day):
+        return metadata
+    if not CAPTURE_SEGMENT_PATTERN.fullmatch(host_app) or not CAPTURE_SEGMENT_PATTERN.fullmatch(device_id):
+        return metadata
+
+    metadata.update(
+        {
+            "schema_version": CAPTURE_SCHEMA_VERSION,
+            "host_app": host_app,
+            "device_id": device_id,
+            "date": f"{year}-{month}-{day}",
+            "ingest_tier": "originals",
+        }
+    )
+
+    filename_match = CAPTURE_FILENAME_PATTERN.match(path.stem)
+    if filename_match:
+        metadata["ts"] = filename_match.group("ts")
+        metadata["hostnode"] = filename_match.group("hostnode")
+        metadata["role"] = filename_match.group("role")
+        seq = filename_match.group("seq")
+        metadata["seq"] = int(seq) if seq is not None else None
+    return metadata
+
+
+def _valid_date_parts(year: str, month: str, day: str) -> bool:
+    if len(year) != 4 or len(month) != 2 or len(day) != 2:
+        return False
+    if not (year.isdigit() and month.isdigit() and day.isdigit()):
+        return False
+    month_num = int(month)
+    day_num = int(day)
+    return 1 <= month_num <= 12 and 1 <= day_num <= 31
