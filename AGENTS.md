@@ -425,3 +425,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-30)
 - Resolve PostgreSQL now binds on all interfaces in Compose (`listen_addresses=*`, `0.0.0.0:5432`) so LAN clients can connect to the DaVinci Resolve project server.
+
+### Latest Implementation Notes (2025-03-31)
+- Media listings now derive capture metadata from canonical ingest/originals paths (host app/device/date/filename fields), persist these fields in index entries during upload/reindex, and expose `media_url` plus optional `.srt` `captions_url` links; legacy paths default to `schema_version=legacy` with unknown host/device tags.

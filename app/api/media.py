@@ -20,7 +20,15 @@ from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.storage.index import load_index, seed_index
-from app.storage.paths import ensure_subdirs, project_path, safe_filename, validate_project_name, validate_relative_path
+from app.storage.paths import (
+    ensure_subdirs,
+    project_path,
+    safe_filename,
+    validate_project_name,
+    validate_relative_path,
+    derive_ingest_metadata,
+    relpath_posix,
+)
 from app.storage.reindex import ALLOWED_MEDIA_EXTENSIONS, reindex_project
 from app.storage.sources import SourceRegistry
 from app.storage.tags_store import TagStore, asset_id_for_source_relpath, normalize_tag
@@ -104,10 +112,15 @@ async def list_media(
         item = dict(entry)
         item["relative_path"] = safe_relative
         item["stream_url"] = _build_stream_url(resolved.name, safe_relative, resolved.source_name)
+        item["media_url"] = item["stream_url"]
         item["download_url"] = _build_download_url(resolved.name, safe_relative, resolved.source_name)
         source_rel_path = f"{resolved.name}/{safe_relative}"
         asset_id = asset_id_for_source_relpath(resolved.source_name, source_rel_path)
         item["asset_id"] = asset_id
+        _apply_capture_metadata(item, safe_relative)
+        captions_url = _maybe_caption_url(resolved.root, safe_relative, resolved.name, resolved.source_name)
+        if captions_url:
+            item["captions_url"] = captions_url
         thumb_path = cache_artifact_path(get_settings().cache_root, asset_id, "thumb.jpg")
         if thumb_path.exists():
             item["thumb_url"] = f"/api/cache/{asset_id}/thumb.jpg"
@@ -729,9 +742,13 @@ def _item_for_media_path(
         "kind": _media_kind_for_path(path),
         "mime": media_type,
         "stream_url": _build_source_stream_url(source_name, rel_path),
+        "media_url": _build_source_stream_url(source_name, rel_path),
     }
     if include_download:
         item["download_url"] = _build_source_download_url(source_name, rel_path)
+    captions_url = _maybe_source_caption_url(path, rel_path, source_name)
+    if captions_url:
+        item["captions_url"] = captions_url
     thumb_path = cache_artifact_path(get_settings().cache_root, asset_id, "thumb.jpg")
     if thumb_path.exists():
         item["thumb_url"] = f"/api/cache/{asset_id}/thumb.jpg"
@@ -746,6 +763,31 @@ def _build_source_stream_url(source_name: str, rel_path: str) -> str:
 def _build_source_download_url(source_name: str, rel_path: str) -> str:
     encoded_path = quote(rel_path, safe="/")
     return f"/media/source/{quote(source_name)}/download/{encoded_path}"
+
+
+def _apply_capture_metadata(item: Dict[str, object], relative_path: str) -> None:
+    derived = derive_ingest_metadata(relative_path)
+    for key, value in derived.items():
+        current = item.get(key)
+        if current in (None, "legacy", "unknown"):
+            item[key] = value
+
+
+def _maybe_caption_url(
+    project_root: Path, relative_path: str, project: str, source: str | None
+) -> str | None:
+    sidecar = (project_root / relative_path).with_suffix(".srt")
+    if not sidecar.exists():
+        return None
+    return _build_stream_url(project, relpath_posix(sidecar, project_root), source)
+
+
+def _maybe_source_caption_url(path: Path, rel_path: str, source_name: str) -> str | None:
+    sidecar = path.with_suffix(".srt")
+    if not sidecar.exists():
+        return None
+    sidecar_rel = Path(rel_path).with_suffix(".srt").as_posix()
+    return _build_source_stream_url(source_name, sidecar_rel)
 
 
 def _resolve_allowed_roots(root: Path, allowed_roots: List[str] | None) -> List[Path]:

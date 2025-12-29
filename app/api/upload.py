@@ -21,7 +21,7 @@ from app.ai_tagging import enqueue_ai_tagging
 from app.config import get_settings
 from app.storage.dedupe import record_file_hash, compute_sha256_from_path, lookup_file_hash
 from app.storage.index import append_file_entry, load_index, save_index, bump_count, append_event
-from app.storage.paths import ensure_subdirs, project_path, validate_project_name, safe_filename
+from app.storage.paths import ensure_subdirs, project_path, validate_project_name, safe_filename, derive_ingest_metadata
 from app.storage.sources import SourceRegistry
 
 router = APIRouter(prefix="/api/projects", tags=["upload"])
@@ -123,6 +123,7 @@ async def upload_file(
         "size": dest_path.stat().st_size,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
+    entry.update(derive_ingest_metadata(entry["relative_path"]))
     append_file_entry(project, entry)
     append_event(project, "upload_ingested", entry)
     logger.info(

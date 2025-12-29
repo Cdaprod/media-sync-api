@@ -7,8 +7,8 @@ from typing import Dict, Any, List, Iterable
 from datetime import datetime, timezone
 
 from .dedupe import compute_sha256_from_path, ensure_db, record_file_hash, get_recorded_paths, remove_file_record
-from .index import append_file_entry, load_index, remove_entries
-from .paths import relpath_posix
+from .index import bump_count, load_index, save_index
+from .paths import relpath_posix, derive_ingest_metadata
 
 
 INGEST_DIR = "ingest/originals"
@@ -43,12 +43,15 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
     ensure_db(db_path)
 
     existing_index = load_index(project_path)
-    existing_paths = {entry.get("relative_path") for entry in existing_index.get("files", [])}
+    existing_entries = existing_index.get("files", [])
+    existing_paths = {entry.get("relative_path") for entry in existing_entries if entry.get("relative_path")}
+    entries_by_path = {entry.get("relative_path"): entry for entry in existing_entries if entry.get("relative_path")}
     relocated = _relocate_misplaced_media(project_path, ingest_path)
 
     new_entries: List[Dict[str, Any]] = []
     seen_paths: set[str] = set()
     skipped_unsupported = 0
+    updated_entries = False
     for file_path in ingest_path.rglob("*"):
         if file_path.is_dir():
             continue
@@ -57,8 +60,14 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
             continue
         rel_path = relpath_posix(file_path, project_path)
         seen_paths.add(rel_path)
+        metadata = derive_ingest_metadata(rel_path)
         sha = compute_sha256_from_path(file_path)
         duplicate = record_file_hash(db_path, sha, rel_path)
+        existing_entry = entries_by_path.get(rel_path)
+        if existing_entry is not None:
+            if _merge_entry_metadata(existing_entry, metadata):
+                updated_entries = True
+            continue
         if duplicate and rel_path in existing_paths:
             continue
         if rel_path in existing_paths:
@@ -69,7 +78,11 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
             "size": file_path.stat().st_size,
             "indexed_at": datetime.now(timezone.utc).isoformat(),
         }
-        append_file_entry(project_path, entry)
+        entry.update(metadata)
+        existing_entries.append(entry)
+        entries_by_path[rel_path] = entry
+        existing_paths.add(rel_path)
+        bump_count(existing_index, "videos", amount=1)
         new_entries.append(entry)
 
     unsupported_existing = _unsupported_entries(existing_paths)
@@ -82,7 +95,19 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
                 sha = entry.get("sha256")
                 if sha and db_records.get(sha) == missing:
                     remove_file_record(db_path, sha, missing)
-        remove_entries(project_path, missing_paths)
+        remaining = [entry for entry in existing_entries if entry.get("relative_path") not in missing_paths]
+        removed = len(existing_entries) - len(remaining)
+        if removed:
+            existing_index["files"] = remaining
+            bump_count(existing_index, "videos", amount=-removed)
+            bump_count(existing_index, "removed_missing_records", amount=removed)
+        existing_entries = remaining
+        entries_by_path = {entry.get("relative_path"): entry for entry in existing_entries if entry.get("relative_path")}
+        save_index(project_path, existing_index)
+
+    if new_entries or updated_entries:
+        existing_index["files"] = existing_entries
+        save_index(project_path, existing_index)
 
     return {
         "indexed": len(new_entries),
@@ -91,6 +116,15 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
         "relocated": relocated,
         "skipped_unsupported": skipped_unsupported,
     }
+
+
+def _merge_entry_metadata(entry: Dict[str, Any], metadata: Dict[str, Any]) -> bool:
+    updated = False
+    for key, value in metadata.items():
+        if entry.get(key) != value:
+            entry[key] = value
+            updated = True
+    return updated
 
 
 def _relocate_misplaced_media(project_root: Path, ingest_path: Path) -> int:

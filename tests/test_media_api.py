@@ -61,6 +61,52 @@ def test_download_media_and_link_in_listing(client: TestClient, env_settings: Pa
     assert download.content == payload
 
 
+def test_media_listing_derives_capture_metadata(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    capture_dir = (
+        env_settings
+        / project_name
+        / "ingest"
+        / "originals"
+        / "ffmpeg"
+        / "hdmi0"
+        / "2025"
+        / "12"
+        / "28"
+    )
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    media_path = capture_dir / "2025-12-28_19-22-11_rpi5-1_program_001.mp4"
+    sidecar = media_path.with_suffix(".srt")
+    media_path.write_bytes(b"capture")
+    sidecar.write_text("caption")
+    legacy_path = env_settings / project_name / "ingest" / "originals" / "legacy.mov"
+    legacy_path.write_bytes(b"legacy")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    payload = listing.json()
+    media_items = payload["media"]
+    capture_item = next(item for item in media_items if item["relative_path"].endswith(".mp4"))
+    legacy_item = next(item for item in media_items if item["relative_path"].endswith("legacy.mov"))
+
+    assert capture_item["schema_version"] == "p1_hostapp_device_v1"
+    assert capture_item["host_app"] == "ffmpeg"
+    assert capture_item["device_id"] == "hdmi0"
+    assert capture_item["date"] == "2025-12-28"
+    assert capture_item["ts"] == "2025-12-28_19-22-11"
+    assert capture_item["hostnode"] == "rpi5-1"
+    assert capture_item["role"] == "program"
+    assert capture_item["seq"] == 1
+    assert capture_item["captions_url"].split("?")[0].endswith(".srt")
+
+    assert legacy_item["schema_version"] == "legacy"
+    assert legacy_item["host_app"] == "unknown"
+    assert legacy_item["device_id"] == "unknown"
+
+
 def test_media_tags_and_filters(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     ingest = env_settings / project_name / "ingest" / "originals"
