@@ -101,6 +101,17 @@ function mediaQuery(opts = {}){
     params.set(state.tagMode === 'any' ? 'any_tags' : 'tags', tagFilter);
   }
   if (state.noTags) params.set('no_tags', 'true');
+  const host = (state.hostFilter || '').trim();
+  if (host) params.set('host', host);
+  const device = (state.deviceFilter || '').trim();
+  if (device) params.set('device', device);
+  const app = (state.appFilter || '').trim();
+  if (app) params.set('app', app);
+  const dateFrom = (state.dateFrom || '').trim();
+  if (dateFrom) params.set('date_from', dateFrom);
+  const dateTo = (state.dateTo || '').trim();
+  if (dateTo) params.set('date_to', dateTo);
+  if (state.hasCaptions) params.set('has_captions', 'true');
   const query = params.toString();
   return query ? `?${query}` : '';
 }
@@ -219,6 +230,33 @@ function filteredMedia(){
   const q = state.q.trim().toLowerCase();
   if (!q) return state.media.slice();
   return state.media.filter(it => (it.relative_path || it.rel_path || '').toLowerCase().includes(q));
+}
+
+function groupMedia(items){
+  if (state.groupBy === 'none') return [{ label: '', items }];
+  const groups = new Map();
+  for (const item of items){
+    const key = groupKey(item);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return Array.from(groups.entries()).map(([label, groupItems]) => ({
+    label,
+    items: groupItems,
+  }));
+}
+
+function groupKey(item){
+  if (state.groupBy === 'day'){
+    return item.date || 'Unknown day';
+  }
+  if (state.groupBy === 'device'){
+    return item.device_id || 'Unknown device';
+  }
+  if (state.groupBy === 'session'){
+    return item.session_id || 'Unassigned session';
+  }
+  return '';
 }
 
 function assetIdFor(item){
@@ -825,6 +863,7 @@ function renderBuckets(){
 
 function renderMedia(){
   const items = filteredMedia();
+  const groups = groupMedia(items);
 
   // GRID
   const g = el('mediaGrid');
@@ -860,85 +899,98 @@ function renderMedia(){
     return;
   }
 
-  for (const it of items){
-    const kind = guessKind(it);
-    const relPath = it.relative_path || it.rel_path || '';
-    const title = relPath.split('/').pop() || relPath || 'unnamed';
-    const sub = relPath || '';
-    const size = formatBytes(it.size);
-    const tags = getTagsForItem(it);
-    const tagsHtml = renderTagPills(tags, 3);
+  for (const group of groups){
+    if (group.label){
+      const header = document.createElement('div');
+      header.className = 'group-header';
+      header.textContent = group.label;
+      g.appendChild(header);
 
-    // If your API can provide a lightweight thumbnail URL (recommended), use it:
-    // - it.thumb_url (image/jpg) for videos/images
-    // Otherwise we can still show the actual stream_url for images (not always great for big video files).
-    const cachedThumb = thumbCache.get(it.asset_id);
-    const thumbUrl = cachedThumb || it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null);
-
-    // ---- grid card
-    const card = document.createElement('div');
-    card.className = 'asset';
-    if (state.selected.has(it.asset_id)) card.classList.add('selected');
-
-    card.innerHTML = `
-      <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-asset-id="${escapeHtml(it.asset_id || '')}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
-        ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
-                   : (kind === 'video' ? `<div class="fallback">VIDEO</div>` : `<div class="fallback">No thumbnail</div>`) }
-        <div class="badges">
-          <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
-          <span class="badge">${escapeHtml(size)}</span>
-        </div>
-        <div class="selector" title="Select">
-          <input type="checkbox" ${state.selected.has(it.asset_id) ? 'checked':''} aria-label="Select media" />
-        </div>
-      </div>
-      <div class="body">
-        <div class="title">${escapeHtml(title)}</div>
-        <div class="sub">${escapeHtml(sub)}</div>
-        ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
-      </div>
-    `;
-
-    // checkbox toggles selection without opening drawer
-    card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      toggleSelected(it.asset_id);
-    });
-
-    // click card opens inspector
-    card.addEventListener('click', () => openDrawer(it));
-    g.appendChild(card);
-
-    if (!thumbUrl && kind === 'video'){
-      const t = card.querySelector('.thumb');
-      ensureThumbObserver().observe(t);
+      const listHeader = document.createElement('div');
+      listHeader.className = 'group-header';
+      listHeader.textContent = group.label;
+      l.appendChild(listHeader);
     }
+    for (const it of group.items){
+      const kind = guessKind(it);
+      const relPath = it.relative_path || it.rel_path || '';
+      const title = relPath.split('/').pop() || relPath || 'unnamed';
+      const sub = relPath || '';
+      const size = formatBytes(it.size);
+      const tags = getTagsForItem(it);
+      const tagsHtml = renderTagPills(tags, 3);
 
-    // ---- list row
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.innerHTML = `
-      <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-asset-id="${escapeHtml(it.asset_id || '')}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
-        ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
-                   : (kind === 'video' ? `<span style="font-size:11px;color:var(--muted);">VIDEO</span>` : `<span style="font-size:11px;color:var(--muted);">${escapeHtml(kind)}</span>`) }
-      </div>
-      <div class="info">
-        <div class="t">${escapeHtml(title)}</div>
-        <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
-        ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
-      </div>
-      <div class="actions">
-        <input type="checkbox" ${state.selected.has(it.asset_id) ? 'checked':''} title="Select" />
-        <button class="iconbtn" type="button">Preview</button>
-      </div>
-    `;
-    row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it.asset_id));
-    row.querySelector('button').addEventListener('click', () => openDrawer(it));
-    if (!thumbUrl && kind === 'video'){
-      const t2 = row.querySelector('.mini');
-      ensureThumbObserver().observe(t2);
+      // If your API can provide a lightweight thumbnail URL (recommended), use it:
+      // - it.thumb_url (image/jpg) for videos/images
+      // Otherwise we can still show the actual stream_url for images (not always great for big video files).
+      const cachedThumb = thumbCache.get(it.asset_id);
+      const thumbUrl = cachedThumb || it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null);
+
+      // ---- grid card
+      const card = document.createElement('div');
+      card.className = 'asset';
+      if (state.selected.has(it.asset_id)) card.classList.add('selected');
+
+      card.innerHTML = `
+        <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-asset-id="${escapeHtml(it.asset_id || '')}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
+          ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
+                     : (kind === 'video' ? `<div class="fallback">VIDEO</div>` : `<div class="fallback">No thumbnail</div>`) }
+          <div class="badges">
+            <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
+            <span class="badge">${escapeHtml(size)}</span>
+          </div>
+          <div class="selector" title="Select">
+            <input type="checkbox" ${state.selected.has(it.asset_id) ? 'checked':''} aria-label="Select media" />
+          </div>
+        </div>
+        <div class="body">
+          <div class="title">${escapeHtml(title)}</div>
+          <div class="sub">${escapeHtml(sub)}</div>
+          ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
+        </div>
+      `;
+
+      // checkbox toggles selection without opening drawer
+      card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        toggleSelected(it.asset_id);
+      });
+
+      // click card opens inspector
+      card.addEventListener('click', () => openDrawer(it));
+      g.appendChild(card);
+
+      if (!thumbUrl && kind === 'video'){
+        const t = card.querySelector('.thumb');
+        ensureThumbObserver().observe(t);
+      }
+
+      // ---- list row
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `
+        <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-asset-id="${escapeHtml(it.asset_id || '')}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
+          ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
+                     : (kind === 'video' ? `<span style="font-size:11px;color:var(--muted);">VIDEO</span>` : `<span style="font-size:11px;color:var(--muted);">${escapeHtml(kind)}</span>`) }
+        </div>
+        <div class="info">
+          <div class="t">${escapeHtml(title)}</div>
+          <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
+          ${tagsHtml ? `<div class="tagwrap">${tagsHtml}</div>` : ''}
+        </div>
+        <div class="actions">
+          <input type="checkbox" ${state.selected.has(it.asset_id) ? 'checked':''} title="Select" />
+          <button class="iconbtn" type="button">Preview</button>
+        </div>
+      `;
+      row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it.asset_id));
+      row.querySelector('button').addEventListener('click', () => openDrawer(it));
+      if (!thumbUrl && kind === 'video'){
+        const t2 = row.querySelector('.mini');
+        ensureThumbObserver().observe(t2);
+      }
+      l.appendChild(row);
     }
-    l.appendChild(row);
   }
 }
 
@@ -1364,12 +1416,52 @@ document.addEventListener('click', (e) => {
 });
 
 let tagFilterTimer = null;
-el('tagFilter').addEventListener('input', (e) => {
-  state.tagFilter = e.target.value || '';
+function scheduleMediaReload(){
   if (tagFilterTimer) window.clearTimeout(tagFilterTimer);
   tagFilterTimer = window.setTimeout(async () => {
     await loadMedia();
   }, 250);
+}
+
+el('tagFilter').addEventListener('input', (e) => {
+  state.tagFilter = e.target.value || '';
+  scheduleMediaReload();
+});
+
+el('hostFilter').addEventListener('input', (e) => {
+  state.hostFilter = e.target.value || '';
+  scheduleMediaReload();
+});
+
+el('deviceFilter').addEventListener('input', (e) => {
+  state.deviceFilter = e.target.value || '';
+  scheduleMediaReload();
+});
+
+el('appFilter').addEventListener('input', (e) => {
+  state.appFilter = e.target.value || '';
+  scheduleMediaReload();
+});
+
+el('dateFrom').addEventListener('change', (e) => {
+  state.dateFrom = e.target.value || '';
+  scheduleMediaReload();
+});
+
+el('dateTo').addEventListener('change', (e) => {
+  state.dateTo = e.target.value || '';
+  scheduleMediaReload();
+});
+
+el('hasCaptions').addEventListener('change', (e) => {
+  state.hasCaptions = Boolean(e.target.checked);
+  scheduleMediaReload();
+});
+
+el('groupBy').addEventListener('change', (e) => {
+  state.groupBy = e.target.value || 'none';
+  renderMedia();
+  updateTopCounts();
 });
 
 el('tagModeBtn').addEventListener('click', async () => {
@@ -1506,6 +1598,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadProjects();
   await loadBuckets();
   setView('grid');
+  el('groupBy').value = state.groupBy || 'none';
+  el('hasCaptions').checked = Boolean(state.hasCaptions);
   updateTagFilterUI();
   updateTopCounts();
   updateSelectionUI();

@@ -220,6 +220,54 @@
       color: var(--text);
       font-size: 12px;
     }
+    .filter-grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 8px;
+    }
+    .filter-field{
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .filter-field input{
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .filter-field .checkbox{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .group-header{
+      grid-column: 1 / -1;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      font-size: 12px;
+      color: var(--muted);
+      margin: 8px 0 2px;
+    }
+    .select{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 11px;
+    }
     .btn.toggle.active{
       border-color: rgba(124,58,237,0.45);
       background: rgba(124,58,237,0.18);
@@ -919,6 +967,35 @@
                 <span class="kbd">tags</span>
                 <input id="tagFilter" placeholder="Filter tags (comma)" autocomplete="off" />
               </div>
+              <div class="filter-grid" role="group" aria-label="Capture filters">
+                <label class="filter-field">
+                  <span>Host node</span>
+                  <input id="hostFilter" placeholder="rpi5-1" autocomplete="off" />
+                </label>
+                <label class="filter-field">
+                  <span>Device</span>
+                  <input id="deviceFilter" placeholder="hdmi0" autocomplete="off" />
+                </label>
+                <label class="filter-field">
+                  <span>App</span>
+                  <input id="appFilter" placeholder="ffmpeg" autocomplete="off" />
+                </label>
+                <label class="filter-field">
+                  <span>Date from</span>
+                  <input id="dateFrom" type="date" />
+                </label>
+                <label class="filter-field">
+                  <span>Date to</span>
+                  <input id="dateTo" type="date" />
+                </label>
+                <label class="filter-field">
+                  <span>Captions</span>
+                  <span class="checkbox">
+                    <input id="hasCaptions" type="checkbox" />
+                    Only show assets with .srt
+                  </span>
+                </label>
+              </div>
               <div class="pillbar">
                 <button id="tagModeBtn" class="btn toggle" type="button">All tags</button>
                 <button id="noTagsBtn" class="btn toggle" type="button">Untagged</button>
@@ -935,6 +1012,15 @@
               <button id="tagSelBtn" class="btn" type="button" disabled>🏷 Tag selected</button>
               <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
             </div>
+          </div>
+
+          <div class="pillbar">
+            <select id="groupBy" class="select" aria-label="Group media">
+              <option value="none">Group: none</option>
+              <option value="day">Group: day</option>
+              <option value="device">Group: device</option>
+              <option value="session">Group: session</option>
+            </select>
           </div>
 
           <div class="seg" aria-label="View mode">

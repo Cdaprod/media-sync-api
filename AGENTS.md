@@ -428,3 +428,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-31)
 - Media listings now derive capture metadata from canonical ingest/originals paths (host app/device/date/filename fields), persist these fields in index entries during upload/reindex, and expose `media_url` plus optional `.srt` `captions_url` links; legacy paths default to `schema_version=legacy` with unknown host/device tags.
+
+### Latest Implementation Notes (2025-04-01)
+- Media endpoints accept capture filters (`host`, `device`, `app`, `date_from`, `date_to`, `has_captions`) and the explorer UI now exposes capture filter controls plus a group-by toggle (day/device/session) in the toolbar.

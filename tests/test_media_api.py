@@ -107,6 +107,58 @@ def test_media_listing_derives_capture_metadata(client: TestClient, env_settings
     assert legacy_item["device_id"] == "unknown"
 
 
+def test_media_listing_filters_by_capture_fields(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    base = env_settings / project_name / "ingest" / "originals"
+    first_dir = base / "ffmpeg" / "hdmi0" / "2025" / "12" / "28"
+    second_dir = base / "obs" / "camx" / "2025" / "12" / "29"
+    first_dir.mkdir(parents=True, exist_ok=True)
+    second_dir.mkdir(parents=True, exist_ok=True)
+    first_media = first_dir / "2025-12-28_10-00-00_rpi5-1_program_001.mp4"
+    second_media = second_dir / "2025-12-29_11-00-00_cda-desktop_camB_001.mp4"
+    first_media.write_bytes(b"first")
+    second_media.write_bytes(b"second")
+    first_media.with_suffix(".srt").write_text("caption")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    host_filtered = client.get(
+        f"/api/projects/{project_name}/media",
+        params={"host": "rpi5-1"},
+    )
+    assert host_filtered.status_code == 200
+    assert len(host_filtered.json()["media"]) == 1
+
+    device_filtered = client.get(
+        f"/api/projects/{project_name}/media",
+        params={"device": "camx"},
+    )
+    assert device_filtered.status_code == 200
+    assert device_filtered.json()["media"][0]["device_id"] == "camx"
+
+    app_filtered = client.get(
+        f"/api/projects/{project_name}/media",
+        params={"app": "ffmpeg"},
+    )
+    assert app_filtered.status_code == 200
+    assert app_filtered.json()["media"][0]["host_app"] == "ffmpeg"
+
+    date_filtered = client.get(
+        f"/api/projects/{project_name}/media",
+        params={"date_from": "2025-12-29", "date_to": "2025-12-29"},
+    )
+    assert date_filtered.status_code == 200
+    assert len(date_filtered.json()["media"]) == 1
+
+    captions_filtered = client.get(
+        f"/api/projects/{project_name}/media",
+        params={"has_captions": "true"},
+    )
+    assert captions_filtered.status_code == 200
+    assert len(captions_filtered.json()["media"]) == 1
+
+
 def test_media_tags_and_filters(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     ingest = env_settings / project_name / "ingest" / "originals"
