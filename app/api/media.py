@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import mimetypes
 import shutil
+from datetime import date
 from pathlib import Path
 from typing import Dict, List
 from urllib.parse import quote
@@ -86,6 +87,12 @@ async def list_media(
     tags: str | None = None,
     any_tags: str | None = None,
     no_tags: bool = False,
+    host: str | None = None,
+    device: str | None = None,
+    app: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    has_captions: bool | None = None,
 ):
     """List all media recorded in a project's index with streamable URLs."""
 
@@ -147,6 +154,15 @@ async def list_media(
         filtered = [m for m in filtered if _has_any_tags(m.get("tags", []), any_tag_list)]
     if no_tags:
         filtered = [m for m in filtered if not m.get("tags")]
+    filtered = _filter_capture_facets(
+        filtered,
+        host=host,
+        device=device,
+        app=app,
+        date_from=date_from,
+        date_to=date_to,
+        has_captions=has_captions,
+    )
 
     sorted_media = sorted(filtered, key=lambda m: m.get("relative_path", ""))
 
@@ -165,6 +181,12 @@ async def list_source_media(
     tags: str | None = None,
     any_tags: str | None = None,
     no_tags: bool = False,
+    host: str | None = None,
+    device: str | None = None,
+    app: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    has_captions: bool | None = None,
 ):
     """List media files for a library source without copying originals."""
 
@@ -211,6 +233,15 @@ async def list_source_media(
     required_tags = _parse_tag_filter(tags)
     any_tag_list = _parse_tag_filter(any_tags)
     filtered = _filter_media_by_tags(media, required_tags, any_tag_list, no_tags)
+    filtered = _filter_capture_facets(
+        filtered,
+        host=host,
+        device=device,
+        app=app,
+        date_from=date_from,
+        date_to=date_to,
+        has_captions=has_captions,
+    )
 
     return {
         "source": source.name,
@@ -381,6 +412,12 @@ async def list_bucket_media(
     tags: str | None = None,
     any_tags: str | None = None,
     no_tags: bool = False,
+    host: str | None = None,
+    device: str | None = None,
+    app: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    has_captions: bool | None = None,
 ):
     """List media for a virtual bucket."""
 
@@ -427,6 +464,15 @@ async def list_bucket_media(
     required_tags = _parse_tag_filter(tags)
     any_tag_list = _parse_tag_filter(any_tags)
     filtered = _filter_media_by_tags(media, required_tags, any_tag_list, no_tags)
+    filtered = _filter_capture_facets(
+        filtered,
+        host=host,
+        device=device,
+        app=app,
+        date_from=date_from,
+        date_to=date_to,
+        has_captions=has_captions,
+    )
 
     return {
         "bucket": bucket.__dict__,
@@ -744,6 +790,7 @@ def _item_for_media_path(
         "stream_url": _build_source_stream_url(source_name, rel_path),
         "media_url": _build_source_stream_url(source_name, rel_path),
     }
+    _apply_capture_metadata(item, rel_path)
     if include_download:
         item["download_url"] = _build_source_download_url(source_name, rel_path)
     captions_url = _maybe_source_caption_url(path, rel_path, source_name)
@@ -788,6 +835,66 @@ def _maybe_source_caption_url(path: Path, rel_path: str, source_name: str) -> st
         return None
     sidecar_rel = Path(rel_path).with_suffix(".srt").as_posix()
     return _build_source_stream_url(source_name, sidecar_rel)
+
+
+def _filter_capture_facets(
+    media: List[Dict[str, object]],
+    *,
+    host: str | None,
+    device: str | None,
+    app: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    has_captions: bool | None,
+) -> List[Dict[str, object]]:
+    filtered = media
+    if host:
+        filtered = [item for item in filtered if _matches_text(item.get("hostnode"), host)]
+    if device:
+        filtered = [item for item in filtered if _matches_text(item.get("device_id"), device)]
+    if app:
+        filtered = [item for item in filtered if _matches_text(item.get("host_app"), app)]
+
+    start_date = _parse_iso_date(date_from) if date_from else None
+    end_date = _parse_iso_date(date_to) if date_to else None
+    if start_date or end_date:
+        filtered = [
+            item for item in filtered if _date_in_range(item.get("date"), start_date, end_date)
+        ]
+
+    if has_captions is not None:
+        filtered = [item for item in filtered if bool(item.get("captions_url")) == has_captions]
+    return filtered
+
+
+def _matches_text(value: object, expected: str) -> bool:
+    if not value:
+        return False
+    return str(value).lower() == expected.lower()
+
+
+def _parse_iso_date(value: str) -> date | None:
+    try:
+        parts = value.split("-")
+        if len(parts) != 3:
+            return None
+        year, month, day = (int(part) for part in parts)
+        return date(year, month, day)
+    except (ValueError, TypeError):
+        return None
+
+
+def _date_in_range(value: object, start: date | None, end: date | None) -> bool:
+    if not value:
+        return False
+    parsed = _parse_iso_date(str(value))
+    if not parsed:
+        return False
+    if start and parsed < start:
+        return False
+    if end and parsed > end:
+        return False
+    return True
 
 
 def _resolve_allowed_roots(root: Path, allowed_roots: List[str] | None) -> List[Path]:
