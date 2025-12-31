@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const packageRoot = path.resolve(__dirname, '..');
+
+const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+test('package exports include entrypoints', () => {
+  const pkg = readJson(path.join(packageRoot, 'package.json'));
+  assert.ok(pkg.exports['.']);
+  assert.equal(pkg.exports['./styles.css'], './src/styles.css');
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
+});
+
+test('standalone app entry exists', () => {
+  assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'page.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'layout.tsx')));
+});
