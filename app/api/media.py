@@ -60,9 +60,8 @@ def _require_source_and_project(project_name: str, source: str | None) -> _Resol
     return _ResolvedProject(name=name, source_name=active_source.name, root=project_root)
 
 
-@router.get("/{project_name}/media")
-async def list_media(project_name: str, source: str | None = None):
-    """List all media recorded in a project's index with streamable URLs."""
+def _build_media_listing(project_name: str, source: str | None = None) -> Dict[str, object]:
+    """Build a media listing payload for a project from its index."""
 
     resolved = _require_source_and_project(project_name, source)
     index_path = resolved.root / "index.json"
@@ -97,6 +96,20 @@ async def list_media(project_name: str, source: str | None = None):
         "counts": index.get("counts", {}),
         "instructions": "Use stream_url to play media directly; run /reindex after manual moves.",
     }
+
+
+@router.get("/{project_name}/media")
+async def list_media(project_name: str, source: str | None = None):
+    """List all media recorded in a project's index with streamable URLs."""
+
+    return _build_media_listing(project_name, source)
+
+
+@router.get("/{project_name}/assets")
+async def list_assets(project_name: str, source: str | None = None):
+    """List indexed project assets with stream URLs (alias of /media)."""
+
+    return _build_media_listing(project_name, source)
 
 
 @media_router.get("/{project_name}/download/{relative_path:path}")

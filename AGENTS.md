@@ -103,6 +103,8 @@ Base: `http://192.168.0.25:<PORT>`
   - creates folder + seeds index/manifest
 - `GET /api/projects/{project}`
   - returns `index.json` content + summary
+- `GET /api/projects/{project}/assets`
+  - returns indexed media entries (alias of `/media`) with stream URLs
 
 ### Upload (de-dupe)
 
@@ -362,3 +364,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `/docker/packages/Explorer` as a Next.js App Router package with a standalone dev app and embeddable `ExplorerApp` component.
 - The package mirrors `/public/explorer.html` behaviors, includes shared TS modules (`api`, `state`, `types`), and ships CSS with improved responsive header stacking.
 - Added a minimal package README plus a Node test to validate exports and standalone entrypoints.
+
+### Latest Implementation Notes (2025-03-10)
+- Added `/api/projects/{project}/assets` as an alias to the media listing endpoint so asset inventories can be fetched alongside project listings.

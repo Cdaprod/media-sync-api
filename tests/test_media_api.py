@@ -39,6 +39,26 @@ def test_list_media_and_stream(client: TestClient, env_settings: Path) -> None:
     assert traversal.status_code == 400
 
 
+def test_list_assets_aliases_media(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "asset.mov"
+    media_path.write_bytes(b"asset-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    media_listing = client.get(f"/api/projects/{project_name}/media")
+    assets_listing = client.get(f"/api/projects/{project_name}/assets")
+    assert media_listing.status_code == 200
+    assert assets_listing.status_code == 200
+
+    media_payload = media_listing.json()
+    assets_payload = assets_listing.json()
+    assert assets_payload["media"] == media_payload["media"]
+
+
 def test_download_media_and_link_in_listing(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     ingest = env_settings / project_name / "ingest" / "originals"
