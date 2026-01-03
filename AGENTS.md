@@ -56,9 +56,17 @@ The service must:
 /
   AGENTS.md
   README.md
-  docker-compose.yml
-  Dockerfile
+  docker-compose.yaml
   requirements.txt
+  docker/
+    Dockerfile
+    docker-compose.yaml
+    docker-bake.hcl
+    packages/
+      Explorer/          # Next.js App Router explorer package + standalone app
+        app/
+        src/
+        README.md
   app/
     main.py
     config.py
@@ -74,6 +82,10 @@ The service must:
   scripts/
     dev.ps1
     dev.sh
+  public/
+    index.html
+    explorer.html
+  tests/
 ```
 
 ---
@@ -238,7 +250,8 @@ docker compose down
 3. ✅ Project create/list/get + seed index.
 4. ✅ Reindex endpoint (scan disk, reconcile db/index).
 5. ✅ Minimal web UI for local admin with project/media browsing.
-6. ⏭ Optional OBS integration + Resolve bridge (separate services).
+6. ✅ Next.js Explorer package under `/docker/packages/Explorer` for embedding.
+7. ⏭ Optional OBS integration + Resolve bridge (separate services).
 
 ---
 
@@ -344,3 +357,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-08)
 - Stream URL copy actions in `public/index.html` and `public/explorer.html` now normalize to absolute URLs based on the current host origin so clipboard copies include the active domain.
+
+### Latest Implementation Notes (2025-03-09)
+- Added `/docker/packages/Explorer` as a Next.js App Router package with a standalone dev app and embeddable `ExplorerApp` component.
+- The package mirrors `/public/explorer.html` behaviors, includes shared TS modules (`api`, `state`, `types`), and ships CSS with improved responsive header stacking.
+- Added a minimal package README plus a Node test to validate exports and standalone entrypoints.
+
+### Latest Implementation Notes (2025-03-10)
+- Tests now insert the repo root into `sys.path` in `tests/conftest.py` so pytest can import `app` without requiring external PYTHONPATH tweaks.
