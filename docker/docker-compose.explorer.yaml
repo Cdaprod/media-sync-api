@@ -1,0 +1,22 @@
+## Explorer UI (Next.js)
+# Usage:
+#   docker compose -f docker/docker-compose.explorer.yaml up -d
+#   docker compose -f docker/docker-compose.explorer.yaml ps
+services:
+  explorer-ui:
+    build:
+      context: ..
+      dockerfile: docker/Explorer/Dockerfile
+    container_name: media-sync-explorer
+    pull_policy: never
+    restart: always
+    ports:
+      - "8790:3000"
+    environment:
+      - NEXT_PUBLIC_MEDIA_SYNC_API_BASE=http://media-sync-api:8787
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - "B:/Video/Projects:/data/projects"
+    depends_on:
+      - media-sync-api
+      - resolve-postgres

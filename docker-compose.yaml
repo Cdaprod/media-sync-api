@@ -1,2 +1,3 @@
 include:
   - docker/docker-compose.yaml
+  - docker/docker-compose.explorer.yaml
