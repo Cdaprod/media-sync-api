@@ -21,3 +21,10 @@ test('standalone app entry exists', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'page.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'layout.tsx')));
 });
+
+test('explorer resolves media urls against api base', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('api.buildUrl'));
+  assert.ok(content.includes('resolveAssetUrl'));
+});

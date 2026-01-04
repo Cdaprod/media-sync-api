@@ -135,6 +135,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `${selected.size} item(s) queued.`
     : 'Select clips to enable.';
 
+  const resolveAssetUrl = useCallback(
+    (path?: string) => {
+      if (!path) return '';
+      if (path.startsWith('data:')) return path;
+      return api.buildUrl(path);
+    },
+    [api],
+  );
+
   const updateSidebarMode = useCallback(() => {
     const mobile = window.matchMedia('(max-width: 860px)').matches;
     setIsMobile(mobile);
@@ -342,26 +351,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const registerThumbTarget = useCallback(
     (node: HTMLDivElement | null, item: MediaItem, kind: string) => {
       if (!node || kind !== 'video' || !item.stream_url) return;
+      const resolvedUrl = resolveAssetUrl(item.stream_url);
+      if (!resolvedUrl) return;
       node.dataset.rel = item.relative_path;
-      node.dataset.url = item.stream_url;
+      node.dataset.url = resolvedUrl;
       node.dataset.duration = String(item.duration || '');
       node.dataset.kind = 'video';
       ensureThumbObserver().observe(node);
     },
-    [ensureThumbObserver],
+    [ensureThumbObserver, resolveAssetUrl],
   );
 
   const handleCopyStream = useCallback(async (item: MediaItem) => {
     if (!item.stream_url) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = toAbsoluteUrl(item.stream_url, origin);
+    const url = toAbsoluteUrl(resolveAssetUrl(item.stream_url), origin);
     try {
       await navigator.clipboard.writeText(url);
       addToast('good', 'Copied', 'Stream URL copied to clipboard');
     } catch {
       addToast('warn', 'Clipboard', 'Copy failed (browser permission)');
     }
-  }, [addToast]);
+  }, [addToast, resolveAssetUrl]);
 
   const handlePreviewSelected = useCallback(() => {
     const first = Array.from(selected)[0];
@@ -739,8 +750,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = item.relative_path || '';
                   const size = formatBytes(item.size);
                   const cachedThumb = thumbs.get(item.relative_path) || thumbCacheRef.current.get(item.relative_path);
-                  const thumbUrl =
-                    cachedThumb || item.thumb_url || item.thumbnail_url || (kind === 'image' ? item.stream_url : undefined);
+                  const rawThumbUrl = cachedThumb
+                    || item.thumb_url
+                    || item.thumbnail_url
+                    || (kind === 'image' ? item.stream_url : undefined);
+                  const thumbUrl = cachedThumb ? cachedThumb : (rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined);
                   const isSelected = selected.has(item.relative_path);
 
                   return (
@@ -798,8 +812,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = item.relative_path || '';
                   const size = formatBytes(item.size);
                   const cachedThumb = thumbs.get(item.relative_path) || thumbCacheRef.current.get(item.relative_path);
-                  const thumbUrl =
-                    cachedThumb || item.thumb_url || item.thumbnail_url || (kind === 'image' ? item.stream_url : undefined);
+                  const rawThumbUrl = cachedThumb
+                    || item.thumb_url
+                    || item.thumbnail_url
+                    || (kind === 'image' ? item.stream_url : undefined);
+                  const thumbUrl = cachedThumb ? cachedThumb : (rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined);
                   const isSelected = selected.has(item.relative_path);
 
                   return (
@@ -883,14 +900,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               const kind = guessKind(focused);
               if (kind === 'video') {
                 return (
-                  <video controls preload="metadata" src={focused.stream_url || ''} />
+                  <video controls preload="metadata" src={resolveAssetUrl(focused.stream_url)} />
                 );
               }
               if (kind === 'image') {
-                return <img src={focused.stream_url || focused.thumb_url || focused.thumbnail_url || ''} alt="preview" />;
+                const rawUrl = focused.stream_url || focused.thumb_url || focused.thumbnail_url || '';
+                return <img src={resolveAssetUrl(rawUrl)} alt="preview" />;
               }
               if (kind === 'audio') {
-                return <audio controls src={focused.stream_url || ''} />;
+                return <audio controls src={resolveAssetUrl(focused.stream_url)} />;
               }
               return (
                 <div style={{ padding: '14px', color: 'var(--muted)', fontSize: '12px' }}>
@@ -934,7 +952,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               const rows: Array<[string, string]> = [
                 ['Kind', kind],
                 ['Size', formatBytes(focused.size)],
-                ['Stream', focused.stream_url || '(none)'],
+                ['Stream', resolveAssetUrl(focused.stream_url) || '(none)'],
                 ['Source', activeProject?.source || '(primary)'],
                 ['Project', activeProject?.name || '(none)'],
                 ['Relative', focused.relative_path || '(none)'],
