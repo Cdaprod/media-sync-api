@@ -365,3 +365,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-10)
 - Tests now insert the repo root into `sys.path` in `tests/conftest.py` so pytest can import `app` without requiring external PYTHONPATH tweaks.
+
+### Latest Implementation Notes (2025-03-11)
+- The Next.js Explorer now resolves media/thumb URLs against the configured API base to avoid cross-origin 404s when embedded.
+- Explorer package tests assert that API URL resolution is wired in the component.
