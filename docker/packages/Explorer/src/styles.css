@@ -244,6 +244,11 @@ code { font-family: var(--mono); }
   flex-direction: column;
   min-height: 0;
 }
+.content.drag-active{
+  outline: 2px dashed rgba(124,58,237,0.6);
+  outline-offset: -6px;
+  background: rgba(124,58,237,0.08);
+}
 
 .section-h{
   padding: 14px 14px 10px;

@@ -373,3 +373,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-12)
 - Root compose now includes `docker/docker-compose.explorer.yaml`, which builds `/docker/Explorer/Dockerfile` to run the Next.js Explorer UI on port 8790 alongside the FastAPI service.
 - Explorer UI container mounts the same projects volume and depends on the shared resolve-postgres service for parity with the rest of the stack.
+
+### Latest Implementation Notes (2025-03-13)
+- Added auto-reindexer background task (controlled by `MEDIA_SYNC_AUTO_REINDEX` + interval) to keep indexes synced with filesystem changes.
+- Media API now supports delete and move operations; the UI explorers support drag-and-drop upload, download drag-out, and project-to-project move gestures.

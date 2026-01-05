@@ -11,6 +11,8 @@ import logging
 from pathlib import Path
 
 import uvicorn
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +25,7 @@ from app.api.reindex import all_router as reindex_all_router
 from app.api.reindex import router as reindex_router
 from app.api.resolve_actions import router as resolve_router
 from app.config import get_settings
+from app.storage.auto_reindex import AutoReindexer
 
 
 BASE_PATH = Path(__file__).resolve().parent.parent
@@ -43,11 +46,24 @@ def _configure_logging() -> None:
     logging.getLogger("media_sync_api").setLevel(logging.INFO)
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    settings = get_settings()
+    reindexer = AutoReindexer(
+        settings.project_root,
+        interval_seconds=settings.auto_reindex_interval_seconds,
+        enabled=settings.auto_reindex_enabled,
+    )
+    reindexer.start()
+    yield
+    reindexer.stop()
+
+
 def create_app() -> FastAPI:
     """Create a new FastAPI instance with registered routers."""
 
     _configure_logging()
-    application = FastAPI(title="media-sync-api", version="0.1.0")
+    application = FastAPI(title="media-sync-api", version="0.1.0", lifespan=lifespan)
     application.include_router(projects_router)
     application.include_router(media_api_router)
     application.include_router(sources_router)

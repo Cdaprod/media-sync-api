@@ -20,6 +20,7 @@ def env_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("MEDIA_SYNC_PROJECTS_ROOT", str(root))
     monkeypatch.setenv("MEDIA_SYNC_MAX_UPLOAD_MB", "5")
     monkeypatch.setenv("MEDIA_SYNC_CORS_ORIGINS", "*")
+    monkeypatch.setenv("MEDIA_SYNC_AUTO_REINDEX", "0")
     config.reset_settings_cache()
     config.get_settings()
     return root
@@ -39,6 +40,7 @@ def limited_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClien
     monkeypatch.setenv("MEDIA_SYNC_PROJECTS_ROOT", str(root))
     monkeypatch.setenv("MEDIA_SYNC_MAX_UPLOAD_MB", "1")
     monkeypatch.setenv("MEDIA_SYNC_CORS_ORIGINS", "*")
+    monkeypatch.setenv("MEDIA_SYNC_AUTO_REINDEX", "0")
     config.reset_settings_cache()
     config.get_settings()
     module = importlib.import_module("app.main")

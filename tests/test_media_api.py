@@ -122,3 +122,61 @@ def test_auto_organize_loose_files(client: TestClient, env_settings: Path) -> No
     empty_run = client.post("/api/projects/auto-organize")
     assert empty_run.status_code == 200
     assert empty_run.json()["moved"] == 0
+
+
+def test_delete_media_removes_index_and_file(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "delete-me.mov"
+    media_path.write_bytes(b"delete-me")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    response = client.post(
+        f"/api/projects/{project_name}/media/delete",
+        json={"relative_paths": ["ingest/originals/delete-me.mov"]},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "ingest/originals/delete-me.mov" in payload["removed"]
+    assert not media_path.exists()
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    assert listing.json()["media"] == []
+
+
+def test_move_media_between_projects(client: TestClient, env_settings: Path) -> None:
+    source_project = _create_project(client)
+    target = client.post("/api/projects", json={"name": "dest"})
+    assert target.status_code == 201
+    target_project = target.json()["name"]
+
+    ingest = env_settings / source_project / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "move-me.mov"
+    media_path.write_bytes(b"move-me")
+
+    reindexed = client.post(f"/api/projects/{source_project}/reindex")
+    assert reindexed.status_code == 200
+
+    response = client.post(
+        f"/api/projects/{source_project}/media/move",
+        json={"relative_paths": ["ingest/originals/move-me.mov"], "target_project": target_project},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["moved"]
+
+    source_listing = client.get(f"/api/projects/{source_project}/media")
+    assert source_listing.status_code == 200
+    assert source_listing.json()["media"] == []
+
+    target_listing = client.get(f"/api/projects/{target_project}/media")
+    assert target_listing.status_code == 200
+    assert any(
+        entry["relative_path"].endswith("move-me.mov")
+        for entry in target_listing.json()["media"]
+    )

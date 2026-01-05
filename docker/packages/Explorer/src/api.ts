@@ -13,6 +13,14 @@ export interface ApiClient {
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   uploadMedia: (url: string, file: File) => Promise<Record<string, unknown>>;
   sendResolve: (payload: ResolveRequest, source?: string) => Promise<ResolveOpenResponse>;
+  deleteMedia: (project: string, relativePaths: string[], source?: string) => Promise<Record<string, unknown>>;
+  moveMedia: (
+    project: string,
+    relativePaths: string[],
+    targetProject: string,
+    source?: string,
+    targetSource?: string,
+  ) => Promise<Record<string, unknown>>;
   buildUrl: (path: string) => string;
 }
 
@@ -74,6 +82,42 @@ export function createApiClient(baseUrl: string): ApiClient {
       const data = await parseJson<ResolveOpenResponse & { detail?: string; message?: string }>(response);
       if (!response.ok) {
         throw new Error(String(data?.detail || data?.message || 'Resolve request failed'));
+      }
+      return data;
+    },
+    async deleteMedia(project: string, relativePaths: string[], source?: string): Promise<Record<string, unknown>> {
+      const query = source ? `?source=${encodeURIComponent(source)}` : '';
+      const response = await fetch(buildUrl(`/api/projects/${encodeURIComponent(project)}/media/delete${query}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relative_paths: relativePaths }),
+      });
+      const data = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || data?.message || 'Delete failed'));
+      }
+      return data;
+    },
+    async moveMedia(
+      project: string,
+      relativePaths: string[],
+      targetProject: string,
+      source?: string,
+      targetSource?: string,
+    ): Promise<Record<string, unknown>> {
+      const query = source ? `?source=${encodeURIComponent(source)}` : '';
+      const response = await fetch(buildUrl(`/api/projects/${encodeURIComponent(project)}/media/move${query}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          relative_paths: relativePaths,
+          target_project: targetProject,
+          target_source: targetSource || undefined,
+        }),
+      });
+      const data = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || data?.message || 'Move failed'));
       }
       return data;
     },

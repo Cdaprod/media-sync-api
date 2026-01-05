@@ -10,16 +10,25 @@ from __future__ import annotations
 import logging
 import mimetypes
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse
 
 from app.config import get_settings
-from app.storage.index import load_index, seed_index
-from app.storage.paths import ensure_subdirs, project_path, safe_filename, validate_project_name
+from app.storage.dedupe import compute_sha256_from_path, record_file_hash, remove_file_record
+from app.storage.index import append_event, append_file_entry, load_index, remove_entries, seed_index
+from app.storage.paths import (
+    ensure_subdirs,
+    project_path,
+    relpath_posix,
+    safe_filename,
+    validate_project_name,
+)
 from app.storage.reindex import reindex_project
 from app.storage.sources import SourceRegistry
 
@@ -30,6 +39,7 @@ router = APIRouter(prefix="/api/projects", tags=["media"])
 media_router = APIRouter(prefix="/media", tags=["media"])
 
 ORPHAN_PROJECT_NAME = "Unsorted-Loose"
+MANIFEST_DB = "_manifest/manifest.db"
 
 
 class _ResolvedProject:
@@ -39,6 +49,16 @@ class _ResolvedProject:
         self.name = name
         self.source_name = source_name
         self.root = root
+
+
+class MoveMediaRequest(BaseModel):
+    relative_paths: List[str] = Field(default_factory=list)
+    target_project: str
+    target_source: str | None = None
+
+
+class DeleteMediaRequest(BaseModel):
+    relative_paths: List[str] = Field(default_factory=list)
 
 
 def _require_source_and_project(project_name: str, source: str | None) -> _ResolvedProject:
@@ -58,6 +78,23 @@ def _require_source_and_project(project_name: str, source: str | None) -> _Resol
 
     project_root = project_path(active_source.root, name)
     return _ResolvedProject(name=name, source_name=active_source.name, root=project_root)
+
+
+def _manifest_db_path(project_root: Path) -> Path:
+    return project_root / MANIFEST_DB
+
+
+def _dedupe_destination(target: Path) -> Path:
+    if not target.exists():
+        return target
+    counter = 1
+    stem = target.stem
+    suffix = target.suffix
+    while True:
+        candidate = target.with_name(f"{stem}_{counter}{suffix}")
+        if not candidate.exists():
+            return candidate
+        counter += 1
 
 
 @router.get("/{project_name}/media")
@@ -152,6 +189,159 @@ async def stream_media(project_name: str, relative_path: str, source: str | None
         extra={"project": resolved.name, "source": resolved.source_name, "path": safe_relative},
     )
     return FileResponse(target, media_type=media_type)
+
+
+@router.post("/{project_name}/media/delete")
+async def delete_media(project_name: str, payload: DeleteMediaRequest, source: str | None = None):
+    """Delete media files from a project and remove index entries.
+
+    Example:
+        curl -X POST http://localhost:8787/api/projects/demo/media/delete \
+          -H "Content-Type: application/json" \
+          -d '{"relative_paths":["ingest/originals/clip.mov"]}'
+    """
+
+    if not payload.relative_paths:
+        raise HTTPException(status_code=400, detail="relative_paths is required")
+    resolved = _require_source_and_project(project_name, source)
+    index = load_index(resolved.root)
+    entries_by_path = {entry.get("relative_path"): entry for entry in index.get("files", [])}
+
+    removed_paths: set[str] = set()
+    missing: list[str] = []
+    for raw_path in payload.relative_paths:
+        try:
+            safe_relative = _validate_relative_media_path(raw_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        entry = entries_by_path.get(safe_relative)
+        target = (resolved.root / safe_relative).resolve()
+        if target.exists() and target.is_file():
+            target.unlink()
+            removed_paths.add(safe_relative)
+        if entry:
+            sha = entry.get("sha256")
+            if sha:
+                remove_file_record(_manifest_db_path(resolved.root), sha, safe_relative)
+            removed_paths.add(safe_relative)
+        if not entry and not target.exists():
+            missing.append(safe_relative)
+
+    if removed_paths:
+        remove_entries(resolved.root, removed_paths)
+        append_event(
+            resolved.root,
+            "media_deleted",
+            {"paths": sorted(removed_paths), "source": resolved.source_name},
+        )
+
+    return {"status": "ok", "removed": sorted(removed_paths), "missing": missing}
+
+
+@router.post("/{project_name}/media/move")
+async def move_media(project_name: str, payload: MoveMediaRequest, source: str | None = None):
+    """Move media entries from one project to another.
+
+    Example:
+        curl -X POST http://localhost:8787/api/projects/demo/media/move \
+          -H "Content-Type: application/json" \
+          -d '{"relative_paths":["ingest/originals/clip.mov"],"target_project":"P2-Editing"}'
+    """
+
+    if not payload.relative_paths:
+        raise HTTPException(status_code=400, detail="relative_paths is required")
+    resolved = _require_source_and_project(project_name, source)
+    registry = SourceRegistry(get_settings().project_root)
+    try:
+        target_source = registry.require(payload.target_source)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    try:
+        target_name = validate_project_name(payload.target_project)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if resolved.name == target_name and resolved.source_name == target_source.name:
+        raise HTTPException(status_code=400, detail="Source and target project must differ")
+
+    target_root = project_path(target_source.root, target_name)
+    if not target_root.exists():
+        raise HTTPException(status_code=404, detail="Target project not found")
+    ensure_subdirs(target_root, ["ingest/originals", "_manifest"])
+    if not (target_root / "index.json").exists():
+        seed_index(target_root, target_name)
+
+    source_index = load_index(resolved.root)
+    source_entries = {entry.get("relative_path"): entry for entry in source_index.get("files", [])}
+
+    moved: list[dict[str, str]] = []
+    duplicates: list[str] = []
+    missing: list[str] = []
+
+    for raw_path in payload.relative_paths:
+        try:
+            safe_relative = _validate_relative_media_path(raw_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        source_entry = source_entries.get(safe_relative)
+        source_file = (resolved.root / safe_relative).resolve()
+        if not source_file.exists() or not source_file.is_file():
+            if source_entry:
+                remove_entries(resolved.root, [safe_relative])
+                if source_entry.get("sha256"):
+                    remove_file_record(_manifest_db_path(resolved.root), source_entry["sha256"], safe_relative)
+            missing.append(safe_relative)
+            continue
+        filename = safe_filename(Path(safe_relative).name)
+        destination = _dedupe_destination(target_root / "ingest" / "originals" / filename)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        sha = source_entry.get("sha256") if source_entry else None
+        if not sha:
+            sha = compute_sha256_from_path(source_file)
+
+        source_file.rename(destination)
+        new_relative = relpath_posix(destination, target_root)
+
+        duplicate = record_file_hash(_manifest_db_path(target_root), sha, new_relative)
+        if duplicate:
+            destination.unlink(missing_ok=True)
+            duplicates.append(safe_relative)
+        else:
+            entry = {
+                "relative_path": new_relative,
+                "sha256": sha,
+                "size": destination.stat().st_size,
+                "indexed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            append_file_entry(target_root, entry)
+            moved.append({"from": safe_relative, "to": new_relative})
+
+        if source_entry:
+            remove_entries(resolved.root, [safe_relative])
+            if source_entry.get("sha256"):
+                remove_file_record(_manifest_db_path(resolved.root), source_entry["sha256"], safe_relative)
+
+    if moved:
+        append_event(
+            target_root,
+            "media_moved_in",
+            {"source_project": resolved.name, "items": moved, "source": target_source.name},
+        )
+    if duplicates:
+        append_event(
+            resolved.root,
+            "media_move_duplicate",
+            {"target_project": target_name, "paths": duplicates},
+        )
+    if moved:
+        append_event(
+            resolved.root,
+            "media_moved_out",
+            {"target_project": target_name, "items": moved, "source": resolved.source_name},
+        )
+
+    return {"status": "ok", "moved": moved, "duplicates": duplicates, "missing": missing}
 
 
 @router.post("/auto-organize")

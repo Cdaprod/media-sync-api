@@ -36,6 +36,12 @@ class Settings(BaseModel):
     cors_origins: List[str] = Field(
         default_factory=lambda: _parse_origins(os.getenv("MEDIA_SYNC_CORS_ORIGINS", ""))
     )
+    auto_reindex_enabled: bool = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_AUTO_REINDEX", "1") not in {"0", "false", "False"}
+    )
+    auto_reindex_interval_seconds: int = Field(
+        default_factory=lambda: int(os.getenv("MEDIA_SYNC_AUTO_REINDEX_INTERVAL_SECONDS", "60"))
+    )
 
 def ensure_project_root(path: Path) -> None:
     """Ensure the configured project root exists and is a directory."""
