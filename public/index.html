@@ -99,6 +99,13 @@
     Browse sources, projects, and indexed media from a single split-pane layout. Use per-file menus to preview, download, or queue clips for Resolve.
   </div>
 
+  <div class="callout">
+    <strong>API reference &amp; OpenAPI</strong><br />
+    Interactive docs: <code><a href="/docs" target="_blank" rel="noreferrer">/docs</a></code><br />
+    OpenAPI JSON: <code><a href="/openapi.json" target="_blank" rel="noreferrer">/openapi.json</a></code><br />
+    Use the curl examples below to match the exact request shapes used by both explorers.
+  </div>
+
   <div class="explorer-shell" id="browser-explorer">
     <aside class="explorer-sidebar">
       <div class="sidebar-header">
@@ -200,11 +207,14 @@
   <h2>Playbook: verify → create projects → ingest → dedupe → reindex</h2>
 
   <div class="step">
-    <h3>1) Verify it is running and writing to your Projects folder</h3>
+    <h3>1) Verify it is running and see the schema</h3>
     <ul>
       <li>Health: <code>http://192.168.0.25:8787/health</code></li>
-      <li>List projects: <code>http://192.168.0.25:8787/api/projects</code></li>
+      <li>OpenAPI: <code>http://192.168.0.25:8787/openapi.json</code></li>
+      <li>Docs UI: <code>http://192.168.0.25:8787/docs</code></li>
     </ul>
+    <pre>curl http://192.168.0.25:8787/health
+curl http://192.168.0.25:8787/openapi.json</pre>
     <p>If <code>/api/projects</code> returns an empty list, create one and confirm <code>index.json</code>, <code>ingest/</code>, and <code>_manifest/</code> exist under <code>../Projects/&lt;project&gt;</code> on the host.</p>
   </div>
 
@@ -218,7 +228,28 @@
   </div>
 
   <div class="step">
-    <h3>3) iPhone Shortcut outline</h3>
+    <h3>3) Upload, list, stream, and download media</h3>
+    <pre>curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/upload \
+  -F "file=@/path/to/clip.mov"
+curl http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media
+curl http://127.0.0.1:8787/media/P1-Public-Accountability/ingest/originals/clip.mov
+curl -OJ http://127.0.0.1:8787/media/P1-Public-Accountability/download/ingest/originals/clip.mov</pre>
+    <p>Listing entries include <code>stream_url</code> and <code>download_url</code> for the explorers.</p>
+  </div>
+
+  <div class="step">
+    <h3>4) Move or delete media (project-to-project)</h3>
+    <pre>curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/move \
+  -H "Content-Type: application/json" \
+  -d '{"relative_paths":["ingest/originals/clip.mov"],"target_project":"P2-Editing"}'
+curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/delete \
+  -H "Content-Type: application/json" \
+  -d '{"relative_paths":["ingest/originals/clip.mov"]}'</pre>
+    <p>Moves update both project indexes and manifests; deletes remove files from disk and index.</p>
+  </div>
+
+  <div class="step">
+    <h3>5) iPhone Shortcut outline</h3>
     <p>Select project → optional create → prompt for label → pick videos → upload → optional sync log.</p>
     <ol>
       <li>GET <code>/api/projects</code> → build list (append "➕ Create New Project").</li>
@@ -231,7 +262,7 @@
   </div>
 
   <div class="step">
-    <h3>4) Prove de-dupe is working</h3>
+    <h3>6) Prove de-dupe is working</h3>
     <p>Upload 2–3 videos, then run the Shortcut again selecting the same files. Expected:</p>
     <ul>
       <li>Second run returns <code>"status": "duplicate"</code>.</li>
@@ -241,19 +272,19 @@
   </div>
 
   <div class="step">
-    <h3>5) Sync album ➜ project folder (practical meaning)</h3>
+    <h3>7) Sync album ➜ project folder (practical meaning)</h3>
     <p>Pick the album in Photos, upload through the Shortcut, and let the API de-dupe. For a future "true sync," send filename/size/date fingerprints and receive "upload-needed" decisions.</p>
   </div>
 
   <div class="step">
-    <h3>6) Reindex after manual changes</h3>
+    <h3>8) Reindex after manual changes</h3>
     <p>Any time you drag, rename, or delete files manually, run:</p>
     <pre>curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/reindex</pre>
     <p>This reconciles disk ↔ sqlite, updates counts, and prunes missing records.</p>
   </div>
 
   <div class="step">
-    <h3>7) Recommended daily workflow</h3>
+    <h3>9) Recommended daily workflow</h3>
     <ul>
       <li>Create/select project before recording.</li>
       <li>Use the Shortcut to push clips; let API de-dupe.</li>
@@ -264,7 +295,7 @@
   </div>
 
   <div class="step">
-    <h3>8) Quick troubleshooting</h3>
+    <h3>10) Quick troubleshooting</h3>
     <ul>
       <li>iPhone cannot reach API: container must bind <code>0.0.0.0:8787</code> and firewall must allow it.</li>
       <li>Projects not appearing: verify the volume mount points to your Projects folder.</li>
