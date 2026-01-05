@@ -52,6 +52,7 @@
     .source-form button:hover { background: var(--accent-strong); }
 
     .explorer-main { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; min-height: 540px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; gap: 0.75rem; }
+    .explorer-main.drag-active { outline: 2px dashed var(--accent); outline-offset: -6px; background: #eef2ff; }
     .main-top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .main-top h3 { margin: 0; }
     .crumb { color: var(--muted); font-size: 0.95rem; }
@@ -325,6 +326,25 @@
       return new URL(path, window.location.origin).toString();
     };
 
+    const dragPayload = (item) => {
+      const paths = selectedMedia.has(item.relative_path)
+        ? Array.from(selectedMedia)
+        : [item.relative_path];
+      return JSON.stringify({ paths });
+    };
+
+    const attachDragData = (event, item) => {
+      if (!event.dataTransfer || !item) return;
+      event.dataTransfer.setData('application/x-media-sync', dragPayload(item));
+      const downloadUrl = toAbsoluteUrl(item.download_url || item.stream_url || '');
+      if (downloadUrl) {
+        const filename = item.relative_path.split('/').pop() || 'media';
+        event.dataTransfer.setData('DownloadURL', `application/octet-stream:${filename}:${downloadUrl}`);
+        event.dataTransfer.setData('text/uri-list', downloadUrl);
+      }
+      event.dataTransfer.effectAllowed = 'move';
+    };
+
     async function loadSources() {
       sourcesEl.textContent = 'Loading sources...';
       try {
@@ -389,6 +409,23 @@
         pill.appendChild(label);
         pill.appendChild(sub);
         pill.onclick = () => selectProject(project);
+        pill.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+        });
+        pill.addEventListener('drop', async (event) => {
+          event.preventDefault();
+          const raw = event.dataTransfer.getData('application/x-media-sync');
+          if (!raw) return;
+          try {
+            const data = JSON.parse(raw);
+            const paths = Array.isArray(data.paths) ? data.paths : [];
+            if (!paths.length) return;
+            await moveMedia(paths, project);
+          } catch (err) {
+            uploadStatus.textContent = `Move failed: ${err.message}`;
+          }
+        });
         projectsEl.appendChild(pill);
       });
     }
@@ -462,6 +499,8 @@
         card.className = 'file-card';
         const isSelected = selectedMedia.has(item.relative_path);
         if (isSelected) card.classList.add('selected');
+        card.setAttribute('draggable', 'true');
+        card.addEventListener('dragstart', (event) => attachDragData(event, item));
 
         const name = document.createElement('div');
         name.className = 'name';
@@ -517,9 +556,17 @@
         reveal.textContent = 'Preview & details';
         reveal.onclick = () => playMedia(item.stream_url, item);
 
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.textContent = 'Delete';
+        deleteButton.onclick = async () => {
+          await deleteMedia([item.relative_path]);
+        };
+
         menuList.appendChild(reveal);
         menuList.appendChild(download);
         menuList.appendChild(copyLink);
+        menuList.appendChild(deleteButton);
         menu.appendChild(menuButton);
         menu.appendChild(menuList);
 
@@ -573,6 +620,65 @@
       selectionStatus.textContent = count
         ? `${count} item(s) queued for Resolve.`
         : 'Select clips to send to Resolve.';
+    }
+
+    async function deleteMedia(paths) {
+      if (!activeProject) {
+        uploadStatus.textContent = 'Choose a project before deleting.';
+        return;
+      }
+      if (!paths.length) {
+        uploadStatus.textContent = 'Select one or more files to delete.';
+        return;
+      }
+      const query = activeProject.source ? `?source=${encodeURIComponent(activeProject.source)}` : '';
+      try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(activeProject.name)}/media/delete${query}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ relative_paths: paths }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          const detail = payload.detail || payload.message || 'Delete failed';
+          throw new Error(detail);
+        }
+        uploadStatus.textContent = 'Media removed from disk and index.';
+        paths.forEach((path) => selectedMedia.delete(path));
+        updateSelectionStatus();
+        loadMedia();
+      } catch (err) {
+        uploadStatus.textContent = `Delete failed: ${err.message}`;
+      }
+    }
+
+    async function moveMedia(paths, targetProject) {
+      if (!activeProject) return;
+      if (!paths.length) return;
+      const query = activeProject.source ? `?source=${encodeURIComponent(activeProject.source)}` : '';
+      try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(activeProject.name)}/media/move${query}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            relative_paths: paths,
+            target_project: targetProject.name,
+            target_source: targetProject.source || null,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          const detail = payload.detail || payload.message || 'Move failed';
+          throw new Error(detail);
+        }
+        uploadStatus.textContent = `Moved ${paths.length} item(s) to ${targetProject.name}.`;
+        paths.forEach((path) => selectedMedia.delete(path));
+        updateSelectionStatus();
+        loadMedia();
+        loadProjects();
+      } catch (err) {
+        uploadStatus.textContent = `Move failed: ${err.message}`;
+      }
     }
 
     async function sendToResolve() {
@@ -666,20 +772,31 @@
         openPicker();
         return;
       }
-      const form = new FormData();
-      form.append('file', uploadFile.files[0]);
+      await uploadFiles(uploadFile.files);
+    });
+
+    async function uploadFiles(files) {
+      if (!activeProject) {
+        uploadStatus.textContent = 'Choose a project before uploading.';
+        return;
+      }
+      if (!files || !files.length) return;
       uploadButton.disabled = true;
       uploadStatus.textContent = 'Uploading...';
       try {
         const targetUrl = activeProject.upload_url || `/api/projects/${encodeURIComponent(activeProject.name)}/upload?source=${encodeURIComponent(activeProject.source || '')}`;
-        const response = await fetch(targetUrl, { method: 'POST', body: form });
-        const payload = await response.json();
-        if (!response.ok) {
-          const detail = payload.detail || payload.message || 'Upload failed';
-          throw new Error(detail);
+        for (const file of Array.from(files)) {
+          const form = new FormData();
+          form.append('file', file);
+          const response = await fetch(targetUrl, { method: 'POST', body: form });
+          const payload = await response.json();
+          if (!response.ok) {
+            const detail = payload.detail || payload.message || 'Upload failed';
+            throw new Error(detail);
+          }
         }
-        uploadStatus.textContent = payload.status === 'duplicate'
-          ? 'Duplicate skipped — already on disk.'
+        uploadStatus.textContent = files.length > 1
+          ? 'Uploads stored.'
           : 'Upload stored. Run /reindex if you moved files manually.';
         loadMedia();
       } catch (err) {
@@ -687,13 +804,28 @@
       } finally {
         uploadButton.disabled = false;
       }
-    });
+    }
 
     resolveSend.addEventListener('click', () => {
       sendToResolve();
     });
 
     assetFilter.addEventListener('input', () => applyMediaFilter());
+
+    mediaEl.addEventListener('dragover', (event) => {
+      if (event.dataTransfer?.types?.includes('Files')) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        mediaEl.classList.add('drag-active');
+      }
+    });
+    mediaEl.addEventListener('dragleave', () => mediaEl.classList.remove('drag-active'));
+    mediaEl.addEventListener('drop', async (event) => {
+      if (!event.dataTransfer?.files?.length) return;
+      event.preventDefault();
+      mediaEl.classList.remove('drag-active');
+      await uploadFiles(event.dataTransfer.files);
+    });
 
     document.addEventListener('DOMContentLoaded', () => {
       loadSources();

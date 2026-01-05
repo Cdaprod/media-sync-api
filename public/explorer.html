@@ -252,6 +252,11 @@
       flex-direction: column;
       min-height: 0;
     }
+    .content.drag-active{
+      outline: 2px dashed rgba(124,58,237,0.6);
+      outline-offset: -6px;
+      background: rgba(124,58,237,0.08);
+    }
 
     .section-h{
       padding: 14px 14px 10px;
@@ -839,6 +844,7 @@
       <div class="sep"></div>
       <button id="selPlayBtn" class="btn" type="button">▶ Preview</button>
       <button id="selResolveBtn" class="btn primary" type="button">⇢ Send to Resolve</button>
+      <button id="selDeleteBtn" class="btn bad" type="button">🗑 Delete</button>
       <button id="selClearBtn" class="btn" type="button">✕ Clear</button>
     </div>
 
@@ -861,6 +867,7 @@
           <button id="drawerPlay" class="btn" type="button">▶ Play</button>
           <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
           <button id="drawerToggleSelect" class="btn primary" type="button">＋ Select</button>
+          <button id="drawerDelete" class="btn bad" type="button">🗑 Delete</button>
         </div>
 
         <div class="kv" id="drawerKV"></div>
@@ -894,6 +901,7 @@
     const ui = {
       sidebarOpen: false,
       inspectorOpen: false,
+      dragActive: false,
     };
 
     const thumbCache = new Map();
@@ -933,6 +941,25 @@
         return path;
       }
       return new URL(path, window.location.origin).toString();
+    }
+
+    function dragPayload(item){
+      const paths = state.selected.has(item.relative_path)
+        ? Array.from(state.selected)
+        : [item.relative_path];
+      return JSON.stringify({ paths });
+    }
+
+    function attachDragData(event, item){
+      if (!item || !event.dataTransfer) return;
+      event.dataTransfer.setData('application/x-media-sync', dragPayload(item));
+      const downloadUrl = toAbsoluteUrl(item.download_url || item.stream_url || '');
+      if (downloadUrl){
+        const filename = item.relative_path?.split('/').pop() || 'media';
+        event.dataTransfer.setData('DownloadURL', `application/octet-stream:${filename}:${downloadUrl}`);
+        event.dataTransfer.setData('text/uri-list', downloadUrl);
+      }
+      event.dataTransfer.effectAllowed = 'move';
     }
 
     function guessKind(item){
@@ -987,6 +1014,7 @@
       el('sendResolveBtn').disabled = !show || !state.activeProject;
       el('clearSelBtn').disabled = !show;
       el('selResolveBtn').disabled = !show || !state.activeProject;
+      el('selDeleteBtn').disabled = !show || !state.activeProject;
 
       // drawer select button label
       if (state.focused){
@@ -994,6 +1022,7 @@
         el('drawerToggleSelect').textContent = isSel ? '− Deselect' : '＋ Select';
         el('drawerToggleSelect').classList.toggle('primary', !isSel);
       }
+      el('drawerDelete').disabled = !state.focused;
     }
 
     function setSidebarOpen(open){
@@ -1023,6 +1052,14 @@
         d.setAttribute('aria-hidden', 'true');
       }
       el('drawerBackdrop')?.classList.toggle('show', open);
+    }
+
+    function setDragActive(active){
+      ui.dragActive = active;
+      const content = document.querySelector('.content');
+      if (content){
+        content.classList.toggle('drag-active', active);
+      }
     }
 
     function syncSidebarMode(){
@@ -1237,6 +1274,21 @@
         chip.title = p.instructions || 'Browse this project';
         chip.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="name">${escapeHtml(p.name)}</span>`;
         chip.addEventListener('click', () => selectProject(p));
+        chip.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+        });
+        chip.addEventListener('drop', async (event) => {
+          event.preventDefault();
+          const raw = event.dataTransfer.getData('application/x-media-sync');
+          if (!raw) return;
+          try{
+            const data = JSON.parse(raw);
+            const paths = Array.isArray(data.paths) ? data.paths : [];
+            if (!paths.length) return;
+            await moveMedia(paths, p);
+          }catch{}
+        });
         root.appendChild(chip);
       }
       el('projCount').textContent = `${state.projects.length} total`;
@@ -1285,6 +1337,8 @@
         // ---- grid card
         const card = document.createElement('div');
         card.className = 'asset';
+        card.setAttribute('draggable', 'true');
+        card.addEventListener('dragstart', (event) => attachDragData(event, it));
         if (state.selected.has(it.relative_path)) card.classList.add('selected');
 
         card.innerHTML = `
@@ -1323,6 +1377,8 @@
         // ---- list row
         const row = document.createElement('div');
         row.className = 'row';
+        row.setAttribute('draggable', 'true');
+        row.addEventListener('dragstart', (event) => attachDragData(event, it));
         row.innerHTML = `
           <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
             ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
@@ -1375,24 +1431,29 @@
       if (!p){ toast('warn','Upload','Select a project first'); return; }
       const f = el('uploadFile').files?.[0];
       if (!f){ toast('warn','Upload','Pick a file first'); return; }
+      await uploadFiles([f]);
+    }
+
+    async function uploadFiles(files){
+      const p = state.activeProject;
+      if (!p){ toast('warn','Upload','Select a project first'); return; }
+      if (!files.length){ return; }
 
       el('uploadBtn').disabled = true;
       el('uploadStatus').textContent = 'Uploading…';
 
       try{
-        const form = new FormData();
-        form.append('file', f);
-
-        const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery()}`;
-        const r = await fetch(url, { method:'POST', body: form });
-        const payload = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
-
-        const msg = payload.status === 'duplicate'
-          ? 'Duplicate skipped — already on disk.'
-          : 'Upload stored.';
+        for (const f of files){
+          const form = new FormData();
+          form.append('file', f);
+          const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery()}`;
+          const r = await fetch(url, { method:'POST', body: form });
+          const payload = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
+        }
+        const msg = files.length > 1 ? 'Uploads stored.' : 'Upload stored.';
         el('uploadStatus').textContent = msg;
-        toast(payload.status === 'duplicate' ? 'warn' : 'good', 'Upload', msg);
+        toast('good', 'Upload', msg);
         await loadMedia();
       }catch(e){
         el('uploadStatus').textContent = `Upload failed: ${e.message}`;
@@ -1420,6 +1481,61 @@
       state.selected.clear();
       renderMedia();
       updateSelectionUI();
+    }
+
+    async function deletePaths(paths){
+      const p = state.activeProject;
+      if (!p){ toast('warn','Delete','Select a project first'); return; }
+      if (!paths.length){ toast('warn','Delete','Select one or more clips'); return; }
+      try{
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/delete${mediaQuery()}`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ relative_paths: paths }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Delete failed');
+        toast('good','Delete','Media removed from disk and index');
+        for (const path of paths){ state.selected.delete(path); }
+        if (state.focused && paths.includes(state.focused.relative_path)){
+          state.focused = null;
+          setInspectorOpen(false);
+        }
+        await loadMedia();
+        updateSelectionUI();
+      }catch(e){
+        toast('bad','Delete', e.message);
+      }
+    }
+
+    async function moveMedia(paths, targetProject){
+      const p = state.activeProject;
+      if (!p){ toast('warn','Move','Select a project first'); return; }
+      if (!paths.length){ toast('warn','Move','Select one or more clips'); return; }
+      try{
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/move${mediaQuery()}`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            relative_paths: paths,
+            target_project: targetProject.name,
+            target_source: targetProject.source || null,
+          }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Move failed');
+        toast('good','Move', `Moved ${paths.length} item(s) to ${targetProject.name}`);
+        for (const path of paths){ state.selected.delete(path); }
+        if (state.focused && paths.includes(state.focused.relative_path)){
+          state.focused = null;
+          setInspectorOpen(false);
+        }
+        await loadMedia();
+        await loadProjects();
+        updateSelectionUI();
+      }catch(e){
+        toast('bad','Move', e.message);
+      }
     }
 
     async function sendToResolve(){
@@ -1579,6 +1695,24 @@
     el('uploadBtn').addEventListener('click', uploadActive);
     el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
 
+    const contentArea = document.querySelector('.content');
+    if (contentArea){
+      contentArea.addEventListener('dragover', (event) => {
+        if (event.dataTransfer?.types?.includes('Files')){
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+          setDragActive(true);
+        }
+      });
+      contentArea.addEventListener('dragleave', () => setDragActive(false));
+      contentArea.addEventListener('drop', (event) => {
+        if (!event.dataTransfer?.files?.length) return;
+        event.preventDefault();
+        setDragActive(false);
+        uploadFiles(Array.from(event.dataTransfer.files));
+      });
+    }
+
     // Resolve
     el('sendResolveBtn').addEventListener('click', sendToResolve);
     el('selResolveBtn').addEventListener('click', sendToResolve);
@@ -1586,6 +1720,7 @@
     // Clear selection
     el('clearSelBtn').addEventListener('click', clearSelection);
     el('selClearBtn').addEventListener('click', clearSelection);
+    el('selDeleteBtn').addEventListener('click', () => deletePaths(Array.from(state.selected)));
 
     // Preview (first selected)
     el('selPlayBtn').addEventListener('click', () => {
@@ -1596,6 +1731,10 @@
 
     // Drawer close
     el('drawerClose').addEventListener('click', closeDrawer);
+    el('drawerDelete').addEventListener('click', () => {
+      if (!state.focused) return;
+      deletePaths([state.focused.relative_path]);
+    });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape'){
         if (ui.inspectorOpen){

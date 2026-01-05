@@ -111,6 +111,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [dragActive, setDragActive] = useState(false);
 
   const [resolveProjectMode, setResolveProjectMode] = useState('current');
   const [resolveProjectName, setResolveProjectName] = useState('');
@@ -267,6 +268,70 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [activeProject, addToast, api, loadMedia]);
 
+  const deleteMediaPaths = useCallback(
+    async (paths: string[]) => {
+      const project = activeProject;
+      if (!project) {
+        addToast('warn', 'Delete', 'Select a project first');
+        return;
+      }
+      if (!paths.length) {
+        addToast('warn', 'Delete', 'Select one or more clips');
+        return;
+      }
+      try {
+        await api.deleteMedia(project.name, paths, project.source);
+        addToast('good', 'Delete', 'Removed media from disk and index');
+        setSelected((current) => {
+          const next = new Set(current);
+          paths.forEach((path) => next.delete(path));
+          return next;
+        });
+        if (focused && paths.includes(focused.relative_path)) {
+          setFocused(null);
+          setInspectorOpen(false);
+        }
+        await loadMedia(project);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Delete failed';
+        addToast('bad', 'Delete', message);
+      }
+    },
+    [activeProject, addToast, api, focused, loadMedia],
+  );
+
+  const moveMediaPaths = useCallback(
+    async (paths: string[], targetProject: Project) => {
+      const project = activeProject;
+      if (!project) return;
+      try {
+        await api.moveMedia(
+          project.name,
+          paths,
+          targetProject.name,
+          project.source,
+          targetProject.source,
+        );
+        addToast('good', 'Move', `Moved ${paths.length} item(s) to ${targetProject.name}`);
+        setSelected((current) => {
+          const next = new Set(current);
+          paths.forEach((path) => next.delete(path));
+          return next;
+        });
+        if (focused && paths.includes(focused.relative_path)) {
+          setFocused(null);
+          setInspectorOpen(false);
+        }
+        await loadMedia(project);
+        await loadProjects();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Move failed';
+        addToast('bad', 'Move', message);
+      }
+    },
+    [activeProject, addToast, api, focused, loadMedia, loadProjects],
+  );
+
   const handleResolve = useCallback(async () => {
     const project = activeProject;
     if (!project) {
@@ -302,6 +367,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('bad', 'Resolve', message);
     }
   }, [activeProject, addToast, api, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName, selected]);
+
+  const handleDropUpload = useCallback(
+    async (files: FileList) => {
+      const project = activeProject;
+      if (!project) {
+        addToast('warn', 'Upload', 'Select a project first');
+        return;
+      }
+      if (!files.length) return;
+      setUploadStatus('Uploading…');
+      for (const file of Array.from(files)) {
+        try {
+          const uploadUrl =
+            project.upload_url
+            || `/api/projects/${encodeURIComponent(project.name)}/upload?source=${encodeURIComponent(project.source)}`;
+          await api.uploadMedia(uploadUrl, file);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Upload failed';
+          addToast('bad', 'Upload', message);
+        }
+      }
+      setUploadStatus('Upload stored.');
+      await loadMedia(project);
+    },
+    [activeProject, addToast, api, loadMedia],
+  );
 
   const ensureThumbObserver = useCallback(() => {
     if (thumbObserverRef.current) return thumbObserverRef.current;
@@ -379,6 +470,46 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const item = media.find((entry) => entry.relative_path === first);
     if (item) openDrawer(item);
   }, [media, openDrawer, selected]);
+
+  const handleAssetDragStart = useCallback(
+    (item: MediaItem) => (event: React.DragEvent) => {
+      if (!activeProject) return;
+      const payload = {
+        project: activeProject.name,
+        source: activeProject.source,
+        paths: selected.has(item.relative_path)
+          ? Array.from(selected)
+          : [item.relative_path],
+      };
+      event.dataTransfer.setData('application/x-media-sync', JSON.stringify(payload));
+      const downloadUrl = resolveAssetUrl(item.download_url || item.stream_url);
+      if (downloadUrl) {
+        const filename = item.relative_path?.split('/').pop() || 'media';
+        event.dataTransfer.setData('DownloadURL', `application/octet-stream:${filename}:${downloadUrl}`);
+        event.dataTransfer.setData('text/uri-list', downloadUrl);
+      }
+      event.dataTransfer.effectAllowed = 'move';
+    },
+    [activeProject, resolveAssetUrl, selected],
+  );
+
+  const handleProjectDrop = useCallback(
+    async (project: Project, event: React.DragEvent) => {
+      event.preventDefault();
+      setDragActive(false);
+      const raw = event.dataTransfer.getData('application/x-media-sync');
+      if (!raw) return;
+      try {
+        const payload = JSON.parse(raw) as { paths?: string[] };
+        const paths = payload.paths || [];
+        if (!paths.length) return;
+        await moveMediaPaths(paths, project);
+      } catch {
+        // ignore invalid payload
+      }
+    },
+    [moveMediaPaths],
+  );
 
   const pickUpload = useCallback(() => {
     const input = uploadInputRef.current;
@@ -537,6 +668,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     title={project.instructions || 'Browse this project'}
                     onClick={() => selectProject(project)}
                     role="button"
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(event) => handleProjectDrop(project, event)}
                   >
                     <span className="dot" aria-hidden="true"></span>
                     <span className="name">{project.name}</span>
@@ -723,7 +859,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </div>
         </aside>
 
-        <section className="content">
+        <section
+          className={`content ${dragActive ? 'drag-active' : ''}`}
+          onDragOver={(event) => {
+            if (event.dataTransfer?.types.includes('Files')) {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'copy';
+              setDragActive(true);
+            }
+          }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={(event) => {
+            if (event.dataTransfer?.files?.length) {
+              event.preventDefault();
+              setDragActive(false);
+              void handleDropUpload(event.dataTransfer.files);
+            }
+          }}
+        >
           <div className="section-h">
             <h2>{contentTitle}</h2>
             <div className="meta-line">
@@ -762,6 +915,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       key={item.relative_path}
                       className={`asset ${isSelected ? 'selected' : ''}`}
                       onClick={() => openDrawer(item)}
+                      draggable
+                      onDragStart={handleAssetDragStart(item)}
                     >
                       <div
                         className="thumb"
@@ -820,7 +975,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const isSelected = selected.has(item.relative_path);
 
                   return (
-                    <div className="row" key={`row-${item.relative_path}`}>
+                    <div
+                      className="row"
+                      key={`row-${item.relative_path}`}
+                      draggable
+                      onDragStart={handleAssetDragStart(item)}
+                    >
                       <div
                         className="mini"
                         ref={(node) => registerThumbTarget(node, item, kind)}
@@ -869,6 +1029,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
         <button className="btn primary" type="button" onClick={handleResolve}>
           ⇢ Send to Resolve
+        </button>
+        <button className="btn bad" type="button" onClick={() => deleteMediaPaths(Array.from(selected))}>
+          🗑 Delete
         </button>
         <button className="btn" type="button" onClick={clearSelection}>
           ✕ Clear
@@ -942,6 +1105,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               onClick={() => focused && toggleSelected(focused.relative_path)}
             >
               {focused && selected.has(focused.relative_path) ? '− Deselect' : '＋ Select'}
+            </button>
+            <button
+              className="btn bad"
+              type="button"
+              onClick={() => focused && deleteMediaPaths([focused.relative_path])}
+            >
+              🗑 Delete
             </button>
           </div>
 
