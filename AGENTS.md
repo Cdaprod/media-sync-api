@@ -389,3 +389,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-17)
 - Ensured the Explorer Docker build creates a public directory in the builder stage so runtime COPY steps always succeed.
+
+### Latest Implementation Notes (2025-03-18)
+- Explorer UIs now use solid inspector panels (no blur) with improved mobile topbar layout and horizontal action scrolling; Next.js explorer infers the LAN API base from the browser host when a container-only hostname is configured.

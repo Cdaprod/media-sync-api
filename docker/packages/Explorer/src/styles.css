@@ -48,7 +48,6 @@ code { font-family: var(--mono); }
   position: fixed;
   inset:0;
   background: rgba(0,0,0,0.45);
-  backdrop-filter: blur(3px);
   opacity:0;
   pointer-events:none;
   transition: opacity 140ms ease;
@@ -61,8 +60,7 @@ code { font-family: var(--mono); }
   position: sticky;
   top:0;
   z-index: 40;
-  backdrop-filter: blur(14px);
-  background: rgba(11,16,32,0.72);
+  background: rgba(11,16,32,0.9);
   border-bottom: 1px solid var(--border);
 }
 .topbar-inner{
@@ -527,8 +525,7 @@ code { font-family: var(--mono); }
   top: 0; right: 0;
   height: 100%;
   width: min(520px, 100vw);
-  background: rgba(11,16,32,0.88);
-  backdrop-filter: blur(16px);
+  background: rgba(8,12,24,0.98);
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow);
   transform: translateX(110%);
@@ -633,7 +630,6 @@ code { font-family: var(--mono); }
   border-radius: 999px;
   padding: 10px 12px;
   box-shadow: var(--shadow);
-  backdrop-filter: blur(16px);
   gap: 10px;
   align-items:center;
   max-width: min(980px, calc(100vw - 24px));
@@ -671,7 +667,6 @@ code { font-family: var(--mono); }
 .toast{
   border: 1px solid var(--border);
   background: rgba(11,16,32,0.78);
-  backdrop-filter: blur(14px);
   border-radius: 14px;
   padding: 10px 12px;
   min-width: 260px;
@@ -713,11 +708,34 @@ code { font-family: var(--mono); }
   .sidebar{ display:block; width: 100%; }
   .content{ width: 100%; }
   .drawer{ width: 100vw; }
-  .topbar-inner{ flex-wrap: wrap; gap:10px; }
+  .topbar-inner{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .brand{
+    width: 100%;
+    justify-content: space-between;
+  }
+  .toolbar{
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
   .brand{ min-width: 0; }
   .hamburger{ display:block; }
-  .toolbar{ width: 100%; }
   .search{ flex:1; max-width: none; }
+  .seg{ align-self: flex-start; }
+  .pillbar{
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .pillbar .btn{ flex: 0 0 auto; }
   .btn{ padding: 7px 10px; font-size:11px; }
   .seg button{ padding: 8px 10px; font-size:11px; }
   .topbar-inner{ padding: 12px 12px; }

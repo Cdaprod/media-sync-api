@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createApiClient } from './api';
 import { extractAiTags, extractTags, filterMedia, pruneSelection, toggleSelection } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
-import { formatBytes, guessKind, kindBadgeClass, toAbsoluteUrl } from './utils';
+import { formatBytes, guessKind, inferApiBaseUrl, kindBadgeClass, toAbsoluteUrl } from './utils';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -103,7 +103,11 @@ async function extractVideoFrame(url: string, durationHint?: number): Promise<st
 }
 
 export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
-  const api = useMemo(() => createApiClient(apiBaseUrl), [apiBaseUrl]);
+  const initialApiBase = typeof window === 'undefined'
+    ? apiBaseUrl
+    : inferApiBaseUrl(apiBaseUrl, window.location);
+  const [resolvedApiBase, setResolvedApiBase] = useState(initialApiBase);
+  const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
   const { toasts, addToast } = useToastQueue();
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -527,6 +531,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       input.click();
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setResolvedApiBase(inferApiBaseUrl(apiBaseUrl, window.location));
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     updateSidebarMode();

@@ -21,6 +21,31 @@ export function toAbsoluteUrl(path: string | undefined, origin: string): string 
   return new URL(path, origin).toString();
 }
 
+export interface LocationLike {
+  protocol: string;
+  hostname: string;
+  port?: string;
+}
+
+export function inferApiBaseUrl(baseUrl: string | undefined, location?: LocationLike): string {
+  const trimmed = (baseUrl || '').trim();
+  if (!location) return trimmed;
+  const fallback = `${location.protocol}//${location.hostname}:8787`;
+  if (!trimmed) return fallback;
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (['media-sync-api', 'localhost', '127.0.0.1'].includes(parsed.hostname)) {
+      return fallback;
+    }
+  } catch {
+    return fallback;
+  }
+  return trimmed;
+}
+
 export function guessKind(item: MediaItem): string {
   const k = (item.kind || item.type || '').toLowerCase();
   if (k) return k;
