@@ -29,3 +29,11 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('resolveAssetUrl'));
   assert.ok(content.includes('formatListValue'));
 });
+
+test('api base inference keeps LAN host reachable', () => {
+  const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
+  const content = fs.readFileSync(utilsPath, 'utf8');
+  assert.ok(content.includes('inferApiBaseUrl'));
+  assert.ok(content.includes('media-sync-api'));
+  assert.ok(content.includes(':8787'));
+});
