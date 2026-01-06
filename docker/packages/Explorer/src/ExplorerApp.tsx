@@ -13,6 +13,13 @@ interface ExplorerAppProps {
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
+const formatListValue = (value: string | string[] | null | undefined) => {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => entry.trim().length > 0).join(', ');
+  }
+  return value ?? '';
+};
+
 function useToastQueue() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const timeouts = useRef<number[]>([]);
@@ -1132,8 +1139,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 ['Modified', focused.updated_at || focused.updatedAt || ''],
                 ['Duration', focused.duration ? `${focused.duration}s` : ''],
                 ['Resolution', focused.width && focused.height ? `${focused.width}×${focused.height}` : ''],
-                ['Tags', Array.isArray(focused.tags) ? focused.tags.join(', ') : focused.tags || ''],
-                ['AI Tags', Array.isArray(focused.ai_tags) ? focused.ai_tags.join(', ') : focused.ai_tags || focused.aiTags || ''],
+                ['Tags', formatListValue(focused.tags)],
+                ['AI Tags', formatListValue(focused.ai_tags ?? focused.aiTags)],
               ].filter(([, value]) => String(value || '').trim().length > 0);
 
               return rows.map(([key, value]) => (
