@@ -380,3 +380,12 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-14)
 - Updated `public/index.html` with OpenAPI links and curl examples covering schema discovery, uploads, downloads, and media move/delete endpoints.
+
+### Latest Implementation Notes (2025-03-15)
+- Normalized Explorer inspector tag/AI tag formatting with a shared helper to keep metadata rows strictly typed during Next.js builds.
+
+### Latest Implementation Notes (2025-03-16)
+- Ensured Explorer inspector metadata rows keep tuple typing through filtering to prevent Next.js type-check failures.
+
+### Latest Implementation Notes (2025-03-17)
+- Ensured the Explorer Docker build creates a public directory in the builder stage so runtime COPY steps always succeed.

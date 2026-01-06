@@ -27,4 +27,5 @@ test('explorer resolves media urls against api base', () => {
   const content = fs.readFileSync(explorerPath, 'utf8');
   assert.ok(content.includes('api.buildUrl'));
   assert.ok(content.includes('resolveAssetUrl'));
+  assert.ok(content.includes('formatListValue'));
 });
