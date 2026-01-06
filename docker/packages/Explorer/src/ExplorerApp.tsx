@@ -1126,7 +1126,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             {(() => {
               if (!focused) return null;
               const kind = guessKind(focused);
-              const rows: Array<[string, string]> = [
+              const rows = [
                 ['Kind', kind],
                 ['Size', formatBytes(focused.size)],
                 ['Stream', resolveAssetUrl(focused.stream_url) || '(none)'],
@@ -1141,9 +1141,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 ['Resolution', focused.width && focused.height ? `${focused.width}×${focused.height}` : ''],
                 ['Tags', formatListValue(focused.tags)],
                 ['AI Tags', formatListValue(focused.ai_tags ?? focused.aiTags)],
-              ].filter(([, value]) => String(value || '').trim().length > 0);
+              ] satisfies Array<[string, string]>;
+              const filteredRows = rows.filter(
+                (row): row is [string, string] => String(row[1] || '').trim().length > 0,
+              );
 
-              return rows.map(([key, value]) => (
+              return filteredRows.map(([key, value]) => (
                 <React.Fragment key={key}>
                   <div className="k">{key}</div>
                   <div className="v">{value}</div>

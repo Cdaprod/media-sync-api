@@ -383,3 +383,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-15)
 - Normalized Explorer inspector tag/AI tag formatting with a shared helper to keep metadata rows strictly typed during Next.js builds.
+
+### Latest Implementation Notes (2025-03-16)
+- Ensured Explorer inspector metadata rows keep tuple typing through filtering to prevent Next.js type-check failures.
