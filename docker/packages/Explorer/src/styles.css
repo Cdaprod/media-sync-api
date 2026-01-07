@@ -47,7 +47,7 @@ code { font-family: var(--mono); }
 .backdrop{
   position: fixed;
   inset:0;
-  background: rgba(0,0,0,0.45);
+  background: rgba(6,8,14,0.6);
   opacity:0;
   pointer-events:none;
   transition: opacity 140ms ease;
@@ -525,7 +525,7 @@ code { font-family: var(--mono); }
   top: 0; right: 0;
   height: 100%;
   width: min(520px, 100vw);
-  background: rgba(8,12,24,0.98);
+  background: #0b1020;
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow);
   transform: translateX(110%);
@@ -534,8 +534,9 @@ code { font-family: var(--mono); }
   display:flex;
   flex-direction: column;
   min-height: 0;
+  pointer-events: none;
 }
-.drawer.open{ transform: translateX(0%); }
+.drawer.open{ transform: translateX(0%); pointer-events: auto; }
 .drawer-h{
   padding: 14px 14px 10px;
   border-bottom: 1px solid var(--border);
