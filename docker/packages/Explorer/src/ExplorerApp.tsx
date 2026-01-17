@@ -121,6 +121,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [dragActive, setDragActive] = useState(false);
 
@@ -546,6 +547,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [updateSidebarMode]);
 
   useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('.actions-panel') || target.closest('.actions-toggle')) return;
+      setActionsOpen(false);
+    };
+    if (!actionsOpen) return;
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [actionsOpen]);
+
+  useEffect(() => {
     addToast('good', 'Boot', 'Loading sources + projects…');
     void loadSources();
     void loadProjects();
@@ -610,52 +623,63 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 Projects
               </button>
             </div>
-            <div className="search" role="search">
-              <span className="kbd">⌘K</span>
-              <input
-                ref={searchInputRef}
-                placeholder="Search filename, path… (client-side filter)"
-                autoComplete="off"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </div>
-
-            <div className="seg" aria-label="View mode">
+            <div className="topbar-controls">
+              <div className="search" role="search">
+                <span className="kbd">⌘K</span>
+                <input
+                  ref={searchInputRef}
+                  placeholder="Search filename, path… (client-side filter)"
+                  autoComplete="off"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </div>
               <button
-                className={view === 'grid' ? 'active' : ''}
+                className="btn actions-toggle"
                 type="button"
-                onClick={() => setView('grid')}
+                aria-expanded={actionsOpen}
+                onClick={() => setActionsOpen((prev) => !prev)}
               >
-                Grid
-              </button>
-              <button
-                className={view === 'list' ? 'active' : ''}
-                type="button"
-                onClick={() => setView('list')}
-              >
-                List
+                Actions ▾
               </button>
             </div>
+            <div className={`actions-panel ${actionsOpen ? 'open' : ''}`} role="region" aria-label="Explorer actions">
+              <div className="seg" aria-label="View mode">
+                <button
+                  className={view === 'grid' ? 'active' : ''}
+                  type="button"
+                  onClick={() => setView('grid')}
+                >
+                  Grid
+                </button>
+                <button
+                  className={view === 'list' ? 'active' : ''}
+                  type="button"
+                  onClick={() => setView('list')}
+                >
+                  List
+                </button>
+              </div>
 
-            <div className="pillbar">
-              <button className="btn" type="button" onClick={refreshAll}>
-                ↻ Refresh
-              </button>
-              <button className="btn good" type="button" onClick={pickUpload}>
-                ＋ Upload
-              </button>
-              <button
-                className="btn primary"
-                type="button"
-                onClick={handleResolve}
-                disabled={!selectedCount || !activeProject}
-              >
-                ⇢ Send to Resolve
-              </button>
-              <button className="btn" type="button" onClick={clearSelection} disabled={!selectedCount}>
-                ✕ Clear
-              </button>
+              <div className="pillbar">
+                <button className="btn" type="button" onClick={refreshAll}>
+                  ↻ Refresh
+                </button>
+                <button className="btn good" type="button" onClick={pickUpload}>
+                  ＋ Upload
+                </button>
+                <button
+                  className="btn primary"
+                  type="button"
+                  onClick={handleResolve}
+                  disabled={!selectedCount || !activeProject}
+                >
+                  ⇢ Send to Resolve
+                </button>
+                <button className="btn" type="button" onClick={clearSelection} disabled={!selectedCount}>
+                  ✕ Clear
+                </button>
+              </div>
             </div>
           </div>
         </div>
