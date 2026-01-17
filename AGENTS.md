@@ -399,3 +399,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-20)
 - Explorer topbar spacing is tightened with a single mobile Projects toggle, drawer backdrops are lighter to keep previews clickable, select menus render with dark options, and grid cards are scaled down.
+
+### Latest Implementation Notes (2025-03-21)
+- Explorer topbar now keeps a single-row layout with an Actions dropdown panel, sidebar background opacity increased with scrollable content, and media grids shortened to reduce tall tiles.
