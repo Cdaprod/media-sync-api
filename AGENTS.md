@@ -396,3 +396,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-19)
 - Explorer badges/selector overlays drop remaining blur filters, the mobile topbar action row wraps again for small screens, and upload URLs no longer inject `source=undefined` when building upload requests.
+
+### Latest Implementation Notes (2025-03-20)
+- Explorer topbar spacing is tightened with a single mobile Projects toggle, drawer backdrops are lighter to keep previews clickable, select menus render with dark options, and grid cards are scaled down.
