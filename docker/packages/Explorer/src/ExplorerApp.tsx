@@ -592,14 +592,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     <div className="app">
       <div className="topbar">
         <div className="topbar-inner">
-          <button
-            className="hamburger mobile-only"
-            type="button"
-            aria-label="Toggle projects"
-            onClick={() => setSidebarOpen((prev) => !prev)}
-          >
-            ☰
-          </button>
           <div className="brand" title="LAN-only media-sync-api explorer">
             <div className="logo" aria-hidden="true"></div>
             <div>
@@ -609,6 +601,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </div>
 
           <div className="toolbar">
+            <div className="toolbar-toggle">
+              <button
+                className="btn mobile-only"
+                type="button"
+                onClick={() => setSidebarOpen((prev) => !prev)}
+              >
+                Projects
+              </button>
+            </div>
             <div className="search" role="search">
               <span className="kbd">⌘K</span>
               <input
@@ -1052,14 +1053,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ✕ Clear
         </button>
       </div>
-
-      <button
-        className="mobile-fab mobile-only"
-        type="button"
-        onClick={() => setSidebarOpen(true)}
-      >
-        Projects
-      </button>
 
       <aside className={`drawer ${inspectorOpen ? 'open' : ''}`} aria-hidden={!inspectorOpen}>
         <div className="drawer-h">

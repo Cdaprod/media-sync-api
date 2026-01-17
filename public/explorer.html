@@ -62,6 +62,9 @@
       z-index:65;
     }
     .backdrop.show{ opacity:1; pointer-events:auto; }
+    #drawerBackdrop{
+      background: rgba(6,8,14,0.35);
+    }
 
     /* Top bar */
     .topbar{
@@ -76,7 +79,7 @@
       align-items:center;
       justify-content: space-between;
       gap: 16px;
-      padding: 16px 18px;
+      padding: 12px 18px;
       max-width: 1400px;
       margin: 0 auto;
     }
@@ -87,16 +90,10 @@
       min-width: 240px;
     }
 
-    .hamburger{
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.06);
-      color: var(--text);
-      border-radius: 12px;
-      padding: 9px 11px;
-      cursor:pointer;
-      display:none;
+    .toolbar-toggle{
+      display:flex;
+      align-items:center;
     }
-    .hamburger:hover{ background: rgba(255,255,255,0.10); }
     .logo{
       width: 36px; height: 36px;
       border-radius: 12px;
@@ -122,6 +119,7 @@
       flex: 1;
       justify-content: flex-end;
       min-width: 0;
+      flex-wrap: wrap;
     }
 
     .search{
@@ -131,7 +129,7 @@
       display:flex;
       align-items:center;
       gap: 10px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-radius: 999px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
@@ -148,7 +146,7 @@
 
     .pillbar{
       display:flex;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
       align-items: center;
       justify-content: flex-end;
@@ -158,7 +156,7 @@
       background: rgba(255,255,255,0.06);
       color: var(--text);
       border-radius: 999px;
-      padding: 9px 12px;
+      padding: 8px 12px;
       font-size: 12px;
       cursor:pointer;
       transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
@@ -186,7 +184,7 @@
       border: none;
       background: transparent;
       color: var(--muted);
-      padding: 9px 12px;
+      padding: 8px 10px;
       font-size: 12px;
       cursor:pointer;
     }
@@ -370,7 +368,7 @@
     .grid{
       padding: 14px;
       display:grid;
-      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
       gap: 12px;
     }
     .list{
@@ -392,7 +390,7 @@
     .asset:hover{ transform: translateY(-2px); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); }
 
     .thumb{
-      aspect-ratio: 16/10;
+      aspect-ratio: 4/3;
       background: rgba(255,255,255,0.04);
       border-bottom: 1px solid var(--border);
       display:flex;
@@ -415,7 +413,7 @@
     }
 
     .asset .body{
-      padding: 10px 10px 10px;
+      padding: 8px 10px 10px;
       display:flex;
       flex-direction: column;
       gap: 6px;
@@ -526,7 +524,7 @@
       box-shadow: var(--shadow);
       transform: translateX(110%);
       transition: transform 160ms ease;
-      z-index: 60;
+      z-index: 80;
       display:flex;
       flex-direction: column;
       min-height: 0;
@@ -585,12 +583,17 @@
       border-radius: var(--radius2);
       background: rgba(255,255,255,0.04);
       overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
     .preview video, .preview img{
       width: 100%;
       height: auto;
       display:block;
       background: rgba(0,0,0,0.25);
+      max-height: 48vh;
+      object-fit: contain;
     }
 
     .kv{
@@ -638,17 +641,7 @@
     .selectbar .btn{ padding: 8px 11px; }
 
     .mobile-fab{
-      position: fixed;
-      left: 16px;
-      bottom: 18px;
-      z-index: 70;
-      border: 1px solid var(--border);
-      background: rgba(11,16,32,0.82);
-      color: var(--text);
-      border-radius: 999px;
-      padding: 10px 14px;
-      box-shadow: var(--shadow);
-      cursor: pointer;
+      display:none;
     }
 
     /* Toasts */
@@ -692,11 +685,13 @@
         flex-direction: column;
         align-items: stretch;
         gap: 10px;
+        padding: 10px 12px;
       }
       .brand{
         width: 100%;
         justify-content: space-between;
       }
+      .toolbar-toggle{ width: 100%; justify-content: flex-start; }
       .toolbar{
         width: 100%;
         flex-direction: column;
@@ -704,7 +699,6 @@
         gap: 10px;
       }
       .brand{ min-width: 0; }
-      .hamburger{ display:block; }
       .search{ flex:1; max-width: none; }
       .seg{ align-self: flex-start; }
       .pillbar{
@@ -716,8 +710,7 @@
       }
       .pillbar .btn{ flex: 0 0 auto; }
       .btn{ padding: 7px 10px; font-size:11px; }
-      .seg button{ padding: 8px 10px; font-size:11px; }
-      .topbar-inner{ padding: 12px 12px; }
+      .seg button{ padding: 7px 9px; font-size:11px; }
       .grid{ gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
       .asset .title{ font-size: 11px; }
       .section-h{ padding: 12px 12px 9px; }
@@ -727,6 +720,13 @@
       .sidebar.sidebar-drawer{ top: 58px; height: calc(100% - 58px); border-radius: 0; }
       .mobile-only{ display:block; }
     }
+    .sidebar select,
+    .sidebar option,
+    .drawer select,
+    .drawer option{
+      color: var(--text);
+      background: #0b1020;
+    }
   </style>
 </head>
 
@@ -734,7 +734,6 @@
   <div class="app">
     <div class="topbar">
       <div class="topbar-inner">
-        <button id="sidebarToggle" class="hamburger mobile-only" type="button" aria-label="Toggle projects">☰</button>
         <div class="brand" title="LAN-only media-sync-api explorer">
           <div class="logo" aria-hidden="true"></div>
           <div>
@@ -744,6 +743,9 @@
         </div>
 
         <div class="toolbar">
+          <div class="toolbar-toggle">
+            <button id="sidebarToggleBtn" class="btn mobile-only" type="button">Projects</button>
+          </div>
           <div class="search" role="search">
             <span class="kbd">⌘K</span>
             <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
@@ -863,8 +865,6 @@
       <button id="selDeleteBtn" class="btn bad" type="button">🗑 Delete</button>
       <button id="selClearBtn" class="btn" type="button">✕ Clear</button>
     </div>
-
-    <button id="mobileProjectsBtn" class="mobile-fab mobile-only" type="button">Projects</button>
 
     <!-- Inspector drawer -->
     <aside id="drawer" class="drawer" aria-hidden="true">
@@ -1693,8 +1693,7 @@
       toast('good','Refresh','Reloaded projects + media');
     });
 
-    el('sidebarToggle').addEventListener('click', () => setSidebarOpen(!ui.sidebarOpen));
-    el('mobileProjectsBtn').addEventListener('click', () => setSidebarOpen(true));
+    el('sidebarToggleBtn').addEventListener('click', () => setSidebarOpen(!ui.sidebarOpen));
     el('sidebarBackdrop').addEventListener('click', () => setSidebarOpen(false));
     el('drawerBackdrop').addEventListener('click', closeDrawer);
 
