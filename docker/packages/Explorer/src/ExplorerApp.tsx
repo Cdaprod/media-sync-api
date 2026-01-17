@@ -147,6 +147,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `${selected.size} item(s) queued.`
     : 'Select clips to enable.';
 
+  const buildUploadUrl = useCallback((project: Project) => {
+    const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
+    return project.upload_url || `/api/projects/${encodeURIComponent(project.name)}/upload${query}`;
+  }, []);
+
   const resolveAssetUrl = useCallback(
     (path?: string) => {
       if (!path) return '';
@@ -261,10 +266,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
     setUploadStatus('Uploading…');
     try {
-      const uploadUrl =
-        project.upload_url ||
-        `/api/projects/${encodeURIComponent(project.name)}/upload?source=${encodeURIComponent(project.source)}`;
-      const payload = await api.uploadMedia(uploadUrl, file);
+      const payload = await api.uploadMedia(buildUploadUrl(project), file);
       const status = typeof payload.status === 'string' ? payload.status : '';
       const msg = status === 'duplicate'
         ? 'Duplicate skipped — already on disk.'
@@ -277,7 +279,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setUploadStatus(`Upload failed: ${message}`);
       addToast('bad', 'Upload', message);
     }
-  }, [activeProject, addToast, api, loadMedia]);
+  }, [activeProject, addToast, api, buildUploadUrl, loadMedia]);
 
   const deleteMediaPaths = useCallback(
     async (paths: string[]) => {
@@ -390,10 +392,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setUploadStatus('Uploading…');
       for (const file of Array.from(files)) {
         try {
-          const uploadUrl =
-            project.upload_url
-            || `/api/projects/${encodeURIComponent(project.name)}/upload?source=${encodeURIComponent(project.source)}`;
-          await api.uploadMedia(uploadUrl, file);
+          await api.uploadMedia(buildUploadUrl(project), file);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Upload failed';
           addToast('bad', 'Upload', message);
@@ -402,7 +401,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setUploadStatus('Upload stored.');
       await loadMedia(project);
     },
-    [activeProject, addToast, api, loadMedia],
+    [activeProject, addToast, api, buildUploadUrl, loadMedia],
   );
 
   const ensureThumbObserver = useCallback(() => {
