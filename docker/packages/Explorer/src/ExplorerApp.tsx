@@ -135,6 +135,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const mediaScrollRef = useRef<HTMLDivElement | null>(null);
   const thumbObserverRef = useRef<IntersectionObserver | null>(null);
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
+  const thumbQueueRef = useRef<MediaItem[]>([]);
+  const thumbQueueActiveRef = useRef(false);
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
   const activeProjectRef = useRef<Project | null>(null);
   const apiRef = useRef(api);
@@ -200,6 +202,68 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [api, addToast]);
 
+  const persistThumbnail = useCallback(async (relPath: string, dataUrl: string) => {
+    const project = activeProjectRef.current;
+    if (!project) return;
+    try {
+      await apiRef.current.saveThumbnail(project.name, relPath, dataUrl, project.source);
+    } catch {
+      // ignore thumbnail persistence failures
+    }
+  }, []);
+
+  const requestIdle = useCallback((fn: () => void) => {
+    if (typeof window === 'undefined') return;
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number })
+      .requestIdleCallback;
+    if (idle) {
+      idle(fn, { timeout: 1200 });
+    } else {
+      window.setTimeout(fn, 150);
+    }
+  }, []);
+
+  const processThumbQueue = useCallback(() => {
+    if (thumbQueueActiveRef.current) return;
+    const next = thumbQueueRef.current.shift();
+    if (!next) return;
+    const rel = next.relative_path;
+    const url = resolveAssetUrl(next.stream_url);
+    if (!url) {
+      processThumbQueue();
+      return;
+    }
+    thumbQueueActiveRef.current = true;
+    requestIdle(async () => {
+      try {
+        const data = await extractVideoFrame(url, next.duration || 0);
+        thumbCacheRef.current.set(rel, data);
+        setThumbs((prev) => new Map(prev).set(rel, data));
+        await persistThumbnail(rel, data);
+      } catch {
+        // ignore
+      } finally {
+        thumbQueueActiveRef.current = false;
+        processThumbQueue();
+      }
+    });
+  }, [persistThumbnail, requestIdle, resolveAssetUrl]);
+
+  const enqueueMissingThumbnails = useCallback((items: MediaItem[]) => {
+    if (!items.length) return;
+    const pending = new Set(thumbQueueRef.current.map((item) => item.relative_path));
+    const additions = items.filter((item) => {
+      if (guessKind(item) !== 'video') return false;
+      if (item.thumb_url || item.thumbnail_url) return false;
+      if (!item.stream_url) return false;
+      if (thumbCacheRef.current.has(item.relative_path)) return false;
+      return !pending.has(item.relative_path);
+    });
+    if (!additions.length) return;
+    thumbQueueRef.current = thumbQueueRef.current.concat(additions);
+    processThumbQueue();
+  }, [processThumbQueue]);
+
   const loadMedia = useCallback(
     async (project: Project | null) => {
       if (!project) {
@@ -211,14 +275,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         const payload = await api.listMedia(project.name, project.source);
         const items = Array.isArray(payload.media) ? payload.media : [];
         setMedia(items);
+        thumbQueueRef.current = [];
+        thumbQueueActiveRef.current = false;
         const existing = new Set(items.map((item) => item.relative_path));
         setSelected((current) => pruneSelection(current, existing));
+        enqueueMissingThumbnails(items);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load media';
         addToast('bad', 'Media', message);
       }
     },
-    [api, addToast],
+    [api, addToast, enqueueMissingThumbnails],
   );
 
   const refreshAll = useCallback(async () => {
@@ -414,16 +481,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     },
     [activeProject, addToast, api, buildUploadUrl, loadMedia],
   );
-
-  const persistThumbnail = useCallback(async (relPath: string, dataUrl: string) => {
-    const project = activeProjectRef.current;
-    if (!project) return;
-    try {
-      await apiRef.current.saveThumbnail(project.name, relPath, dataUrl, project.source);
-    } catch {
-      // ignore thumbnail persistence failures
-    }
-  }, []);
 
   const ensureThumbObserver = useCallback(() => {
     if (thumbObserverRef.current) return thumbObserverRef.current;

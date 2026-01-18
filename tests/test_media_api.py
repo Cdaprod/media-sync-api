@@ -168,6 +168,16 @@ def test_delete_media_removes_index_and_file(client: TestClient, env_settings: P
     reindexed = client.post(f"/api/projects/{project_name}/reindex")
     assert reindexed.status_code == 200
 
+    thumbnail_data = base64.b64encode(b"thumb-bytes").decode("utf-8")
+    thumb_response = client.post(
+        f"/api/projects/{project_name}/media/thumbnail",
+        json={
+            "relative_path": "ingest/originals/delete-me.mov",
+            "data_url": f"data:image/jpeg;base64,{thumbnail_data}",
+        },
+    )
+    assert thumb_response.status_code == 200
+
     response = client.post(
         f"/api/projects/{project_name}/media/delete",
         json={"relative_paths": ["ingest/originals/delete-me.mov"]},
@@ -176,6 +186,9 @@ def test_delete_media_removes_index_and_file(client: TestClient, env_settings: P
     payload = response.json()
     assert "ingest/originals/delete-me.mov" in payload["removed"]
     assert not media_path.exists()
+    thumb_path = env_settings / project_name / "ingest" / "thumbnails" / "delete-me.jpg"
+    assert not thumb_path.exists()
+    assert payload["thumbnails_removed"] == ["ingest/thumbnails/delete-me.jpg"]
 
     listing = client.get(f"/api/projects/{project_name}/media")
     assert listing.status_code == 200
@@ -196,6 +209,16 @@ def test_move_media_between_projects(client: TestClient, env_settings: Path) -> 
     reindexed = client.post(f"/api/projects/{source_project}/reindex")
     assert reindexed.status_code == 200
 
+    thumbnail_data = base64.b64encode(b"thumb-bytes").decode("utf-8")
+    thumb_response = client.post(
+        f"/api/projects/{source_project}/media/thumbnail",
+        json={
+            "relative_path": "ingest/originals/move-me.mov",
+            "data_url": f"data:image/jpeg;base64,{thumbnail_data}",
+        },
+    )
+    assert thumb_response.status_code == 200
+
     response = client.post(
         f"/api/projects/{source_project}/media/move",
         json={"relative_paths": ["ingest/originals/move-me.mov"], "target_project": target_project},
@@ -203,6 +226,9 @@ def test_move_media_between_projects(client: TestClient, env_settings: Path) -> 
     assert response.status_code == 200
     payload = response.json()
     assert payload["moved"]
+    assert payload["thumbnails_moved"] == [
+        {"from": "ingest/originals/move-me.mov", "to": "ingest/thumbnails/move-me.jpg"},
+    ]
 
     source_listing = client.get(f"/api/projects/{source_project}/media")
     assert source_listing.status_code == 200
@@ -214,3 +240,5 @@ def test_move_media_between_projects(client: TestClient, env_settings: Path) -> 
         entry["relative_path"].endswith("move-me.mov")
         for entry in target_listing.json()["media"]
     )
+    target_thumb = env_settings / target_project / "ingest" / "thumbnails" / "move-me.jpg"
+    assert target_thumb.exists()
