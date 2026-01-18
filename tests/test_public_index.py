@@ -28,3 +28,11 @@ def test_stream_url_copy_includes_origin_helper(client):
     assert explorer.status_code == 200
     assert "toAbsoluteUrl" in explorer.text
     assert "window.location.origin" in explorer.text
+
+
+def test_explorer_logo_toggles_sidebar(client):
+    response = client.get("/public/explorer.html")
+    assert response.status_code == 200
+    assert 'id="sidebarToggleBtn"' in response.text
+    assert "logo-button" in response.text
+    assert "Toggle projects sidebar" in response.text
