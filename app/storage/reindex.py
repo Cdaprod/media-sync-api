@@ -12,6 +12,7 @@ from .paths import relpath_posix
 
 
 INGEST_DIR = "ingest/originals"
+THUMBNAIL_DIR = "ingest/thumbnails"
 MANIFEST_DB = "_manifest/manifest.db"
 ALLOWED_MEDIA_EXTENSIONS = {
     ".mp4",
@@ -95,7 +96,11 @@ def _relocate_misplaced_media(project_root: Path, ingest_path: Path) -> int:
     for candidate in project_root.rglob("*"):
         if candidate.is_dir():
             continue
-        if _is_manifest_path(candidate, project_root) or _is_within_ingest(candidate, ingest_path):
+        if (
+            _is_manifest_path(candidate, project_root)
+            or _is_within_ingest(candidate, ingest_path)
+            or _is_thumbnail_path(candidate, project_root)
+        ):
             continue
         if not _is_supported_media(candidate):
             continue
@@ -135,6 +140,14 @@ def _is_within_ingest(path: Path, ingest_path: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _is_thumbnail_path(path: Path, project_root: Path) -> bool:
+    try:
+        relative = path.relative_to(project_root)
+    except ValueError:
+        return False
+    return relative.parts[:2] == ("ingest", "thumbnails")
 
 
 def _is_supported_media(path: Path) -> bool:

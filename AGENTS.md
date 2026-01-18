@@ -135,6 +135,7 @@ B:\Video\Projects\<project>\
   index.json
   ingest\
     originals\
+    thumbnails\
     proxies\
   exports\
   _manifest\
@@ -411,3 +412,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-24)
 - Explorer view-mode toggle now sizes to its content instead of stretching across the actions panel.
+
+### Latest Implementation Notes (2025-03-25)
+- Explorer thumbnails can now be stored via `/api/projects/{project}/media/thumbnail`; cached frames live under `ingest/thumbnails/` and are returned as `thumb_url` in media listings. Reindexing skips thumbnail files so they stay out of indexed assets.

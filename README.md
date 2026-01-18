@@ -14,6 +14,7 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 - Serves `/public/index.html` as a lightweight adapter UI with copy-paste examples, a browser-native media explorer, and upload controls
 - Tracks multiple storage sources so additional NAS paths can be indexed without redeploying the container
 - Shows configured sources in the adapter UI so you can confirm mounts or register a new destination path without touching the API directly
+- Persists generated thumbnails under `ingest/thumbnails/` so explorer previews load quickly without re-generating frames
 - Streams indexed media directly from `/media/<project>/<relative_path>` for in-browser playback
 - Forces direct downloads from `/media/<project>/download/<relative_path>` so files listed in the UI can be saved offline
 - Sweeps loose files sitting in the projects root into an `Unsorted-Loose` project so uploads that land in the wrong spot are still indexed
@@ -130,6 +131,7 @@ Path alignment for Resolve:
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
+- `POST /api/projects/{project}/media/thumbnail` – store a generated thumbnail for reuse in explorer UIs
 - `GET /media/{project}/download/{relative_path}` – download a stored media file with `Content-Disposition: attachment`
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
 - `POST /api/projects/{project}/sync-album` – record audit event

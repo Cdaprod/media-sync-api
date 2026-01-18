@@ -136,6 +136,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const thumbObserverRef = useRef<IntersectionObserver | null>(null);
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
+  const activeProjectRef = useRef<Project | null>(null);
+  const apiRef = useRef(api);
 
   const filteredMedia = useMemo(() => filterMedia(media, query), [media, query]);
   const tags = useMemo(() => extractTags(media), [media]);
@@ -147,6 +149,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const resolveHint = selected.size
     ? `${selected.size} item(s) queued.`
     : 'Select clips to enable.';
+
+  useEffect(() => {
+    activeProjectRef.current = activeProject;
+  }, [activeProject]);
+
+  useEffect(() => {
+    apiRef.current = api;
+  }, [api]);
 
   const buildUploadUrl = useCallback((project: Project) => {
     const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
@@ -405,6 +415,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [activeProject, addToast, api, buildUploadUrl, loadMedia],
   );
 
+  const persistThumbnail = useCallback(async (relPath: string, dataUrl: string) => {
+    const project = activeProjectRef.current;
+    if (!project) return;
+    try {
+      await apiRef.current.saveThumbnail(project.name, relPath, dataUrl, project.source);
+    } catch {
+      // ignore thumbnail persistence failures
+    }
+  }, []);
+
   const ensureThumbObserver = useCallback(() => {
     if (thumbObserverRef.current) return thumbObserverRef.current;
     const observer = new IntersectionObserver(
@@ -427,6 +447,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 const data = await extractVideoFrame(url, duration);
                 thumbCacheRef.current.set(rel, data);
                 setThumbs((prev) => new Map(prev).set(rel, data));
+                await persistThumbnail(rel, data);
               } catch {
                 // fallback stays in place
               }
@@ -437,6 +458,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 const data = await extractVideoFrame(url, duration);
                 thumbCacheRef.current.set(rel, data);
                 setThumbs((prev) => new Map(prev).set(rel, data));
+                await persistThumbnail(rel, data);
               } catch {
                 // ignore
               }

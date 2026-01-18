@@ -45,7 +45,7 @@ async def upload_file(project_name: str, file: UploadFile = File(...), source: s
     if not active_source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
     project = project_path(active_source.root, name)
-    ensure_subdirs(project, ["ingest/originals", "_manifest"])
+    ensure_subdirs(project, ["ingest/originals", "ingest/thumbnails", "_manifest"])
     if not (project / "index.json").exists():
         raise HTTPException(status_code=404, detail="Project index missing")
 
@@ -150,7 +150,7 @@ async def sync_album(project_name: str, payload: dict, source: str | None = None
     if not active_source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
     project = project_path(active_source.root, name)
-    ensure_subdirs(project, ["_manifest"])
+    ensure_subdirs(project, ["_manifest", "ingest/thumbnails"])
     events_path = project / "_manifest/events.jsonl"
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),

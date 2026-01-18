@@ -1192,6 +1192,20 @@
       target.innerHTML = `<img src="${escapeHtml(dataUrl)}" alt="Video thumbnail" loading="lazy" />`;
     }
 
+    async function storeThumbnail(relPath, dataUrl){
+      if (!state.activeProject || !relPath || !dataUrl) return;
+      const name = state.activeProject.name;
+      try{
+        await fetch(`${API}/api/projects/${encodeURIComponent(name)}/media/thumbnail${mediaQuery()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ relative_path: relPath, data_url: dataUrl }),
+        });
+      }catch{
+        // ignore thumbnail persistence failures
+      }
+    }
+
     async function generateThumb(relPath, url, durationHint, target){
       if (!url || !relPath) return;
       if (thumbCache.has(relPath)){
@@ -1202,6 +1216,7 @@
         const data = await extractVideoFrame(url, durationHint);
         thumbCache.set(relPath, data);
         setThumbImage(target, data);
+        storeThumbnail(relPath, data);
       }catch{
         if (target){
           target.innerHTML = '<div class="fallback">VIDEO</div>';

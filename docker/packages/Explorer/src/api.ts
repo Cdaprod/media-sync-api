@@ -12,6 +12,12 @@ export interface ApiClient {
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   uploadMedia: (url: string, file: File) => Promise<Record<string, unknown>>;
+  saveThumbnail: (
+    project: string,
+    relativePath: string,
+    dataUrl: string,
+    source?: string,
+  ) => Promise<Record<string, unknown>>;
   sendResolve: (payload: ResolveRequest, source?: string) => Promise<ResolveOpenResponse>;
   deleteMedia: (project: string, relativePaths: string[], source?: string) => Promise<Record<string, unknown>>;
   moveMedia: (
@@ -71,6 +77,27 @@ export function createApiClient(baseUrl: string): ApiClient {
         throw new Error(String(payload?.detail || payload?.message || 'Upload failed'));
       }
       return payload;
+    },
+    async saveThumbnail(
+      project: string,
+      relativePath: string,
+      dataUrl: string,
+      source?: string,
+    ): Promise<Record<string, unknown>> {
+      const query = source ? `?source=${encodeURIComponent(source)}` : '';
+      const response = await fetch(
+        buildUrl(`/api/projects/${encodeURIComponent(project)}/media/thumbnail${query}`),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ relative_path: relativePath, data_url: dataUrl }),
+        },
+      );
+      const data = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || data?.message || 'Thumbnail save failed'));
+      }
+      return data;
     },
     async sendResolve(payload: ResolveRequest, source?: string): Promise<ResolveOpenResponse> {
       const query = source ? `?source=${encodeURIComponent(source)}` : '';
