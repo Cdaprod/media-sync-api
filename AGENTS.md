@@ -405,3 +405,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-22)
 - Explorer API base inference now preserves same-origin defaults when the base URL is empty, avoiding unintended :8787 overrides.
+
+### Latest Implementation Notes (2025-03-23)
+- Explorer topbar logo now toggles the projects sidebar and the mobile layout truncates brand text to prevent overlap without increasing topbar height.

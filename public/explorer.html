@@ -101,16 +101,35 @@
       background: linear-gradient(135deg, rgba(124,58,237,0.9), rgba(34,197,94,0.75));
       box-shadow: 0 10px 30px rgba(124,58,237,0.25);
     }
+    .logo-button{
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+    .logo-button:focus-visible{
+      outline: 2px solid rgba(124,58,237,0.7);
+      outline-offset: 3px;
+    }
     .brand h1{
       margin:0;
       font-size: 16px;
       letter-spacing: 0.3px;
       font-weight: 750;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .brand .sub{
       margin-top: 2px;
       font-size: 12px;
       color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .toolbar{
@@ -713,6 +732,12 @@
         min-width: 0;
         gap: 8px;
       }
+      .brand h1{
+        font-size: 14px;
+      }
+      .brand .sub{
+        display: none;
+      }
       .toolbar{
         width: auto;
         flex: 1;
@@ -721,8 +746,9 @@
       .topbar-controls{
         width: 100%;
         justify-content: flex-end;
+        gap: 6px;
       }
-      .search{ max-width: 200px; min-width: 120px; }
+      .search{ max-width: 200px; min-width: 0; }
       .btn{ padding: 7px 10px; font-size:11px; }
       .seg button{ padding: 7px 9px; font-size:11px; }
       .grid{ gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
@@ -765,7 +791,7 @@
     <div class="topbar">
       <div class="topbar-inner">
         <div class="brand" title="LAN-only media-sync-api explorer">
-          <div class="logo" aria-hidden="true"></div>
+          <button id="sidebarToggleBtn" class="logo logo-button" type="button" aria-label="Toggle projects sidebar"></button>
           <div>
             <h1>media-sync-api</h1>
             <div class="sub">Explorer • projects → ingest → index → preview → Resolve</div>
@@ -773,9 +799,6 @@
         </div>
 
         <div class="toolbar">
-          <div class="toolbar-toggle">
-            <button id="sidebarToggleBtn" class="btn mobile-only" type="button">Projects</button>
-          </div>
           <div class="topbar-controls">
             <div class="search" role="search">
               <span class="kbd">⌘K</span>
