@@ -275,6 +275,7 @@ async def delete_media(project_name: str, payload: DeleteMediaRequest, source: s
     entries_by_path = {entry.get("relative_path"): entry for entry in index.get("files", [])}
 
     removed_paths: set[str] = set()
+    removed_thumbnails: set[str] = set()
     missing: list[str] = []
     for raw_path in payload.relative_paths:
         try:
@@ -286,11 +287,17 @@ async def delete_media(project_name: str, payload: DeleteMediaRequest, source: s
         if target.exists() and target.is_file():
             target.unlink()
             removed_paths.add(safe_relative)
+            thumb_removed = _remove_thumbnail(resolved.root, safe_relative)
+            if thumb_removed:
+                removed_thumbnails.add(thumb_removed)
         if entry:
             sha = entry.get("sha256")
             if sha:
                 remove_file_record(_manifest_db_path(resolved.root), sha, safe_relative)
             removed_paths.add(safe_relative)
+            thumb_removed = _remove_thumbnail(resolved.root, safe_relative)
+            if thumb_removed:
+                removed_thumbnails.add(thumb_removed)
         if not entry and not target.exists():
             missing.append(safe_relative)
 
@@ -299,10 +306,19 @@ async def delete_media(project_name: str, payload: DeleteMediaRequest, source: s
         append_event(
             resolved.root,
             "media_deleted",
-            {"paths": sorted(removed_paths), "source": resolved.source_name},
+            {
+                "paths": sorted(removed_paths),
+                "source": resolved.source_name,
+                "thumbnails": sorted(removed_thumbnails),
+            },
         )
 
-    return {"status": "ok", "removed": sorted(removed_paths), "missing": missing}
+    return {
+        "status": "ok",
+        "removed": sorted(removed_paths),
+        "missing": missing,
+        "thumbnails_removed": sorted(removed_thumbnails),
+    }
 
 
 @router.post("/{project_name}/media/move")
@@ -342,6 +358,7 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
     source_entries = {entry.get("relative_path"): entry for entry in source_index.get("files", [])}
 
     moved: list[dict[str, str]] = []
+    thumbnails_moved: list[dict[str, str]] = []
     duplicates: list[str] = []
     missing: list[str] = []
 
@@ -369,6 +386,9 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
 
         source_file.rename(destination)
         new_relative = relpath_posix(destination, target_root)
+        thumb_relative = _move_thumbnail(resolved.root, target_root, safe_relative, new_relative)
+        if thumb_relative:
+            thumbnails_moved.append({"from": safe_relative, "to": thumb_relative})
 
         duplicate = record_file_hash(_manifest_db_path(target_root), sha, new_relative)
         if duplicate:
@@ -393,7 +413,12 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
         append_event(
             target_root,
             "media_moved_in",
-            {"source_project": resolved.name, "items": moved, "source": target_source.name},
+            {
+                "source_project": resolved.name,
+                "items": moved,
+                "source": target_source.name,
+                "thumbnails": thumbnails_moved,
+            },
         )
     if duplicates:
         append_event(
@@ -405,10 +430,21 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
         append_event(
             resolved.root,
             "media_moved_out",
-            {"target_project": target_name, "items": moved, "source": resolved.source_name},
+            {
+                "target_project": target_name,
+                "items": moved,
+                "source": resolved.source_name,
+                "thumbnails": thumbnails_moved,
+            },
         )
 
-    return {"status": "ok", "moved": moved, "duplicates": duplicates, "missing": missing}
+    return {
+        "status": "ok",
+        "moved": moved,
+        "duplicates": duplicates,
+        "missing": missing,
+        "thumbnails_moved": thumbnails_moved,
+    }
 
 
 @router.post("/auto-organize")
@@ -521,6 +557,47 @@ def _find_thumbnail_relative(project_root: Path, relative_path: str) -> str | No
         if (project_root / candidate).exists():
             return candidate
     return None
+
+
+def _remove_thumbnail(project_root: Path, relative_path: str) -> str | None:
+    thumb_relative = _find_thumbnail_relative(project_root, relative_path)
+    if not thumb_relative:
+        return None
+    thumb_path = (project_root / thumb_relative).resolve()
+    project_root = project_root.resolve()
+    if project_root not in thumb_path.parents and thumb_path != project_root:
+        return None
+    thumb_path.unlink(missing_ok=True)
+    return thumb_relative
+
+
+def _move_thumbnail(
+    source_root: Path,
+    target_root: Path,
+    source_relative: str,
+    target_relative: str,
+) -> str | None:
+    thumb_relative = _find_thumbnail_relative(source_root, source_relative)
+    if not thumb_relative:
+        return None
+    source_thumb = (source_root / thumb_relative).resolve()
+    source_root = source_root.resolve()
+    if source_root not in source_thumb.parents and source_thumb != source_root:
+        return None
+    extension = Path(thumb_relative).suffix
+    if not extension:
+        return None
+    target_thumb_relative = _thumbnail_relative_for_extension(target_relative, extension)
+    target_thumb = (target_root / target_thumb_relative).resolve()
+    target_root = target_root.resolve()
+    if target_root not in target_thumb.parents and target_thumb != target_root:
+        return None
+    target_thumb.parent.mkdir(parents=True, exist_ok=True)
+    if target_thumb.exists():
+        source_thumb.unlink(missing_ok=True)
+    else:
+        source_thumb.rename(target_thumb)
+    return target_thumb_relative
 
 
 def _decode_thumbnail_data(data_url: str) -> tuple[bytes, str]:

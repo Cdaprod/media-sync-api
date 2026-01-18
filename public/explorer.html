@@ -981,6 +981,8 @@
 
     const thumbCache = new Map();
     let thumbObserver = null;
+    let thumbQueue = [];
+    let thumbQueueActive = false;
 
     // -------------------------
     // Utils
@@ -1192,6 +1194,12 @@
       target.innerHTML = `<img src="${escapeHtml(dataUrl)}" alt="Video thumbnail" loading="lazy" />`;
     }
 
+    function applyThumbToVisible(relPath, dataUrl){
+      if (!relPath || !dataUrl) return;
+      const nodes = document.querySelectorAll(`[data-rel="${CSS.escape(relPath)}"]`);
+      nodes.forEach((node) => setThumbImage(node, dataUrl));
+    }
+
     async function storeThumbnail(relPath, dataUrl){
       if (!state.activeProject || !relPath || !dataUrl) return;
       const name = state.activeProject.name;
@@ -1222,6 +1230,46 @@
           target.innerHTML = '<div class="fallback">VIDEO</div>';
         }
       }
+    }
+
+    function enqueueMissingThumbnails(items){
+      if (!items || !items.length) return;
+      const pending = new Set(thumbQueue.map((item) => item.relative_path));
+      const additions = [];
+      for (const item of items){
+        if (guessKind(item) !== 'video') continue;
+        if (item.thumb_url || item.thumbnail_url) continue;
+        if (thumbCache.has(item.relative_path)) continue;
+        if (pending.has(item.relative_path)) continue;
+        if (!item.stream_url) continue;
+        additions.push(item);
+      }
+      if (!additions.length) return;
+      thumbQueue = thumbQueue.concat(additions);
+      processThumbQueue();
+    }
+
+    function processThumbQueue(){
+      if (thumbQueueActive) return;
+      if (!thumbQueue.length) return;
+      thumbQueueActive = true;
+      const next = thumbQueue.shift();
+      const url = next.stream_url;
+      const rel = next.relative_path;
+      const duration = next.duration || 0;
+      requestIdle(async () => {
+        try{
+          const data = await extractVideoFrame(url, duration);
+          thumbCache.set(rel, data);
+          applyThumbToVisible(rel, data);
+          storeThumbnail(rel, data);
+        }catch{
+          // keep fallback
+        }finally{
+          thumbQueueActive = false;
+          processThumbQueue();
+        }
+      });
     }
 
     function extractVideoFrame(url, durationHint){
@@ -1310,6 +1358,8 @@
         if (!r.ok) throw new Error('Failed to load media list');
         const payload = await r.json();
         state.media = Array.isArray(payload.media) ? payload.media : [];
+        thumbQueue = [];
+        thumbQueueActive = false;
         // clear selection if selected files disappeared
         const existing = new Set(state.media.map(m => m.relative_path));
         for (const s of Array.from(state.selected)){
@@ -1318,6 +1368,7 @@
         renderMedia();
         updateTopCounts();
         updateSelectionUI();
+        enqueueMissingThumbnails(state.media);
       }catch(e){
         toast('bad','Media', e.message);
       }
