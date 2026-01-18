@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -59,6 +60,39 @@ def test_download_media_and_link_in_listing(client: TestClient, env_settings: Pa
     assert download.status_code == 200
     assert "attachment" in download.headers.get("content-disposition", "").lower()
     assert download.content == payload
+
+
+def test_store_thumbnail_and_list(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "thumb.mov"
+    media_path.write_bytes(b"media-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    thumbnail_data = base64.b64encode(b"thumb-bytes").decode("utf-8")
+    response = client.post(
+        f"/api/projects/{project_name}/media/thumbnail",
+        json={
+            "relative_path": "ingest/originals/thumb.mov",
+            "data_url": f"data:image/jpeg;base64,{thumbnail_data}",
+        },
+    )
+    assert response.status_code == 200
+
+    thumb_path = env_settings / project_name / "ingest" / "thumbnails" / "thumb.jpg"
+    assert thumb_path.exists()
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    media_entry = listing.json()["media"][0]
+    assert "/ingest/thumbnails/thumb.jpg" in media_entry["thumb_url"]
+
+    thumbnail = client.get(media_entry["thumb_url"])
+    assert thumbnail.status_code == 200
+    assert thumbnail.content == b"thumb-bytes"
 
 
 def test_reindex_moves_misplaced_media(client: TestClient, env_settings: Path) -> None:

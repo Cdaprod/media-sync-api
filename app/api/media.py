@@ -7,6 +7,8 @@ Example calls:
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import mimetypes
 import shutil
@@ -40,6 +42,14 @@ media_router = APIRouter(prefix="/media", tags=["media"])
 
 ORPHAN_PROJECT_NAME = "Unsorted-Loose"
 MANIFEST_DB = "_manifest/manifest.db"
+THUMBNAIL_DIR = "ingest/thumbnails"
+THUMBNAIL_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+THUMBNAIL_MIME_TO_EXT = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 
 
 class _ResolvedProject:
@@ -59,6 +69,11 @@ class MoveMediaRequest(BaseModel):
 
 class DeleteMediaRequest(BaseModel):
     relative_paths: List[str] = Field(default_factory=list)
+
+
+class ThumbnailCreateRequest(BaseModel):
+    relative_path: str = Field(..., description="Relative media path under ingest/originals/")
+    data_url: str = Field(..., description="Base64-encoded data URL for the thumbnail image.")
 
 
 def _require_source_and_project(project_name: str, source: str | None) -> _ResolvedProject:
@@ -124,6 +139,9 @@ async def list_media(project_name: str, source: str | None = None):
         item["relative_path"] = safe_relative
         item["stream_url"] = _build_stream_url(resolved.name, safe_relative, resolved.source_name)
         item["download_url"] = _build_download_url(resolved.name, safe_relative, resolved.source_name)
+        thumbnail_relative = _find_thumbnail_relative(resolved.root, safe_relative)
+        if thumbnail_relative:
+            item["thumb_url"] = _build_stream_url(resolved.name, thumbnail_relative, resolved.source_name)
         media.append(item)
     sorted_media = sorted(media, key=lambda m: m.get("relative_path", ""))
 
@@ -133,6 +151,55 @@ async def list_media(project_name: str, source: str | None = None):
         "media": sorted_media,
         "counts": index.get("counts", {}),
         "instructions": "Use stream_url to play media directly; run /reindex after manual moves.",
+    }
+
+
+@router.post("/{project_name}/media/thumbnail")
+async def store_thumbnail(project_name: str, payload: ThumbnailCreateRequest, source: str | None = None):
+    """Persist a generated thumbnail alongside the project media.
+
+    Example:
+        curl -X POST http://localhost:8787/api/projects/demo/media/thumbnail \
+          -H "Content-Type: application/json" \
+          -d '{"relative_path":"ingest/originals/clip.mov","data_url":"data:image/jpeg;base64,..."}'
+    """
+
+    resolved = _require_source_and_project(project_name, source)
+    try:
+        safe_relative = _validate_relative_media_path(payload.relative_path)
+        data, ext = _decode_thumbnail_data(payload.data_url)
+        thumb_relative = _thumbnail_relative_for_extension(safe_relative, ext)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    media_path = (resolved.root / safe_relative).resolve()
+    if not media_path.exists() or not media_path.is_file():
+        raise HTTPException(status_code=404, detail="Media not found")
+
+    target = (resolved.root / thumb_relative).resolve()
+    project_root = resolved.root.resolve()
+    if project_root not in target.parents and target != project_root:
+        raise HTTPException(status_code=400, detail="Thumbnail path is outside the project")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    stored = False
+    if not target.exists():
+        target.write_bytes(data)
+        stored = True
+    logger.info(
+        "thumbnail_saved",
+        extra={
+            "project": resolved.name,
+            "source": resolved.source_name,
+            "path": thumb_relative,
+            "stored": stored,
+        },
+    )
+    return {
+        "status": "ok",
+        "stored": stored,
+        "thumbnail_path": thumb_relative,
+        "thumbnail_url": _build_stream_url(resolved.name, thumb_relative, resolved.source_name),
     }
 
 
@@ -267,7 +334,7 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
     target_root = project_path(target_source.root, target_name)
     if not target_root.exists():
         raise HTTPException(status_code=404, detail="Target project not found")
-    ensure_subdirs(target_root, ["ingest/originals", "_manifest"])
+    ensure_subdirs(target_root, ["ingest/originals", "ingest/thumbnails", "_manifest"])
     if not (target_root / "index.json").exists():
         seed_index(target_root, target_name)
 
@@ -392,7 +459,7 @@ def _organize_source_root(root: Path) -> Dict[str, object]:
     index_path = destination / "index.json"
     if not index_path.exists():
         seed_index(destination, ORPHAN_PROJECT_NAME, notes="Auto-organized loose files from projects root")
-    ensure_subdirs(destination, ["ingest/originals", "_manifest"])
+    ensure_subdirs(destination, ["ingest/originals", "ingest/thumbnails", "_manifest"])
 
     moved: List[str] = []
     ingest = destination / "ingest/originals"
@@ -426,6 +493,56 @@ def _validate_relative_media_path(relative_path: str) -> str:
     if not cleaned:
         raise ValueError("Relative path cannot be empty")
     return cleaned
+
+
+def _thumbnail_relative_for_extension(relative_path: str, extension: str) -> str:
+    path = Path(relative_path)
+    if path.parts[:2] != ("ingest", "originals"):
+        raise ValueError("Thumbnails are only supported for ingest/originals media")
+    if not extension.startswith("."):
+        raise ValueError("Thumbnail extension must start with a dot")
+    sub_path = Path(*path.parts[2:])
+    return (Path("ingest") / "thumbnails" / sub_path.with_suffix(extension)).as_posix()
+
+
+def _thumbnail_candidate_relatives(relative_path: str) -> List[str]:
+    path = Path(relative_path)
+    if path.parts[:2] != ("ingest", "originals"):
+        return []
+    sub_path = Path(*path.parts[2:])
+    candidates = []
+    for ext in THUMBNAIL_EXTENSIONS:
+        candidates.append((Path("ingest") / "thumbnails" / sub_path.with_suffix(ext)).as_posix())
+    return candidates
+
+
+def _find_thumbnail_relative(project_root: Path, relative_path: str) -> str | None:
+    for candidate in _thumbnail_candidate_relatives(relative_path):
+        if (project_root / candidate).exists():
+            return candidate
+    return None
+
+
+def _decode_thumbnail_data(data_url: str) -> tuple[bytes, str]:
+    header, separator, b64_data = data_url.partition(",")
+    if not separator or not header:
+        raise ValueError("data_url must be a base64-encoded image data URL")
+    if not header.startswith("data:image/"):
+        raise ValueError("data_url must be an image data URL")
+    header_parts = header.split(";")
+    if "base64" not in header_parts:
+        raise ValueError("data_url must be base64 encoded")
+    mime = header_parts[0].replace("data:", "", 1)
+    extension = THUMBNAIL_MIME_TO_EXT.get(mime)
+    if not extension:
+        raise ValueError("Unsupported thumbnail mime type")
+    try:
+        decoded = base64.b64decode(b64_data, validate=True)
+    except binascii.Error as exc:
+        raise ValueError("Invalid base64 thumbnail payload") from exc
+    if not decoded:
+        raise ValueError("Thumbnail payload is empty")
+    return decoded, extension
 
 
 def _build_stream_url(project: str, relative_path: str, source: str | None) -> str:

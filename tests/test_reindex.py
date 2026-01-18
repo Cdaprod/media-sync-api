@@ -57,6 +57,24 @@ def test_reindex_allows_get_and_indexes_manual_moves(client, env_settings: Path)
     assert any(entry["relative_path"] == "ingest/originals/relocated.mp4" for entry in index_data["files"])
 
 
+def test_reindex_does_not_relocate_thumbnails(client, env_settings: Path) -> None:
+    created = client.post("/api/projects", json={"name": "thumb-check"})
+    assert created.status_code == 201
+    project_name = created.json()["name"]
+
+    project_dir = env_settings / project_name
+    thumb_dir = project_dir / "ingest" / "thumbnails"
+    thumb_dir.mkdir(parents=True, exist_ok=True)
+    thumb_path = thumb_dir / "keep.jpg"
+    thumb_path.write_bytes(b"thumb-cache")
+
+    response = client.post(f"/api/projects/{project_name}/reindex")
+    assert response.status_code == 200
+
+    assert thumb_path.exists()
+    assert not (project_dir / "ingest" / "originals" / "keep.jpg").exists()
+
+
 def test_root_reindex_scans_all_sources(client, env_settings: Path):
     primary = client.post("/api/projects", json={"name": "bulk-primary"})
     assert primary.status_code == 201
