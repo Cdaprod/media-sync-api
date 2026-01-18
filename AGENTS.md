@@ -419,3 +419,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-26)
 - Explorer UIs now queue background thumbnail generation for videos missing cached thumbs, ensuring new uploads get persisted frames without requiring viewport-triggered generation.
 - Media delete/move endpoints now remove or relocate thumbnail files alongside assets, returning thumbnail details in responses and manifest events.
+
+### Latest Implementation Notes (2025-03-27)
+- Refresh actions in the explorer UIs now re-persist cached thumbnails and enqueue missing thumbnail generation so the refresh button backfills any gaps in cached frames.
