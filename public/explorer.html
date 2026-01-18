@@ -215,11 +215,13 @@
     .btn[disabled]{ opacity: 0.55; cursor: not-allowed; transform: none; }
 
     .seg{
-      display:flex;
+      display:inline-flex;
       border: 1px solid var(--border);
       border-radius: 999px;
       overflow:hidden;
       background: rgba(255,255,255,0.05);
+      flex: 0 0 auto;
+      width: fit-content;
     }
     .seg button{
       border: none;
