@@ -408,3 +408,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-23)
 - Explorer topbar logo now toggles the projects sidebar and the mobile layout truncates brand text to prevent overlap without increasing topbar height.
+
+### Latest Implementation Notes (2025-03-24)
+- Explorer view-mode toggle now sizes to its content instead of stretching across the actions panel.
