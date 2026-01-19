@@ -4,7 +4,7 @@ A LAN-only, long-running relay that listens to one NDI source and re-broadcasts 
 
 ## Usage
 
-> Requires the NewTek NDI SDK (not redistributed here). Place the SDK contents at `ndi-relay/ndi-sdk/` before building.
+> Requires the NewTek NDI SDK (not redistributed here). Populate `ndi-relay/ndi-sdk/` before building (a placeholder directory is tracked in git).
 
 ```bash
 cd ndi-relay
