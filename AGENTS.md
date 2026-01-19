@@ -453,3 +453,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-05)
 - Explorer thumbnail generation now throttles auto-queue work, tracks in-flight attempts, and applies cooldowns to reduce excessive media requests while still supporting refresh backfills.
+- NDI relay now requires explicit SDK URLs when auto-downloading; defaults were removed to avoid 403s from the NDI portal.
