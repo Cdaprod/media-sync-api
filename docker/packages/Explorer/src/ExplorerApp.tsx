@@ -253,14 +253,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (thumbQueueActiveRef.current) return;
     let next = thumbQueueRef.current.shift();
     while (next) {
-      const rel = next.relative_path;
-      const url = resolveAssetUrl(next.stream_url);
+      const item = next;
+      const rel = item.relative_path;
+      const url = resolveAssetUrl(item.stream_url);
       if (rel && url && canAttemptThumb(rel)) {
         thumbQueueActiveRef.current = true;
         requestIdle(async () => {
           markThumbAttempt(rel);
           try {
-            const data = await extractVideoFrame(url, next.duration || 0);
+            const data = await extractVideoFrame(url, item.duration ?? 0);
             thumbCacheRef.current.set(rel, data);
             setThumbs((prev) => new Map(prev).set(rel, data));
             await persistThumbnail(rel, data);
