@@ -32,6 +32,8 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('formatListValue'));
   assert.ok(content.includes('buildUploadUrl'));
   assert.ok(content.includes('refreshMissingThumbnails'));
+  assert.ok(content.includes('THUMB_QUEUE_LIMIT'));
+  assert.ok(content.includes('THUMB_RETRY_MS'));
 });
 
 test('api base inference keeps LAN host reachable', () => {

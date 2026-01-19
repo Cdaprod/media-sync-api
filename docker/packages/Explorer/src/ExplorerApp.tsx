@@ -12,6 +12,9 @@ interface ExplorerAppProps {
 }
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
+const THUMB_QUEUE_LIMIT = 24;
+const THUMB_REFRESH_LIMIT = 60;
+const THUMB_RETRY_MS = 5 * 60 * 1000;
 
 const formatListValue = (value: string | string[] | null | undefined) => {
   if (Array.isArray(value)) {
@@ -137,6 +140,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
   const thumbQueueRef = useRef<MediaItem[]>([]);
   const thumbQueueActiveRef = useRef(false);
+  const thumbInFlightRef = useRef<Set<string>>(new Set());
+  const thumbAttemptRef = useRef<Map<string, number>>(new Map());
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
   const activeProjectRef = useRef<Project | null>(null);
   const apiRef = useRef(api);
@@ -212,6 +217,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, []);
 
+  const canAttemptThumb = useCallback((relPath: string, force = false) => {
+    if (!relPath) return false;
+    if (thumbInFlightRef.current.has(relPath)) return false;
+    if (thumbCacheRef.current.has(relPath)) return false;
+    if (force) return true;
+    const lastAttempt = thumbAttemptRef.current.get(relPath);
+    if (!lastAttempt) return true;
+    return Date.now() - lastAttempt > THUMB_RETRY_MS;
+  }, []);
+
+  const markThumbAttempt = useCallback((relPath: string) => {
+    if (!relPath) return;
+    thumbAttemptRef.current.set(relPath, Date.now());
+    thumbInFlightRef.current.add(relPath);
+  }, []);
+
+  const clearThumbAttempt = useCallback((relPath: string) => {
+    if (!relPath) return;
+    thumbInFlightRef.current.delete(relPath);
+  }, []);
+
   const requestIdle = useCallback((fn: () => void) => {
     if (typeof window === 'undefined') return;
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number })
@@ -225,47 +251,59 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const processThumbQueue = useCallback(() => {
     if (thumbQueueActiveRef.current) return;
-    const next = thumbQueueRef.current.shift();
-    if (!next) return;
-    const rel = next.relative_path;
-    const url = resolveAssetUrl(next.stream_url);
-    if (!url) {
-      processThumbQueue();
-      return;
-    }
-    thumbQueueActiveRef.current = true;
-    requestIdle(async () => {
-      try {
-        const data = await extractVideoFrame(url, next.duration || 0);
-        thumbCacheRef.current.set(rel, data);
-        setThumbs((prev) => new Map(prev).set(rel, data));
-        await persistThumbnail(rel, data);
-      } catch {
-        // ignore
-      } finally {
-        thumbQueueActiveRef.current = false;
-        processThumbQueue();
+    let next = thumbQueueRef.current.shift();
+    while (next) {
+      const rel = next.relative_path;
+      const url = resolveAssetUrl(next.stream_url);
+      if (rel && url && canAttemptThumb(rel)) {
+        thumbQueueActiveRef.current = true;
+        requestIdle(async () => {
+          markThumbAttempt(rel);
+          try {
+            const data = await extractVideoFrame(url, next.duration || 0);
+            thumbCacheRef.current.set(rel, data);
+            setThumbs((prev) => new Map(prev).set(rel, data));
+            await persistThumbnail(rel, data);
+          } catch {
+            // ignore
+          } finally {
+            clearThumbAttempt(rel);
+            thumbQueueActiveRef.current = false;
+            processThumbQueue();
+          }
+        });
+        return;
       }
-    });
-  }, [persistThumbnail, requestIdle, resolveAssetUrl]);
+      next = thumbQueueRef.current.shift();
+    }
+  }, [canAttemptThumb, clearThumbAttempt, markThumbAttempt, persistThumbnail, requestIdle, resolveAssetUrl]);
 
   const enqueueMissingThumbnails = useCallback((items: MediaItem[]) => {
     if (!items.length) return;
+    const remaining = Math.max(0, THUMB_QUEUE_LIMIT - thumbQueueRef.current.length);
+    if (remaining <= 0) return;
     const pending = new Set(thumbQueueRef.current.map((item) => item.relative_path));
-    const additions = items.filter((item) => {
-      if (guessKind(item) !== 'video') return false;
-      if (item.thumb_url || item.thumbnail_url) return false;
-      if (!item.stream_url) return false;
-      if (thumbCacheRef.current.has(item.relative_path)) return false;
-      return !pending.has(item.relative_path);
-    });
+    const additions: MediaItem[] = [];
+    for (const item of items) {
+      if (guessKind(item) !== 'video') continue;
+      if (item.thumb_url || item.thumbnail_url) continue;
+      if (!item.stream_url) continue;
+      if (!item.relative_path) continue;
+      if (thumbCacheRef.current.has(item.relative_path)) continue;
+      if (pending.has(item.relative_path)) continue;
+      if (!canAttemptThumb(item.relative_path)) continue;
+      additions.push(item);
+      if (additions.length >= remaining) break;
+    }
     if (!additions.length) return;
     thumbQueueRef.current = thumbQueueRef.current.concat(additions);
     processThumbQueue();
-  }, [processThumbQueue]);
+  }, [canAttemptThumb, processThumbQueue]);
 
   const refreshMissingThumbnails = useCallback((items: MediaItem[]) => {
     if (!items.length) return;
+    const remaining = Math.max(0, THUMB_REFRESH_LIMIT - thumbQueueRef.current.length);
+    if (remaining <= 0) return;
     const pending = new Set(thumbQueueRef.current.map((item) => item.relative_path));
     const additions: MediaItem[] = [];
     for (const item of items) {
@@ -281,12 +319,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       if (!item.stream_url) continue;
       if (pending.has(rel)) continue;
+      if (!canAttemptThumb(rel, true)) continue;
       additions.push(item);
+      if (additions.length >= remaining) break;
     }
     if (!additions.length) return;
     thumbQueueRef.current = thumbQueueRef.current.concat(additions);
     processThumbQueue();
-  }, [persistThumbnail, processThumbQueue]);
+  }, [canAttemptThumb, persistThumbnail, processThumbQueue]);
 
   const loadMedia = useCallback(
     async (project: Project | null) => {
@@ -301,6 +341,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setMedia(items);
         thumbQueueRef.current = [];
         thumbQueueActiveRef.current = false;
+        thumbInFlightRef.current.clear();
+        thumbAttemptRef.current.clear();
         const existing = new Set(items.map((item) => item.relative_path));
         setSelected((current) => pruneSelection(current, existing));
         enqueueMissingThumbnails(items);
@@ -523,10 +565,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           const kind = target.dataset.kind;
           if (!rel || !url || kind !== 'video') return;
           if (thumbCacheRef.current.has(rel)) return;
+          if (!canAttemptThumb(rel)) return;
           const requestIdle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number })
             .requestIdleCallback;
           if (requestIdle) {
             requestIdle(async () => {
+              markThumbAttempt(rel);
               try {
                 const data = await extractVideoFrame(url, duration);
                 thumbCacheRef.current.set(rel, data);
@@ -534,10 +578,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 await persistThumbnail(rel, data);
               } catch {
                 // fallback stays in place
+              } finally {
+                clearThumbAttempt(rel);
               }
             }, { timeout: 1200 });
           } else {
             window.setTimeout(async () => {
+              markThumbAttempt(rel);
               try {
                 const data = await extractVideoFrame(url, duration);
                 thumbCacheRef.current.set(rel, data);
@@ -545,6 +592,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 await persistThumbnail(rel, data);
               } catch {
                 // ignore
+              } finally {
+                clearThumbAttempt(rel);
               }
             }, 150);
           }
@@ -554,7 +603,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     );
     thumbObserverRef.current = observer;
     return observer;
-  }, []);
+  }, [canAttemptThumb, clearThumbAttempt, markThumbAttempt, persistThumbnail]);
 
   const registerThumbTarget = useCallback(
     (node: HTMLDivElement | null, item: MediaItem, kind: string) => {
