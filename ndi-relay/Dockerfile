@@ -16,10 +16,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   ndi-sdk/lib
 COPY ndi-sdk/ /opt/ndi/
 
-ARG NDI_SDK_URL_X86_64="https://downloads.ndi.tv/SDK/NDI_SDK_Linux/Install_NDI_SDK_v6_Linux.tar.gz"
-ARG NDI_SDK_URL_AARCH64="https://downloads.ndi.tv/SDK/NDI_SDK_Linux/Install_NDI_SDK_v6_Linux.tar.gz"
+ARG NDI_SDK_URL_X86_64="https://get.ndi.video/e/1092312/nstall-NDI-SDK-v6-Linux-tar-gz/lygzhz/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
+ARG NDI_SDK_URL_AARCH64=""
+ARG NDI_SDK_URL_WINDOWS="https://get.ndi.video/e/1092312/SDK-NDI-SDK-NDI20620SDK-exe/lygzhs/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
+ARG NDI_SDK_URL_MACOS="https://get.ndi.video/e/1092312/c-Install-NDI-SDK-v6-Apple-pkg/lygzhw/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
+ARG NDI_SDK_URL_ANDROID_LINUX="https://get.ndi.video/e/1092312/tall-NDI-SDK-v6-Android-tar-gz/lygzj3/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
+ARG NDI_SDK_URL_ANDROID_WINDOWS="https://get.ndi.video/e/1092312/d-NDI20620SDK2028Android29-exe/lygzj6/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
 
-RUN if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
+RUN set -eux; \
+    if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
       arch="$(uname -m)"; \
       case "${arch}" in \
         x86_64|amd64) sdk_url="${NDI_SDK_URL_X86_64}" ;; \
@@ -31,17 +36,36 @@ RUN if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
         exit 1; \
       fi; \
       echo "Downloading NDI SDK for ${arch}..." >&2; \
-      curl -fsSL "${sdk_url}" -o /tmp/ndi-sdk.tgz; \
+      curl -fL --retry 3 --retry-delay 1 "${sdk_url}" -o /tmp/ndi-sdk.tgz; \
       mkdir -p /tmp/ndi-sdk; \
       tar -xzf /tmp/ndi-sdk.tgz -C /tmp/ndi-sdk; \
-      sdk_root="$(find /tmp/ndi-sdk -type f -name Processing.NDI.Lib.h -print -quit | xargs -r dirname | xargs -r dirname)"; \
-      if [ -z "${sdk_root}" ]; then \
-        echo "NDI SDK download missing include/lib structure." >&2; \
+      header_path="$(find /tmp/ndi-sdk -type f -name Processing.NDI.Lib.h -print -quit)"; \
+      if [ -z "${header_path}" ]; then \
+        echo "NDI SDK download missing Processing.NDI.Lib.h (unexpected layout)." >&2; \
+        echo "Top-level extracted contents:" >&2; \
+        ls -la /tmp/ndi-sdk >&2 || true; \
         exit 1; \
       fi; \
+      sdk_root="$(dirname "$(dirname "${header_path}")")"; \
       rm -rf /opt/ndi; \
-      mkdir -p /opt/ndi; \
-      cp -r "${sdk_root}/include" "${sdk_root}/lib" /opt/ndi/; \
+      mkdir -p /opt/ndi/include /opt/ndi/lib; \
+      cp -r "${sdk_root}/include/." /opt/ndi/include/; \
+      lib_dir=""; \
+      if [ -d "${sdk_root}/lib" ]; then \
+        lib_dir="${sdk_root}/lib"; \
+      else \
+        lib_file="$(find "${sdk_root}" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print -quit)"; \
+        if [ -n "${lib_file}" ]; then \
+          lib_dir="$(dirname "${lib_file}")"; \
+        else \
+          lib_dir="$(find "${sdk_root}" -maxdepth 5 -type d -name lib -print -quit)"; \
+        fi; \
+      fi; \
+      if [ -z "${lib_dir}" ]; then \
+        echo "NDI SDK found headers but no lib directory." >&2; \
+        exit 1; \
+      fi; \
+      cp -r "${lib_dir}/." /opt/ndi/lib/; \
       rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz; \
     fi
 
