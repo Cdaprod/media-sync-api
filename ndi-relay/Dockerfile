@@ -112,6 +112,7 @@ RUN set -eux; \
       --enable-nonfree \
       --enable-shared \
       --enable-libx264 \
+      --disable-x86asm \
       --enable-libndi_newtek \
       --extra-cflags="-I/opt/ndi/include" \
       --extra-ldflags="-L/opt/ndi/lib" \
