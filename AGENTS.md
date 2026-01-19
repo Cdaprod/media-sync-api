@@ -469,3 +469,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-10)
 - Explorer app thumbnail queue now captures the dequeued media item before async processing to satisfy strict undefined checks during Next.js builds.
+
+### Latest Implementation Notes (2025-04-11)
+- NDI relay now defaults the FFmpeg tarball source to the DistroAV `main` branch to avoid 404s on missing `master`.

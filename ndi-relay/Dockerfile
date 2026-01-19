@@ -22,7 +22,7 @@ ARG NDI_SDK_URL_WINDOWS="https://get.ndi.video/e/1092312/SDK-NDI-SDK-NDI20620SDK
 ARG NDI_SDK_URL_MACOS="https://get.ndi.video/e/1092312/c-Install-NDI-SDK-v6-Apple-pkg/lygzhw/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
 ARG NDI_SDK_URL_ANDROID_LINUX="https://get.ndi.video/e/1092312/tall-NDI-SDK-v6-Android-tar-gz/lygzj3/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
 ARG NDI_SDK_URL_ANDROID_WINDOWS="https://get.ndi.video/e/1092312/d-NDI20620SDK2028Android29-exe/lygzj6/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
-ARG FFMPEG_NDI_SOURCE_URL="https://codeload.github.com/DistroAV/FFmpeg/tar.gz/refs/heads/master"
+ARG FFMPEG_NDI_SOURCE_URL="https://codeload.github.com/DistroAV/FFmpeg/tar.gz/refs/heads/main"
 
 RUN set -eux; \
     if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
