@@ -985,9 +985,15 @@
     };
 
     const thumbCache = new Map();
+    const thumbInFlight = new Set();
+    const thumbAttempts = new Map();
     let thumbObserver = null;
     let thumbQueue = [];
     let thumbQueueActive = false;
+
+    const MAX_AUTO_THUMBS = 24;
+    const MAX_REFRESH_THUMBS = 60;
+    const THUMB_RETRY_MS = 5 * 60 * 1000;
 
     // -------------------------
     // Utils
@@ -1194,6 +1200,27 @@
       }
     }
 
+    function canAttemptThumb(relPath, options = {}){
+      if (!relPath) return false;
+      if (thumbInFlight.has(relPath)) return false;
+      if (thumbCache.has(relPath)) return false;
+      if (options.force) return true;
+      const lastAttempt = thumbAttempts.get(relPath);
+      if (!lastAttempt) return true;
+      return (Date.now() - lastAttempt) > THUMB_RETRY_MS;
+    }
+
+    function markThumbAttempt(relPath){
+      if (!relPath) return;
+      thumbAttempts.set(relPath, Date.now());
+      thumbInFlight.add(relPath);
+    }
+
+    function clearThumbAttempt(relPath){
+      if (!relPath) return;
+      thumbInFlight.delete(relPath);
+    }
+
     function setThumbImage(target, dataUrl){
       if (!target) return;
       target.innerHTML = `<img src="${escapeHtml(dataUrl)}" alt="Video thumbnail" loading="lazy" />`;
@@ -1225,6 +1252,8 @@
         setThumbImage(target, thumbCache.get(relPath));
         return;
       }
+      if (!canAttemptThumb(relPath)) return;
+      markThumbAttempt(relPath);
       try{
         const data = await extractVideoFrame(url, durationHint);
         thumbCache.set(relPath, data);
@@ -1234,11 +1263,15 @@
         if (target){
           target.innerHTML = '<div class="fallback">VIDEO</div>';
         }
+      }finally{
+        clearThumbAttempt(relPath);
       }
     }
 
     function enqueueMissingThumbnails(items){
       if (!items || !items.length) return;
+      const remaining = Math.max(0, MAX_AUTO_THUMBS - thumbQueue.length);
+      if (remaining <= 0) return;
       const pending = new Set(thumbQueue.map((item) => item.relative_path));
       const additions = [];
       for (const item of items){
@@ -1246,8 +1279,10 @@
         if (item.thumb_url || item.thumbnail_url) continue;
         if (thumbCache.has(item.relative_path)) continue;
         if (pending.has(item.relative_path)) continue;
+        if (!canAttemptThumb(item.relative_path)) continue;
         if (!item.stream_url) continue;
         additions.push(item);
+        if (additions.length >= remaining) break;
       }
       if (!additions.length) return;
       thumbQueue = thumbQueue.concat(additions);
@@ -1256,29 +1291,38 @@
 
     function processThumbQueue(){
       if (thumbQueueActive) return;
-      if (!thumbQueue.length) return;
-      thumbQueueActive = true;
-      const next = thumbQueue.shift();
-      const url = next.stream_url;
-      const rel = next.relative_path;
-      const duration = next.duration || 0;
-      requestIdle(async () => {
-        try{
-          const data = await extractVideoFrame(url, duration);
-          thumbCache.set(rel, data);
-          applyThumbToVisible(rel, data);
-          storeThumbnail(rel, data);
-        }catch{
-          // keep fallback
-        }finally{
-          thumbQueueActive = false;
-          processThumbQueue();
-        }
-      });
+      while (thumbQueue.length){
+        const next = thumbQueue.shift();
+        if (!next) return;
+        const url = next.stream_url;
+        const rel = next.relative_path;
+        const duration = next.duration || 0;
+        if (!url || !rel) continue;
+        if (!canAttemptThumb(rel)) continue;
+        thumbQueueActive = true;
+        requestIdle(async () => {
+          markThumbAttempt(rel);
+          try{
+            const data = await extractVideoFrame(url, duration);
+            thumbCache.set(rel, data);
+            applyThumbToVisible(rel, data);
+            storeThumbnail(rel, data);
+          }catch{
+            // keep fallback
+          }finally{
+            clearThumbAttempt(rel);
+            thumbQueueActive = false;
+            processThumbQueue();
+          }
+        });
+        return;
+      }
     }
 
     function refreshMissingThumbnails(items){
       if (!items || !items.length) return;
+      const remaining = Math.max(0, MAX_REFRESH_THUMBS - thumbQueue.length);
+      if (remaining <= 0) return;
       const pending = new Set(thumbQueue.map((item) => item.relative_path));
       const additions = [];
       for (const item of items){
@@ -1294,7 +1338,9 @@
         }
         if (!item.stream_url) continue;
         if (pending.has(rel)) continue;
+        if (!canAttemptThumb(rel, { force: true })) continue;
         additions.push(item);
+        if (additions.length >= remaining) break;
       }
       if (!additions.length) return;
       thumbQueue = thumbQueue.concat(additions);
@@ -1580,6 +1626,11 @@
       state.activeProject = p;
       state.selected.clear();
       state.focused = null;
+      thumbCache.clear();
+      thumbInFlight.clear();
+      thumbAttempts.clear();
+      thumbQueue = [];
+      thumbQueueActive = false;
 
       // prefill resolve name
       el('resolveProjectMode').value = 'current';
