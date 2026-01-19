@@ -426,3 +426,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-28)
 - Added a standalone `/ndi-relay` service with Dockerfile, compose file, and entrypoint to relay an incoming NDI stream and re-broadcast it as `iPhone Screen`, plus a minimal asset test and README usage notes.
+
+### Latest Implementation Notes (2025-03-29)
+- Tightened explorer grid card metadata spacing to reduce overall asset tile height.
