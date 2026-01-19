@@ -273,7 +273,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (item.thumb_url || item.thumbnail_url) continue;
       const rel = item.relative_path;
       if (!rel) continue;
-      if (thumbCacheRef.current.has(rel)) continue;
+      const cached = thumbCacheRef.current.get(rel);
+      if (cached) {
+        setThumbs((prev) => new Map(prev).set(rel, cached));
+        void persistThumbnail(rel, cached);
+        continue;
+      }
       if (!item.stream_url) continue;
       if (pending.has(rel)) continue;
       additions.push(item);
@@ -281,7 +286,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!additions.length) return;
     thumbQueueRef.current = thumbQueueRef.current.concat(additions);
     processThumbQueue();
-  }, [processThumbQueue]);
+  }, [persistThumbnail, processThumbQueue]);
 
   const loadMedia = useCallback(
     async (project: Project | null) => {

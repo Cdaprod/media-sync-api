@@ -1281,7 +1281,12 @@
         if (item.thumb_url || item.thumbnail_url) continue;
         const rel = item.relative_path;
         if (!rel) continue;
-        if (thumbCache.has(rel)) continue;
+        const cached = thumbCache.get(rel);
+        if (cached){
+          applyThumbToVisible(rel, cached);
+          storeThumbnail(rel, cached);
+          continue;
+        }
         if (!item.stream_url) continue;
         if (pending.has(rel)) continue;
         additions.push(item);
