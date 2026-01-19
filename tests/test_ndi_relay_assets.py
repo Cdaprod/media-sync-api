@@ -23,3 +23,5 @@ def test_ndi_dockerfile_mentions_sdk_hint():
     dockerfile = relay_dir / "Dockerfile"
     content = dockerfile.read_text(encoding="utf-8")
     assert "NDI SDK missing" in content
+    assert "NDI_SDK_URL_X86_64" in content
+    assert "NDI_SDK_URL_AARCH64" in content
