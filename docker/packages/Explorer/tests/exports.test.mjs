@@ -29,6 +29,7 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('resolveAssetUrl'));
   assert.ok(content.includes('formatListValue'));
   assert.ok(content.includes('buildUploadUrl'));
+  assert.ok(content.includes('refreshMissingThumbnails'));
 });
 
 test('api base inference keeps LAN host reachable', () => {

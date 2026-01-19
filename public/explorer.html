@@ -1272,6 +1272,25 @@
       });
     }
 
+    function refreshMissingThumbnails(items){
+      if (!items || !items.length) return;
+      const pending = new Set(thumbQueue.map((item) => item.relative_path));
+      const additions = [];
+      for (const item of items){
+        if (guessKind(item) !== 'video') continue;
+        if (item.thumb_url || item.thumbnail_url) continue;
+        const rel = item.relative_path;
+        if (!rel) continue;
+        if (thumbCache.has(rel)) continue;
+        if (!item.stream_url) continue;
+        if (pending.has(rel)) continue;
+        additions.push(item);
+      }
+      if (!additions.length) return;
+      thumbQueue = thumbQueue.concat(additions);
+      processThumbQueue();
+    }
+
     function extractVideoFrame(url, durationHint){
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -1815,7 +1834,8 @@
       await loadSources();
       await loadProjects();
       await loadMedia();
-      toast('good','Refresh','Reloaded projects + media');
+      refreshMissingThumbnails(state.media);
+      toast('good','Refresh','Reloaded projects + media + thumbnails');
     });
 
     el('sidebarToggleBtn').addEventListener('click', () => setSidebarOpen(!ui.sidebarOpen));

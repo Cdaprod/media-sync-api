@@ -264,12 +264,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     processThumbQueue();
   }, [processThumbQueue]);
 
+  const refreshMissingThumbnails = useCallback((items: MediaItem[]) => {
+    if (!items.length) return;
+    const pending = new Set(thumbQueueRef.current.map((item) => item.relative_path));
+    const additions: MediaItem[] = [];
+    for (const item of items) {
+      if (guessKind(item) !== 'video') continue;
+      if (item.thumb_url || item.thumbnail_url) continue;
+      const rel = item.relative_path;
+      if (!rel) continue;
+      if (thumbCacheRef.current.has(rel)) continue;
+      if (!item.stream_url) continue;
+      if (pending.has(rel)) continue;
+      additions.push(item);
+    }
+    if (!additions.length) return;
+    thumbQueueRef.current = thumbQueueRef.current.concat(additions);
+    processThumbQueue();
+  }, [processThumbQueue]);
+
   const loadMedia = useCallback(
     async (project: Project | null) => {
       if (!project) {
         setMedia([]);
         setSelected(new Set());
-        return;
+        return [];
       }
       try {
         const payload = await api.listMedia(project.name, project.source);
@@ -280,10 +299,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         const existing = new Set(items.map((item) => item.relative_path));
         setSelected((current) => pruneSelection(current, existing));
         enqueueMissingThumbnails(items);
+        return items;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load media';
         addToast('bad', 'Media', message);
       }
+      return [];
     },
     [api, addToast, enqueueMissingThumbnails],
   );
@@ -291,9 +312,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const refreshAll = useCallback(async () => {
     await loadSources();
     await loadProjects();
-    await loadMedia(activeProject);
-    addToast('good', 'Refresh', 'Reloaded projects + media');
-  }, [activeProject, addToast, loadMedia, loadProjects, loadSources]);
+    const items = await loadMedia(activeProject);
+    refreshMissingThumbnails(items);
+    addToast('good', 'Refresh', 'Reloaded projects + media + thumbnails');
+  }, [activeProject, addToast, loadMedia, loadProjects, loadSources, refreshMissingThumbnails]);
 
   const selectProject = useCallback(
     (project: Project) => {
