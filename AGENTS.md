@@ -463,3 +463,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-08)
 - NDI relay now builds FFmpeg from the DistroAV fork and logs NDI-related configure flags to avoid missing `--enable-libndi_newtek` in vanilla FFmpeg.
+
+### Latest Implementation Notes (2025-04-09)
+- NDI relay now downloads the DistroAV FFmpeg source as a tarball via `FFMPEG_NDI_SOURCE_URL` to avoid git auth prompts during Docker builds.

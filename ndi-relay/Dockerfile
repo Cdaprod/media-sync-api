@@ -22,6 +22,7 @@ ARG NDI_SDK_URL_WINDOWS="https://get.ndi.video/e/1092312/SDK-NDI-SDK-NDI20620SDK
 ARG NDI_SDK_URL_MACOS="https://get.ndi.video/e/1092312/c-Install-NDI-SDK-v6-Apple-pkg/lygzhw/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
 ARG NDI_SDK_URL_ANDROID_LINUX="https://get.ndi.video/e/1092312/tall-NDI-SDK-v6-Android-tar-gz/lygzj3/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
 ARG NDI_SDK_URL_ANDROID_WINDOWS="https://get.ndi.video/e/1092312/d-NDI20620SDK2028Android29-exe/lygzj6/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
+ARG FFMPEG_NDI_SOURCE_URL="https://codeload.github.com/DistroAV/FFmpeg/tar.gz/refs/heads/master"
 
 RUN set -eux; \
     if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
@@ -81,7 +82,18 @@ RUN set -eux; \
       rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz /tmp/ndi-install /tmp/ndi-install.log; \
     fi
 
-RUN git clone --depth 1 https://github.com/DistroAV/FFmpeg.git /ffmpeg && \
+RUN set -eux; \
+    curl -fL --retry 3 --retry-delay 1 "${FFMPEG_NDI_SOURCE_URL}" -o /tmp/ffmpeg.tgz; \
+    mkdir -p /tmp/ffmpeg-src; \
+    tar -xzf /tmp/ffmpeg.tgz -C /tmp/ffmpeg-src; \
+    ffmpeg_dir="$(find /tmp/ffmpeg-src -maxdepth 2 -type d -name 'FFmpeg-*' -print -quit)"; \
+    if [ -z "${ffmpeg_dir}" ]; then \
+      echo "FFmpeg source archive did not unpack as expected." >&2; \
+      ls -la /tmp/ffmpeg-src >&2 || true; \
+      exit 1; \
+    fi; \
+    mv "${ffmpeg_dir}" /ffmpeg; \
+    rm -rf /tmp/ffmpeg-src /tmp/ffmpeg.tgz; \
     cd /ffmpeg && \
     ./configure --help | grep -i ndi || true && \
     ./configure \
