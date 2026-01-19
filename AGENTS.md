@@ -441,3 +441,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-04-01)
 - Next.js Explorer proxies `/api/*` and `/media/*` through route handlers so the UI can stream/preview assets without CORS headers.
 - API base inference now prefers same-origin paths when the configured base points at localhost/container hosts on a different port.
+
+### Latest Implementation Notes (2025-04-02)
+- NDI relay now includes a tracked `ndi-relay/ndi-sdk` placeholder and fails fast with a clear Dockerfile message when the SDK is missing.

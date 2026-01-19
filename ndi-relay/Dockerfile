@@ -16,6 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   ndi-sdk/lib
 COPY ndi-sdk/ /opt/ndi/
 
+RUN if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
+      echo "NDI SDK missing. Copy the SDK into ndi-relay/ndi-sdk before building." >&2; \
+      exit 1; \
+    fi
+
 RUN git clone --depth 1 -b release/6.1 https://github.com/FFmpeg/FFmpeg.git /ffmpeg && \
     cd /ffmpeg && \
     ./configure \
