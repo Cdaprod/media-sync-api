@@ -437,3 +437,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-31)
 - Tightened explorer asset body padding/gap to reduce empty space in grid cards.
 - Next.js explorer now defaults to `:8787` when running on a different port and no API base is configured, avoiding same-origin 404s.
+
+### Latest Implementation Notes (2025-04-01)
+- Next.js Explorer proxies `/api/*` and `/media/*` through route handlers so the UI can stream/preview assets without CORS headers.
+- API base inference now prefers same-origin paths when the configured base points at localhost/container hosts on a different port.

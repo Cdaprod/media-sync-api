@@ -20,6 +20,8 @@ test('package exports include entrypoints', () => {
 test('standalone app entry exists', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'page.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'layout.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'api', '[...path]', 'route.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'media', '[...path]', 'route.ts')));
 });
 
 test('explorer resolves media urls against api base', () => {
@@ -37,6 +39,7 @@ test('api base inference keeps LAN host reachable', () => {
   const content = fs.readFileSync(utilsPath, 'utf8');
   assert.ok(content.includes('inferApiBaseUrl'));
   assert.ok(content.includes('media-sync-api'));
-  assert.ok(content.includes(':8787'));
-  assert.ok(content.includes("location.port !== '8787'"));
+  assert.ok(content.includes('localhost'));
+  assert.ok(content.includes('sameHost'));
+  assert.ok(content.includes('location.hostname'));
 });
