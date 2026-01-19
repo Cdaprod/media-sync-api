@@ -447,3 +447,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-03)
 - NDI relay can auto-download the SDK during builds via architecture-specific `NDI_SDK_URL_X86_64` / `NDI_SDK_URL_AARCH64` build args when the local SDK folder is empty.
+
+### Latest Implementation Notes (2025-04-04)
+- NDI relay now ships default SDK download URLs for x86_64/aarch64 and still allows overrides via build args.

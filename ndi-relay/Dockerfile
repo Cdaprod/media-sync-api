@@ -16,8 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   ndi-sdk/lib
 COPY ndi-sdk/ /opt/ndi/
 
-ARG NDI_SDK_URL_X86_64=""
-ARG NDI_SDK_URL_AARCH64=""
+ARG NDI_SDK_URL_X86_64="https://downloads.ndi.tv/SDK/NDI_SDK_Linux_x86_64.tar.gz"
+ARG NDI_SDK_URL_AARCH64="https://downloads.ndi.tv/SDK/NDI_SDK_Linux_aarch64.tar.gz"
 
 RUN if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
       arch="$(uname -m)"; \
@@ -27,7 +27,7 @@ RUN if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
         *) echo "Unsupported architecture: ${arch}" >&2; exit 1 ;; \
       esac; \
       if [ -z "${sdk_url}" ]; then \
-        echo "NDI SDK missing. Provide ndi-relay/ndi-sdk or set NDI_SDK_URL_X86_64/NDI_SDK_URL_AARCH64 to download." >&2; \
+        echo "NDI SDK missing and no download URL configured for ${arch}." >&2; \
         exit 1; \
       fi; \
       echo "Downloading NDI SDK for ${arch}..." >&2; \
