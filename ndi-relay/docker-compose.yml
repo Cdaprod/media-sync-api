@@ -1,0 +1,21 @@
+services:
+  ndi-relay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ndi-iphone-broadcast-relay
+    restart: unless-stopped
+    environment:
+      # Exact incoming NDI name
+      NDI_INPUT_NAME: "iPhone Screen"
+
+      # New outgoing relay name
+      NDI_OUTPUT_NAME: "iPhone Screen"
+
+      # Optional: hard-pin discovery if Docker multicast is flaky
+      # Example: "192.168.0.77"
+      NDI_EXTRA_IPS: ""
+
+      RETRY_SECONDS: "2"
+
+    network_mode: "host"

@@ -253,6 +253,7 @@ docker compose down
 5. ✅ Minimal web UI for local admin with project/media browsing.
 6. ✅ Next.js Explorer package under `/docker/packages/Explorer` for embedding.
 7. ⏭ Optional OBS integration + Resolve bridge (separate services).
+8. ✅ NDI relay container under `/ndi-relay` for iPhone broadcast stabilization.
 
 ---
 
@@ -422,3 +423,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-27)
 - Refresh actions in the explorer UIs now re-persist cached thumbnails and enqueue missing thumbnail generation so the refresh button backfills any gaps in cached frames.
+
+### Latest Implementation Notes (2025-03-28)
+- Added a standalone `/ndi-relay` service with Dockerfile, compose file, and entrypoint to relay an incoming NDI stream and re-broadcast it as `iPhone Screen`, plus a minimal asset test and README usage notes.
