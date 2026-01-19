@@ -444,3 +444,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-02)
 - NDI relay now includes a tracked `ndi-relay/ndi-sdk` placeholder and fails fast with a clear Dockerfile message when the SDK is missing.
+
+### Latest Implementation Notes (2025-04-03)
+- NDI relay can auto-download the SDK during builds via architecture-specific `NDI_SDK_URL_X86_64` / `NDI_SDK_URL_AARCH64` build args when the local SDK folder is empty.
