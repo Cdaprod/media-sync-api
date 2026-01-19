@@ -41,32 +41,44 @@ RUN set -eux; \
       tar -xzf /tmp/ndi-sdk.tgz -C /tmp/ndi-sdk; \
       header_path="$(find /tmp/ndi-sdk -type f -name Processing.NDI.Lib.h -print -quit)"; \
       if [ -z "${header_path}" ]; then \
-        echo "NDI SDK download missing Processing.NDI.Lib.h (unexpected layout)." >&2; \
-        echo "Top-level extracted contents:" >&2; \
-        ls -la /tmp/ndi-sdk >&2 || true; \
-        exit 1; \
+        installer="$(find /tmp/ndi-sdk -maxdepth 2 -type f -name 'Install_NDI_SDK_*_Linux.sh' -print -quit)"; \
+        if [ -z "${installer}" ]; then \
+          echo "NDI SDK download missing Processing.NDI.Lib.h (unexpected layout)." >&2; \
+          echo "Top-level extracted contents:" >&2; \
+          ls -la /tmp/ndi-sdk >&2 || true; \
+          exit 1; \
+        fi; \
+        chmod +x "${installer}"; \
+        install_prefix="/tmp/ndi-install"; \
+        rm -rf "${install_prefix}"; \
+        mkdir -p "${install_prefix}"; \
+        if "${installer}" --help 2>&1 | grep -qi -- '--prefix'; then \
+          yes | "${installer}" --prefix="${install_prefix}" >/tmp/ndi-install.log 2>&1; \
+        else \
+          yes | (cd /tmp/ndi-sdk && "${installer}") >/tmp/ndi-install.log 2>&1 || true; \
+        fi; \
+        header_path="$(find "${install_prefix}" /tmp/ndi-sdk /usr/local /opt -type f -name Processing.NDI.Lib.h -print -quit || true)"; \
+        if [ -z "${header_path}" ]; then \
+          echo "NDI install ran but header not found. Installer log:" >&2; \
+          tail -n 120 /tmp/ndi-install.log >&2 || true; \
+          exit 1; \
+        fi; \
       fi; \
       sdk_root="$(dirname "$(dirname "${header_path}")")"; \
       rm -rf /opt/ndi; \
       mkdir -p /opt/ndi/include /opt/ndi/lib; \
       cp -r "${sdk_root}/include/." /opt/ndi/include/; \
-      lib_dir=""; \
-      if [ -d "${sdk_root}/lib" ]; then \
-        lib_dir="${sdk_root}/lib"; \
-      else \
-        lib_file="$(find "${sdk_root}" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print -quit)"; \
-        if [ -n "${lib_file}" ]; then \
-          lib_dir="$(dirname "${lib_file}")"; \
-        else \
-          lib_dir="$(find "${sdk_root}" -maxdepth 5 -type d -name lib -print -quit)"; \
-        fi; \
+      lib_file="$(find "${sdk_root}" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print -quit || true)"; \
+      if [ -z "${lib_file}" ]; then \
+        lib_file="$(find "$(dirname "${sdk_root}")" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print -quit || true)"; \
       fi; \
-      if [ -z "${lib_dir}" ]; then \
-        echo "NDI SDK found headers but no lib directory." >&2; \
+      if [ -z "${lib_file}" ]; then \
+        echo "NDI headers found but libs not found. Installer log:" >&2; \
+        tail -n 120 /tmp/ndi-install.log >&2 || true; \
         exit 1; \
       fi; \
-      cp -r "${lib_dir}/." /opt/ndi/lib/; \
-      rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz; \
+      cp -r "$(dirname "${lib_file}")/." /opt/ndi/lib/; \
+      rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz /tmp/ndi-install /tmp/ndi-install.log; \
     fi
 
 RUN git clone --depth 1 -b release/6.1 https://github.com/FFmpeg/FFmpeg.git /ffmpeg && \
