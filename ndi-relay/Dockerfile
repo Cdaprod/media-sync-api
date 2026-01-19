@@ -81,8 +81,9 @@ RUN set -eux; \
       rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz /tmp/ndi-install /tmp/ndi-install.log; \
     fi
 
-RUN git clone --depth 1 -b release/6.1 https://github.com/FFmpeg/FFmpeg.git /ffmpeg && \
+RUN git clone --depth 1 https://github.com/DistroAV/FFmpeg.git /ffmpeg && \
     cd /ffmpeg && \
+    ./configure --help | grep -i ndi || true && \
     ./configure \
       --prefix=/usr/local \
       --enable-gpl \

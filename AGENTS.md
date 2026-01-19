@@ -460,3 +460,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-07)
 - NDI relay Dockerfile now runs the Linux SDK installer script when the download is a self-extracting payload, then locates headers/libs from the install output with log tails for failure triage.
+
+### Latest Implementation Notes (2025-04-08)
+- NDI relay now builds FFmpeg from the DistroAV fork and logs NDI-related configure flags to avoid missing `--enable-libndi_newtek` in vanilla FFmpeg.
