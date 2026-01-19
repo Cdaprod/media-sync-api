@@ -466,3 +466,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-09)
 - NDI relay now downloads the DistroAV FFmpeg source as a tarball via `FFMPEG_NDI_SOURCE_URL` to avoid git auth prompts during Docker builds.
+
+### Latest Implementation Notes (2025-04-10)
+- Explorer app thumbnail queue now captures the dequeued media item before async processing to satisfy strict undefined checks during Next.js builds.
