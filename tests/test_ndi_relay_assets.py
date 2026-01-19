@@ -25,4 +25,3 @@ def test_ndi_dockerfile_mentions_sdk_hint():
     assert "NDI SDK missing" in content
     assert "NDI_SDK_URL_X86_64" in content
     assert "NDI_SDK_URL_AARCH64" in content
-    assert "downloads.ndi.tv" in content

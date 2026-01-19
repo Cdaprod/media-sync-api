@@ -450,3 +450,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-04)
 - NDI relay now ships default SDK download URLs for x86_64/aarch64 and still allows overrides via build args.
+
+### Latest Implementation Notes (2025-04-05)
+- NDI relay now requires explicit SDK URLs when auto-downloading; defaults were removed to avoid 403s from the NDI portal.

@@ -13,7 +13,7 @@ cp -R /path/to/ndi-sdk ./ndi-sdk
 docker compose up -d
 ```
 
-To download the SDK during the Docker build, the Dockerfile uses default NDI SDK URLs based on architecture. Override them if you keep the SDK in a different location:
+To download the SDK during the Docker build, pass a per-architecture URL for the SDK tarball. (The official NDI download portal may require authentication; use the direct URL you receive there.)
 
 ```bash
 docker compose build \
