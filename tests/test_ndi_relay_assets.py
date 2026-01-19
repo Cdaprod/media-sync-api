@@ -7,6 +7,7 @@ def test_ndi_relay_assets_present():
     assert (relay_dir / "entrypoint.sh").is_file()
     assert (relay_dir / "docker-compose.yml").is_file()
     assert (relay_dir / "README.md").is_file()
+    assert (relay_dir / "ndi-sdk").is_dir()
 
 
 def test_entrypoint_has_usage_comment():
@@ -15,3 +16,12 @@ def test_entrypoint_has_usage_comment():
     content = entrypoint.read_text(encoding="utf-8")
     assert "Usage:" in content
     assert "Example:" in content
+
+
+def test_ndi_dockerfile_mentions_sdk_hint():
+    relay_dir = Path(__file__).resolve().parents[1] / "ndi-relay"
+    dockerfile = relay_dir / "Dockerfile"
+    content = dockerfile.read_text(encoding="utf-8")
+    assert "NDI SDK missing" in content
+    assert "NDI_SDK_URL_X86_64" in content
+    assert "NDI_SDK_URL_AARCH64" in content

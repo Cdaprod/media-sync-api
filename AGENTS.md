@@ -441,3 +441,15 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-04-01)
 - Next.js Explorer proxies `/api/*` and `/media/*` through route handlers so the UI can stream/preview assets without CORS headers.
 - API base inference now prefers same-origin paths when the configured base points at localhost/container hosts on a different port.
+
+### Latest Implementation Notes (2025-04-02)
+- NDI relay now includes a tracked `ndi-relay/ndi-sdk` placeholder and fails fast with a clear Dockerfile message when the SDK is missing.
+
+### Latest Implementation Notes (2025-04-03)
+- NDI relay can auto-download the SDK during builds via architecture-specific `NDI_SDK_URL_X86_64` / `NDI_SDK_URL_AARCH64` build args when the local SDK folder is empty.
+
+### Latest Implementation Notes (2025-04-04)
+- NDI relay now ships default SDK download URLs for x86_64/aarch64 and still allows overrides via build args.
+
+### Latest Implementation Notes (2025-04-05)
+- NDI relay now requires explicit SDK URLs when auto-downloading; defaults were removed to avoid 403s from the NDI portal.

@@ -4,13 +4,21 @@ A LAN-only, long-running relay that listens to one NDI source and re-broadcasts 
 
 ## Usage
 
-> Requires the NewTek NDI SDK (not redistributed here). Place the SDK contents at `ndi-relay/ndi-sdk/` before building.
+> Requires the NewTek NDI SDK (not redistributed here). Populate `ndi-relay/ndi-sdk/` before building (a placeholder directory is tracked in git), or pass a download URL for your CPU architecture at build time.
 
 ```bash
 cd ndi-relay
 cp -R /path/to/ndi-sdk ./ndi-sdk
 
 docker compose up -d
+```
+
+To download the SDK during the Docker build, pass a per-architecture URL for the SDK tarball. (The official NDI download portal may require authentication; use the direct URL you receive there.)
+
+```bash
+docker compose build \
+  --build-arg NDI_SDK_URL_X86_64="https://example.com/ndi-sdk-x86_64.tgz" \
+  --build-arg NDI_SDK_URL_AARCH64="https://example.com/ndi-sdk-aarch64.tgz"
 ```
 
 ## Configuration
