@@ -472,3 +472,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-11)
 - NDI relay now defaults the FFmpeg tarball source to the DistroAV `main` branch to avoid 404s on missing `master`.
+
+### Latest Implementation Notes (2025-04-12)
+- NDI relay now builds FFmpeg from the upstream tarball and applies the `lplassman/FFMPEG-NDI` patch (via `FFMPEG_SOURCE_URL` + `FFMPEG_NDI_PATCH_URL`) to restore `--enable-libndi_newtek`.

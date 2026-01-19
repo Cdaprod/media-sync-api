@@ -21,6 +21,14 @@ docker compose build \
   --build-arg NDI_SDK_URL_AARCH64="https://example.com/ndi-sdk-aarch64.tgz"
 ```
 
+The relay build patches FFmpeg with NDI support using the upstream FFmpeg tarball plus the `lplassman/FFMPEG-NDI` patch. Override the sources if needed:
+
+```bash
+docker compose build \
+  --build-arg FFMPEG_SOURCE_URL="https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n5.1" \
+  --build-arg FFMPEG_NDI_PATCH_URL="https://codeload.github.com/lplassman/FFMPEG-NDI/tar.gz/refs/heads/master"
+```
+
 Reference URLs from the NDI download email (store these locally; they may expire):
 
 - Windows: `https://get.ndi.video/e/1092312/SDK-NDI-SDK-NDI20620SDK-exe/lygzhs/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk`

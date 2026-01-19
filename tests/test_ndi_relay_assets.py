@@ -24,7 +24,9 @@ def test_ndi_dockerfile_mentions_sdk_hint():
     content = dockerfile.read_text(encoding="utf-8")
     assert "NDI SDK missing" in content
     assert "Install_NDI_SDK" in content
-    assert "DistroAV/FFmpeg" in content
-    assert "FFMPEG_NDI_SOURCE_URL" in content
+    assert "FFMPEG_SOURCE_URL" in content
+    assert "FFMPEG_NDI_PATCH_URL" in content
+    assert "FFmpeg/FFmpeg" in content
+    assert "lplassman/FFMPEG-NDI" in content
     assert "NDI_SDK_URL_X86_64" in content
     assert "NDI_SDK_URL_AARCH64" in content
