@@ -454,3 +454,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-04-05)
 - Explorer thumbnail generation now throttles auto-queue work, tracks in-flight attempts, and applies cooldowns to reduce excessive media requests while still supporting refresh backfills.
 - NDI relay now requires explicit SDK URLs when auto-downloading; defaults were removed to avoid 403s from the NDI portal.
+
+### Latest Implementation Notes (2025-04-06)
+- NDI relay Dockerfile now normalizes the downloaded SDK layout by locating headers/libs regardless of nested installer paths, and build args/defaults reference the latest NDI email URLs (Linux for builds, other platforms documented for future use).
