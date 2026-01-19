@@ -16,8 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   ndi-sdk/lib
 COPY ndi-sdk/ /opt/ndi/
 
-ARG NDI_SDK_URL_X86_64=""
-ARG NDI_SDK_URL_AARCH64=""
+ARG NDI_SDK_URL_X86_64="https://downloads.ndi.tv/SDK/NDI_SDK_Linux/Install_NDI_SDK_v6_Linux.tar.gz"
+ARG NDI_SDK_URL_AARCH64="https://downloads.ndi.tv/SDK/NDI_SDK_Linux/Install_NDI_SDK_v6_Linux.tar.gz"
 
 RUN if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
       arch="$(uname -m)"; \
