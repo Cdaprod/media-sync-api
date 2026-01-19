@@ -429,3 +429,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-29)
 - Tightened explorer grid card metadata spacing to reduce overall asset tile height.
+
+### Latest Implementation Notes (2025-03-30)
+- Added FastAPI CORS middleware wiring so LAN UIs served from other ports can access the API when `MEDIA_SYNC_CORS_ORIGINS` is configured.
+- Shortened explorer thumbnail aspect ratio in both static and Next.js explorers to reduce excess grid card height.
