@@ -30,11 +30,7 @@ export interface LocationLike {
 export function inferApiBaseUrl(baseUrl: string | undefined, location?: LocationLike): string {
   const trimmed = (baseUrl || '').trim();
   if (!location) return trimmed;
-  const fallback = `${location.protocol}//${location.hostname}:8787`;
   if (!trimmed) {
-    if (location.port && location.port !== '8787') {
-      return fallback;
-    }
     return '';
   }
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
@@ -42,11 +38,17 @@ export function inferApiBaseUrl(baseUrl: string | undefined, location?: Location
   }
   try {
     const parsed = new URL(trimmed);
-    if (['media-sync-api', 'localhost', '127.0.0.1'].includes(parsed.hostname)) {
-      return fallback;
+    const hostIsLocal = ['media-sync-api', 'localhost', '127.0.0.1'].includes(parsed.hostname);
+    const sameHost = parsed.hostname === location.hostname;
+    if (hostIsLocal || sameHost) {
+      const parsedPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+      const locationPort = location.port || (location.protocol === 'https:' ? '443' : '80');
+      if (parsedPort !== locationPort) {
+        return '';
+      }
     }
   } catch {
-    return fallback;
+    return '';
   }
   return trimmed;
 }
