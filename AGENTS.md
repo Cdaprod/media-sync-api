@@ -433,3 +433,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-03-30)
 - Added FastAPI CORS middleware wiring so LAN UIs served from other ports can access the API when `MEDIA_SYNC_CORS_ORIGINS` is configured.
 - Shortened explorer thumbnail aspect ratio in both static and Next.js explorers to reduce excess grid card height.
+
+### Latest Implementation Notes (2025-03-31)
+- Tightened explorer asset body padding/gap to reduce empty space in grid cards.
+- Next.js explorer now defaults to `:8787` when running on a different port and no API base is configured, avoiding same-origin 404s.

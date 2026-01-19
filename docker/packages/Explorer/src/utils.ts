@@ -30,8 +30,13 @@ export interface LocationLike {
 export function inferApiBaseUrl(baseUrl: string | undefined, location?: LocationLike): string {
   const trimmed = (baseUrl || '').trim();
   if (!location) return trimmed;
-  if (!trimmed) return '';
   const fallback = `${location.protocol}//${location.hostname}:8787`;
+  if (!trimmed) {
+    if (location.port && location.port !== '8787') {
+      return fallback;
+    }
+    return '';
+  }
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
     return trimmed;
   }

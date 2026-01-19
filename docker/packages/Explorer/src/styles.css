@@ -410,6 +410,8 @@ code { font-family: var(--mono); }
   cursor:pointer;
   transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
   position: relative;
+  display:flex;
+  flex-direction: column;
 }
 .asset:hover{ transform: translateY(-2px); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); }
 
@@ -437,10 +439,11 @@ code { font-family: var(--mono); }
 }
 
 .asset .body{
-  padding: 6px 8px 8px;
+  padding: 4px 6px 6px;
   display:flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  margin: 0;
 }
 .asset .title{
   font-size: 12px;
