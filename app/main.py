@@ -14,6 +14,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -63,7 +64,17 @@ def create_app() -> FastAPI:
     """Create a new FastAPI instance with registered routers."""
 
     _configure_logging()
+    settings = get_settings()
     application = FastAPI(title="media-sync-api", version="0.1.0", lifespan=lifespan)
+    if settings.cors_origins:
+        allow_all = "*" in settings.cors_origins
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"] if allow_all else settings.cors_origins,
+            allow_credentials=False if allow_all else True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     application.include_router(projects_router)
     application.include_router(media_api_router)
     application.include_router(sources_router)
