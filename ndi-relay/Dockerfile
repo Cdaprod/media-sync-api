@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential pkg-config git ca-certificates curl tar \
-    yasm nasm autoconf automake libtool \
+    yasm nasm autoconf automake libtool file \
     libssl-dev libx264-dev \
  && rm -rf /var/lib/apt/lists/*
 
@@ -29,8 +29,8 @@ RUN set -eux; \
     if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
       arch="$(uname -m)"; \
       case "${arch}" in \
-        x86_64|amd64) sdk_url="${NDI_SDK_URL_X86_64}" ;; \
-        aarch64|arm64) sdk_url="${NDI_SDK_URL_AARCH64}" ;; \
+        x86_64|amd64) sdk_url="${NDI_SDK_URL_X86_64}" ; arch_pattern="x86-64" ;; \
+        aarch64|arm64) sdk_url="${NDI_SDK_URL_AARCH64}" ; arch_pattern="aarch64" ;; \
         *) echo "Unsupported architecture: ${arch}" >&2; exit 1 ;; \
       esac; \
       if [ -z "${sdk_url}" ]; then \
@@ -70,16 +70,50 @@ RUN set -eux; \
       rm -rf /opt/ndi; \
       mkdir -p /opt/ndi/include /opt/ndi/lib; \
       cp -r "${sdk_root}/include/." /opt/ndi/include/; \
-      lib_file="$(find "${sdk_root}" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print -quit || true)"; \
-      if [ -z "${lib_file}" ]; then \
-        lib_file="$(find "$(dirname "${sdk_root}")" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print -quit || true)"; \
+      lib_candidates="$(find "${sdk_root}" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print || true)"; \
+      if [ -z "${lib_candidates}" ]; then \
+        lib_candidates="$(find "$(dirname "${sdk_root}")" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print || true)"; \
       fi; \
-      if [ -z "${lib_file}" ]; then \
+      if [ -z "${lib_candidates}" ]; then \
         echo "NDI headers found but libs not found. Installer log:" >&2; \
         tail -n 120 /tmp/ndi-install.log >&2 || true; \
         exit 1; \
       fi; \
-      cp -r "$(dirname "${lib_file}")/." /opt/ndi/lib/; \
+      old_ifs="${IFS}"; \
+      IFS="$(printf '\n')"; \
+      selected_lib_dir=""; \
+      for lib_file in ${lib_candidates}; do \
+        if [ -f "${lib_file}" ]; then \
+          if echo "${lib_file}" | grep -q '\.a$'; then \
+            selected_lib_dir="$(dirname "${lib_file}")"; \
+            break; \
+          fi; \
+          if file -b "${lib_file}" | grep -qi "${arch_pattern}"; then \
+            selected_lib_dir="$(dirname "${lib_file}")"; \
+            break; \
+          fi; \
+        fi; \
+      done; \
+      IFS="${old_ifs}"; \
+      if [ -z "${selected_lib_dir}" ]; then \
+        echo "NDI libs found but none match architecture ${arch}." >&2; \
+        IFS="$(printf '\n')"; \
+        for lib_file in ${lib_candidates}; do \
+          if [ -f "${lib_file}" ]; then \
+            echo "${lib_file}: $(file -b "${lib_file}")" >&2; \
+          fi; \
+        done; \
+        IFS="${old_ifs}"; \
+        exit 1; \
+      fi; \
+      cp -r "${selected_lib_dir}/." /opt/ndi/lib/; \
+      for lib_file in /opt/ndi/lib/libndi*.so*; do \
+        if [ -e "${lib_file}" ]; then \
+          if ! file -b "${lib_file}" | grep -qi "${arch_pattern}"; then \
+            rm -f "${lib_file}"; \
+          fi; \
+        fi; \
+      done; \
       rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz /tmp/ndi-install /tmp/ndi-install.log; \
     fi
 
