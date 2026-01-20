@@ -11,6 +11,7 @@ NDI_EXTRA_IPS="${NDI_EXTRA_IPS:-}"
 NDI_GROUPS="${NDI_GROUPS:-}"
 NDI_DISCOVERY_REQUIRED="${NDI_DISCOVERY_REQUIRED:-false}"
 NDI_DISCOVERY_SERVER="${NDI_DISCOVERY_SERVER:-}"
+NDI_SOURCE_MATCH="${NDI_SOURCE_MATCH:-}"
 RETRY_SECONDS="${RETRY_SECONDS:-2}"
 
 log() { echo "[$(date -Is)] $*"; }
@@ -38,15 +39,30 @@ if [[ -n "${NDI_GROUPS}" ]]; then
 fi
 
 while true; do
-  if [[ -z "${NDI_INPUT_NAME}" ]]; then
-    log "Waiting for NDI_INPUT_NAME to be set. Retry in ${RETRY_SECONDS}s."
+  discovery_output="$(ffmpeg -hide_banner -f libndi_newtek -find_sources 1 -i dummy 2>&1 || true)"
+  sources="$(echo "${discovery_output}" | sed -n -e 's/^[[:space:]]*[0-9][0-9]*[.:)][[:space:]]*//p' -e 's/^[[:space:]]*-[[:space:]]*//p')"
+
+  input_name="${NDI_INPUT_NAME}"
+  if [[ -z "${input_name}" && -n "${sources}" ]]; then
+    if [[ -n "${NDI_SOURCE_MATCH}" ]]; then
+      input_name="$(echo "${sources}" | grep -Ei "${NDI_SOURCE_MATCH}" | head -n 1 || true)"
+    else
+      input_name="$(echo "${sources}" | head -n 1 || true)"
+    fi
+  fi
+
+  if [[ -z "${input_name}" ]]; then
+    log "No NDI source selected. Set NDI_INPUT_NAME or NDI_SOURCE_MATCH. Retry in ${RETRY_SECONDS}s."
+    if [[ -n "${sources}" ]]; then
+      log "Discovered sources:"
+      echo "${sources}" | sed 's/^/  - /'
+    fi
     sleep "${RETRY_SECONDS}"
     continue
   fi
 
-  discovery_output="$(ffmpeg -hide_banner -f libndi_newtek -find_sources 1 -i dummy 2>&1 || true)"
-  if [[ -n "${discovery_output}" ]] && ! grep -Fq "${NDI_INPUT_NAME}" <<< "${discovery_output}"; then
-    log "NDI source not found in discovery pass: ${NDI_INPUT_NAME}"
+  if [[ -n "${discovery_output}" ]] && ! grep -Fq "${input_name}" <<< "${discovery_output}"; then
+    log "NDI source not found in discovery pass: ${input_name}"
     log "Discovery hints: confirm the iPhone is broadcasting, disable NDI Groups or set NDI_GROUPS if supported."
     echo "${discovery_output}" | grep -i "ndi" || true
     if [[ "${NDI_DISCOVERY_REQUIRED}" == "true" ]]; then
@@ -56,7 +72,7 @@ while true; do
   fi
 
   log "Starting NDI relay"
-  log "  IN : ${NDI_INPUT_NAME}"
+  log "  IN : ${input_name}"
   log "  OUT: ${NDI_OUTPUT_NAME}"
 
   ndi_group_args=()
@@ -69,7 +85,7 @@ while true; do
     -hide_banner -loglevel info \
     "${ndi_group_args[@]}" \
     ${NDI_EXTRA_IPS:+-extra_ips "$NDI_EXTRA_IPS"} \
-    -f libndi_newtek -i "${NDI_INPUT_NAME}" \
+    -f libndi_newtek -i "${input_name}" \
     -map 0:v -map 0:a? \
     -c:v copy \
     -c:a copy \

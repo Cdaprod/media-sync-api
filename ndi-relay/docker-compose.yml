@@ -35,6 +35,9 @@ services:
       # Optional: NDI discovery server host:port (ex: "127.0.0.1:5959")
       NDI_DISCOVERY_SERVER: "127.0.0.1:5959"
 
+      # Optional: regex to auto-pick a discovered source when NDI_INPUT_NAME is empty.
+      NDI_SOURCE_MATCH: ""
+
       RETRY_SECONDS: "2"
 
     network_mode: "host"

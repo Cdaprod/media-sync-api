@@ -47,12 +47,19 @@ Environment variables:
 - `NDI_GROUPS`: Optional comma-separated NDI groups to search (ex: `iPhone,public`). Only applies if the bundled FFmpeg supports `-ndi_group`.
 - `NDI_DISCOVERY_REQUIRED`: Set to `true` to block relaying until discovery finds `NDI_INPUT_NAME`. Defaults to `false`.
 - `NDI_DISCOVERY_SERVER`: Optional discovery server host:port (ex: `192.168.0.25:5959`). When set, the relay writes `/root/.ndi/ndi-config.v1.json` to force unicast discovery.
+- `NDI_SOURCE_MATCH`: Optional case-insensitive regex to auto-pick a discovered source when `NDI_INPUT_NAME` is empty (ex: `iPhone|NDI`).
 - `RETRY_SECONDS`: Wait time before retrying when the source disappears. Defaults to `2`.
 
 Example override:
 
 ```bash
 NDI_INPUT_NAME="My iPhone" NDI_OUTPUT_NAME="iPhone Screen" NDI_GROUPS="iPhone" docker compose up -d
+```
+
+Auto-select example (no exact name needed):
+
+```bash
+NDI_INPUT_NAME="" NDI_SOURCE_MATCH="iPhone|NDI" docker compose up -d
 ```
 
 ### Discovery server (Docker-only)

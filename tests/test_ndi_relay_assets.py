@@ -57,3 +57,4 @@ def test_ndi_relay_compose_defaults():
     assert env.get("NDI_GROUPS") == ""
     assert env.get("NDI_DISCOVERY_REQUIRED") == "false"
     assert env.get("NDI_DISCOVERY_SERVER") == "127.0.0.1:5959"
+    assert env.get("NDI_SOURCE_MATCH") == ""

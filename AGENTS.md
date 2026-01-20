@@ -523,3 +523,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-28)
 - NDI relay stack now includes a Dockerized discovery server with `NDI_DISCOVERY_SERVER` wiring to avoid multicast gaps in Docker Desktop environments.
+
+### Latest Implementation Notes (2025-04-29)
+- NDI relay can now auto-select a discovered source via `NDI_SOURCE_MATCH` when `NDI_INPUT_NAME` is blank, reducing strict name dependency.
