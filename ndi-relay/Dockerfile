@@ -186,6 +186,8 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder /opt/ndi /opt/ndi
 COPY entrypoint.sh /entrypoint.sh
 
-RUN chmod +x /entrypoint.sh
+# Fix Windows CRLF -> Linux LF (prevents 'bash\r' error)
+RUN sed -i 's/\r$//' /entrypoint.sh \
+  && chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

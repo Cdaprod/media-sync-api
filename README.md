@@ -30,7 +30,7 @@ The container is stateless; the host path is the source of truth.
 
 ## Quick start with Docker Compose
 ```bash
-docker compose -f docker/docker-compose.yaml up -d --build
+docker compose up -d --build
 ```
 
 For multi-platform image builds, use Buildx Bake from the repo root:
@@ -39,7 +39,7 @@ For multi-platform image builds, use Buildx Bake from the repo root:
 docker buildx bake -f docker/docker-bake.hcl
 ```
 
-The Compose file lives under `/docker/` and builds from the repo root using `docker/Dockerfile` so COPY paths remain valid while keeping the build context anchored at the project root.
+Root-level Compose includes the core API, Explorer UI, and the NDI relay sidecar so the relay stays up to rebroadcast any `iPhone Screen` NDI feed on the LAN. The Compose file lives under `/docker/` and builds from the repo root using `docker/Dockerfile` so COPY paths remain valid while keeping the build context anchored at the project root.
 
 Verify the service and volume:
 ```bash
@@ -52,7 +52,7 @@ Existing folders under `B:\\Video\\Projects` that follow the `P{n}-<name>` patte
 Troubleshooting:
 - Ensure Docker Desktop has file sharing enabled for drive `B:`
 - Bind to `0.0.0.0` so iOS devices on `192.168.0.x` can reach the API
-- If requests fail, check firewall rules and `docker compose -f docker/docker-compose.yaml logs -f`
+- If requests fail, check firewall rules and `docker compose logs -f`
 
 ## Usage playbook (verify → create → ingest → dedupe → reindex)
 1) Verify it is running
