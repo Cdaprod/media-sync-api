@@ -20,7 +20,8 @@ services:
       NDI_EXTRA_IPS: ""
 
       # Optional: NDI groups to search (comma-separated). Example: "iPhone,public"
-      NDI_GROUPS: "iPhone"
+      # Some ffmpeg builds do not support -ndi_group, so leave blank unless needed.
+      NDI_GROUPS: ""
 
       RETRY_SECONDS: "2"
 

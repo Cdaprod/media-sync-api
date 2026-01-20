@@ -511,3 +511,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-24)
 - NDI relay now accepts `NDI_GROUPS` and defaults the compose sidecar to the `iPhone` group to find iPhone Screen NDI HX feeds.
+
+### Latest Implementation Notes (2025-04-25)
+- NDI relay now probes FFmpeg for `-ndi_group` support before passing group flags, and the compose default leaves groups blank to avoid option errors in builds without group support.

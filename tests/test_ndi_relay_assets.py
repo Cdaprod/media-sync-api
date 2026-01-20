@@ -50,4 +50,4 @@ def test_ndi_relay_compose_defaults():
     env = service.get("environment", {})
     assert env.get("NDI_INPUT_NAME") == "iPhone Screen"
     assert env.get("NDI_OUTPUT_NAME") == "iPhone Screen"
-    assert env.get("NDI_GROUPS") == "iPhone"
+    assert env.get("NDI_GROUPS") == ""

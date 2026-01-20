@@ -18,6 +18,15 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   exit 127
 fi
 
+ndi_group_supported=false
+if [[ -n "${NDI_GROUPS}" ]]; then
+  if ffmpeg -hide_banner -h full 2>/dev/null | grep -q "ndi_group"; then
+    ndi_group_supported=true
+  else
+    log "NDI groups requested (${NDI_GROUPS}) but ffmpeg does not support -ndi_group. Skipping groups."
+  fi
+fi
+
 while true; do
   if [[ -z "${NDI_INPUT_NAME}" ]]; then
     log "Waiting for NDI_INPUT_NAME to be set. Retry in ${RETRY_SECONDS}s."
@@ -29,10 +38,15 @@ while true; do
   log "  IN : ${NDI_INPUT_NAME}"
   log "  OUT: ${NDI_OUTPUT_NAME}"
 
+  ndi_group_args=()
+  if [[ -n "${NDI_GROUPS}" && "${ndi_group_supported}" == "true" ]]; then
+    ndi_group_args=(-ndi_group "${NDI_GROUPS}")
+  fi
+
   set +e
   ffmpeg \
     -hide_banner -loglevel info \
-    ${NDI_GROUPS:+-ndi_group "$NDI_GROUPS"} \
+    "${ndi_group_args[@]}" \
     ${NDI_EXTRA_IPS:+-extra_ips "$NDI_EXTRA_IPS"} \
     -f libndi_newtek -i "${NDI_INPUT_NAME}" \
     -map 0:v -map 0:a? \
