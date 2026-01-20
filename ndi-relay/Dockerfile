@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential pkg-config git ca-certificates curl tar \
     yasm nasm autoconf automake libtool file \
-    libssl-dev libx264-dev \
+    libssl-dev libx264-dev libavahi-client-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Provide NDI SDK yourself (licensing)
@@ -179,7 +179,7 @@ ENV PATH="/usr/local/bin:$PATH"
 ENV LD_LIBRARY_PATH="/opt/ndi/lib:/usr/local/lib"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates bash \
+    ca-certificates bash libavahi-client3 \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local

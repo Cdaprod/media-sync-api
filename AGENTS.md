@@ -493,3 +493,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-18)
 - NDI relay SDK install now flattens libndi artifacts into `/opt/ndi/lib`, creates `libndi.so` symlinks, and links FFmpeg with `-lndi`.
+
+### Latest Implementation Notes (2025-04-19)
+- NDI relay build now installs Avahi client headers/libs so libndi resolves `avahi_*` symbols at link time and runtime.
