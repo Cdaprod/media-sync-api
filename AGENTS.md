@@ -490,3 +490,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-17)
 - NDI relay SDK library selection now uses a bash/null-delimited candidate list to handle spaces without word-splitting.
+
+### Latest Implementation Notes (2025-04-18)
+- NDI relay SDK install now flattens libndi artifacts into `/opt/ndi/lib`, creates `libndi.so` symlinks, and links FFmpeg with `-lndi`.
