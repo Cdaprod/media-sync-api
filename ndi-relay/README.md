@@ -41,7 +41,7 @@ Reference URLs from the NDI download email (store these locally; they may expire
 
 Environment variables:
 
-- `NDI_INPUT_NAME`: The exact incoming NDI source name. (Required)
+- `NDI_INPUT_NAME`: The exact incoming NDI source name. Leave blank to auto-pick using `NDI_SOURCE_MATCH`.
 - `NDI_OUTPUT_NAME`: The outgoing relay name. Defaults to `iPhone Screen`.
 - `NDI_EXTRA_IPS`: Optional comma-separated extra discovery IPs.
 - `NDI_GROUPS`: Optional comma-separated NDI groups to search (ex: `iPhone,public`). Only applies if the bundled FFmpeg supports `-ndi_group`.

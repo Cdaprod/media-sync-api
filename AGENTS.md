@@ -526,3 +526,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-29)
 - NDI relay can now auto-select a discovered source via `NDI_SOURCE_MATCH` when `NDI_INPUT_NAME` is blank, reducing strict name dependency.
+
+### Latest Implementation Notes (2025-04-30)
+- Relay compose defaults now leave `NDI_INPUT_NAME` blank and use `NDI_SOURCE_MATCH=iPhone|NDI` so the sidecar auto-picks iPhone sources when discovery is available.

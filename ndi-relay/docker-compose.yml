@@ -15,8 +15,8 @@ services:
     container_name: ndi-iphone-broadcast-relay
     restart: always
     environment:
-      # Exact incoming NDI name
-      NDI_INPUT_NAME: "iPhone Screen"
+      # Exact incoming NDI name (leave blank to auto-pick a discovered source).
+      NDI_INPUT_NAME: ""
 
       # New outgoing relay name
       NDI_OUTPUT_NAME: "iPhone Screen"
@@ -36,7 +36,7 @@ services:
       NDI_DISCOVERY_SERVER: "127.0.0.1:5959"
 
       # Optional: regex to auto-pick a discovered source when NDI_INPUT_NAME is empty.
-      NDI_SOURCE_MATCH: ""
+      NDI_SOURCE_MATCH: "iPhone|NDI"
 
       RETRY_SECONDS: "2"
 
