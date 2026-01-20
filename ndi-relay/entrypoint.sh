@@ -34,6 +34,15 @@ while true; do
     continue
   fi
 
+  discovery_output="$(ffmpeg -hide_banner -f libndi_newtek -find_sources 1 -i dummy 2>&1 || true)"
+  if [[ -n "${discovery_output}" ]] && ! grep -Fq "${NDI_INPUT_NAME}" <<< "${discovery_output}"; then
+    log "NDI source not found in discovery pass: ${NDI_INPUT_NAME}"
+    log "Discovery hints: confirm the iPhone is broadcasting, disable NDI Groups or set NDI_GROUPS if supported."
+    echo "${discovery_output}" | grep -i "ndi" || true
+    sleep "${RETRY_SECONDS}"
+    continue
+  fi
+
   log "Starting NDI relay"
   log "  IN : ${NDI_INPUT_NAME}"
   log "  OUT: ${NDI_OUTPUT_NAME}"

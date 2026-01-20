@@ -19,6 +19,7 @@ def test_entrypoint_has_usage_comment():
     assert "Usage:" in content
     assert "Example:" in content
     assert "\r" not in content
+    assert "-find_sources 1" in content
 
 
 def test_ndi_dockerfile_mentions_sdk_hint():

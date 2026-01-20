@@ -514,3 +514,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-25)
 - NDI relay now probes FFmpeg for `-ndi_group` support before passing group flags, and the compose default leaves groups blank to avoid option errors in builds without group support.
+
+### Latest Implementation Notes (2025-04-26)
+- NDI relay now performs an FFmpeg discovery pass before starting the relay, logging hints when the iPhone source is not found to reduce blind retries.

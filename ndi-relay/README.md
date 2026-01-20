@@ -53,6 +53,12 @@ Example override:
 NDI_INPUT_NAME="My iPhone" NDI_OUTPUT_NAME="iPhone Screen" NDI_GROUPS="iPhone" docker compose up -d
 ```
 
+### Troubleshooting
+
+- If logs repeat `No such device`, verify the iPhone is actively broadcasting and that the NDI name matches exactly.
+- If you enabled NDI Groups in the iPhone app, either set `NDI_GROUPS` (only works when FFmpeg supports `-ndi_group`) or disable groups in the app so discovery is not filtered.
+- For stubborn discovery, set `NDI_EXTRA_IPS` to the iPhone IP (or the LAN broadcast) so FFmpeg can find the source without multicast.
+
 ## Testing
 
 ```bash
