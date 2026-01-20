@@ -48,3 +48,11 @@ def test_explorer_upload_controls_support_multi_select(client):
     assert "Reindexing in background" in body
     assert "handleUploadSelection" in body
     assert 'id="uploadQueue"' in body
+
+
+def test_explorer_copy_fallback_present(client):
+    response = client.get("/public/explorer.html")
+    assert response.status_code == 200
+    body = response.text
+    assert "copyTextToClipboard" in body
+    assert "document.execCommand('copy')" in body

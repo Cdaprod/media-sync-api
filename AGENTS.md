@@ -544,3 +544,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-05)
 - Explorer Actions panel now shows a pending upload queue with status badges, and the sidebar scroll uses touch-friendly overflow for mobile browsers.
+
+### Latest Implementation Notes (2025-05-06)
+- Explorer copy stream URL now falls back to a legacy clipboard copy path when the Clipboard API is blocked on mobile browsers.
