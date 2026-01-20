@@ -7,7 +7,7 @@ services:
         NDI_SDK_URL_X86_64: "https://get.ndi.video/e/1092312/nstall-NDI-SDK-v6-Linux-tar-gz/lygzhz/2106549604/h/OX6QWjGgRma6HDuCWaNY2n5rngnuziie97-dmNA1Blk"
         NDI_SDK_URL_AARCH64: ""
     container_name: ndi-iphone-broadcast-relay
-    restart: unless-stopped
+    restart: always
     environment:
       # Exact incoming NDI name
       NDI_INPUT_NAME: "iPhone Screen"

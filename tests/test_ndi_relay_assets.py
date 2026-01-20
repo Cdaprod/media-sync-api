@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 
 def test_ndi_relay_assets_present():
     relay_dir = Path(__file__).resolve().parents[1] / "ndi-relay"
@@ -32,3 +34,16 @@ def test_ndi_dockerfile_mentions_sdk_hint():
     assert "lplassman/FFMPEG-NDI" in content
     assert "NDI_SDK_URL_X86_64" in content
     assert "NDI_SDK_URL_AARCH64" in content
+
+
+def test_ndi_relay_compose_defaults():
+    relay_dir = Path(__file__).resolve().parents[1] / "ndi-relay"
+    compose_path = relay_dir / "docker-compose.yml"
+    content = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
+    service = content.get("services", {}).get("ndi-relay", {})
+
+    assert service.get("restart") == "always"
+
+    env = service.get("environment", {})
+    assert env.get("NDI_INPUT_NAME") == "iPhone Screen"
+    assert env.get("NDI_OUTPUT_NAME") == "iPhone Screen"
