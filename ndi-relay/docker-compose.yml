@@ -19,6 +19,9 @@ services:
       # Example: "192.168.0.77"
       NDI_EXTRA_IPS: ""
 
+      # Optional: NDI groups to search (comma-separated). Example: "iPhone,public"
+      NDI_GROUPS: "iPhone"
+
       RETRY_SECONDS: "2"
 
     network_mode: "host"

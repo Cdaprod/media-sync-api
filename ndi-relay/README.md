@@ -44,12 +44,13 @@ Environment variables:
 - `NDI_INPUT_NAME`: The exact incoming NDI source name. (Required)
 - `NDI_OUTPUT_NAME`: The outgoing relay name. Defaults to `iPhone Screen`.
 - `NDI_EXTRA_IPS`: Optional comma-separated extra discovery IPs.
+- `NDI_GROUPS`: Optional comma-separated NDI groups to search (ex: `iPhone,public`).
 - `RETRY_SECONDS`: Wait time before retrying when the source disappears. Defaults to `2`.
 
 Example override:
 
 ```bash
-NDI_INPUT_NAME="My iPhone" NDI_OUTPUT_NAME="iPhone Screen" docker compose up -d
+NDI_INPUT_NAME="My iPhone" NDI_OUTPUT_NAME="iPhone Screen" NDI_GROUPS="iPhone" docker compose up -d
 ```
 
 ## Testing

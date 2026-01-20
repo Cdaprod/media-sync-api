@@ -8,6 +8,7 @@ set -euo pipefail
 NDI_INPUT_NAME="${NDI_INPUT_NAME:-}"
 NDI_OUTPUT_NAME="${NDI_OUTPUT_NAME:-iPhone Screen}"
 NDI_EXTRA_IPS="${NDI_EXTRA_IPS:-}"
+NDI_GROUPS="${NDI_GROUPS:-}"
 RETRY_SECONDS="${RETRY_SECONDS:-2}"
 
 log() { echo "[$(date -Is)] $*"; }
@@ -31,6 +32,7 @@ while true; do
   set +e
   ffmpeg \
     -hide_banner -loglevel info \
+    ${NDI_GROUPS:+-ndi_group "$NDI_GROUPS"} \
     ${NDI_EXTRA_IPS:+-extra_ips "$NDI_EXTRA_IPS"} \
     -f libndi_newtek -i "${NDI_INPUT_NAME}" \
     -map 0:v -map 0:a? \

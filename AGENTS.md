@@ -508,3 +508,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-23)
 - NDI relay runtime image now installs `libx264-164` so FFmpeg can start without missing shared library errors.
+
+### Latest Implementation Notes (2025-04-24)
+- NDI relay now accepts `NDI_GROUPS` and defaults the compose sidecar to the `iPhone` group to find iPhone Screen NDI HX feeds.
