@@ -1978,7 +1978,7 @@
 
     // Upload
     el('uploadBtn').addEventListener('click', uploadActive);
-    el('uploadFile').addEventListener('change', () => {
+    function handleUploadSelection(){
       ui.uploadFiles = Array.from(el('uploadFile').files || []);
       if (ui.uploadFiles.length){
         el('uploadStatus').textContent = 'Files selected. Upload will begin shortly.';
@@ -1987,10 +1987,13 @@
       if (ui.autoUpload){
         ui.autoUpload = false;
         if (ui.uploadFiles.length){
-          uploadActive();
+          setTimeout(() => uploadActive(), 0);
         }
       }
-    });
+    }
+
+    el('uploadFile').addEventListener('change', handleUploadSelection);
+    el('uploadFile').addEventListener('input', handleUploadSelection);
     el('pickUploadBtn').addEventListener('click', () => {
       if (!state.activeProject){
         toast('warn','Upload','Select a project first');

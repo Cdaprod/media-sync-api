@@ -538,3 +538,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-03)
 - Explorer upload now clears and reopens the picker for Actions uploads, starts background reindexing after uploads, and surfaces a brief "upload will begin" status to improve large video selection UX.
+
+### Latest Implementation Notes (2025-05-04)
+- Default max upload limit increased to 4096 MB and the explorer upload picker now listens to both change/input events to handle large video selections on iOS more reliably.
