@@ -47,3 +47,4 @@ def test_explorer_upload_controls_support_multi_select(client):
     assert "autoUpload" in body
     assert "Reindexing in background" in body
     assert "handleUploadSelection" in body
+    assert 'id="uploadQueue"' in body

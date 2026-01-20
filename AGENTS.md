@@ -541,3 +541,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-04)
 - Default max upload limit increased to 4096 MB and the explorer upload picker now listens to both change/input events to handle large video selections on iOS more reliably.
+
+### Latest Implementation Notes (2025-05-05)
+- Explorer Actions panel now shows a pending upload queue with status badges, and the sidebar scroll uses touch-friendly overflow for mobile browsers.

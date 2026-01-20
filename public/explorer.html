@@ -192,6 +192,43 @@
       z-index: 75;
     }
     .actions-panel.open{ display:flex; }
+    .upload-queue{
+      display:flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .upload-item{
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      padding: 8px 10px;
+      display:flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .upload-item .meta{
+      display:flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      gap: 8px;
+    }
+    .upload-item .name{
+      font-size: 12px;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .upload-item .status{
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .upload-item .status.queued{ color: #fbbf24; }
+    .upload-item .status.uploading{ color: #93c5fd; }
+    .upload-item .status.done{ color: #86efac; }
+    .upload-item .status.error{ color: #fecaca; }
     .btn{
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
@@ -334,6 +371,7 @@
     .scroll{
       overflow: auto;
       min-height: 0;
+      -webkit-overflow-scrolling: touch;
     }
     .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
     .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
@@ -825,6 +863,8 @@
               <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
               <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
             </div>
+
+            <div class="upload-queue" id="uploadQueue" aria-live="polite"></div>
           </div>
         </div>
       </div>
@@ -986,6 +1026,7 @@
       uploadReady: false,
       uploading: false,
       autoUpload: false,
+      uploadQueue: [],
     };
 
     const thumbCache = new Map();
@@ -1130,6 +1171,28 @@
       if (!ui.uploading && fileCount > 0){
         el('uploadStatus').textContent = `${fileCount} file${fileCount > 1 ? 's' : ''} ready to upload.`;
       }
+    }
+
+    function renderUploadQueue(){
+      const root = el('uploadQueue');
+      if (!root) return;
+      if (!ui.uploadQueue.length){
+        root.innerHTML = '<div class="small" style="color:var(--muted);">No pending uploads.</div>';
+        return;
+      }
+      root.innerHTML = ui.uploadQueue.map((item) => {
+        const size = formatBytes(item.size);
+        const statusClass = escapeHtml(item.status || 'queued');
+        return `
+          <div class="upload-item">
+            <div class="name">${escapeHtml(item.name || 'unnamed')}</div>
+            <div class="meta">
+              <span>${escapeHtml(size)}</span>
+              <span class="status ${statusClass}">${escapeHtml(item.status || 'queued')}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     function setSidebarOpen(open){
@@ -1673,23 +1736,45 @@
       await uploadFiles(files);
     }
 
+    function buildUploadQueue(files){
+      const queued = files.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}`,
+        name: file.name,
+        size: file.size,
+        status: 'queued',
+      }));
+      ui.uploadQueue = queued;
+      renderUploadQueue();
+    }
+
+    function setQueueStatus(id, status){
+      const item = ui.uploadQueue.find((entry) => entry.id === id);
+      if (!item) return;
+      item.status = status;
+      renderUploadQueue();
+    }
+
     async function uploadFiles(files){
       const p = state.activeProject;
       if (!p){ toast('warn','Upload','Select a project first'); return; }
       if (!files.length){ return; }
 
+      buildUploadQueue(files);
       ui.uploading = true;
       updateUploadUI();
       el('uploadStatus').textContent = `Uploading ${files.length} item(s)…`;
 
       try{
         for (const f of files){
+          const id = `${f.name}-${f.size}-${f.lastModified}`;
+          setQueueStatus(id, 'uploading');
           const form = new FormData();
           form.append('file', f, f.name);
           const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery()}`;
           const r = await fetch(url, { method:'POST', body: form });
           const payload = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
+          setQueueStatus(id, 'done');
         }
         el('uploadStatus').textContent = 'Uploads stored. Reindexing in background…';
         const reindexPromise = reindexActive();
@@ -1709,6 +1794,12 @@
       }catch(e){
         el('uploadStatus').textContent = `Upload failed: ${e.message}`;
         toast('bad','Upload', e.message);
+        ui.uploadQueue.forEach((entry) => {
+          if (entry.status === 'queued' || entry.status === 'uploading'){
+            entry.status = 'error';
+          }
+        });
+        renderUploadQueue();
       }finally{
         ui.uploading = false;
         updateUploadUI();
@@ -1982,6 +2073,10 @@
       ui.uploadFiles = Array.from(el('uploadFile').files || []);
       if (ui.uploadFiles.length){
         el('uploadStatus').textContent = 'Files selected. Upload will begin shortly.';
+        buildUploadQueue(ui.uploadFiles);
+      } else {
+        ui.uploadQueue = [];
+        renderUploadQueue();
       }
       updateUploadUI();
       if (ui.autoUpload){
@@ -2097,6 +2192,7 @@
       setView('grid');
       updateTopCounts();
       updateSelectionUI();
+      renderUploadQueue();
     });
   </script>
 </body>
