@@ -179,7 +179,7 @@ ENV PATH="/usr/local/bin:$PATH"
 ENV LD_LIBRARY_PATH="/opt/ndi/lib:/usr/local/lib"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates bash libavahi-client3 \
+    ca-certificates bash libavahi-client3 libx264-164 \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local

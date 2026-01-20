@@ -27,6 +27,7 @@ def test_ndi_dockerfile_mentions_sdk_hint():
     content = dockerfile.read_text(encoding="utf-8")
     assert "sed -i 's/\\r$//' /entrypoint.sh" in content
     assert "NDI SDK missing" in content
+    assert "libx264-164" in content
     assert "Install_NDI_SDK" in content
     assert "NDI libs found but none match architecture" in content
     assert "libndi.so" in content

@@ -505,3 +505,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-22)
 - NDI relay Dockerfile now normalizes entrypoint line endings during build to prevent CRLF shebang failures even if a Windows checkout leaks in.
+
+### Latest Implementation Notes (2025-04-23)
+- NDI relay runtime image now installs `libx264-164` so FFmpeg can start without missing shared library errors.
