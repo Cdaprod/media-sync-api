@@ -103,7 +103,7 @@ RUN bash -eux -c '\
         done < "${candidates_file}"; \
         exit 1; \
       fi; \
-      cp -r "${selected_lib_dir}/." /opt/ndi/lib/; \
+      find "${selected_lib_dir}" -type f \( -name "libndi*.so*" -o -name "libndi*.a" \) -exec cp -v {} /opt/ndi/lib/ \;; \
       for lib_file in /opt/ndi/lib/libndi*.so*; do \
         if [ -e "${lib_file}" ]; then \
           if ! file -b "${lib_file}" | grep -qi "${arch_pattern}"; then \
@@ -111,6 +111,22 @@ RUN bash -eux -c '\
           fi; \
         fi; \
       done; \
+      if [ ! -e /opt/ndi/lib/libndi.so ]; then \
+        link_target="$(find /opt/ndi/lib -maxdepth 1 -type f -name "libndi.so*" -print | sort -V | tail -n 1 || true)"; \
+        if [ -z "${link_target}" ]; then \
+          echo "No libndi shared library found under /opt/ndi/lib" >&2; \
+          ls -la /opt/ndi/lib >&2 || true; \
+          exit 1; \
+        fi; \
+        ln -sf "$(basename "${link_target}")" /opt/ndi/lib/libndi.so; \
+      fi; \
+      if [ ! -e /opt/ndi/lib/libndi.so.6 ]; then \
+        link_target="$(find /opt/ndi/lib -maxdepth 1 -type f -name "libndi.so.*" -print | sort -V | tail -n 1 || true)"; \
+        if [ -n "${link_target}" ]; then \
+          ln -sf "$(basename "${link_target}")" /opt/ndi/lib/libndi.so.6; \
+        fi; \
+      fi; \
+      ldconfig; \
       rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz /tmp/ndi-install /tmp/ndi-install.log "${candidates_file}"; \
     fi'
 
@@ -148,7 +164,7 @@ RUN set -eux; \
       --enable-libndi_newtek \
       --extra-cflags="-I/opt/ndi/include" \
       --extra-ldflags="-L/opt/ndi/lib" \
-      --extra-libs="-lpthread -lm" && \
+      --extra-libs="-lndi -lpthread -lm" && \
     make -j$(nproc) && \
     make install && \
     ldconfig && \
