@@ -481,3 +481,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-14)
 - NDI relay FFmpeg build now disables all asm to avoid operand mismatch errors during compilation.
+
+### Latest Implementation Notes (2025-04-15)
+- NDI relay now filters NDI SDK libraries by architecture during Docker builds to avoid incompatible `libndi.so` link errors.
