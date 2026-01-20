@@ -893,7 +893,7 @@
               <strong>Upload to active project</strong>
               <div class="small" id="uploadCaption">Pick a project first.</div>
               <div style="display:flex; gap:10px; align-items:center; margin-top: 10px; flex-wrap: wrap;">
-                <input id="uploadFile" type="file" style="max-width: 100%; color: var(--muted);" />
+                <input id="uploadFile" type="file" multiple accept="video/*,image/*,audio/*" style="max-width: 100%; color: var(--muted);" />
                 <button id="uploadBtn" class="btn good" type="button" disabled>Upload</button>
               </div>
               <div class="small" id="uploadStatus" style="margin-top:8px;"></div>
@@ -1650,9 +1650,9 @@
     async function uploadActive(){
       const p = state.activeProject;
       if (!p){ toast('warn','Upload','Select a project first'); return; }
-      const f = el('uploadFile').files?.[0];
-      if (!f){ toast('warn','Upload','Pick a file first'); return; }
-      await uploadFiles([f]);
+      const files = Array.from(el('uploadFile').files || []);
+      if (!files.length){ toast('warn','Upload','Pick one or more files first'); return; }
+      await uploadFiles(files);
     }
 
     async function uploadFiles(files){
@@ -1661,7 +1661,7 @@
       if (!files.length){ return; }
 
       el('uploadBtn').disabled = true;
-      el('uploadStatus').textContent = 'Uploading…';
+      el('uploadStatus').textContent = `Uploading ${files.length} item(s)…`;
 
       try{
         for (const f of files){
@@ -1672,15 +1672,36 @@
           const payload = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
         }
-        const msg = files.length > 1 ? 'Uploads stored.' : 'Upload stored.';
-        el('uploadStatus').textContent = msg;
-        toast('good', 'Upload', msg);
+        el('uploadStatus').textContent = 'Uploads stored. Refreshing index…';
+        const reindexOk = await reindexActive();
+        if (reindexOk){
+          const msg = files.length > 1 ? 'Uploads stored. Index refreshed.' : 'Upload stored. Index refreshed.';
+          el('uploadStatus').textContent = msg;
+          toast('good', 'Upload', msg);
+        }
+        el('uploadFile').value = '';
         await loadMedia();
       }catch(e){
         el('uploadStatus').textContent = `Upload failed: ${e.message}`;
         toast('bad','Upload', e.message);
       }finally{
         el('uploadBtn').disabled = false;
+      }
+    }
+
+    async function reindexActive(){
+      const p = state.activeProject;
+      if (!p) return false;
+      try{
+        const url = `${API}/api/projects/${encodeURIComponent(p.name)}/reindex${mediaQuery()}`;
+        const r = await fetch(url, { method:'POST' });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Reindex failed');
+        return true;
+      }catch(e){
+        toast('warn', 'Reindex', e.message);
+        el('uploadStatus').textContent = `Upload stored, but reindex failed: ${e.message}`;
+        return false;
       }
     }
 

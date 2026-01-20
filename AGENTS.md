@@ -529,3 +529,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-30)
 - Relay compose defaults now leave `NDI_INPUT_NAME` blank and use `NDI_SOURCE_MATCH=iPhone|NDI` so the sidecar auto-picks iPhone sources when discovery is available.
+
+### Latest Implementation Notes (2025-05-01)
+- Explorer upload controls now allow multi-select uploads and trigger a project reindex after uploads in both the static and Next.js explorers so new media appears immediately.
