@@ -1,4 +1,10 @@
 services:
+  ndi-discovery:
+    image: pnxr/ndi-discovery-minimal:latest
+    container_name: ndi-discovery
+    restart: always
+    network_mode: "host"
+
   ndi-relay:
     build:
       context: .
@@ -25,6 +31,9 @@ services:
 
       # Require discovery to succeed before relaying (true/false).
       NDI_DISCOVERY_REQUIRED: "false"
+
+      # Optional: NDI discovery server host:port (ex: "127.0.0.1:5959")
+      NDI_DISCOVERY_SERVER: "127.0.0.1:5959"
 
       RETRY_SECONDS: "2"
 

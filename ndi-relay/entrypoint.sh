@@ -10,6 +10,7 @@ NDI_OUTPUT_NAME="${NDI_OUTPUT_NAME:-iPhone Screen}"
 NDI_EXTRA_IPS="${NDI_EXTRA_IPS:-}"
 NDI_GROUPS="${NDI_GROUPS:-}"
 NDI_DISCOVERY_REQUIRED="${NDI_DISCOVERY_REQUIRED:-false}"
+NDI_DISCOVERY_SERVER="${NDI_DISCOVERY_SERVER:-}"
 RETRY_SECONDS="${RETRY_SECONDS:-2}"
 
 log() { echo "[$(date -Is)] $*"; }
@@ -17,6 +18,14 @@ log() { echo "[$(date -Is)] $*"; }
 if ! command -v ffmpeg >/dev/null 2>&1; then
   log "ffmpeg not found in PATH. Exiting with code 127."
   exit 127
+fi
+
+if [[ -n "${NDI_DISCOVERY_SERVER}" ]]; then
+  mkdir -p /root/.ndi
+  cat > /root/.ndi/ndi-config.v1.json <<JSON
+{"networks":{"discovery":"${NDI_DISCOVERY_SERVER}"}}
+JSON
+  log "Configured NDI discovery server: ${NDI_DISCOVERY_SERVER}"
 fi
 
 ndi_group_supported=false

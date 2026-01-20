@@ -45,11 +45,15 @@ def test_ndi_relay_compose_defaults():
     compose_path = relay_dir / "docker-compose.yml"
     content = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
     service = content.get("services", {}).get("ndi-relay", {})
+    discovery = content.get("services", {}).get("ndi-discovery", {})
 
     assert service.get("restart") == "always"
+    assert discovery.get("restart") == "always"
+    assert discovery.get("network_mode") == "host"
 
     env = service.get("environment", {})
     assert env.get("NDI_INPUT_NAME") == "iPhone Screen"
     assert env.get("NDI_OUTPUT_NAME") == "iPhone Screen"
     assert env.get("NDI_GROUPS") == ""
     assert env.get("NDI_DISCOVERY_REQUIRED") == "false"
+    assert env.get("NDI_DISCOVERY_SERVER") == "127.0.0.1:5959"
