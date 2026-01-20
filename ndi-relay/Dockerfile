@@ -179,13 +179,15 @@ ENV PATH="/usr/local/bin:$PATH"
 ENV LD_LIBRARY_PATH="/opt/ndi/lib:/usr/local/lib"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates bash libavahi-client3 \
+    ca-certificates bash libavahi-client3 libx264-164 \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /opt/ndi /opt/ndi
 COPY entrypoint.sh /entrypoint.sh
 
-RUN chmod +x /entrypoint.sh
+# Fix Windows CRLF -> Linux LF (prevents 'bash\r' error)
+RUN sed -i 's/\r$//' /entrypoint.sh \
+  && chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

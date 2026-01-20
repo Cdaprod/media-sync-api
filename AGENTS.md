@@ -499,3 +499,33 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-20)
 - Root Compose quick start now runs the NDI relay sidecar by default, and the relay container restarts automatically to keep rebroadcasting the `iPhone Screen` feed on the LAN.
+
+### Latest Implementation Notes (2025-04-21)
+- NDI relay entrypoint now uses Unix line endings to avoid `/usr/bin/env: 'bash\r'` failures on Linux hosts, with a static test guard and `.gitattributes` enforcing LF for shell scripts.
+
+### Latest Implementation Notes (2025-04-22)
+- NDI relay Dockerfile now normalizes entrypoint line endings during build to prevent CRLF shebang failures even if a Windows checkout leaks in.
+
+### Latest Implementation Notes (2025-04-23)
+- NDI relay runtime image now installs `libx264-164` so FFmpeg can start without missing shared library errors.
+
+### Latest Implementation Notes (2025-04-24)
+- NDI relay now accepts `NDI_GROUPS` and defaults the compose sidecar to the `iPhone` group to find iPhone Screen NDI HX feeds.
+
+### Latest Implementation Notes (2025-04-25)
+- NDI relay now probes FFmpeg for `-ndi_group` support before passing group flags, and the compose default leaves groups blank to avoid option errors in builds without group support.
+
+### Latest Implementation Notes (2025-04-26)
+- NDI relay now performs an FFmpeg discovery pass before starting the relay, logging hints when the iPhone source is not found to reduce blind retries.
+
+### Latest Implementation Notes (2025-04-27)
+- NDI relay discovery is now optional via `NDI_DISCOVERY_REQUIRED=false` (default), so relays can still attempt to connect even when discovery returns zero sources.
+
+### Latest Implementation Notes (2025-04-28)
+- NDI relay stack now includes a Dockerized discovery server with `NDI_DISCOVERY_SERVER` wiring to avoid multicast gaps in Docker Desktop environments.
+
+### Latest Implementation Notes (2025-04-29)
+- NDI relay can now auto-select a discovered source via `NDI_SOURCE_MATCH` when `NDI_INPUT_NAME` is blank, reducing strict name dependency.
+
+### Latest Implementation Notes (2025-04-30)
+- Relay compose defaults now leave `NDI_INPUT_NAME` blank and use `NDI_SOURCE_MATCH=iPhone|NDI` so the sidecar auto-picks iPhone sources when discovery is available.

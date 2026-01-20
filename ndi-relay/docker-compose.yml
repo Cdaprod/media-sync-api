@@ -1,4 +1,10 @@
 services:
+  ndi-discovery:
+    image: pnxr/ndi-discovery-minimal:latest
+    container_name: ndi-discovery
+    restart: always
+    network_mode: "host"
+
   ndi-relay:
     build:
       context: .
@@ -9,8 +15,8 @@ services:
     container_name: ndi-iphone-broadcast-relay
     restart: always
     environment:
-      # Exact incoming NDI name
-      NDI_INPUT_NAME: "iPhone Screen"
+      # Exact incoming NDI name (leave blank to auto-pick a discovered source).
+      NDI_INPUT_NAME: ""
 
       # New outgoing relay name
       NDI_OUTPUT_NAME: "iPhone Screen"
@@ -18,6 +24,19 @@ services:
       # Optional: hard-pin discovery if Docker multicast is flaky
       # Example: "192.168.0.77"
       NDI_EXTRA_IPS: ""
+
+      # Optional: NDI groups to search (comma-separated). Example: "iPhone,public"
+      # Some ffmpeg builds do not support -ndi_group, so leave blank unless needed.
+      NDI_GROUPS: ""
+
+      # Require discovery to succeed before relaying (true/false).
+      NDI_DISCOVERY_REQUIRED: "false"
+
+      # Optional: NDI discovery server host:port (ex: "127.0.0.1:5959")
+      NDI_DISCOVERY_SERVER: "127.0.0.1:5959"
+
+      # Optional: regex to auto-pick a discovered source when NDI_INPUT_NAME is empty.
+      NDI_SOURCE_MATCH: "iPhone|NDI"
 
       RETRY_SECONDS: "2"
 
