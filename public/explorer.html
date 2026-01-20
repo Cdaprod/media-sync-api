@@ -982,6 +982,10 @@
       sidebarOpen: false,
       inspectorOpen: false,
       dragActive: false,
+      uploadFiles: [],
+      uploadReady: false,
+      uploading: false,
+      autoUpload: false,
     };
 
     const thumbCache = new Map();
@@ -1111,6 +1115,21 @@
         el('drawerToggleSelect').classList.toggle('primary', !isSel);
       }
       el('drawerDelete').disabled = !state.focused;
+    }
+
+    function updateUploadUI(){
+      const projectSelected = Boolean(state.activeProject);
+      const fileCount = ui.uploadFiles.length;
+      ui.uploadReady = projectSelected && fileCount > 0;
+      el('uploadBtn').disabled = !ui.uploadReady || ui.uploading;
+      if (!projectSelected){
+        el('uploadCaption').textContent = 'Pick a project first.';
+      } else {
+        el('uploadCaption').textContent = `Upload to ${state.activeProject.name}${state.activeProject.source ? ` (${state.activeProject.source})` : ''}`;
+      }
+      if (!ui.uploading && fileCount > 0){
+        el('uploadStatus').textContent = `${fileCount} file${fileCount > 1 ? 's' : ''} ready to upload.`;
+      }
     }
 
     function setSidebarOpen(open){
@@ -1637,8 +1656,7 @@
       el('resolveProjectName').value = p.name || '';
       el('resolveNewName').value = '';
 
-      el('uploadCaption').textContent = `Upload to ${p.name}${p.source ? ` (${p.source})` : ''}`;
-      el('uploadBtn').disabled = false;
+      updateUploadUI();
 
       renderProjects();
       updateTopCounts();
@@ -1650,7 +1668,7 @@
     async function uploadActive(){
       const p = state.activeProject;
       if (!p){ toast('warn','Upload','Select a project first'); return; }
-      const files = Array.from(el('uploadFile').files || []);
+      const files = ui.uploadFiles.length ? ui.uploadFiles : Array.from(el('uploadFile').files || []);
       if (!files.length){ toast('warn','Upload','Pick one or more files first'); return; }
       await uploadFiles(files);
     }
@@ -1660,13 +1678,14 @@
       if (!p){ toast('warn','Upload','Select a project first'); return; }
       if (!files.length){ return; }
 
-      el('uploadBtn').disabled = true;
+      ui.uploading = true;
+      updateUploadUI();
       el('uploadStatus').textContent = `Uploading ${files.length} item(s)…`;
 
       try{
         for (const f of files){
           const form = new FormData();
-          form.append('file', f);
+          form.append('file', f, f.name);
           const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery()}`;
           const r = await fetch(url, { method:'POST', body: form });
           const payload = await r.json().catch(() => ({}));
@@ -1680,12 +1699,15 @@
           toast('good', 'Upload', msg);
         }
         el('uploadFile').value = '';
+        ui.uploadFiles = [];
+        updateUploadUI();
         await loadMedia();
       }catch(e){
         el('uploadStatus').textContent = `Upload failed: ${e.message}`;
         toast('bad','Upload', e.message);
       }finally{
-        el('uploadBtn').disabled = false;
+        ui.uploading = false;
+        updateUploadUI();
       }
     }
 
@@ -1952,7 +1974,29 @@
 
     // Upload
     el('uploadBtn').addEventListener('click', uploadActive);
-    el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
+    el('uploadFile').addEventListener('change', () => {
+      ui.uploadFiles = Array.from(el('uploadFile').files || []);
+      updateUploadUI();
+      if (ui.autoUpload){
+        ui.autoUpload = false;
+        if (ui.uploadFiles.length){
+          uploadActive();
+        }
+      }
+    });
+    el('pickUploadBtn').addEventListener('click', () => {
+      if (!state.activeProject){
+        toast('warn','Upload','Select a project first');
+        return;
+      }
+      ui.autoUpload = true;
+      const input = el('uploadFile');
+      if (typeof input.showPicker === 'function') {
+        input.showPicker();
+      } else {
+        input.click();
+      }
+    });
 
     const contentArea = document.querySelector('.content');
     if (contentArea){

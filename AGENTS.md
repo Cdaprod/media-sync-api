@@ -532,3 +532,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-01)
 - Explorer upload controls now allow multi-select uploads and trigger a project reindex after uploads in both the static and Next.js explorers so new media appears immediately.
+
+### Latest Implementation Notes (2025-05-02)
+- Explorer actions upload now auto-uploads the selected files, and upload state tracks file selection to enable the sidebar upload button only when assets are ready.
