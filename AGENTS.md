@@ -484,3 +484,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-15)
 - NDI relay now filters NDI SDK libraries by architecture during Docker builds to avoid incompatible `libndi.so` link errors.
+
+### Latest Implementation Notes (2025-04-16)
+- NDI relay Dockerfile now handles NDI SDK library paths with spaces by iterating over newline-delimited candidates to avoid false negatives.

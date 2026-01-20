@@ -79,6 +79,8 @@ RUN set -eux; \
         tail -n 120 /tmp/ndi-install.log >&2 || true; \
         exit 1; \
       fi; \
+      old_ifs="${IFS}"; \
+      IFS="$(printf '\n')"; \
       selected_lib_dir=""; \
       for lib_file in ${lib_candidates}; do \
         if [ -f "${lib_file}" ]; then \
@@ -92,13 +94,16 @@ RUN set -eux; \
           fi; \
         fi; \
       done; \
+      IFS="${old_ifs}"; \
       if [ -z "${selected_lib_dir}" ]; then \
         echo "NDI libs found but none match architecture ${arch}." >&2; \
+        IFS="$(printf '\n')"; \
         for lib_file in ${lib_candidates}; do \
           if [ -f "${lib_file}" ]; then \
             echo "${lib_file}: $(file -b "${lib_file}")" >&2; \
           fi; \
         done; \
+        IFS="${old_ifs}"; \
         exit 1; \
       fi; \
       cp -r "${selected_lib_dir}/." /opt/ndi/lib/; \
