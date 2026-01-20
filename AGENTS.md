@@ -535,3 +535,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-02)
 - Explorer actions upload now auto-uploads the selected files, and upload state tracks file selection to enable the sidebar upload button only when assets are ready.
+
+### Latest Implementation Notes (2025-05-03)
+- Explorer upload now clears and reopens the picker for Actions uploads, starts background reindexing after uploads, and surfaces a brief "upload will begin" status to improve large video selection UX.

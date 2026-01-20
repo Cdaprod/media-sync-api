@@ -45,3 +45,4 @@ def test_explorer_upload_controls_support_multi_select(client):
     assert 'id="uploadFile"' in body
     assert "multiple" in body
     assert "autoUpload" in body
+    assert "Reindexing in background" in body

@@ -1691,17 +1691,21 @@
           const payload = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
         }
-        el('uploadStatus').textContent = 'Uploads stored. Refreshing index…';
-        const reindexOk = await reindexActive();
-        if (reindexOk){
-          const msg = files.length > 1 ? 'Uploads stored. Index refreshed.' : 'Upload stored. Index refreshed.';
-          el('uploadStatus').textContent = msg;
-          toast('good', 'Upload', msg);
-        }
+        el('uploadStatus').textContent = 'Uploads stored. Reindexing in background…';
+        const reindexPromise = reindexActive();
         el('uploadFile').value = '';
         ui.uploadFiles = [];
         updateUploadUI();
-        await loadMedia();
+        reindexPromise
+          .then(() => {
+            const msg = files.length > 1
+              ? 'Uploads stored. Index refreshed.'
+              : 'Upload stored. Index refreshed.';
+            el('uploadStatus').textContent = msg;
+            toast('good', 'Upload', msg);
+            return loadMedia();
+          })
+          .catch(() => {});
       }catch(e){
         el('uploadStatus').textContent = `Upload failed: ${e.message}`;
         toast('bad','Upload', e.message);
@@ -1976,6 +1980,9 @@
     el('uploadBtn').addEventListener('click', uploadActive);
     el('uploadFile').addEventListener('change', () => {
       ui.uploadFiles = Array.from(el('uploadFile').files || []);
+      if (ui.uploadFiles.length){
+        el('uploadStatus').textContent = 'Files selected. Upload will begin shortly.';
+      }
       updateUploadUI();
       if (ui.autoUpload){
         ui.autoUpload = false;
@@ -1989,8 +1996,11 @@
         toast('warn','Upload','Select a project first');
         return;
       }
-      ui.autoUpload = true;
       const input = el('uploadFile');
+      input.value = '';
+      ui.uploadFiles = [];
+      updateUploadUI();
+      ui.autoUpload = true;
       if (typeof input.showPicker === 'function') {
         input.showPicker();
       } else {
