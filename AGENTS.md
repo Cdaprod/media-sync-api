@@ -457,3 +457,27 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-06)
 - NDI relay Dockerfile now normalizes the downloaded SDK layout by locating headers/libs regardless of nested installer paths, and build args/defaults reference the latest NDI email URLs (Linux for builds, other platforms documented for future use).
+
+### Latest Implementation Notes (2025-04-07)
+- NDI relay Dockerfile now runs the Linux SDK installer script when the download is a self-extracting payload, then locates headers/libs from the install output with log tails for failure triage.
+
+### Latest Implementation Notes (2025-04-08)
+- NDI relay now builds FFmpeg from the DistroAV fork and logs NDI-related configure flags to avoid missing `--enable-libndi_newtek` in vanilla FFmpeg.
+
+### Latest Implementation Notes (2025-04-09)
+- NDI relay now downloads the DistroAV FFmpeg source as a tarball via `FFMPEG_NDI_SOURCE_URL` to avoid git auth prompts during Docker builds.
+
+### Latest Implementation Notes (2025-04-10)
+- Explorer app thumbnail queue now captures the dequeued media item before async processing to satisfy strict undefined checks during Next.js builds.
+
+### Latest Implementation Notes (2025-04-11)
+- NDI relay now defaults the FFmpeg tarball source to the DistroAV `main` branch to avoid 404s on missing `master`.
+
+### Latest Implementation Notes (2025-04-12)
+- NDI relay now builds FFmpeg from the upstream tarball and applies the `lplassman/FFMPEG-NDI` patch (via `FFMPEG_SOURCE_URL` + `FFMPEG_NDI_PATCH_URL`) to restore `--enable-libndi_newtek`.
+
+### Latest Implementation Notes (2025-04-13)
+- NDI relay FFmpeg build now disables x86 asm to avoid assembler operand errors during Docker builds.
+
+### Latest Implementation Notes (2025-04-14)
+- NDI relay FFmpeg build now disables all asm to avoid operand mismatch errors during compilation.
