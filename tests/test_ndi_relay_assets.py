@@ -24,6 +24,7 @@ def test_ndi_dockerfile_mentions_sdk_hint():
     content = dockerfile.read_text(encoding="utf-8")
     assert "NDI SDK missing" in content
     assert "Install_NDI_SDK" in content
+    assert "NDI libs found but none match architecture" in content
     assert "FFMPEG_SOURCE_URL" in content
     assert "FFMPEG_NDI_PATCH_URL" in content
     assert "FFmpeg/FFmpeg" in content

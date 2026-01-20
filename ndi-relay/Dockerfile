@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential pkg-config git ca-certificates curl tar \
-    yasm nasm autoconf automake libtool \
+    yasm nasm autoconf automake libtool file \
     libssl-dev libx264-dev \
  && rm -rf /var/lib/apt/lists/*
 
@@ -25,12 +25,12 @@ ARG NDI_SDK_URL_ANDROID_WINDOWS="https://get.ndi.video/e/1092312/d-NDI20620SDK20
 ARG FFMPEG_SOURCE_URL="https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n5.1"
 ARG FFMPEG_NDI_PATCH_URL="https://codeload.github.com/lplassman/FFMPEG-NDI/tar.gz/refs/heads/master"
 
-RUN set -eux; \
+RUN bash -eux -c '\
     if [ ! -f /opt/ndi/include/Processing.NDI.Lib.h ]; then \
       arch="$(uname -m)"; \
       case "${arch}" in \
-        x86_64|amd64) sdk_url="${NDI_SDK_URL_X86_64}" ;; \
-        aarch64|arm64) sdk_url="${NDI_SDK_URL_AARCH64}" ;; \
+        x86_64|amd64) sdk_url="${NDI_SDK_URL_X86_64}" ; arch_pattern="x86-64" ;; \
+        aarch64|arm64) sdk_url="${NDI_SDK_URL_AARCH64}" ; arch_pattern="aarch64" ;; \
         *) echo "Unsupported architecture: ${arch}" >&2; exit 1 ;; \
       esac; \
       if [ -z "${sdk_url}" ]; then \
@@ -43,7 +43,7 @@ RUN set -eux; \
       tar -xzf /tmp/ndi-sdk.tgz -C /tmp/ndi-sdk; \
       header_path="$(find /tmp/ndi-sdk -type f -name Processing.NDI.Lib.h -print -quit)"; \
       if [ -z "${header_path}" ]; then \
-        installer="$(find /tmp/ndi-sdk -maxdepth 2 -type f -name 'Install_NDI_SDK_*_Linux.sh' -print -quit)"; \
+        installer="$(find /tmp/ndi-sdk -maxdepth 2 -type f -name "Install_NDI_SDK_*_Linux.sh" -print -quit)"; \
         if [ -z "${installer}" ]; then \
           echo "NDI SDK download missing Processing.NDI.Lib.h (unexpected layout)." >&2; \
           echo "Top-level extracted contents:" >&2; \
@@ -54,7 +54,7 @@ RUN set -eux; \
         install_prefix="/tmp/ndi-install"; \
         rm -rf "${install_prefix}"; \
         mkdir -p "${install_prefix}"; \
-        if "${installer}" --help 2>&1 | grep -qi -- '--prefix'; then \
+        if "${installer}" --help 2>&1 | grep -qi -- "--prefix"; then \
           yes | "${installer}" --prefix="${install_prefix}" >/tmp/ndi-install.log 2>&1; \
         else \
           yes | (cd /tmp/ndi-sdk && "${installer}") >/tmp/ndi-install.log 2>&1 || true; \
@@ -70,18 +70,49 @@ RUN set -eux; \
       rm -rf /opt/ndi; \
       mkdir -p /opt/ndi/include /opt/ndi/lib; \
       cp -r "${sdk_root}/include/." /opt/ndi/include/; \
-      lib_file="$(find "${sdk_root}" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print -quit || true)"; \
-      if [ -z "${lib_file}" ]; then \
-        lib_file="$(find "$(dirname "${sdk_root}")" -type f \( -name 'libndi*.so*' -o -name 'libndi*.a' \) -print -quit || true)"; \
+      candidates_file="/tmp/ndi-lib-candidates.list"; \
+      rm -f "${candidates_file}"; \
+      find "${sdk_root}" -type f \( -name "libndi*.so*" -o -name "libndi*.a" \) -print0 > "${candidates_file}" || true; \
+      if [ ! -s "${candidates_file}" ]; then \
+        find "$(dirname "${sdk_root}")" -type f \( -name "libndi*.so*" -o -name "libndi*.a" \) -print0 > "${candidates_file}" || true; \
       fi; \
-      if [ -z "${lib_file}" ]; then \
+      if [ ! -s "${candidates_file}" ]; then \
         echo "NDI headers found but libs not found. Installer log:" >&2; \
         tail -n 120 /tmp/ndi-install.log >&2 || true; \
         exit 1; \
       fi; \
-      cp -r "$(dirname "${lib_file}")/." /opt/ndi/lib/; \
-      rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz /tmp/ndi-install /tmp/ndi-install.log; \
-    fi
+      selected_lib_dir=""; \
+      while IFS= read -r -d "" lib_file; do \
+        if [ -f "${lib_file}" ]; then \
+          if echo "${lib_file}" | grep -q "\.a$"; then \
+            selected_lib_dir="$(dirname "${lib_file}")"; \
+            break; \
+          fi; \
+          if file -b "${lib_file}" | grep -qi "${arch_pattern}"; then \
+            selected_lib_dir="$(dirname "${lib_file}")"; \
+            break; \
+          fi; \
+        fi; \
+      done < "${candidates_file}"; \
+      if [ -z "${selected_lib_dir}" ]; then \
+        echo "NDI libs found but none match architecture ${arch}." >&2; \
+        while IFS= read -r -d "" lib_file; do \
+          if [ -f "${lib_file}" ]; then \
+            echo "${lib_file}: $(file -b "${lib_file}")" >&2; \
+          fi; \
+        done < "${candidates_file}"; \
+        exit 1; \
+      fi; \
+      cp -r "${selected_lib_dir}/." /opt/ndi/lib/; \
+      for lib_file in /opt/ndi/lib/libndi*.so*; do \
+        if [ -e "${lib_file}" ]; then \
+          if ! file -b "${lib_file}" | grep -qi "${arch_pattern}"; then \
+            rm -f "${lib_file}"; \
+          fi; \
+        fi; \
+      done; \
+      rm -rf /tmp/ndi-sdk /tmp/ndi-sdk.tgz /tmp/ndi-install /tmp/ndi-install.log "${candidates_file}"; \
+    fi'
 
 RUN set -eux; \
     curl -fL --retry 3 --retry-delay 1 "${FFMPEG_SOURCE_URL}" -o /tmp/ffmpeg.tgz; \
