@@ -517,3 +517,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-26)
 - NDI relay now performs an FFmpeg discovery pass before starting the relay, logging hints when the iPhone source is not found to reduce blind retries.
+
+### Latest Implementation Notes (2025-04-27)
+- NDI relay discovery is now optional via `NDI_DISCOVERY_REQUIRED=false` (default), so relays can still attempt to connect even when discovery returns zero sources.

@@ -9,6 +9,7 @@ NDI_INPUT_NAME="${NDI_INPUT_NAME:-}"
 NDI_OUTPUT_NAME="${NDI_OUTPUT_NAME:-iPhone Screen}"
 NDI_EXTRA_IPS="${NDI_EXTRA_IPS:-}"
 NDI_GROUPS="${NDI_GROUPS:-}"
+NDI_DISCOVERY_REQUIRED="${NDI_DISCOVERY_REQUIRED:-false}"
 RETRY_SECONDS="${RETRY_SECONDS:-2}"
 
 log() { echo "[$(date -Is)] $*"; }
@@ -39,8 +40,10 @@ while true; do
     log "NDI source not found in discovery pass: ${NDI_INPUT_NAME}"
     log "Discovery hints: confirm the iPhone is broadcasting, disable NDI Groups or set NDI_GROUPS if supported."
     echo "${discovery_output}" | grep -i "ndi" || true
-    sleep "${RETRY_SECONDS}"
-    continue
+    if [[ "${NDI_DISCOVERY_REQUIRED}" == "true" ]]; then
+      sleep "${RETRY_SECONDS}"
+      continue
+    fi
   fi
 
   log "Starting NDI relay"

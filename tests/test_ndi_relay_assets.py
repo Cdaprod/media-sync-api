@@ -52,3 +52,4 @@ def test_ndi_relay_compose_defaults():
     assert env.get("NDI_INPUT_NAME") == "iPhone Screen"
     assert env.get("NDI_OUTPUT_NAME") == "iPhone Screen"
     assert env.get("NDI_GROUPS") == ""
+    assert env.get("NDI_DISCOVERY_REQUIRED") == "false"

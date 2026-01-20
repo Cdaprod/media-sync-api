@@ -23,6 +23,9 @@ services:
       # Some ffmpeg builds do not support -ndi_group, so leave blank unless needed.
       NDI_GROUPS: ""
 
+      # Require discovery to succeed before relaying (true/false).
+      NDI_DISCOVERY_REQUIRED: "false"
+
       RETRY_SECONDS: "2"
 
     network_mode: "host"

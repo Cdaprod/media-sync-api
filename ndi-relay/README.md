@@ -45,6 +45,7 @@ Environment variables:
 - `NDI_OUTPUT_NAME`: The outgoing relay name. Defaults to `iPhone Screen`.
 - `NDI_EXTRA_IPS`: Optional comma-separated extra discovery IPs.
 - `NDI_GROUPS`: Optional comma-separated NDI groups to search (ex: `iPhone,public`). Only applies if the bundled FFmpeg supports `-ndi_group`.
+- `NDI_DISCOVERY_REQUIRED`: Set to `true` to block relaying until discovery finds `NDI_INPUT_NAME`. Defaults to `false`.
 - `RETRY_SECONDS`: Wait time before retrying when the source disappears. Defaults to `2`.
 
 Example override:
@@ -58,6 +59,7 @@ NDI_INPUT_NAME="My iPhone" NDI_OUTPUT_NAME="iPhone Screen" NDI_GROUPS="iPhone" d
 - If logs repeat `No such device`, verify the iPhone is actively broadcasting and that the NDI name matches exactly.
 - If you enabled NDI Groups in the iPhone app, either set `NDI_GROUPS` (only works when FFmpeg supports `-ndi_group`) or disable groups in the app so discovery is not filtered.
 - For stubborn discovery, set `NDI_EXTRA_IPS` to the iPhone IP (or the LAN broadcast) so FFmpeg can find the source without multicast.
+- To keep relaying even when discovery is empty, leave `NDI_DISCOVERY_REQUIRED=false` (default) so the relay still attempts to connect.
 
 ## Testing
 
