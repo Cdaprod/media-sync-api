@@ -496,3 +496,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-19)
 - NDI relay build now installs Avahi client headers/libs so libndi resolves `avahi_*` symbols at link time and runtime.
+
+### Latest Implementation Notes (2025-04-20)
+- Root Compose quick start now runs the NDI relay sidecar by default, and the relay container restarts automatically to keep rebroadcasting the `iPhone Screen` feed on the LAN.
+
+### Latest Implementation Notes (2025-04-21)
+- NDI relay entrypoint now uses Unix line endings to avoid `/usr/bin/env: 'bash\r'` failures on Linux hosts, with a static test guard and `.gitattributes` enforcing LF for shell scripts.
