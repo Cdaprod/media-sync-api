@@ -529,3 +529,21 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-30)
 - Relay compose defaults now leave `NDI_INPUT_NAME` blank and use `NDI_SOURCE_MATCH=iPhone|NDI` so the sidecar auto-picks iPhone sources when discovery is available.
+
+### Latest Implementation Notes (2025-05-01)
+- Explorer upload controls now allow multi-select uploads and trigger a project reindex after uploads in both the static and Next.js explorers so new media appears immediately.
+
+### Latest Implementation Notes (2025-05-02)
+- Explorer actions upload now auto-uploads the selected files, and upload state tracks file selection to enable the sidebar upload button only when assets are ready.
+
+### Latest Implementation Notes (2025-05-03)
+- Explorer upload now clears and reopens the picker for Actions uploads, starts background reindexing after uploads, and surfaces a brief "upload will begin" status to improve large video selection UX.
+
+### Latest Implementation Notes (2025-05-04)
+- Default max upload limit increased to 4096 MB and the explorer upload picker now listens to both change/input events to handle large video selections on iOS more reliably.
+
+### Latest Implementation Notes (2025-05-05)
+- Explorer Actions panel now shows a pending upload queue with status badges, and the sidebar scroll uses touch-friendly overflow for mobile browsers.
+
+### Latest Implementation Notes (2025-05-06)
+- Explorer copy stream URL now falls back to a legacy clipboard copy path when the Clipboard API is blocked on mobile browsers.

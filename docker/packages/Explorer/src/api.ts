@@ -12,6 +12,7 @@ export interface ApiClient {
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   uploadMedia: (url: string, file: File) => Promise<Record<string, unknown>>;
+  reindexProject: (project: string, source?: string) => Promise<Record<string, unknown>>;
   saveThumbnail: (
     project: string,
     relativePath: string,
@@ -75,6 +76,17 @@ export function createApiClient(baseUrl: string): ApiClient {
       const payload = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
         throw new Error(String(payload?.detail || payload?.message || 'Upload failed'));
+      }
+      return payload;
+    },
+    async reindexProject(project: string, source?: string): Promise<Record<string, unknown>> {
+      const query = source ? `?source=${encodeURIComponent(source)}` : '';
+      const response = await fetch(buildUrl(`/api/projects/${encodeURIComponent(project)}/reindex${query}`), {
+        method: 'POST',
+      });
+      const payload = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || payload?.message || 'Reindex failed'));
       }
       return payload;
     },

@@ -192,6 +192,43 @@
       z-index: 75;
     }
     .actions-panel.open{ display:flex; }
+    .upload-queue{
+      display:flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .upload-item{
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      padding: 8px 10px;
+      display:flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .upload-item .meta{
+      display:flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      gap: 8px;
+    }
+    .upload-item .name{
+      font-size: 12px;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .upload-item .status{
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .upload-item .status.queued{ color: #fbbf24; }
+    .upload-item .status.uploading{ color: #93c5fd; }
+    .upload-item .status.done{ color: #86efac; }
+    .upload-item .status.error{ color: #fecaca; }
     .btn{
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
@@ -334,6 +371,7 @@
     .scroll{
       overflow: auto;
       min-height: 0;
+      -webkit-overflow-scrolling: touch;
     }
     .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
     .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
@@ -825,6 +863,8 @@
               <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
               <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
             </div>
+
+            <div class="upload-queue" id="uploadQueue" aria-live="polite"></div>
           </div>
         </div>
       </div>
@@ -893,7 +933,7 @@
               <strong>Upload to active project</strong>
               <div class="small" id="uploadCaption">Pick a project first.</div>
               <div style="display:flex; gap:10px; align-items:center; margin-top: 10px; flex-wrap: wrap;">
-                <input id="uploadFile" type="file" style="max-width: 100%; color: var(--muted);" />
+                <input id="uploadFile" type="file" multiple accept="video/*,image/*,audio/*" style="max-width: 100%; color: var(--muted);" />
                 <button id="uploadBtn" class="btn good" type="button" disabled>Upload</button>
               </div>
               <div class="small" id="uploadStatus" style="margin-top:8px;"></div>
@@ -982,6 +1022,11 @@
       sidebarOpen: false,
       inspectorOpen: false,
       dragActive: false,
+      uploadFiles: [],
+      uploadReady: false,
+      uploading: false,
+      autoUpload: false,
+      uploadQueue: [],
     };
 
     const thumbCache = new Map();
@@ -1029,6 +1074,35 @@
         return path;
       }
       return new URL(path, window.location.origin).toString();
+    }
+
+    async function copyTextToClipboard(text){
+      if (!text) return false;
+      if (navigator.clipboard?.writeText){
+        try{
+          await navigator.clipboard.writeText(text);
+          return true;
+        }catch{
+          // fall through to legacy copy
+        }
+      }
+      const field = document.createElement('textarea');
+      field.value = text;
+      field.setAttribute('readonly', 'true');
+      field.style.position = 'fixed';
+      field.style.left = '-9999px';
+      field.style.top = '0';
+      document.body.appendChild(field);
+      field.focus();
+      field.select();
+      let success = false;
+      try{
+        success = document.execCommand('copy');
+      }catch{
+        success = false;
+      }
+      field.remove();
+      return success;
     }
 
     function dragPayload(item){
@@ -1111,6 +1185,43 @@
         el('drawerToggleSelect').classList.toggle('primary', !isSel);
       }
       el('drawerDelete').disabled = !state.focused;
+    }
+
+    function updateUploadUI(){
+      const projectSelected = Boolean(state.activeProject);
+      const fileCount = ui.uploadFiles.length;
+      ui.uploadReady = projectSelected && fileCount > 0;
+      el('uploadBtn').disabled = !ui.uploadReady || ui.uploading;
+      if (!projectSelected){
+        el('uploadCaption').textContent = 'Pick a project first.';
+      } else {
+        el('uploadCaption').textContent = `Upload to ${state.activeProject.name}${state.activeProject.source ? ` (${state.activeProject.source})` : ''}`;
+      }
+      if (!ui.uploading && fileCount > 0){
+        el('uploadStatus').textContent = `${fileCount} file${fileCount > 1 ? 's' : ''} ready to upload.`;
+      }
+    }
+
+    function renderUploadQueue(){
+      const root = el('uploadQueue');
+      if (!root) return;
+      if (!ui.uploadQueue.length){
+        root.innerHTML = '<div class="small" style="color:var(--muted);">No pending uploads.</div>';
+        return;
+      }
+      root.innerHTML = ui.uploadQueue.map((item) => {
+        const size = formatBytes(item.size);
+        const statusClass = escapeHtml(item.status || 'queued');
+        return `
+          <div class="upload-item">
+            <div class="name">${escapeHtml(item.name || 'unnamed')}</div>
+            <div class="meta">
+              <span>${escapeHtml(size)}</span>
+              <span class="status ${statusClass}">${escapeHtml(item.status || 'queued')}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     function setSidebarOpen(open){
@@ -1637,8 +1748,7 @@
       el('resolveProjectName').value = p.name || '';
       el('resolveNewName').value = '';
 
-      el('uploadCaption').textContent = `Upload to ${p.name}${p.source ? ` (${p.source})` : ''}`;
-      el('uploadBtn').disabled = false;
+      updateUploadUI();
 
       renderProjects();
       updateTopCounts();
@@ -1650,9 +1760,27 @@
     async function uploadActive(){
       const p = state.activeProject;
       if (!p){ toast('warn','Upload','Select a project first'); return; }
-      const f = el('uploadFile').files?.[0];
-      if (!f){ toast('warn','Upload','Pick a file first'); return; }
-      await uploadFiles([f]);
+      const files = ui.uploadFiles.length ? ui.uploadFiles : Array.from(el('uploadFile').files || []);
+      if (!files.length){ toast('warn','Upload','Pick one or more files first'); return; }
+      await uploadFiles(files);
+    }
+
+    function buildUploadQueue(files){
+      const queued = files.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}`,
+        name: file.name,
+        size: file.size,
+        status: 'queued',
+      }));
+      ui.uploadQueue = queued;
+      renderUploadQueue();
+    }
+
+    function setQueueStatus(id, status){
+      const item = ui.uploadQueue.find((entry) => entry.id === id);
+      if (!item) return;
+      item.status = status;
+      renderUploadQueue();
     }
 
     async function uploadFiles(files){
@@ -1660,27 +1788,66 @@
       if (!p){ toast('warn','Upload','Select a project first'); return; }
       if (!files.length){ return; }
 
-      el('uploadBtn').disabled = true;
-      el('uploadStatus').textContent = 'Uploading…';
+      buildUploadQueue(files);
+      ui.uploading = true;
+      updateUploadUI();
+      el('uploadStatus').textContent = `Uploading ${files.length} item(s)…`;
 
       try{
         for (const f of files){
+          const id = `${f.name}-${f.size}-${f.lastModified}`;
+          setQueueStatus(id, 'uploading');
           const form = new FormData();
-          form.append('file', f);
+          form.append('file', f, f.name);
           const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery()}`;
           const r = await fetch(url, { method:'POST', body: form });
           const payload = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
+          setQueueStatus(id, 'done');
         }
-        const msg = files.length > 1 ? 'Uploads stored.' : 'Upload stored.';
-        el('uploadStatus').textContent = msg;
-        toast('good', 'Upload', msg);
-        await loadMedia();
+        el('uploadStatus').textContent = 'Uploads stored. Reindexing in background…';
+        const reindexPromise = reindexActive();
+        el('uploadFile').value = '';
+        ui.uploadFiles = [];
+        updateUploadUI();
+        reindexPromise
+          .then(() => {
+            const msg = files.length > 1
+              ? 'Uploads stored. Index refreshed.'
+              : 'Upload stored. Index refreshed.';
+            el('uploadStatus').textContent = msg;
+            toast('good', 'Upload', msg);
+            return loadMedia();
+          })
+          .catch(() => {});
       }catch(e){
         el('uploadStatus').textContent = `Upload failed: ${e.message}`;
         toast('bad','Upload', e.message);
+        ui.uploadQueue.forEach((entry) => {
+          if (entry.status === 'queued' || entry.status === 'uploading'){
+            entry.status = 'error';
+          }
+        });
+        renderUploadQueue();
       }finally{
-        el('uploadBtn').disabled = false;
+        ui.uploading = false;
+        updateUploadUI();
+      }
+    }
+
+    async function reindexActive(){
+      const p = state.activeProject;
+      if (!p) return false;
+      try{
+        const url = `${API}/api/projects/${encodeURIComponent(p.name)}/reindex${mediaQuery()}`;
+        const r = await fetch(url, { method:'POST' });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Reindex failed');
+        return true;
+      }catch(e){
+        toast('warn', 'Reindex', e.message);
+        el('uploadStatus').textContent = `Upload stored, but reindex failed: ${e.message}`;
+        return false;
       }
     }
 
@@ -1868,7 +2035,8 @@
       el('drawerCopy').onclick = async () => {
         const u = toAbsoluteUrl(item.stream_url);
         try{
-          await navigator.clipboard.writeText(u);
+          const ok = await copyTextToClipboard(u);
+          if (!ok) throw new Error('copy-failed');
           toast('good','Copied', 'Stream URL copied to clipboard');
         }catch{
           toast('warn','Clipboard', 'Copy failed (browser permission)');
@@ -1931,7 +2099,42 @@
 
     // Upload
     el('uploadBtn').addEventListener('click', uploadActive);
-    el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
+    function handleUploadSelection(){
+      ui.uploadFiles = Array.from(el('uploadFile').files || []);
+      if (ui.uploadFiles.length){
+        el('uploadStatus').textContent = 'Files selected. Upload will begin shortly.';
+        buildUploadQueue(ui.uploadFiles);
+      } else {
+        ui.uploadQueue = [];
+        renderUploadQueue();
+      }
+      updateUploadUI();
+      if (ui.autoUpload){
+        ui.autoUpload = false;
+        if (ui.uploadFiles.length){
+          setTimeout(() => uploadActive(), 0);
+        }
+      }
+    }
+
+    el('uploadFile').addEventListener('change', handleUploadSelection);
+    el('uploadFile').addEventListener('input', handleUploadSelection);
+    el('pickUploadBtn').addEventListener('click', () => {
+      if (!state.activeProject){
+        toast('warn','Upload','Select a project first');
+        return;
+      }
+      const input = el('uploadFile');
+      input.value = '';
+      ui.uploadFiles = [];
+      updateUploadUI();
+      ui.autoUpload = true;
+      if (typeof input.showPicker === 'function') {
+        input.showPicker();
+      } else {
+        input.click();
+      }
+    });
 
     const contentArea = document.querySelector('.content');
     if (contentArea){
@@ -2019,6 +2222,7 @@
       setView('grid');
       updateTopCounts();
       updateSelectionUI();
+      renderUploadQueue();
     });
   </script>
 </body>

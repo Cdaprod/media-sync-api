@@ -31,9 +31,18 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('resolveAssetUrl'));
   assert.ok(content.includes('formatListValue'));
   assert.ok(content.includes('buildUploadUrl'));
+  assert.ok(content.includes('reindexProject'));
+  assert.ok(content.includes('multiple'));
   assert.ok(content.includes('refreshMissingThumbnails'));
   assert.ok(content.includes('THUMB_QUEUE_LIMIT'));
   assert.ok(content.includes('THUMB_RETRY_MS'));
+});
+
+test('api client supports reindex calls', () => {
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const content = fs.readFileSync(apiPath, 'utf8');
+  assert.ok(content.includes('reindexProject'));
+  assert.ok(content.includes('/reindex'));
 });
 
 test('api base inference keeps LAN host reachable', () => {

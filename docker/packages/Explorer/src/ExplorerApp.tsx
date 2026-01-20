@@ -406,21 +406,42 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Upload', 'Select a project first');
       return;
     }
-    const file = uploadInputRef.current?.files?.[0];
-    if (!file) {
-      addToast('warn', 'Upload', 'Pick a file first');
+    const files = Array.from(uploadInputRef.current?.files ?? []);
+    if (!files.length) {
+      addToast('warn', 'Upload', 'Pick one or more files first');
       return;
     }
 
-    setUploadStatus('Uploading…');
+    setUploadStatus(`Uploading ${files.length} item(s)…`);
     try {
-      const payload = await api.uploadMedia(buildUploadUrl(project), file);
-      const status = typeof payload.status === 'string' ? payload.status : '';
-      const msg = status === 'duplicate'
-        ? 'Duplicate skipped — already on disk.'
-        : 'Upload stored.';
-      setUploadStatus(msg);
-      addToast(status === 'duplicate' ? 'warn' : 'good', 'Upload', msg);
+      let hasDuplicate = false;
+      for (const file of files) {
+        const payload = await api.uploadMedia(buildUploadUrl(project), file);
+        const status = typeof payload.status === 'string' ? payload.status : '';
+        if (status === 'duplicate') {
+          hasDuplicate = true;
+        }
+      }
+      setUploadStatus('Uploads stored. Refreshing index…');
+      let reindexOk = true;
+      try {
+        await api.reindexProject(project.name, project.source);
+      } catch (err) {
+        reindexOk = false;
+        const message = err instanceof Error ? err.message : 'Reindex failed';
+        setUploadStatus(`Upload stored, but reindex failed: ${message}`);
+        addToast('warn', 'Reindex', message);
+      }
+      if (reindexOk) {
+        const msg = files.length > 1
+          ? 'Uploads stored. Index refreshed.'
+          : 'Upload stored. Index refreshed.';
+        setUploadStatus(msg);
+        addToast(hasDuplicate ? 'warn' : 'good', 'Upload', msg);
+      }
+      if (uploadInputRef.current) {
+        uploadInputRef.current.value = '';
+      }
       await loadMedia(project);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';
@@ -536,9 +557,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         addToast('warn', 'Upload', 'Select a project first');
         return;
       }
-      if (!files.length) return;
-      setUploadStatus('Uploading…');
-      for (const file of Array.from(files)) {
+      const batch = Array.from(files);
+      if (!batch.length) return;
+      setUploadStatus(`Uploading ${batch.length} item(s)…`);
+      for (const file of batch) {
         try {
           await api.uploadMedia(buildUploadUrl(project), file);
         } catch (err) {
@@ -546,7 +568,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           addToast('bad', 'Upload', message);
         }
       }
-      setUploadStatus('Upload stored.');
+      setUploadStatus('Uploads stored. Refreshing index…');
+      let reindexOk = true;
+      try {
+        await api.reindexProject(project.name, project.source);
+      } catch (err) {
+        reindexOk = false;
+        const message = err instanceof Error ? err.message : 'Reindex failed';
+        setUploadStatus(`Upload stored, but reindex failed: ${message}`);
+        addToast('warn', 'Reindex', message);
+      }
+      if (reindexOk) {
+        setUploadStatus('Uploads stored. Index refreshed.');
+      }
       await loadMedia(project);
     },
     [activeProject, addToast, api, buildUploadUrl, loadMedia],
@@ -1044,7 +1078,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <strong>Upload to active project</strong>
                 <div className="small">{uploadCaption}</div>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' }}>
-                  <input ref={uploadInputRef} type="file" style={{ maxWidth: '100%', color: 'var(--muted)' }} />
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    multiple
+                    accept="video/*,image/*,audio/*"
+                    style={{ maxWidth: '100%', color: 'var(--muted)' }}
+                  />
                   <button className="btn good" type="button" onClick={handleUpload} disabled={!activeProject}>
                     Upload
                   </button>

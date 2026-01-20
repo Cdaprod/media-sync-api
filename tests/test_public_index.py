@@ -36,3 +36,23 @@ def test_explorer_logo_toggles_sidebar(client):
     assert 'id="sidebarToggleBtn"' in response.text
     assert "logo-button" in response.text
     assert "Toggle projects sidebar" in response.text
+
+
+def test_explorer_upload_controls_support_multi_select(client):
+    response = client.get("/public/explorer.html")
+    assert response.status_code == 200
+    body = response.text
+    assert 'id="uploadFile"' in body
+    assert "multiple" in body
+    assert "autoUpload" in body
+    assert "Reindexing in background" in body
+    assert "handleUploadSelection" in body
+    assert 'id="uploadQueue"' in body
+
+
+def test_explorer_copy_fallback_present(client):
+    response = client.get("/public/explorer.html")
+    assert response.status_code == 200
+    body = response.text
+    assert "copyTextToClipboard" in body
+    assert "document.execCommand('copy')" in body

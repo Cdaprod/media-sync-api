@@ -32,7 +32,7 @@ class Settings(BaseModel):
         or os.getenv("PROJECT_ROOT", "/data/projects")
     ))
     port: int = Field(default_factory=lambda: int(os.getenv("MEDIA_SYNC_PORT", os.getenv("PORT", "8787"))))
-    max_upload_mb: int = Field(default_factory=lambda: int(os.getenv("MEDIA_SYNC_MAX_UPLOAD_MB", "512")))
+    max_upload_mb: int = Field(default_factory=lambda: int(os.getenv("MEDIA_SYNC_MAX_UPLOAD_MB", "4096")))
     cors_origins: List[str] = Field(
         default_factory=lambda: _parse_origins(os.getenv("MEDIA_SYNC_CORS_ORIGINS", ""))
     )
