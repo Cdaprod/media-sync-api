@@ -430,3 +430,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-29)
 - Drawer tagging panel now overlays the preview area instead of shrinking the media viewport; the Tag pill toggles the overlay.
+
+### Latest Implementation Notes (2025-03-30)
+- Added disabled-by-default NDI compose stubs under the `ndi` profile to prevent orphan warnings while keeping NDI containers off until explicitly enabled.
