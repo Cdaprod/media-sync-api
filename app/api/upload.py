@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.storage.dedupe import record_file_hash, compute_sha256_from_path, lookup_file_hash
 from app.storage.index import append_file_entry, load_index, save_index, bump_count, append_event
+from app.storage.metadata import ensure_metadata
 from app.storage.paths import ensure_subdirs, project_path, validate_project_name, safe_filename
 from app.storage.sources import SourceRegistry
 
@@ -45,7 +46,7 @@ async def upload_file(project_name: str, file: UploadFile = File(...), source: s
     if not active_source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
     project = project_path(active_source.root, name)
-    ensure_subdirs(project, ["ingest/originals", "_manifest"])
+    ensure_subdirs(project, ["ingest/originals", "ingest/_metadata", "_manifest"])
     if not (project / "index.json").exists():
         raise HTTPException(status_code=404, detail="Project index missing")
 
@@ -113,6 +114,14 @@ async def upload_file(project_name: str, file: UploadFile = File(...), source: s
         "size": dest_path.stat().st_size,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
+    ensure_metadata(
+        project,
+        entry["relative_path"],
+        sha,
+        dest_path,
+        source=active_source.name,
+        method="upload",
+    )
     append_file_entry(project, entry)
     append_event(project, "upload_ingested", entry)
     logger.info(

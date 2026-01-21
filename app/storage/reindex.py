@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from .dedupe import compute_sha256_from_path, ensure_db, record_file_hash, get_recorded_paths, remove_file_record
 from .index import append_file_entry, load_index, remove_entries
+from .metadata import ensure_metadata, remove_metadata
 from .paths import relpath_posix
 
 
@@ -54,6 +55,14 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
         seen_paths.add(rel_path)
         sha = compute_sha256_from_path(file_path)
         duplicate = record_file_hash(db_path, sha, rel_path)
+        ensure_metadata(
+            project_path,
+            rel_path,
+            sha,
+            file_path,
+            source="reindex",
+            method="filesystem_scan",
+        )
         if duplicate and rel_path in existing_paths:
             continue
         if rel_path in existing_paths:
@@ -77,6 +86,8 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
                 sha = entry.get("sha256")
                 if sha and db_records.get(sha) == missing:
                     remove_file_record(db_path, sha, missing)
+                if sha:
+                    remove_metadata(project_path, sha)
         remove_entries(project_path, missing_paths)
 
     return {
