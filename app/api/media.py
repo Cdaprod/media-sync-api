@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse
 from app.config import get_settings
 from app.storage.dedupe import compute_sha256_from_path, record_file_hash, remove_file_record
 from app.storage.index import append_event, append_file_entry, load_index, remove_entries, seed_index
+from app.storage.metadata import ensure_metadata, metadata_path, metadata_relpath, remove_metadata
 from app.storage.paths import (
     ensure_subdirs,
     project_path,
@@ -124,6 +125,9 @@ async def list_media(project_name: str, source: str | None = None):
         item["relative_path"] = safe_relative
         item["stream_url"] = _build_stream_url(resolved.name, safe_relative, resolved.source_name)
         item["download_url"] = _build_download_url(resolved.name, safe_relative, resolved.source_name)
+        sha = item.get("sha256")
+        if isinstance(sha, str) and metadata_path(resolved.root, sha).exists():
+            item["metadata_path"] = metadata_relpath(resolved.root, sha)
         media.append(item)
     sorted_media = sorted(media, key=lambda m: m.get("relative_path", ""))
 
@@ -223,6 +227,7 @@ async def delete_media(project_name: str, payload: DeleteMediaRequest, source: s
             sha = entry.get("sha256")
             if sha:
                 remove_file_record(_manifest_db_path(resolved.root), sha, safe_relative)
+                remove_metadata(resolved.root, sha)
             removed_paths.add(safe_relative)
         if not entry and not target.exists():
             missing.append(safe_relative)
@@ -267,7 +272,7 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
     target_root = project_path(target_source.root, target_name)
     if not target_root.exists():
         raise HTTPException(status_code=404, detail="Target project not found")
-    ensure_subdirs(target_root, ["ingest/originals", "_manifest"])
+    ensure_subdirs(target_root, ["ingest/originals", "ingest/_metadata", "_manifest"])
     if not (target_root / "index.json").exists():
         seed_index(target_root, target_name)
 
@@ -314,6 +319,14 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
                 "size": destination.stat().st_size,
                 "indexed_at": datetime.now(timezone.utc).isoformat(),
             }
+            ensure_metadata(
+                target_root,
+                new_relative,
+                sha,
+                destination,
+                source=target_source.name,
+                method="move",
+            )
             append_file_entry(target_root, entry)
             moved.append({"from": safe_relative, "to": new_relative})
 
@@ -321,6 +334,7 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
             remove_entries(resolved.root, [safe_relative])
             if source_entry.get("sha256"):
                 remove_file_record(_manifest_db_path(resolved.root), source_entry["sha256"], safe_relative)
+                remove_metadata(resolved.root, source_entry["sha256"])
 
     if moved:
         append_event(
@@ -392,7 +406,7 @@ def _organize_source_root(root: Path) -> Dict[str, object]:
     index_path = destination / "index.json"
     if not index_path.exists():
         seed_index(destination, ORPHAN_PROJECT_NAME, notes="Auto-organized loose files from projects root")
-    ensure_subdirs(destination, ["ingest/originals", "_manifest"])
+    ensure_subdirs(destination, ["ingest/originals", "ingest/_metadata", "_manifest"])
 
     moved: List[str] = []
     ingest = destination / "ingest/originals"

@@ -97,7 +97,7 @@ async def create_project(payload: ProjectCreateRequest, source: str | None = Non
         raise HTTPException(status_code=503, detail="Source root is not reachable")
     target = project_path(active_source.root, name)
     target.mkdir(parents=True, exist_ok=True)
-    ensure_subdirs(target, ["ingest/originals", "_manifest"])
+    ensure_subdirs(target, ["ingest/originals", "ingest/_metadata", "_manifest"])
 
     index_path = target / "index.json"
     if not index_path.exists():
@@ -149,7 +149,7 @@ def _bootstrap_existing_projects(root: Path) -> None:
             continue
         if path.name.startswith("_"):
             continue
-        ensure_subdirs(path, ["ingest/originals", "_manifest"])
+        ensure_subdirs(path, ["ingest/originals", "ingest/_metadata", "_manifest"])
         index_path = path / "index.json"
         if not index_path.exists():
             seed_index(path, path.name)

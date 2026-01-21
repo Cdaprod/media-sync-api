@@ -135,6 +135,7 @@ B:\Video\Projects\<project>\
   index.json
   ingest\
     originals\
+    _metadata\
     proxies\
   exports\
   _manifest\
@@ -405,3 +406,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-22)
 - Explorer API base inference now preserves same-origin defaults when the base URL is empty, avoiding unintended :8787 overrides.
+
+### Latest Implementation Notes (2025-03-23)
+- Asset metadata sidecars are now stored under `ingest/_metadata/<sha256>.json`; uploads, moves, and reindex runs create or update them while deletes clean them up. Tests validate metadata creation on upload and reindex.
