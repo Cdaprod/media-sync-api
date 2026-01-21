@@ -57,5 +57,25 @@ services:
     # User: resolve
     # Password: resolve_change_me (set RESOLVE_POSTGRES_PASSWORD to override)
 
+  ndi-discovery:
+    image: alpine:3.20
+    container_name: ndi-discovery
+    pull_policy: never
+    restart: "no"
+    profiles:
+      - ndi
+    command: >
+      sh -c "echo 'NDI discovery is disabled by default. Enable the ndi profile and override this service with the real image when needed.'"
+
+  ndi-iphone-broadcast-relay:
+    image: alpine:3.20
+    container_name: ndi-iphone-broadcast-relay
+    pull_policy: never
+    restart: "no"
+    profiles:
+      - ndi
+    command: >
+      sh -c "echo 'NDI iPhone broadcast relay is disabled by default. Enable the ndi profile and override this service with the real image when needed.'"
+
 volumes:
   resolve_pg_data:
