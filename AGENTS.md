@@ -235,6 +235,9 @@ docker compose down
 ## Engineering Standards
 
 - **No breaking API changes** without updating README + AGENTS.md.
+- Always wire new features into **both** API handlers and the static explorers (`public/index.html`, `public/explorer.html`) when user-facing behavior is involved.
+- Enforce metadata contracts: originals stay immutable, tags live in `ingest/_metadata/<sha256>.json`, and UI tag actions must call `/api/projects/{project}/media/tags`.
+- Update AGENTS.md **and** relevant changelog/implementation notes on **every** patch (no exceptions), even for UI-only changes.
 - Safe path handling: reject `..`, slashes, traversal.
 - Upload must be streaming (no full file in memory).
 - Hashing must be computed as bytes stream.
