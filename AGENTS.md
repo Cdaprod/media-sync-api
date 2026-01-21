@@ -424,3 +424,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-27)
 - Explorer top bar now uses the brand/logo as the Projects toggle; the separate Projects pill has been removed so only search + Actions remain.
+
+### Latest Implementation Notes (2025-03-28)
+- Explorer move target selection now encodes source/name as JSON to avoid move failures, and topbar subtitle truncates to avoid overflowing the search/actions row.
