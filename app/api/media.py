@@ -22,7 +22,13 @@ from fastapi.responses import FileResponse
 from app.config import get_settings
 from app.storage.dedupe import compute_sha256_from_path, record_file_hash, remove_file_record
 from app.storage.index import append_event, append_file_entry, load_index, remove_entries, seed_index
-from app.storage.metadata import ensure_metadata, metadata_path, metadata_relpath, remove_metadata
+from app.storage.metadata import (
+    ensure_metadata,
+    metadata_path,
+    metadata_relpath,
+    remove_metadata,
+    update_metadata_tags,
+)
 from app.storage.paths import (
     ensure_subdirs,
     project_path,
@@ -60,6 +66,12 @@ class MoveMediaRequest(BaseModel):
 
 class DeleteMediaRequest(BaseModel):
     relative_paths: List[str] = Field(default_factory=list)
+
+
+class TagMediaRequest(BaseModel):
+    relative_paths: List[str] = Field(default_factory=list)
+    add_tags: List[str] = Field(default_factory=list)
+    remove_tags: List[str] = Field(default_factory=list)
 
 
 def _require_source_and_project(project_name: str, source: str | None) -> _ResolvedProject:
@@ -356,6 +368,77 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
         )
 
     return {"status": "ok", "moved": moved, "duplicates": duplicates, "missing": missing}
+
+
+@router.post("/{project_name}/media/tags")
+async def tag_media(project_name: str, payload: TagMediaRequest, source: str | None = None):
+    """Add or remove manual tags for media assets.
+
+    Example:
+        curl -X POST http://localhost:8787/api/projects/demo/media/tags \
+          -H "Content-Type: application/json" \
+          -d '{"relative_paths":["ingest/originals/clip.mov"],"add_tags":["broll"],"remove_tags":["draft"]}'
+    """
+
+    if not payload.relative_paths:
+        raise HTTPException(status_code=400, detail="relative_paths is required")
+    if not payload.add_tags and not payload.remove_tags:
+        raise HTTPException(status_code=400, detail="add_tags or remove_tags is required")
+
+    resolved = _require_source_and_project(project_name, source)
+    index = load_index(resolved.root)
+    entries_by_path = {entry.get("relative_path"): entry for entry in index.get("files", [])}
+
+    updated: list[dict[str, object]] = []
+    missing: list[str] = []
+
+    for raw_path in payload.relative_paths:
+        try:
+            safe_relative = _validate_relative_media_path(raw_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        entry = entries_by_path.get(safe_relative)
+        if not entry:
+            missing.append(safe_relative)
+            continue
+        target = (resolved.root / safe_relative).resolve()
+        if not target.exists() or not target.is_file():
+            missing.append(safe_relative)
+            continue
+        sha = entry.get("sha256")
+        if not sha:
+            sha = compute_sha256_from_path(target)
+        metadata = update_metadata_tags(
+            resolved.root,
+            safe_relative,
+            sha,
+            target,
+            add_tags=payload.add_tags,
+            remove_tags=payload.remove_tags,
+            source=resolved.source_name,
+            method="tag_update",
+        )
+        updated.append(
+            {
+                "relative_path": safe_relative,
+                "sha256": sha,
+                "tags": metadata.get("tags", {}),
+            }
+        )
+
+    if updated:
+        append_event(
+            resolved.root,
+            "media_tags_updated",
+            {
+                "paths": [item["relative_path"] for item in updated],
+                "add_tags": payload.add_tags,
+                "remove_tags": payload.remove_tags,
+                "source": resolved.source_name,
+            },
+        )
+
+    return {"status": "ok", "updated": updated, "missing": missing}
 
 
 @router.post("/auto-organize")

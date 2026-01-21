@@ -52,3 +52,43 @@ def test_metadata_created_on_reindex(client, env_settings: Path) -> None:
     metadata = json.loads(metadata_path.read_text())
     assert metadata["kind"] == "image"
     assert metadata["relative"] == entry["relative_path"]
+
+
+def test_metadata_tags_endpoint(client, env_settings: Path) -> None:
+    created = client.post("/api/projects", json={"name": "demo"})
+    project_name = created.json()["name"]
+
+    payload = b"video-bytes"
+    upload = client.post(
+        f"/api/projects/{project_name}/upload",
+        files={"file": ("clip.mp4", payload, "video/mp4")},
+    )
+    rel_path = upload.json()["path"]
+
+    response = client.post(
+        f"/api/projects/{project_name}/media/tags",
+        json={
+            "relative_paths": [rel_path],
+            "add_tags": ["Hero", "broll"],
+        },
+    )
+    assert response.status_code == 200
+
+    index_path = env_settings / project_name / "index.json"
+    index = json.loads(index_path.read_text())
+    entry = index["files"][0]
+    sha = entry["sha256"]
+    metadata_path = env_settings / project_name / "ingest" / "_metadata" / f"{sha}.json"
+    metadata = json.loads(metadata_path.read_text())
+    assert metadata["tags"]["manual"] == ["broll", "hero"]
+
+    response = client.post(
+        f"/api/projects/{project_name}/media/tags",
+        json={
+            "relative_paths": [rel_path],
+            "remove_tags": ["hero"],
+        },
+    )
+    assert response.status_code == 200
+    metadata = json.loads(metadata_path.read_text())
+    assert metadata["tags"]["manual"] == ["broll"]
