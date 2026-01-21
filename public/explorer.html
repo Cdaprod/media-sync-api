@@ -420,6 +420,30 @@
     .tag-panel.is-hidden{
       display: none;
     }
+    .drawer-tag-panel{
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      top: 14px;
+      z-index: 5;
+      margin-top: 0;
+      background: rgba(11,16,32,0.96);
+      box-shadow: var(--shadow);
+      display: none;
+    }
+    .drawer-tag-panel.open{
+      display: block;
+    }
+    .drawer-tag-panel .taglist{
+      max-height: 120px;
+      overflow: auto;
+    }
+    .drawer-tag-panel .tag-editor{
+      margin-top: 10px;
+    }
+    .drawer-body{
+      position: relative;
+    }
     .tag-editor{
       display:flex;
       flex-wrap: wrap;
@@ -1018,7 +1042,7 @@
           <button id="drawerDelete" class="btn bad" type="button">🗑 Delete</button>
         </div>
 
-        <div class="tag-panel" id="drawerTagPanel">
+        <div class="tag-panel drawer-tag-panel" id="drawerTagPanel">
           <div class="taglist" id="drawerTagList"></div>
           <div class="tag-editor">
             <input id="drawerTagInput" type="text" placeholder="Add or remove tag…" />
@@ -1406,6 +1430,9 @@
         d.setAttribute('aria-hidden', 'true');
       }
       el('drawerBackdrop')?.classList.toggle('show', open);
+      if (!open){
+        el('drawerTagPanel')?.classList.remove('open');
+      }
     }
 
     function setDragActive(active){
@@ -2014,7 +2041,11 @@
       };
 
       el('drawerTagToggle').onclick = () => {
-        el('drawerTagInput')?.focus();
+        const panel = el('drawerTagPanel');
+        panel?.classList.toggle('open');
+        if (panel?.classList.contains('open')){
+          el('drawerTagInput')?.focus();
+        }
       };
 
       el('drawerTagAdd').onclick = () => {

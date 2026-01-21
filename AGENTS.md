@@ -427,3 +427,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-28)
 - Explorer move target selection now encodes source/name as JSON to avoid move failures, and topbar subtitle truncates to avoid overflowing the search/actions row.
+
+### Latest Implementation Notes (2025-03-29)
+- Drawer tagging panel now overlays the preview area instead of shrinking the media viewport; the Tag pill toggles the overlay.
