@@ -89,11 +89,7 @@
       gap:12px;
       align-items:center;
       min-width: 240px;
-    }
-
-    .toolbar-toggle{
-      display:flex;
-      align-items:center;
+      cursor: pointer;
     }
     .logo{
       width: 36px; height: 36px;
@@ -834,7 +830,7 @@
   <div class="app">
     <div class="topbar">
       <div class="topbar-inner">
-        <div class="brand" title="LAN-only media-sync-api explorer">
+        <div class="brand" id="brandToggle" title="LAN-only media-sync-api explorer">
           <div class="logo" aria-hidden="true"></div>
           <div>
             <h1>media-sync-api</h1>
@@ -843,9 +839,6 @@
         </div>
 
         <div class="toolbar">
-          <div class="toolbar-toggle">
-            <button id="sidebarToggleBtn" class="btn mobile-only" type="button">Projects</button>
-          </div>
           <div class="topbar-controls">
             <div class="search" role="search">
               <span class="kbd">⌘K</span>
@@ -2051,7 +2044,7 @@
       toast('good','Refresh','Reloaded projects + media');
     });
 
-    el('sidebarToggleBtn').addEventListener('click', () => setSidebarOpen(!ui.sidebarOpen));
+    el('brandToggle').addEventListener('click', () => setSidebarOpen(!ui.sidebarOpen));
     el('sidebarBackdrop').addEventListener('click', () => setSidebarOpen(false));
     el('drawerBackdrop').addEventListener('click', closeDrawer);
 

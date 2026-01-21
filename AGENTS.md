@@ -421,3 +421,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-26)
 - Explorer selection bar now focuses on tag, move, and copy stream URL actions while batch delete stays in the Actions panel; the drawer action pill remains Tag for focused assets.
+
+### Latest Implementation Notes (2025-03-27)
+- Explorer top bar now uses the brand/logo as the Projects toggle; the separate Projects pill has been removed so only search + Actions remain.
