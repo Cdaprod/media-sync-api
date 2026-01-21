@@ -418,3 +418,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-25)
 - Deleting or moving media now preserves metadata sidecars when another index entry shares the same sha256, removing sidecars only after the last path is removed.
+
+### Latest Implementation Notes (2025-03-26)
+- Explorer selection bar now focuses on tag, move, and copy stream URL actions while batch delete stays in the Actions panel; the drawer action pill remains Tag for focused assets.

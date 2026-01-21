@@ -696,18 +696,41 @@
       display:none;
       background: rgba(11,16,32,0.75);
       border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 10px 12px;
+      border-radius: 18px;
+      padding: 12px;
       box-shadow: var(--shadow);
       gap: 10px;
-      align-items:center;
+      align-items: stretch;
+      flex-direction: column;
       max-width: min(980px, calc(100vw - 24px));
-      width: fit-content;
+      width: min(980px, calc(100vw - 24px));
     }
     .selectbar.show{ display:flex; }
+    .selectbar-row{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items:center;
+    }
     .selectbar .count{ font-size: 12px; color: var(--muted); }
     .selectbar .sep{ width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
     .selectbar .btn{ padding: 8px 11px; }
+    .selectbar-panel{
+      display:none;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+    .selectbar-panel.open{
+      display:block;
+    }
+    .selectbar-panel select{
+      flex: 1 1 180px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+    }
 
     .mobile-fab{
       display:none;
@@ -840,6 +863,7 @@
               <button id="refreshBtn" class="btn" type="button">↻ Refresh</button>
               <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
               <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
+              <button id="deleteSelBtn" class="btn bad" type="button" disabled>🗑 Delete Selected</button>
               <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
             </div>
 
@@ -948,12 +972,30 @@
 
     <!-- Bottom selection bar -->
     <div id="selectBar" class="selectbar" role="status" aria-live="polite">
-      <div class="count"><span id="selCount">0</span> selected</div>
-      <div class="sep"></div>
-      <button id="selPlayBtn" class="btn" type="button">▶ Preview</button>
-      <button id="selResolveBtn" class="btn primary" type="button">⇢ Send to Resolve</button>
-      <button id="selDeleteBtn" class="btn bad" type="button">🗑 Delete</button>
-      <button id="selClearBtn" class="btn" type="button">✕ Clear</button>
+      <div class="selectbar-row">
+        <div class="count"><span id="selCount">0</span> selected</div>
+        <div class="sep"></div>
+        <button id="selTagToggle" class="btn" type="button">🏷 Tag Selected</button>
+        <button id="selMoveToggle" class="btn" type="button">⇢ Move Selected</button>
+        <button id="selCopyUrls" class="btn" type="button">⧉ Copy stream URLs</button>
+      </div>
+
+      <div class="selectbar-panel" id="selTagPanel">
+        <div class="small">Add or remove tags for selected assets</div>
+        <div class="tag-editor">
+          <input id="selTagInput" type="text" placeholder="tag, another tag" />
+          <button id="selTagAdd" class="btn" type="button">＋ Tag</button>
+          <button id="selTagRemove" class="btn" type="button">− Remove</button>
+        </div>
+      </div>
+
+      <div class="selectbar-panel" id="selMovePanel">
+        <div class="small">Move selected assets to a project</div>
+        <div class="tag-editor">
+          <select id="selMoveTarget" aria-label="Move target project"></select>
+          <button id="selMoveSubmit" class="btn" type="button">⇢ Move</button>
+        </div>
+      </div>
     </div>
 
     <!-- Inspector drawer -->
@@ -1142,10 +1184,16 @@
       // enable/disable action buttons
       el('sendResolveBtn').disabled = !show || !state.activeProject;
       el('clearSelBtn').disabled = !show;
-      el('selResolveBtn').disabled = !show || !state.activeProject;
-      el('selDeleteBtn').disabled = !show || !state.activeProject;
+      el('deleteSelBtn').disabled = !show || !state.activeProject;
+      el('selTagToggle').disabled = !show || !state.activeProject;
+      el('selMoveToggle').disabled = !show || !state.activeProject;
+      el('selCopyUrls').disabled = !show || !state.activeProject;
 
       updateTagButtons();
+      if (!show){
+        setSelectPanel('selTagPanel', false);
+        setSelectPanel('selMovePanel', false);
+      }
       el('drawerDelete').disabled = !state.focused;
     }
 
@@ -1154,14 +1202,37 @@
       const hasFocused = !!state.focused;
       const batchInput = el('batchTagInput');
       const drawerInput = el('drawerTagInput');
+      const selInput = el('selTagInput');
       const batchHasValue = !!parseTagInput(batchInput?.value).length;
       const drawerHasValue = !!parseTagInput(drawerInput?.value).length;
+      const selHasValue = !!parseTagInput(selInput?.value).length;
 
       el('batchTagAdd').disabled = !hasSelection || !batchHasValue;
       el('batchTagRemove').disabled = !hasSelection || !batchHasValue;
       el('drawerTagAdd').disabled = !hasFocused || !drawerHasValue;
       el('drawerTagRemove').disabled = !hasFocused || !drawerHasValue;
       el('drawerTagToggle').disabled = !hasFocused;
+      el('selTagAdd').disabled = !hasSelection || !selHasValue;
+      el('selTagRemove').disabled = !hasSelection || !selHasValue;
+    }
+
+    function setSelectPanel(panelId, open){
+      const panel = el(panelId);
+      if (!panel) return;
+      panel.classList.toggle('open', open);
+    }
+
+    function toggleSelectPanel(panelId){
+      const panel = el(panelId);
+      if (!panel) return;
+      const willOpen = !panel.classList.contains('open');
+      setSelectPanel('selTagPanel', false);
+      setSelectPanel('selMovePanel', false);
+      setSelectPanel(panelId, willOpen);
+      if (willOpen){
+        const input = panel.querySelector('input, select');
+        input?.focus?.();
+      }
     }
 
     async function fetchMetadata(item){
@@ -1250,6 +1321,61 @@
         }
       }catch(e){
         toast('bad','Tags', e.message);
+      }
+    }
+
+    function renderMoveTargets(){
+      const select = el('selMoveTarget');
+      if (!select) return;
+      const active = state.activeProject;
+      const options = state.projects.filter((proj) => {
+        if (!active) return true;
+        return proj.name !== active.name || proj.source !== active.source;
+      });
+
+      select.innerHTML = '';
+      if (!options.length){
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'No other projects available';
+        select.appendChild(opt);
+        select.disabled = true;
+        return;
+      }
+      select.disabled = false;
+      options.forEach((proj) => {
+        const opt = document.createElement('option');
+        opt.value = `${proj.source || ''}::${proj.name}`;
+        opt.textContent = proj.source ? `${proj.name} (${proj.source})` : proj.name;
+        select.appendChild(opt);
+      });
+    }
+
+    async function copySelectedUrls(){
+      if (!state.selected.size){
+        toast('warn','Copy','Select one or more clips');
+        return;
+      }
+      const urls = Array.from(state.selected)
+        .map((rel) => state.media.find((item) => item.relative_path === rel))
+        .filter(Boolean)
+        .map((item) => toAbsoluteUrl(item.stream_url));
+      if (!urls.length){
+        toast('warn','Copy','No stream URLs found');
+        return;
+      }
+      const text = urls.join('\n');
+      try{
+        await navigator.clipboard.writeText(text);
+        toast('good','Copied', `Copied ${urls.length} URL(s)`);
+      }catch{
+        const temp = document.createElement('textarea');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        temp.remove();
+        toast('good','Copied', `Copied ${urls.length} URL(s)`);
       }
     }
 
@@ -1430,6 +1556,7 @@
         state.projects = await r.json();
         renderProjects();
         updateTopCounts();
+        renderMoveTargets();
       }catch(e){
         toast('bad','Projects', e.message);
       }
@@ -1649,6 +1776,7 @@
 
       renderProjects();
       updateTopCounts();
+      renderMoveTargets();
       updateSelectionUI();
       toast('good', 'Project', `Selected ${p.name}`);
       await loadMedia();
@@ -1993,18 +2121,41 @@
 
     // Resolve
     el('sendResolveBtn').addEventListener('click', sendToResolve);
-    el('selResolveBtn').addEventListener('click', sendToResolve);
 
     // Clear selection
     el('clearSelBtn').addEventListener('click', clearSelection);
-    el('selClearBtn').addEventListener('click', clearSelection);
-    el('selDeleteBtn').addEventListener('click', () => deletePaths(Array.from(state.selected)));
+    el('deleteSelBtn').addEventListener('click', () => deletePaths(Array.from(state.selected)));
 
-    // Preview (first selected)
-    el('selPlayBtn').addEventListener('click', () => {
-      const first = Array.from(state.selected)[0];
-      const item = state.media.find(m => m.relative_path === first);
-      if (item) openDrawer(item);
+    // Selection bar actions
+    el('selTagToggle').addEventListener('click', () => toggleSelectPanel('selTagPanel'));
+    el('selMoveToggle').addEventListener('click', () => {
+      renderMoveTargets();
+      toggleSelectPanel('selMovePanel');
+    });
+    el('selCopyUrls').addEventListener('click', copySelectedUrls);
+    el('selTagInput').addEventListener('input', updateTagButtons);
+    el('selTagAdd').addEventListener('click', () => {
+      const tags = parseTagInput(el('selTagInput').value);
+      applyTagsToPaths(Array.from(state.selected), tags, []);
+      el('selTagInput').value = '';
+      updateTagButtons();
+    });
+    el('selTagRemove').addEventListener('click', () => {
+      const tags = parseTagInput(el('selTagInput').value);
+      applyTagsToPaths(Array.from(state.selected), [], tags);
+      el('selTagInput').value = '';
+      updateTagButtons();
+    });
+    el('selMoveSubmit').addEventListener('click', async () => {
+      const select = el('selMoveTarget');
+      const value = select?.value || '';
+      if (!value){
+        toast('warn','Move','Select a target project');
+        return;
+      }
+      const [source, name] = value.split('::');
+      await moveMedia(Array.from(state.selected), { name, source: source || null });
+      setSelectPanel('selMovePanel', false);
     });
 
     // Drawer close
