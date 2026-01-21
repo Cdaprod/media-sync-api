@@ -409,3 +409,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-23)
 - Asset metadata sidecars are now stored under `ingest/_metadata/<sha256>.json`; uploads, moves, and reindex runs create or update them while deletes clean them up. Tests validate metadata creation on upload and reindex.
+
+### Latest Implementation Notes (2025-03-24)
+- Added `/api/projects/{project}/media/tags` to add/remove manual tags in metadata sidecars, and updated the explorer UI to expose tag controls for selected assets and the inspector drawer.

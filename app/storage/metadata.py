@@ -95,6 +95,46 @@ def ensure_metadata(
     return metadata_path(project_path, sha256)
 
 
+def update_metadata_tags(
+    project_path: Path,
+    relative_path: str,
+    sha256: str,
+    file_path: Path,
+    *,
+    add_tags: list[str] | None = None,
+    remove_tags: list[str] | None = None,
+    source: str,
+    method: str,
+    run_id: str | None = None,
+) -> Dict[str, Any]:
+    """Update metadata tags for a media asset."""
+
+    ensure_metadata(
+        project_path,
+        relative_path,
+        sha256,
+        file_path,
+        source=source,
+        method=method,
+        run_id=run_id,
+    )
+    payload = load_metadata(project_path, sha256) or {}
+    tags_payload = payload.get("tags") or {}
+    manual_tags = _normalize_tags(tags_payload.get("manual", []))
+
+    if add_tags:
+        manual_tags.update(_normalize_tags(add_tags))
+    if remove_tags:
+        manual_tags.difference_update(_normalize_tags(remove_tags))
+
+    tags_payload["manual"] = sorted(manual_tags)
+    tags_payload.setdefault("derived", [])
+    payload["tags"] = tags_payload
+    payload["updated_at"] = _timestamp()
+    _write_metadata(project_path, sha256, payload)
+    return payload
+
+
 def remove_metadata(project_path: Path, sha256: str) -> None:
     """Remove a metadata sidecar if it exists."""
 
@@ -145,3 +185,15 @@ def _detect_kind(file_path: Path) -> str:
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _normalize_tags(tags: list[str] | set[str] | tuple[str, ...]) -> set[str]:
+    normalized: set[str] = set()
+    for tag in tags:
+        if not isinstance(tag, str):
+            continue
+        cleaned = tag.strip()
+        if not cleaned:
+            continue
+        normalized.add(cleaned.lower())
+    return normalized

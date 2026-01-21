@@ -383,8 +383,55 @@
       color: var(--muted);
       background: rgba(255,255,255,0.04);
     }
+    .taglist{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .taglist .tag{
+      border-color: rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+    .taglist .tag-button{
+      border: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: inherit;
+    }
+    .taglist .tag-button span{
+      opacity: 0.7;
+      font-size: 11px;
+    }
     .tag.good{ border-color: rgba(34,197,94,0.35); color: rgba(187,247,208,0.85); background: rgba(34,197,94,0.12); }
     .tag.bad{ border-color: rgba(239,68,68,0.35); color: rgba(254,202,202,0.85); background: rgba(239,68,68,0.12); }
+    .tag-panel{
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+    }
+    .tag-panel.is-hidden{
+      display: none;
+    }
+    .tag-editor{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      align-items: center;
+    }
+    .tag-editor input{
+      flex: 1 1 180px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+    }
 
     /* Grid/List */
     .grid{
@@ -795,6 +842,15 @@
               <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
               <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
             </div>
+
+            <div class="tag-panel" id="batchTagPanel">
+              <div class="small">Tag selected assets</div>
+              <div class="tag-editor">
+                <input id="batchTagInput" type="text" placeholder="e.g. highlight, vertical" />
+                <button id="batchTagAdd" class="btn" type="button" disabled>＋ Tag</button>
+                <button id="batchTagRemove" class="btn" type="button" disabled>− Remove</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -916,8 +972,17 @@
         <div class="drawer-actions">
           <button id="drawerPlay" class="btn" type="button">▶ Play</button>
           <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
-          <button id="drawerToggleSelect" class="btn primary" type="button">＋ Select</button>
+          <button id="drawerTagToggle" class="btn" type="button">🏷 Tag</button>
           <button id="drawerDelete" class="btn bad" type="button">🗑 Delete</button>
+        </div>
+
+        <div class="tag-panel" id="drawerTagPanel">
+          <div class="taglist" id="drawerTagList"></div>
+          <div class="tag-editor">
+            <input id="drawerTagInput" type="text" placeholder="Add or remove tag…" />
+            <button id="drawerTagAdd" class="btn" type="button">＋ Tag</button>
+            <button id="drawerTagRemove" class="btn" type="button">− Remove</button>
+          </div>
         </div>
 
         <div class="kv" id="drawerKV"></div>
@@ -973,6 +1038,13 @@
       return String(s ?? '')
         .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
         .replaceAll('"','&quot;').replaceAll("'","&#039;");
+    }
+
+    function encodePath(path){
+      return String(path || '')
+        .split('/')
+        .map(segment => encodeURIComponent(segment))
+        .join('/');
     }
 
     function formatBytes(bytes){
@@ -1040,6 +1112,13 @@
       return p.source ? `?source=${encodeURIComponent(p.source)}` : '';
     }
 
+    function parseTagInput(value){
+      return String(value || '')
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+    }
+
     function updateTopCounts(){
       el('projCount').textContent = `${state.projects.length} total`;
       const name = state.activeProject?.name || 'no project';
@@ -1066,13 +1145,112 @@
       el('selResolveBtn').disabled = !show || !state.activeProject;
       el('selDeleteBtn').disabled = !show || !state.activeProject;
 
-      // drawer select button label
-      if (state.focused){
-        const isSel = state.selected.has(state.focused.relative_path);
-        el('drawerToggleSelect').textContent = isSel ? '− Deselect' : '＋ Select';
-        el('drawerToggleSelect').classList.toggle('primary', !isSel);
-      }
+      updateTagButtons();
       el('drawerDelete').disabled = !state.focused;
+    }
+
+    function updateTagButtons(){
+      const hasSelection = state.selected.size > 0 && state.activeProject;
+      const hasFocused = !!state.focused;
+      const batchInput = el('batchTagInput');
+      const drawerInput = el('drawerTagInput');
+      const batchHasValue = !!parseTagInput(batchInput?.value).length;
+      const drawerHasValue = !!parseTagInput(drawerInput?.value).length;
+
+      el('batchTagAdd').disabled = !hasSelection || !batchHasValue;
+      el('batchTagRemove').disabled = !hasSelection || !batchHasValue;
+      el('drawerTagAdd').disabled = !hasFocused || !drawerHasValue;
+      el('drawerTagRemove').disabled = !hasFocused || !drawerHasValue;
+      el('drawerTagToggle').disabled = !hasFocused;
+    }
+
+    async function fetchMetadata(item){
+      if (!item?.metadata_path) return null;
+      const p = state.activeProject;
+      if (!p) return null;
+      const url = `${API}/media/${encodeURIComponent(p.name)}/${encodePath(item.metadata_path)}${mediaQuery()}`;
+      try{
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        return await r.json();
+      }catch{
+        return null;
+      }
+    }
+
+    function renderTagList(container, tags, onRemove){
+      container.innerHTML = '';
+      const list = Array.isArray(tags) ? tags : [];
+      if (!list.length){
+        const empty = document.createElement('span');
+        empty.className = 'tag';
+        empty.textContent = 'No tags';
+        container.appendChild(empty);
+        return;
+      }
+      list.forEach((tag) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tag tag-button';
+        const label = document.createElement('span');
+        label.textContent = tag;
+        const remove = document.createElement('span');
+        remove.textContent = '×';
+        btn.appendChild(label);
+        btn.appendChild(remove);
+        btn.addEventListener('click', () => onRemove(tag));
+        container.appendChild(btn);
+      });
+    }
+
+    async function loadDrawerTags(item){
+      const tagList = el('drawerTagList');
+      if (!tagList) return;
+      if (!item){
+        tagList.innerHTML = '';
+        return;
+      }
+      tagList.innerHTML = '<span class="tag">Loading…</span>';
+      const metadata = await fetchMetadata(item);
+      const manualTags = metadata?.tags?.manual || [];
+      renderTagList(tagList, manualTags, (tag) => applyTagsToPaths([item.relative_path], [], [tag]));
+    }
+
+    async function applyTagsToPaths(paths, addTags, removeTags){
+      const p = state.activeProject;
+      if (!p){
+        toast('warn','Tags','Select a project first');
+        return;
+      }
+      if (!paths.length){
+        toast('warn','Tags','Select one or more clips');
+        return;
+      }
+      const add = (addTags || []).length ? addTags : [];
+      const remove = (removeTags || []).length ? removeTags : [];
+      if (!add.length && !remove.length){
+        toast('warn','Tags','Enter a tag name');
+        return;
+      }
+      try{
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/tags${mediaQuery()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            relative_paths: paths,
+            add_tags: add,
+            remove_tags: remove,
+          }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Tag update failed');
+        toast('good','Tags', `Updated ${payload.updated?.length || 0} assets`);
+        if (state.focused){
+          await loadDrawerTags(state.focused);
+        }
+      }catch(e){
+        toast('bad','Tags', e.message);
+      }
     }
 
     function setSidebarOpen(open){
@@ -1631,6 +1809,9 @@
     // -------------------------
     function openDrawer(item){
       state.focused = item;
+      if (item?.relative_path){
+        state.selected.add(item.relative_path);
+      }
 
       const kind = guessKind(item);
       const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
@@ -1704,11 +1885,26 @@
         }
       };
 
-      el('drawerToggleSelect').onclick = () => {
-        toggleSelected(item.relative_path);
+      el('drawerTagToggle').onclick = () => {
+        el('drawerTagInput')?.focus();
+      };
+
+      el('drawerTagAdd').onclick = () => {
+        const tags = parseTagInput(el('drawerTagInput').value);
+        applyTagsToPaths([item.relative_path], tags, []);
+        el('drawerTagInput').value = '';
+        updateTagButtons();
+      };
+      el('drawerTagRemove').onclick = () => {
+        const tags = parseTagInput(el('drawerTagInput').value);
+        applyTagsToPaths([item.relative_path], [], tags);
+        el('drawerTagInput').value = '';
+        updateTagButtons();
       };
 
       // open
+      el('drawerTagPanel').classList.toggle('is-hidden', !item);
+      loadDrawerTags(item);
       setInspectorOpen(true);
       updateSelectionUI();
     }
@@ -1755,6 +1951,22 @@
       state.q = e.target.value || '';
       renderMedia();
       updateTopCounts();
+    });
+
+    el('batchTagInput').addEventListener('input', updateTagButtons);
+    el('drawerTagInput').addEventListener('input', updateTagButtons);
+
+    el('batchTagAdd').addEventListener('click', () => {
+      const tags = parseTagInput(el('batchTagInput').value);
+      applyTagsToPaths(Array.from(state.selected), tags, []);
+      el('batchTagInput').value = '';
+      updateTagButtons();
+    });
+    el('batchTagRemove').addEventListener('click', () => {
+      const tags = parseTagInput(el('batchTagInput').value);
+      applyTagsToPaths(Array.from(state.selected), [], tags);
+      el('batchTagInput').value = '';
+      updateTagButtons();
     });
 
     // Upload
