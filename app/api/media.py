@@ -110,6 +110,17 @@ def _dedupe_destination(target: Path) -> Path:
         counter += 1
 
 
+def _should_remove_metadata(
+    sha: str,
+    delete_paths: set[str],
+    sha_to_paths: dict[str, set[str]],
+) -> bool:
+    paths = sha_to_paths.get(sha, set())
+    if not paths:
+        return True
+    return paths.issubset(delete_paths)
+
+
 @router.get("/{project_name}/media")
 async def list_media(project_name: str, source: str | None = None):
     """List all media recorded in a project's index with streamable URLs."""
@@ -222,14 +233,23 @@ async def delete_media(project_name: str, payload: DeleteMediaRequest, source: s
     resolved = _require_source_and_project(project_name, source)
     index = load_index(resolved.root)
     entries_by_path = {entry.get("relative_path"): entry for entry in index.get("files", [])}
+    sha_to_paths: dict[str, set[str]] = {}
+    for rel_path, entry in entries_by_path.items():
+        sha = entry.get("sha256")
+        if not sha or not isinstance(rel_path, str):
+            continue
+        sha_to_paths.setdefault(sha, set()).add(rel_path)
 
     removed_paths: set[str] = set()
     missing: list[str] = []
+    removed_shas: set[str] = set()
+    delete_targets: set[str] = set()
     for raw_path in payload.relative_paths:
         try:
             safe_relative = _validate_relative_media_path(raw_path)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        delete_targets.add(safe_relative)
         entry = entries_by_path.get(safe_relative)
         target = (resolved.root / safe_relative).resolve()
         if target.exists() and target.is_file():
@@ -239,10 +259,14 @@ async def delete_media(project_name: str, payload: DeleteMediaRequest, source: s
             sha = entry.get("sha256")
             if sha:
                 remove_file_record(_manifest_db_path(resolved.root), sha, safe_relative)
-                remove_metadata(resolved.root, sha)
+                removed_shas.add(sha)
             removed_paths.add(safe_relative)
         if not entry and not target.exists():
             missing.append(safe_relative)
+
+    for sha in removed_shas:
+        if _should_remove_metadata(sha, delete_targets, sha_to_paths):
+            remove_metadata(resolved.root, sha)
 
     if removed_paths:
         remove_entries(resolved.root, removed_paths)
@@ -290,16 +314,25 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
 
     source_index = load_index(resolved.root)
     source_entries = {entry.get("relative_path"): entry for entry in source_index.get("files", [])}
+    sha_to_paths: dict[str, set[str]] = {}
+    for rel_path, entry in source_entries.items():
+        sha = entry.get("sha256")
+        if not sha or not isinstance(rel_path, str):
+            continue
+        sha_to_paths.setdefault(sha, set()).add(rel_path)
 
     moved: list[dict[str, str]] = []
     duplicates: list[str] = []
     missing: list[str] = []
+    removed_shas: set[str] = set()
+    delete_targets: set[str] = set()
 
     for raw_path in payload.relative_paths:
         try:
             safe_relative = _validate_relative_media_path(raw_path)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        delete_targets.add(safe_relative)
         source_entry = source_entries.get(safe_relative)
         source_file = (resolved.root / safe_relative).resolve()
         if not source_file.exists() or not source_file.is_file():
@@ -307,6 +340,7 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
                 remove_entries(resolved.root, [safe_relative])
                 if source_entry.get("sha256"):
                     remove_file_record(_manifest_db_path(resolved.root), source_entry["sha256"], safe_relative)
+                    removed_shas.add(source_entry["sha256"])
             missing.append(safe_relative)
             continue
         filename = safe_filename(Path(safe_relative).name)
@@ -346,7 +380,11 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
             remove_entries(resolved.root, [safe_relative])
             if source_entry.get("sha256"):
                 remove_file_record(_manifest_db_path(resolved.root), source_entry["sha256"], safe_relative)
-                remove_metadata(resolved.root, source_entry["sha256"])
+                removed_shas.add(source_entry["sha256"])
+
+    for sha in removed_shas:
+        if _should_remove_metadata(sha, delete_targets, sha_to_paths):
+            remove_metadata(resolved.root, sha)
 
     if moved:
         append_event(

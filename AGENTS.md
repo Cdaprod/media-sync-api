@@ -415,3 +415,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-24)
 - Added `/api/projects/{project}/media/tags` to add/remove manual tags in metadata sidecars, and updated the explorer UI to expose tag controls for selected assets and the inspector drawer.
+
+### Latest Implementation Notes (2025-03-25)
+- Deleting or moving media now preserves metadata sidecars when another index entry shares the same sha256, removing sidecars only after the last path is removed.
