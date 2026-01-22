@@ -1131,6 +1131,40 @@
       return new URL(path, window.location.origin).toString();
     }
 
+    async function copyTextWithFallback(text){
+      if (!text) return false;
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
+        try{
+          await navigator.clipboard.writeText(text);
+          return true;
+        }catch(e){
+          // fallback continues below
+        }
+      }
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      temp.setAttribute('readonly','');
+      temp.style.position = 'fixed';
+      temp.style.top = '-1000px';
+      temp.style.left = '-1000px';
+      document.body.appendChild(temp);
+      temp.focus();
+      temp.select();
+      let ok = false;
+      try{
+        ok = document.execCommand('copy');
+      }catch(e){
+        ok = false;
+      }
+      temp.remove();
+      if (ok) return true;
+      if (typeof window.prompt === 'function'){
+        window.prompt('Copy to clipboard', text);
+        return true;
+      }
+      return false;
+    }
+
     function dragPayload(item){
       const paths = state.selected.has(item.relative_path)
         ? Array.from(state.selected)
@@ -1389,17 +1423,11 @@
         return;
       }
       const text = urls.join('\n');
-      try{
-        await navigator.clipboard.writeText(text);
+      const ok = await copyTextWithFallback(text);
+      if (ok){
         toast('good','Copied', `Copied ${urls.length} URL(s)`);
-      }catch{
-        const temp = document.createElement('textarea');
-        temp.value = text;
-        document.body.appendChild(temp);
-        temp.select();
-        document.execCommand('copy');
-        temp.remove();
-        toast('good','Copied', `Copied ${urls.length} URL(s)`);
+      }else{
+        toast('warn','Clipboard', 'Copy failed — please copy manually.');
       }
     }
 
@@ -2032,11 +2060,11 @@
 
       el('drawerCopy').onclick = async () => {
         const u = toAbsoluteUrl(item.stream_url);
-        try{
-          await navigator.clipboard.writeText(u);
+        const ok = await copyTextWithFallback(u);
+        if (ok){
           toast('good','Copied', 'Stream URL copied to clipboard');
-        }catch{
-          toast('warn','Clipboard', 'Copy failed (browser permission)');
+        }else{
+          toast('warn','Clipboard', 'Copy failed — please copy manually.');
         }
       };
 

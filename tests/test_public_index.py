@@ -23,8 +23,12 @@ def test_stream_url_copy_includes_origin_helper(client):
     assert response.status_code == 200
     assert "toAbsoluteUrl" in response.text
     assert "window.location.origin" in response.text
+    assert "copyTextWithFallback" in response.text
+    assert "document.execCommand('copy')" in response.text
 
     explorer = client.get("/public/explorer.html")
     assert explorer.status_code == 200
     assert "toAbsoluteUrl" in explorer.text
     assert "window.location.origin" in explorer.text
+    assert "copyTextWithFallback" in explorer.text
+    assert "document.execCommand('copy')" in explorer.text

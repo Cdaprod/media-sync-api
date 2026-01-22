@@ -71,3 +71,38 @@ export function normalizeTagList(value?: string[] | string): string[] {
     .map((tag) => tag.trim())
     .filter(Boolean);
 }
+
+export async function copyTextWithFallback(text: string): Promise<boolean> {
+  if (!text) return false;
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fallback continues below
+    }
+  }
+  if (typeof document === 'undefined') return false;
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.top = '-1000px';
+  textarea.style.left = '-1000px';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  textarea.remove();
+  if (ok) return true;
+  if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+    window.prompt('Copy to clipboard', text);
+    return true;
+  }
+  return false;
+}

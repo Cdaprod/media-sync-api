@@ -5,7 +5,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createApiClient } from './api';
 import { extractAiTags, extractTags, filterMedia, pruneSelection, toggleSelection } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
-import { formatBytes, guessKind, inferApiBaseUrl, kindBadgeClass, toAbsoluteUrl } from './utils';
+import {
+  copyTextWithFallback,
+  formatBytes,
+  guessKind,
+  inferApiBaseUrl,
+  kindBadgeClass,
+  toAbsoluteUrl,
+} from './utils';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -468,11 +475,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!item.stream_url) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const url = toAbsoluteUrl(resolveAssetUrl(item.stream_url), origin);
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyTextWithFallback(url);
+    if (ok) {
       addToast('good', 'Copied', 'Stream URL copied to clipboard');
-    } catch {
-      addToast('warn', 'Clipboard', 'Copy failed (browser permission)');
+    } else {
+      addToast('warn', 'Clipboard', 'Copy failed — please copy manually.');
     }
   }, [addToast, resolveAssetUrl]);
 
