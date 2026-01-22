@@ -439,3 +439,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-01)
 - Refreshed `public/explorer.html` topbar branding to “Cdaprod’s Asset Explorer” with gradient text and a polished logo hover sheen while keeping the layout dimensions unchanged.
+
+### Latest Implementation Notes (2025-04-02)
+- Tuned `public/explorer.html` motion to use settle/snappy easing with transform/opacity-only transitions for drawer/sidebar/asset interactions plus reduced-motion safeguards.
