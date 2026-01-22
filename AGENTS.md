@@ -436,3 +436,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-03-31)
 - Added clipboard copy fallbacks (execCommand + prompt) across the static explorers and the Next.js Explorer so copy actions work on restrictive mobile browsers.
+
+### Latest Implementation Notes (2025-04-01)
+- Refreshed `public/explorer.html` topbar branding to “Cdaprod’s Asset Explorer” with gradient text and a polished logo hover sheen while keeping the layout dimensions unchanged.
