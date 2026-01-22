@@ -1130,6 +1130,7 @@
       sources: [],
       activeProject: null,   // {name, source, ...}
       media: [],             // items from /media
+      mediaScope: 'project', // project|all
       view: 'grid',          // grid|list
       q: '',
       selected: new Set(),   // relative_path
@@ -1180,12 +1181,80 @@
       return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
     }
 
+    function parseTimestamp(value){
+      if (!value) return 0;
+      const ts = Date.parse(value);
+      return Number.isNaN(ts) ? 0 : ts;
+    }
+
+    function filenameTimestamp(relativePath){
+      if (!relativePath) return 0;
+      const name = relativePath.split('/').pop() || relativePath;
+      const dateTimeMatch = name.match(/(\d{4})-(\d{2})-(\d{2})[T_ -]?(\d{2})-(\d{2})-(\d{2})/);
+      if (dateTimeMatch){
+        const [, year, month, day, hour, minute, second] = dateTimeMatch;
+        return Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+      }
+      const dateMatch = name.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch){
+        const [, year, month, day] = dateMatch;
+        return Date.parse(`${year}-${month}-${day}T00:00:00`);
+      }
+      return 0;
+    }
+
+    function itemTimestamp(item){
+      return Math.max(
+        parseTimestamp(item.updated_at),
+        parseTimestamp(item.updatedAt),
+        parseTimestamp(item.created_at),
+        parseTimestamp(item.createdAt),
+        filenameTimestamp(item.relative_path),
+      );
+    }
+
+    function sortMediaByRecent(items){
+      return items.slice().sort((a, b) => {
+        const delta = itemTimestamp(b) - itemTimestamp(a);
+        if (delta !== 0) return delta;
+        return String(b.relative_path || '').localeCompare(String(a.relative_path || ''));
+      });
+    }
+
+    function projectLabel(item){
+      const name = item.project_name || item.project || '';
+      const source = item.project_source || item.source || '';
+      if (!name) return '';
+      return source ? `${name} (${source})` : name;
+    }
+
     function toAbsoluteUrl(path){
       if (!path) return '';
       if (path.startsWith('http://') || path.startsWith('https://')) {
         return path;
       }
       return new URL(path, window.location.origin).toString();
+    }
+
+    function buildThumbFallback(label){
+      const safeLabel = String(label || 'MEDIA').replace(/[^a-z0-9 ]/gi, '').slice(0, 12) || 'MEDIA';
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#2a2d3a"/>
+              <stop offset="100%" stop-color="#1d2030"/>
+            </linearGradient>
+          </defs>
+          <rect width="640" height="360" rx="28" fill="url(#bg)"/>
+          <rect x="24" y="24" width="592" height="312" rx="22" fill="rgba(255,255,255,0.06)"/>
+          <text x="50%" y="52%" dominant-baseline="middle" text-anchor="middle" fill="#b7bcc8"
+            font-family="Inter, system-ui, sans-serif" font-size="48" font-weight="600" letter-spacing="2">
+            ${safeLabel.toUpperCase()}
+          </text>
+        </svg>
+      `;
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     }
 
     async function copyTextWithFallback(text){
@@ -1278,9 +1347,11 @@
 
     function updateTopCounts(){
       el('projCount').textContent = `${state.projects.length} total`;
-      const name = state.activeProject?.name || 'no project';
+      const name = state.activeProject?.name || (state.mediaScope === 'all' ? 'all projects' : 'no project');
       el('activePath').textContent = name;
-      el('contentTitle').textContent = state.activeProject ? `Media — ${name}` : 'Media';
+      el('contentTitle').textContent = state.activeProject
+        ? `Media — ${name}`
+        : (state.mediaScope === 'all' ? 'Media — All Projects' : 'Media');
       el('mediaCount').textContent = `${filteredMedia().length} items`;
     }
 
@@ -1609,7 +1680,8 @@
         video.muted = true;
         video.playsInline = true;
         video.crossOrigin = 'anonymous';
-        video.src = url;
+        const withTimeHint = url.includes('#') ? url : `${url}#t=0.1`;
+        video.src = withTimeHint;
 
         const timeout = setTimeout(() => {
           cleanup();
@@ -1639,9 +1711,9 @@
 
         video.addEventListener('loadedmetadata', () => {
           const targetTime = Number.isFinite(video.duration) && video.duration > 0
-            ? Math.min(video.duration * 0.5, video.duration - 0.1)
-            : (durationHint || 1.0);
-          video.currentTime = Math.max(0.5, targetTime);
+            ? Math.min(Math.max(video.duration * 0.05, 0.3), 2.0)
+            : Math.min(Math.max(durationHint || 0.5, 0.3), 1.5);
+          video.currentTime = targetTime;
         }, { once:true });
 
         video.addEventListener('seeked', capture, { once:true });
@@ -1679,6 +1751,7 @@
     async function loadMedia(){
       if (!state.activeProject){
         state.media = [];
+        state.mediaScope = 'project';
         renderMedia();
         updateTopCounts();
         return;
@@ -1688,7 +1761,9 @@
         const r = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/media${mediaQuery()}`);
         if (!r.ok) throw new Error('Failed to load media list');
         const payload = await r.json();
-        state.media = Array.isArray(payload.media) ? payload.media : [];
+        state.mediaScope = 'project';
+        const items = Array.isArray(payload.media) ? payload.media : [];
+        state.media = sortMediaByRecent(items);
         // clear selection if selected files disappeared
         const existing = new Set(state.media.map(m => m.relative_path));
         for (const s of Array.from(state.selected)){
@@ -1700,6 +1775,42 @@
       }catch(e){
         toast('bad','Media', e.message);
       }
+    }
+
+    async function loadAllMedia(){
+      state.mediaScope = 'all';
+      state.selected.clear();
+      state.focused = null;
+      const items = [];
+      if (!state.projects.length){
+        state.media = [];
+        renderMedia();
+        updateTopCounts();
+        updateSelectionUI();
+        return;
+      }
+      for (const project of state.projects){
+        const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
+        try{
+          const r = await fetch(`${API}/api/projects/${encodeURIComponent(project.name)}/media${query}`);
+          if (!r.ok) throw new Error('Failed to load media list');
+          const payload = await r.json();
+          const media = Array.isArray(payload.media) ? payload.media : [];
+          media.forEach((item) => {
+            items.push({
+              ...item,
+              project_name: project.name,
+              project_source: project.source || null,
+            });
+          });
+        }catch(e){
+          toast('warn','Media', `Skipped ${project.name}: ${e.message}`);
+        }
+      }
+      state.media = sortMediaByRecent(items);
+      renderMedia();
+      updateTopCounts();
+      updateSelectionUI();
     }
 
     // -------------------------
@@ -1765,6 +1876,8 @@
 
     function renderMedia(){
       const items = filteredMedia();
+      const allMode = !state.activeProject && state.mediaScope === 'all';
+      const canSelect = !!state.activeProject;
 
       // GRID
       const g = el('mediaGrid');
@@ -1773,7 +1886,7 @@
       const l = el('mediaList');
       l.innerHTML = '';
 
-      if (!state.activeProject){
+      if (!state.activeProject && !allMode){
         const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
           Select a project to view media.
         </div>`;
@@ -1784,7 +1897,9 @@
 
       if (!items.length){
         const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
-          No indexed files yet. Upload then run <code>/reindex</code>.
+          ${allMode
+            ? 'No indexed files yet across all projects.'
+            : 'No indexed files yet. Upload then run <code>/reindex</code>.'}
         </div>`;
         g.innerHTML = empty;
         l.innerHTML = empty;
@@ -1794,32 +1909,37 @@
       for (const it of items){
         const kind = guessKind(it);
         const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
-        const sub = it.relative_path || '';
+        const proj = projectLabel(it);
+        const sub = proj ? `${it.relative_path || ''} • ${proj}` : (it.relative_path || '');
         const size = formatBytes(it.size);
 
         // If your API can provide a lightweight thumbnail URL (recommended), use it:
         // - it.thumb_url (image/jpg) for videos/images
         // Otherwise we can still show the actual stream_url for images (not always great for big video files).
         const cachedThumb = thumbCache.get(it.relative_path);
+        const fallbackThumb = buildThumbFallback(kind);
         const thumbUrl = cachedThumb || it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null);
+        const safeThumbUrl = thumbUrl || fallbackThumb;
 
         // ---- grid card
         const card = document.createElement('div');
         card.className = 'asset';
-        card.setAttribute('draggable', 'true');
-        card.addEventListener('dragstart', (event) => attachDragData(event, it));
+        if (canSelect){
+          card.setAttribute('draggable', 'true');
+          card.addEventListener('dragstart', (event) => attachDragData(event, it));
+        }
         if (state.selected.has(it.relative_path)) card.classList.add('selected');
 
         card.innerHTML = `
           <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
-            ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
-                       : (kind === 'video' ? `<div class="fallback">VIDEO</div>` : `<div class="fallback">No thumbnail</div>`) }
+            <img src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
+              onerror="this.onerror=null;this.src='${escapeHtml(fallbackThumb)}';" />
             <div class="badges">
               <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
               <span class="badge">${escapeHtml(size)}</span>
             </div>
             <div class="selector" title="Select">
-              <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} aria-label="Select media" />
+              <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
             </div>
           </div>
           <div class="body">
@@ -1846,19 +1966,21 @@
         // ---- list row
         const row = document.createElement('div');
         row.className = 'row';
-        row.setAttribute('draggable', 'true');
-        row.addEventListener('dragstart', (event) => attachDragData(event, it));
+        if (canSelect){
+          row.setAttribute('draggable', 'true');
+          row.addEventListener('dragstart', (event) => attachDragData(event, it));
+        }
         row.innerHTML = `
           <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
-            ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(title)}" loading="lazy" />`
-                       : (kind === 'video' ? `<span style="font-size:11px;color:var(--muted);">VIDEO</span>` : `<span style="font-size:11px;color:var(--muted);">${escapeHtml(kind)}</span>`) }
+            <img src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
+              onerror="this.onerror=null;this.src='${escapeHtml(fallbackThumb)}';" />
           </div>
           <div class="info">
             <div class="t">${escapeHtml(title)}</div>
             <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
           </div>
           <div class="actions">
-            <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} title="Select" />
+            <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} title="Select" ${canSelect ? '' : 'disabled'} />
             <button class="iconbtn" type="button">Preview</button>
           </div>
         `;
@@ -1877,6 +1999,7 @@
     // -------------------------
     async function selectProject(p){
       state.activeProject = p;
+      state.mediaScope = 'project';
       state.selected.clear();
       state.focused = null;
 
@@ -1938,6 +2061,7 @@
     // -------------------------
     function toggleSelected(relPath){
       if (!relPath) return;
+      if (!state.activeProject) return;
       if (state.selected.has(relPath)) state.selected.delete(relPath);
       else state.selected.add(relPath);
 
@@ -2051,7 +2175,7 @@
     // -------------------------
     function openDrawer(item){
       state.focused = item;
-      if (item?.relative_path){
+      if (state.activeProject && item?.relative_path){
         state.selected.add(item.relative_path);
       }
 
@@ -2090,12 +2214,14 @@
 
       // metadata table (show what you have; hides gracefully if missing)
       const kv = el('drawerKV');
+      const activeProjectName = state.activeProject?.name || item.project_name || '';
+      const activeSource = state.activeProject?.source || item.project_source || '';
       const rows = [
         ['Kind', kind],
         ['Size', formatBytes(item.size)],
         ['Stream', item.stream_url || '(none)'],
-        ['Source', state.activeProject?.source || '(primary)'],
-        ['Project', state.activeProject?.name || '(none)'],
+        ['Source', activeSource || '(primary)'],
+        ['Project', activeProjectName || '(none)'],
         ['Relative', item.relative_path || '(none)'],
         // Optional fields if your API provides them:
         ['MIME', item.mime || item.content_type || ''],
@@ -2165,7 +2291,11 @@
     el('refreshBtn').addEventListener('click', async () => {
       await loadSources();
       await loadProjects();
-      await loadMedia();
+      if (state.activeProject){
+        await loadMedia();
+      }else{
+        await loadAllMedia();
+      }
       toast('good','Refresh','Reloaded projects + media');
     });
 
@@ -2334,6 +2464,9 @@
       toast('good','Boot','Loading sources + projects…');
       await loadSources();
       await loadProjects();
+      if (!state.activeProject){
+        await loadAllMedia();
+      }
       setView('grid');
       updateTopCounts();
       updateSelectionUI();

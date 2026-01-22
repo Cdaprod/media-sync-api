@@ -340,6 +340,7 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
     let activeProject = null;
     const selectedMedia = new Set();
     let currentMedia = [];
+    let mediaScope = 'project';
 
     const formatBytes = (bytes) => {
       if (!bytes || Number.isNaN(bytes)) return '0 B';
@@ -347,6 +348,47 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
       const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
       const size = bytes / (1024 ** power);
       return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[power]}`;
+    };
+
+    const parseTimestamp = (value) => {
+      if (!value) return 0;
+      const ts = Date.parse(value);
+      return Number.isNaN(ts) ? 0 : ts;
+    };
+
+    const filenameTimestamp = (relativePath) => {
+      if (!relativePath) return 0;
+      const name = relativePath.split('/').pop() || relativePath;
+      const dateTimeMatch = name.match(/(\d{4})-(\d{2})-(\d{2})[T_ -]?(\d{2})-(\d{2})-(\d{2})/);
+      if (dateTimeMatch) {
+        const [, year, month, day, hour, minute, second] = dateTimeMatch;
+        return Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+      }
+      const dateMatch = name.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) {
+        const [, year, month, day] = dateMatch;
+        return Date.parse(`${year}-${month}-${day}T00:00:00`);
+      }
+      return 0;
+    };
+
+    const itemTimestamp = (item) => Math.max(
+      parseTimestamp(item.updated_at),
+      parseTimestamp(item.updatedAt),
+      parseTimestamp(item.created_at),
+      parseTimestamp(item.createdAt),
+      filenameTimestamp(item.relative_path),
+    );
+
+    const sortMediaByRecent = (items) => items.slice().sort((a, b) => {
+      const delta = itemTimestamp(b) - itemTimestamp(a);
+      if (delta !== 0) return delta;
+      return String(b.relative_path || '').localeCompare(String(a.relative_path || ''));
+    });
+
+    const projectLabel = (item) => {
+      if (!item.project_name) return '';
+      return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
     };
 
     const toAbsoluteUrl = (path) => {
@@ -448,6 +490,9 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
         if (!response.ok) throw new Error('Failed to list projects');
         const projects = await response.json();
         renderProjects(projects);
+        if (!activeProject) {
+          await loadAllMedia(projects);
+        }
       } catch (err) {
         projectsEl.textContent = `Error: ${err.message}`;
       }
@@ -497,6 +542,7 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
 
     function selectProject(project) {
       activeProject = project;
+      mediaScope = 'project';
       selectedMedia.clear();
       updateSelectionStatus();
       uploadPanel.classList.remove('hidden');
@@ -517,6 +563,7 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
 
     async function loadMedia() {
       if (!activeProject) {
+        mediaScope = 'project';
         mediaList.innerHTML = '<div class="empty-state">Select a project to view media.</div>';
         return;
       }
@@ -533,15 +580,49 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
         const response = await fetch(`/api/projects/${encodeURIComponent(name)}/media${query}`);
         if (!response.ok) throw new Error('Failed to load media list');
         const payload = await response.json();
-        currentMedia = payload.media || [];
+        mediaScope = 'project';
+        currentMedia = sortMediaByRecent(payload.media || []);
         applyMediaFilter();
       } catch (err) {
         mediaList.innerHTML = `<div class="empty-state">Error loading media: ${err.message}</div>`;
       }
     }
 
+    async function loadAllMedia(projects) {
+      mediaScope = 'all';
+      selectedMedia.clear();
+      updateSelectionStatus();
+      mediaEl.classList.remove('hidden');
+      mediaTitle.textContent = 'Media — All Projects';
+      crumbText.textContent = 'all projects';
+      if (!projects.length) {
+        currentMedia = [];
+        applyMediaFilter();
+        return;
+      }
+      const gathered = [];
+      for (const project of projects) {
+        const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
+        try {
+          const response = await fetch(`/api/projects/${encodeURIComponent(project.name)}/media${query}`);
+          if (!response.ok) throw new Error('Failed to load media list');
+          const payload = await response.json();
+          const media = payload.media || [];
+          media.forEach((item) => gathered.push({
+            ...item,
+            project_name: project.name,
+            project_source: project.source || null,
+          }));
+        } catch (err) {
+          uploadStatus.textContent = `Skipped ${project.name}: ${err.message}`;
+        }
+      }
+      currentMedia = sortMediaByRecent(gathered);
+      applyMediaFilter();
+    }
+
     function applyMediaFilter() {
-      if (!activeProject) {
+      if (!activeProject && mediaScope !== 'all') {
         mediaList.innerHTML = '<div class="empty-state">Select a project to view media.</div>';
         return;
       }
@@ -555,7 +636,9 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
     function renderMediaGrid(items) {
       mediaList.textContent = '';
       if (!items.length) {
-        mediaList.innerHTML = '<div class="empty-state">No assets found for this folder or filter.</div>';
+        mediaList.innerHTML = mediaScope === 'all'
+          ? '<div class="empty-state">No assets found across all projects.</div>'
+          : '<div class="empty-state">No assets found for this folder or filter.</div>';
         return;
       }
 
@@ -564,8 +647,10 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
         card.className = 'file-card';
         const isSelected = selectedMedia.has(item.relative_path);
         if (isSelected) card.classList.add('selected');
-        card.setAttribute('draggable', 'true');
-        card.addEventListener('dragstart', (event) => attachDragData(event, item));
+        if (activeProject) {
+          card.setAttribute('draggable', 'true');
+          card.addEventListener('dragstart', (event) => attachDragData(event, item));
+        }
 
         const name = document.createElement('div');
         name.className = 'name';
@@ -573,7 +658,8 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
 
         const meta = document.createElement('div');
         meta.className = 'meta';
-        meta.textContent = `${item.relative_path} • ${formatBytes(item.size || 0)}`;
+        const proj = projectLabel(item);
+        meta.textContent = `${item.relative_path} • ${formatBytes(item.size || 0)}${proj ? ` • ${proj}` : ''}`;
 
         const actions = document.createElement('div');
         actions.className = 'file-actions';
@@ -591,6 +677,7 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
           card.classList.toggle('selected', selectedMedia.has(item.relative_path));
           queue.textContent = selectedMedia.has(item.relative_path) ? 'Queued for Resolve' : 'Queue for Resolve';
         };
+        queue.disabled = !activeProject;
 
         const menu = document.createElement('div');
         menu.className = 'menu';
@@ -672,6 +759,7 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
     }
 
     function toggleSelection(path, checked) {
+      if (!activeProject) return;
       if (checked) {
         selectedMedia.add(path);
       } else {
@@ -683,6 +771,10 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
     function updateSelectionStatus() {
       if (!selectionStatus) return;
       const count = selectedMedia.size;
+      if (!activeProject) {
+        selectionStatus.textContent = 'Select a project to queue clips for Resolve.';
+        return;
+      }
       selectionStatus.textContent = count
         ? `${count} item(s) queued for Resolve.`
         : 'Select clips to send to Resolve.';
