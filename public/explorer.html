@@ -22,6 +22,11 @@
       --radius: 18px;
       --radius2: 12px;
       --ring: 0 0 0 3px rgba(124,58,237,0.25);
+      --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
+      --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+      --dur-fast: 160ms;
+      --dur-med: 240ms;
+      --dur-slow: 320ms;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
     }
@@ -58,7 +63,7 @@
       background: rgba(6,8,14,0.6);
       opacity:0;
       pointer-events:none;
-      transition: opacity 140ms ease;
+      transition: opacity var(--dur-med) var(--ease-settle);
       z-index:65;
     }
     .backdrop.show{ opacity:1; pointer-events:auto; }
@@ -274,12 +279,15 @@
       width: min(420px, 100vw - 24px);
       max-width: 100%;
       transform: translateX(-105%);
-      transition: transform 160ms ease;
+      opacity: 0;
+      transition: transform var(--dur-slow) var(--ease-settle), opacity var(--dur-med) var(--ease-settle);
       pointer-events: none;
       z-index: 90;
+      will-change: transform, opacity;
     }
     .sidebar.sidebar-drawer.is-open{
       transform: translateX(0%);
+      opacity: 1;
       pointer-events: auto;
     }
 
@@ -501,10 +509,11 @@
       border-radius: var(--radius2);
       overflow:hidden;
       cursor:pointer;
-      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+      transition: transform var(--dur-med) var(--ease-snappy), background var(--dur-med) var(--ease-settle), border-color var(--dur-med) var(--ease-settle);
       position: relative;
+      will-change: transform;
     }
-    .asset:hover{ transform: translateY(-2px); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); }
+    .asset:hover{ transform: translateY(-3px) scale(1.01); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); }
 
     .thumb{
       aspect-ratio: 5/4;
@@ -589,6 +598,7 @@
     .asset.selected{
       border-color: rgba(124,58,237,0.55);
       box-shadow: 0 0 0 3px rgba(124,58,237,0.12) inset;
+      transform: translateY(-1px);
     }
 
     /* List row variant */
@@ -640,14 +650,16 @@
       border-left: 1px solid var(--border);
       box-shadow: var(--shadow);
       transform: translateX(110%);
-      transition: transform 160ms ease;
+      opacity: 0;
+      transition: transform var(--dur-slow) var(--ease-settle), opacity var(--dur-med) var(--ease-settle);
       z-index: 80;
       display:flex;
       flex-direction: column;
       min-height: 0;
       pointer-events: none;
+      will-change: transform, opacity;
     }
-    .drawer.open{ transform: translateX(0%); pointer-events: auto; }
+    .drawer.open{ transform: translateX(0%); opacity: 1; pointer-events: auto; }
     .drawer-h{
       padding: 14px 14px 10px;
       border-bottom: 1px solid var(--border);
@@ -858,6 +870,15 @@
         top: 58px;
         left: 12px;
         right: 12px;
+      }
+    }
+    @media (prefers-reduced-motion: reduce){
+      .asset,
+      .drawer,
+      .sidebar.sidebar-drawer,
+      .backdrop,
+      .logo::after{
+        transition-duration: 1ms !important;
       }
     }
     .sidebar{
