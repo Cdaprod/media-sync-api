@@ -39,3 +39,10 @@ test('api base inference keeps LAN host reachable', () => {
   assert.ok(content.includes(':8787'));
   assert.ok(content.includes("if (!trimmed) return ''"));
 });
+
+test('clipboard helper includes fallback copy behavior', () => {
+  const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
+  const content = fs.readFileSync(utilsPath, 'utf8');
+  assert.ok(content.includes('copyTextWithFallback'));
+  assert.ok(content.includes("document.execCommand('copy')"));
+});

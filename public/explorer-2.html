@@ -832,6 +832,40 @@
         .replaceAll('"','&quot;').replaceAll("'","&#039;");
     }
 
+    async function copyTextWithFallback(text){
+      if (!text) return false;
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
+        try{
+          await navigator.clipboard.writeText(text);
+          return true;
+        }catch(e){
+          // fallback continues below
+        }
+      }
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      temp.setAttribute('readonly','');
+      temp.style.position = 'fixed';
+      temp.style.top = '-1000px';
+      temp.style.left = '-1000px';
+      document.body.appendChild(temp);
+      temp.focus();
+      temp.select();
+      let ok = false;
+      try{
+        ok = document.execCommand('copy');
+      }catch(e){
+        ok = false;
+      }
+      temp.remove();
+      if (ok) return true;
+      if (typeof window.prompt === 'function'){
+        window.prompt('Copy to clipboard', text);
+        return true;
+      }
+      return false;
+    }
+
     function formatBytes(bytes){
       const n = Number(bytes || 0);
       if (!isFinite(n) || n <= 0) return '0 B';
@@ -1284,11 +1318,11 @@
 
       el('drawerCopy').onclick = async () => {
         const u = item.stream_url || '';
-        try{
-          await navigator.clipboard.writeText(u);
+        const ok = await copyTextWithFallback(u);
+        if (ok){
           toast('good','Copied', 'Stream URL copied to clipboard');
-        }catch{
-          toast('warn','Clipboard', 'Copy failed (browser permission)');
+        }else{
+          toast('warn','Clipboard', 'Copy failed — please copy manually.');
         }
       };
 
