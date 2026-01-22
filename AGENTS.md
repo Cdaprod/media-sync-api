@@ -454,3 +454,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-06)
 - Explorer UIs now load an all-projects media feed on first visit, sorting assets by most recent timestamps and annotating entries with project labels while keeping project-only actions disabled until a project is selected.
+
+### Latest Implementation Notes (2025-04-07)
+- Explorer media sorting now falls back to filename timestamps for camera-style names, and thumbnail rendering uses SVG fallbacks plus error handlers to avoid broken previews.

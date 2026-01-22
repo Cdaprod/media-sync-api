@@ -34,6 +34,27 @@ const formatListValue = (value: string | string[] | null | undefined) => {
   return value ?? '';
 };
 
+const buildThumbFallback = (label: string) => {
+  const safeLabel = label.replace(/[^a-z0-9 ]/gi, '').slice(0, 12) || 'MEDIA';
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#2a2d3a"/>
+          <stop offset="100%" stop-color="#1d2030"/>
+        </linearGradient>
+      </defs>
+      <rect width="640" height="360" rx="28" fill="url(#bg)"/>
+      <rect x="24" y="24" width="592" height="312" rx="22" fill="rgba(255,255,255,0.06)"/>
+      <text x="50%" y="52%" dominant-baseline="middle" text-anchor="middle" fill="#b7bcc8"
+        font-family="Inter, system-ui, sans-serif" font-size="48" font-weight="600" letter-spacing="2">
+        ${safeLabel.toUpperCase()}
+      </text>
+    </svg>
+  `;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+
 function useToastQueue() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const timeouts = useRef<number[]>([]);
@@ -1012,7 +1033,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     || item.thumb_url
                     || item.thumbnail_url
                     || (kind === 'image' ? item.stream_url : undefined);
+                  const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = cachedThumb ? cachedThumb : (rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined);
+                  const safeThumbUrl = thumbUrl || fallbackThumb;
                   const isSelected = selected.has(item.relative_path);
 
                   return (
@@ -1027,11 +1050,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                         className="thumb"
                         ref={(node) => registerThumbTarget(node, item, kind)}
                       >
-                        {thumbUrl ? (
-                          <img src={thumbUrl} alt={title} loading="lazy" />
-                        ) : (
-                          <div className="fallback">{kind === 'video' ? 'VIDEO' : 'No thumbnail'}</div>
-                        )}
+                        <img
+                          src={safeThumbUrl}
+                          alt={title}
+                          loading="lazy"
+                          onError={(event) => {
+                            const target = event.currentTarget;
+                            if (target.src !== fallbackThumb) target.src = fallbackThumb;
+                          }}
+                        />
                         <div className="badges">
                           <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
                           <span className="badge">{size}</span>
@@ -1080,7 +1107,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     || item.thumb_url
                     || item.thumbnail_url
                     || (kind === 'image' ? item.stream_url : undefined);
+                  const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = cachedThumb ? cachedThumb : (rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined);
+                  const safeThumbUrl = thumbUrl || fallbackThumb;
                   const isSelected = selected.has(item.relative_path);
 
                   return (
@@ -1094,13 +1123,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                         className="mini"
                         ref={(node) => registerThumbTarget(node, item, kind)}
                       >
-                        {thumbUrl ? (
-                          <img src={thumbUrl} alt={title} loading="lazy" />
-                        ) : (
-                          <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                            {kind === 'video' ? 'VIDEO' : kind}
-                          </span>
-                        )}
+                        <img
+                          src={safeThumbUrl}
+                          alt={title}
+                          loading="lazy"
+                          onError={(event) => {
+                            const target = event.currentTarget;
+                            if (target.src !== fallbackThumb) target.src = fallbackThumb;
+                          }}
+                        />
                       </div>
                       <div className="info">
                         <div className="t">{title}</div>

@@ -53,6 +53,7 @@ test('media sorting helper orders by recent timestamps', () => {
   assert.ok(content.includes('sortMediaByRecent'));
   assert.ok(content.includes('updated_at'));
   assert.ok(content.includes('created_at'));
+  assert.ok(content.includes('filenameTimestamp'));
 });
 
 test('explorer supports all-project media view', () => {
