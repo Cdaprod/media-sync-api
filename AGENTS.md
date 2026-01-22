@@ -448,3 +448,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-04)
 - Tightened the explorer topbar brand sizing and made the title button the sole projects-toggle trigger for a cleaner left-side footprint.
+
+### Latest Implementation Notes (2025-04-05)
+- Fixed the explorer topbar title gradient so the primary label remains visible by applying the gradient to the title spans instead of the heading container.
