@@ -46,3 +46,18 @@ test('clipboard helper includes fallback copy behavior', () => {
   assert.ok(content.includes('copyTextWithFallback'));
   assert.ok(content.includes("document.execCommand('copy')"));
 });
+
+test('media sorting helper orders by recent timestamps', () => {
+  const statePath = path.join(packageRoot, 'src', 'state.ts');
+  const content = fs.readFileSync(statePath, 'utf8');
+  assert.ok(content.includes('sortMediaByRecent'));
+  assert.ok(content.includes('updated_at'));
+  assert.ok(content.includes('created_at'));
+});
+
+test('explorer supports all-project media view', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('loadAllMedia'));
+  assert.ok(content.includes('Media — All Projects'));
+});

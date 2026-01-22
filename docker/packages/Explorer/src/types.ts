@@ -39,6 +39,8 @@ export interface MediaItem {
   tags?: string[] | string;
   ai_tags?: string[] | string;
   aiTags?: string[] | string;
+  project_name?: string;
+  project_source?: string | null;
 }
 
 export interface MediaResponse {

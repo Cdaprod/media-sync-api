@@ -3,7 +3,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { createApiClient } from './api';
-import { extractAiTags, extractTags, filterMedia, pruneSelection, toggleSelection } from './state';
+import {
+  extractAiTags,
+  extractTags,
+  filterMedia,
+  pruneSelection,
+  sortMediaByRecent,
+  toggleSelection,
+} from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
 import {
   copyTextWithFallback,
@@ -121,6 +128,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [sources, setSources] = useState([] as Awaited<ReturnType<typeof api.listSources>>);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
+  const [mediaScope, setMediaScope] = useState<'project' | 'all'>('project');
   const [view, setView] = useState<ExplorerView>(DEFAULT_VIEW);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -148,8 +156,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
 
-  const activePath = activeProject?.name || 'no project';
-  const contentTitle = activeProject ? `Media — ${activeProject.name}` : 'Media';
+  const activePath = activeProject?.name || (mediaScope === 'all' ? 'all projects' : 'no project');
+  const contentTitle = activeProject
+    ? `Media — ${activeProject.name}`
+    : (mediaScope === 'all' ? 'Media — All Projects' : 'Media');
 
   const resolveHint = selected.size
     ? `${selected.size} item(s) queued.`
@@ -201,13 +211,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     async (project: Project | null) => {
       if (!project) {
         setMedia([]);
+        setMediaScope('project');
         setSelected(new Set());
         return;
       }
       try {
         const payload = await api.listMedia(project.name, project.source);
         const items = Array.isArray(payload.media) ? payload.media : [];
-        setMedia(items);
+        setMedia(sortMediaByRecent(items));
+        setMediaScope('project');
         const existing = new Set(items.map((item) => item.relative_path));
         setSelected((current) => pruneSelection(current, existing));
       } catch (err) {
@@ -218,16 +230,49 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [api, addToast],
   );
 
+  const loadAllMedia = useCallback(async () => {
+    setSelected(new Set());
+    setFocused(null);
+    setMediaScope('all');
+    if (!projects.length) {
+      setMedia([]);
+      return;
+    }
+    const gathered: MediaItem[] = [];
+    for (const project of projects) {
+      try {
+        const payload = await api.listMedia(project.name, project.source);
+        const items = Array.isArray(payload.media) ? payload.media : [];
+        items.forEach((item) => {
+          gathered.push({
+            ...item,
+            project_name: project.name,
+            project_source: project.source || null,
+          });
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load media';
+        addToast('warn', 'Media', `Skipped ${project.name}: ${message}`);
+      }
+    }
+    setMedia(sortMediaByRecent(gathered));
+  }, [addToast, api, projects]);
+
   const refreshAll = useCallback(async () => {
     await loadSources();
     await loadProjects();
-    await loadMedia(activeProject);
+    if (activeProject) {
+      await loadMedia(activeProject);
+    } else {
+      await loadAllMedia();
+    }
     addToast('good', 'Refresh', 'Reloaded projects + media');
-  }, [activeProject, addToast, loadMedia, loadProjects, loadSources]);
+  }, [activeProject, addToast, loadAllMedia, loadMedia, loadProjects, loadSources]);
 
   const selectProject = useCallback(
     (project: Project) => {
       setActiveProject(project);
+      setMediaScope('project');
       setSelected(new Set());
       setFocused(null);
       setResolveProjectMode('current');
@@ -242,9 +287,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toggleSelected = useCallback(
     (relPath: string) => {
       if (!relPath) return;
+      if (!activeProject) return;
       setSelected((current) => toggleSelection(current, relPath));
     },
-    [setSelected],
+    [activeProject, setSelected],
   );
 
   const clearSelection = useCallback(() => {
@@ -572,8 +618,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [addToast, loadProjects, loadSources]);
 
   useEffect(() => {
-    void loadMedia(activeProject);
-  }, [activeProject, loadMedia]);
+    if (activeProject) {
+      void loadMedia(activeProject);
+    } else {
+      void loadAllMedia();
+    }
+  }, [activeProject, loadAllMedia, loadMedia]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -607,6 +657,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const uploadCaption = activeProject
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
+  const canSelect = Boolean(activeProject);
+  const projectLabel = (item: MediaItem) => {
+    if (!item.project_name) return '';
+    return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
+  };
 
   return (
     <div className="app">
@@ -935,19 +990,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
           <div className="scroll" ref={mediaScrollRef}>
             <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
-              {!activeProject ? (
+              {!activeProject && mediaScope !== 'all' ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   Select a project to view media.
                 </div>
               ) : filteredMedia.length === 0 ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                  No indexed files yet. Upload then run <code>/reindex</code>.
+                  {mediaScope === 'all'
+                    ? 'No indexed files yet across all projects.'
+                    : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
                 </div>
               ) : (
                 filteredMedia.map((item) => {
                   const kind = guessKind(item);
                   const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
-                  const sub = item.relative_path || '';
+                  const proj = projectLabel(item);
+                  const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const cachedThumb = thumbs.get(item.relative_path) || thumbCacheRef.current.get(item.relative_path);
                   const rawThumbUrl = cachedThumb
@@ -959,11 +1017,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
                   return (
                     <div
-                      key={item.relative_path}
+                      key={`${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
                       className={`asset ${isSelected ? 'selected' : ''}`}
                       onClick={() => openDrawer(item)}
-                      draggable
-                      onDragStart={handleAssetDragStart(item)}
+                      draggable={canSelect}
+                      onDragStart={canSelect ? handleAssetDragStart(item) : undefined}
                     >
                       <div
                         className="thumb"
@@ -983,6 +1041,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             type="checkbox"
                             checked={isSelected}
                             aria-label="Select media"
+                            disabled={!canSelect}
                             onClick={(event) => event.stopPropagation()}
                             onChange={() => toggleSelected(item.relative_path)}
                           />
@@ -999,19 +1058,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             </div>
 
             <div className="list" style={{ display: view === 'list' ? '' : 'none' }}>
-              {!activeProject ? (
+              {!activeProject && mediaScope !== 'all' ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   Select a project to view media.
                 </div>
               ) : filteredMedia.length === 0 ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                  No indexed files yet. Upload then run <code>/reindex</code>.
+                  {mediaScope === 'all'
+                    ? 'No indexed files yet across all projects.'
+                    : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
                 </div>
               ) : (
                 filteredMedia.map((item) => {
                   const kind = guessKind(item);
                   const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
-                  const sub = item.relative_path || '';
+                  const proj = projectLabel(item);
+                  const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const cachedThumb = thumbs.get(item.relative_path) || thumbCacheRef.current.get(item.relative_path);
                   const rawThumbUrl = cachedThumb
@@ -1024,9 +1086,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   return (
                     <div
                       className="row"
-                      key={`row-${item.relative_path}`}
-                      draggable
-                      onDragStart={handleAssetDragStart(item)}
+                      key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
+                      draggable={canSelect}
+                      onDragStart={canSelect ? handleAssetDragStart(item) : undefined}
                     >
                       <div
                         className="mini"
@@ -1051,6 +1113,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           type="checkbox"
                           checked={isSelected}
                           title="Select"
+                          disabled={!canSelect}
                           onChange={() => toggleSelected(item.relative_path)}
                         />
                         <button className="iconbtn" type="button" onClick={() => openDrawer(item)}>
@@ -1074,10 +1137,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <button className="btn" type="button" onClick={handlePreviewSelected}>
           ▶ Preview
         </button>
-        <button className="btn primary" type="button" onClick={handleResolve}>
+        <button
+          className="btn primary"
+          type="button"
+          onClick={handleResolve}
+          disabled={!activeProject || !selectedCount}
+        >
           ⇢ Send to Resolve
         </button>
-        <button className="btn bad" type="button" onClick={() => deleteMediaPaths(Array.from(selected))}>
+        <button
+          className="btn bad"
+          type="button"
+          onClick={() => deleteMediaPaths(Array.from(selected))}
+          disabled={!activeProject || !selectedCount}
+        >
           🗑 Delete
         </button>
         <button className="btn" type="button" onClick={clearSelection}>
@@ -1142,6 +1215,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               className={`btn ${focused && selected.has(focused.relative_path) ? '' : 'primary'}`}
               type="button"
               onClick={() => focused && toggleSelected(focused.relative_path)}
+              disabled={!activeProject}
             >
               {focused && selected.has(focused.relative_path) ? '− Deselect' : '＋ Select'}
             </button>
@@ -1149,6 +1223,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               className="btn bad"
               type="button"
               onClick={() => focused && deleteMediaPaths([focused.relative_path])}
+              disabled={!activeProject}
             >
               🗑 Delete
             </button>
@@ -1158,12 +1233,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             {(() => {
               if (!focused) return null;
               const kind = guessKind(focused);
+              const projectName = activeProject?.name || focused.project_name || '(none)';
+              const projectSource = activeProject?.source || focused.project_source || '(primary)';
               const rows = [
                 ['Kind', kind],
                 ['Size', formatBytes(focused.size)],
                 ['Stream', resolveAssetUrl(focused.stream_url) || '(none)'],
-                ['Source', activeProject?.source || '(primary)'],
-                ['Project', activeProject?.name || '(none)'],
+                ['Source', projectSource],
+                ['Project', projectName],
                 ['Relative', focused.relative_path || '(none)'],
                 ['MIME', focused.mime || focused.content_type || ''],
                 ['Hash', focused.sha256 || focused.hash || ''],
