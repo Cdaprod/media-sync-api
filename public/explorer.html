@@ -107,11 +107,7 @@
       letter-spacing: 0.35px;
       font-weight: 750;
       line-height: 1.1;
-      background: linear-gradient(120deg, #f0f3ff 5%, #a7d3ff 55%, #c6ffe2 90%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      text-shadow: 0 4px 14px rgba(60,130,255,0.18);
+      color: var(--text);
       cursor: pointer;
       position: relative;
     }
@@ -123,6 +119,11 @@
     }
     .brand-title{
       display: inline-block;
+      background: linear-gradient(120deg, #f0f3ff 5%, #a7d3ff 55%, #c6ffe2 90%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 4px 14px rgba(60,130,255,0.18);
       transition: transform var(--dur-med) var(--ease-snappy), opacity var(--dur-med) var(--ease-settle);
       will-change: transform, opacity;
     }
