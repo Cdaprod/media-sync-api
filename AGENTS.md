@@ -460,3 +460,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-08)
 - Explorer thumbnail extraction now seeks near the start of videos and adds a time hint fragment to reduce slow loads while keeping fallback posters visible.
+
+### Latest Implementation Notes (2025-04-09)
+- Upload responses now include absolute `served.stream_url` and `served.download_url`, and batch upload sessions (`/upload-batch/start`, per-file `?batch_id=`, `/upload-batch/finalize`) aggregate served URLs for iOS Shortcut repeat loops.
+
+### Latest Implementation Notes (2025-04-10)
+- Consolidated batch handling into `POST /api/projects/{project}/upload` using `op=start|upload|finalize|snapshot`, added multi-file support via `files[]`, and kept legacy `/upload-batch/*` aliases pointing to the new flow.

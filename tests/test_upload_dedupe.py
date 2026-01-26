@@ -26,6 +26,8 @@ def test_upload_and_dedupe_tracking(client, project_path: Path):
     stored_rel_path = first_data["path"]
     stored_path = project_path / project_name / stored_rel_path
     assert stored_path.exists()
+    assert f"/media/{project_name}/{stored_rel_path}" in first_data["served"]["stream_url"]
+    assert f"/media/{project_name}/download/{stored_rel_path}" in first_data["served"]["download_url"]
 
     duplicate = client.post(
         f"/api/projects/{project_name}/upload",
@@ -35,6 +37,8 @@ def test_upload_and_dedupe_tracking(client, project_path: Path):
     assert duplicate.status_code == 200
     assert dup_data["status"] == "duplicate"
     assert dup_data["path"] == stored_rel_path
+    assert f"/media/{project_name}/{stored_rel_path}" in dup_data["served"]["stream_url"]
+    assert f"/media/{project_name}/download/{stored_rel_path}" in dup_data["served"]["download_url"]
 
     index_path = project_path / project_name / "index.json"
     index = json.loads(index_path.read_text())
@@ -45,6 +49,59 @@ def test_upload_and_dedupe_tracking(client, project_path: Path):
     lines = events_path.read_text().splitlines()
     assert any("upload_ingested" in line for line in lines)
     assert any("upload_duplicate_skipped" in line for line in lines)
+
+
+def test_upload_batch_session_aggregates_items(client, project_path: Path):
+    created = client.post("/api/projects", json={"name": "demo"})
+    project_name = created.json()["name"]
+
+    batch_start = client.post(f"/api/projects/{project_name}/upload", params={"op": "start"})
+    assert batch_start.status_code == 200
+    batch_id = batch_start.json()["batch_id"]
+
+    first = client.post(
+        f"/api/projects/{project_name}/upload",
+        params={"batch_id": batch_id},
+        files={"file": ("clip-one.mp4", b"first", "video/mp4")},
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        f"/api/projects/{project_name}/upload",
+        params={"batch_id": batch_id},
+        files={"file": ("clip-two.mp4", b"second", "video/mp4")},
+    )
+    assert second.status_code == 200
+
+    finalized = client.post(
+        f"/api/projects/{project_name}/upload",
+        params={"op": "finalize"},
+        json={"batch_id": batch_id},
+    )
+    assert finalized.status_code == 200
+    data = finalized.json()
+    assert data["counts"]["total"] == 2
+    assert data["counts"]["stored"] == 2
+    assert len(data["served_urls"]) == 2
+    assert all(f"/media/{project_name}/download/ingest/originals/" in url for url in data["served_urls"])
+
+
+def test_upload_multi_file_single_request(client):
+    created = client.post("/api/projects", json={"name": "demo"})
+    project_name = created.json()["name"]
+
+    response = client.post(
+        f"/api/projects/{project_name}/upload",
+        files=[
+            ("files", ("clip-one.mp4", b"one", "video/mp4")),
+            ("files", ("clip-two.mp4", b"two", "video/mp4")),
+        ],
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["counts"]["total"] == 2
+    assert len(data["items"]) == 2
 
 
 def test_upload_rejects_traversal_filename(client, project_path: Path):
