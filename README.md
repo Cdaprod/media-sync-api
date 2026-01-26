@@ -71,9 +71,9 @@ Project names are assigned as `P{n}-<label>` automatically (e.g., `P1-Public-Acc
 - If creating: POST `/api/projects` with `{ "name": NewName, "notes": Notes }`
 - Ask for input `EntryLabel` and choose videos
 - Optional audit: POST `/api/projects/{Project}/sync-album` with `{ "album_name": EntryLabel, "device": "iphone", "note": "Shortcut ingest" }`
-- Optional batch start (for aggregate results): POST `/api/projects/{Project}/upload?op=start` → store `batch_id`
+- Recommended batch start (for aggregate results): POST `/api/projects/{Project}/upload?op=start` → store `batch_id`
 - For each file: POST `/api/projects/{Project}/upload` form field `file` (include `?batch_id=...` if batching)
-- Optional batch finalize: POST `/api/projects/{Project}/upload?op=finalize` with `{ "batch_id": "..." }` to receive all served URLs
+- Recommended batch finalize: POST `/api/projects/{Project}/upload?op=finalize` with `{ "batch_id": "..." }` to receive all served URLs
 - Each upload response includes `served.stream_url` and `served.download_url` for the stored or deduped asset
 - The API handles duplicate detection; no client-side hashing required
 

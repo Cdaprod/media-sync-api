@@ -466,3 +466,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-10)
 - Consolidated batch handling into `POST /api/projects/{project}/upload` using `op=start|upload|finalize|snapshot`, added multi-file support via `files[]`, and kept legacy `/upload-batch/*` aliases pointing to the new flow.
+
+### Latest Implementation Notes (2025-04-11)
+- README now emphasizes batch start/finalize as the recommended Shortcut flow for getting aggregated served URLs from repeat uploads.
