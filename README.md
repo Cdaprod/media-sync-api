@@ -71,7 +71,10 @@ Project names are assigned as `P{n}-<label>` automatically (e.g., `P1-Public-Acc
 - If creating: POST `/api/projects` with `{ "name": NewName, "notes": Notes }`
 - Ask for input `EntryLabel` and choose videos
 - Optional audit: POST `/api/projects/{Project}/sync-album` with `{ "album_name": EntryLabel, "device": "iphone", "note": "Shortcut ingest" }`
-- For each file: POST `/api/projects/{Project}/upload` form field `file`
+- Optional batch start (for aggregate results): POST `/api/projects/{Project}/upload?op=start` → store `batch_id`
+- For each file: POST `/api/projects/{Project}/upload` form field `file` (include `?batch_id=...` if batching)
+- Optional batch finalize: POST `/api/projects/{Project}/upload?op=finalize` with `{ "batch_id": "..." }` to receive all served URLs
+- Each upload response includes `served.stream_url` and `served.download_url` for the stored or deduped asset
 - The API handles duplicate detection; no client-side hashing required
 
 4) Prove de-dupe is working
@@ -131,7 +134,10 @@ Path alignment for Resolve:
 - `GET /api/projects/{project}` – fetch project index
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
 - `GET /media/{project}/download/{relative_path}` – download a stored media file with `Content-Disposition: attachment`
-- `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` with sha256 de-dupe
+- `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` (or `files[]=...`) with sha256 de-dupe (returns `served.stream_url` + `served.download_url`)
+- `POST /api/projects/{project}/upload?op=start` – start a batch session for Shortcut repeats
+- `POST /api/projects/{project}/upload?op=finalize` – finalize batch and return aggregated served URLs
+- `POST /api/projects/{project}/upload?op=snapshot` – fetch batch snapshot
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
 - `GET|POST /reindex` – reconcile every enabled source and project in one sweep
