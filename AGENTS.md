@@ -478,3 +478,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-14)
 - Added a Program Monitor handoff action to the explorer multi-select bar, sending ordered selected stream URLs via postMessage using a dedicated handoff module and data attributes on media cards.
+
+### Latest Implementation Notes (2025-04-15)
+- Program Monitor handoff now reuses explorer DOM-order URL helpers, hides the button until selections exist, and aligns selection classes with `.is-selected` for DOM order traversal.

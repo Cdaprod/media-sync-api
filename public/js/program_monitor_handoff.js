@@ -18,8 +18,8 @@ function getVisibleMediaContainer(){
   const grid = document.getElementById('mediaGrid');
   const list = document.getElementById('mediaList');
   const gridVisible = grid && window.getComputedStyle(grid).display !== 'none';
-  if (gridVisible) return { container: grid, selector: '.asset.selected' };
-  return { container: list, selector: '.row.selected' };
+  if (gridVisible) return { container: grid, selector: '.asset.is-selected' };
+  return { container: list, selector: '.row.is-selected' };
 }
 
 function getSelectedCardsInVisualOrder(){
@@ -35,9 +35,9 @@ function buildStreamUrlFromCard(cardEl){
 
   const project = cardEl.dataset.project;
   const rel = cardEl.dataset.relative;
-  const source = cardEl.dataset.source || '';
+  const source = cardEl.dataset.source || 'primary';
   if (project && rel){
-    const suffix = source ? `?source=${encodeURIComponent(source)}` : '';
+    const suffix = source && source !== 'primary' ? `?source=${encodeURIComponent(source)}` : '';
     return `/media/${encodeURIComponent(project)}/${encodePath(rel)}${suffix}`;
   }
 
@@ -100,6 +100,12 @@ async function openProgramMonitorAndSend(urls){
 }
 
 export async function sendSelectedToProgramMonitor(){
+  const externalUrls = window.MediaExplorer?.getSelectedStreamUrlsInDomOrder?.();
+  if (Array.isArray(externalUrls) && externalUrls.length){
+    await openProgramMonitorAndSend(externalUrls);
+    return;
+  }
+
   const selected = getSelectedCardsInVisualOrder();
   if (!selected.length){
     throw new Error('No items selected.');
