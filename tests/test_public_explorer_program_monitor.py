@@ -14,6 +14,7 @@ def test_program_monitor_handoff_module_payload_shape():
     assert module_path.exists()
     module_text = module_path.read_text(encoding='utf-8')
     assert 'PROGRAM_MONITOR_URL' in module_text
+    assert '/program-monitor/index.html' in module_text
     assert 'CDAPROD_PROGRAM_MONITOR_IMPORT' in module_text
     assert 'CDAPROD_PROGRAM_MONITOR_ACK' in module_text
     assert 'durationOverride' in module_text

@@ -3,7 +3,7 @@
  * Usage: window.ProgramMonitorHandoff.sendSelectedToProgramMonitor();
  * Example: call from the multi-select bar to hand off selected stream URLs.
  */
-const PROGRAM_MONITOR_URL = 'http://192.168.0.25:8789/program-monitor.html';
+const PROGRAM_MONITOR_URL = 'http://192.168.0.25:8789/program-monitor/index.html';
 const ACK_TYPE = 'CDAPROD_PROGRAM_MONITOR_ACK';
 const IMPORT_TYPE = 'CDAPROD_PROGRAM_MONITOR_IMPORT';
 
