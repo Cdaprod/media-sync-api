@@ -472,3 +472,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-12)
 - The explorer inspector drawer now includes a “Send to OBS” pill that calls OBS WebSocket v5 to update the `ASSET_MEDIA` Browser Source URL and attempts a cache refresh.
+
+### Latest Implementation Notes (2025-04-13)
+- The explorer "Send to OBS" action now uses the configured OBS WebSocket password (`123456`) when connecting.

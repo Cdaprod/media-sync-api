@@ -34,3 +34,4 @@ def test_stream_url_copy_includes_origin_helper(client):
     assert "document.execCommand('copy')" in explorer.text
     assert "drawerSendOBS" in explorer.text
     assert "obsReplaceAssetMediaUrl" in explorer.text
+    assert "obsPassword = '123456'" in explorer.text
