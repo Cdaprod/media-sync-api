@@ -1059,6 +1059,7 @@
         <button id="selTagToggle" class="btn" type="button">🏷 Tag Selected</button>
         <button id="selMoveToggle" class="btn" type="button">⇢ Move Selected</button>
         <button id="selCopyUrls" class="btn" type="button">⧉ Copy stream URLs</button>
+        <button id="btnProgramMonitor" class="btn" type="button">➕ Add to Program Monitor</button>
       </div>
 
       <div class="selectbar-panel" id="selTagPanel">
@@ -1120,6 +1121,7 @@
   </div>
 
   <script src="https://unpkg.com/obs-websocket-js@5/dist/obs-websocket.js"></script>
+  <script type="module" src="js/program_monitor_handoff.js"></script>
   <script>
     // -------------------------
     // Config / state
@@ -1411,6 +1413,7 @@
       el('selTagToggle').disabled = !show || !state.activeProject;
       el('selMoveToggle').disabled = !show || !state.activeProject;
       el('selCopyUrls').disabled = !show || !state.activeProject;
+      el('btnProgramMonitor').disabled = !show || !state.activeProject;
 
       updateTagButtons();
       if (!show){
@@ -1595,6 +1598,33 @@
         toast('good','Copied', `Copied ${urls.length} URL(s)`);
       }else{
         toast('warn','Clipboard', 'Copy failed — please copy manually.');
+      }
+    }
+
+    async function sendSelectedToProgramMonitor(){
+      const btn = el('btnProgramMonitor');
+      const prev = btn?.textContent || '➕ Add to Program Monitor';
+      if (!window.ProgramMonitorHandoff?.sendSelectedToProgramMonitor){
+        alert('Program Monitor handoff is unavailable. Reload the page.');
+        return;
+      }
+      try{
+        if (btn){
+          btn.textContent = 'Sending…';
+          btn.disabled = true;
+        }
+        await window.ProgramMonitorHandoff.sendSelectedToProgramMonitor();
+        if (btn){
+          btn.textContent = 'Sent ✓';
+          setTimeout(() => {
+            btn.textContent = prev;
+          }, 900);
+        }
+      }catch(e){
+        alert(e?.message || String(e));
+        if (btn) btn.textContent = prev;
+      }finally{
+        updateSelectionUI();
       }
     }
 
@@ -1968,6 +1998,10 @@
           card.addEventListener('dragstart', (event) => attachDragData(event, it));
         }
         if (state.selected.has(it.relative_path)) card.classList.add('selected');
+        card.dataset.streamUrl = it.stream_url || it.streamUrl || '';
+        card.dataset.relative = it.relative_path || '';
+        card.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
+        card.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
 
         card.innerHTML = `
           <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
@@ -2009,6 +2043,11 @@
           row.setAttribute('draggable', 'true');
           row.addEventListener('dragstart', (event) => attachDragData(event, it));
         }
+        if (state.selected.has(it.relative_path)) row.classList.add('selected');
+        row.dataset.streamUrl = it.stream_url || it.streamUrl || '';
+        row.dataset.relative = it.relative_path || '';
+        row.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
+        row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         row.innerHTML = `
           <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
             <img src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
@@ -2455,6 +2494,7 @@
       toggleSelectPanel('selMovePanel');
     });
     el('selCopyUrls').addEventListener('click', copySelectedUrls);
+    el('btnProgramMonitor').addEventListener('click', sendSelectedToProgramMonitor);
     el('selTagInput').addEventListener('input', updateTagButtons);
     el('selTagAdd').addEventListener('click', () => {
       const tags = parseTagInput(el('selTagInput').value);

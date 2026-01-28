@@ -475,3 +475,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-13)
 - The explorer "Send to OBS" action now uses the configured OBS WebSocket password (`123456`) when connecting.
+
+### Latest Implementation Notes (2025-04-14)
+- Added a Program Monitor handoff action to the explorer multi-select bar, sending ordered selected stream URLs via postMessage using a dedicated handoff module and data attributes on media cards.
