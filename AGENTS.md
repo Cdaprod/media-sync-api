@@ -469,3 +469,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-11)
 - README now emphasizes batch start/finalize as the recommended Shortcut flow for getting aggregated served URLs from repeat uploads.
+
+### Latest Implementation Notes (2025-04-12)
+- The explorer inspector drawer now includes a “Send to OBS” pill that calls OBS WebSocket v5 to update the `ASSET_MEDIA` Browser Source URL and attempts a cache refresh.

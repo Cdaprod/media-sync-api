@@ -32,3 +32,5 @@ def test_stream_url_copy_includes_origin_helper(client):
     assert "window.location.origin" in explorer.text
     assert "copyTextWithFallback" in explorer.text
     assert "document.execCommand('copy')" in explorer.text
+    assert "drawerSendOBS" in explorer.text
+    assert "obsReplaceAssetMediaUrl" in explorer.text

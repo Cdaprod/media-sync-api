@@ -1096,6 +1096,7 @@
           <button id="drawerPlay" class="btn" type="button">▶ Play</button>
           <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
           <button id="drawerTagToggle" class="btn" type="button">🏷 Tag</button>
+          <button id="drawerSendOBS" class="btn" type="button">📺 Send to OBS</button>
           <button id="drawerDelete" class="btn bad" type="button">🗑 Delete</button>
         </div>
 
@@ -1118,6 +1119,7 @@
     <div id="drawerBackdrop" class="backdrop" style="z-index:70;"></div>
   </div>
 
+  <script src="https://unpkg.com/obs-websocket-js@5/dist/obs-websocket.js"></script>
   <script>
     // -------------------------
     // Config / state
@@ -1234,6 +1236,40 @@
         return path;
       }
       return new URL(path, window.location.origin).toString();
+    }
+
+    async function obsReplaceAssetMediaUrl({
+      obsHost = '192.168.0.187',
+      obsPort = 4455,
+      inputName = 'ASSET_MEDIA',
+      assetUrl,
+    }){
+      if (!assetUrl) throw new Error('assetUrl is required');
+      if (typeof OBSWebSocket === 'undefined'){
+        throw new Error('OBSWebSocket is not available. Load obs-websocket-js v5 before this script.');
+      }
+
+      const obs = new OBSWebSocket();
+      await obs.connect(`ws://${obsHost}:${obsPort}`);
+
+      await obs.call('SetInputSettings', {
+        inputName,
+        inputSettings: {
+          url: assetUrl,
+        },
+        overlay: false,
+      });
+
+      try{
+        await obs.call('PressInputPropertiesButton', {
+          inputName,
+          propertyName: 'refreshnocache',
+        });
+      }catch(_){
+        // Best-effort refresh for Browser Sources.
+      }
+
+      await obs.disconnect();
     }
 
     function buildThumbFallback(label){
@@ -1381,6 +1417,8 @@
         setSelectPanel('selMovePanel', false);
       }
       el('drawerDelete').disabled = !state.focused;
+      const obsUrl = state.focused?.stream_url || state.focused?.streamUrl || '';
+      el('drawerSendOBS').disabled = !state.focused || !obsUrl;
     }
 
     function updateTagButtons(){
@@ -2258,6 +2296,38 @@
         panel?.classList.toggle('open');
         if (panel?.classList.contains('open')){
           el('drawerTagInput')?.focus();
+        }
+      };
+
+      el('drawerSendOBS').onclick = async () => {
+        const assetUrl = toAbsoluteUrl(item.stream_url);
+        if (!assetUrl){
+          toast('warn','OBS', 'No stream URL available for this asset.');
+          return;
+        }
+
+        const btn = el('drawerSendOBS');
+        const prevText = btn.textContent;
+        btn.textContent = '📡 Sending…';
+        btn.disabled = true;
+
+        try{
+          await obsReplaceAssetMediaUrl({
+            obsHost: '192.168.0.187',
+            inputName: 'ASSET_MEDIA',
+            assetUrl,
+          });
+          toast('good','OBS', 'Browser source updated.');
+          btn.textContent = '✅ Sent';
+          setTimeout(() => {
+            btn.textContent = prevText;
+          }, 900);
+        }catch(e){
+          console.error('[OBS] push failed:', e);
+          toast('bad','OBS', e.message || 'OBS push failed.');
+          btn.textContent = prevText;
+        }finally{
+          btn.disabled = false;
         }
       };
 
