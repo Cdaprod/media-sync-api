@@ -484,3 +484,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-16)
 - Program Monitor handoff now uses a direct `window.open` and posts messages to the monitor origin to improve mobile Safari delivery.
+
+### Latest Implementation Notes (2025-04-17)
+- Updated the Program Monitor handoff URL to target `/program-monitor/index.html` for the monitor route.
