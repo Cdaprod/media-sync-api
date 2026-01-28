@@ -487,3 +487,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-17)
 - Updated the Program Monitor handoff URL to target `/program-monitor/index.html` for the monitor route.
+
+### Latest Implementation Notes (2025-04-18)
+- Program Monitor handoff now sends the import payload once per handoff to prevent duplicate nodes while still waiting for ACK.

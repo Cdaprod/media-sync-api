@@ -90,6 +90,7 @@ async function openProgramMonitorAndSend(urls){
 
     window.addEventListener('message', onMessage);
 
+    let sendCount = 0;
     const timer = setInterval(() => {
       if (Date.now() - start > timeoutMs){
         clearInterval(timer);
@@ -98,8 +99,13 @@ async function openProgramMonitorAndSend(urls){
         return;
       }
 
+      if (sendCount > 0){
+        return;
+      }
+
       try{
         win.postMessage(payload, targetOrigin);
+        sendCount += 1;
       }catch{
         // Ignore transient postMessage errors while waiting for ACK.
       }
