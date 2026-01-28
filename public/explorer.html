@@ -1242,6 +1242,7 @@
       obsHost = '192.168.0.187',
       obsPort = 4455,
       inputName = 'ASSET_MEDIA',
+      obsPassword = '123456',
       assetUrl,
     }){
       if (!assetUrl) throw new Error('assetUrl is required');
@@ -1250,7 +1251,7 @@
       }
 
       const obs = new OBSWebSocket();
-      await obs.connect(`ws://${obsHost}:${obsPort}`);
+      await obs.connect(`ws://${obsHost}:${obsPort}`, obsPassword);
 
       await obs.call('SetInputSettings', {
         inputName,
