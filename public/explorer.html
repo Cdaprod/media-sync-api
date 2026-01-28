@@ -1059,6 +1059,7 @@
         <button id="selTagToggle" class="btn" type="button">🏷 Tag Selected</button>
         <button id="selMoveToggle" class="btn" type="button">⇢ Move Selected</button>
         <button id="selCopyUrls" class="btn" type="button">⧉ Copy stream URLs</button>
+        <button id="btnProgramMonitor" class="btn" type="button" hidden>➕ Add to Program Monitor</button>
       </div>
 
       <div class="selectbar-panel" id="selTagPanel">
@@ -1120,6 +1121,7 @@
   </div>
 
   <script src="https://unpkg.com/obs-websocket-js@5/dist/obs-websocket.js"></script>
+  <script type="module" src="js/program_monitor_handoff.js"></script>
   <script>
     // -------------------------
     // Config / state
@@ -1172,6 +1174,10 @@
         .map(segment => encodeURIComponent(segment))
         .join('/');
     }
+
+    window.MediaExplorer = {
+      getSelectedStreamUrlsInDomOrder,
+    };
 
     function formatBytes(bytes){
       const n = Number(bytes || 0);
@@ -1398,6 +1404,38 @@
       return state.media.filter(it => (it.relative_path || '').toLowerCase().includes(q));
     }
 
+    function getVisibleMediaContainer(){
+      const grid = el('mediaGrid');
+      const list = el('mediaList');
+      const gridVisible = grid && window.getComputedStyle(grid).display !== 'none';
+      if (gridVisible) return { container: grid, selector: '.asset.is-selected' };
+      return { container: list, selector: '.row.is-selected' };
+    }
+
+    function getSelectedStreamUrlsInDomOrder(){
+      const { container, selector } = getVisibleMediaContainer();
+      if (!container) return [];
+      const cards = Array.from(container.querySelectorAll(selector));
+      return cards.map((card) => {
+        const direct = card.dataset.streamUrl || card.dataset.url || '';
+        if (direct){
+          return toAbsoluteUrl(direct);
+        }
+        const project = card.dataset.project || state.activeProject?.name || '';
+        const rel = card.dataset.relative || '';
+        const source = card.dataset.source || 'primary';
+        if (project && rel){
+          const suffix = source && source !== 'primary' ? `?source=${encodeURIComponent(source)}` : '';
+          return toAbsoluteUrl(`/media/${encodeURIComponent(project)}/${encodePath(rel)}${suffix}`);
+        }
+        const item = state.media.find((entry) => entry.relative_path === rel);
+        if (item?.stream_url){
+          return toAbsoluteUrl(item.stream_url);
+        }
+        return '';
+      }).filter(Boolean);
+    }
+
     function updateSelectionUI(){
       const count = state.selected.size;
       el('selCount').textContent = String(count);
@@ -1411,6 +1449,8 @@
       el('selTagToggle').disabled = !show || !state.activeProject;
       el('selMoveToggle').disabled = !show || !state.activeProject;
       el('selCopyUrls').disabled = !show || !state.activeProject;
+      el('btnProgramMonitor').disabled = !show || !state.activeProject;
+      el('btnProgramMonitor').hidden = !show;
 
       updateTagButtons();
       if (!show){
@@ -1581,10 +1621,7 @@
         toast('warn','Copy','Select one or more clips');
         return;
       }
-      const urls = Array.from(state.selected)
-        .map((rel) => state.media.find((item) => item.relative_path === rel))
-        .filter(Boolean)
-        .map((item) => toAbsoluteUrl(item.stream_url));
+      const urls = getSelectedStreamUrlsInDomOrder();
       if (!urls.length){
         toast('warn','Copy','No stream URLs found');
         return;
@@ -1595,6 +1632,33 @@
         toast('good','Copied', `Copied ${urls.length} URL(s)`);
       }else{
         toast('warn','Clipboard', 'Copy failed — please copy manually.');
+      }
+    }
+
+    async function sendSelectedToProgramMonitor(){
+      const btn = el('btnProgramMonitor');
+      const prev = btn?.textContent || '➕ Add to Program Monitor';
+      if (!window.ProgramMonitorHandoff?.sendSelectedToProgramMonitor){
+        alert('Program Monitor handoff is unavailable. Reload the page.');
+        return;
+      }
+      try{
+        if (btn){
+          btn.textContent = 'Sending…';
+          btn.disabled = true;
+        }
+        await window.ProgramMonitorHandoff.sendSelectedToProgramMonitor();
+        if (btn){
+          btn.textContent = 'Sent ✓';
+          setTimeout(() => {
+            btn.textContent = prev;
+          }, 900);
+        }
+      }catch(e){
+        alert(e?.message || String(e));
+        if (btn) btn.textContent = prev;
+      }finally{
+        updateSelectionUI();
       }
     }
 
@@ -1967,7 +2031,11 @@
           card.setAttribute('draggable', 'true');
           card.addEventListener('dragstart', (event) => attachDragData(event, it));
         }
-        if (state.selected.has(it.relative_path)) card.classList.add('selected');
+        if (state.selected.has(it.relative_path)) card.classList.add('selected', 'is-selected');
+        card.dataset.streamUrl = it.stream_url || it.streamUrl || '';
+        card.dataset.relative = it.relative_path || '';
+        card.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
+        card.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
 
         card.innerHTML = `
           <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
@@ -2009,6 +2077,11 @@
           row.setAttribute('draggable', 'true');
           row.addEventListener('dragstart', (event) => attachDragData(event, it));
         }
+        if (state.selected.has(it.relative_path)) row.classList.add('selected', 'is-selected');
+        row.dataset.streamUrl = it.stream_url || it.streamUrl || '';
+        row.dataset.relative = it.relative_path || '';
+        row.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
+        row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         row.innerHTML = `
           <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
             <img src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
@@ -2455,6 +2528,7 @@
       toggleSelectPanel('selMovePanel');
     });
     el('selCopyUrls').addEventListener('click', copySelectedUrls);
+    el('btnProgramMonitor').addEventListener('click', sendSelectedToProgramMonitor);
     el('selTagInput').addEventListener('input', updateTagButtons);
     el('selTagAdd').addEventListener('click', () => {
       const tags = parseTagInput(el('selTagInput').value);
