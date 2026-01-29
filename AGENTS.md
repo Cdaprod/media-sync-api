@@ -496,3 +496,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-20)
 - Explorer UIs now sort recent media using uploaded/indexed timestamps when available, keeping newest uploads first on initial load.
+
+### Latest Implementation Notes (2025-04-21)
+- Explorer media type definitions now include uploaded/indexed timestamp fields to keep Next.js builds passing.

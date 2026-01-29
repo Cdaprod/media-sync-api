@@ -33,6 +33,10 @@ export interface MediaItem {
   createdAt?: string;
   updated_at?: string;
   updatedAt?: string;
+  uploaded_at?: string;
+  uploadedAt?: string;
+  indexed_at?: string;
+  indexedAt?: string;
   duration?: number;
   width?: number;
   height?: number;
