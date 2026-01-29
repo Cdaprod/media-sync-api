@@ -58,7 +58,13 @@ const buildThumbFallback = (label: string) => {
 const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
 const THUMB_STORAGE_PREFIX = 'media-sync-thumb:';
 
-const getThumbCacheKey = (item: MediaItem) => item.sha256 || item.hash || item.relative_path || '';
+const getThumbCacheKey = (item: MediaItem) => {
+  const project = item.project_name || item.project || '';
+  const source = item.project_source || item.source || '';
+  const rel = item.relative_path || '';
+  const sha = item.sha256 || item.hash || '';
+  return [source, project, rel, sha].filter(Boolean).join('|');
+};
 
 const thumbCacheRequest = (key: string) => {
   if (!key || typeof window === 'undefined') return '';
@@ -555,7 +561,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           const duration = Number(target.dataset.duration || 0);
           const kind = target.dataset.kind;
           const key = target.dataset.thumbKey || rel;
+          const state = target.dataset.state || 'idle';
+          const attempts = Number(target.dataset.attempts || 0);
           if (!rel || !url || kind !== 'video' || !key) return;
+          if (state === 'loaded' || attempts >= 3) return;
           if (thumbCacheRef.current.has(key)) return;
           const requestIdle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number })
             .requestIdleCallback;
@@ -566,8 +575,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 thumbCacheRef.current.set(key, data);
                 await writeThumbToCache(key, data);
                 setThumbs((prev) => new Map(prev).set(key, data));
+                target.dataset.state = 'loaded';
               } catch {
-                // fallback stays in place
+                target.dataset.attempts = String(attempts + 1);
+                target.dataset.state = attempts + 1 < 3 ? 'idle' : 'error';
+                if (attempts + 1 < 3) {
+                  window.setTimeout(() => {
+                    ensureThumbObserver().observe(target);
+                  }, 800);
+                }
               }
             }, { timeout: 1200 });
           } else {
@@ -577,8 +593,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 thumbCacheRef.current.set(key, data);
                 await writeThumbToCache(key, data);
                 setThumbs((prev) => new Map(prev).set(key, data));
+                target.dataset.state = 'loaded';
               } catch {
-                // ignore
+                target.dataset.attempts = String(attempts + 1);
+                target.dataset.state = attempts + 1 < 3 ? 'idle' : 'error';
+                if (attempts + 1 < 3) {
+                  ensureThumbObserver().observe(target);
+                }
               }
             }, 150);
           }
@@ -592,7 +613,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const primeThumbFromCache = useCallback(async (key: string, node: HTMLElement) => {
     if (!key || !node) return;
-    if (thumbCacheRef.current.has(key)) return;
+    if (thumbCacheRef.current.has(key)) {
+      node.dataset.state = 'loaded';
+      return;
+    }
     if (thumbPendingRef.current.has(key)) return;
     thumbPendingRef.current.add(key);
     try {
@@ -600,11 +624,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (cached) {
         thumbCacheRef.current.set(key, cached);
         setThumbs((prev) => new Map(prev).set(key, cached));
+        node.dataset.state = 'loaded';
         return;
       }
     } finally {
       thumbPendingRef.current.delete(key);
     }
+    node.dataset.state = node.dataset.state || 'idle';
+    node.dataset.attempts = node.dataset.attempts || '0';
     ensureThumbObserver().observe(node);
   }, [ensureThumbObserver]);
 
@@ -619,6 +646,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       node.dataset.duration = String(item.duration || '');
       node.dataset.kind = 'video';
       node.dataset.thumbKey = key;
+      node.dataset.state = node.dataset.state || 'idle';
+      node.dataset.attempts = node.dataset.attempts || '0';
       void primeThumbFromCache(key, node);
     },
     [primeThumbFromCache, resolveAssetUrl],

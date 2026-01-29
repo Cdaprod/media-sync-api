@@ -502,3 +502,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-22)
 - Explorer UIs now persist generated video thumbnails in Cache Storage (with localStorage fallback) keyed by sha256/relative path so refreshes reuse cached thumbs instead of re-extracting frames.
+
+### Latest Implementation Notes (2025-04-23)
+- Explorer video thumbnail caching now includes project/source in cache keys and retries failed frame extraction a few times instead of giving up after the first error.
