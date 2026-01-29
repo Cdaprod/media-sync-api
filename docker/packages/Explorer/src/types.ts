@@ -44,7 +44,9 @@ export interface MediaItem {
   ai_tags?: string[] | string;
   aiTags?: string[] | string;
   project_name?: string;
+  project?: string;
   project_source?: string | null;
+  source?: string | null;
 }
 
 export interface MediaResponse {
