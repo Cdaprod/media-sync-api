@@ -1147,7 +1147,10 @@
       dragActive: false,
     };
 
+    const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
+    const THUMB_STORAGE_PREFIX = 'media-sync-thumb:';
     const thumbCache = new Map();
+    const thumbPending = new Set();
     let thumbObserver = null;
 
     // -------------------------
@@ -1166,6 +1169,68 @@
       return String(s ?? '')
         .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
         .replaceAll('"','&quot;').replaceAll("'","&#039;");
+    }
+
+    function thumbCacheKey(item){
+      return String(item?.sha256 || item?.hash || item?.relative_path || '');
+    }
+
+    function thumbCacheRequest(key){
+      if (!key) return '';
+      return `${window.location.origin}/__thumbs/${encodeURIComponent(key)}`;
+    }
+
+    function canUseCacheStorage(){
+      return typeof window !== 'undefined' && 'caches' in window;
+    }
+
+    async function readThumbFromCache(key){
+      if (!key) return null;
+      if (canUseCacheStorage()){
+        try{
+          const cache = await caches.open(THUMB_CACHE_NAME);
+          const response = await cache.match(thumbCacheRequest(key));
+          if (response){
+            const data = await response.text();
+            if (data.startsWith('data:image')) return data;
+          }
+        }catch(_){
+          // ignore cache errors
+        }
+      }
+      try{
+        const stored = localStorage.getItem(`${THUMB_STORAGE_PREFIX}${key}`);
+        if (stored && stored.startsWith('data:image')) return stored;
+      }catch(_){
+        // ignore storage errors
+      }
+      return null;
+    }
+
+    async function writeThumbToCache(key, dataUrl){
+      if (!key || !dataUrl) return;
+      if (canUseCacheStorage()){
+        try{
+          const cache = await caches.open(THUMB_CACHE_NAME);
+          await cache.put(
+            thumbCacheRequest(key),
+            new Response(dataUrl, {
+              headers: {
+                'Content-Type': 'text/plain',
+                'Cache-Control': 'public, max-age=31536000, immutable',
+              },
+            }),
+          );
+          return;
+        }catch(_){
+          // fallback to localStorage
+        }
+      }
+      try{
+        localStorage.setItem(`${THUMB_STORAGE_PREFIX}${key}`, dataUrl);
+      }catch(_){
+        // quota exceeded or storage unavailable
+      }
     }
 
     function encodePath(path){
@@ -1743,8 +1808,9 @@
           const url = entry.target.dataset.url;
           const duration = Number(entry.target.dataset.duration) || 0;
           const itemKind = entry.target.dataset.kind;
+          const cacheKey = entry.target.dataset.thumbKey || rel;
           if (itemKind !== 'video') return;
-          requestIdle(() => generateThumb(rel, url, duration, entry.target));
+          requestIdle(() => generateThumb(rel, url, duration, entry.target, cacheKey));
         });
       }, { root: el('mediaScroll'), rootMargin: '200px 0px', threshold: 0.1 });
       return thumbObserver;
@@ -1763,15 +1829,23 @@
       target.innerHTML = `<img src="${escapeHtml(dataUrl)}" alt="Video thumbnail" loading="lazy" />`;
     }
 
-    async function generateThumb(relPath, url, durationHint, target){
-      if (!url || !relPath) return;
-      if (thumbCache.has(relPath)){
-        setThumbImage(target, thumbCache.get(relPath));
+    async function generateThumb(relPath, url, durationHint, target, cacheKey){
+      const key = cacheKey || relPath;
+      if (!url || !key) return;
+      if (thumbCache.has(key)){
+        setThumbImage(target, thumbCache.get(key));
         return;
       }
       try{
+        const stored = await readThumbFromCache(key);
+        if (stored){
+          thumbCache.set(key, stored);
+          setThumbImage(target, stored);
+          return;
+        }
         const data = await extractVideoFrame(url, durationHint);
-        thumbCache.set(relPath, data);
+        thumbCache.set(key, data);
+        await writeThumbToCache(key, data);
         setThumbImage(target, data);
       }catch{
         if (target){
@@ -1826,6 +1900,29 @@
         video.addEventListener('seeked', capture, { once:true });
         video.addEventListener('error', () => { cleanup(); reject(new Error('thumb-error')); }, { once:true });
       });
+    }
+
+    async function primeThumbFromCache(target){
+      if (!target) return false;
+      const key = target.dataset.thumbKey || target.dataset.rel;
+      if (!key) return false;
+      if (thumbCache.has(key)){
+        setThumbImage(target, thumbCache.get(key));
+        return true;
+      }
+      if (thumbPending.has(key)) return false;
+      thumbPending.add(key);
+      try{
+        const stored = await readThumbFromCache(key);
+        if (stored){
+          thumbCache.set(key, stored);
+          setThumbImage(target, stored);
+          return true;
+        }
+      }finally{
+        thumbPending.delete(key);
+      }
+      return false;
     }
 
     // -------------------------
@@ -2023,7 +2120,8 @@
         // If your API can provide a lightweight thumbnail URL (recommended), use it:
         // - it.thumb_url (image/jpg) for videos/images
         // Otherwise we can still show the actual stream_url for images (not always great for big video files).
-        const cachedThumb = thumbCache.get(it.relative_path);
+        const thumbKey = thumbCacheKey(it);
+        const cachedThumb = thumbKey ? thumbCache.get(thumbKey) : null;
         const fallbackThumb = buildThumbFallback(kind);
         const thumbUrl = cachedThumb || it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null);
         const safeThumbUrl = thumbUrl || fallbackThumb;
@@ -2042,7 +2140,7 @@
         card.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
 
         card.innerHTML = `
-          <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
+          <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video" data-thumb-key="${escapeHtml(thumbKey)}"` : ''}>
             <img src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
               onerror="this.onerror=null;this.src='${escapeHtml(fallbackThumb)}';" />
             <div class="badges">
@@ -2071,7 +2169,9 @@
 
         if (!thumbUrl && kind === 'video'){
           const t = card.querySelector('.thumb');
-          ensureThumbObserver().observe(t);
+          primeThumbFromCache(t).then((found) => {
+            if (!found) ensureThumbObserver().observe(t);
+          });
         }
 
         // ---- list row
@@ -2087,7 +2187,7 @@
         row.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
         row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         row.innerHTML = `
-          <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video"` : ''}>
+          <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video" data-thumb-key="${escapeHtml(thumbKey)}"` : ''}>
             <img src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
               onerror="this.onerror=null;this.src='${escapeHtml(fallbackThumb)}';" />
           </div>
@@ -2104,7 +2204,9 @@
         row.querySelector('button').addEventListener('click', () => openDrawer(it));
         if (!thumbUrl && kind === 'video'){
           const t2 = row.querySelector('.mini');
-          ensureThumbObserver().observe(t2);
+          primeThumbFromCache(t2).then((found) => {
+            if (!found) ensureThumbObserver().observe(t2);
+          });
         }
         l.appendChild(row);
       }

@@ -55,6 +55,67 @@ const buildThumbFallback = (label: string) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
+const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
+const THUMB_STORAGE_PREFIX = 'media-sync-thumb:';
+
+const getThumbCacheKey = (item: MediaItem) => item.sha256 || item.hash || item.relative_path || '';
+
+const thumbCacheRequest = (key: string) => {
+  if (!key || typeof window === 'undefined') return '';
+  return `${window.location.origin}/__thumbs/${encodeURIComponent(key)}`;
+};
+
+const canUseCacheStorage = () => typeof window !== 'undefined' && 'caches' in window;
+
+async function readThumbFromCache(key: string): Promise<string | null> {
+  if (!key) return null;
+  if (canUseCacheStorage()) {
+    try {
+      const cache = await caches.open(THUMB_CACHE_NAME);
+      const response = await cache.match(thumbCacheRequest(key));
+      if (response) {
+        const data = await response.text();
+        if (data.startsWith('data:image')) return data;
+      }
+    } catch {
+      // ignore cache errors
+    }
+  }
+  try {
+    const stored = window.localStorage.getItem(`${THUMB_STORAGE_PREFIX}${key}`);
+    if (stored && stored.startsWith('data:image')) return stored;
+  } catch {
+    // ignore storage errors
+  }
+  return null;
+}
+
+async function writeThumbToCache(key: string, dataUrl: string): Promise<void> {
+  if (!key || !dataUrl) return;
+  if (canUseCacheStorage()) {
+    try {
+      const cache = await caches.open(THUMB_CACHE_NAME);
+      await cache.put(
+        thumbCacheRequest(key),
+        new Response(dataUrl, {
+          headers: {
+            'Content-Type': 'text/plain',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          },
+        }),
+      );
+      return;
+    } catch {
+      // fallback to localStorage
+    }
+  }
+  try {
+    window.localStorage.setItem(`${THUMB_STORAGE_PREFIX}${key}`, dataUrl);
+  } catch {
+    // ignore quota errors
+  }
+}
+
 function useToastQueue() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const timeouts = useRef<number[]>([]);
@@ -172,6 +233,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const mediaScrollRef = useRef<HTMLDivElement | null>(null);
   const thumbObserverRef = useRef<IntersectionObserver | null>(null);
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
+  const thumbPendingRef = useRef<Set<string>>(new Set());
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
 
   const filteredMedia = useMemo(() => filterMedia(media, query), [media, query]);
@@ -492,16 +554,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           const url = target.dataset.url;
           const duration = Number(target.dataset.duration || 0);
           const kind = target.dataset.kind;
-          if (!rel || !url || kind !== 'video') return;
-          if (thumbCacheRef.current.has(rel)) return;
+          const key = target.dataset.thumbKey || rel;
+          if (!rel || !url || kind !== 'video' || !key) return;
+          if (thumbCacheRef.current.has(key)) return;
           const requestIdle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number })
             .requestIdleCallback;
           if (requestIdle) {
             requestIdle(async () => {
               try {
                 const data = await extractVideoFrame(url, duration);
-                thumbCacheRef.current.set(rel, data);
-                setThumbs((prev) => new Map(prev).set(rel, data));
+                thumbCacheRef.current.set(key, data);
+                await writeThumbToCache(key, data);
+                setThumbs((prev) => new Map(prev).set(key, data));
               } catch {
                 // fallback stays in place
               }
@@ -510,8 +574,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             window.setTimeout(async () => {
               try {
                 const data = await extractVideoFrame(url, duration);
-                thumbCacheRef.current.set(rel, data);
-                setThumbs((prev) => new Map(prev).set(rel, data));
+                thumbCacheRef.current.set(key, data);
+                await writeThumbToCache(key, data);
+                setThumbs((prev) => new Map(prev).set(key, data));
               } catch {
                 // ignore
               }
@@ -525,18 +590,38 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return observer;
   }, []);
 
+  const primeThumbFromCache = useCallback(async (key: string, node: HTMLElement) => {
+    if (!key || !node) return;
+    if (thumbCacheRef.current.has(key)) return;
+    if (thumbPendingRef.current.has(key)) return;
+    thumbPendingRef.current.add(key);
+    try {
+      const cached = await readThumbFromCache(key);
+      if (cached) {
+        thumbCacheRef.current.set(key, cached);
+        setThumbs((prev) => new Map(prev).set(key, cached));
+        return;
+      }
+    } finally {
+      thumbPendingRef.current.delete(key);
+    }
+    ensureThumbObserver().observe(node);
+  }, [ensureThumbObserver]);
+
   const registerThumbTarget = useCallback(
     (node: HTMLDivElement | null, item: MediaItem, kind: string) => {
       if (!node || kind !== 'video' || !item.stream_url) return;
       const resolvedUrl = resolveAssetUrl(item.stream_url);
       if (!resolvedUrl) return;
+      const key = getThumbCacheKey(item);
       node.dataset.rel = item.relative_path;
       node.dataset.url = resolvedUrl;
       node.dataset.duration = String(item.duration || '');
       node.dataset.kind = 'video';
-      ensureThumbObserver().observe(node);
+      node.dataset.thumbKey = key;
+      void primeThumbFromCache(key, node);
     },
-    [ensureThumbObserver, resolveAssetUrl],
+    [primeThumbFromCache, resolveAssetUrl],
   );
 
   const handleCopyStream = useCallback(async (item: MediaItem) => {
@@ -1029,7 +1114,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const proj = projectLabel(item);
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
-                  const cachedThumb = thumbs.get(item.relative_path) || thumbCacheRef.current.get(item.relative_path);
+                  const thumbKey = getThumbCacheKey(item);
+                  const cachedThumb = thumbs.get(thumbKey) || thumbCacheRef.current.get(thumbKey);
                   const rawThumbUrl = cachedThumb
                     || item.thumb_url
                     || item.thumbnail_url
@@ -1103,7 +1189,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const proj = projectLabel(item);
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
-                  const cachedThumb = thumbs.get(item.relative_path) || thumbCacheRef.current.get(item.relative_path);
+                  const thumbKey = getThumbCacheKey(item);
+                  const cachedThumb = thumbs.get(thumbKey) || thumbCacheRef.current.get(thumbKey);
                   const rawThumbUrl = cachedThumb
                     || item.thumb_url
                     || item.thumbnail_url

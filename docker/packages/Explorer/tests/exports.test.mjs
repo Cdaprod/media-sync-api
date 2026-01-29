@@ -65,3 +65,12 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('Media — All Projects'));
   assert.ok(content.includes('buildThumbFallback'));
 });
+
+test('explorer persists video thumbnail cache hints', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('media-sync-thumb-cache'));
+  assert.ok(content.includes('readThumbFromCache'));
+  assert.ok(content.includes('writeThumbToCache'));
+  assert.ok(content.includes('thumbPendingRef'));
+});
