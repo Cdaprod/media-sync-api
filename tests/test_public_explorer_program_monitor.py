@@ -21,6 +21,7 @@ def test_program_monitor_handoff_module_payload_shape():
     assert 'meta' in module_text
     assert 'new URL(PROGRAM_MONITOR_URL)' in module_text
     assert 'sendCount' in module_text
+    assert 'clearInterval' in module_text
 
 
 def test_program_monitor_handoff_ordering_and_url_resolution():
