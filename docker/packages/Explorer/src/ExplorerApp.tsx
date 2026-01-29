@@ -56,7 +56,6 @@ const buildThumbFallback = (label: string) => {
 };
 
 const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
-const THUMB_STORAGE_PREFIX = 'media-sync-thumb:';
 
 const getThumbCacheKey = (item: MediaItem) => {
   const project = item.project_name || item.project || '';
@@ -75,50 +74,36 @@ const canUseCacheStorage = () => typeof window !== 'undefined' && 'caches' in wi
 
 async function readThumbFromCache(key: string): Promise<string | null> {
   if (!key) return null;
-  if (canUseCacheStorage()) {
-    try {
-      const cache = await caches.open(THUMB_CACHE_NAME);
-      const response = await cache.match(thumbCacheRequest(key));
-      if (response) {
-        const data = await response.text();
-        if (data.startsWith('data:image')) return data;
-      }
-    } catch {
-      // ignore cache errors
-    }
-  }
+  if (!canUseCacheStorage()) return null;
   try {
-    const stored = window.localStorage.getItem(`${THUMB_STORAGE_PREFIX}${key}`);
-    if (stored && stored.startsWith('data:image')) return stored;
+    const cache = await caches.open(THUMB_CACHE_NAME);
+    const response = await cache.match(thumbCacheRequest(key));
+    if (!response) return null;
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) return null;
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
   } catch {
-    // ignore storage errors
+    // ignore cache errors
   }
   return null;
 }
 
-async function writeThumbToCache(key: string, dataUrl: string): Promise<void> {
-  if (!key || !dataUrl) return;
-  if (canUseCacheStorage()) {
-    try {
-      const cache = await caches.open(THUMB_CACHE_NAME);
-      await cache.put(
-        thumbCacheRequest(key),
-        new Response(dataUrl, {
-          headers: {
-            'Content-Type': 'text/plain',
-            'Cache-Control': 'public, max-age=31536000, immutable',
-          },
-        }),
-      );
-      return;
-    } catch {
-      // fallback to localStorage
-    }
-  }
+async function writeThumbToCache(key: string, blob: Blob): Promise<void> {
+  if (!key || !blob || !canUseCacheStorage()) return;
   try {
-    window.localStorage.setItem(`${THUMB_STORAGE_PREFIX}${key}`, dataUrl);
+    const cache = await caches.open(THUMB_CACHE_NAME);
+    await cache.put(
+      thumbCacheRequest(key),
+      new Response(blob, {
+        headers: {
+          'Content-Type': blob.type || 'image/jpeg',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
+      }),
+    );
   } catch {
-    // ignore quota errors
+    // best-effort cache writes
   }
 }
 
@@ -144,7 +129,7 @@ function useToastQueue() {
   return { toasts, addToast };
 }
 
-async function extractVideoFrame(url: string, durationHint?: number): Promise<string> {
+async function extractVideoFrame(url: string, durationHint?: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
@@ -172,9 +157,11 @@ async function extractVideoFrame(url: string, durationHint?: number): Promise<st
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('thumb-canvas');
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const data = canvas.toDataURL('image/jpeg', 0.82);
-        cleanup();
-        resolve(data);
+        canvas.toBlob((blob) => {
+          cleanup();
+          if (!blob) return reject(new Error('thumb-blob'));
+          resolve(blob);
+        }, 'image/jpeg', 0.82);
       } catch (err) {
         cleanup();
         reject(err);
@@ -571,10 +558,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           if (requestIdle) {
             requestIdle(async () => {
               try {
-                const data = await extractVideoFrame(url, duration);
-                thumbCacheRef.current.set(key, data);
-                await writeThumbToCache(key, data);
-                setThumbs((prev) => new Map(prev).set(key, data));
+                const blob = await extractVideoFrame(url, duration);
+                const objectUrl = URL.createObjectURL(blob);
+                thumbCacheRef.current.set(key, objectUrl);
+                setThumbs((prev) => new Map(prev).set(key, objectUrl));
+                void writeThumbToCache(key, blob);
                 target.dataset.state = 'loaded';
               } catch {
                 target.dataset.attempts = String(attempts + 1);
@@ -589,10 +577,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           } else {
             window.setTimeout(async () => {
               try {
-                const data = await extractVideoFrame(url, duration);
-                thumbCacheRef.current.set(key, data);
-                await writeThumbToCache(key, data);
-                setThumbs((prev) => new Map(prev).set(key, data));
+                const blob = await extractVideoFrame(url, duration);
+                const objectUrl = URL.createObjectURL(blob);
+                thumbCacheRef.current.set(key, objectUrl);
+                setThumbs((prev) => new Map(prev).set(key, objectUrl));
+                void writeThumbToCache(key, blob);
                 target.dataset.state = 'loaded';
               } catch {
                 target.dataset.attempts = String(attempts + 1);

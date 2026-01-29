@@ -1148,7 +1148,6 @@
     };
 
     const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
-    const THUMB_STORAGE_PREFIX = 'media-sync-thumb:';
     const thumbCache = new Map();
     const thumbPending = new Set();
     let thumbObserver = null;
@@ -1190,50 +1189,36 @@
 
     async function readThumbFromCache(key){
       if (!key) return null;
-      if (canUseCacheStorage()){
-        try{
-          const cache = await caches.open(THUMB_CACHE_NAME);
-          const response = await cache.match(thumbCacheRequest(key));
-          if (response){
-            const data = await response.text();
-            if (data.startsWith('data:image')) return data;
-          }
-        }catch(_){
-          // ignore cache errors
-        }
-      }
+      if (!canUseCacheStorage()) return null;
       try{
-        const stored = localStorage.getItem(`${THUMB_STORAGE_PREFIX}${key}`);
-        if (stored && stored.startsWith('data:image')) return stored;
+        const cache = await caches.open(THUMB_CACHE_NAME);
+        const response = await cache.match(thumbCacheRequest(key));
+        if (!response) return null;
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.startsWith('image/')) return null;
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
       }catch(_){
-        // ignore storage errors
+        // ignore cache errors
       }
       return null;
     }
 
-    async function writeThumbToCache(key, dataUrl){
-      if (!key || !dataUrl) return;
-      if (canUseCacheStorage()){
-        try{
-          const cache = await caches.open(THUMB_CACHE_NAME);
-          await cache.put(
-            thumbCacheRequest(key),
-            new Response(dataUrl, {
-              headers: {
-                'Content-Type': 'text/plain',
-                'Cache-Control': 'public, max-age=31536000, immutable',
-              },
-            }),
-          );
-          return;
-        }catch(_){
-          // fallback to localStorage
-        }
-      }
+    async function writeThumbToCache(key, blob){
+      if (!key || !blob || !canUseCacheStorage()) return;
       try{
-        localStorage.setItem(`${THUMB_STORAGE_PREFIX}${key}`, dataUrl);
+        const cache = await caches.open(THUMB_CACHE_NAME);
+        await cache.put(
+          thumbCacheRequest(key),
+          new Response(blob, {
+            headers: {
+              'Content-Type': blob.type || 'image/jpeg',
+              'Cache-Control': 'public, max-age=31536000, immutable',
+            },
+          }),
+        );
       }catch(_){
-        // quota exceeded or storage unavailable
+        // best-effort cache writes
       }
     }
 
@@ -1853,11 +1838,12 @@
           target.dataset.state = 'loaded';
           return;
         }
-        const data = await extractVideoFrame(url, durationHint);
-        thumbCache.set(key, data);
-        await writeThumbToCache(key, data);
-        setThumbImage(target, data);
+        const blob = await extractVideoFrame(url, durationHint);
+        const objectUrl = URL.createObjectURL(blob);
+        thumbCache.set(key, objectUrl);
+        setThumbImage(target, objectUrl);
         target.dataset.state = 'loaded';
+        void writeThumbToCache(key, blob);
       }catch{
         if (target){
           target.innerHTML = '<div class="fallback">VIDEO</div>';
@@ -1900,10 +1886,13 @@
             canvas.width = video.videoWidth || 640;
             canvas.height = video.videoHeight || 360;
             const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('thumb-canvas');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const data = canvas.toDataURL('image/jpeg', 0.82);
-            cleanup();
-            resolve(data);
+            canvas.toBlob((blob) => {
+              cleanup();
+              if (!blob) return reject(new Error('thumb-blob'));
+              resolve(blob);
+            }, 'image/jpeg', 0.82);
           }catch(err){
             cleanup();
             reject(err);
