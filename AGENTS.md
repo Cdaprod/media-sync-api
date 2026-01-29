@@ -490,3 +490,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-18)
 - Program Monitor handoff now sends the import payload once per handoff to prevent duplicate nodes while still waiting for ACK.
+
+### Latest Implementation Notes (2025-04-19)
+- Program Monitor handoff clears the retry timer on ACK to stop duplicate postMessage sends.

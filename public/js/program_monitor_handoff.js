@@ -81,8 +81,12 @@ async function openProgramMonitorAndSend(urls){
   })();
 
   return await new Promise((resolve, reject) => {
+    let timer = null;
     function onMessage(event){
       if (event?.data?.type === ACK_TYPE){
+        if (timer){
+          clearInterval(timer);
+        }
         window.removeEventListener('message', onMessage);
         resolve(true);
       }
@@ -91,7 +95,7 @@ async function openProgramMonitorAndSend(urls){
     window.addEventListener('message', onMessage);
 
     let sendCount = 0;
-    const timer = setInterval(() => {
+    timer = setInterval(() => {
       if (Date.now() - start > timeoutMs){
         clearInterval(timer);
         window.removeEventListener('message', onMessage);
