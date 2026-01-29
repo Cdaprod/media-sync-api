@@ -508,3 +508,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-24)
 - Explorer thumbnail persistence no longer writes base64 data into localStorage; Cache Storage now stores JPEG blobs and renders immediately before best-effort cache writes to avoid iOS quota stalls.
+
+### Latest Implementation Notes (2025-04-25)
+- Next.js Explorer MediaItem typing now includes optional project/source aliases to keep cache-key fallbacks building in production.
