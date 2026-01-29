@@ -505,3 +505,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-23)
 - Explorer video thumbnail caching now includes project/source in cache keys and retries failed frame extraction a few times instead of giving up after the first error.
+
+### Latest Implementation Notes (2025-04-24)
+- Explorer thumbnail persistence no longer writes base64 data into localStorage; Cache Storage now stores JPEG blobs and renders immediately before best-effort cache writes to avoid iOS quota stalls.
