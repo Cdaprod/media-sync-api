@@ -73,5 +73,7 @@ test('explorer persists video thumbnail cache hints', () => {
   assert.ok(content.includes('readThumbFromCache'));
   assert.ok(content.includes('writeThumbToCache'));
   assert.ok(content.includes('thumbPendingRef'));
+  assert.ok(content.includes('thumbQueueRef'));
+  assert.ok(content.includes('scheduleThumbSweep'));
   assert.ok(content.includes('project_source'));
 });

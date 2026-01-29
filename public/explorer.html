@@ -1148,8 +1148,14 @@
     };
 
     const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
+    const THUMB_MAX_WORKERS = 2;
     const thumbCache = new Map();
     const thumbPending = new Set();
+    const thumbQueue = [];
+    const thumbInFlight = new Set();
+    let thumbActiveCount = 0;
+    let thumbSweepTimer = null;
+    let thumbQueueScheduled = false;
     let thumbObserver = null;
 
     // -------------------------
@@ -1802,7 +1808,7 @@
           const attempts = Number(entry.target.dataset.attempts || 0);
           if (itemKind !== 'video') return;
           if (state === 'loaded' || attempts >= 3) return;
-          requestIdle(() => generateThumb(rel, url, duration, entry.target, cacheKey));
+          requestIdle(() => enqueueThumbWork(rel, url, duration, entry.target, cacheKey));
         });
       }, { root: el('mediaScroll'), rootMargin: '200px 0px', threshold: 0.1 });
       return thumbObserver;
@@ -1818,7 +1824,84 @@
 
     function setThumbImage(target, dataUrl){
       if (!target) return;
-      target.innerHTML = `<img src="${escapeHtml(dataUrl)}" alt="Video thumbnail" loading="lazy" />`;
+      const img = target.querySelector('img') || null;
+      if (img){
+        img.onerror = null;
+        img.src = dataUrl;
+        return;
+      }
+      const fallbackImg = document.createElement('img');
+      fallbackImg.alt = 'Video thumbnail';
+      fallbackImg.loading = 'lazy';
+      fallbackImg.src = dataUrl;
+      target.prepend(fallbackImg);
+    }
+
+    function scheduleThumbQueue(){
+      if (thumbQueueScheduled) return;
+      thumbQueueScheduled = true;
+      requestIdle(() => {
+        thumbQueueScheduled = false;
+        processThumbQueue();
+      });
+    }
+
+    function isThumbTargetVisible(target){
+      if (!target || !target.getBoundingClientRect) return false;
+      const root = el('mediaScroll');
+      const rect = target.getBoundingClientRect();
+      const rootRect = root?.getBoundingClientRect?.() || { top: 0, bottom: window.innerHeight };
+      return rect.bottom >= rootRect.top - 200 && rect.top <= rootRect.bottom + 200;
+    }
+
+    function enqueueThumbWork(relPath, url, durationHint, target, cacheKey){
+      const key = cacheKey || relPath;
+      if (!key || !url || !target) return;
+      const state = target.dataset.state || 'idle';
+      const attempts = Number(target.dataset.attempts || 0);
+      if (state === 'loaded' || state === 'loading' || attempts >= 3) return;
+      if (thumbInFlight.has(key)) return;
+      thumbQueue.push({ relPath, url, durationHint, target, key });
+      thumbInFlight.add(key);
+      scheduleThumbQueue();
+    }
+
+    function processThumbQueue(){
+      while (thumbActiveCount < THUMB_MAX_WORKERS && thumbQueue.length){
+        const job = thumbQueue.shift();
+        if (!job?.target || !job.target.isConnected){
+          thumbInFlight.delete(job?.key);
+          continue;
+        }
+        if (!isThumbTargetVisible(job.target)){
+          thumbInFlight.delete(job.key);
+          continue;
+        }
+        thumbActiveCount += 1;
+        job.target.dataset.state = 'loading';
+        generateThumb(job.relPath, job.url, job.durationHint, job.target, job.key)
+          .finally(() => {
+            thumbActiveCount = Math.max(0, thumbActiveCount - 1);
+            thumbInFlight.delete(job.key);
+            processThumbQueue();
+          });
+      }
+    }
+
+    function scheduleThumbSweep(){
+      if (thumbSweepTimer) clearTimeout(thumbSweepTimer);
+      thumbSweepTimer = setTimeout(() => {
+        thumbSweepTimer = null;
+        const targets = Array.from(document.querySelectorAll('[data-kind="video"][data-url]'));
+        targets.forEach((target) => {
+          if (!isThumbTargetVisible(target)) return;
+          const rel = target.dataset.rel;
+          const url = target.dataset.url;
+          const duration = Number(target.dataset.duration || 0);
+          const key = target.dataset.thumbKey || rel;
+          enqueueThumbWork(rel, url, duration, target, key);
+        });
+      }, 120);
     }
 
     async function generateThumb(relPath, url, durationHint, target, cacheKey){
@@ -1852,6 +1935,7 @@
           if (attempts + 1 < 3){
             setTimeout(() => {
               ensureThumbObserver().observe(target);
+              scheduleThumbSweep();
             }, 800);
           }else{
             target.dataset.state = 'error';
@@ -1880,7 +1964,11 @@
           video.src = '';
         }
 
+        let settled = false;
+
         function capture(){
+          if (settled) return;
+          settled = true;
           try{
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth || 640;
@@ -1899,14 +1987,27 @@
           }
         }
 
+        let targetTime = Math.min(Math.max(durationHint || 0.5, 0.3), 1.5);
         video.addEventListener('loadedmetadata', () => {
-          const targetTime = Number.isFinite(video.duration) && video.duration > 0
+          targetTime = Number.isFinite(video.duration) && video.duration > 0
             ? Math.min(Math.max(video.duration * 0.05, 0.3), 2.0)
             : Math.min(Math.max(durationHint || 0.5, 0.3), 1.5);
           video.currentTime = targetTime;
         }, { once:true });
 
         video.addEventListener('seeked', capture, { once:true });
+        video.addEventListener('loadeddata', () => {
+          if (settled) return;
+          if (video.readyState >= 2 && (video.currentTime >= targetTime || video.currentTime > 0)){
+            capture();
+          }
+        }, { once:true });
+        video.addEventListener('timeupdate', () => {
+          if (settled) return;
+          if (video.readyState >= 2 && (video.currentTime >= targetTime || video.currentTime > 0)){
+            capture();
+          }
+        }, { once:true });
         video.addEventListener('error', () => { cleanup(); reject(new Error('thumb-error')); }, { once:true });
       });
     }
@@ -1935,6 +2036,7 @@
       }
       target.dataset.state = target.dataset.state || 'idle';
       target.dataset.attempts = target.dataset.attempts || '0';
+      scheduleThumbSweep();
       return false;
     }
 
@@ -2180,7 +2282,7 @@
         card.addEventListener('click', () => openDrawer(it));
         g.appendChild(card);
 
-        if (!thumbUrl && kind === 'video'){
+      if (!thumbUrl && kind === 'video'){
           const t = card.querySelector('.thumb');
           primeThumbFromCache(t).then((found) => {
             if (!found) ensureThumbObserver().observe(t);
@@ -2223,6 +2325,7 @@
         }
         l.appendChild(row);
       }
+      scheduleThumbSweep();
     }
 
     // -------------------------
@@ -2724,6 +2827,10 @@
       window.matchMedia('(max-width: 860px)').addEventListener('change', () => {
         syncSidebarMode();
       });
+      const scrollRoot = el('mediaScroll');
+      if (scrollRoot){
+        scrollRoot.addEventListener('scroll', () => scheduleThumbSweep(), { passive: true });
+      }
 
       toast('good','Boot','Loading sources + projects…');
       await loadSources();

@@ -511,3 +511,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-25)
 - Next.js Explorer MediaItem typing now includes optional project/source aliases to keep cache-key fallbacks building in production.
+
+### Latest Implementation Notes (2025-04-26)
+- Explorer UIs now queue thumbnail extraction with visibility sweeps and improved video frame capture fallbacks to reduce sparse thumbnail misses during scrolling or large lists.
