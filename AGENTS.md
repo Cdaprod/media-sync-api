@@ -499,3 +499,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-21)
 - Explorer media type definitions now include uploaded/indexed timestamp fields to keep Next.js builds passing.
+
+### Latest Implementation Notes (2025-04-22)
+- Explorer UIs now persist generated video thumbnails in Cache Storage (with localStorage fallback) keyed by sha256/relative path so refreshes reuse cached thumbs instead of re-extracting frames.
