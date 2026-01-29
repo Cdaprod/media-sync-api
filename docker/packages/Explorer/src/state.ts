@@ -65,6 +65,10 @@ const mediaTimestamp = (item: MediaItem): number => Math.max(
   parseTimestamp(item.updatedAt),
   parseTimestamp(item.created_at),
   parseTimestamp(item.createdAt),
+  parseTimestamp(item.uploaded_at),
+  parseTimestamp(item.uploadedAt),
+  parseTimestamp(item.indexed_at),
+  parseTimestamp(item.indexedAt),
   filenameTimestamp(item.relative_path),
 );
 
