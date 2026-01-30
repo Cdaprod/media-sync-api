@@ -526,3 +526,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-30)
 - OBS send workflow now uses a dedicated browser-source push helper with bounds-based transforms, rerouted audio, and optional exclusivity cleanup while relying solely on input lookups (no scene fallback).
+
+### Latest Implementation Notes (2025-05-01)
+- Split the static OBS helper into `public/js/obs-push.js` and kept `public/js/obs-websocket.js` as the vendor bundle, updating the explorer loader and tests accordingly.

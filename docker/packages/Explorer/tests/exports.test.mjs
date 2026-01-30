@@ -81,7 +81,7 @@ test('static OBS player page exists', () => {
 });
 
 test('OBS websocket helper includes browser source defaults', () => {
-  const obsPath = path.resolve(packageRoot, '..', '..', '..', 'public', 'js', 'obs-websocket.js');
+  const obsPath = path.resolve(packageRoot, '..', '..', '..', 'public', 'js', 'obs-push.js');
   const content = fs.readFileSync(obsPath, 'utf8');
   assert.ok(content.includes('obsPushBrowserMedia'));
   assert.ok(content.includes('CreateInput'));
