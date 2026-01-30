@@ -74,6 +74,13 @@ test('static explorer resolves OBS input names with fallbacks', () => {
   assert.ok(content.includes('GetSceneItemList'));
 });
 
+test('static OBS player page exists', () => {
+  const playerPath = path.resolve(packageRoot, '..', '..', '..', 'public', 'player.html');
+  const content = fs.readFileSync(playerPath, 'utf8');
+  assert.ok(content.includes('OBS Player'));
+  assert.ok(content.includes('object-fit'));
+});
+
 test('explorer persists video thumbnail cache hints', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');

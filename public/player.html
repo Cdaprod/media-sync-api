@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<!--
+  media-sync-api OBS player
+  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0
+  Example: /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&fit=cover&muted=0
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>media-sync-api — OBS Player</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
+
+    #player {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: transparent;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+  <video id="player" playsinline></video>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const rawSrc = params.get('src') || '';
+    const fit = (params.get('fit') || 'cover').toLowerCase();
+    const mutedParam = params.get('muted') === '1';
+    const loopParam = params.get('loop') !== '0';
+    const video = document.getElementById('player');
+
+    video.controls = false;
+    video.loop = loopParam;
+    video.playsInline = true;
+    video.style.objectFit = ['contain', 'cover', 'fill', 'none', 'scale-down'].includes(fit)
+      ? fit
+      : 'cover';
+
+    if (!rawSrc){
+      console.warn('[OBS Player] Missing src param.');
+    } else {
+      const resolvedSrc = rawSrc.startsWith('http') ? rawSrc : decodeURIComponent(rawSrc);
+      const allowAudio = !mutedParam;
+      video.muted = true;
+      video.src = resolvedSrc;
+
+      const tryPlay = () => video.play().catch(() => false);
+      video.addEventListener('loadedmetadata', () => {
+        tryPlay().then(() => {
+          if (allowAudio) {
+            setTimeout(() => {
+              video.muted = false;
+            }, 150);
+          }
+        });
+      });
+      let attempts = 0;
+      const retry = setInterval(() => {
+        attempts += 1;
+        tryPlay();
+        if (attempts > 20) clearInterval(retry);
+      }, 250);
+    }
+  </script>
+</body>
+</html>

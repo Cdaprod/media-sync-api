@@ -520,3 +520,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-28)
 - The static explorer now resolves OBS input targets by name (including scene fallbacks and fuzzy matches) before sending URLs, reducing “specified source is not an input” errors.
+
+### Latest Implementation Notes (2025-04-29)
+- The static explorer now pushes media to a dedicated OBS Browser Source using a clean `/player.html` URL, applies base-resolution sizing + scene transforms, and warns when inputs are shared across scenes.
