@@ -100,21 +100,41 @@
       const playerUrl = buildPlayerUrl({ assetUrl, fit, muted });
 
       if (!match){
-        await obs.call('CreateInput', {
-          sceneName: targetSceneName,
-          inputName: resolvedInputName,
-          inputKind: 'browser_source',
-          inputSettings: {
-            url: playerUrl,
-            width,
-            height,
-            fps: 60,
-            shutdown: false,
-            restart_when_active: true,
-            reroute_audio: true,
-          },
-          sceneItemEnabled: true,
-        });
+        try{
+          await obs.call('CreateInput', {
+            sceneName: targetSceneName,
+            inputName: resolvedInputName,
+            inputKind: 'browser_source',
+            inputSettings: {
+              url: playerUrl,
+              width,
+              height,
+              fps: 60,
+              shutdown: false,
+              restart_when_active: true,
+              reroute_audio: true,
+            },
+            sceneItemEnabled: true,
+          });
+        }catch(error){
+          const message = String(error?.message || '');
+          if (!message.toLowerCase().includes('already exists')){
+            throw error;
+          }
+          await obs.call('SetInputSettings', {
+            inputName: resolvedInputName,
+            inputSettings: {
+              url: playerUrl,
+              width,
+              height,
+              fps: 60,
+              shutdown: false,
+              restart_when_active: true,
+              reroute_audio: true,
+            },
+            overlay: false,
+          });
+        }
       }else{
         await obs.call('SetInputSettings', {
           inputName: resolvedInputName,
