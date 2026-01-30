@@ -13,7 +13,7 @@
       fit,
       muted: muted ? '1' : '0',
     });
-    return `${window.location.origin}/player.html?${params.toString()}`;
+    return `${resolvedAssetUrl.origin}/player.html?${params.toString()}`;
   };
 
   const findInputName = (inputs, desired) => {
@@ -41,6 +41,16 @@
       // ignore
     }
     const created = await obs.call('CreateSceneItem', { sceneName, sourceName: inputName });
+    if (created?.sceneItemId === undefined) throw new Error('Failed to create scene item');
+    return created.sceneItemId;
+  }
+
+  async function getSceneItemIdStrict(obs, sceneName, sourceName){
+    const list = await obs.call('GetSceneItemList', { sceneName });
+    const items = Array.isArray(list?.sceneItems) ? list.sceneItems : [];
+    const match = items.find((item) => item.sourceName === sourceName);
+    if (match?.sceneItemId !== undefined) return match.sceneItemId;
+    const created = await obs.call('CreateSceneItem', { sceneName, sourceName });
     if (created?.sceneItemId === undefined) throw new Error('Failed to create scene item');
     return created.sceneItemId;
   }
@@ -108,7 +118,7 @@
       for (const entry of inputs){
         const name = entry?.inputName;
         if (!name || name === keepName) continue;
-        if (name === baseName || name.startsWith(`${baseName} (`)){
+        if (name.startsWith(`${baseName} (`)){
           try{
             await obs.call('RemoveInput', { inputName: name });
           }catch(_){
@@ -233,7 +243,7 @@
         // ignore
       }
 
-      const sceneItemId = await getSceneItemId(obs, targetSceneName, finalInputName);
+      const sceneItemId = await getSceneItemIdStrict(obs, targetSceneName, finalInputName);
       await snapBrowserSourceToCanvas(
         obs,
         targetSceneName,
