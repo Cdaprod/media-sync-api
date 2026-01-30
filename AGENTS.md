@@ -535,3 +535,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-03)
 - Handle OBS “source is not an input” errors by generating a unique Browser Source name when a conflicting non-input source exists.
+
+### Latest Implementation Notes (2025-05-04)
+- Added a retrying Browser Source creator to avoid “already exists” errors even when OBS races on name creation.

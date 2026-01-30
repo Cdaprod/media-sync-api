@@ -39,6 +39,33 @@
     return candidate;
   };
 
+  async function createBrowserInput(obs, sceneName, desiredName, inputs, settings){
+    let attempts = 0;
+    let candidate = buildUniqueInputName(inputs, desiredName);
+    while (attempts < 3){
+      try{
+        await obs.call('CreateInput', {
+          sceneName,
+          inputName: candidate,
+          inputKind: 'browser_source',
+          inputSettings: settings,
+          sceneItemEnabled: true,
+        });
+        return candidate;
+      }catch(error){
+        const message = String(error?.message || '').toLowerCase();
+        if (!message.includes('already exists')){
+          throw error;
+        }
+        const refreshed = await obs.call('GetInputList');
+        const refreshedInputs = Array.isArray(refreshed?.inputs) ? refreshed.inputs : [];
+        candidate = buildUniqueInputName(refreshedInputs, desiredName);
+      }
+      attempts += 1;
+    }
+    throw new Error('Unable to create a unique OBS Browser Source input.');
+  };
+
   async function getSceneItemId(obs, sceneName, inputName){
     try{
       const response = await obs.call('GetSceneItemId', { sceneName, sourceName: inputName });
@@ -115,11 +142,12 @@
 
       if (!match){
         try{
-          await obs.call('CreateInput', {
-            sceneName: targetSceneName,
-            inputName: finalInputName,
-            inputKind: 'browser_source',
-            inputSettings: {
+          finalInputName = await createBrowserInput(
+            obs,
+            targetSceneName,
+            finalInputName,
+            inputs,
+            {
               url: playerUrl,
               width,
               height,
@@ -128,8 +156,7 @@
               restart_when_active: true,
               reroute_audio: true,
             },
-            sceneItemEnabled: true,
-          });
+          );
         }catch(error){
           const message = String(error?.message || '');
           const lowered = message.toLowerCase();
@@ -153,12 +180,12 @@
                 overlay: false,
               });
             }else{
-              finalInputName = buildUniqueInputName(refreshedInputs, resolvedInputName);
-              await obs.call('CreateInput', {
-                sceneName: targetSceneName,
-                inputName: finalInputName,
-                inputKind: 'browser_source',
-                inputSettings: {
+              finalInputName = await createBrowserInput(
+                obs,
+                targetSceneName,
+                resolvedInputName,
+                refreshedInputs,
+                {
                   url: playerUrl,
                   width,
                   height,
@@ -167,8 +194,7 @@
                   restart_when_active: true,
                   reroute_audio: true,
                 },
-                sceneItemEnabled: true,
-              });
+              );
             }
           }else{
             throw error;
@@ -196,12 +222,12 @@
           }
           const refreshed = await obs.call('GetInputList');
           const refreshedInputs = Array.isArray(refreshed?.inputs) ? refreshed.inputs : [];
-          finalInputName = buildUniqueInputName(refreshedInputs, resolvedInputName);
-          await obs.call('CreateInput', {
-            sceneName: targetSceneName,
-            inputName: finalInputName,
-            inputKind: 'browser_source',
-            inputSettings: {
+          finalInputName = await createBrowserInput(
+            obs,
+            targetSceneName,
+            resolvedInputName,
+            refreshedInputs,
+            {
               url: playerUrl,
               width,
               height,
@@ -210,8 +236,7 @@
               restart_when_active: true,
               reroute_audio: true,
             },
-            sceneItemEnabled: true,
-          });
+          );
         }
       }
 
