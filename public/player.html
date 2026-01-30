@@ -1,75 +1,62 @@
-<!DOCTYPE html>
+<!doctype html>
 <!--
-  media-sync-api OBS player
+  media-sync-api OBS Player
   Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0
   Example: /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&fit=cover&muted=0
 -->
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1" />
   <title>media-sync-api — OBS Player</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     html, body {
       margin: 0;
-      padding: 0;
       width: 100%;
       height: 100%;
       background: transparent;
       overflow: hidden;
     }
-
-    #player {
-      width: 100%;
-      height: 100%;
-      display: block;
-      background: transparent;
+    video {
+      width: 100vw;
+      height: 100vh;
       object-fit: cover;
+      display: block;
     }
   </style>
 </head>
 <body>
-  <video id="player" playsinline></video>
+  <video id="v" autoplay playsinline></video>
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const rawSrc = params.get('src') || '';
-    const fit = (params.get('fit') || 'cover').toLowerCase();
-    const mutedParam = params.get('muted') === '1';
-    const loopParam = params.get('loop') !== '0';
-    const video = document.getElementById('player');
+    const qs = new URLSearchParams(location.search);
+    const src = qs.get("src") || "";
+    const fit = qs.get("fit") || "cover";
+    const muted = (qs.get("muted") || "0") === "1";
+    const v = document.getElementById("v");
+    v.style.objectFit = fit;
+    v.muted = true;
+    v.src = src;
 
-    video.controls = false;
-    video.loop = loopParam;
-    video.playsInline = true;
-    video.style.objectFit = ['contain', 'cover', 'fill', 'none', 'scale-down'].includes(fit)
-      ? fit
-      : 'cover';
-
-    if (!rawSrc){
-      console.warn('[OBS Player] Missing src param.');
-    } else {
-      const resolvedSrc = rawSrc.startsWith('http') ? rawSrc : decodeURIComponent(rawSrc);
-      const allowAudio = !mutedParam;
-      video.muted = true;
-      video.src = resolvedSrc;
-
-      const tryPlay = () => video.play().catch(() => false);
-      video.addEventListener('loadedmetadata', () => {
-        tryPlay().then(() => {
-          if (allowAudio) {
-            setTimeout(() => {
-              video.muted = false;
-            }, 150);
-          }
-        });
-      });
-      let attempts = 0;
-      const retry = setInterval(() => {
-        attempts += 1;
-        tryPlay();
-        if (attempts > 20) clearInterval(retry);
-      }, 250);
+    async function tryPlay() {
+      try {
+        await v.play();
+      } catch (_) {
+        // ignore autoplay errors
+      }
     }
+
+    let n = 0;
+    const t = setInterval(async () => {
+      n++;
+      await tryPlay();
+      if (!v.paused || n > 20) clearInterval(t);
+    }, 250);
+
+    v.addEventListener("playing", () => {
+      if (!muted) {
+        v.muted = false;
+      }
+    }, { once: true });
   </script>
 </body>
 </html>
