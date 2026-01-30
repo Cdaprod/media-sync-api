@@ -45,77 +45,52 @@
     return created.sceneItemId;
   }
 
-  async function getSceneItemTransformWithRetry(obs, sceneName, sceneItemId, tries = 6){
-    for (let i = 0; i < tries; i += 1){
-      const response = await obs.call('GetSceneItemTransform', { sceneName, sceneItemId });
-      const transform = response?.sceneItemTransform || {};
-      const sourceW = Number(transform.sourceWidth || 0);
-      const sourceH = Number(transform.sourceHeight || 0);
-      if (sourceW >= 2 && sourceH >= 2) return transform;
-      await new Promise((resolve) => setTimeout(resolve, 120));
-    }
-    const response = await obs.call('GetSceneItemTransform', { sceneName, sceneItemId });
-    return response?.sceneItemTransform || {};
-  }
-
-  async function hardResetSceneItemTransform(obs, sceneName, sceneItemId){
-    await obs.call('SetSceneItemTransform', {
-      sceneName,
-      sceneItemId,
-      sceneItemTransform: {
-        cropLeft: 0,
-        cropRight: 0,
-        cropTop: 0,
-        cropBottom: 0,
-        rotation: 0,
-        alignment: 5,
-        positionX: 0,
-        positionY: 0,
-        scaleX: 1,
-        scaleY: 1,
-        boundsType: 'OBS_BOUNDS_NONE',
-        boundsAlignment: 5,
-      },
-    });
-  }
-
-  async function snapSceneItemToCanvas(obs, sceneName, sceneItemId, mode){
+  async function snapBrowserSourceToCanvas(obs, sceneName, sceneItemId, inputName, fit){
     const video = await obs.call('GetVideoSettings');
     const baseW = Number(video?.baseWidth || 1920);
     const baseH = Number(video?.baseHeight || 1080);
 
-    const sceneTransform = await getSceneItemTransformWithRetry(obs, sceneName, sceneItemId);
-    const sourceW = Number(sceneTransform.sourceWidth || sceneTransform.boundsWidth || 0);
-    const sourceH = Number(sceneTransform.sourceHeight || sceneTransform.boundsHeight || 0);
-    const safeSourceW = sourceW > 0 ? sourceW : baseW;
-    const safeSourceH = sourceH > 0 ? sourceH : baseH;
+    const input = await obs.call('GetInputSettings', { inputName });
+    const settings = input?.inputSettings || {};
+    const sourceW = Number(settings?.width || baseW);
+    const sourceH = Number(settings?.height || baseH);
 
-    const sx = baseW / safeSourceW;
-    const sy = baseH / safeSourceH;
-    const scale = mode === 'contain' ? Math.min(sx, sy) : Math.max(sx, sy);
+    if (sourceW !== baseW || sourceH !== baseH){
+      await obs.call('SetInputSettings', {
+        inputName,
+        inputSettings: {
+          ...settings,
+          width: baseW,
+          height: baseH,
+        },
+        overlay: false,
+      });
+    }
 
-    await hardResetSceneItemTransform(obs, sceneName, sceneItemId);
+    const boundsType = fit === 'contain' ? 'OBS_BOUNDS_SCALE_INNER' : 'OBS_BOUNDS_SCALE_OUTER';
 
     await obs.call('SetSceneItemTransform', {
       sceneName,
       sceneItemId,
       sceneItemTransform: {
-        positionX: baseW / 2,
-        positionY: baseH / 2,
-        rotation: 0,
-        alignment: 5,
-        scaleX: scale,
-        scaleY: scale,
-        boundsType: 'OBS_BOUNDS_NONE',
-        boundsAlignment: 5,
         cropLeft: 0,
         cropRight: 0,
         cropTop: 0,
         cropBottom: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        alignment: 5,
+        boundsAlignment: 5,
+        boundsType,
+        boundsWidth: baseW,
+        boundsHeight: baseH,
+        positionX: baseW / 2,
+        positionY: baseH / 2,
       },
     });
 
-    return { baseW, baseH, sourceW: safeSourceW, sourceH: safeSourceH, scale };
+    return { baseW, baseH };
   }
 
   async function cleanupExtraInputs(obs, baseName, keepName){
@@ -252,10 +227,11 @@
       }
 
       const sceneItemId = await getSceneItemId(obs, targetSceneName, finalInputName);
-      await snapSceneItemToCanvas(
+      await snapBrowserSourceToCanvas(
         obs,
         targetSceneName,
         sceneItemId,
+        finalInputName,
         fit === 'contain' ? 'contain' : 'cover',
       );
 

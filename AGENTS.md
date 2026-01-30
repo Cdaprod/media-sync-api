@@ -553,3 +553,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-09)
 - OBS transforms now reset without zero-sized bounds and retry scene item sizing to avoid `boundsWidth` validation errors before scaling.
+
+### Latest Implementation Notes (2025-05-10)
+- OBS browser source snapping now uses `GetInputSettings` width/height and bounds scaling against the canvas to avoid transform-size drift.
