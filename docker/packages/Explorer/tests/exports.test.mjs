@@ -66,12 +66,11 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('buildThumbFallback'));
 });
 
-test('static explorer resolves OBS input names with fallbacks', () => {
+test('static explorer uses OBS push helper', () => {
   const explorerPath = path.resolve(packageRoot, '..', '..', '..', 'public', 'explorer.html');
   const content = fs.readFileSync(explorerPath, 'utf8');
-  assert.ok(content.includes('resolveObsInputName'));
-  assert.ok(content.includes('GetInputList'));
-  assert.ok(content.includes('GetSceneItemList'));
+  assert.ok(content.includes('obsPushBrowserMedia'));
+  assert.ok(!content.includes('resolveObsInputName'));
 });
 
 test('static OBS player page exists', () => {
@@ -79,6 +78,16 @@ test('static OBS player page exists', () => {
   const content = fs.readFileSync(playerPath, 'utf8');
   assert.ok(content.includes('OBS Player'));
   assert.ok(content.includes('object-fit'));
+});
+
+test('OBS websocket helper includes browser source defaults', () => {
+  const obsPath = path.resolve(packageRoot, '..', '..', '..', 'public', 'js', 'obs-websocket.js');
+  const content = fs.readFileSync(obsPath, 'utf8');
+  assert.ok(content.includes('obsPushBrowserMedia'));
+  assert.ok(content.includes('CreateInput'));
+  assert.ok(content.includes('SetInputSettings'));
+  assert.ok(content.includes('SetSceneItemTransform'));
+  assert.ok(content.includes('reroute_audio'));
 });
 
 test('explorer persists video thumbnail cache hints', () => {

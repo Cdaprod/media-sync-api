@@ -523,3 +523,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-29)
 - The static explorer now pushes media to a dedicated OBS Browser Source using a clean `/player.html` URL, applies base-resolution sizing + scene transforms, and warns when inputs are shared across scenes.
+
+### Latest Implementation Notes (2025-04-30)
+- OBS send workflow now uses a dedicated browser-source push helper with bounds-based transforms, rerouted audio, and optional exclusivity cleanup while relying solely on input lookups (no scene fallback).
