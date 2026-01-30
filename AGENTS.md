@@ -556,3 +556,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-10)
 - OBS browser source snapping now uses `GetInputSettings` width/height and bounds scaling against the canvas to avoid transform-size drift.
+
+### Latest Implementation Notes (2025-05-11)
+- OBS push now warns when output resolution is far smaller than the canvas size to flag low-res output scaling.
