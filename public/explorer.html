@@ -1327,6 +1327,50 @@
       });
     }
 
+    function normalizeObsName(value){
+      return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+    }
+
+    async function resolveObsInputName(obs, desiredName){
+      const name = String(desiredName || '').trim();
+      if (!name) throw new Error('OBS input name is required');
+      const response = await obs.call('GetInputList');
+      const inputs = Array.isArray(response?.inputs) ? response.inputs : [];
+      const normalized = normalizeObsName(name);
+      let match = inputs.find((entry) => entry.inputName === name);
+      if (!match && normalized){
+        match = inputs.find((entry) => normalizeObsName(entry.inputName) === normalized);
+      }
+      if (!match && normalized){
+        match = inputs.find((entry) => normalizeObsName(entry.inputName).startsWith(normalized));
+      }
+      if (!match && normalized){
+        match = inputs.find((entry) => normalized.startsWith(normalizeObsName(entry.inputName)));
+      }
+      if (match?.inputName){
+        return match.inputName;
+      }
+      try{
+        const sceneItems = await obs.call('GetSceneItemList', { sceneName: name });
+        const items = Array.isArray(sceneItems?.sceneItems) ? sceneItems.sceneItems : [];
+        const preferred = items.find((item) => ['browser_source','ffmpeg_source','vlc_source'].includes(item.inputKind));
+        if (preferred?.sourceName){
+          return preferred.sourceName;
+        }
+        const fallback = items.find((item) => item.sourceName);
+        if (fallback?.sourceName){
+          return fallback.sourceName;
+        }
+      }catch(_){
+        // ignore scene lookup failures
+      }
+      const names = inputs.map((entry) => entry.inputName).filter(Boolean);
+      const hint = names.length ? names.join(', ') : 'none';
+      throw new Error(`OBS input "${name}" not found. Available inputs: ${hint}`);
+    }
+
     async function obsReplaceAssetMediaUrl({
       obsHost = '192.168.0.187',
       obsPort = 4455,
@@ -1343,8 +1387,9 @@
       const obs = new OBSWebSocket();
       await obs.connect(`ws://${obsHost}:${obsPort}`, obsPassword);
 
+      const resolvedInputName = await resolveObsInputName(obs, inputName);
       await obs.call('SetInputSettings', {
-        inputName,
+        inputName: resolvedInputName,
         inputSettings: {
           url: assetUrl,
         },

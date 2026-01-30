@@ -66,6 +66,14 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('buildThumbFallback'));
 });
 
+test('static explorer resolves OBS input names with fallbacks', () => {
+  const explorerPath = path.resolve(packageRoot, '..', '..', '..', 'public', 'explorer.html');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('resolveObsInputName'));
+  assert.ok(content.includes('GetInputList'));
+  assert.ok(content.includes('GetSceneItemList'));
+});
+
 test('explorer persists video thumbnail cache hints', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
