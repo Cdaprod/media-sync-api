@@ -559,3 +559,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-11)
 - OBS push now warns when output resolution is far smaller than the canvas size to flag low-res output scaling.
+
+### Latest Implementation Notes (2025-05-12)
+- OBS browser-source push now builds player URLs from the media origin, uses a strict scene item lookup before creation, and only removes numbered duplicate inputs during cleanup.
