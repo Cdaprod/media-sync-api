@@ -1120,7 +1120,7 @@
     <div id="drawerBackdrop" class="backdrop" style="z-index:70;"></div>
   </div>
 
-  <script src="https://unpkg.com/obs-websocket-js@5/dist/obs-websocket.js"></script>
+  <script src="js/obs-websocket.js"></script>
   <script type="module" src="js/program_monitor_handoff.js"></script>
   <script>
     // -------------------------
@@ -1308,6 +1308,25 @@
       return new URL(path, window.location.origin).toString();
     }
 
+    function ensureObsWebsocketLoaded(){
+      if (typeof OBSWebSocket !== 'undefined') return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-obs-websocket]');
+        if (existing){
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error('OBSWebSocket failed to load')), { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'js/obs-websocket.js';
+        script.async = true;
+        script.dataset.obsWebsocket = 'true';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('OBSWebSocket failed to load'));
+        document.head.appendChild(script);
+      });
+    }
+
     async function obsReplaceAssetMediaUrl({
       obsHost = '192.168.0.187',
       obsPort = 4455,
@@ -1316,6 +1335,7 @@
       assetUrl,
     }){
       if (!assetUrl) throw new Error('assetUrl is required');
+      await ensureObsWebsocketLoaded();
       if (typeof OBSWebSocket === 'undefined'){
         throw new Error('OBSWebSocket is not available. Load obs-websocket-js v5 before this script.');
       }
@@ -1848,6 +1868,10 @@
 
     function isThumbTargetVisible(target){
       if (!target || !target.getBoundingClientRect) return false;
+      if (target.getClientRects().length === 0) return false;
+      const style = window.getComputedStyle(target);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      if (target.offsetParent === null && style.position !== 'fixed') return false;
       const root = el('mediaScroll');
       const rect = target.getBoundingClientRect();
       const rootRect = root?.getBoundingClientRect?.() || { top: 0, bottom: window.innerHeight };

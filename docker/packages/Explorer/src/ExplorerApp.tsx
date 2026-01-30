@@ -593,6 +593,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   function isThumbTargetVisible(target: HTMLElement) {
     if (!target?.getBoundingClientRect) return false;
+    if (target.getClientRects().length === 0) return false;
+    const style = window.getComputedStyle(target);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    if (target.offsetParent === null && style.position !== 'fixed') return false;
     const rootRect = mediaScrollRef.current?.getBoundingClientRect?.() || {
       top: 0,
       bottom: window.innerHeight,
