@@ -7,12 +7,13 @@
   const normalizeName = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
   const buildPlayerUrl = ({ assetUrl, fit, muted }) => {
+    const resolvedAssetUrl = new URL(assetUrl, window.location.origin);
     const params = new URLSearchParams({
-      src: assetUrl,
+      src: resolvedAssetUrl.toString(),
       fit,
       muted: muted ? '1' : '0',
     });
-    return `${window.location.origin}/player.html?${params.toString()}`;
+    return `${resolvedAssetUrl.origin}/player.html?${params.toString()}`;
   };
 
   const findInputName = (inputs, desired) => {

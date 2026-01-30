@@ -541,3 +541,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-05)
 - OBS Browser Source creation now accounts for scene name collisions when generating unique input names to avoid name conflicts with scenes.
+
+### Latest Implementation Notes (2025-05-06)
+- OBS player URLs now use the media URL origin so `/player.html` resolves against the API host even when the explorer runs on a different port.

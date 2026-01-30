@@ -91,6 +91,7 @@ test('OBS websocket helper includes browser source defaults', () => {
   assert.ok(content.includes('buildUniqueInputName'));
   assert.ok(content.includes('createBrowserInput'));
   assert.ok(content.includes('GetSceneList'));
+  assert.ok(content.includes('resolvedAssetUrl.origin'));
   assert.ok(content.includes('SetSceneItemTransform'));
   assert.ok(content.includes('reroute_audio'));
 });
