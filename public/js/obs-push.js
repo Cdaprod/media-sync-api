@@ -26,9 +26,12 @@
       || null;
   };
 
-  const buildUniqueInputName = (inputs, desired) => {
+  const buildUniqueInputName = (inputs, desired, extraNames = []) => {
     const base = String(desired || 'ASSET_MEDIA').trim() || 'ASSET_MEDIA';
-    const existing = new Set((inputs || []).map((entry) => entry.inputName));
+    const existing = new Set([
+      ...((inputs || []).map((entry) => entry.inputName)),
+      ...extraNames,
+    ]);
     if (!existing.has(base)) return base;
     let i = 2;
     let candidate = `${base} (${i})`;
@@ -41,8 +44,10 @@
 
   async function createBrowserInput(obs, sceneName, desiredName, inputs, settings){
     let attempts = 0;
-    let candidate = buildUniqueInputName(inputs, desiredName);
-    while (attempts < 3){
+    const sceneList = await obs.call('GetSceneList');
+    const scenes = Array.isArray(sceneList?.scenes) ? sceneList.scenes : [];
+    let candidate = buildUniqueInputName(inputs, desiredName, scenes.map((scene) => scene.sceneName));
+    while (attempts < 5){
       try{
         await obs.call('CreateInput', {
           sceneName,
@@ -59,7 +64,13 @@
         }
         const refreshed = await obs.call('GetInputList');
         const refreshedInputs = Array.isArray(refreshed?.inputs) ? refreshed.inputs : [];
-        candidate = buildUniqueInputName(refreshedInputs, desiredName);
+        const refreshedScenes = await obs.call('GetSceneList');
+        const refreshedSceneList = Array.isArray(refreshedScenes?.scenes) ? refreshedScenes.scenes : [];
+        candidate = buildUniqueInputName(
+          refreshedInputs,
+          desiredName,
+          refreshedSceneList.map((scene) => scene.sceneName),
+        );
       }
       attempts += 1;
     }

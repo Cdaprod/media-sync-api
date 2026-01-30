@@ -538,3 +538,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-04)
 - Added a retrying Browser Source creator to avoid “already exists” errors even when OBS races on name creation.
+
+### Latest Implementation Notes (2025-05-05)
+- OBS Browser Source creation now accounts for scene name collisions when generating unique input names to avoid name conflicts with scenes.
