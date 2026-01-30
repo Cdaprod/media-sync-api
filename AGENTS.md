@@ -550,3 +550,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-08)
 - OBS scene item transforms now snap to the actual canvas size via `GetVideoSettings`/`GetSceneItemTransform`, scaling to cover/contain without relying on hard-coded dimensions.
+
+### Latest Implementation Notes (2025-05-09)
+- OBS transforms now reset without zero-sized bounds and retry scene item sizing to avoid `boundsWidth` validation errors before scaling.

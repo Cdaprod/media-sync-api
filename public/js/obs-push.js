@@ -45,13 +45,46 @@
     return created.sceneItemId;
   }
 
+  async function getSceneItemTransformWithRetry(obs, sceneName, sceneItemId, tries = 6){
+    for (let i = 0; i < tries; i += 1){
+      const response = await obs.call('GetSceneItemTransform', { sceneName, sceneItemId });
+      const transform = response?.sceneItemTransform || {};
+      const sourceW = Number(transform.sourceWidth || 0);
+      const sourceH = Number(transform.sourceHeight || 0);
+      if (sourceW >= 2 && sourceH >= 2) return transform;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    const response = await obs.call('GetSceneItemTransform', { sceneName, sceneItemId });
+    return response?.sceneItemTransform || {};
+  }
+
+  async function hardResetSceneItemTransform(obs, sceneName, sceneItemId){
+    await obs.call('SetSceneItemTransform', {
+      sceneName,
+      sceneItemId,
+      sceneItemTransform: {
+        cropLeft: 0,
+        cropRight: 0,
+        cropTop: 0,
+        cropBottom: 0,
+        rotation: 0,
+        alignment: 5,
+        positionX: 0,
+        positionY: 0,
+        scaleX: 1,
+        scaleY: 1,
+        boundsType: 'OBS_BOUNDS_NONE',
+        boundsAlignment: 5,
+      },
+    });
+  }
+
   async function snapSceneItemToCanvas(obs, sceneName, sceneItemId, mode){
     const video = await obs.call('GetVideoSettings');
     const baseW = Number(video?.baseWidth || 1920);
     const baseH = Number(video?.baseHeight || 1080);
 
-    const transform = await obs.call('GetSceneItemTransform', { sceneName, sceneItemId });
-    const sceneTransform = transform?.sceneItemTransform || {};
+    const sceneTransform = await getSceneItemTransformWithRetry(obs, sceneName, sceneItemId);
     const sourceW = Number(sceneTransform.sourceWidth || sceneTransform.boundsWidth || 0);
     const sourceH = Number(sceneTransform.sourceHeight || sceneTransform.boundsHeight || 0);
     const safeSourceW = sourceW > 0 ? sourceW : baseW;
@@ -61,20 +94,7 @@
     const sy = baseH / safeSourceH;
     const scale = mode === 'contain' ? Math.min(sx, sy) : Math.max(sx, sy);
 
-    await obs.call('SetSceneItemTransform', {
-      sceneName,
-      sceneItemId,
-      sceneItemTransform: {
-        cropLeft: 0,
-        cropRight: 0,
-        cropTop: 0,
-        cropBottom: 0,
-        boundsType: 'OBS_BOUNDS_NONE',
-        boundsAlignment: 0,
-        boundsWidth: 0,
-        boundsHeight: 0,
-      },
-    });
+    await hardResetSceneItemTransform(obs, sceneName, sceneItemId);
 
     await obs.call('SetSceneItemTransform', {
       sceneName,
@@ -86,6 +106,12 @@
         alignment: 5,
         scaleX: scale,
         scaleY: scale,
+        boundsType: 'OBS_BOUNDS_NONE',
+        boundsAlignment: 5,
+        cropLeft: 0,
+        cropRight: 0,
+        cropTop: 0,
+        cropBottom: 0,
       },
     });
 
