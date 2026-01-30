@@ -532,3 +532,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-02)
 - Made the OBS push helper idempotent by falling back to `SetInputSettings` when a Browser Source already exists with the target input name.
+
+### Latest Implementation Notes (2025-05-03)
+- Handle OBS “source is not an input” errors by generating a unique Browser Source name when a conflicting non-input source exists.
