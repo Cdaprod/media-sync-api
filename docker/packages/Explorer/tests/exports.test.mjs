@@ -93,6 +93,7 @@ test('OBS websocket helper includes browser source defaults', () => {
   assert.ok(content.includes('GetVideoSettings'));
   assert.ok(content.includes('GetInputSettings'));
   assert.ok(content.includes('snapBrowserSourceToCanvas'));
+  assert.ok(content.includes('outputWidth'));
   assert.ok(content.includes('alignment: 5'));
   assert.ok(content.includes('boundsAlignment: 5'));
   assert.ok(content.includes('SetSceneItemTransform'));

@@ -49,6 +49,13 @@
     const video = await obs.call('GetVideoSettings');
     const baseW = Number(video?.baseWidth || 1920);
     const baseH = Number(video?.baseHeight || 1080);
+    const outputW = Number(video?.outputWidth || 0);
+    const outputH = Number(video?.outputHeight || 0);
+    if (outputW && outputH && (outputW < baseW * 0.6 || outputH < baseH * 0.6)){
+      console.warn(
+        `[OBS] Output resolution (${outputW}x${outputH}) is much smaller than canvas (${baseW}x${baseH}).`,
+      );
+    }
 
     const input = await obs.call('GetInputSettings', { inputName });
     const settings = input?.inputSettings || {};
