@@ -514,3 +514,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-26)
 - Explorer UIs now queue thumbnail extraction with visibility sweeps and improved video frame capture fallbacks to reduce sparse thumbnail misses during scrolling or large lists.
+
+### Latest Implementation Notes (2025-04-27)
+- Explorer thumbnail sweeps now skip hidden list/grid targets to avoid double extraction, and the static explorer bundles obs-websocket-js locally with a loader to keep the Send to OBS action available on LAN-only hosts.
