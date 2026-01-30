@@ -31,6 +31,7 @@ from app.storage.auto_reindex import AutoReindexer
 BASE_PATH = Path(__file__).resolve().parent.parent
 PUBLIC_DIR = BASE_PATH / "public"
 INDEX_FILE = PUBLIC_DIR / "index.html"
+PLAYER_FILE = PUBLIC_DIR / "player.html"
 
 
 def _configure_logging() -> None:
@@ -87,6 +88,16 @@ def create_app() -> FastAPI:
             "ok": False,
             "detail": "Static adapter is missing",
             "instructions": "Place public/index.html next to the app package or rebuild the image.",
+        }
+
+    @application.get("/player.html", include_in_schema=False)
+    async def public_player():
+        if PLAYER_FILE.exists():
+            return FileResponse(PLAYER_FILE)
+        return {
+            "ok": False,
+            "detail": "OBS player is missing",
+            "instructions": "Place public/player.html next to the app package or rebuild the image.",
         }
 
     @application.get("/health")

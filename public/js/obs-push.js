@@ -13,7 +13,7 @@
       fit,
       muted: muted ? '1' : '0',
     });
-    return `${resolvedAssetUrl.origin}/player.html?${params.toString()}`;
+    return `${window.location.origin}/player.html?${params.toString()}`;
   };
 
   const findInputName = (inputs, desired) => {
@@ -27,55 +27,10 @@
       || null;
   };
 
-  const buildUniqueInputName = (inputs, desired, extraNames = []) => {
+  const resolveInputName = (sceneName, desired) => {
     const base = String(desired || 'ASSET_MEDIA').trim() || 'ASSET_MEDIA';
-    const existing = new Set([
-      ...((inputs || []).map((entry) => entry.inputName)),
-      ...extraNames,
-    ]);
-    if (!existing.has(base)) return base;
-    let i = 2;
-    let candidate = `${base} (${i})`;
-    while (existing.has(candidate)){
-      i += 1;
-      candidate = `${base} (${i})`;
-    }
-    return candidate;
-  };
-
-  async function createBrowserInput(obs, sceneName, desiredName, inputs, settings){
-    let attempts = 0;
-    const sceneList = await obs.call('GetSceneList');
-    const scenes = Array.isArray(sceneList?.scenes) ? sceneList.scenes : [];
-    let candidate = buildUniqueInputName(inputs, desiredName, scenes.map((scene) => scene.sceneName));
-    while (attempts < 5){
-      try{
-        await obs.call('CreateInput', {
-          sceneName,
-          inputName: candidate,
-          inputKind: 'browser_source',
-          inputSettings: settings,
-          sceneItemEnabled: true,
-        });
-        return candidate;
-      }catch(error){
-        const message = String(error?.message || '').toLowerCase();
-        if (!message.includes('already exists')){
-          throw error;
-        }
-        const refreshed = await obs.call('GetInputList');
-        const refreshedInputs = Array.isArray(refreshed?.inputs) ? refreshed.inputs : [];
-        const refreshedScenes = await obs.call('GetSceneList');
-        const refreshedSceneList = Array.isArray(refreshedScenes?.scenes) ? refreshedScenes.scenes : [];
-        candidate = buildUniqueInputName(
-          refreshedInputs,
-          desiredName,
-          refreshedSceneList.map((scene) => scene.sceneName),
-        );
-      }
-      attempts += 1;
-    }
-    throw new Error('Unable to create a unique OBS Browser Source input.');
+    if (sceneName && sceneName === base) return `${base}_SOURCE`;
+    return base;
   };
 
   async function getSceneItemId(obs, sceneName, inputName){
@@ -96,18 +51,82 @@
       sceneName,
       sceneItemId,
       sceneItemTransform: {
-        positionX: 0,
-        positionY: 0,
+        positionX: width / 2,
+        positionY: height / 2,
         rotation: 0,
         scaleX: 1,
         scaleY: 1,
-        alignment: 0,
+        alignment: 5,
         boundsType,
-        boundsAlignment: 0,
+        boundsAlignment: 5,
         boundsWidth: width,
         boundsHeight: height,
       },
     });
+  }
+
+  async function cleanupExtraInputs(obs, baseName, keepName){
+    if (!baseName) return;
+    try{
+      const list = await obs.call('GetInputList');
+      const inputs = Array.isArray(list?.inputs) ? list.inputs : [];
+      for (const entry of inputs){
+        const name = entry?.inputName;
+        if (!name || name === keepName) continue;
+        if (name === baseName || name.startsWith(`${baseName} (`)){
+          try{
+            await obs.call('RemoveInput', { inputName: name });
+          }catch(_){
+            // ignore cleanup errors
+          }
+        }
+      }
+    }catch(_){
+      // ignore cleanup errors
+    }
+  }
+
+  async function ensureBrowserInput(obs, sceneName, desiredName, settings){
+    const list = await obs.call('GetInputList');
+    const inputs = Array.isArray(list?.inputs) ? list.inputs : [];
+    const match = findInputName(inputs, desiredName);
+    const resolvedName = match?.inputName || desiredName;
+
+    if (match){
+      await obs.call('SetInputSettings', {
+        inputName: resolvedName,
+        inputSettings: settings,
+        overlay: false,
+      });
+      return resolvedName;
+    }
+
+    try{
+      await obs.call('CreateInput', {
+        sceneName,
+        inputName: resolvedName,
+        inputKind: 'browser_source',
+        inputSettings: settings,
+        sceneItemEnabled: true,
+      });
+      return resolvedName;
+    }catch(error){
+      const message = String(error?.message || '').toLowerCase();
+      if (message.includes('already exists')){
+        const refreshed = await obs.call('GetInputList');
+        const refreshedInputs = Array.isArray(refreshed?.inputs) ? refreshed.inputs : [];
+        const refreshedMatch = findInputName(refreshedInputs, resolvedName);
+        if (refreshedMatch){
+          await obs.call('SetInputSettings', {
+            inputName: refreshedMatch.inputName,
+            inputSettings: settings,
+            overlay: false,
+          });
+          return refreshedMatch.inputName;
+        }
+      }
+      throw error;
+    }
   }
 
   async function removeSharedSceneItems(obs, inputName, targetSceneName){
@@ -147,110 +166,25 @@
     try{
       const inputList = await obs.call('GetInputList');
       const inputs = Array.isArray(inputList?.inputs) ? inputList.inputs : [];
-      const match = findInputName(inputs, inputName);
-      const resolvedInputName = match?.inputName || inputName;
+      const resolvedInputName = resolveInputName(targetSceneName, inputName);
       const playerUrl = buildPlayerUrl({ assetUrl, fit, muted });
-      let finalInputName = resolvedInputName;
+      const inputSettings = {
+        url: playerUrl,
+        width,
+        height,
+        fps: 60,
+        shutdown: false,
+        restart_when_active: true,
+        reroute_audio: true,
+      };
 
-      if (!match){
-        try{
-          finalInputName = await createBrowserInput(
-            obs,
-            targetSceneName,
-            finalInputName,
-            inputs,
-            {
-              url: playerUrl,
-              width,
-              height,
-              fps: 60,
-              shutdown: false,
-              restart_when_active: true,
-              reroute_audio: true,
-            },
-          );
-        }catch(error){
-          const message = String(error?.message || '');
-          const lowered = message.toLowerCase();
-          if (lowered.includes('already exists')){
-            const refreshed = await obs.call('GetInputList');
-            const refreshedInputs = Array.isArray(refreshed?.inputs) ? refreshed.inputs : [];
-            const refreshedMatch = findInputName(refreshedInputs, resolvedInputName);
-            if (refreshedMatch){
-              finalInputName = refreshedMatch.inputName;
-              await obs.call('SetInputSettings', {
-                inputName: finalInputName,
-                inputSettings: {
-                  url: playerUrl,
-                  width,
-                  height,
-                  fps: 60,
-                  shutdown: false,
-                  restart_when_active: true,
-                  reroute_audio: true,
-                },
-                overlay: false,
-              });
-            }else{
-              finalInputName = await createBrowserInput(
-                obs,
-                targetSceneName,
-                resolvedInputName,
-                refreshedInputs,
-                {
-                  url: playerUrl,
-                  width,
-                  height,
-                  fps: 60,
-                  shutdown: false,
-                  restart_when_active: true,
-                  reroute_audio: true,
-                },
-              );
-            }
-          }else{
-            throw error;
-          }
-        }
-      }else{
-        try{
-          await obs.call('SetInputSettings', {
-            inputName: finalInputName,
-            inputSettings: {
-              url: playerUrl,
-              width,
-              height,
-              fps: 60,
-              shutdown: false,
-              restart_when_active: true,
-              reroute_audio: true,
-            },
-            overlay: false,
-          });
-        }catch(error){
-          const message = String(error?.message || '').toLowerCase();
-          if (!message.includes('not an input')){
-            throw error;
-          }
-          const refreshed = await obs.call('GetInputList');
-          const refreshedInputs = Array.isArray(refreshed?.inputs) ? refreshed.inputs : [];
-          finalInputName = await createBrowserInput(
-            obs,
-            targetSceneName,
-            resolvedInputName,
-            refreshedInputs,
-            {
-              url: playerUrl,
-              width,
-              height,
-              fps: 60,
-              shutdown: false,
-              restart_when_active: true,
-              reroute_audio: true,
-            },
-          );
-        }
-      }
+      const finalInputName = await ensureBrowserInput(
+        obs,
+        targetSceneName,
+        resolvedInputName,
+        inputSettings,
+      );
+      await cleanupExtraInputs(obs, inputName, finalInputName);
 
       try{
         await obs.call('PressInputPropertiesButton', {
