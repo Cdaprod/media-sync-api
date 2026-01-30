@@ -1136,6 +1136,7 @@
   </div>
 
   <script src="js/obs-websocket.js"></script>
+  <script src="js/obs-push.js"></script>
   <script type="module" src="js/program_monitor_handoff.js"></script>
   <script>
     // -------------------------
@@ -1342,6 +1343,25 @@
       });
     }
 
+    function ensureObsPushHelperLoaded(){
+      if (typeof window.obsPushBrowserMedia === 'function') return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-obs-push]');
+        if (existing){
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error('OBS push helper failed to load')), { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'js/obs-push.js';
+        script.async = true;
+        script.dataset.obsPush = 'true';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('OBS push helper failed to load'));
+        document.head.appendChild(script);
+      });
+    }
+
     async function obsReplaceAssetMediaUrl({
       obsHost = '192.168.0.187',
       obsPort = 4455,
@@ -1355,6 +1375,7 @@
     }){
       if (!assetUrl) throw new Error('assetUrl is required');
       await ensureObsWebsocketLoaded();
+      await ensureObsPushHelperLoaded();
       if (typeof OBSWebSocket === 'undefined'){
         throw new Error('OBSWebSocket is not available. Load obs-websocket-js v5 before this script.');
       }
