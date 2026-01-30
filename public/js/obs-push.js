@@ -45,24 +45,51 @@
     return created.sceneItemId;
   }
 
-  async function setSceneBounds(obs, sceneName, sceneItemId, width, height, fit){
-    const boundsType = fit === 'contain' ? 'OBS_BOUNDS_SCALE_INNER' : 'OBS_BOUNDS_SCALE_OUTER';
+  async function snapSceneItemToCanvas(obs, sceneName, sceneItemId, mode){
+    const video = await obs.call('GetVideoSettings');
+    const baseW = Number(video?.baseWidth || 1920);
+    const baseH = Number(video?.baseHeight || 1080);
+
+    const transform = await obs.call('GetSceneItemTransform', { sceneName, sceneItemId });
+    const sceneTransform = transform?.sceneItemTransform || {};
+    const sourceW = Number(sceneTransform.sourceWidth || sceneTransform.boundsWidth || 0);
+    const sourceH = Number(sceneTransform.sourceHeight || sceneTransform.boundsHeight || 0);
+    const safeSourceW = sourceW > 0 ? sourceW : baseW;
+    const safeSourceH = sourceH > 0 ? sourceH : baseH;
+
+    const sx = baseW / safeSourceW;
+    const sy = baseH / safeSourceH;
+    const scale = mode === 'contain' ? Math.min(sx, sy) : Math.max(sx, sy);
+
     await obs.call('SetSceneItemTransform', {
       sceneName,
       sceneItemId,
       sceneItemTransform: {
-        positionX: width / 2,
-        positionY: height / 2,
-        rotation: 0,
-        scaleX: 1,
-        scaleY: 1,
-        alignment: 5,
-        boundsType,
-        boundsAlignment: 5,
-        boundsWidth: width,
-        boundsHeight: height,
+        cropLeft: 0,
+        cropRight: 0,
+        cropTop: 0,
+        cropBottom: 0,
+        boundsType: 'OBS_BOUNDS_NONE',
+        boundsAlignment: 0,
+        boundsWidth: 0,
+        boundsHeight: 0,
       },
     });
+
+    await obs.call('SetSceneItemTransform', {
+      sceneName,
+      sceneItemId,
+      sceneItemTransform: {
+        positionX: baseW / 2,
+        positionY: baseH / 2,
+        rotation: 0,
+        alignment: 5,
+        scaleX: scale,
+        scaleY: scale,
+      },
+    });
+
+    return { baseW, baseH, sourceW: safeSourceW, sourceH: safeSourceH, scale };
   }
 
   async function cleanupExtraInputs(obs, baseName, keepName){
@@ -167,11 +194,14 @@
       const inputList = await obs.call('GetInputList');
       const inputs = Array.isArray(inputList?.inputs) ? inputList.inputs : [];
       const resolvedInputName = resolveInputName(targetSceneName, inputName);
+      const video = await obs.call('GetVideoSettings');
+      const baseW = Number(video?.baseWidth || 1080);
+      const baseH = Number(video?.baseHeight || 1920);
       const playerUrl = buildPlayerUrl({ assetUrl, fit, muted });
       const inputSettings = {
         url: playerUrl,
-        width,
-        height,
+        width: baseW,
+        height: baseH,
         fps: 60,
         shutdown: false,
         restart_when_active: true,
@@ -196,7 +226,12 @@
       }
 
       const sceneItemId = await getSceneItemId(obs, targetSceneName, finalInputName);
-      await setSceneBounds(obs, targetSceneName, sceneItemId, width, height, fit);
+      await snapSceneItemToCanvas(
+        obs,
+        targetSceneName,
+        sceneItemId,
+        fit === 'contain' ? 'contain' : 'cover',
+      );
 
       if (ensureExclusiveScene){
         await removeSharedSceneItems(obs, finalInputName, targetSceneName);

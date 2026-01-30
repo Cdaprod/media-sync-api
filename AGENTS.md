@@ -547,3 +547,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-07)
 - The OBS player page is now served at `/player.html`, OBS transforms center on the canvas, and the helper sticks to a canonical input name while cleaning up `ASSET_MEDIA (n)` duplicates.
+
+### Latest Implementation Notes (2025-05-08)
+- OBS scene item transforms now snap to the actual canvas size via `GetVideoSettings`/`GetSceneItemTransform`, scaling to cover/contain without relying on hard-coded dimensions.
