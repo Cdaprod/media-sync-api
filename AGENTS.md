@@ -517,3 +517,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-04-27)
 - Explorer thumbnail sweeps now skip hidden list/grid targets to avoid double extraction, and the static explorer bundles obs-websocket-js locally with a loader to keep the Send to OBS action available on LAN-only hosts.
+
+### Latest Implementation Notes (2025-04-28)
+- The static explorer now resolves OBS input targets by name (including scene fallbacks and fuzzy matches) before sending URLs, reducing “specified source is not an input” errors.
