@@ -595,3 +595,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-23)
 - Explorer assets now use unified pointer handlers for tap/preview/long-press context menus, include drag-hover project assist on the brand toggle, and ship a shared context menu in static + Next.js explorers.
+
+### Latest Implementation Notes (2025-05-24)
+- Fixed Next.js explorer orientation inference typing with image/video guards and restored the static explorer topbar markup after context menu wiring.
