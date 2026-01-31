@@ -29,7 +29,7 @@ interface ExplorerAppProps {
 }
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
-const POINTER_THRESHOLD = 10;
+const POINTER_THRESHOLD = 8;
 const LONG_PRESS_MS = 480;
 
 const formatListValue = (value: string | string[] | null | undefined) => {
@@ -238,7 +238,7 @@ function useToastQueue() {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 3100);
     timeouts.current.push(timeout);
-  }, []);
+  }, [dragging, sidebarOpen]);
 
   useEffect(() => {
     return () => {
@@ -365,7 +365,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [uploadStatus, setUploadStatus] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [assetDragActive, setAssetDragActive] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
+  const dragPathsRef = useRef<string[]>([]);
 
   const [resolveProjectMode, setResolveProjectMode] = useState('current');
   const [resolveProjectName, setResolveProjectName] = useState('');
@@ -1056,6 +1058,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         if (!moved && (dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
           moved = true;
           clearTimer();
+          setDragging(true);
+          setAssetDragActive(true);
+          dragPathsRef.current = selected.has(item.relative_path)
+            ? Array.from(selected)
+            : [item.relative_path];
+          if (event.clientY <= 56) setTopbarHidden(false);
         }
       };
 
@@ -1064,7 +1072,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         clearTimer();
         event.currentTarget.releasePointerCapture(pointerId);
         pointerId = null;
-        if (moved) return;
+        if (moved) {
+          setDragging(false);
+          setAssetDragActive(false);
+          const dropEl = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.chip') as HTMLElement | null;
+          if (dropEl?.dataset?.project) {
+            const target = projects.find((proj) => (
+              proj.name === dropEl.dataset.project
+              && String(proj.source || '') === String(dropEl.dataset.source || '')
+            ));
+            if (target) void moveMediaPaths(dragPathsRef.current, target);
+          }
+          return;
+        }
         if (!activeProject) return;
         if (selected.has(item.relative_path)) openDrawer(item);
         else toggleSelected(item.relative_path);
@@ -1073,10 +1093,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const handlePointerCancel = () => {
         clearTimer();
         pointerId = null;
+        setDragging(false);
+        setAssetDragActive(false);
       };
 
       const handleContextMenu = (event: React.MouseEvent) => {
         event.preventDefault();
+        if (dragging) return;
         const selectedItems = selected.has(item.relative_path)
           ? Array.from(selected).map((path) => itemsByPath.get(path)).filter(Boolean)
           : [item];
@@ -1091,7 +1114,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onContextMenu: handleContextMenu,
       };
     },
-    [activeProject, itemsByPath, openContextMenu, openDrawer, selected, toggleSelected],
+    [activeProject, dragging, itemsByPath, moveMediaPaths, openContextMenu, openDrawer, projects, selected, toggleSelected],
   );
 
   const handlePreviewSelected = useCallback(() => {
@@ -1128,46 +1151,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [],
   );
 
-  const handleAssetDragStart = useCallback(
-    (item: MediaItem) => (event: React.DragEvent) => {
-      if (!activeProject) return;
-      setAssetDragActive(true);
-      const payload = {
-        project: activeProject.name,
-        source: activeProject.source,
-        paths: selected.has(item.relative_path)
-          ? Array.from(selected)
-          : [item.relative_path],
-      };
-      event.dataTransfer.setData('application/x-media-sync', JSON.stringify(payload));
-      const downloadUrl = resolveAssetUrl(item.download_url || item.stream_url);
-      if (downloadUrl) {
-        const filename = item.relative_path?.split('/').pop() || 'media';
-        event.dataTransfer.setData('DownloadURL', `application/octet-stream:${filename}:${downloadUrl}`);
-        event.dataTransfer.setData('text/uri-list', downloadUrl);
-      }
-      event.dataTransfer.effectAllowed = 'move';
-    },
-    [activeProject, resolveAssetUrl, selected, setAssetDragActive],
-  );
-
-  const handleProjectDrop = useCallback(
-    async (project: Project, event: React.DragEvent) => {
-      event.preventDefault();
-      setDragActive(false);
-      const raw = event.dataTransfer.getData('application/x-media-sync');
-      if (!raw) return;
-      try {
-        const payload = JSON.parse(raw) as { paths?: string[] };
-        const paths = payload.paths || [];
-        if (!paths.length) return;
-        await moveMediaPaths(paths, project);
-      } catch {
-        // ignore invalid payload
-      }
-    },
-    [moveMediaPaths],
-  );
+  const handleProjectDrop = useCallback(async (project: Project) => {
+    if (!dragging) return;
+    setDragging(false);
+    setAssetDragActive(false);
+    if (!dragPathsRef.current.length) return;
+    await moveMediaPaths(dragPathsRef.current, project);
+  }, [dragging, moveMediaPaths]);
 
   const pickUpload = useCallback(() => {
     const input = uploadInputRef.current;
@@ -1227,6 +1217,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
   }, [contextMenu]);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMove = (event: PointerEvent) => {
+      if (event.clientY <= 56) setTopbarHidden(false);
+    };
+    window.addEventListener('pointermove', handleMove);
+    return () => window.removeEventListener('pointermove', handleMove);
+  }, [dragging]);
 
   useEffect(() => {
     addToast('good', 'Boot', 'Loading sources + projects…');
@@ -1294,32 +1293,50 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const topbar = topbarRef.current;
     const reveal = topbarRevealRef.current;
     if (!topbar || !reveal) return;
+    const supportsHover = window.matchMedia('(hover: hover)').matches;
 
     const intent = createIntentController({
       onOpen: () => setTopbarHidden(false),
       onClose: () => setTopbarHidden(true),
-      closeDelay: 320,
+      closeDelay: 600,
     });
     topbarIntentRef.current = intent;
 
+    const hasOpenMenus = () => {
+      const actionsPanel = topbar.querySelector('.actions-panel');
+      const hasDropdown = Boolean(topbar.querySelector('details.dropdown[open]'));
+      return Boolean(actionsPanel?.classList.contains('open')) || hasDropdown;
+    };
+    const shouldKeepOpen = () => dragging || sidebarOpen || hasOpenMenus()
+      || topbar.contains(document.activeElement);
+
     const handleEnter = () => intent.scheduleOpen(0);
-    const handleLeave = () => intent.scheduleClose(280);
+    const handleLeave = () => {
+      if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
+    };
 
     topbar.addEventListener('pointerenter', handleEnter);
     topbar.addEventListener('pointerleave', handleLeave);
+    topbar.addEventListener('focusin', () => intent.setPinned(true));
+    topbar.addEventListener('focusout', () => {
+      intent.setPinned(false);
+      if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
+    });
     reveal.addEventListener('pointerenter', handleEnter);
     reveal.addEventListener('pointerleave', handleLeave);
     reveal.addEventListener('pointerdown', handleEnter);
+    reveal.addEventListener('pointermove', () => {
+      if (dragging) intent.scheduleOpen(0);
+    });
 
     const handleOutside = (event: PointerEvent) => {
       if (intent.isPinned()) return;
       if (topbar.contains(event.target as Node) || reveal.contains(event.target as Node)) return;
-      intent.scheduleClose(120);
+      if (!shouldKeepOpen()) intent.scheduleClose(120);
     };
     document.addEventListener('pointerdown', handleOutside);
 
     intent.setOpen(true);
-    intent.scheduleClose(1600);
 
     return () => {
       topbar.removeEventListener('pointerenter', handleEnter);
@@ -1666,13 +1683,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     key={`${project.source}-${project.name}`}
                     className={`chip ${activeProject?.name === project.name ? 'active' : ''}`}
                     title={project.instructions || 'Browse this project'}
+                    data-project={project.name}
+                    data-source={project.source || ''}
                     onClick={() => selectProject(project)}
                     role="button"
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = 'move';
-                    }}
-                    onDrop={(event) => handleProjectDrop(project, event)}
+                    onPointerUp={() => void handleProjectDrop(project)}
                   >
                     <span className="dot" aria-hidden="true"></span>
                     <span className="name">{project.name}</span>
@@ -1925,9 +1940,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       data-kind={kind}
                       data-orient={orient}
                       {...pointerHandlers}
-                      draggable={canSelect}
-                      onDragStart={canSelect ? handleAssetDragStart(item) : undefined}
-                      onDragEnd={() => setAssetDragActive(false)}
                     >
                       <div
                         className="thumb"
@@ -2004,9 +2016,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       className="row"
                       key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
                       {...pointerHandlers}
-                      draggable={canSelect}
-                      onDragStart={canSelect ? handleAssetDragStart(item) : undefined}
-                      onDragEnd={() => setAssetDragActive(false)}
                     >
                       <div
                         className="mini"

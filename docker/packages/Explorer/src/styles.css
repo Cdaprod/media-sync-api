@@ -93,7 +93,7 @@ code { font-family: var(--mono); }
   top: 0;
   left: 0;
   right: 0;
-  height: 32px;
+  height: 56px;
   z-index: 45;
   pointer-events: auto;
 }
@@ -537,10 +537,8 @@ select.control{
 /* Grid/List */
 .grid{
   padding: 14px;
-  display:grid;
-  grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
-  gap: var(--grid-gap);
-  align-items: start;
+  column-count: var(--grid-cols);
+  column-gap: var(--grid-gap);
 }
 .list{
   padding: 10px 12px;
@@ -550,6 +548,10 @@ select.control{
 }
 
 .asset{
+  display: inline-block;
+  width: 100%;
+  break-inside: avoid;
+  margin-bottom: var(--grid-gap);
   border: 1px solid var(--card-border);
   background: var(--card-bg);
   border-radius: var(--radius2);

@@ -38,7 +38,7 @@ def test_explorer_grid_responsive_rules_and_orientation_hooks():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert '--grid-cols' in html
     assert '--grid-gap' in html
-    assert 'grid-template-columns: repeat(var(--grid-cols)' in html
+    assert 'column-count: var(--grid-cols)' in html
     assert 'dataset.kind' in html
     assert 'dataset.orient' in html
     assert 'updateCardOrientation' in html

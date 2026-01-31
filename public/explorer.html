@@ -106,7 +106,7 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 32px;
+      height: 56px;
       z-index: 45;
       pointer-events: auto;
     }
@@ -650,10 +650,8 @@
     /* Grid/List */
     .grid{
       padding: 14px;
-      display:grid;
-      grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
-      gap: var(--grid-gap);
-      align-items: start;
+      column-count: var(--grid-cols);
+      column-gap: var(--grid-gap);
     }
     .list{
       padding: 10px 12px;
@@ -663,6 +661,10 @@
     }
 
     .asset{
+      display: inline-block;
+      width: 100%;
+      break-inside: avoid;
+      margin-bottom: var(--grid-gap);
       border: 1px solid var(--card-border);
       background: var(--card-bg);
       border-radius: var(--radius2);
@@ -1405,6 +1407,10 @@
       inspectorOpen: false,
       dragActive: false,
       assetDragActive: false,
+      dragging: false,
+      dragPaths: [],
+      dragPointerId: null,
+      dragTarget: null,
     };
 
     const itemsByPath = new Map();
@@ -1791,6 +1797,7 @@
         scheduleClose,
         setPinned,
         isPinned: () => pinned,
+        clearTimers,
       };
     }
 
@@ -1799,37 +1806,57 @@
       const reveal = el('topbarReveal');
       const search = el('q');
       if (!topbar || !reveal) return;
+      const supportsHover = window.matchMedia('(hover: hover)').matches;
 
       const intent = createIntentController({
         onOpen: () => document.body.classList.remove('topbar-hidden'),
         onClose: () => document.body.classList.add('topbar-hidden'),
-        closeDelay: 320,
+        closeDelay: 600,
       });
 
+      function hasOpenMenus(){
+        const actionsPanel = el('actionsPanel');
+        const hasDropdown = !!document.querySelector('details.dropdown[open]');
+        return !!actionsPanel?.classList.contains('open') || hasDropdown;
+      }
+
+      function shouldKeepOpen(){
+        return ui.dragging || ui.sidebarOpen || hasOpenMenus() || topbar.contains(document.activeElement);
+      }
+
       const handleEnter = () => intent.scheduleOpen(0);
-      const handleLeave = () => intent.scheduleClose(280);
+      const handleLeave = () => {
+        if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
+      };
       topbar.addEventListener('pointerenter', handleEnter);
       topbar.addEventListener('pointerleave', handleLeave);
+      topbar.addEventListener('focusin', () => intent.setPinned(true));
+      topbar.addEventListener('focusout', () => {
+        intent.setPinned(false);
+        if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
+      });
       reveal.addEventListener('pointerenter', handleEnter);
       reveal.addEventListener('pointerleave', handleLeave);
       reveal.addEventListener('pointerdown', handleEnter);
+      reveal.addEventListener('pointermove', () => {
+        if (ui.dragging) intent.scheduleOpen(0);
+      });
 
       document.addEventListener('pointerdown', (event) => {
         if (intent.isPinned()) return;
         if (topbar.contains(event.target) || reveal.contains(event.target)) return;
-        intent.scheduleClose(120);
+        if (!shouldKeepOpen()) intent.scheduleClose(120);
       });
 
       if (search){
         search.addEventListener('focusin', () => intent.setPinned(true));
         search.addEventListener('focusout', () => {
           intent.setPinned(false);
-          intent.scheduleClose(360);
+          if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
         });
       }
 
       intent.setOpen(true);
-      intent.scheduleClose(1600);
     }
 
     function wireDropdownIntents(){
@@ -1867,8 +1894,8 @@
         onClose: () => {
           if (ui.assetDragActive) setSidebarOpen(false);
         },
-        openDelay: 320,
-        closeDelay: 260,
+        openDelay: 360,
+        closeDelay: 400,
       });
 
       brand.addEventListener('pointerenter', () => {
@@ -1970,7 +1997,7 @@
     }
 
     function wireAssetPointerHandlers(target, item){
-      const POINTER_THRESHOLD = 10;
+      const POINTER_THRESHOLD = 8;
       const LONG_PRESS_MS = 480;
       let pointerId = null;
       let startX = 0;
@@ -2011,6 +2038,13 @@
         if (!moved && (dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD){
           moved = true;
           clearLongPress();
+          ui.dragging = true;
+          ui.dragPointerId = pointerId;
+          ui.dragPaths = state.selected.has(item.relative_path)
+            ? Array.from(state.selected)
+            : [item.relative_path];
+          ui.assetDragActive = true;
+          if (event.clientY <= 56) document.body.classList.remove('topbar-hidden');
         }
       });
 
@@ -2019,7 +2053,19 @@
         clearLongPress();
         target.releasePointerCapture(pointerId);
         pointerId = null;
-        if (moved) return;
+        if (moved){
+          ui.dragging = false;
+          ui.assetDragActive = false;
+          const dropEl = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.chip');
+          if (dropEl?.dataset?.project){
+            const target = state.projects.find((proj) => (
+              proj.name === dropEl.dataset.project && String(proj.source || '') === String(dropEl.dataset.source || '')
+            ));
+            if (target) moveMedia(ui.dragPaths, target);
+          }
+          ui.dragTarget = null;
+          return;
+        }
         if (!state.activeProject) return;
         if (state.selected.has(item.relative_path)) openDrawer(item);
         else toggleSelected(item.relative_path);
@@ -2028,6 +2074,8 @@
       target.addEventListener('pointercancel', () => {
         clearLongPress();
         pointerId = null;
+        ui.dragging = false;
+        ui.assetDragActive = false;
       });
 
       target.addEventListener('contextmenu', (event) => {
@@ -2037,18 +2085,6 @@
           : [item];
         openContextMenu({ clientX: event.clientX, clientY: event.clientY }, selectedItems);
       });
-    }
-
-    function attachDragData(event, item){
-      if (!item || !event.dataTransfer) return;
-      event.dataTransfer.setData('application/x-media-sync', dragPayload(item));
-      const downloadUrl = toAbsoluteUrl(item.download_url || item.stream_url || '');
-      if (downloadUrl){
-        const filename = item.relative_path?.split('/').pop() || 'media';
-        event.dataTransfer.setData('DownloadURL', `application/octet-stream:${filename}:${downloadUrl}`);
-        event.dataTransfer.setData('text/uri-list', downloadUrl);
-      }
-      event.dataTransfer.effectAllowed = 'move';
     }
 
     function guessKind(item){
@@ -3012,23 +3048,20 @@
         const chip = document.createElement('div');
         chip.className = 'chip';
         if (state.activeProject && state.activeProject.name === p.name) chip.classList.add('active');
+        chip.dataset.project = p.name;
+        chip.dataset.source = p.source || '';
         chip.title = p.instructions || 'Browse this project';
         chip.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="name">${escapeHtml(p.name)}</span>`;
         chip.addEventListener('click', () => selectProject(p));
-        chip.addEventListener('dragover', (event) => {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
+        chip.addEventListener('pointerenter', () => {
+          if (!ui.dragging) return;
+          chip.classList.add('active');
+          ui.dragTarget = p;
         });
-        chip.addEventListener('drop', async (event) => {
-          event.preventDefault();
-          const raw = event.dataTransfer.getData('application/x-media-sync');
-          if (!raw) return;
-          try{
-            const data = JSON.parse(raw);
-            const paths = Array.isArray(data.paths) ? data.paths : [];
-            if (!paths.length) return;
-            await moveMedia(paths, p);
-          }catch{}
+        chip.addEventListener('pointerleave', () => {
+          if (!ui.dragging) return;
+          chip.classList.remove('active');
+          if (ui.dragTarget?.name === p.name) ui.dragTarget = null;
         });
         root.appendChild(chip);
       }
@@ -3092,10 +3125,7 @@
         const card = document.createElement('div');
         card.className = 'asset';
         if (canSelect){
-          card.setAttribute('draggable', 'true');
-          card.addEventListener('dragstart', (event) => attachDragData(event, it));
-          card.addEventListener('dragstart', () => { ui.assetDragActive = true; });
-          card.addEventListener('dragend', () => { ui.assetDragActive = false; });
+          card.removeAttribute('draggable');
         }
         if (state.selected.has(it.relative_path)) card.classList.add('selected', 'is-selected');
         card.dataset.streamUrl = it.stream_url || it.streamUrl || '';
@@ -3149,10 +3179,7 @@
         const row = document.createElement('div');
         row.className = 'row';
         if (canSelect){
-          row.setAttribute('draggable', 'true');
-          row.addEventListener('dragstart', (event) => attachDragData(event, it));
-          row.addEventListener('dragstart', () => { ui.assetDragActive = true; });
-          row.addEventListener('dragend', () => { ui.assetDragActive = false; });
+          row.removeAttribute('draggable');
         }
         if (state.selected.has(it.relative_path)) row.classList.add('selected', 'is-selected');
         row.dataset.streamUrl = it.stream_url || it.streamUrl || '';
