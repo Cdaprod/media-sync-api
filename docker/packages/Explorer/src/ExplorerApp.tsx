@@ -238,7 +238,7 @@ function useToastQueue() {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 3100);
     timeouts.current.push(timeout);
-  }, [dragging, sidebarOpen]);
+  }, []);
 
   useEffect(() => {
     return () => {

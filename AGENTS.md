@@ -604,3 +604,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-26)
 - Explorer drag/drop now resolves drop targets via pointer position instead of HTML5 drag events, with updated top-edge hotzones and thresholds.
+
+### Latest Implementation Notes (2025-05-27)
+- Fixed Next.js Explorer toast hook dependencies to avoid build-time scope errors.
