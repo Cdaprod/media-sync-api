@@ -97,13 +97,13 @@
         rotation: 0,
         scaleX: 1,
         scaleY: 1,
-        alignment: 5,
-        boundsAlignment: 5,
+        alignment: 0,
+        boundsAlignment: 0,
         boundsType,
         boundsWidth: baseW,
         boundsHeight: baseH,
-        positionX: baseW / 2,
-        positionY: baseH / 2,
+        positionX: 0,
+        positionY: 0,
       },
     });
 

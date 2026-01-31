@@ -562,3 +562,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-12)
 - OBS browser-source push now builds player URLs from the media origin, uses a strict scene item lookup before creation, and only removes numbered duplicate inputs during cleanup.
+
+### Latest Implementation Notes (2025-05-13)
+- OBS browser-source transforms now anchor at the top-left with bounds alignment reset to avoid off-center positioning.
