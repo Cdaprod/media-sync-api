@@ -568,3 +568,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-14)
 - OBS browser-source transforms now use explicit top-left alignment constants to prevent center-origin offsets in OBS scenes.
+
+### Latest Implementation Notes (2025-05-15)
+- OBS browser-source transforms now stretch to the canvas so the player handles cover/contain while edges align to the scene bounds.

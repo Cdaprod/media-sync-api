@@ -85,7 +85,8 @@
       });
     }
 
-    const boundsType = fit === 'contain' ? 'OBS_BOUNDS_SCALE_INNER' : 'OBS_BOUNDS_SCALE_OUTER';
+    // Stretch the browser source to the canvas; /player.html handles object-fit internally.
+    const boundsType = 'OBS_BOUNDS_STRETCH';
 
     await obs.call('SetSceneItemTransform', {
       sceneName,
