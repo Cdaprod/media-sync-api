@@ -32,3 +32,29 @@ def test_program_monitor_handoff_ordering_and_url_resolution():
     assert 'dataset.project' in module_text
     assert 'dataset.relative' in module_text
     assert '/media/' in module_text
+
+
+def test_explorer_grid_responsive_rules_and_orientation_hooks():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '--grid-cols' in html
+    assert '--grid-gap' in html
+    assert 'grid-template-columns: repeat(var(--grid-cols)' in html
+    assert 'dataset.kind' in html
+    assert 'dataset.orient' in html
+    assert 'updateCardOrientation' in html
+
+
+def test_explorer_topbar_intent_controller():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'topbar-reveal' in html
+    assert 'createIntentController' in html
+    assert 'wireTopbarIntent' in html
+    assert 'wireDropdownIntents' in html
+
+
+def test_explorer_context_menu_and_drag_assist():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'context-menu' in html
+    assert 'contextMenu' in html
+    assert 'wireProjectDragAssist' in html
+    assert 'openContextMenu' in html
