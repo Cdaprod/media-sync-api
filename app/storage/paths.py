@@ -13,6 +13,32 @@ from typing import Iterable
 
 PROJECT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 PROJECT_SEQUENCE_PATTERN = re.compile(r"^P(?P<num>\d+)-(?P<label>.+)$")
+THUMBNAIL_DIR_NAMES = {
+    ".thumbnails",
+    ".thumbs",
+    "_thumbnails",
+    "_thumbs",
+    "thumbnails",
+    "thumbs",
+}
+
+
+def is_thumbnail_path(path: str | Path) -> bool:
+    """Return True when a path looks like a generated thumbnail asset."""
+
+    candidate = Path(path)
+    for part in candidate.parts:
+        if part.lower() in THUMBNAIL_DIR_NAMES:
+            return True
+    name = candidate.name.lower()
+    if any(marker in name for marker in (".thumb.", ".thumbnail.")):
+        return True
+    stem = candidate.stem.lower()
+    if stem.startswith(("thumb_", "thumbnail_")):
+        return True
+    if stem.endswith(("_thumb", "-thumb", "_thumbnail", "-thumbnail")):
+        return True
+    return False
 
 
 def validate_project_name(name: str) -> str:

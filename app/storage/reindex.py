@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from .dedupe import compute_sha256_from_path, ensure_db, record_file_hash, get_recorded_paths, remove_file_record
 from .index import append_file_entry, load_index, remove_entries
 from .metadata import ensure_metadata, remove_metadata
-from .paths import relpath_posix
+from .paths import is_thumbnail_path, relpath_posix
 
 
 INGEST_DIR = "ingest/originals"
@@ -149,7 +149,9 @@ def _is_within_ingest(path: Path, ingest_path: Path) -> bool:
 
 
 def _is_supported_media(path: Path) -> bool:
-    return path.suffix.lower() in ALLOWED_MEDIA_EXTENSIONS
+    if path.suffix.lower() not in ALLOWED_MEDIA_EXTENSIONS:
+        return False
+    return not is_thumbnail_path(path)
 
 
 def _unsupported_entries(existing_paths: Iterable[str | None]) -> set[str]:

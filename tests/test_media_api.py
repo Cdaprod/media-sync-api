@@ -99,6 +99,24 @@ def test_reindex_skips_non_media_files(client: TestClient, env_settings: Path) -
     assert not listing.json()["media"]
 
 
+def test_reindex_skips_thumbnail_assets(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    thumbnail = ingest / "clip.thumb.jpg"
+    thumbnail.write_bytes(b"thumb-bytes")
+
+    response = client.post(f"/api/projects/{project_name}/reindex")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["indexed"] == 0
+    assert payload["skipped_unsupported"] == 1
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    assert not listing.json()["media"]
+
+
 def test_auto_organize_loose_files(client: TestClient, env_settings: Path) -> None:
     loose_file = env_settings / "loose.mov"
     loose_file.write_bytes(b"orphaned")

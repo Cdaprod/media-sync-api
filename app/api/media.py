@@ -31,6 +31,7 @@ from app.storage.metadata import (
 )
 from app.storage.paths import (
     ensure_subdirs,
+    is_thumbnail_path,
     project_path,
     relpath_posix,
     safe_filename,
@@ -143,6 +144,8 @@ async def list_media(project_name: str, source: str | None = None):
                 "skipping_invalid_media_path",
                 extra={"project": resolved.name, "path": relative_path},
             )
+            continue
+        if is_thumbnail_path(Path(safe_relative)):
             continue
         item = dict(entry)
         item["relative_path"] = safe_relative
