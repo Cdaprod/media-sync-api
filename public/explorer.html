@@ -182,6 +182,8 @@
     }
     .search input{
       width: 100%;
+      flex: 1;
+      min-width: 0;
       border: none;
       outline: none;
       background: transparent;
@@ -189,6 +191,31 @@
       font-size: 13px;
     }
     .search input::placeholder{ color: var(--muted2); }
+    .search-toolbar{
+      display:flex;
+      align-items:center;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .control{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      min-height: 28px;
+    }
+    select.control{
+      appearance: none;
+      padding-right: 26px;
+      background-image: linear-gradient(45deg, transparent 50%, rgba(255,255,255,0.6) 50%),
+        linear-gradient(135deg, rgba(255,255,255,0.6) 50%, transparent 50%);
+      background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
 
     .pillbar{
       display:flex;
@@ -236,10 +263,13 @@
     .btn[disabled]{ opacity: 0.55; cursor: not-allowed; transform: none; }
 
     .seg{
-      display:flex;
+      display:inline-flex;
+      flex: 0 0 auto;
+      width: max-content;
+      max-width: 100%;
       border: 1px solid var(--border);
       border-radius: 999px;
-      overflow:hidden;
+      overflow: hidden;
       background: rgba(255,255,255,0.05);
     }
     .seg button{
@@ -252,6 +282,25 @@
     }
     .seg button.active{
       background: rgba(255,255,255,0.10);
+      color: var(--text);
+    }
+    .action-controls{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .action-controls .control{
+      min-width: 140px;
+    }
+    .toggle-btn{
+      padding: 6px 10px;
+      font-size: 11px;
+    }
+    .toggle-btn.is-on{
+      border-color: rgba(124,58,237,0.45);
+      background: rgba(124,58,237,0.18);
       color: var(--text);
     }
 
@@ -866,6 +915,9 @@
       .search{ max-width: 200px; min-width: 120px; }
       .btn{ padding: 7px 10px; font-size:11px; }
       .seg button{ padding: 7px 9px; font-size:11px; }
+      .search-toolbar .control{ padding: 5px 8px; font-size:11px; }
+      .action-controls .control{ min-width: 120px; }
+      .toggle-btn{ padding: 6px 9px; font-size:11px; }
       .grid{ gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
       .asset .title{ font-size: 11px; }
       .section-h{ padding: 12px 12px 9px; }
@@ -931,6 +983,16 @@
             <div class="search" role="search">
               <span class="kbd">⌘K</span>
               <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
+              <div class="search-toolbar" aria-label="Search filters">
+                <select id="typeFilter" class="control" aria-label="Filter by media type">
+                  <option value="all">All types</option>
+                  <option value="video">Video</option>
+                  <option value="image">Image</option>
+                  <option value="audio">Audio</option>
+                  <option value="overlay" id="typeOptionOverlay">Overlay</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </div>
             </div>
             <button id="actionsToggle" class="btn" type="button" aria-expanded="false">Actions ▾</button>
           </div>
@@ -938,6 +1000,21 @@
             <div class="seg" aria-label="View mode">
               <button id="viewGrid" class="active" type="button">Grid</button>
               <button id="viewList" type="button">List</button>
+            </div>
+
+            <div class="action-controls" aria-label="Sort and quick filters">
+              <select id="sortFilter" class="control" aria-label="Sort media">
+                <option value="newest">Sort: Newest</option>
+                <option value="oldest">Sort: Oldest</option>
+                <option value="name-asc">Sort: Name A→Z</option>
+                <option value="name-desc">Sort: Name Z→A</option>
+                <option value="size-desc" id="sortOptionSizeDesc">Sort: Size big→small</option>
+                <option value="size-asc" id="sortOptionSizeAsc">Sort: Size small→big</option>
+              </select>
+              <div class="pillbar">
+                <button id="toggleSelectedOnly" class="btn toggle-btn" type="button">Selected only</button>
+                <button id="toggleUntaggedOnly" class="btn toggle-btn" type="button">Untagged only</button>
+              </div>
             </div>
 
             <div class="pillbar">
@@ -1153,8 +1230,19 @@
       mediaScope: 'project', // project|all
       view: 'grid',          // grid|list
       q: '',
+      filters: {
+        type: 'all',
+        sort: 'newest',
+        selectedOnly: false,
+        untaggedOnly: false,
+      },
       selected: new Set(),   // relative_path
       focused: null,         // item
+      mediaMeta: {
+        types: new Set(),
+        hasTags: false,
+        hasSize: false,
+      },
     };
 
     const ui = {
@@ -1165,6 +1253,7 @@
 
     const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
     const THUMB_MAX_WORKERS = 2;
+    const PREFS_KEY = 'media-sync-explorer-filters-v1';
     const thumbCache = new Map();
     const thumbPending = new Set();
     const thumbQueue = [];
@@ -1307,6 +1396,48 @@
         if (delta !== 0) return delta;
         return String(b.relative_path || '').localeCompare(String(a.relative_path || ''));
       });
+    }
+
+    function sortMediaItems(items, sortKey, hasSize){
+      const list = items.slice();
+      const nameCompare = (a, b) => String(a.relative_path || '').localeCompare(String(b.relative_path || ''));
+      const sizeValue = (item) => {
+        const value = Number(item.size);
+        return Number.isFinite(value) ? value : null;
+      };
+      const sortNewest = () => list.sort((a, b) => {
+        const delta = itemTimestamp(b) - itemTimestamp(a);
+        if (delta !== 0) return delta;
+        return nameCompare(a, b);
+      });
+
+      if (sortKey === 'oldest'){
+        return list.sort((a, b) => {
+          const delta = itemTimestamp(a) - itemTimestamp(b);
+          if (delta !== 0) return delta;
+          return nameCompare(a, b);
+        });
+      }
+      if (sortKey === 'name-asc'){
+        return list.sort(nameCompare);
+      }
+      if (sortKey === 'name-desc'){
+        return list.sort((a, b) => nameCompare(b, a));
+      }
+      if ((sortKey === 'size-desc' || sortKey === 'size-asc') && hasSize){
+        const direction = sortKey === 'size-desc' ? -1 : 1;
+        return list.sort((a, b) => {
+          const aSize = sizeValue(a);
+          const bSize = sizeValue(b);
+          if (aSize == null && bSize == null) return nameCompare(a, b);
+          if (aSize == null) return 1;
+          if (bSize == null) return -1;
+          const delta = (aSize - bSize) * direction;
+          if (delta !== 0) return delta;
+          return nameCompare(a, b);
+        });
+      }
+      return sortNewest();
     }
 
     function projectLabel(item){
@@ -1506,6 +1637,128 @@
         .filter(tag => tag.length > 0);
     }
 
+    function normalizeTagList(value){
+      if (!value) return [];
+      if (Array.isArray(value)) return value.filter(Boolean);
+      return String(value)
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+    }
+
+    function mediaType(item){
+      const raw = (item.kind || item.type || '').toLowerCase();
+      if (raw.includes('overlay')) return 'overlay';
+      if (['video', 'image', 'audio'].includes(raw)) return raw;
+      if (raw) return 'unknown';
+      const p = (item.relative_path || '').toLowerCase();
+      if (/\.(mp4|mov|mkv|webm|m4v)$/.test(p)) return 'video';
+      if (/\.(jpg|jpeg|png|gif|webp|heic)$/.test(p)) return 'image';
+      if (/\.(mp3|wav|m4a|aac|flac)$/.test(p)) return 'audio';
+      return 'unknown';
+    }
+
+    function collectMediaMeta(items){
+      const types = new Set();
+      let hasTags = false;
+      let hasSize = false;
+      for (const item of items){
+        types.add(mediaType(item));
+        if (!hasTags && normalizeTagList(item.tags).length > 0) hasTags = true;
+        if (!hasSize && Number.isFinite(Number(item.size))) hasSize = true;
+      }
+      return { types, hasTags, hasSize };
+    }
+
+    function loadFilterPrefs(){
+      try{
+        const raw = window.localStorage.getItem(PREFS_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object'){
+          state.filters.type = parsed.type || state.filters.type;
+          state.filters.sort = parsed.sort || state.filters.sort;
+          state.filters.selectedOnly = Boolean(parsed.selectedOnly);
+          state.filters.untaggedOnly = Boolean(parsed.untaggedOnly);
+        }
+      }catch{}
+    }
+
+    function persistFilterPrefs(){
+      try{
+        window.localStorage.setItem(PREFS_KEY, JSON.stringify(state.filters));
+      }catch{}
+    }
+
+    function reconcileFilters(){
+      const meta = state.mediaMeta;
+      const hasOverlay = meta.types.has('overlay');
+      const hasSize = meta.hasSize;
+      const hasTags = meta.hasTags;
+
+      const overlayOption = el('typeOptionOverlay');
+      if (overlayOption){
+        overlayOption.disabled = !hasOverlay;
+        overlayOption.hidden = !hasOverlay;
+      }
+      if (state.filters.type === 'overlay' && !hasOverlay){
+        state.filters.type = 'all';
+      }
+
+      const sortSizeDesc = el('sortOptionSizeDesc');
+      const sortSizeAsc = el('sortOptionSizeAsc');
+      if (sortSizeDesc) sortSizeDesc.disabled = !hasSize;
+      if (sortSizeAsc) sortSizeAsc.disabled = !hasSize;
+      if ((state.filters.sort === 'size-desc' || state.filters.sort === 'size-asc') && !hasSize){
+        state.filters.sort = 'newest';
+      }
+
+      if (!hasTags && state.filters.untaggedOnly){
+        state.filters.untaggedOnly = false;
+      }
+
+      const typeSelect = el('typeFilter');
+      if (typeSelect) typeSelect.value = state.filters.type;
+      const sortSelect = el('sortFilter');
+      if (sortSelect) sortSelect.value = state.filters.sort;
+
+      setToggleState('toggleSelectedOnly', state.filters.selectedOnly);
+      setToggleState('toggleUntaggedOnly', state.filters.untaggedOnly);
+      if (!hasTags){
+        const toggle = el('toggleUntaggedOnly');
+        if (toggle){
+          toggle.disabled = true;
+          toggle.title = 'No tagged items yet';
+        }
+      }else{
+        const toggle = el('toggleUntaggedOnly');
+        if (toggle){
+          toggle.disabled = false;
+          toggle.title = '';
+        }
+      }
+    }
+
+    function updateMediaMeta(){
+      state.mediaMeta = collectMediaMeta(state.media);
+      reconcileFilters();
+      persistFilterPrefs();
+    }
+
+    function setToggleState(id, active){
+      const button = el(id);
+      if (!button) return;
+      button.classList.toggle('is-on', active);
+    }
+
+    function setFilterState(next){
+      state.filters = { ...state.filters, ...next };
+      reconcileFilters();
+      persistFilterPrefs();
+      renderMedia();
+      updateTopCounts();
+    }
+
     function updateTopCounts(){
       el('projCount').textContent = `${state.projects.length} total`;
       const name = state.activeProject?.name || (state.mediaScope === 'all' ? 'all projects' : 'no project');
@@ -1518,8 +1771,17 @@
 
     function filteredMedia(){
       const q = state.q.trim().toLowerCase();
-      if (!q) return state.media.slice();
-      return state.media.filter(it => (it.relative_path || '').toLowerCase().includes(q));
+      const { type, selectedOnly, untaggedOnly } = state.filters;
+      const hasTags = state.mediaMeta.hasTags;
+      let items = state.media.filter((it) => {
+        if (q && !(it.relative_path || '').toLowerCase().includes(q)) return false;
+        if (type !== 'all' && mediaType(it) !== type) return false;
+        if (selectedOnly && !state.selected.has(it.relative_path)) return false;
+        if (untaggedOnly && hasTags && normalizeTagList(it.tags).length > 0) return false;
+        return true;
+      });
+      items = sortMediaItems(items, state.filters.sort, state.mediaMeta.hasSize);
+      return items;
     }
 
     function getVisibleMediaContainer(){
@@ -2129,6 +2391,7 @@
       if (!state.activeProject){
         state.media = [];
         state.mediaScope = 'project';
+        updateMediaMeta();
         renderMedia();
         updateTopCounts();
         return;
@@ -2141,6 +2404,7 @@
         state.mediaScope = 'project';
         const items = Array.isArray(payload.media) ? payload.media : [];
         state.media = sortMediaByRecent(items);
+        updateMediaMeta();
         // clear selection if selected files disappeared
         const existing = new Set(state.media.map(m => m.relative_path));
         for (const s of Array.from(state.selected)){
@@ -2161,6 +2425,7 @@
       const items = [];
       if (!state.projects.length){
         state.media = [];
+        updateMediaMeta();
         renderMedia();
         updateTopCounts();
         updateSelectionUI();
@@ -2185,6 +2450,7 @@
         }
       }
       state.media = sortMediaByRecent(items);
+      updateMediaMeta();
       renderMedia();
       updateTopCounts();
       updateSelectionUI();
@@ -2762,6 +3028,21 @@
       updateTopCounts();
     });
 
+    el('typeFilter').addEventListener('change', (e) => {
+      setFilterState({ type: e.target.value });
+    });
+    el('sortFilter').addEventListener('change', (e) => {
+      setFilterState({ sort: e.target.value });
+    });
+    el('toggleSelectedOnly').addEventListener('click', () => {
+      setFilterState({ selectedOnly: !state.filters.selectedOnly });
+    });
+    el('toggleUntaggedOnly').addEventListener('click', () => {
+      const target = el('toggleUntaggedOnly');
+      if (target && target.disabled) return;
+      setFilterState({ untaggedOnly: !state.filters.untaggedOnly });
+    });
+
     el('batchTagInput').addEventListener('input', updateTagButtons);
     el('drawerTagInput').addEventListener('input', updateTagButtons);
 
@@ -2887,6 +3168,8 @@
 
     // Boot
     document.addEventListener('DOMContentLoaded', async () => {
+      loadFilterPrefs();
+      reconcileFilters();
       syncSidebarMode();
       window.matchMedia('(max-width: 860px)').addEventListener('change', () => {
         syncSidebarMode();

@@ -4,13 +4,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createApiClient } from './api';
 import {
+  collectMediaMeta,
   extractAiTags,
   extractTags,
   filterMedia,
   pruneSelection,
+  sortMedia,
   sortMediaByRecent,
   toggleSelection,
 } from './state';
+import type { MediaMeta, MediaTypeFilter, SortKey } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
 import {
   copyTextWithFallback,
@@ -57,6 +60,7 @@ const buildThumbFallback = (label: string) => {
 
 const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
 const THUMB_MAX_WORKERS = 2;
+const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 
 const getThumbCacheKey = (item: MediaItem) => {
   const project = item.project_name || item.project || '';
@@ -233,6 +237,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [mediaScope, setMediaScope] = useState<'project' | 'all'>('project');
   const [view, setView] = useState<ExplorerView>(DEFAULT_VIEW);
   const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<MediaTypeFilter>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
+  const [selectedOnly, setSelectedOnly] = useState(false);
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -269,7 +277,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const thumbSweepTimerRef = useRef<number | null>(null);
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
 
-  const filteredMedia = useMemo(() => filterMedia(media, query), [media, query]);
+  const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
+  const filteredMedia = useMemo(() => {
+    const filtered = filterMedia(
+      media,
+      {
+        query,
+        type: typeFilter,
+        selectedOnly,
+        untaggedOnly,
+        selected,
+      },
+      mediaMeta,
+    );
+    return sortMedia(filtered, sortKey, mediaMeta);
+  }, [media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
 
@@ -303,6 +325,46 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setSidebarOpen(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(FILTER_PREFS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        setTypeFilter((parsed.type as MediaTypeFilter) || 'all');
+        setSortKey((parsed.sort as SortKey) || 'newest');
+        setSelectedOnly(Boolean(parsed.selectedOnly));
+        setUntaggedOnly(Boolean(parsed.untaggedOnly));
+      }
+    } catch {
+      // ignore malformed prefs
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const payload = {
+      type: typeFilter,
+      sort: sortKey,
+      selectedOnly,
+      untaggedOnly,
+    };
+    window.localStorage.setItem(FILTER_PREFS_KEY, JSON.stringify(payload));
+  }, [typeFilter, sortKey, selectedOnly, untaggedOnly]);
+
+  useEffect(() => {
+    if (typeFilter === 'overlay' && !mediaMeta.types.has('overlay')) {
+      setTypeFilter('all');
+    }
+    if (!mediaMeta.hasTags && untaggedOnly) {
+      setUntaggedOnly(false);
+    }
+    if (!mediaMeta.hasSize && (sortKey === 'size-desc' || sortKey === 'size-asc')) {
+      setSortKey('newest');
+    }
+  }, [mediaMeta, typeFilter, untaggedOnly, sortKey]);
 
   const loadSources = useCallback(async () => {
     try {
@@ -939,6 +1001,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />
+                <div className="search-toolbar" aria-label="Search filters">
+                  <select
+                    className="control"
+                    aria-label="Filter by media type"
+                    value={typeFilter}
+                    onChange={(event) => setTypeFilter(event.target.value as MediaTypeFilter)}
+                  >
+                    <option value="all">All types</option>
+                    <option value="video">Video</option>
+                    <option value="image">Image</option>
+                    <option value="audio">Audio</option>
+                    <option value="overlay" disabled={!mediaMeta.types.has('overlay')} hidden={!mediaMeta.types.has('overlay')}>
+                      Overlay
+                    </option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </div>
               </div>
               <button
                 className="btn actions-toggle"
@@ -965,6 +1044,44 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 >
                   List
                 </button>
+              </div>
+
+              <div className="action-controls" aria-label="Sort and quick filters">
+                <select
+                  className="control"
+                  aria-label="Sort media"
+                  value={sortKey}
+                  onChange={(event) => setSortKey(event.target.value as SortKey)}
+                >
+                  <option value="newest">Sort: Newest</option>
+                  <option value="oldest">Sort: Oldest</option>
+                  <option value="name-asc">Sort: Name A→Z</option>
+                  <option value="name-desc">Sort: Name Z→A</option>
+                  <option value="size-desc" disabled={!mediaMeta.hasSize}>
+                    Sort: Size big→small
+                  </option>
+                  <option value="size-asc" disabled={!mediaMeta.hasSize}>
+                    Sort: Size small→big
+                  </option>
+                </select>
+                <div className="pillbar">
+                  <button
+                    className={`btn toggle-btn ${selectedOnly ? 'is-on' : ''}`}
+                    type="button"
+                    onClick={() => setSelectedOnly((prev) => !prev)}
+                  >
+                    Selected only
+                  </button>
+                  <button
+                    className={`btn toggle-btn ${untaggedOnly ? 'is-on' : ''}`}
+                    type="button"
+                    onClick={() => setUntaggedOnly((prev) => !prev)}
+                    disabled={!mediaMeta.hasTags}
+                    title={mediaMeta.hasTags ? '' : 'No tagged items yet'}
+                  >
+                    Untagged only
+                  </button>
+                </div>
               </div>
 
               <div className="pillbar">
