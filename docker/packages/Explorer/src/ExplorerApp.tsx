@@ -127,7 +127,9 @@ const inferOrientationFromItem = (item: MediaItem) => (
 );
 
 const updateCardOrientation = (mediaEl: HTMLImageElement | HTMLVideoElement) => {
-  const orient = inferOrientation(mediaEl.naturalWidth || mediaEl.videoWidth, mediaEl.naturalHeight || mediaEl.videoHeight);
+  const width = mediaEl instanceof HTMLImageElement ? mediaEl.naturalWidth : mediaEl.videoWidth;
+  const height = mediaEl instanceof HTMLImageElement ? mediaEl.naturalHeight : mediaEl.videoHeight;
+  const orient = inferOrientation(width, height);
   if (!orient) return;
   const card = mediaEl.closest('.asset') as HTMLElement | null;
   if (card) card.dataset.orient = orient;
