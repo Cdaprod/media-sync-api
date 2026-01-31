@@ -216,6 +216,58 @@
       background-size: 5px 5px, 5px 5px;
       background-repeat: no-repeat;
     }
+    .dropdown{
+      position: relative;
+    }
+    .dropdown summary{
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+    .dropdown summary::-webkit-details-marker{ display: none; }
+    .dropdown summary::marker{ content: ''; }
+    .dropdown-menu{
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      min-width: 160px;
+      background: rgba(11,16,32,0.98);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 6px;
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 80;
+    }
+    .dropdown[open] .dropdown-menu{ display: flex; }
+    .dropdown-menu button{
+      width: 100%;
+      text-align: left;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .dropdown-menu button:hover{
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.08);
+    }
+    .dropdown-menu button[disabled]{
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .dropdown-menu button.is-active{
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(124,58,237,0.35);
+    }
 
     .pillbar{
       display:flex;
@@ -984,14 +1036,19 @@
               <span class="kbd">⌘K</span>
               <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
               <div class="search-toolbar" aria-label="Search filters">
-                <select id="typeFilter" class="control" aria-label="Filter by media type">
-                  <option value="all">All types</option>
-                  <option value="video">Video</option>
-                  <option value="image">Image</option>
-                  <option value="audio">Audio</option>
-                  <option value="overlay" id="typeOptionOverlay">Overlay</option>
-                  <option value="unknown">Unknown</option>
-                </select>
+                <details id="typeFilterDropdown" class="dropdown">
+                  <summary class="control" aria-label="Filter by media type">
+                    Type: <span id="typeFilterLabel">All types</span>
+                  </summary>
+                  <div class="dropdown-menu" role="listbox" aria-label="Media type filters">
+                    <button type="button" data-value="all">All types</button>
+                    <button type="button" data-value="video">Video</button>
+                    <button type="button" data-value="image">Image</button>
+                    <button type="button" data-value="audio">Audio</button>
+                    <button type="button" data-value="overlay" id="typeOptionOverlay">Overlay</button>
+                    <button type="button" data-value="unknown">Unknown</button>
+                  </div>
+                </details>
               </div>
             </div>
             <button id="actionsToggle" class="btn" type="button" aria-expanded="false">Actions ▾</button>
@@ -1637,6 +1694,19 @@
         .filter(tag => tag.length > 0);
     }
 
+    const TYPE_LABELS = {
+      all: 'All types',
+      video: 'Video',
+      image: 'Image',
+      audio: 'Audio',
+      overlay: 'Overlay',
+      unknown: 'Unknown',
+    };
+
+    function typeLabel(value){
+      return TYPE_LABELS[value] || 'All types';
+    }
+
     function normalizeTagList(value){
       if (!value) return [];
       if (Array.isArray(value)) return value.filter(Boolean);
@@ -1717,10 +1787,16 @@
         state.filters.untaggedOnly = false;
       }
 
-      const typeSelect = el('typeFilter');
-      if (typeSelect) typeSelect.value = state.filters.type;
+      const typeLabelEl = el('typeFilterLabel');
+      if (typeLabelEl) typeLabelEl.textContent = typeLabel(state.filters.type);
       const sortSelect = el('sortFilter');
       if (sortSelect) sortSelect.value = state.filters.sort;
+
+      const typeButtons = Array.from(document.querySelectorAll('#typeFilterDropdown .dropdown-menu button[data-value]'));
+      typeButtons.forEach((button) => {
+        const value = button.dataset.value;
+        button.classList.toggle('is-active', value === state.filters.type);
+      });
 
       setToggleState('toggleSelectedOnly', state.filters.selectedOnly);
       setToggleState('toggleUntaggedOnly', state.filters.untaggedOnly);
@@ -3028,9 +3104,18 @@
       updateTopCounts();
     });
 
-    el('typeFilter').addEventListener('change', (e) => {
-      setFilterState({ type: e.target.value });
-    });
+    const typeDropdown = el('typeFilterDropdown');
+    if (typeDropdown){
+      const typeMenu = typeDropdown.querySelector('.dropdown-menu');
+      if (typeMenu){
+        typeMenu.addEventListener('click', (event) => {
+          const button = event.target.closest('button[data-value]');
+          if (!button || button.disabled) return;
+          setFilterState({ type: button.dataset.value });
+          typeDropdown.removeAttribute('open');
+        });
+      }
+    }
     el('sortFilter').addEventListener('change', (e) => {
       setFilterState({ sort: e.target.value });
     });

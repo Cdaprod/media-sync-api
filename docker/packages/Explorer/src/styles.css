@@ -167,6 +167,58 @@ select.control{
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
+.dropdown{
+  position: relative;
+}
+.dropdown summary{
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+.dropdown summary::-webkit-details-marker{ display: none; }
+.dropdown summary::marker{ content: ''; }
+.dropdown-menu{
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 160px;
+  background: rgba(11,16,32,0.98);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 80;
+}
+.dropdown[open] .dropdown-menu{ display: flex; }
+.dropdown-menu button{
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dropdown-menu button:hover{
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.08);
+}
+.dropdown-menu button[disabled]{
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dropdown-menu button.is-active{
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(124,58,237,0.35);
+}
 
 .pillbar{
   display:flex;

@@ -62,6 +62,15 @@ const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
 const THUMB_MAX_WORKERS = 2;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 
+const TYPE_LABELS: Record<MediaTypeFilter, string> = {
+  all: 'All types',
+  video: 'Video',
+  image: 'Image',
+  audio: 'Audio',
+  overlay: 'Overlay',
+  unknown: 'Unknown',
+};
+
 const getThumbCacheKey = (item: MediaItem) => {
   const project = item.project_name || item.project || '';
   const source = item.project_source || item.source || '';
@@ -294,6 +303,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
+  const typeLabel = TYPE_LABELS[typeFilter] ?? TYPE_LABELS.all;
 
   const activePath = activeProject?.name || (mediaScope === 'all' ? 'all projects' : 'no project');
   const contentTitle = activeProject
@@ -829,6 +839,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (item) openDrawer(item);
   }, [media, openDrawer, selected]);
 
+  const handleTypeSelect = useCallback(
+    (value: MediaTypeFilter) => (event: React.MouseEvent<HTMLButtonElement>) => {
+      setTypeFilter(value);
+      const details = event.currentTarget.closest('details');
+      if (details) {
+        details.removeAttribute('open');
+      }
+    },
+    [],
+  );
+
   const handleAssetDragStart = useCallback(
     (item: MediaItem) => (event: React.DragEvent) => {
       if (!activeProject) return;
@@ -1002,21 +1023,57 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   onChange={(event) => setQuery(event.target.value)}
                 />
                 <div className="search-toolbar" aria-label="Search filters">
-                  <select
-                    className="control"
-                    aria-label="Filter by media type"
-                    value={typeFilter}
-                    onChange={(event) => setTypeFilter(event.target.value as MediaTypeFilter)}
-                  >
-                    <option value="all">All types</option>
-                    <option value="video">Video</option>
-                    <option value="image">Image</option>
-                    <option value="audio">Audio</option>
-                    <option value="overlay" disabled={!mediaMeta.types.has('overlay')} hidden={!mediaMeta.types.has('overlay')}>
-                      Overlay
-                    </option>
-                    <option value="unknown">Unknown</option>
-                  </select>
+                  <details className="dropdown">
+                    <summary className="control" aria-label="Filter by media type">
+                      Type: <span>{typeLabel}</span>
+                    </summary>
+                    <div className="dropdown-menu" role="listbox" aria-label="Media type filters">
+                      <button
+                        type="button"
+                        className={typeFilter === 'all' ? 'is-active' : ''}
+                        onClick={handleTypeSelect('all')}
+                      >
+                        All types
+                      </button>
+                      <button
+                        type="button"
+                        className={typeFilter === 'video' ? 'is-active' : ''}
+                        onClick={handleTypeSelect('video')}
+                      >
+                        Video
+                      </button>
+                      <button
+                        type="button"
+                        className={typeFilter === 'image' ? 'is-active' : ''}
+                        onClick={handleTypeSelect('image')}
+                      >
+                        Image
+                      </button>
+                      <button
+                        type="button"
+                        className={typeFilter === 'audio' ? 'is-active' : ''}
+                        onClick={handleTypeSelect('audio')}
+                      >
+                        Audio
+                      </button>
+                      {mediaMeta.types.has('overlay') ? (
+                        <button
+                          type="button"
+                          className={typeFilter === 'overlay' ? 'is-active' : ''}
+                          onClick={handleTypeSelect('overlay')}
+                        >
+                          Overlay
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={typeFilter === 'unknown' ? 'is-active' : ''}
+                        onClick={handleTypeSelect('unknown')}
+                      >
+                        Unknown
+                      </button>
+                    </div>
+                  </details>
                 </div>
               </div>
               <button
