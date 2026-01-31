@@ -56,6 +56,7 @@
   }
 
   async function snapBrowserSourceToCanvas(obs, sceneName, sceneItemId, inputName, fit){
+    const TOP_LEFT_ALIGNMENT = 5;
     const video = await obs.call('GetVideoSettings');
     const baseW = Number(video?.baseWidth || 1920);
     const baseH = Number(video?.baseHeight || 1080);
@@ -97,8 +98,8 @@
         rotation: 0,
         scaleX: 1,
         scaleY: 1,
-        alignment: 0,
-        boundsAlignment: 0,
+        alignment: TOP_LEFT_ALIGNMENT,
+        boundsAlignment: TOP_LEFT_ALIGNMENT,
         boundsType,
         boundsWidth: baseW,
         boundsHeight: baseH,
