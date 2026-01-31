@@ -598,3 +598,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-24)
 - Fixed Next.js explorer orientation inference typing with image/video guards and restored the static explorer topbar markup after context menu wiring.
+
+### Latest Implementation Notes (2025-05-25)
+- Explorer topbar/drag rules now honor hover-vs-touch intent, pointer-based drag/drop replaces HTML5 drag, and grids use column packing to avoid empty rows.
+
+### Latest Implementation Notes (2025-05-26)
+- Explorer drag/drop now resolves drop targets via pointer position instead of HTML5 drag events, with updated top-edge hotzones and thresholds.
