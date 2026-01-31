@@ -79,15 +79,36 @@ def ensure_metadata(
         payload["size_bytes"] = file_path.stat().st_size
         updated = True
 
-    ingest = payload.get("ingest") or {}
-    ingest.setdefault("source", source)
-    ingest.setdefault("method", method)
-    if run_id:
-        ingest.setdefault("run_id", run_id)
+    ingest = payload.get("ingest")
+    if not isinstance(ingest, dict):
+        ingest = {}
+        updated = True
+    if ingest.get("source") != source:
+        ingest["source"] = source
+        updated = True
+    if ingest.get("method") != method:
+        ingest["method"] = method
+        updated = True
+    if run_id and ingest.get("run_id") != run_id:
+        ingest["run_id"] = run_id
+        updated = True
     payload["ingest"] = ingest
 
-    payload.setdefault("schema_version", METADATA_SCHEMA_VERSION)
-    payload.setdefault("tags", {"manual": [], "derived": []})
+    if payload.get("schema_version") != METADATA_SCHEMA_VERSION:
+        payload["schema_version"] = METADATA_SCHEMA_VERSION
+        updated = True
+
+    tags_payload = payload.get("tags")
+    if not isinstance(tags_payload, dict):
+        tags_payload = {"manual": [], "derived": []}
+        updated = True
+    if "manual" not in tags_payload:
+        tags_payload["manual"] = []
+        updated = True
+    if "derived" not in tags_payload:
+        tags_payload["derived"] = []
+        updated = True
+    payload["tags"] = tags_payload
     if updated:
         payload["updated_at"] = _timestamp()
         return _write_metadata(project_path, sha256, payload)
