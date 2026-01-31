@@ -70,6 +70,14 @@ const TYPE_LABELS: Record<MediaTypeFilter, string> = {
   overlay: 'Overlay',
   unknown: 'Unknown',
 };
+const SORT_LABELS: Record<SortKey, string> = {
+  newest: 'Newest',
+  oldest: 'Oldest',
+  'name-asc': 'Name A→Z',
+  'name-desc': 'Name Z→A',
+  'size-desc': 'Size big→small',
+  'size-asc': 'Size small→big',
+};
 
 const getThumbCacheKey = (item: MediaItem) => {
   const project = item.project_name || item.project || '';
@@ -267,6 +275,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const mediaScrollRef = useRef<HTMLDivElement | null>(null);
+  const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const thumbObserverRef = useRef<IntersectionObserver | null>(null);
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
   const thumbPendingRef = useRef<Set<string>>(new Set());
@@ -304,6 +313,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
   const typeLabel = TYPE_LABELS[typeFilter] ?? TYPE_LABELS.all;
+  const sortLabel = SORT_LABELS[sortKey] ?? SORT_LABELS.newest;
 
   const activePath = activeProject?.name || (mediaScope === 'all' ? 'all projects' : 'no project');
   const contentTitle = activeProject
@@ -850,6 +860,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [],
   );
 
+  const handleSortSelect = useCallback(
+    (value: SortKey) => (event: React.MouseEvent<HTMLButtonElement>) => {
+      const select = sortSelectRef.current;
+      if (select) {
+        select.value = value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        setSortKey(value);
+      }
+      const details = event.currentTarget.closest('details');
+      if (details) {
+        details.removeAttribute('open');
+      }
+    },
+    [],
+  );
+
   const handleAssetDragStart = useCallback(
     (item: MediaItem) => (event: React.DragEvent) => {
       if (!activeProject) return;
@@ -1105,7 +1132,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
               <div className="action-controls" aria-label="Sort and quick filters">
                 <select
-                  className="control"
+                  ref={sortSelectRef}
+                  className="control visually-hidden"
                   aria-label="Sort media"
                   value={sortKey}
                   onChange={(event) => setSortKey(event.target.value as SortKey)}
@@ -1121,6 +1149,57 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     Sort: Size small→big
                   </option>
                 </select>
+                <details className="dropdown">
+                  <summary className="control" aria-label="Sort media">
+                    Sort: <span>{sortLabel}</span>
+                  </summary>
+                  <div className="dropdown-menu" role="listbox" aria-label="Sort media">
+                    <button
+                      type="button"
+                      className={sortKey === 'newest' ? 'is-active' : ''}
+                      onClick={handleSortSelect('newest')}
+                    >
+                      Sort: Newest
+                    </button>
+                    <button
+                      type="button"
+                      className={sortKey === 'oldest' ? 'is-active' : ''}
+                      onClick={handleSortSelect('oldest')}
+                    >
+                      Sort: Oldest
+                    </button>
+                    <button
+                      type="button"
+                      className={sortKey === 'name-asc' ? 'is-active' : ''}
+                      onClick={handleSortSelect('name-asc')}
+                    >
+                      Sort: Name A→Z
+                    </button>
+                    <button
+                      type="button"
+                      className={sortKey === 'name-desc' ? 'is-active' : ''}
+                      onClick={handleSortSelect('name-desc')}
+                    >
+                      Sort: Name Z→A
+                    </button>
+                    <button
+                      type="button"
+                      className={sortKey === 'size-desc' ? 'is-active' : ''}
+                      onClick={handleSortSelect('size-desc')}
+                      disabled={!mediaMeta.hasSize}
+                    >
+                      Sort: Size big→small
+                    </button>
+                    <button
+                      type="button"
+                      className={sortKey === 'size-asc' ? 'is-active' : ''}
+                      onClick={handleSortSelect('size-asc')}
+                      disabled={!mediaMeta.hasSize}
+                    >
+                      Sort: Size small→big
+                    </button>
+                  </div>
+                </details>
                 <div className="pillbar">
                   <button
                     className={`btn toggle-btn ${selectedOnly ? 'is-on' : ''}`}

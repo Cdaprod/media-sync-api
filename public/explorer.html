@@ -268,6 +268,17 @@
       background: rgba(255,255,255,0.12);
       border-color: rgba(124,58,237,0.35);
     }
+    .visually-hidden{
+      position: absolute !important;
+      height: 1px;
+      width: 1px;
+      overflow: hidden;
+      clip: rect(1px, 1px, 1px, 1px);
+      white-space: nowrap;
+      border: 0;
+      padding: 0;
+      margin: -1px;
+    }
 
     .pillbar{
       display:flex;
@@ -1060,7 +1071,7 @@
             </div>
 
             <div class="action-controls" aria-label="Sort and quick filters">
-              <select id="sortFilter" class="control" aria-label="Sort media">
+              <select id="sortFilter" class="control visually-hidden" aria-label="Sort media">
                 <option value="newest">Sort: Newest</option>
                 <option value="oldest">Sort: Oldest</option>
                 <option value="name-asc">Sort: Name A→Z</option>
@@ -1068,6 +1079,19 @@
                 <option value="size-desc" id="sortOptionSizeDesc">Sort: Size big→small</option>
                 <option value="size-asc" id="sortOptionSizeAsc">Sort: Size small→big</option>
               </select>
+              <details id="sortFilterDropdown" class="dropdown">
+                <summary class="control" aria-label="Sort media">
+                  Sort: <span id="sortFilterLabel">Newest</span>
+                </summary>
+                <div class="dropdown-menu" role="listbox" aria-label="Sort media">
+                  <button type="button" data-value="newest">Sort: Newest</button>
+                  <button type="button" data-value="oldest">Sort: Oldest</button>
+                  <button type="button" data-value="name-asc">Sort: Name A→Z</button>
+                  <button type="button" data-value="name-desc">Sort: Name Z→A</button>
+                  <button type="button" data-value="size-desc" id="sortMenuSizeDesc">Sort: Size big→small</button>
+                  <button type="button" data-value="size-asc" id="sortMenuSizeAsc">Sort: Size small→big</button>
+                </div>
+              </details>
               <div class="pillbar">
                 <button id="toggleSelectedOnly" class="btn toggle-btn" type="button">Selected only</button>
                 <button id="toggleUntaggedOnly" class="btn toggle-btn" type="button">Untagged only</button>
@@ -1702,9 +1726,21 @@
       overlay: 'Overlay',
       unknown: 'Unknown',
     };
+    const SORT_LABELS = {
+      newest: 'Newest',
+      oldest: 'Oldest',
+      'name-asc': 'Name A→Z',
+      'name-desc': 'Name Z→A',
+      'size-desc': 'Size big→small',
+      'size-asc': 'Size small→big',
+    };
 
     function typeLabel(value){
       return TYPE_LABELS[value] || 'All types';
+    }
+
+    function sortLabel(value){
+      return SORT_LABELS[value] || 'Newest';
     }
 
     function normalizeTagList(value){
@@ -1779,6 +1815,10 @@
       const sortSizeAsc = el('sortOptionSizeAsc');
       if (sortSizeDesc) sortSizeDesc.disabled = !hasSize;
       if (sortSizeAsc) sortSizeAsc.disabled = !hasSize;
+      const sortMenuSizeDesc = el('sortMenuSizeDesc');
+      const sortMenuSizeAsc = el('sortMenuSizeAsc');
+      if (sortMenuSizeDesc) sortMenuSizeDesc.disabled = !hasSize;
+      if (sortMenuSizeAsc) sortMenuSizeAsc.disabled = !hasSize;
       if ((state.filters.sort === 'size-desc' || state.filters.sort === 'size-asc') && !hasSize){
         state.filters.sort = 'newest';
       }
@@ -1791,11 +1831,18 @@
       if (typeLabelEl) typeLabelEl.textContent = typeLabel(state.filters.type);
       const sortSelect = el('sortFilter');
       if (sortSelect) sortSelect.value = state.filters.sort;
+      const sortLabelEl = el('sortFilterLabel');
+      if (sortLabelEl) sortLabelEl.textContent = sortLabel(state.filters.sort);
 
       const typeButtons = Array.from(document.querySelectorAll('#typeFilterDropdown .dropdown-menu button[data-value]'));
       typeButtons.forEach((button) => {
         const value = button.dataset.value;
         button.classList.toggle('is-active', value === state.filters.type);
+      });
+      const sortButtons = Array.from(document.querySelectorAll('#sortFilterDropdown .dropdown-menu button[data-value]'));
+      sortButtons.forEach((button) => {
+        const value = button.dataset.value;
+        button.classList.toggle('is-active', value === state.filters.sort);
       });
 
       setToggleState('toggleSelectedOnly', state.filters.selectedOnly);
@@ -3119,6 +3166,22 @@
     el('sortFilter').addEventListener('change', (e) => {
       setFilterState({ sort: e.target.value });
     });
+    const sortDropdown = el('sortFilterDropdown');
+    if (sortDropdown){
+      const sortMenu = sortDropdown.querySelector('.dropdown-menu');
+      if (sortMenu){
+        sortMenu.addEventListener('click', (event) => {
+          const button = event.target.closest('button[data-value]');
+          if (!button || button.disabled) return;
+          const select = el('sortFilter');
+          if (select){
+            select.value = button.dataset.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          sortDropdown.removeAttribute('open');
+        });
+      }
+    }
     el('toggleSelectedOnly').addEventListener('click', () => {
       setFilterState({ selectedOnly: !state.filters.selectedOnly });
     });
