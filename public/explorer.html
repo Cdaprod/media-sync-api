@@ -11,6 +11,10 @@
       --panel: rgba(255,255,255,0.06);
       --panel2: rgba(255,255,255,0.09);
       --border: rgba(255,255,255,0.10);
+      --grid-gap: 12px;
+      --grid-cols: 3;
+      --card-bg: rgba(255,255,255,0.05);
+      --card-border: rgba(255,255,255,0.10);
       --text: rgba(255,255,255,0.92);
       --muted: rgba(255,255,255,0.65);
       --muted2: rgba(255,255,255,0.45);
@@ -29,6 +33,16 @@
       --dur-slow: 320ms;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    @media (min-width: 900px){
+      :root{ --grid-cols: 5; }
+    }
+    @media (orientation: landscape) and (min-width: 700px){
+      :root{ --grid-cols: 5; }
+    }
+    @media (max-width: 420px){
+      :root{ --grid-gap: 10px; }
     }
 
     * { box-sizing: border-box; }
@@ -78,9 +92,30 @@
       z-index: 40;
       background: rgba(11,16,32,0.9);
       border-bottom: 1px solid var(--border);
+      --topbar-height: 56px;
+      transition: transform var(--dur-med) var(--ease-snappy), opacity var(--dur-med) var(--ease-settle), margin-bottom var(--dur-med) var(--ease-settle);
+    }
+    body.topbar-hidden .topbar{
+      transform: translateY(calc(-1 * var(--topbar-height)));
+      opacity: 0;
+      pointer-events: none;
+      margin-bottom: calc(-1 * var(--topbar-height));
+    }
+    .topbar-reveal{
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 32px;
+      z-index: 45;
+      pointer-events: auto;
+    }
+    body:not(.topbar-hidden) .topbar-reveal{
+      pointer-events: none;
     }
     .topbar-inner{
       position: relative;
+      min-height: var(--topbar-height);
       display:flex;
       align-items:center;
       justify-content: space-between;
@@ -616,8 +651,9 @@
     .grid{
       padding: 14px;
       display:grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
+      gap: var(--grid-gap);
+      align-items: start;
     }
     .list{
       padding: 10px 12px;
@@ -627,8 +663,8 @@
     }
 
     .asset{
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
       border-radius: var(--radius2);
       overflow:hidden;
       cursor:pointer;
@@ -639,7 +675,6 @@
     .asset:hover{ transform: translateY(-3px) scale(1.01); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); }
 
     .thumb{
-      aspect-ratio: 5/4;
       background: rgba(255,255,255,0.04);
       border-bottom: 1px solid var(--border);
       display:flex;
@@ -648,7 +683,19 @@
       position: relative;
       overflow:hidden;
     }
-    .thumb img{
+    .asset[data-kind="image"] .thumb,
+    .asset[data-kind="video"] .thumb{
+      aspect-ratio: 1 / 1;
+    }
+    .asset[data-kind="audio"] .thumb{
+      aspect-ratio: 1 / 1;
+      display:grid;
+      place-items:center;
+    }
+    .asset[data-orient="portrait"] .thumb{ aspect-ratio: 9 / 16; }
+    .asset[data-orient="landscape"] .thumb{ aspect-ratio: 16 / 9; }
+    .asset[data-orient="square"] .thumb{ aspect-ratio: 1 / 1; }
+    .asset-thumb{
       width: 100%; height: 100%;
       object-fit: cover;
       display:block;
@@ -1022,10 +1069,38 @@
       color: var(--text);
       background: #0b1020;
     }
+
+    /* Context menu */
+    .context-menu{
+      position: fixed;
+      min-width: 180px;
+      padding: 8px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(11,16,32,0.96);
+      box-shadow: var(--shadow);
+      z-index: 90;
+      display: none;
+    }
+    .context-menu.open{ display: block; }
+    .context-menu button{
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .context-menu button:hover{ background: rgba(255,255,255,0.08); }
+    .context-menu .muted{ color: var(--muted); cursor: default; }
   </style>
 </head>
 
 <body>
+  <div class="topbar-reveal" id="topbarReveal" aria-hidden="true"></div>
   <div class="app">
     <div class="topbar">
       <div class="topbar-inner">
@@ -1038,8 +1113,9 @@
               </button>
             </h1>
             <div class="sub">media-sync-api</div>
-          </div>
-        </div>
+    </div>
+  </div>
+  <div id="contextMenu" class="context-menu" role="menu" aria-hidden="true"></div>
 
         <div class="toolbar">
           <div class="topbar-controls">
@@ -1330,7 +1406,10 @@
       sidebarOpen: false,
       inspectorOpen: false,
       dragActive: false,
+      assetDragActive: false,
     };
+
+    const itemsByPath = new Map();
 
     const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
     const THUMB_MAX_WORKERS = 2;
@@ -1664,11 +1743,302 @@
       return false;
     }
 
+    function createIntentController({ onOpen, onClose, openDelay = 0, closeDelay = 240 } = {}){
+      let openTimer = null;
+      let closeTimer = null;
+      let isOpen = false;
+      let pinned = false;
+
+      function clearTimers(){
+        if (openTimer) clearTimeout(openTimer);
+        if (closeTimer) clearTimeout(closeTimer);
+        openTimer = null;
+        closeTimer = null;
+      }
+
+      function setOpen(next){
+        if (isOpen === next) return;
+        isOpen = next;
+        if (isOpen) onOpen?.();
+        else onClose?.();
+      }
+
+      function scheduleOpen(delay = openDelay){
+        if (pinned) return;
+        clearTimers();
+        openTimer = setTimeout(() => {
+          setOpen(true);
+        }, delay);
+      }
+
+      function scheduleClose(delay = closeDelay){
+        if (pinned) return;
+        clearTimers();
+        closeTimer = setTimeout(() => {
+          if (!pinned) setOpen(false);
+        }, delay);
+      }
+
+      function setPinned(next){
+        pinned = next;
+        if (pinned){
+          clearTimers();
+          setOpen(true);
+        }
+      }
+
+      return {
+        setOpen,
+        scheduleOpen,
+        scheduleClose,
+        setPinned,
+        isPinned: () => pinned,
+      };
+    }
+
+    function wireTopbarIntent(){
+      const topbar = document.querySelector('.topbar');
+      const reveal = el('topbarReveal');
+      const search = el('q');
+      if (!topbar || !reveal) return;
+
+      const intent = createIntentController({
+        onOpen: () => document.body.classList.remove('topbar-hidden'),
+        onClose: () => document.body.classList.add('topbar-hidden'),
+        closeDelay: 320,
+      });
+
+      const handleEnter = () => intent.scheduleOpen(0);
+      const handleLeave = () => intent.scheduleClose(280);
+      topbar.addEventListener('pointerenter', handleEnter);
+      topbar.addEventListener('pointerleave', handleLeave);
+      reveal.addEventListener('pointerenter', handleEnter);
+      reveal.addEventListener('pointerleave', handleLeave);
+      reveal.addEventListener('pointerdown', handleEnter);
+
+      document.addEventListener('pointerdown', (event) => {
+        if (intent.isPinned()) return;
+        if (topbar.contains(event.target) || reveal.contains(event.target)) return;
+        intent.scheduleClose(120);
+      });
+
+      if (search){
+        search.addEventListener('focusin', () => intent.setPinned(true));
+        search.addEventListener('focusout', () => {
+          intent.setPinned(false);
+          intent.scheduleClose(360);
+        });
+      }
+
+      intent.setOpen(true);
+      intent.scheduleClose(1600);
+    }
+
+    function wireDropdownIntents(){
+      const dropdowns = Array.from(document.querySelectorAll('details.dropdown'));
+      if (!dropdowns.length) return;
+
+      dropdowns.forEach((dropdown) => {
+        const intent = createIntentController({
+          onOpen: () => dropdown.setAttribute('open', ''),
+          onClose: () => dropdown.removeAttribute('open'),
+          openDelay: 80,
+          closeDelay: 200,
+        });
+
+        dropdown.addEventListener('pointerenter', () => intent.scheduleOpen());
+        dropdown.addEventListener('pointerleave', () => intent.scheduleClose());
+      });
+
+      document.addEventListener('pointerdown', (event) => {
+        dropdowns.forEach((dropdown) => {
+          if (!dropdown.hasAttribute('open')) return;
+          if (dropdown.contains(event.target)) return;
+          dropdown.removeAttribute('open');
+        });
+      });
+    }
+
+    function wireProjectDragAssist(){
+      const brand = el('brandToggle');
+      if (!brand) return;
+      const intent = createIntentController({
+        onOpen: () => {
+          if (ui.assetDragActive) setSidebarOpen(true);
+        },
+        onClose: () => {
+          if (ui.assetDragActive) setSidebarOpen(false);
+        },
+        openDelay: 320,
+        closeDelay: 260,
+      });
+
+      brand.addEventListener('pointerenter', () => {
+        if (ui.assetDragActive) intent.scheduleOpen(320);
+      });
+      brand.addEventListener('pointerleave', () => {
+        if (ui.assetDragActive) intent.scheduleClose(260);
+      });
+    }
+
     function dragPayload(item){
       const paths = state.selected.has(item.relative_path)
         ? Array.from(state.selected)
         : [item.relative_path];
       return JSON.stringify({ paths });
+    }
+
+    function getContextActions(items){
+      const count = items.length;
+      if (!count) return [];
+      const single = count === 1;
+      const item = items[0];
+      const actions = [];
+      if (single){
+        actions.push({ id: 'preview', label: 'Open preview', handler: () => openDrawer(item) });
+        actions.push({
+          id: 'copy-stream',
+          label: 'Copy stream URL',
+          handler: () => copyStreamUrl(item),
+        });
+        actions.push({
+          id: 'download',
+          label: 'Download',
+          handler: () => {
+            const url = item.download_url || item.stream_url || '';
+            if (url) window.open(toAbsoluteUrl(url), '_blank');
+          },
+        });
+      }else{
+        actions.push({
+          id: 'copy-streams',
+          label: 'Copy stream URLs',
+          handler: () => copySelectedUrls(),
+        });
+      }
+      actions.push({
+        id: 'move',
+        label: 'Move to project…',
+        handler: () => {
+          renderMoveTargets();
+          toggleSelectPanel('selMovePanel');
+        },
+      });
+      actions.push({
+        id: 'delete',
+        label: `Delete ${count} item${count > 1 ? 's' : ''}`,
+        handler: () => deletePaths(items.map((entry) => entry.relative_path)),
+      });
+      return actions;
+    }
+
+    function positionContextMenu(menu, x, y){
+      const padding = 12;
+      const rect = menu.getBoundingClientRect();
+      const maxX = window.innerWidth - rect.width - padding;
+      const maxY = window.innerHeight - rect.height - padding;
+      const left = Math.max(padding, Math.min(x, maxX));
+      const top = Math.max(padding, Math.min(y, maxY));
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    }
+
+    function openContextMenu(position, items){
+      const menu = el('contextMenu');
+      if (!menu) return;
+      const actions = getContextActions(items);
+      if (!actions.length) return;
+      closeContextMenu();
+      menu.innerHTML = actions.map((action) => (
+        `<button type="button" data-action="${action.id}">${escapeHtml(action.label)}</button>`
+      )).join('');
+      menu.classList.add('open');
+      menu.setAttribute('aria-hidden', 'false');
+      requestAnimationFrame(() => positionContextMenu(menu, position.clientX, position.clientY));
+      menu.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const action = actions.find((item) => item.id === btn.dataset.action);
+          closeContextMenu();
+          action?.handler?.();
+        }, { once: true });
+      });
+    }
+
+    function closeContextMenu(){
+      const menu = el('contextMenu');
+      if (!menu) return;
+      menu.classList.remove('open');
+      menu.setAttribute('aria-hidden', 'true');
+    }
+
+    function wireAssetPointerHandlers(target, item){
+      const POINTER_THRESHOLD = 10;
+      const LONG_PRESS_MS = 480;
+      let pointerId = null;
+      let startX = 0;
+      let startY = 0;
+      let moved = false;
+      let longPress = null;
+      let pressX = 0;
+      let pressY = 0;
+
+      function clearLongPress(){
+        if (longPress) clearTimeout(longPress);
+        longPress = null;
+      }
+
+      target.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if (event.target.closest('input, button, a, summary')) return;
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+        pressX = event.clientX;
+        pressY = event.clientY;
+        moved = false;
+        target.setPointerCapture(pointerId);
+        clearLongPress();
+        longPress = setTimeout(() => {
+          const selectedItems = state.selected.has(item.relative_path)
+            ? Array.from(state.selected).map((path) => itemsByPath.get(path)).filter(Boolean)
+            : [item];
+          openContextMenu({ clientX: pressX, clientY: pressY }, selectedItems);
+        }, LONG_PRESS_MS);
+      });
+
+      target.addEventListener('pointermove', (event) => {
+        if (pointerId !== event.pointerId) return;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        if (!moved && (dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD){
+          moved = true;
+          clearLongPress();
+        }
+      });
+
+      target.addEventListener('pointerup', (event) => {
+        if (pointerId !== event.pointerId) return;
+        clearLongPress();
+        target.releasePointerCapture(pointerId);
+        pointerId = null;
+        if (moved) return;
+        if (!state.activeProject) return;
+        if (state.selected.has(item.relative_path)) openDrawer(item);
+        else toggleSelected(item.relative_path);
+      });
+
+      target.addEventListener('pointercancel', () => {
+        clearLongPress();
+        pointerId = null;
+      });
+
+      target.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        const selectedItems = state.selected.has(item.relative_path)
+          ? Array.from(state.selected).map((path) => itemsByPath.get(path)).filter(Boolean)
+          : [item];
+        openContextMenu({ clientX: event.clientX, clientY: event.clientY }, selectedItems);
+      });
     }
 
     function attachDragData(event, item){
@@ -1692,6 +2062,29 @@
       if (/\.(jpg|jpeg|png|gif|webp|heic)$/.test(p)) return 'image';
       if (/\.(mp3|wav|m4a|aac|flac)$/.test(p)) return 'audio';
       return 'document';
+    }
+
+    function inferOrientation(width, height){
+      const w = Number(width) || 0;
+      const h = Number(height) || 0;
+      if (!w || !h) return null;
+      const ratio = w / h;
+      if (ratio > 1.15) return 'landscape';
+      if (ratio < 0.87) return 'portrait';
+      return 'square';
+    }
+
+    function inferOrientationFromItem(item){
+      return inferOrientation(item?.width, item?.height);
+    }
+
+    function updateCardOrientation(card, mediaEl){
+      if (!card || !mediaEl) return;
+      const orient = inferOrientation(
+        mediaEl.naturalWidth || mediaEl.videoWidth,
+        mediaEl.naturalHeight || mediaEl.videoHeight,
+      );
+      if (orient) card.dataset.orient = orient;
     }
 
     function kindBadgeClass(kind){
@@ -2267,12 +2660,16 @@
       if (img){
         img.onerror = null;
         img.src = dataUrl;
+        img.classList.add('asset-thumb');
+        img.addEventListener('load', () => updateCardOrientation(img.closest('.asset'), img), { once: true });
         return;
       }
       const fallbackImg = document.createElement('img');
       fallbackImg.alt = 'Video thumbnail';
       fallbackImg.loading = 'lazy';
+      fallbackImg.className = 'asset-thumb';
       fallbackImg.src = dataUrl;
+      fallbackImg.addEventListener('load', () => updateCardOrientation(fallbackImg.closest('.asset'), fallbackImg), { once: true });
       target.prepend(fallbackImg);
     }
 
@@ -2642,6 +3039,10 @@
 
     function renderMedia(){
       const items = filteredMedia();
+      itemsByPath.clear();
+      items.forEach((item) => {
+        if (item?.relative_path) itemsByPath.set(item.relative_path, item);
+      });
       const allMode = !state.activeProject && state.mediaScope === 'all';
       const canSelect = !!state.activeProject;
 
@@ -2674,6 +3075,7 @@
 
       for (const it of items){
         const kind = guessKind(it);
+        const orient = inferOrientationFromItem(it) || 'square';
         const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
         const proj = projectLabel(it);
         const sub = proj ? `${it.relative_path || ''} • ${proj}` : (it.relative_path || '');
@@ -2694,16 +3096,20 @@
         if (canSelect){
           card.setAttribute('draggable', 'true');
           card.addEventListener('dragstart', (event) => attachDragData(event, it));
+          card.addEventListener('dragstart', () => { ui.assetDragActive = true; });
+          card.addEventListener('dragend', () => { ui.assetDragActive = false; });
         }
         if (state.selected.has(it.relative_path)) card.classList.add('selected', 'is-selected');
         card.dataset.streamUrl = it.stream_url || it.streamUrl || '';
         card.dataset.relative = it.relative_path || '';
         card.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
         card.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
+        card.dataset.kind = kind;
+        card.dataset.orient = orient;
 
         card.innerHTML = `
           <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video" data-thumb-key="${escapeHtml(thumbKey)}" data-state="idle" data-attempts="0"` : ''}>
-            <img src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
               onerror="this.onerror=null;this.src='${escapeHtml(fallbackThumb)}';" />
             <div class="badges">
               <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
@@ -2719,14 +3125,19 @@
           </div>
         `;
 
+        const thumbImg = card.querySelector('.asset-thumb');
+        if (thumbImg){
+          if (thumbImg.complete) updateCardOrientation(card, thumbImg);
+          else thumbImg.addEventListener('load', () => updateCardOrientation(card, thumbImg), { once: true });
+        }
+
         // checkbox toggles selection without opening drawer
         card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
           ev.stopPropagation();
           toggleSelected(it.relative_path);
         });
 
-        // click card opens inspector
-        card.addEventListener('click', () => openDrawer(it));
+        wireAssetPointerHandlers(card, it);
         g.appendChild(card);
 
       if (!thumbUrl && kind === 'video'){
@@ -2742,6 +3153,8 @@
         if (canSelect){
           row.setAttribute('draggable', 'true');
           row.addEventListener('dragstart', (event) => attachDragData(event, it));
+          row.addEventListener('dragstart', () => { ui.assetDragActive = true; });
+          row.addEventListener('dragend', () => { ui.assetDragActive = false; });
         }
         if (state.selected.has(it.relative_path)) row.classList.add('selected', 'is-selected');
         row.dataset.streamUrl = it.stream_url || it.streamUrl || '';
@@ -2750,7 +3163,7 @@
         row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         row.innerHTML = `
           <div class="mini" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video" data-thumb-key="${escapeHtml(thumbKey)}" data-state="idle" data-attempts="0"` : ''}>
-            <img src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
               onerror="this.onerror=null;this.src='${escapeHtml(fallbackThumb)}';" />
           </div>
           <div class="info">
@@ -2764,6 +3177,7 @@
         `;
         row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it.relative_path));
         row.querySelector('button').addEventListener('click', () => openDrawer(it));
+        wireAssetPointerHandlers(row, it);
         if (!thumbUrl && kind === 'video'){
           const t2 = row.querySelector('.mini');
           primeThumbFromCache(t2).then((found) => {
@@ -3293,6 +3707,7 @@
           e.preventDefault();
           return;
         }
+        closeContextMenu();
       }
       // cheap "cmd+k" focus
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){
@@ -3316,6 +3731,15 @@
 
     // Boot
     document.addEventListener('DOMContentLoaded', async () => {
+      wireTopbarIntent();
+      wireDropdownIntents();
+      wireProjectDragAssist();
+      document.addEventListener('pointerdown', (event) => {
+        const menu = el('contextMenu');
+        if (!menu?.classList.contains('open')) return;
+        if (menu.contains(event.target)) return;
+        closeContextMenu();
+      });
       loadFilterPrefs();
       reconcileFilters();
       syncSidebarMode();

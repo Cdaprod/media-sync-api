@@ -29,12 +29,108 @@ interface ExplorerAppProps {
 }
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
+const POINTER_THRESHOLD = 10;
+const LONG_PRESS_MS = 480;
 
 const formatListValue = (value: string | string[] | null | undefined) => {
   if (Array.isArray(value)) {
     return value.filter((entry) => entry.trim().length > 0).join(', ');
   }
   return value ?? '';
+};
+
+type IntentController = {
+  setOpen: (next: boolean) => void;
+  scheduleOpen: (delayOverride?: number) => void;
+  scheduleClose: (delayOverride?: number) => void;
+  setPinned: (next: boolean) => void;
+  isPinned: () => boolean;
+};
+
+const createIntentController = ({
+  onOpen,
+  onClose,
+  openDelay = 0,
+  closeDelay = 240,
+}: {
+  onOpen?: () => void;
+  onClose?: () => void;
+  openDelay?: number;
+  closeDelay?: number;
+}): IntentController => {
+  let openTimer: number | null = null;
+  let closeTimer: number | null = null;
+  let isOpen = false;
+  let pinned = false;
+
+  const clearTimers = () => {
+    if (openTimer) window.clearTimeout(openTimer);
+    if (closeTimer) window.clearTimeout(closeTimer);
+    openTimer = null;
+    closeTimer = null;
+  };
+
+  const setOpen = (next: boolean) => {
+    if (isOpen === next) return;
+    isOpen = next;
+    if (isOpen) onOpen?.();
+    else onClose?.();
+  };
+
+  const scheduleOpen = (delayOverride?: number) => {
+    if (pinned) return;
+    clearTimers();
+    const delay = delayOverride ?? openDelay;
+    openTimer = window.setTimeout(() => {
+      setOpen(true);
+    }, delay);
+  };
+
+  const scheduleClose = (delayOverride?: number) => {
+    if (pinned) return;
+    clearTimers();
+    const delay = delayOverride ?? closeDelay;
+    closeTimer = window.setTimeout(() => {
+      if (!pinned) setOpen(false);
+    }, delay);
+  };
+
+  const setPinned = (next: boolean) => {
+    pinned = next;
+    if (pinned) {
+      clearTimers();
+      setOpen(true);
+    }
+  };
+
+  return {
+    setOpen,
+    scheduleOpen,
+    scheduleClose,
+    setPinned,
+    isPinned: () => pinned,
+  };
+};
+
+const inferOrientation = (width?: number | null, height?: number | null) => {
+  const w = Number(width) || 0;
+  const h = Number(height) || 0;
+  if (!w || !h) return null;
+  const ratio = w / h;
+  if (ratio > 1.15) return 'landscape';
+  if (ratio < 0.87) return 'portrait';
+  return 'square';
+};
+
+const inferOrientationFromItem = (item: MediaItem) => (
+  inferOrientation((item as MediaItem & { width?: number }).width, (item as MediaItem & { height?: number }).height)
+);
+
+const updateCardOrientation = (mediaEl: HTMLImageElement | HTMLVideoElement) => {
+  const orient = inferOrientation(mediaEl.naturalWidth || mediaEl.videoWidth, mediaEl.naturalHeight || mediaEl.videoHeight);
+  if (!orient) return;
+  const card = mediaEl.closest('.asset') as HTMLElement | null;
+  if (card) card.dataset.orient = orient;
 };
 
 const buildThumbFallback = (label: string) => {
@@ -266,6 +362,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [assetDragActive, setAssetDragActive] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
 
   const [resolveProjectMode, setResolveProjectMode] = useState('current');
   const [resolveProjectName, setResolveProjectName] = useState('');
@@ -276,6 +374,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const mediaScrollRef = useRef<HTMLDivElement | null>(null);
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
+  const brandRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const thumbObserverRef = useRef<IntersectionObserver | null>(null);
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
   const thumbPendingRef = useRef<Set<string>>(new Set());
@@ -310,6 +410,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     );
     return sortMedia(filtered, sortKey, mediaMeta);
   }, [media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const itemsByPath = useMemo(() => {
+    const map = new Map<string, MediaItem>();
+    media.forEach((item) => {
+      if (item.relative_path) map.set(item.relative_path, item);
+    });
+    return map;
+  }, [media]);
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
   const typeLabel = TYPE_LABELS[typeFilter] ?? TYPE_LABELS.all;
@@ -843,6 +950,148 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [addToast, resolveAssetUrl]);
 
+  const handleCopySelectedUrls = useCallback(async (items: MediaItem[]) => {
+    if (!items.length) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const urls = items
+      .map((item) => toAbsoluteUrl(resolveAssetUrl(item.stream_url), origin))
+      .filter(Boolean);
+    if (!urls.length) return;
+    const ok = await copyTextWithFallback(urls.join('\n'));
+    if (ok) {
+      addToast('good', 'Copied', `Copied ${urls.length} stream URL(s).`);
+    } else {
+      addToast('warn', 'Clipboard', 'Copy failed — please copy manually.');
+    }
+  }, [addToast, resolveAssetUrl]);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const openContextMenu = useCallback((x: number, y: number, items: MediaItem[]) => {
+    if (!items.length) return;
+    setContextMenu({ x, y, items });
+  }, []);
+
+  const getContextActions = useCallback((items: MediaItem[]) => {
+    const count = items.length;
+    if (!count) return [];
+    const single = count === 1;
+    const item = items[0];
+    const actions: Array<{ id: string; label: string; handler: () => void }> = [];
+
+    if (single) {
+      actions.push({ id: 'preview', label: 'Open preview', handler: () => openDrawer(item) });
+      actions.push({ id: 'copy-stream', label: 'Copy stream URL', handler: () => void handleCopyStream(item) });
+      actions.push({
+        id: 'download',
+        label: 'Download',
+        handler: () => {
+          const url = resolveAssetUrl(item.download_url || item.stream_url);
+          if (url) window.open(url, '_blank');
+        },
+      });
+    } else {
+      actions.push({
+        id: 'copy-streams',
+        label: 'Copy stream URLs',
+        handler: () => void handleCopySelectedUrls(items),
+      });
+    }
+
+    actions.push({
+      id: 'move',
+      label: 'Move to project…',
+      handler: () => {
+        setActionsOpen(true);
+      },
+    });
+    actions.push({
+      id: 'delete',
+      label: `Delete ${count} item${count > 1 ? 's' : ''}`,
+      handler: () => deleteMediaPaths(items.map((entry) => entry.relative_path)),
+    });
+    return actions;
+  }, [deleteMediaPaths, handleCopySelectedUrls, handleCopyStream, openDrawer, resolveAssetUrl]);
+
+  const buildAssetPointerHandlers = useCallback(
+    (item: MediaItem) => {
+      let pointerId: number | null = null;
+      let startX = 0;
+      let startY = 0;
+      let moved = false;
+      let timer: number | null = null;
+      let pressX = 0;
+      let pressY = 0;
+
+      const clearTimer = () => {
+        if (timer) window.clearTimeout(timer);
+        timer = null;
+      };
+
+      const handlePointerDown = (event: React.PointerEvent) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if ((event.target as HTMLElement).closest('input, button, a, summary')) return;
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+        pressX = event.clientX;
+        pressY = event.clientY;
+        moved = false;
+        event.currentTarget.setPointerCapture(pointerId);
+        clearTimer();
+        timer = window.setTimeout(() => {
+          const selectedItems = selected.has(item.relative_path)
+            ? Array.from(selected).map((path) => itemsByPath.get(path)).filter(Boolean)
+            : [item];
+          openContextMenu(pressX, pressY, selectedItems);
+        }, LONG_PRESS_MS);
+      };
+
+      const handlePointerMove = (event: React.PointerEvent) => {
+        if (pointerId !== event.pointerId) return;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        if (!moved && (dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
+          moved = true;
+          clearTimer();
+        }
+      };
+
+      const handlePointerUp = (event: React.PointerEvent) => {
+        if (pointerId !== event.pointerId) return;
+        clearTimer();
+        event.currentTarget.releasePointerCapture(pointerId);
+        pointerId = null;
+        if (moved) return;
+        if (!activeProject) return;
+        if (selected.has(item.relative_path)) openDrawer(item);
+        else toggleSelected(item.relative_path);
+      };
+
+      const handlePointerCancel = () => {
+        clearTimer();
+        pointerId = null;
+      };
+
+      const handleContextMenu = (event: React.MouseEvent) => {
+        event.preventDefault();
+        const selectedItems = selected.has(item.relative_path)
+          ? Array.from(selected).map((path) => itemsByPath.get(path)).filter(Boolean)
+          : [item];
+        openContextMenu(event.clientX, event.clientY, selectedItems);
+      };
+
+      return {
+        onPointerDown: handlePointerDown,
+        onPointerMove: handlePointerMove,
+        onPointerUp: handlePointerUp,
+        onPointerCancel: handlePointerCancel,
+        onContextMenu: handleContextMenu,
+      };
+    },
+    [activeProject, itemsByPath, openContextMenu, openDrawer, selected, toggleSelected],
+  );
+
   const handlePreviewSelected = useCallback(() => {
     const first = Array.from(selected)[0];
     const item = media.find((entry) => entry.relative_path === first);
@@ -880,6 +1129,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const handleAssetDragStart = useCallback(
     (item: MediaItem) => (event: React.DragEvent) => {
       if (!activeProject) return;
+      setAssetDragActive(true);
       const payload = {
         project: activeProject.name,
         source: activeProject.source,
@@ -896,7 +1146,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       event.dataTransfer.effectAllowed = 'move';
     },
-    [activeProject, resolveAssetUrl, selected],
+    [activeProject, resolveAssetUrl, selected, setAssetDragActive],
   );
 
   const handleProjectDrop = useCallback(
@@ -954,6 +1204,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [actionsOpen]);
 
   useEffect(() => {
+    if (!contextMenu) return;
+    const handleOutside = (event: PointerEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) return;
+      setContextMenu(null);
+    };
+    document.addEventListener('pointerdown', handleOutside);
+    return () => document.removeEventListener('pointerdown', handleOutside);
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const menu = contextMenuRef.current;
+    const padding = 12;
+    const rect = menu.getBoundingClientRect();
+    const maxX = window.innerWidth - rect.width - padding;
+    const maxY = window.innerHeight - rect.height - padding;
+    const left = Math.max(padding, Math.min(contextMenu.x, maxX));
+    const top = Math.max(padding, Math.min(contextMenu.y, maxY));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  }, [contextMenu]);
+
+  useEffect(() => {
     addToast('good', 'Boot', 'Loading sources + projects…');
     void loadSources();
     void loadProjects();
@@ -991,6 +1264,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           setSidebarOpen(false);
           event.preventDefault();
         }
+        if (contextMenu) {
+          setContextMenu(null);
+        }
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
@@ -1007,7 +1283,124 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, []);
 
+  const [topbarHidden, setTopbarHidden] = useState(false);
+  const topbarRef = useRef<HTMLDivElement | null>(null);
+  const topbarRevealRef = useRef<HTMLDivElement | null>(null);
+  const topbarIntentRef = useRef<IntentController | null>(null);
+
+  useEffect(() => {
+    const topbar = topbarRef.current;
+    const reveal = topbarRevealRef.current;
+    if (!topbar || !reveal) return;
+
+    const intent = createIntentController({
+      onOpen: () => setTopbarHidden(false),
+      onClose: () => setTopbarHidden(true),
+      closeDelay: 320,
+    });
+    topbarIntentRef.current = intent;
+
+    const handleEnter = () => intent.scheduleOpen(0);
+    const handleLeave = () => intent.scheduleClose(280);
+
+    topbar.addEventListener('pointerenter', handleEnter);
+    topbar.addEventListener('pointerleave', handleLeave);
+    reveal.addEventListener('pointerenter', handleEnter);
+    reveal.addEventListener('pointerleave', handleLeave);
+    reveal.addEventListener('pointerdown', handleEnter);
+
+    const handleOutside = (event: PointerEvent) => {
+      if (intent.isPinned()) return;
+      if (topbar.contains(event.target as Node) || reveal.contains(event.target as Node)) return;
+      intent.scheduleClose(120);
+    };
+    document.addEventListener('pointerdown', handleOutside);
+
+    intent.setOpen(true);
+    intent.scheduleClose(1600);
+
+    return () => {
+      topbar.removeEventListener('pointerenter', handleEnter);
+      topbar.removeEventListener('pointerleave', handleLeave);
+      reveal.removeEventListener('pointerenter', handleEnter);
+      reveal.removeEventListener('pointerleave', handleLeave);
+      reveal.removeEventListener('pointerdown', handleEnter);
+      document.removeEventListener('pointerdown', handleOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    const brand = brandRef.current;
+    if (!brand) return;
+    const intent = createIntentController({
+      onOpen: () => {
+        if (assetDragActive) setSidebarOpen(true);
+      },
+      onClose: () => {
+        if (assetDragActive) setSidebarOpen(false);
+      },
+      openDelay: 320,
+      closeDelay: 260,
+    });
+    const handleEnter = () => {
+      if (assetDragActive) intent.scheduleOpen(320);
+    };
+    const handleLeave = () => {
+      if (assetDragActive) intent.scheduleClose(260);
+    };
+    brand.addEventListener('pointerenter', handleEnter);
+    brand.addEventListener('pointerleave', handleLeave);
+    return () => {
+      brand.removeEventListener('pointerenter', handleEnter);
+      brand.removeEventListener('pointerleave', handleLeave);
+    };
+  }, [assetDragActive, setSidebarOpen]);
+
+  useEffect(() => {
+    const root = topbarRef.current;
+    if (!root) return;
+    const dropdowns = Array.from(root.querySelectorAll('details.dropdown'));
+    if (!dropdowns.length) return;
+
+    const cleanups: Array<() => void> = [];
+
+    dropdowns.forEach((dropdown) => {
+      const intent = createIntentController({
+        onOpen: () => dropdown.setAttribute('open', ''),
+        onClose: () => dropdown.removeAttribute('open'),
+        openDelay: 80,
+        closeDelay: 200,
+      });
+      const enter = () => intent.scheduleOpen();
+      const leave = () => intent.scheduleClose();
+      dropdown.addEventListener('pointerenter', enter);
+      dropdown.addEventListener('pointerleave', leave);
+      cleanups.push(() => {
+        dropdown.removeEventListener('pointerenter', enter);
+        dropdown.removeEventListener('pointerleave', leave);
+      });
+    });
+
+    const handleOutside = (event: PointerEvent) => {
+      dropdowns.forEach((dropdown) => {
+        if (!dropdown.hasAttribute('open')) return;
+        if (dropdown.contains(event.target as Node)) return;
+        dropdown.removeAttribute('open');
+      });
+    };
+    document.addEventListener('pointerdown', handleOutside);
+    cleanups.push(() => document.removeEventListener('pointerdown', handleOutside));
+
+    return () => {
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, []);
+
   const selectedCount = selected.size;
+  const contextActions = useMemo(
+    () => (contextMenu ? getContextActions(contextMenu.items) : []),
+    [contextMenu, getContextActions],
+  );
   const uploadCaption = activeProject
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
@@ -1018,10 +1411,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   };
 
   return (
-    <div className="app">
-      <div className="topbar">
+    <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`}>
+      <div className="topbar-reveal" ref={topbarRevealRef} aria-hidden="true" />
+      <div className="topbar" ref={topbarRef}>
         <div className="topbar-inner">
-          <div className="brand" title="LAN-only media-sync-api explorer">
+          <div className="brand" title="LAN-only media-sync-api explorer" ref={brandRef}>
             <div className="logo" aria-hidden="true"></div>
             <div>
               <h1>media-sync-api</h1>
@@ -1048,6 +1442,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   autoComplete="off"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
+                  onFocus={() => topbarIntentRef.current?.setPinned(true)}
+                  onBlur={() => {
+                    topbarIntentRef.current?.setPinned(false);
+                    topbarIntentRef.current?.scheduleClose(360);
+                  }}
                 />
                 <div className="search-toolbar" aria-label="Search filters">
                   <details className="dropdown">
@@ -1500,10 +1899,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               ) : (
                 filteredMedia.map((item) => {
                   const kind = guessKind(item);
+                  const orient = inferOrientationFromItem(item) || 'square';
                   const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
                   const proj = projectLabel(item);
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
+                  const pointerHandlers = buildAssetPointerHandlers(item);
                   const thumbKey = getThumbCacheKey(item);
                   const cachedThumb = thumbs.get(thumbKey) || thumbCacheRef.current.get(thumbKey);
                   const rawThumbUrl = cachedThumb
@@ -1519,18 +1920,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     <div
                       key={`${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
                       className={`asset ${isSelected ? 'selected' : ''}`}
-                      onClick={() => openDrawer(item)}
+                      data-kind={kind}
+                      data-orient={orient}
+                      {...pointerHandlers}
                       draggable={canSelect}
                       onDragStart={canSelect ? handleAssetDragStart(item) : undefined}
+                      onDragEnd={() => setAssetDragActive(false)}
                     >
                       <div
                         className="thumb"
                         ref={(node) => registerThumbTarget(node, item, kind)}
                       >
                         <img
+                          className="asset-thumb"
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
+                          onLoad={(event) => updateCardOrientation(event.currentTarget)}
                           onError={(event) => {
                             const target = event.currentTarget;
                             if (target.src !== fallbackThumb) target.src = fallbackThumb;
@@ -1579,6 +1985,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const proj = projectLabel(item);
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
+                  const pointerHandlers = buildAssetPointerHandlers(item);
                   const thumbKey = getThumbCacheKey(item);
                   const cachedThumb = thumbs.get(thumbKey) || thumbCacheRef.current.get(thumbKey);
                   const rawThumbUrl = cachedThumb
@@ -1594,17 +2001,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     <div
                       className="row"
                       key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
+                      {...pointerHandlers}
                       draggable={canSelect}
                       onDragStart={canSelect ? handleAssetDragStart(item) : undefined}
+                      onDragEnd={() => setAssetDragActive(false)}
                     >
                       <div
                         className="mini"
                         ref={(node) => registerThumbTarget(node, item, kind)}
                       >
                         <img
+                          className="asset-thumb"
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
+                          onLoad={(event) => updateCardOrientation(event.currentTarget)}
                           onError={(event) => {
                             const target = event.currentTarget;
                             if (target.src !== fallbackThumb) target.src = fallbackThumb;
@@ -1774,6 +2185,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </div>
         </div>
       </aside>
+
+      {contextMenu ? (
+        <div
+          className="context-menu open"
+          ref={contextMenuRef}
+          role="menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {contextActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              onClick={() => {
+                closeContextMenu();
+                action.handler();
+              }}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="toasts">
         {toasts.map((toast) => (
