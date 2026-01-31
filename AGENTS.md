@@ -607,3 +607,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-27)
 - Fixed Next.js Explorer toast hook dependencies to avoid build-time scope errors.
+
+### Latest Implementation Notes (2025-05-28)
+- Metadata sidecar updates now persist ingest/schema/tag defaults when existing entries are missing or outdated, ensuring updates are written during ensure_metadata calls.
