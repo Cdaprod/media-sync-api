@@ -30,7 +30,7 @@ export function getMediaType(item: MediaItem): MediaTypeFilter {
   if (raw === 'video' || raw === 'image' || raw === 'audio') return raw;
   if (raw) return 'unknown';
   const p = (item.relative_path || '').toLowerCase();
-  if (/\.(mp4|mov|mkv|webm|m4v)$/.test(p)) return 'video';
+  if (/\.(mp4|mov|mkv|webm|m4v|avi)$/.test(p)) return 'video';
   if (/\.(jpg|jpeg|png|gif|webp|heic)$/.test(p)) return 'image';
   if (/\.(mp3|wav|m4a|aac|flac)$/.test(p)) return 'audio';
   return 'unknown';
