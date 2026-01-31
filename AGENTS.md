@@ -571,3 +571,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-15)
 - OBS browser-source transforms now stretch to the canvas so the player handles cover/contain while edges align to the scene bounds.
+
+### Latest Implementation Notes (2025-05-16)
+- Reindexing and media listings now skip thumbnail-style assets (e.g., thumb directories or `.thumb.` filenames) so explorers do not index generated previews.
