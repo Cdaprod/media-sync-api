@@ -580,3 +580,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-18)
 - The search type filter now uses a custom dropdown (details/summary + styled menu) to avoid native select styling; keep the type list in sync across `public/explorer.html` and `docker/packages/Explorer/src/ExplorerApp.tsx` along with shared dropdown styles in `docker/packages/Explorer/src/styles.css`.
+
+### Latest Implementation Notes (2025-05-19)
+- The action-panel sort control now uses a custom dropdown overlaying the hidden sort `<select>` (still driving state changes) so native select styling never shows; keep sort labels and option lists aligned in `public/explorer.html` and `docker/packages/Explorer/src/ExplorerApp.tsx`.
