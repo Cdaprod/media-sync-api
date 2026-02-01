@@ -613,3 +613,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-29)
 - Restored all-project preview taps in the explorers while keeping selection gated to active projects, and tightened context-menu item selection typing to keep Next.js builds green.
+
+### Latest Implementation Notes (2025-05-30)
+- Explorer grid tiles are now tighter and near-borderless with minimal rounding, and filename/path metadata renders as a translucent overlay on top of thumbnails in both static and Next.js explorers.
