@@ -616,3 +616,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-30)
 - Explorer grid tiles are now tighter and near-borderless with minimal rounding, and filename/path metadata renders as a translucent overlay on top of thumbnails in both static and Next.js explorers.
+
+### Latest Implementation Notes (2025-05-31)
+- Explorer grid overlays are now unified into a single HUD layout (badges, size, checkbox, metadata) to prevent collisions, with tighter gaps and landscape/portrait aspect ratios shifted toward near-square tiles.

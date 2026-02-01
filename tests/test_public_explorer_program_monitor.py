@@ -46,9 +46,13 @@ def test_explorer_grid_responsive_rules_and_orientation_hooks():
 
 def test_explorer_grid_overlay_metadata():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
-    assert 'tile-overlay' in html
-    assert 'tile-title' in html
-    assert 'tile-sub' in html
+    assert 'asset-overlay' in html
+    assert 'asset-ol-tl' in html
+    assert 'asset-ol-tr' in html
+    assert 'asset-ol-bl' in html
+    assert 'asset-ol-bottom' in html
+    assert 'asset-title' in html
+    assert 'asset-subtitle' in html
 
 
 def test_explorer_topbar_intent_controller():
