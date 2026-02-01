@@ -11,10 +11,12 @@
       --panel: rgba(255,255,255,0.06);
       --panel2: rgba(255,255,255,0.09);
       --border: rgba(255,255,255,0.10);
-      --grid-gap: 12px;
+      --grid-gap: 8px;
       --grid-cols: 3;
       --card-bg: rgba(255,255,255,0.05);
       --card-border: rgba(255,255,255,0.10);
+      --asset-radius: 8px;
+      --asset-border: rgba(255,255,255,0);
       --text: rgba(255,255,255,0.92);
       --muted: rgba(255,255,255,0.65);
       --muted2: rgba(255,255,255,0.45);
@@ -42,7 +44,7 @@
       :root{ --grid-cols: 5; }
     }
     @media (max-width: 420px){
-      :root{ --grid-gap: 10px; }
+      :root{ --grid-gap: 6px; }
     }
 
     * { box-sizing: border-box; }
@@ -649,7 +651,7 @@
 
     /* Grid/List */
     .grid{
-      padding: 14px;
+      padding: 10px;
       column-count: var(--grid-cols);
       column-gap: var(--grid-gap);
     }
@@ -665,20 +667,19 @@
       width: 100%;
       break-inside: avoid;
       margin-bottom: var(--grid-gap);
-      border: 1px solid var(--card-border);
-      background: var(--card-bg);
-      border-radius: var(--radius2);
+      border: 1px solid var(--asset-border);
+      background: transparent;
+      border-radius: var(--asset-radius);
       overflow:hidden;
       cursor:pointer;
-      transition: transform var(--dur-med) var(--ease-snappy), background var(--dur-med) var(--ease-settle), border-color var(--dur-med) var(--ease-settle);
+      transition: transform var(--dur-fast) var(--ease-snappy), filter var(--dur-fast) var(--ease-settle), border-color var(--dur-fast) var(--ease-settle);
       position: relative;
       will-change: transform;
     }
-    .asset:hover{ transform: translateY(-3px) scale(1.01); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); }
+    .asset:hover{ transform: translateY(-1px) scale(1.005); filter: brightness(1.03); border-color: rgba(255,255,255,0.12); }
 
     .thumb{
-      background: rgba(255,255,255,0.04);
-      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.18);
       display:flex;
       align-items:center;
       justify-content:center;
@@ -710,32 +711,39 @@
       text-align:center;
     }
 
-    .asset .body{
-      padding: 8px 10px 10px;
-      display:flex;
-      flex-direction: column;
-      gap: 6px;
+    .asset .tile-overlay{
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 10px 12px;
+      display: grid;
+      gap: 4px;
+      background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.2), rgba(0,0,0,0));
+      pointer-events: none;
     }
-    .asset .title{
+    .asset .tile-title{
       font-size: 12px;
       font-weight: 650;
-      line-height: 1.25;
-      overflow:hidden;
-      display:-webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
-    .asset .sub{
-      font-size: 11px;
-      color: var(--muted);
-      overflow:hidden;
-      white-space: nowrap;
+      line-height: 1.2;
+      color: rgba(255,255,255,0.95);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+      overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .asset .tile-sub{
+      font-size: 11px;
+      color: rgba(255,255,255,0.72);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .badges{
       position:absolute;
-      top: 10px; left: 10px;
+      top: 8px; left: 8px;
       display:flex;
       gap: 6px;
       flex-wrap: wrap;
@@ -756,9 +764,9 @@
 
     .selector{
       position:absolute;
-      top: 10px; right: 10px;
+      top: 8px; right: 8px;
       width: 34px; height: 34px;
-      border-radius: 12px;
+      border-radius: 10px;
       border: 1px solid var(--border);
       background: rgba(0,0,0,0.25);
       display:flex;
@@ -3143,6 +3151,10 @@
           <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video" data-thumb-key="${escapeHtml(thumbKey)}" data-state="idle" data-attempts="0"` : ''}>
             <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
               onerror="this.onerror=null;this.src='${escapeHtml(fallbackThumb)}';" />
+            <div class="tile-overlay">
+              <div class="tile-title">${escapeHtml(title)}</div>
+              <div class="tile-sub">${escapeHtml(sub)}</div>
+            </div>
             <div class="badges">
               <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
               <span class="badge">${escapeHtml(size)}</span>
@@ -3150,10 +3162,6 @@
             <div class="selector" title="Select">
               <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
             </div>
-          </div>
-          <div class="body">
-            <div class="title">${escapeHtml(title)}</div>
-            <div class="sub">${escapeHtml(sub)}</div>
           </div>
         `;
 

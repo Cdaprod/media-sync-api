@@ -1964,6 +1964,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             if (target.src !== fallbackThumb) target.src = fallbackThumb;
                           }}
                         />
+                        <div className="tile-overlay">
+                          <div className="tile-title">{title}</div>
+                          <div className="tile-sub">{sub}</div>
+                        </div>
                         <div className="badges">
                           <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
                           <span className="badge">{size}</span>
@@ -1978,10 +1982,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             onChange={() => toggleSelected(item.relative_path)}
                           />
                         </div>
-                      </div>
-                      <div className="body">
-                        <div className="title">{title}</div>
-                        <div className="sub">{sub}</div>
                       </div>
                     </div>
                   );
