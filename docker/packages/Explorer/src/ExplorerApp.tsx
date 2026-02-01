@@ -1964,23 +1964,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             if (target.src !== fallbackThumb) target.src = fallbackThumb;
                           }}
                         />
-                        <div className="tile-overlay">
-                          <div className="tile-title">{title}</div>
-                          <div className="tile-sub">{sub}</div>
-                        </div>
-                        <div className="badges">
-                          <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
-                          <span className="badge">{size}</span>
-                        </div>
-                        <div className="selector" title="Select">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            aria-label="Select media"
-                            disabled={!canSelect}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={() => toggleSelected(item.relative_path)}
-                          />
+                        <div className="asset-overlay">
+                          <div className="asset-ol-tl">
+                            <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
+                          </div>
+                          <div className="asset-ol-tr">
+                            <div className="selector" title="Select">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                aria-label="Select media"
+                                disabled={!canSelect}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={() => toggleSelected(item.relative_path)}
+                              />
+                            </div>
+                          </div>
+                          <div className="asset-ol-bl">
+                            <span className="badge">{size}</span>
+                          </div>
+                          <div className="asset-ol-bottom">
+                            <div className="asset-title">{title}</div>
+                            <div className="asset-subtitle">{sub}</div>
+                          </div>
                         </div>
                       </div>
                     </div>

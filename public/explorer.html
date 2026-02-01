@@ -11,7 +11,7 @@
       --panel: rgba(255,255,255,0.06);
       --panel2: rgba(255,255,255,0.09);
       --border: rgba(255,255,255,0.10);
-      --grid-gap: 8px;
+      --grid-gap: 6px;
       --grid-cols: 3;
       --card-bg: rgba(255,255,255,0.05);
       --card-border: rgba(255,255,255,0.10);
@@ -42,6 +42,9 @@
     }
     @media (orientation: landscape) and (min-width: 700px){
       :root{ --grid-cols: 5; }
+    }
+    @media (min-width: 900px){
+      :root{ --grid-gap: 8px; }
     }
     @media (max-width: 420px){
       :root{ --grid-gap: 6px; }
@@ -695,8 +698,8 @@
       display:grid;
       place-items:center;
     }
-    .asset[data-orient="portrait"] .thumb{ aspect-ratio: 9 / 16; }
-    .asset[data-orient="landscape"] .thumb{ aspect-ratio: 16 / 9; }
+    .asset[data-orient="portrait"] .thumb{ aspect-ratio: 3 / 4; }
+    .asset[data-orient="landscape"] .thumb{ aspect-ratio: 4 / 3; }
     .asset[data-orient="square"] .thumb{ aspect-ratio: 1 / 1; }
     .asset-thumb{
       width: 100%; height: 100%;
@@ -711,7 +714,36 @@
       text-align:center;
     }
 
-    .asset .tile-overlay{
+    .asset .asset-overlay{
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .asset .asset-ol-tl{
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      display:flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      max-width: calc(100% - 20px);
+      pointer-events: auto;
+    }
+    .asset .asset-ol-tr{
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      pointer-events: auto;
+    }
+    .asset .asset-ol-bl{
+      position: absolute;
+      left: 8px;
+      bottom: 46px;
+      display:flex;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .asset .asset-ol-bottom{
       position: absolute;
       left: 0;
       right: 0;
@@ -719,10 +751,10 @@
       padding: 10px 10px 12px;
       display: grid;
       gap: 4px;
-      background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0.2), rgba(0,0,0,0));
+      background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.2), rgba(0,0,0,0));
       pointer-events: none;
     }
-    .asset .tile-title{
+    .asset .asset-title{
       font-size: 12px;
       font-weight: 650;
       line-height: 1.2;
@@ -732,22 +764,13 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .asset .tile-sub{
+    .asset .asset-subtitle{
       font-size: 11px;
       color: rgba(255,255,255,0.72);
       text-shadow: 0 1px 2px rgba(0,0,0,0.45);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-
-    .badges{
-      position:absolute;
-      top: 8px; left: 8px;
-      display:flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      max-width: calc(100% - 20px);
     }
     .badge{
       font-size: 11px;
@@ -763,8 +786,6 @@
     .badge.kind-doc{ border-color: rgba(124,58,237,0.35); }
 
     .selector{
-      position:absolute;
-      top: 8px; right: 8px;
       width: 34px; height: 34px;
       border-radius: 10px;
       border: 1px solid var(--border);
@@ -3151,16 +3172,22 @@
           <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video" data-thumb-key="${escapeHtml(thumbKey)}" data-state="idle" data-attempts="0"` : ''}>
             <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
               onerror="this.onerror=null;this.src='${escapeHtml(fallbackThumb)}';" />
-            <div class="tile-overlay">
-              <div class="tile-title">${escapeHtml(title)}</div>
-              <div class="tile-sub">${escapeHtml(sub)}</div>
-            </div>
-            <div class="badges">
-              <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
-              <span class="badge">${escapeHtml(size)}</span>
-            </div>
-            <div class="selector" title="Select">
-              <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+            <div class="asset-overlay">
+              <div class="asset-ol-tl">
+                <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
+              </div>
+              <div class="asset-ol-tr">
+                <div class="selector" title="Select">
+                  <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+                </div>
+              </div>
+              <div class="asset-ol-bl">
+                <span class="badge">${escapeHtml(size)}</span>
+              </div>
+              <div class="asset-ol-bottom">
+                <div class="asset-title">${escapeHtml(title)}</div>
+                <div class="asset-subtitle">${escapeHtml(sub)}</div>
+              </div>
             </div>
           </div>
         `;
