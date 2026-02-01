@@ -622,3 +622,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-01)
 - Explorer grids now cache asset orientation per thumbnail key and lock card ratios when cached or provided, reducing layout shifts while thumbs load and persisting orientation in localStorage for fast re-renders.
+
+### Latest Implementation Notes (2025-06-02)
+- Explorer thumbnails now prefetch earlier via expanded IntersectionObserver root margins and eager-load the first grid screenful to avoid “only after scroll” delays.
