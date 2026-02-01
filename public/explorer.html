@@ -2748,7 +2748,7 @@
           if (state === 'loaded' || attempts >= 3) return;
           requestIdle(() => enqueueThumbWork(rel, url, duration, entry.target, cacheKey));
         });
-      }, { root: el('mediaScroll'), rootMargin: '200px 0px', threshold: 0.1 });
+      }, { root: el('mediaScroll'), rootMargin: '1200px 0px', threshold: 0.01 });
       return thumbObserver;
     }
 
@@ -3176,7 +3176,8 @@
         return;
       }
 
-      for (const it of items){
+      const eagerCount = 18;
+      items.forEach((it, index) => {
         const kind = guessKind(it);
         const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
         const proj = projectLabel(it);
@@ -3212,6 +3213,7 @@
         card.dataset.orientLocked = orientLocked ? 'true' : 'false';
         card.dataset.thumbKey = thumbKey || '';
 
+        const isEager = index < eagerCount;
         card.innerHTML = `
           <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video" data-thumb-key="${escapeHtml(thumbKey)}" data-state="idle" data-attempts="0"` : ''}>
             <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
@@ -3238,6 +3240,10 @@
 
         const thumbImg = card.querySelector('.asset-thumb');
         if (thumbImg){
+          if (isEager){
+            thumbImg.loading = 'eager';
+            thumbImg.fetchPriority = 'high';
+          }
           if (thumbImg.complete) updateCardOrientation(card, thumbImg);
           else thumbImg.addEventListener('load', () => updateCardOrientation(card, thumbImg), { once: true });
         }
@@ -3251,7 +3257,7 @@
         wireAssetPointerHandlers(card, it);
         g.appendChild(card);
 
-      if (!thumbUrl && kind === 'video'){
+        if (!thumbUrl && kind === 'video'){
           const t = card.querySelector('.thumb');
           primeThumbFromCache(t).then((found) => {
             if (!found) ensureThumbObserver().observe(t);
@@ -3293,7 +3299,7 @@
           });
         }
         l.appendChild(row);
-      }
+      });
       scheduleThumbSweep();
     }
 

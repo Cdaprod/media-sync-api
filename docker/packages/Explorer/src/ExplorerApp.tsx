@@ -936,7 +936,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           enqueueThumbWork(target);
         });
       },
-      { root: mediaScrollRef.current, rootMargin: '200px 0px', threshold: 0.1 },
+      { root: mediaScrollRef.current, rootMargin: '1200px 0px', threshold: 0.01 },
     );
     thumbObserverRef.current = observer;
     return observer;
@@ -1967,8 +1967,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
                 </div>
               ) : (
-                filteredMedia.map((item) => {
+                filteredMedia.map((item, index) => {
                   const kind = guessKind(item);
+                  const isEager = index < 18;
                   const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
                   const proj = projectLabel(item);
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
@@ -2008,7 +2009,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           className="asset-thumb"
                           src={safeThumbUrl}
                           alt={title}
-                          loading="lazy"
+                          loading={isEager ? 'eager' : 'lazy'}
+                          fetchPriority={isEager ? 'high' : 'auto'}
                           onLoad={(event) => updateCardOrientation(event.currentTarget)}
                           onError={(event) => {
                             const target = event.currentTarget;

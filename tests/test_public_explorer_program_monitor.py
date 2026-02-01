@@ -54,6 +54,7 @@ def test_explorer_grid_overlay_metadata():
     assert 'asset-title' in html
     assert 'asset-subtitle' in html
     assert 'media-sync-orient-cache-v1' in html
+    assert "rootMargin: '1200px 0px'" in html
 
 
 def test_explorer_topbar_intent_controller():
