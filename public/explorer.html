@@ -2066,9 +2066,13 @@
           ui.dragTarget = null;
           return;
         }
-        if (!state.activeProject) return;
-        if (state.selected.has(item.relative_path)) openDrawer(item);
-        else toggleSelected(item.relative_path);
+        if (state.selected.has(item.relative_path)) {
+          openDrawer(item);
+        } else if (state.activeProject) {
+          toggleSelected(item.relative_path);
+        } else {
+          openDrawer(item);
+        }
       });
 
       target.addEventListener('pointercancel', () => {
