@@ -1045,7 +1045,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         clearTimer();
         timer = window.setTimeout(() => {
           const selectedItems = selected.has(item.relative_path)
-            ? Array.from(selected).map((path) => itemsByPath.get(path)).filter(Boolean)
+            ? Array.from(selected)
+              .map((path) => itemsByPath.get(path))
+              .filter((entry): entry is MediaItem => Boolean(entry))
             : [item];
           openContextMenu(pressX, pressY, selectedItems);
         }, LONG_PRESS_MS);
@@ -1085,9 +1087,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           }
           return;
         }
-        if (!activeProject) return;
-        if (selected.has(item.relative_path)) openDrawer(item);
-        else toggleSelected(item.relative_path);
+        if (selected.has(item.relative_path)) {
+          openDrawer(item);
+        } else if (activeProject) {
+          toggleSelected(item.relative_path);
+        } else {
+          openDrawer(item);
+        }
       };
 
       const handlePointerCancel = () => {
@@ -1101,7 +1107,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         event.preventDefault();
         if (dragging) return;
         const selectedItems = selected.has(item.relative_path)
-          ? Array.from(selected).map((path) => itemsByPath.get(path)).filter(Boolean)
+          ? Array.from(selected)
+            .map((path) => itemsByPath.get(path))
+            .filter((entry): entry is MediaItem => Boolean(entry))
           : [item];
         openContextMenu(event.clientX, event.clientY, selectedItems);
       };

@@ -610,3 +610,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-05-28)
 - Metadata sidecar updates now persist ingest/schema/tag defaults when existing entries are missing or outdated, ensuring updates are written during ensure_metadata calls.
+
+### Latest Implementation Notes (2025-05-29)
+- Restored all-project preview taps in the explorers while keeping selection gated to active projects, and tightened context-menu item selection typing to keep Next.js builds green.
