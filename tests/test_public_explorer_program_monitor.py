@@ -53,6 +53,7 @@ def test_explorer_grid_overlay_metadata():
     assert 'asset-ol-bottom' in html
     assert 'asset-title' in html
     assert 'asset-subtitle' in html
+    assert 'media-sync-orient-cache-v1' in html
 
 
 def test_explorer_topbar_intent_controller():

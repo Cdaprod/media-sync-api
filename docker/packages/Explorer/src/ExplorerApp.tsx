@@ -126,15 +126,6 @@ const inferOrientationFromItem = (item: MediaItem) => (
   inferOrientation((item as MediaItem & { width?: number }).width, (item as MediaItem & { height?: number }).height)
 );
 
-const updateCardOrientation = (mediaEl: HTMLImageElement | HTMLVideoElement) => {
-  const width = mediaEl instanceof HTMLImageElement ? mediaEl.naturalWidth : mediaEl.videoWidth;
-  const height = mediaEl instanceof HTMLImageElement ? mediaEl.naturalHeight : mediaEl.videoHeight;
-  const orient = inferOrientation(width, height);
-  if (!orient) return;
-  const card = mediaEl.closest('.asset') as HTMLElement | null;
-  if (card) card.dataset.orient = orient;
-};
-
 const buildThumbFallback = (label: string) => {
   const safeLabel = label.replace(/[^a-z0-9 ]/gi, '').slice(0, 12) || 'MEDIA';
   const svg = `
@@ -159,6 +150,30 @@ const buildThumbFallback = (label: string) => {
 const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
 const THUMB_MAX_WORKERS = 2;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
+const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
+
+const readOrientationCache = (): Map<string, string> => {
+  if (typeof window === 'undefined') return new Map();
+  try {
+    const raw = window.localStorage.getItem(ORIENT_CACHE_KEY);
+    if (!raw) return new Map();
+    const entries = JSON.parse(raw);
+    if (!Array.isArray(entries)) return new Map();
+    return new Map(entries.filter(([key, value]) => Boolean(key && value)));
+  } catch {
+    return new Map();
+  }
+};
+
+const writeOrientationCache = (cache: Map<string, string>) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const entries = Array.from(cache.entries()).slice(-1000);
+    window.localStorage.setItem(ORIENT_CACHE_KEY, JSON.stringify(entries));
+  } catch {
+    // ignore storage errors
+  }
+};
 
 const TYPE_LABELS: Record<MediaTypeFilter, string> = {
   all: 'All types',
@@ -398,6 +413,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const processThumbQueueRef = useRef<() => void>(() => {});
   const thumbSweepTimerRef = useRef<number | null>(null);
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
+  const orientationCacheRef = useRef<Map<string, string>>(new Map());
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
   const filteredMedia = useMemo(() => {
@@ -434,6 +450,35 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const resolveHint = selected.size
     ? `${selected.size} item(s) queued.`
     : 'Select clips to enable.';
+
+  useEffect(() => {
+    orientationCacheRef.current = readOrientationCache();
+  }, []);
+
+  const getCachedOrientation = useCallback((key: string) => {
+    return orientationCacheRef.current.get(key) ?? null;
+  }, []);
+
+  const cacheOrientation = useCallback((key: string, orient: string) => {
+    if (!key || !orient) return;
+    if (orientationCacheRef.current.get(key) === orient) return;
+    orientationCacheRef.current.set(key, orient);
+    writeOrientationCache(orientationCacheRef.current);
+  }, []);
+
+  const updateCardOrientation = useCallback((
+    mediaEl: HTMLImageElement | HTMLVideoElement,
+  ) => {
+    const card = mediaEl.closest('.asset') as HTMLElement | null;
+    if (!card || card.dataset.orientLocked === 'true') return;
+    const width = mediaEl instanceof HTMLImageElement ? mediaEl.naturalWidth : mediaEl.videoWidth;
+    const height = mediaEl instanceof HTMLImageElement ? mediaEl.naturalHeight : mediaEl.videoHeight;
+    const orient = inferOrientation(width, height);
+    if (!orient) return;
+    card.dataset.orient = orient;
+    const cacheKey = card.dataset.thumbKey || card.dataset.relative || '';
+    cacheOrientation(cacheKey, orient);
+  }, [cacheOrientation]);
 
   const buildUploadUrl = useCallback((project: Project) => {
     const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
@@ -1924,13 +1969,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               ) : (
                 filteredMedia.map((item) => {
                   const kind = guessKind(item);
-                  const orient = inferOrientationFromItem(item) || 'square';
                   const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
                   const proj = projectLabel(item);
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
                   const thumbKey = getThumbCacheKey(item);
+                  const cachedOrient = getCachedOrientation(thumbKey || item.relative_path || '');
+                  const itemOrient = inferOrientationFromItem(item);
+                  const orient = itemOrient || cachedOrient || 'square';
+                  const orientLocked = Boolean(itemOrient || cachedOrient);
                   const cachedThumb = thumbs.get(thumbKey) || thumbCacheRef.current.get(thumbKey);
                   const rawThumbUrl = cachedThumb
                     || item.thumb_url
@@ -1947,6 +1995,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       className={`asset ${isSelected ? 'selected' : ''}`}
                       data-kind={kind}
                       data-orient={orient}
+                      data-orient-locked={orientLocked ? 'true' : 'false'}
+                      data-thumb-key={thumbKey}
+                      data-relative={item.relative_path || ''}
                       {...pointerHandlers}
                     >
                       <div

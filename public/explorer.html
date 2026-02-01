@@ -1445,6 +1445,7 @@
     const itemsByPath = new Map();
 
     const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
+    const ORIENT_CACHE_NAME = 'media-sync-orient-cache-v1';
     const THUMB_MAX_WORKERS = 2;
     const PREFS_KEY = 'media-sync-explorer-filters-v1';
     const thumbCache = new Map();
@@ -1455,6 +1456,7 @@
     let thumbSweepTimer = null;
     let thumbQueueScheduled = false;
     let thumbObserver = null;
+    const orientationCache = new Map();
 
     // -------------------------
     // Utils
@@ -1472,6 +1474,38 @@
       return String(s ?? '')
         .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
         .replaceAll('"','&quot;').replaceAll("'","&#039;");
+    }
+
+    function loadOrientationCache(){
+      try{
+        const raw = window.localStorage.getItem(ORIENT_CACHE_NAME);
+        if (!raw) return;
+        const entries = JSON.parse(raw);
+        if (Array.isArray(entries)){
+          for (const [key, value] of entries){
+            if (key && value) orientationCache.set(key, value);
+          }
+        }
+      }catch{}
+    }
+
+    function persistOrientationCache(){
+      try{
+        const entries = Array.from(orientationCache.entries()).slice(-1000);
+        window.localStorage.setItem(ORIENT_CACHE_NAME, JSON.stringify(entries));
+      }catch{}
+    }
+
+    function cacheOrientation(key, orient){
+      if (!key || !orient) return;
+      if (orientationCache.get(key) === orient) return;
+      orientationCache.set(key, orient);
+      persistOrientationCache();
+    }
+
+    function getCachedOrientation(key){
+      if (!key) return null;
+      return orientationCache.get(key) || null;
     }
 
     function thumbCacheKey(item){
@@ -2147,11 +2181,16 @@
 
     function updateCardOrientation(card, mediaEl){
       if (!card || !mediaEl) return;
+      if (card.dataset.orientLocked === 'true') return;
       const orient = inferOrientation(
         mediaEl.naturalWidth || mediaEl.videoWidth,
         mediaEl.naturalHeight || mediaEl.videoHeight,
       );
-      if (orient) card.dataset.orient = orient;
+      if (orient){
+        card.dataset.orient = orient;
+        const cacheKey = card.dataset.thumbKey || card.dataset.relative || '';
+        cacheOrientation(cacheKey, orient);
+      }
     }
 
     function kindBadgeClass(kind){
@@ -3139,7 +3178,6 @@
 
       for (const it of items){
         const kind = guessKind(it);
-        const orient = inferOrientationFromItem(it) || 'square';
         const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
         const proj = projectLabel(it);
         const sub = proj ? `${it.relative_path || ''} • ${proj}` : (it.relative_path || '');
@@ -3149,6 +3187,10 @@
         // - it.thumb_url (image/jpg) for videos/images
         // Otherwise we can still show the actual stream_url for images (not always great for big video files).
         const thumbKey = thumbCacheKey(it);
+        const cachedOrient = getCachedOrientation(thumbKey || it.relative_path || '');
+        const itemOrient = inferOrientationFromItem(it);
+        const orient = itemOrient || cachedOrient || 'square';
+        const orientLocked = Boolean(itemOrient || cachedOrient);
         const cachedThumb = thumbKey ? thumbCache.get(thumbKey) : null;
         const fallbackThumb = buildThumbFallback(kind);
         const thumbUrl = cachedThumb || it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null);
@@ -3167,6 +3209,8 @@
         card.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         card.dataset.kind = kind;
         card.dataset.orient = orient;
+        card.dataset.orientLocked = orientLocked ? 'true' : 'false';
+        card.dataset.thumbKey = thumbKey || '';
 
         card.innerHTML = `
           <div class="thumb" ${(!thumbUrl && kind === 'video') ? `data-rel="${escapeHtml(it.relative_path)}" data-url="${escapeHtml(it.stream_url || '')}" data-duration="${escapeHtml(it.duration || '')}" data-kind="video" data-thumb-key="${escapeHtml(thumbKey)}" data-state="idle" data-attempts="0"` : ''}>
@@ -3805,6 +3849,7 @@
         closeContextMenu();
       });
       loadFilterPrefs();
+      loadOrientationCache();
       reconcileFilters();
       syncSidebarMode();
       window.matchMedia('(max-width: 860px)').addEventListener('change', () => {
