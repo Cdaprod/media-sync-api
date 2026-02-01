@@ -66,6 +66,19 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('buildThumbFallback'));
 });
 
+test('all-project clicks still open the drawer without selection', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.match(
+    content,
+    /selected\.has\(item\.relative_path\)[\s\S]*openDrawer\(item\)[\s\S]*else if \(activeProject\)[\s\S]*toggleSelected/,
+  );
+  assert.match(
+    content,
+    /else \{[\s\S]*openDrawer\(item\)[\s\S]*\}/,
+  );
+});
+
 test('static explorer uses OBS push helper', () => {
   const explorerPath = path.resolve(packageRoot, '..', '..', '..', 'public', 'explorer.html');
   const content = fs.readFileSync(explorerPath, 'utf8');
