@@ -625,3 +625,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-02)
 - Explorer thumbnails now prefetch earlier via expanded IntersectionObserver root margins and eager-load the first grid screenful to avoid “only after scroll” delays.
+
+### Latest Implementation Notes (2025-06-03)
+- Explorer layout now uses a single content surface with loading veil; eager thumbnails gate initial render to avoid placeholder pop-in, and grid density/radius tightened for a masonry-like feel.
+
+### Latest Implementation Notes (2025-06-04)
+- Next.js Explorer styles now match the tightened grid density and reduced tile radius used by the static explorer to keep the layout consistent.

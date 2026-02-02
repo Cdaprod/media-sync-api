@@ -151,6 +151,7 @@ const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
 const THUMB_MAX_WORKERS = 2;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
+const CONTENT_LOAD_TIMEOUT_MS = 700;
 
 const readOrientationCache = (): Map<string, string> => {
   if (typeof window === 'undefined') return new Map();
@@ -382,6 +383,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [assetDragActive, setAssetDragActive] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
   const dragPathsRef = useRef<string[]>([]);
 
   const [resolveProjectMode, setResolveProjectMode] = useState('current');
@@ -414,6 +416,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const thumbSweepTimerRef = useRef<number | null>(null);
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
+  const eagerThumbGateRef = useRef<{ pending: number; active: boolean }>({ pending: 0, active: false });
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
   const filteredMedia = useMemo(() => {
@@ -479,6 +482,40 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const cacheKey = card.dataset.thumbKey || card.dataset.relative || '';
     cacheOrientation(cacheKey, orient);
   }, [cacheOrientation]);
+
+  const markEagerThumbLoaded = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = event.currentTarget;
+    if (!eagerThumbGateRef.current.active) return;
+    if (!target.dataset.eager) return;
+    eagerThumbGateRef.current.pending = Math.max(0, eagerThumbGateRef.current.pending - 1);
+    if (eagerThumbGateRef.current.pending === 0) {
+      eagerThumbGateRef.current.active = false;
+      setContentLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view !== 'grid') {
+      setContentLoading(false);
+      eagerThumbGateRef.current.active = false;
+      eagerThumbGateRef.current.pending = 0;
+      return;
+    }
+    const eagerCount = Math.min(18, filteredMedia.length);
+    if (!eagerCount) {
+      setContentLoading(false);
+      return;
+    }
+    eagerThumbGateRef.current.active = true;
+    eagerThumbGateRef.current.pending = eagerCount;
+    setContentLoading(true);
+    const timer = window.setTimeout(() => {
+      eagerThumbGateRef.current.active = false;
+      eagerThumbGateRef.current.pending = 0;
+      setContentLoading(false);
+    }, CONTENT_LOAD_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [filteredMedia, view]);
 
   const buildUploadUrl = useCallback((project: Project) => {
     const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
@@ -1928,7 +1965,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </aside>
 
         <section
-          className={`content ${dragActive ? 'drag-active' : ''}`}
+          className={`content ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''}`}
           onDragOver={(event) => {
             if (event.dataTransfer?.types.includes('Files')) {
               event.preventDefault();
@@ -1945,6 +1982,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             }
           }}
         >
+          <div className="content-loading" aria-hidden="true">
+            <div className="spinner"></div>
+            <div>Preparing thumbnails…</div>
+          </div>
           <div className="section-h">
             <h2>{contentTitle}</h2>
             <div className="meta-line">
@@ -2011,10 +2052,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           alt={title}
                           loading={isEager ? 'eager' : 'lazy'}
                           fetchPriority={isEager ? 'high' : 'auto'}
-                          onLoad={(event) => updateCardOrientation(event.currentTarget)}
+                          data-eager={isEager ? 'true' : undefined}
+                          onLoad={(event) => {
+                            updateCardOrientation(event.currentTarget);
+                            markEagerThumbLoaded(event);
+                          }}
                           onError={(event) => {
                             const target = event.currentTarget;
                             if (target.src !== fallbackThumb) target.src = fallbackThumb;
+                            markEagerThumbLoaded(event);
                           }}
                         />
                         <div className="asset-overlay">

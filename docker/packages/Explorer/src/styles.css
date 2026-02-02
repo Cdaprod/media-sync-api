@@ -3,8 +3,8 @@
   --panel: rgba(255,255,255,0.06);
   --panel2: rgba(255,255,255,0.09);
   --border: rgba(255,255,255,0.10);
-  --grid-gap: 6px;
-  --grid-cols: 3;
+  --grid-gap: 4px;
+  --grid-cols: 2;
   --card-bg: rgba(255,255,255,0.05);
   --card-border: rgba(255,255,255,0.10);
   --text: rgba(255,255,255,0.92);
@@ -23,13 +23,13 @@
 }
 
 @media (min-width: 900px){
-  :root{ --grid-cols: 5; }
+  :root{ --grid-cols: 4; }
 }
 @media (orientation: landscape) and (min-width: 700px){
-  :root{ --grid-cols: 5; }
+  :root{ --grid-cols: 4; }
 }
 @media (min-width: 900px){
-  :root{ --grid-gap: 8px; }
+  :root{ --grid-gap: 6px; }
 }
 @media (max-width: 420px){
   :root{ --grid-gap: 6px; }
@@ -364,17 +364,17 @@ select.control{
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
-  padding: 16px 18px 18px;
+  padding: 18px 18px 20px;
   gap: 14px;
 }
 
 .sidebar{
   width: 330px;
   min-width: 260px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   overflow: hidden;
   display:flex;
   flex-direction: column;
@@ -403,18 +403,57 @@ select.control{
 .content{
   flex:1;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  border-radius: 18px;
+  background: rgba(15,19,34,0.88);
+  box-shadow: 0 24px 60px rgba(2,6,20,0.55);
   overflow:hidden;
   display:flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
 }
 .content.drag-active{
   outline: 2px dashed rgba(124,58,237,0.6);
   outline-offset: -6px;
   background: rgba(124,58,237,0.08);
+}
+
+.content.is-loading .grid,
+.content.is-loading .list{
+  opacity: 0;
+  pointer-events: none;
+}
+.content-loading{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+  background: radial-gradient(circle at 50% 40%, rgba(18,24,44,0.75), rgba(10,13,24,0.92));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+.content.is-loading .content-loading{
+  opacity: 1;
+  pointer-events: auto;
+}
+.content-loading .spinner{
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: rgba(124,58,237,0.8);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin{
+  to { transform: rotate(360deg); }
 }
 
 .section-h{
@@ -539,7 +578,7 @@ select.control{
 
 /* Grid/List */
 .grid{
-  padding: 10px;
+  padding: 8px;
   column-count: var(--grid-cols);
   column-gap: var(--grid-gap);
 }
@@ -557,7 +596,7 @@ select.control{
   margin-bottom: var(--grid-gap);
   border: 1px solid rgba(255,255,255,0);
   background: transparent;
-  border-radius: 8px;
+  border-radius: 4px;
   overflow:hidden;
   cursor:pointer;
   transition: transform 120ms ease, filter 120ms ease, border-color 120ms ease;
