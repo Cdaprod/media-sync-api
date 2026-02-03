@@ -168,13 +168,13 @@ def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
     cmd = [
         ffmpeg,
         "-y",
+        "-nostdin",
         "-hide_banner",
         "-loglevel",
         "error",
-        "-ss",
-        "00:00:00.30",
         "-i",
         str(source_path),
+        "-an",
         "-frames:v",
         "1",
         "-vf",
@@ -184,8 +184,16 @@ def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
         str(temp_path),
     ]
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=12)
         temp_path.replace(target_path)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("ffmpeg thumbnail generation timed out") from exc
+    except subprocess.CalledProcessError as exc:
+        logger.warning(
+            "thumbnail_ffmpeg_failed",
+            extra={"stderr": exc.stderr, "path": str(source_path)},
+        )
+        raise
     finally:
         temp_path.unlink(missing_ok=True)
 
@@ -293,7 +301,8 @@ async def get_thumbnail(project_name: str, thumb_name: str, source: str | None =
             try:
                 _generate_thumbnail(source_path, target_path)
             except RuntimeError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
+                status = 404 if "ffmpeg is not available" in str(exc) else 500
+                raise HTTPException(status_code=status, detail=str(exc)) from exc
             except subprocess.CalledProcessError as exc:
                 logger.warning(
                     "thumbnail_generation_failed",

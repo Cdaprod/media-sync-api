@@ -653,3 +653,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-11)
 - API container now installs ffmpeg in `/docker/Dockerfile` so video thumbnail generation works out of the box; rebuild the image if thumbnails report ffmpeg missing.
+
+### Latest Implementation Notes (2025-06-12)
+- Thumbnail generation now runs ffmpeg with no-stdin, audio disabled, and a timeout to avoid 40s hangs; timeouts surface as 500 errors while missing ffmpeg still returns 404.
