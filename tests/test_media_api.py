@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 
 def _create_project(client: TestClient) -> str:
@@ -87,6 +88,30 @@ def test_thumbnail_endpoint_serves_cached_file(client: TestClient, env_settings:
     response = client.get(thumb_url)
     assert response.status_code == 200
     assert response.content == b"thumb-bytes"
+    assert "immutable" in response.headers.get("cache-control", "")
+
+
+def test_thumbnail_endpoint_generates_image_thumbnail(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    image_path = ingest / "frame.png"
+    image = Image.new("RGB", (1280, 720), color=(32, 64, 96))
+    image.save(image_path, format="PNG")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    media_entry = listing.json()["media"][0]
+    thumb_url = media_entry.get("thumb_url")
+    assert thumb_url
+
+    response = client.get(thumb_url)
+    assert response.status_code == 200
+    assert response.headers.get("content-type") == "image/jpeg"
+    assert response.content.startswith(b"\xff\xd8")
     assert "immutable" in response.headers.get("cache-control", "")
 
 
