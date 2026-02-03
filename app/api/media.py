@@ -65,6 +65,7 @@ THUMBNAIL_EXTENSIONS = {
 }
 THUMBNAIL_SHA_PATTERN = re.compile(r"^[A-Fa-f0-9]{64}$")
 THUMBNAIL_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
+_FFMPEG_AVAILABLE: bool | None = None
 
 
 class _ResolvedProject:
@@ -149,7 +150,16 @@ def _is_thumbable_media(path: Path) -> bool:
     return path.suffix.lower() in THUMBNAIL_EXTENSIONS
 
 
+def _ffmpeg_available() -> bool:
+    global _FFMPEG_AVAILABLE
+    if _FFMPEG_AVAILABLE is None:
+        _FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
+    return _FFMPEG_AVAILABLE
+
+
 def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
+    if not _ffmpeg_available():
+        raise RuntimeError("ffmpeg is not available to generate thumbnails")
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise RuntimeError("ffmpeg is not available to generate thumbnails")
@@ -212,7 +222,9 @@ async def list_media(project_name: str, source: str | None = None):
         if _is_thumbable_media(Path(safe_relative)):
             sha = item.get("sha256")
             if isinstance(sha, str):
-                item["thumb_url"] = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
+                thumb_path = thumbnail_path(resolved.root, sha)
+                if thumb_path.exists() or _ffmpeg_available():
+                    item["thumb_url"] = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
         sha = item.get("sha256")
         if isinstance(sha, str) and metadata_path(resolved.root, sha).exists():
             item["metadata_path"] = metadata_relpath(resolved.root, sha)
@@ -281,7 +293,7 @@ async def get_thumbnail(project_name: str, thumb_name: str, source: str | None =
             try:
                 _generate_thumbnail(source_path, target_path)
             except RuntimeError as exc:
-                raise HTTPException(status_code=503, detail=str(exc)) from exc
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
             except subprocess.CalledProcessError as exc:
                 logger.warning(
                     "thumbnail_generation_failed",
