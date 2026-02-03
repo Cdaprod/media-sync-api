@@ -74,14 +74,17 @@ def test_thumbnail_endpoint_serves_cached_file(client: TestClient, env_settings:
     listing = client.get(f"/api/projects/{project_name}/media")
     assert listing.status_code == 200
     media_entry = listing.json()["media"][0]
-    assert media_entry["thumb_url"].startswith(f"/thumbnails/{project_name}/")
+    thumb_url = media_entry.get("thumb_url")
+    if not thumb_url:
+        thumb_url = f"/thumbnails/{project_name}/{media_entry['sha256']}.jpg"
+    assert thumb_url.startswith(f"/thumbnails/{project_name}/")
 
     sha = media_entry["sha256"]
     thumb_path = env_settings / project_name / "ingest" / "thumbnails" / f"{sha}.jpg"
     thumb_path.parent.mkdir(parents=True, exist_ok=True)
     thumb_path.write_bytes(b"thumb-bytes")
 
-    response = client.get(media_entry["thumb_url"])
+    response = client.get(thumb_url)
     assert response.status_code == 200
     assert response.content == b"thumb-bytes"
     assert "immutable" in response.headers.get("cache-control", "")

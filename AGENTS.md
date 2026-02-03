@@ -647,3 +647,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-09)
 - Explorer thumbnail loaders now normalize `thumb_url` values that point at `127.0.0.1`/`localhost` so mobile clients always fetch thumbnails from the current LAN origin.
+
+### Latest Implementation Notes (2025-06-10)
+- Thumbnail URLs are only advertised when a cached thumbnail exists or ffmpeg is available; missing ffmpeg now returns a 404 from the thumbnail endpoint to avoid persistent 503 noise.
