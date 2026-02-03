@@ -228,7 +228,7 @@ def _release_thumbnail_lock(lock_path: Path) -> None:
 
 def _generate_image_thumbnail(source_path: Path, target_path: Path) -> None:
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = target_path.with_suffix(".tmp")
+    temp_path = target_path.with_suffix(".tmp.jpg")
     with Image.open(source_path) as image:
         image = ImageOps.exif_transpose(image)
         if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
@@ -249,7 +249,7 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
     if not ffmpeg:
         raise RuntimeError("ffmpeg is not available to generate thumbnails")
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = target_path.with_suffix(".tmp")
+    temp_path = target_path.with_suffix(".tmp.jpg")
     vf = f"thumbnail,scale='min({THUMB_MAX_W},iw)':-2:flags=lanczos"
     cmd_fast = [
         ffmpeg,
@@ -267,6 +267,8 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
         "-dn",
         "-map",
         "0:v:0",
+        "-f",
+        "image2",
         "-frames:v",
         "1",
         "-vf",
@@ -291,6 +293,8 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
         "-dn",
         "-map",
         "0:v:0",
+        "-f",
+        "image2",
         "-frames:v",
         "1",
         "-vf",
@@ -313,6 +317,8 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
         "-dn",
         "-map",
         "0:v:0",
+        "-f",
+        "image2",
         "-frames:v",
         "1",
         "-vf",
