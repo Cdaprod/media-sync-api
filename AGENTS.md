@@ -631,3 +631,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-04)
 - Next.js Explorer styles now match the tightened grid density and reduced tile radius used by the static explorer to keep the layout consistent.
+
+### Latest Implementation Notes (2025-06-05)
+- Explorer content surface styling is now fully transparent (no border/shadow) with a softened header strip, removing the remaining container outline so the grid sits directly on the ambient backdrop.
