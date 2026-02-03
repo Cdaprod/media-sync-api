@@ -191,12 +191,10 @@ def _run_ffmpeg(cmd: list[str], timeout_s: int) -> None:
     if proc.returncode != 0:
         stderr_tail = (proc.stderr or "")[-4000:]
         logger.warning(
-            "thumbnail_ffmpeg_failed",
-            extra={
-                "returncode": proc.returncode,
-                "cmd": " ".join(cmd),
-                "stderr_tail": stderr_tail,
-            },
+            "thumbnail_ffmpeg_failed rc=%s cmd=%s stderr_tail=%s",
+            proc.returncode,
+            " ".join(cmd),
+            stderr_tail,
         )
         raise RuntimeError("ffmpeg thumbnail generation failed")
 
@@ -235,7 +233,7 @@ def _generate_image_thumbnail(source_path: Path, target_path: Path) -> None:
             image = background.convert("RGB")
         else:
             image = image.convert("RGB")
-        image.thumbnail((640, 640), Image.LANCZOS)
+        image.thumbnail((THUMB_MAX_W, THUMB_MAX_W), Image.LANCZOS)
         image.save(temp_path, format="JPEG", quality=85, optimize=True, progressive=True)
     temp_path.replace(target_path)
 
