@@ -20,6 +20,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse, Response
+from PIL import Image, ImageOps
 
 from app.config import get_settings
 from app.storage.dedupe import compute_sha256_from_path, record_file_hash, remove_file_record
@@ -63,6 +64,8 @@ THUMBNAIL_EXTENSIONS = {
     ".png",
     ".heic",
 }
+THUMBNAIL_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic"}
+THUMBNAIL_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
 THUMBNAIL_SHA_PATTERN = re.compile(r"^[A-Fa-f0-9]{64}$")
 THUMBNAIL_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 THUMBNAIL_FALLBACK_HEADERS = {"Cache-Control": "public, max-age=300"}
@@ -151,6 +154,10 @@ def _is_thumbable_media(path: Path) -> bool:
     return path.suffix.lower() in THUMBNAIL_EXTENSIONS
 
 
+def _is_image_media(path: Path) -> bool:
+    return path.suffix.lower() in THUMBNAIL_IMAGE_EXTENSIONS
+
+
 def _ffmpeg_available() -> bool:
     global _FFMPEG_AVAILABLE
     if _FFMPEG_AVAILABLE is None:
@@ -158,7 +165,23 @@ def _ffmpeg_available() -> bool:
     return _FFMPEG_AVAILABLE
 
 
-def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
+def _generate_image_thumbnail(source_path: Path, target_path: Path) -> None:
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = target_path.with_suffix(".tmp")
+    with Image.open(source_path) as image:
+        image = ImageOps.exif_transpose(image)
+        if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+            background = Image.new("RGBA", image.size, (16, 18, 28, 255))
+            background.paste(image, mask=image.split()[-1])
+            image = background.convert("RGB")
+        else:
+            image = image.convert("RGB")
+        image.thumbnail((640, 640), Image.LANCZOS)
+        image.save(temp_path, format="JPEG", quality=85, optimize=True, progressive=True)
+    temp_path.replace(target_path)
+
+
+def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
     if not _ffmpeg_available():
         raise RuntimeError("ffmpeg is not available to generate thumbnails")
     ffmpeg = shutil.which("ffmpeg")
@@ -199,6 +222,16 @@ def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
         raise
     finally:
         temp_path.unlink(missing_ok=True)
+
+
+def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
+    if _is_image_media(source_path):
+        try:
+            _generate_image_thumbnail(source_path, target_path)
+        except OSError as exc:
+            raise RuntimeError("image thumbnail generation failed") from exc
+        return
+    _generate_video_thumbnail(source_path, target_path)
 
 
 def _thumbnail_fallback_response(label: str) -> Response:
@@ -320,7 +353,7 @@ async def get_thumbnail(project_name: str, thumb_name: str, source: str | None =
             legacy_path.replace(target_path)
         else:
             label = source_path.suffix.lstrip(".") or "VIDEO"
-            if not _ffmpeg_available():
+            if not _is_image_media(source_path) and not _ffmpeg_available():
                 return _thumbnail_fallback_response(label)
             try:
                 _generate_thumbnail(source_path, target_path)

@@ -659,3 +659,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-13)
 - Media listings now always include thumbnail URLs for thumbable assets, and the thumbnail endpoint serves a short-lived SVG fallback when ffmpeg is unavailable or thumbnail generation fails/timeouts.
+
+### Latest Implementation Notes (2025-06-14)
+- Image thumbnails now render from the actual asset using Pillow (EXIF-aware) while videos continue to use ffmpeg; SVG fallbacks only apply when generation fails or ffmpeg is unavailable for videos.
