@@ -637,3 +637,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-06)
 - Explorer headers now use translucent glass styling with backdrop blur to let scrolled assets subtly show behind the section header and topbar.
+
+### Latest Implementation Notes (2025-06-07)
+- Explorer scroll containers now live on the content surface so media can scroll beneath the fixed glass topbar/section headers in both the static and Next.js explorers.
