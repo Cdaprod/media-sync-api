@@ -662,3 +662,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-14)
 - Image thumbnails now render from the actual asset using Pillow (EXIF-aware) while videos continue to use ffmpeg; SVG fallbacks only apply when generation fails or ffmpeg is unavailable for videos.
+
+### Latest Implementation Notes (2025-06-15)
+- Video thumbnailing now logs ffmpeg stderr tail, uses fast-then-safe seeks with configurable timeouts and max width, and guards generation with per-thumb locks while fallback responses include an `X-Thumb-Status` header.

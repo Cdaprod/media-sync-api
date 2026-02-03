@@ -115,6 +115,36 @@ def test_thumbnail_endpoint_generates_image_thumbnail(client: TestClient, env_se
     assert "immutable" in response.headers.get("cache-control", "")
 
 
+def test_thumbnail_endpoint_falls_back_when_ffmpeg_missing(
+    client: TestClient,
+    env_settings: Path,
+    monkeypatch,
+) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "sample.mov"
+    media_path.write_bytes(b"video-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+
+    monkeypatch.setattr(media_module, "_ffmpeg_available", lambda: False)
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    media_entry = listing.json()["media"][0]
+    thumb_url = media_entry.get("thumb_url")
+    assert thumb_url
+
+    response = client.get(thumb_url)
+    assert response.status_code == 200
+    assert response.headers.get("content-type") == "image/svg+xml"
+    assert response.headers.get("x-thumb-status") == "ffmpeg_missing"
+
+
 def test_reindex_moves_misplaced_media(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     project_dir = env_settings / project_name
