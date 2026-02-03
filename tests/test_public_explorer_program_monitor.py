@@ -54,7 +54,6 @@ def test_explorer_grid_overlay_metadata():
     assert 'asset-title' in html
     assert 'asset-subtitle' in html
     assert 'media-sync-orient-cache-v1' in html
-    assert "rootMargin: '1200px 0px'" in html
     assert 'content-loading' in html
     assert 'Preparing thumbnails' in html
     assert 'backdrop-filter: blur(8px)' in html

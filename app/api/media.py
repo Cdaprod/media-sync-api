@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+import re
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
@@ -35,6 +37,8 @@ from app.storage.paths import (
     project_path,
     relpath_posix,
     safe_filename,
+    thumbnail_path,
+    thumbnail_name,
     validate_project_name,
 )
 from app.storage.reindex import reindex_project
@@ -45,9 +49,22 @@ logger = logging.getLogger("media_sync_api.media")
 
 router = APIRouter(prefix="/api/projects", tags=["media"])
 media_router = APIRouter(prefix="/media", tags=["media"])
+thumbnail_router = APIRouter(prefix="/thumbnails", tags=["media"])
 
 ORPHAN_PROJECT_NAME = "Unsorted-Loose"
 MANIFEST_DB = "_manifest/manifest.db"
+THUMBNAIL_EXTENSIONS = {
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".heic",
+}
+THUMBNAIL_SHA_PATTERN = re.compile(r"^[A-Fa-f0-9]{64}$")
+THUMBNAIL_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 
 
 class _ResolvedProject:
@@ -122,6 +139,47 @@ def _should_remove_metadata(
     return paths.issubset(delete_paths)
 
 
+def _build_thumbnail_url(project: str, sha256: str, source: str | None) -> str:
+    encoded_name = quote(thumbnail_name(sha256))
+    suffix = f"?source={quote(source)}" if source is not None else ""
+    return f"/thumbnails/{quote(project)}/{encoded_name}" + suffix
+
+
+def _is_thumbable_media(path: Path) -> bool:
+    return path.suffix.lower() in THUMBNAIL_EXTENSIONS
+
+
+def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError("ffmpeg is not available to generate thumbnails")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = target_path.with_suffix(".tmp")
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        "00:00:00.30",
+        "-i",
+        str(source_path),
+        "-frames:v",
+        "1",
+        "-vf",
+        "scale='min(640,iw)':-2",
+        "-q:v",
+        "4",
+        str(temp_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True)
+        temp_path.replace(target_path)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 @router.get("/{project_name}/media")
 async def list_media(project_name: str, source: str | None = None):
     """List all media recorded in a project's index with streamable URLs."""
@@ -151,6 +209,10 @@ async def list_media(project_name: str, source: str | None = None):
         item["relative_path"] = safe_relative
         item["stream_url"] = _build_stream_url(resolved.name, safe_relative, resolved.source_name)
         item["download_url"] = _build_download_url(resolved.name, safe_relative, resolved.source_name)
+        if _is_thumbable_media(Path(safe_relative)):
+            sha = item.get("sha256")
+            if isinstance(sha, str):
+                item["thumb_url"] = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
         sha = item.get("sha256")
         if isinstance(sha, str) and metadata_path(resolved.root, sha).exists():
             item["metadata_path"] = metadata_relpath(resolved.root, sha)
@@ -164,6 +226,70 @@ async def list_media(project_name: str, source: str | None = None):
         "counts": index.get("counts", {}),
         "instructions": "Use stream_url to play media directly; run /reindex after manual moves.",
     }
+
+
+@thumbnail_router.get("/{project_name}/{thumb_name}")
+async def get_thumbnail(project_name: str, thumb_name: str, source: str | None = None):
+    """Serve a stored or generated thumbnail for a project asset.
+
+    Example:
+        curl -O "http://localhost:8787/thumbnails/demo/<sha256>.jpg"
+    """
+
+    resolved = _require_source_and_project(project_name, source)
+    try:
+        cleaned = safe_filename(thumb_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    name_path = Path(cleaned)
+    if name_path.suffix.lower() != ".jpg":
+        raise HTTPException(status_code=400, detail="Thumbnail name must end with .jpg")
+    sha = name_path.stem
+    if not THUMBNAIL_SHA_PATTERN.fullmatch(sha):
+        raise HTTPException(status_code=400, detail="Thumbnail name must be a sha256.jpg filename")
+
+    index = load_index(resolved.root)
+    entry = next((item for item in index.get("files", []) if item.get("sha256") == sha), None)
+    if not entry:
+        raise HTTPException(status_code=404, detail="No media entry matches this thumbnail")
+
+    relative_path = entry.get("relative_path")
+    if not isinstance(relative_path, str):
+        raise HTTPException(status_code=404, detail="Media entry missing relative path")
+    try:
+        safe_relative = _validate_relative_media_path(relative_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    source_path = (resolved.root / safe_relative).resolve()
+    project_root = resolved.root.resolve()
+    if project_root not in source_path.parents and source_path != project_root:
+        raise HTTPException(status_code=400, detail="Requested path is outside the project")
+    if not source_path.exists() or not source_path.is_file():
+        raise HTTPException(status_code=404, detail="Media not found for thumbnail")
+    if not _is_thumbable_media(source_path):
+        raise HTTPException(status_code=400, detail="Media type does not support thumbnails")
+
+    target_path = thumbnail_path(resolved.root, sha)
+    if not target_path.exists():
+        legacy_path = resolved.root / "ingest" / "originals" / "ingest" / "thumbnails" / f"{sha}.jpg"
+        if legacy_path.exists():
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            legacy_path.replace(target_path)
+        else:
+            try:
+                _generate_thumbnail(source_path, target_path)
+            except RuntimeError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            except subprocess.CalledProcessError as exc:
+                logger.warning(
+                    "thumbnail_generation_failed",
+                    extra={"project": resolved.name, "path": safe_relative},
+                )
+                raise HTTPException(status_code=500, detail="Thumbnail generation failed") from exc
+
+    return FileResponse(target_path, media_type="image/jpeg", headers=THUMBNAIL_HEADERS)
 
 
 @media_router.get("/{project_name}/download/{relative_path:path}")
@@ -311,7 +437,7 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
     target_root = project_path(target_source.root, target_name)
     if not target_root.exists():
         raise HTTPException(status_code=404, detail="Target project not found")
-    ensure_subdirs(target_root, ["ingest/originals", "ingest/_metadata", "_manifest"])
+    ensure_subdirs(target_root, ["ingest/originals", "ingest/_metadata", "ingest/thumbnails", "_manifest"])
     if not (target_root / "index.json").exists():
         seed_index(target_root, target_name)
 
@@ -530,7 +656,7 @@ def _organize_source_root(root: Path) -> Dict[str, object]:
     index_path = destination / "index.json"
     if not index_path.exists():
         seed_index(destination, ORPHAN_PROJECT_NAME, notes="Auto-organized loose files from projects root")
-    ensure_subdirs(destination, ["ingest/originals", "ingest/_metadata", "_manifest"])
+    ensure_subdirs(destination, ["ingest/originals", "ingest/_metadata", "ingest/thumbnails", "_manifest"])
 
     moved: List[str] = []
     ingest = destination / "ingest/originals"

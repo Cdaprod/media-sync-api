@@ -21,6 +21,8 @@ THUMBNAIL_DIR_NAMES = {
     "thumbnails",
     "thumbs",
 }
+THUMBNAIL_OUTPUT_DIR = "ingest/thumbnails"
+THUMBNAIL_EXTENSION = ".jpg"
 
 
 def is_thumbnail_path(path: str | Path) -> bool:
@@ -99,6 +101,24 @@ def ensure_subdirs(base: Path, subdirs: Iterable[str]) -> None:
     for subdir in subdirs:
         target = base / subdir
         target.mkdir(parents=True, exist_ok=True)
+
+
+def thumbnail_dir(project_root: Path) -> Path:
+    """Return the canonical thumbnail directory for a project."""
+
+    return project_root / THUMBNAIL_OUTPUT_DIR
+
+
+def thumbnail_name(sha256: str) -> str:
+    """Return the thumbnail filename for a given sha256."""
+
+    return f"{sha256}{THUMBNAIL_EXTENSION}"
+
+
+def thumbnail_path(project_root: Path, sha256: str) -> Path:
+    """Return the absolute thumbnail path for a project sha256."""
+
+    return thumbnail_dir(project_root) / thumbnail_name(sha256)
 
 
 def relpath_posix(target: Path, base: Path) -> str:

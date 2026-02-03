@@ -104,7 +104,7 @@ def _resolve_project(project_name: str, source: str | None) -> tuple[str, Any, P
     if not active_source.accessible:
         raise HTTPException(status_code=503, detail="Source root is not reachable")
     project = project_path(active_source.root, name)
-    ensure_subdirs(project, ["ingest/originals", "ingest/_metadata", "_manifest"])
+    ensure_subdirs(project, ["ingest/originals", "ingest/_metadata", "ingest/thumbnails", "_manifest"])
     if not (project / "index.json").exists():
         raise HTTPException(status_code=404, detail="Project index missing")
     return name, active_source, project

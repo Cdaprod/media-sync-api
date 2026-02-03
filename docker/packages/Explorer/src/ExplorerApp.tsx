@@ -147,11 +147,82 @@ const buildThumbFallback = (label: string) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
-const THUMB_CACHE_NAME = 'media-sync-thumb-cache-v1';
-const THUMB_MAX_WORKERS = 2;
+const queueThumbLoads = async (
+  targets: HTMLImageElement[],
+  timeoutMs: number,
+  onOrientation: (node: HTMLImageElement) => void,
+): Promise<void> => {
+  if (!targets.length) return;
+  const jobs = targets
+    .map((target) => ({
+      target,
+      url: target.dataset.thumbUrl,
+      fallback: target.dataset.thumbFallback,
+    }))
+    .filter((job) => Boolean(job.url));
+  if (!jobs.length) return;
+  let active = 0;
+  let index = 0;
+  let settled = false;
+  await new Promise<void>((resolve) => {
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    }, timeoutMs);
+    const startNext = () => {
+      while (active < THUMB_MAX_WORKERS && index < jobs.length) {
+        const job = jobs[index++];
+        if (!job.url) continue;
+        active += 1;
+        const loader = new Image();
+        loader.onload = () => {
+          job.target.src = job.url as string;
+          job.target.dataset.thumbState = 'loaded';
+          if (job.target.complete) {
+            onOrientation(job.target);
+          } else {
+            job.target.addEventListener('load', () => onOrientation(job.target), { once: true });
+          }
+          active -= 1;
+          if (index >= jobs.length && active === 0 && !settled) {
+            settled = true;
+            window.clearTimeout(timer);
+            resolve();
+          } else {
+            startNext();
+          }
+        };
+        loader.onerror = () => {
+          if (job.fallback) {
+            job.target.src = job.fallback as string;
+          }
+          job.target.dataset.thumbState = 'error';
+          active -= 1;
+          if (index >= jobs.length && active === 0 && !settled) {
+            settled = true;
+            window.clearTimeout(timer);
+            resolve();
+          } else {
+            startNext();
+          }
+        };
+        loader.src = job.url as string;
+      }
+      if (index >= jobs.length && active === 0 && !settled) {
+        settled = true;
+        window.clearTimeout(timer);
+        resolve();
+      }
+    };
+    startNext();
+  });
+};
+
+const THUMB_MAX_WORKERS = 3;
+const THUMB_LOAD_TIMEOUT_MS = 8000;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
-const CONTENT_LOAD_TIMEOUT_MS = 700;
 
 const readOrientationCache = (): Map<string, string> => {
   if (typeof window === 'undefined') return new Map();
@@ -201,48 +272,6 @@ const getThumbCacheKey = (item: MediaItem) => {
   return [source, project, rel, sha].filter(Boolean).join('|');
 };
 
-const thumbCacheRequest = (key: string) => {
-  if (!key || typeof window === 'undefined') return '';
-  return `${window.location.origin}/__thumbs/${encodeURIComponent(key)}`;
-};
-
-const canUseCacheStorage = () => typeof window !== 'undefined' && 'caches' in window;
-
-async function readThumbFromCache(key: string): Promise<string | null> {
-  if (!key) return null;
-  if (!canUseCacheStorage()) return null;
-  try {
-    const cache = await caches.open(THUMB_CACHE_NAME);
-    const response = await cache.match(thumbCacheRequest(key));
-    if (!response) return null;
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.startsWith('image/')) return null;
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
-  } catch {
-    // ignore cache errors
-  }
-  return null;
-}
-
-async function writeThumbToCache(key: string, blob: Blob): Promise<void> {
-  if (!key || !blob || !canUseCacheStorage()) return;
-  try {
-    const cache = await caches.open(THUMB_CACHE_NAME);
-    await cache.put(
-      thumbCacheRequest(key),
-      new Response(blob, {
-        headers: {
-          'Content-Type': blob.type || 'image/jpeg',
-          'Cache-Control': 'public, max-age=31536000, immutable',
-        },
-      }),
-    );
-  } catch {
-    // best-effort cache writes
-  }
-}
-
 function useToastQueue() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const timeouts = useRef<number[]>([]);
@@ -263,94 +292,6 @@ function useToastQueue() {
   }, []);
 
   return { toasts, addToast };
-}
-
-async function extractVideoFrame(url: string, durationHint?: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.muted = true;
-    video.playsInline = true;
-    video.crossOrigin = 'anonymous';
-    const withTimeHint = url.includes('#') ? url : `${url}#t=0.1`;
-    video.src = withTimeHint;
-
-    const timeout = window.setTimeout(() => {
-      cleanup();
-      reject(new Error('thumb-timeout'));
-    }, 6000);
-
-    let settled = false;
-    let targetTime = Math.min(Math.max(durationHint || 0.5, 0.3), 1.5);
-
-    function cleanup() {
-      window.clearTimeout(timeout);
-      video.src = '';
-    }
-
-    function capture() {
-      if (settled) return;
-      settled = true;
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 360;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('thumb-canvas');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => {
-          cleanup();
-          if (!blob) return reject(new Error('thumb-blob'));
-          resolve(blob);
-        }, 'image/jpeg', 0.82);
-      } catch (err) {
-        cleanup();
-        reject(err);
-      }
-    }
-
-    video.addEventListener(
-      'loadedmetadata',
-      () => {
-        targetTime =
-          Number.isFinite(video.duration) && video.duration > 0
-            ? Math.min(Math.max(video.duration * 0.05, 0.3), 2.0)
-            : Math.min(Math.max(durationHint || 0.5, 0.3), 1.5);
-        video.currentTime = targetTime;
-      },
-      { once: true },
-    );
-
-    video.addEventListener('seeked', capture, { once: true });
-    video.addEventListener(
-      'loadeddata',
-      () => {
-        if (settled) return;
-        if (video.readyState >= 2 && (video.currentTime >= targetTime || video.currentTime > 0)) {
-          capture();
-        }
-      },
-      { once: true },
-    );
-    video.addEventListener(
-      'timeupdate',
-      () => {
-        if (settled) return;
-        if (video.readyState >= 2 && (video.currentTime >= targetTime || video.currentTime > 0)) {
-          capture();
-        }
-      },
-      { once: true },
-    );
-    video.addEventListener(
-      'error',
-      () => {
-        cleanup();
-        reject(new Error('thumb-error'));
-      },
-      { once: true },
-    );
-  });
 }
 
 export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
@@ -397,26 +338,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
-  const thumbObserverRef = useRef<IntersectionObserver | null>(null);
-  const thumbCacheRef = useRef<Map<string, string>>(new Map());
-  const thumbPendingRef = useRef<Set<string>>(new Set());
-  const thumbQueueRef = useRef<
-    Array<{
-      key: string;
-      rel: string;
-      url: string;
-      duration: number;
-      target: HTMLElement;
-    }>
-  >([]);
-  const thumbInFlightRef = useRef<Set<string>>(new Set());
-  const thumbActiveRef = useRef(0);
-  const thumbQueueScheduledRef = useRef(false);
-  const processThumbQueueRef = useRef<() => void>(() => {});
-  const thumbSweepTimerRef = useRef<number | null>(null);
-  const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
-  const eagerThumbGateRef = useRef<{ pending: number; active: boolean }>({ pending: 0, active: false });
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
   const filteredMedia = useMemo(() => {
@@ -483,39 +405,30 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     cacheOrientation(cacheKey, orient);
   }, [cacheOrientation]);
 
-  const markEagerThumbLoaded = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
-    const target = event.currentTarget;
-    if (!eagerThumbGateRef.current.active) return;
-    if (!target.dataset.eager) return;
-    eagerThumbGateRef.current.pending = Math.max(0, eagerThumbGateRef.current.pending - 1);
-    if (eagerThumbGateRef.current.pending === 0) {
-      eagerThumbGateRef.current.active = false;
-      setContentLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    if (view !== 'grid') {
+    if (typeof window === 'undefined') return;
+    const root = mediaScrollRef.current;
+    if (!root) return;
+    const selector = view === 'grid'
+      ? '.grid img.asset-thumb[data-thumb-url]'
+      : '.list img.asset-thumb[data-thumb-url]';
+    const targets = Array.from(root.querySelectorAll(selector)) as HTMLImageElement[];
+    if (!targets.length) {
       setContentLoading(false);
-      eagerThumbGateRef.current.active = false;
-      eagerThumbGateRef.current.pending = 0;
       return;
     }
-    const eagerCount = Math.min(18, filteredMedia.length);
-    if (!eagerCount) {
-      setContentLoading(false);
-      return;
-    }
-    eagerThumbGateRef.current.active = true;
-    eagerThumbGateRef.current.pending = eagerCount;
+    let cancelled = false;
     setContentLoading(true);
-    const timer = window.setTimeout(() => {
-      eagerThumbGateRef.current.active = false;
-      eagerThumbGateRef.current.pending = 0;
-      setContentLoading(false);
-    }, CONTENT_LOAD_TIMEOUT_MS);
-    return () => window.clearTimeout(timer);
-  }, [filteredMedia, view]);
+    queueThumbLoads(targets, THUMB_LOAD_TIMEOUT_MS, updateCardOrientation)
+      .finally(() => {
+        if (!cancelled) {
+          setContentLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredMedia, updateCardOrientation, view]);
 
   const buildUploadUrl = useCallback((project: Project) => {
     const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
@@ -850,180 +763,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [activeProject, addToast, api, buildUploadUrl, loadMedia],
   );
 
-  function scheduleThumbQueue() {
-    if (thumbQueueScheduledRef.current) return;
-    thumbQueueScheduledRef.current = true;
-    const requestIdle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number })
-      .requestIdleCallback;
-    const run = () => {
-      thumbQueueScheduledRef.current = false;
-      processThumbQueueRef.current();
-    };
-    if (requestIdle) {
-      requestIdle(run, { timeout: 1200 });
-    } else {
-      window.setTimeout(run, 150);
-    }
-  }
-
-  function isThumbTargetVisible(target: HTMLElement) {
-    if (!target?.getBoundingClientRect) return false;
-    if (target.getClientRects().length === 0) return false;
-    const style = window.getComputedStyle(target);
-    if (style.display === 'none' || style.visibility === 'hidden') return false;
-    if (target.offsetParent === null && style.position !== 'fixed') return false;
-    const rootRect = mediaScrollRef.current?.getBoundingClientRect?.() || {
-      top: 0,
-      bottom: window.innerHeight,
-    };
-    const rect = target.getBoundingClientRect();
-    return rect.bottom >= rootRect.top - 200 && rect.top <= rootRect.bottom + 200;
-  }
-
-  function processThumbQueue() {
-    while (thumbActiveRef.current < THUMB_MAX_WORKERS && thumbQueueRef.current.length) {
-      const job = thumbQueueRef.current.shift();
-      if (!job) break;
-      if (!job.target?.isConnected) {
-        thumbInFlightRef.current.delete(job.key);
-        continue;
-      }
-      if (!isThumbTargetVisible(job.target)) {
-        thumbInFlightRef.current.delete(job.key);
-        continue;
-      }
-      thumbActiveRef.current += 1;
-      job.target.dataset.state = 'loading';
-      extractVideoFrame(job.url, job.duration)
-        .then((blob) => {
-          const objectUrl = URL.createObjectURL(blob);
-          thumbCacheRef.current.set(job.key, objectUrl);
-          setThumbs((prev) => new Map(prev).set(job.key, objectUrl));
-          void writeThumbToCache(job.key, blob);
-          job.target.dataset.state = 'loaded';
-        })
-        .catch(() => {
-          const attempts = Number(job.target.dataset.attempts || 0) + 1;
-          job.target.dataset.attempts = String(attempts);
-          job.target.dataset.state = attempts < 3 ? 'idle' : 'error';
-          if (attempts < 3) {
-            window.setTimeout(() => {
-              ensureThumbObserver().observe(job.target);
-              scheduleThumbSweep();
-            }, 800);
-          }
-        })
-        .finally(() => {
-          thumbActiveRef.current = Math.max(0, thumbActiveRef.current - 1);
-          thumbInFlightRef.current.delete(job.key);
-          processThumbQueue();
-        });
-    }
-  }
-
-  function enqueueThumbWork(target: HTMLElement) {
-    const rel = target.dataset.rel;
-    const url = target.dataset.url;
-    const duration = Number(target.dataset.duration || 0);
-    const key = target.dataset.thumbKey || rel;
-    const state = target.dataset.state || 'idle';
-    const attempts = Number(target.dataset.attempts || 0);
-    if (!rel || !url || !key) return;
-    if (state === 'loaded' || state === 'loading' || attempts >= 3) return;
-    if (thumbInFlightRef.current.has(key)) return;
-    thumbInFlightRef.current.add(key);
-    thumbQueueRef.current.push({ key, rel, url, duration, target });
-    scheduleThumbQueue();
-  }
-
-  function scheduleThumbSweep() {
-    if (thumbSweepTimerRef.current) {
-      window.clearTimeout(thumbSweepTimerRef.current);
-    }
-    thumbSweepTimerRef.current = window.setTimeout(() => {
-      thumbSweepTimerRef.current = null;
-      const root = mediaScrollRef.current;
-      if (!root) return;
-      const targets = Array.from(root.querySelectorAll<HTMLElement>('[data-kind="video"][data-url]'));
-      targets.forEach((target) => {
-        if (!isThumbTargetVisible(target)) return;
-        enqueueThumbWork(target);
-      });
-    }, 120);
-  }
-
-  function ensureThumbObserver() {
-    if (thumbObserverRef.current) return thumbObserverRef.current;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          observer.unobserve(entry.target);
-          const target = entry.target as HTMLElement;
-          const rel = target.dataset.rel;
-          const url = target.dataset.url;
-          const duration = Number(target.dataset.duration || 0);
-          const kind = target.dataset.kind;
-          const key = target.dataset.thumbKey || rel;
-          const state = target.dataset.state || 'idle';
-          const attempts = Number(target.dataset.attempts || 0);
-          if (!rel || !url || kind !== 'video' || !key) return;
-          if (state === 'loaded' || attempts >= 3) return;
-          if (thumbCacheRef.current.has(key)) return;
-          enqueueThumbWork(target);
-        });
-      },
-      { root: mediaScrollRef.current, rootMargin: '1200px 0px', threshold: 0.01 },
-    );
-    thumbObserverRef.current = observer;
-    return observer;
-  }
-
-  async function primeThumbFromCache(key: string, node: HTMLElement) {
-    if (!key || !node) return;
-    if (thumbCacheRef.current.has(key)) {
-      node.dataset.state = 'loaded';
-      return;
-    }
-    if (thumbPendingRef.current.has(key)) return;
-    thumbPendingRef.current.add(key);
-    try {
-      const cached = await readThumbFromCache(key);
-      if (cached) {
-        thumbCacheRef.current.set(key, cached);
-        setThumbs((prev) => new Map(prev).set(key, cached));
-        node.dataset.state = 'loaded';
-        return;
-      }
-    } finally {
-      thumbPendingRef.current.delete(key);
-    }
-    node.dataset.state = node.dataset.state || 'idle';
-    node.dataset.attempts = node.dataset.attempts || '0';
-    scheduleThumbSweep();
-    ensureThumbObserver().observe(node);
-  }
-
-  processThumbQueueRef.current = processThumbQueue;
-
-  const registerThumbTarget = useCallback(
-    (node: HTMLDivElement | null, item: MediaItem, kind: string) => {
-      if (!node || kind !== 'video' || !item.stream_url) return;
-      const resolvedUrl = resolveAssetUrl(item.stream_url);
-      if (!resolvedUrl) return;
-      const key = getThumbCacheKey(item);
-      node.dataset.rel = item.relative_path;
-      node.dataset.url = resolvedUrl;
-      node.dataset.duration = String(item.duration || '');
-      node.dataset.kind = 'video';
-      node.dataset.thumbKey = key;
-      node.dataset.state = node.dataset.state || 'idle';
-      node.dataset.attempts = node.dataset.attempts || '0';
-      void primeThumbFromCache(key, node);
-    },
-    [primeThumbFromCache, resolveAssetUrl],
-  );
-
   const handleCopyStream = useCallback(async (item: MediaItem) => {
     if (!item.stream_url) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -1332,18 +1071,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, loadAllMedia, loadMedia]);
 
   useEffect(() => {
-    scheduleThumbSweep();
-  }, [filteredMedia, scheduleThumbSweep, view]);
-
-  useEffect(() => {
-    const root = mediaScrollRef.current;
-    if (!root) return;
-    const handleScroll = () => scheduleThumbSweep();
-    root.addEventListener('scroll', handleScroll, { passive: true });
-    return () => root.removeEventListener('scroll', handleScroll);
-  }, [scheduleThumbSweep]);
-
-  useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (inspectorOpen) {
@@ -1367,12 +1094,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [closeDrawer, inspectorOpen, sidebarOpen]);
-
-  useEffect(() => {
-    return () => {
-      thumbObserverRef.current?.disconnect();
-    };
-  }, []);
 
   const [topbarHidden, setTopbarHidden] = useState(false);
   const topbarRef = useRef<HTMLDivElement | null>(null);
@@ -2009,9 +1730,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
                 </div>
               ) : (
-                filteredMedia.map((item, index) => {
+                filteredMedia.map((item) => {
                   const kind = guessKind(item);
-                  const isEager = index < 18;
                   const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
                   const proj = projectLabel(item);
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
@@ -2022,14 +1742,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const itemOrient = inferOrientationFromItem(item);
                   const orient = itemOrient || cachedOrient || 'square';
                   const orientLocked = Boolean(itemOrient || cachedOrient);
-                  const cachedThumb = thumbs.get(thumbKey) || thumbCacheRef.current.get(thumbKey);
-                  const rawThumbUrl = cachedThumb
-                    || item.thumb_url
+                  const rawThumbUrl = item.thumb_url
                     || item.thumbnail_url
                     || (kind === 'image' ? item.stream_url : undefined);
                   const fallbackThumb = buildThumbFallback(kind);
-                  const thumbUrl = cachedThumb ? cachedThumb : (rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined);
-                  const safeThumbUrl = thumbUrl || fallbackThumb;
+                  const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
+                  const safeThumbUrl = fallbackThumb;
                   const isSelected = selected.has(item.relative_path);
 
                   return (
@@ -2043,26 +1761,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       data-relative={item.relative_path || ''}
                       {...pointerHandlers}
                     >
-                      <div
-                        className="thumb"
-                        ref={(node) => registerThumbTarget(node, item, kind)}
-                      >
+                      <div className="thumb">
                         <img
                           className="asset-thumb"
                           src={safeThumbUrl}
                           alt={title}
-                          loading={isEager ? 'eager' : 'lazy'}
-                          fetchPriority={isEager ? 'high' : 'auto'}
-                          data-eager={isEager ? 'true' : undefined}
-                          onLoad={(event) => {
-                            updateCardOrientation(event.currentTarget);
-                            markEagerThumbLoaded(event);
-                          }}
-                          onError={(event) => {
-                            const target = event.currentTarget;
-                            if (target.src !== fallbackThumb) target.src = fallbackThumb;
-                            markEagerThumbLoaded(event);
-                          }}
+                          loading="lazy"
+                          data-thumb-url={thumbUrl}
+                          data-thumb-fallback={fallbackThumb}
                         />
                         <div className="asset-overlay">
                           <div className="asset-ol-tl">
@@ -2114,15 +1820,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
-                  const thumbKey = getThumbCacheKey(item);
-                  const cachedThumb = thumbs.get(thumbKey) || thumbCacheRef.current.get(thumbKey);
-                  const rawThumbUrl = cachedThumb
-                    || item.thumb_url
+                  const rawThumbUrl = item.thumb_url
                     || item.thumbnail_url
                     || (kind === 'image' ? item.stream_url : undefined);
                   const fallbackThumb = buildThumbFallback(kind);
-                  const thumbUrl = cachedThumb ? cachedThumb : (rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined);
-                  const safeThumbUrl = thumbUrl || fallbackThumb;
+                  const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
+                  const safeThumbUrl = fallbackThumb;
                   const isSelected = selected.has(item.relative_path);
 
                   return (
@@ -2131,20 +1834,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
                       {...pointerHandlers}
                     >
-                      <div
-                        className="mini"
-                        ref={(node) => registerThumbTarget(node, item, kind)}
-                      >
+                      <div className="mini">
                         <img
                           className="asset-thumb"
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
-                          onLoad={(event) => updateCardOrientation(event.currentTarget)}
-                          onError={(event) => {
-                            const target = event.currentTarget;
-                            if (target.src !== fallbackThumb) target.src = fallbackThumb;
-                          }}
+                          data-thumb-url={thumbUrl}
+                          data-thumb-fallback={fallbackThumb}
                         />
                       </div>
                       <div className="info">

@@ -640,3 +640,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-07)
 - Explorer scroll containers now live on the content surface so media can scroll beneath the fixed glass topbar/section headers in both the static and Next.js explorers.
+
+### Latest Implementation Notes (2025-06-08)
+- Added `/thumbnails/{project}/{sha256}.jpg` to serve cached JPEG thumbnails from `ingest/thumbnails`; thumbnails are generated on demand (ffmpeg) and cached with immutable headers, and project scaffolding now creates `ingest/thumbnails` alongside originals + metadata.
+- Static and Next.js explorers now request server thumbnail URLs and load them with an in-order, concurrency-limited queue to avoid placeholder flashes on refresh while keeping thumbnail orientation caching intact.
