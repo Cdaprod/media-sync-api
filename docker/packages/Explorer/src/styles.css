@@ -18,6 +18,8 @@
   --radius: 18px;
   --radius2: 12px;
   --ring: 0 0 0 3px rgba(124,58,237,0.25);
+  --topbar-height: 56px;
+  --topbar-offset: var(--topbar-height);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
 }
@@ -48,6 +50,9 @@ body{
   color: var(--text);
   overflow: hidden;
 }
+.app.topbar-hidden{
+  --topbar-offset: 0px;
+}
 
 a { color: inherit; }
 code { font-family: var(--mono); }
@@ -77,14 +82,15 @@ code { font-family: var(--mono); }
 
 /* Top bar */
 .topbar{
-  position: sticky;
-  top:0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 40;
   background: rgba(11,16,32,0.65);
   border-bottom: 1px solid rgba(255,255,255,0.06);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  --topbar-height: 56px;
   transition: transform 160ms ease, opacity 160ms ease, margin-bottom 160ms ease;
 }
 .app.topbar-hidden .topbar{
@@ -98,7 +104,7 @@ code { font-family: var(--mono); }
   top: 0;
   left: 0;
   right: 0;
-  height: 56px;
+  height: var(--topbar-height);
   z-index: 45;
   pointer-events: auto;
 }
@@ -408,11 +414,12 @@ select.control{
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  overflow:hidden;
+  overflow:auto;
   display:flex;
   flex-direction: column;
   min-height: 0;
   position: relative;
+  scroll-padding-top: var(--topbar-offset);
 }
 .content.drag-active{
   outline: 2px dashed rgba(124,58,237,0.6);
@@ -459,6 +466,9 @@ select.control{
 }
 
 .section-h{
+  position: sticky;
+  top: var(--topbar-offset);
+  z-index: 20;
   padding: 12px 8px 8px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   display:flex;
@@ -496,8 +506,13 @@ select.control{
 }
 
 .scroll{
-  overflow: auto;
   min-height: 0;
+}
+.sidebar .scroll{
+  overflow: auto;
+}
+.content .scroll{
+  overflow: visible;
 }
 .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
 .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }

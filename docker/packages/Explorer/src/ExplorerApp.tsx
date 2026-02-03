@@ -1965,6 +1965,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </aside>
 
         <section
+          ref={mediaScrollRef}
           className={`content ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''}`}
           onDragOver={(event) => {
             if (event.dataTransfer?.types.includes('Files')) {
@@ -1995,7 +1996,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             </div>
           </div>
 
-          <div className="scroll" ref={mediaScrollRef}>
+          <div className="scroll">
             <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
               {!activeProject && mediaScope !== 'all' ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
