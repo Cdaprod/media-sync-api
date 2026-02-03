@@ -57,6 +57,7 @@ def test_explorer_grid_overlay_metadata():
     assert "rootMargin: '1200px 0px'" in html
     assert 'content-loading' in html
     assert 'Preparing thumbnails' in html
+    assert 'backdrop-filter: blur(8px)' in html
 
 
 def test_explorer_topbar_intent_controller():
