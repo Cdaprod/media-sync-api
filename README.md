@@ -53,6 +53,7 @@ Troubleshooting:
 - Ensure Docker Desktop has file sharing enabled for drive `B:`
 - Bind to `0.0.0.0` so iOS devices on `192.168.0.x` can reach the API
 - If requests fail, check firewall rules and `docker compose -f docker/docker-compose.yaml logs -f`
+- Video thumbnails require `ffmpeg` in the API container; rebuild the image if `/thumbnails/*` returns "ffmpeg is not available"
 
 ## Usage playbook (verify → create → ingest → dedupe → reindex)
 1) Verify it is running

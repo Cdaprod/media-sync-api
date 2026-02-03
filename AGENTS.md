@@ -650,3 +650,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-10)
 - Thumbnail URLs are only advertised when a cached thumbnail exists or ffmpeg is available; missing ffmpeg now returns a 404 from the thumbnail endpoint to avoid persistent 503 noise.
+
+### Latest Implementation Notes (2025-06-11)
+- API container now installs ffmpeg in `/docker/Dockerfile` so video thumbnail generation works out of the box; rebuild the image if thumbnails report ffmpeg missing.
