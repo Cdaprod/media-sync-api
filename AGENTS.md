@@ -671,3 +671,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-17)
 - Video thumbnailing adds a third slow ffmpeg fallback, maps the first video stream explicitly, and logs stdout tail alongside stderr; thumbnail seek/timeouts are now configurable via `MEDIA_SYNC_THUMB_SEEK_S` and `MEDIA_SYNC_THUMB_TIMEOUT_SLOW_S`.
+
+### Latest Implementation Notes (2025-06-18)
+- Thumbnail temp files now use a `.tmp.jpg` suffix and ffmpeg is forced to `image2` output to avoid muxer errors when writing temp thumbnails.
