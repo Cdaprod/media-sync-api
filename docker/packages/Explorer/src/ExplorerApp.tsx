@@ -147,6 +147,22 @@ const buildThumbFallback = (label: string) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
+const normalizeThumbUrl = (rawUrl?: string): string | undefined => {
+  if (!rawUrl) return undefined;
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
+        return `${window.location.origin}${parsed.pathname}${parsed.search}`;
+      }
+      return parsed.href;
+    } catch {
+      return rawUrl;
+    }
+  }
+  return rawUrl;
+};
+
 const queueThumbLoads = async (
   targets: HTMLImageElement[],
   timeoutMs: number,
@@ -1742,9 +1758,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const itemOrient = inferOrientationFromItem(item);
                   const orient = itemOrient || cachedOrient || 'square';
                   const orientLocked = Boolean(itemOrient || cachedOrient);
-                  const rawThumbUrl = item.thumb_url
+                  const rawThumbUrl = normalizeThumbUrl(item.thumb_url
                     || item.thumbnail_url
-                    || (kind === 'image' ? item.stream_url : undefined);
+                    || (kind === 'image' ? item.stream_url : undefined));
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
@@ -1820,9 +1836,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
-                  const rawThumbUrl = item.thumb_url
+                  const rawThumbUrl = normalizeThumbUrl(item.thumb_url
                     || item.thumbnail_url
-                    || (kind === 'image' ? item.stream_url : undefined);
+                    || (kind === 'image' ? item.stream_url : undefined));
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;

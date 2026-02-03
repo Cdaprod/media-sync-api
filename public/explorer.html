@@ -1577,6 +1577,22 @@
       return [source, project, rel, sha].filter(Boolean).join('|');
     }
 
+    function normalizeThumbUrl(rawUrl){
+      if (!rawUrl) return null;
+      if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')){
+        try{
+          const parsed = new URL(rawUrl);
+          if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'){
+            return `${window.location.origin}${parsed.pathname}${parsed.search}`;
+          }
+          return parsed.href;
+        }catch{
+          return rawUrl;
+        }
+      }
+      return rawUrl;
+    }
+
     function loadThumbQueue(targets, timeoutMs){
       if (!targets.length) return Promise.resolve();
       const jobs = targets.map((target) => ({
@@ -3025,7 +3041,7 @@
         const orient = itemOrient || cachedOrient || 'square';
         const orientLocked = Boolean(itemOrient || cachedOrient);
         const fallbackThumb = buildThumbFallback(kind);
-        const thumbUrl = it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null);
+        const thumbUrl = normalizeThumbUrl(it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null));
         const safeThumbUrl = fallbackThumb;
 
         // ---- grid card
@@ -3068,16 +3084,6 @@
             </div>
           </div>
         `;
-
-        const thumbImg = card.querySelector('.asset-thumb');
-        if (thumbImg){
-          if (isEager){
-            thumbImg.loading = 'eager';
-            thumbImg.fetchPriority = 'high';
-          }
-          if (thumbImg.complete) updateCardOrientation(card, thumbImg);
-          else thumbImg.addEventListener('load', () => updateCardOrientation(card, thumbImg), { once: true });
-        }
 
         // checkbox toggles selection without opening drawer
         card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {

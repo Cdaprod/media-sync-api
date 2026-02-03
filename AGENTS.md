@@ -644,3 +644,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-06-08)
 - Added `/thumbnails/{project}/{sha256}.jpg` to serve cached JPEG thumbnails from `ingest/thumbnails`; thumbnails are generated on demand (ffmpeg) and cached with immutable headers, and project scaffolding now creates `ingest/thumbnails` alongside originals + metadata.
 - Static and Next.js explorers now request server thumbnail URLs and load them with an in-order, concurrency-limited queue to avoid placeholder flashes on refresh while keeping thumbnail orientation caching intact.
+
+### Latest Implementation Notes (2025-06-09)
+- Explorer thumbnail loaders now normalize `thumb_url` values that point at `127.0.0.1`/`localhost` so mobile clients always fetch thumbnails from the current LAN origin.
