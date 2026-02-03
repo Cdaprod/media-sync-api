@@ -674,3 +674,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-18)
 - Thumbnail temp files now use a `.tmp.jpg` suffix and ffmpeg is forced to `image2` output to avoid muxer errors when writing temp thumbnails.
+
+### Latest Implementation Notes (2025-06-19)
+- Explorer grids now use responsive column widths for a justified masonry layout, keeping orientation-aware thumbnail aspect ratios intact in both static and Next.js explorers.
