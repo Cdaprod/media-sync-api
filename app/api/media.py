@@ -8,6 +8,8 @@ Example calls:
 from __future__ import annotations
 
 import logging
+import os
+import time
 import mimetypes
 import re
 import shutil
@@ -70,6 +72,10 @@ THUMBNAIL_SHA_PATTERN = re.compile(r"^[A-Fa-f0-9]{64}$")
 THUMBNAIL_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 THUMBNAIL_FALLBACK_HEADERS = {"Cache-Control": "public, max-age=300"}
 _FFMPEG_AVAILABLE: bool | None = None
+THUMB_MAX_W = int(os.getenv("MEDIA_SYNC_THUMB_MAX_W", "640"))
+THUMB_TIMEOUT_S = int(os.getenv("MEDIA_SYNC_THUMB_TIMEOUT_S", "25"))
+THUMB_TIMEOUT_FALLBACK_S = int(os.getenv("MEDIA_SYNC_THUMB_TIMEOUT_FALLBACK_S", "60"))
+THUMB_LOCK_TTL_S = int(os.getenv("MEDIA_SYNC_THUMB_LOCK_TTL_S", "120"))
 
 
 class _ResolvedProject:
@@ -165,6 +171,59 @@ def _ffmpeg_available() -> bool:
     return _FFMPEG_AVAILABLE
 
 
+def _run_ffmpeg(cmd: list[str], timeout_s: int) -> None:
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout_s,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        logger.warning(
+            "thumbnail_ffmpeg_timeout",
+            extra={"timeout_s": timeout_s, "cmd": " ".join(cmd)},
+        )
+        raise RuntimeError("ffmpeg thumbnail generation timed out") from exc
+
+    if proc.returncode != 0:
+        stderr_tail = (proc.stderr or "")[-4000:]
+        logger.warning(
+            "thumbnail_ffmpeg_failed",
+            extra={
+                "returncode": proc.returncode,
+                "cmd": " ".join(cmd),
+                "stderr_tail": stderr_tail,
+            },
+        )
+        raise RuntimeError("ffmpeg thumbnail generation failed")
+
+
+def _thumbnail_lock_path(project_root: Path, sha: str) -> Path:
+    return project_root / "ingest" / "thumbnails" / ".locks" / f"{sha}.lock"
+
+
+def _acquire_thumbnail_lock(lock_path: Path, ttl_s: int = THUMB_LOCK_TTL_S) -> bool:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if lock_path.exists():
+        age = time.time() - lock_path.stat().st_mtime
+        if age > ttl_s:
+            lock_path.unlink(missing_ok=True)
+    try:
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return False
+    else:
+        os.close(fd)
+        return True
+
+
+def _release_thumbnail_lock(lock_path: Path) -> None:
+    lock_path.unlink(missing_ok=True)
+
+
 def _generate_image_thumbnail(source_path: Path, target_path: Path) -> None:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = target_path.with_suffix(".tmp")
@@ -189,7 +248,8 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
         raise RuntimeError("ffmpeg is not available to generate thumbnails")
     target_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = target_path.with_suffix(".tmp")
-    cmd = [
+    vf = f"scale='min({THUMB_MAX_W},iw)':-2:flags=lanczos"
+    cmd_fast = [
         ffmpeg,
         "-y",
         "-nostdin",
@@ -197,31 +257,44 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
         "-loglevel",
         "error",
         "-ss",
-        "00:00:00.10",
+        "1.0",
         "-i",
         str(source_path),
         "-an",
         "-frames:v",
         "1",
         "-vf",
-        "scale='min(640,iw)':-2",
+        vf,
         "-q:v",
-        "4",
+        "5",
+        str(temp_path),
+    ]
+    cmd_safe = [
+        ffmpeg,
+        "-y",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(source_path),
+        "-ss",
+        "1.0",
+        "-an",
+        "-frames:v",
+        "1",
+        "-vf",
+        vf,
+        "-q:v",
+        "5",
         str(temp_path),
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=8)
-        temp_path.replace(target_path)
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("ffmpeg thumbnail generation timed out") from exc
-    except subprocess.CalledProcessError as exc:
-        logger.warning(
-            "thumbnail_ffmpeg_failed",
-            extra={"stderr": exc.stderr, "path": str(source_path)},
-        )
-        raise
-    finally:
-        temp_path.unlink(missing_ok=True)
+        _run_ffmpeg(cmd_fast, timeout_s=THUMB_TIMEOUT_S)
+    except RuntimeError:
+        _run_ffmpeg(cmd_safe, timeout_s=THUMB_TIMEOUT_FALLBACK_S)
+    temp_path.replace(target_path)
+    temp_path.unlink(missing_ok=True)
 
 
 def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
@@ -234,7 +307,7 @@ def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
     _generate_video_thumbnail(source_path, target_path)
 
 
-def _thumbnail_fallback_response(label: str) -> Response:
+def _thumbnail_fallback_response(label: str, status: str = "fallback") -> Response:
     safe_label = "".join(ch for ch in label.upper() if ch.isalnum() or ch == " ")
     safe_label = safe_label.strip() or "VIDEO"
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
@@ -251,7 +324,8 @@ def _thumbnail_fallback_response(label: str) -> Response:
     {safe_label}
   </text>
 </svg>"""
-    return Response(content=svg, media_type="image/svg+xml", headers=THUMBNAIL_FALLBACK_HEADERS)
+    headers = {**THUMBNAIL_FALLBACK_HEADERS, "X-Thumb-Status": status}
+    return Response(content=svg, media_type="image/svg+xml", headers=headers)
 
 
 @router.get("/{project_name}/media")
@@ -354,25 +428,27 @@ async def get_thumbnail(project_name: str, thumb_name: str, source: str | None =
         else:
             label = source_path.suffix.lstrip(".") or "VIDEO"
             if not _is_image_media(source_path) and not _ffmpeg_available():
-                return _thumbnail_fallback_response(label)
+                return _thumbnail_fallback_response(label, status="ffmpeg_missing")
+            lock_path = _thumbnail_lock_path(resolved.root, sha)
+            if not _acquire_thumbnail_lock(lock_path):
+                return _thumbnail_fallback_response(label, status="locked")
             try:
                 _generate_thumbnail(source_path, target_path)
             except RuntimeError as exc:
-                if "ffmpeg is not available" in str(exc):
-                    return _thumbnail_fallback_response(label)
-                if "timed out" in str(exc):
+                message = str(exc)
+                if "ffmpeg is not available" in message:
+                    return _thumbnail_fallback_response(label, status="ffmpeg_missing")
+                if "timed out" in message:
                     logger.warning(
                         "thumbnail_generation_timed_out",
                         extra={"project": resolved.name, "path": safe_relative},
                     )
-                    return _thumbnail_fallback_response(label)
-                raise HTTPException(status_code=500, detail=str(exc)) from exc
-            except subprocess.CalledProcessError as exc:
-                logger.warning(
-                    "thumbnail_generation_failed",
-                    extra={"project": resolved.name, "path": safe_relative},
-                )
-                return _thumbnail_fallback_response(label)
+                    return _thumbnail_fallback_response(label, status="timeout")
+                if "failed" in message:
+                    return _thumbnail_fallback_response(label, status="failed")
+                raise HTTPException(status_code=500, detail=message) from exc
+            finally:
+                _release_thumbnail_lock(lock_path)
 
     return FileResponse(target_path, media_type="image/jpeg", headers=THUMBNAIL_HEADERS)
 
