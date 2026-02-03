@@ -61,7 +61,7 @@ async def reindex(project_name: str, source: str | None = None):
 
 
 def _seed_if_missing(project_dir: Path) -> None:
-    ensure_subdirs(project_dir, ["ingest/originals", "ingest/_metadata", "_manifest"])
+    ensure_subdirs(project_dir, ["ingest/originals", "ingest/_metadata", "ingest/thumbnails", "_manifest"])
     if not (project_dir / "index.json").exists():
         seed_index(project_dir, project_dir.name)
 

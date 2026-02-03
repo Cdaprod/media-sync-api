@@ -16,6 +16,7 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 - Shows configured sources in the adapter UI so you can confirm mounts or register a new destination path without touching the API directly
 - Streams indexed media directly from `/media/<project>/<relative_path>` for in-browser playback
 - Forces direct downloads from `/media/<project>/download/<relative_path>` so files listed in the UI can be saved offline
+- Generates and serves cached thumbnails from `ingest/thumbnails` via `/thumbnails/<project>/<sha256>.jpg` to keep explorer refreshes fast
 - Sweeps loose files sitting in the projects root into an `Unsorted-Loose` project so uploads that land in the wrong spot are still indexed
 - Queues Resolve host actions so a local resolve-agent can open/import selected media deterministically
 
@@ -133,6 +134,7 @@ Path alignment for Resolve:
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
+- `GET /thumbnails/{project}/{sha256}.jpg` – serve (and cache) a generated thumbnail for explorer grids
 - `GET /media/{project}/download/{relative_path}` – download a stored media file with `Content-Disposition: attachment`
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` (or `files[]=...`) with sha256 de-dupe (returns `served.stream_url` + `served.download_url`)
 - `POST /api/projects/{project}/upload?op=start` – start a batch session for Shortcut repeats

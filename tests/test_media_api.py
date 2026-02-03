@@ -61,6 +61,32 @@ def test_download_media_and_link_in_listing(client: TestClient, env_settings: Pa
     assert download.content == payload
 
 
+def test_thumbnail_endpoint_serves_cached_file(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "thumbed.mov"
+    media_path.write_bytes(b"video-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    media_entry = listing.json()["media"][0]
+    assert media_entry["thumb_url"].startswith(f"/thumbnails/{project_name}/")
+
+    sha = media_entry["sha256"]
+    thumb_path = env_settings / project_name / "ingest" / "thumbnails" / f"{sha}.jpg"
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+    thumb_path.write_bytes(b"thumb-bytes")
+
+    response = client.get(media_entry["thumb_url"])
+    assert response.status_code == 200
+    assert response.content == b"thumb-bytes"
+    assert "immutable" in response.headers.get("cache-control", "")
+
+
 def test_reindex_moves_misplaced_media(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     project_dir = env_settings / project_name

@@ -112,15 +112,12 @@ test('OBS websocket helper includes browser source defaults', () => {
   assert.ok(content.includes('reroute_audio'));
 });
 
-test('explorer persists video thumbnail cache hints', () => {
+test('explorer queues thumbnail loads from server urls', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
-  assert.ok(content.includes('media-sync-thumb-cache'));
-  assert.ok(content.includes('readThumbFromCache'));
-  assert.ok(content.includes('writeThumbToCache'));
-  assert.ok(content.includes('thumbPendingRef'));
-  assert.ok(content.includes('thumbQueueRef'));
-  assert.ok(content.includes('scheduleThumbSweep'));
-  assert.ok(content.includes('getClientRects'));
+  assert.ok(content.includes('queueThumbLoads'));
+  assert.ok(content.includes('data-thumb-url'));
+  assert.ok(content.includes('THUMB_LOAD_TIMEOUT_MS'));
+  assert.ok(content.includes('thumbState'));
   assert.ok(content.includes('project_source'));
 });
