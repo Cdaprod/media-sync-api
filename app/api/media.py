@@ -19,7 +19,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.config import get_settings
 from app.storage.dedupe import compute_sha256_from_path, record_file_hash, remove_file_record
@@ -65,6 +65,7 @@ THUMBNAIL_EXTENSIONS = {
 }
 THUMBNAIL_SHA_PATTERN = re.compile(r"^[A-Fa-f0-9]{64}$")
 THUMBNAIL_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
+THUMBNAIL_FALLBACK_HEADERS = {"Cache-Control": "public, max-age=300"}
 _FFMPEG_AVAILABLE: bool | None = None
 
 
@@ -172,6 +173,8 @@ def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
         "-hide_banner",
         "-loglevel",
         "error",
+        "-ss",
+        "00:00:00.10",
         "-i",
         str(source_path),
         "-an",
@@ -184,7 +187,7 @@ def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
         str(temp_path),
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=12)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=8)
         temp_path.replace(target_path)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("ffmpeg thumbnail generation timed out") from exc
@@ -196,6 +199,26 @@ def _generate_thumbnail(source_path: Path, target_path: Path) -> None:
         raise
     finally:
         temp_path.unlink(missing_ok=True)
+
+
+def _thumbnail_fallback_response(label: str) -> Response:
+    safe_label = "".join(ch for ch in label.upper() if ch.isalnum() or ch == " ")
+    safe_label = safe_label.strip() or "VIDEO"
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a2d3a"/>
+      <stop offset="100%" stop-color="#1d2030"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="24" y="24" width="592" height="312" rx="22" fill="rgba(255,255,255,0.06)"/>
+  <text x="50%" y="52%" dominant-baseline="middle" text-anchor="middle" fill="#b7bcc8"
+    font-family="Inter, system-ui, sans-serif" font-size="48" font-weight="600" letter-spacing="2">
+    {safe_label}
+  </text>
+</svg>"""
+    return Response(content=svg, media_type="image/svg+xml", headers=THUMBNAIL_FALLBACK_HEADERS)
 
 
 @router.get("/{project_name}/media")
@@ -230,9 +253,7 @@ async def list_media(project_name: str, source: str | None = None):
         if _is_thumbable_media(Path(safe_relative)):
             sha = item.get("sha256")
             if isinstance(sha, str):
-                thumb_path = thumbnail_path(resolved.root, sha)
-                if thumb_path.exists() or _ffmpeg_available():
-                    item["thumb_url"] = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
+                item["thumb_url"] = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
         sha = item.get("sha256")
         if isinstance(sha, str) and metadata_path(resolved.root, sha).exists():
             item["metadata_path"] = metadata_relpath(resolved.root, sha)
@@ -298,17 +319,27 @@ async def get_thumbnail(project_name: str, thumb_name: str, source: str | None =
             target_path.parent.mkdir(parents=True, exist_ok=True)
             legacy_path.replace(target_path)
         else:
+            label = source_path.suffix.lstrip(".") or "VIDEO"
+            if not _ffmpeg_available():
+                return _thumbnail_fallback_response(label)
             try:
                 _generate_thumbnail(source_path, target_path)
             except RuntimeError as exc:
-                status = 404 if "ffmpeg is not available" in str(exc) else 500
-                raise HTTPException(status_code=status, detail=str(exc)) from exc
+                if "ffmpeg is not available" in str(exc):
+                    return _thumbnail_fallback_response(label)
+                if "timed out" in str(exc):
+                    logger.warning(
+                        "thumbnail_generation_timed_out",
+                        extra={"project": resolved.name, "path": safe_relative},
+                    )
+                    return _thumbnail_fallback_response(label)
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
             except subprocess.CalledProcessError as exc:
                 logger.warning(
                     "thumbnail_generation_failed",
                     extra={"project": resolved.name, "path": safe_relative},
                 )
-                raise HTTPException(status_code=500, detail="Thumbnail generation failed") from exc
+                return _thumbnail_fallback_response(label)
 
     return FileResponse(target_path, media_type="image/jpeg", headers=THUMBNAIL_HEADERS)
 

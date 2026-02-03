@@ -656,3 +656,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-12)
 - Thumbnail generation now runs ffmpeg with no-stdin, audio disabled, and a timeout to avoid 40s hangs; timeouts surface as 500 errors while missing ffmpeg still returns 404.
+
+### Latest Implementation Notes (2025-06-13)
+- Media listings now always include thumbnail URLs for thumbable assets, and the thumbnail endpoint serves a short-lived SVG fallback when ffmpeg is unavailable or thumbnail generation fails/timeouts.
