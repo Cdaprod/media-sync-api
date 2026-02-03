@@ -634,3 +634,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-05)
 - Explorer content surface styling is now fully transparent (no border/shadow) with a softened header strip, removing the remaining container outline so the grid sits directly on the ambient backdrop.
+
+### Latest Implementation Notes (2025-06-06)
+- Explorer headers now use translucent glass styling with backdrop blur to let scrolled assets subtly show behind the section header and topbar.
