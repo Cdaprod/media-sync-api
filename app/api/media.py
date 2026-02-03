@@ -75,6 +75,8 @@ _FFMPEG_AVAILABLE: bool | None = None
 THUMB_MAX_W = int(os.getenv("MEDIA_SYNC_THUMB_MAX_W", "640"))
 THUMB_TIMEOUT_S = int(os.getenv("MEDIA_SYNC_THUMB_TIMEOUT_S", "25"))
 THUMB_TIMEOUT_FALLBACK_S = int(os.getenv("MEDIA_SYNC_THUMB_TIMEOUT_FALLBACK_S", "60"))
+THUMB_TIMEOUT_SLOW_S = int(os.getenv("MEDIA_SYNC_THUMB_TIMEOUT_SLOW_S", "90"))
+THUMB_SEEK_S = os.getenv("MEDIA_SYNC_THUMB_SEEK_S", "1.0")
 THUMB_LOCK_TTL_S = int(os.getenv("MEDIA_SYNC_THUMB_LOCK_TTL_S", "120"))
 
 
@@ -190,11 +192,13 @@ def _run_ffmpeg(cmd: list[str], timeout_s: int) -> None:
 
     if proc.returncode != 0:
         stderr_tail = (proc.stderr or "")[-4000:]
+        stdout_tail = (proc.stdout or "")[-4000:]
         logger.warning(
-            "thumbnail_ffmpeg_failed rc=%s cmd=%s stderr_tail=%s",
+            "thumbnail_ffmpeg_failed rc=%s cmd=%s stderr_tail=%s stdout_tail=%s",
             proc.returncode,
             " ".join(cmd),
             stderr_tail,
+            stdout_tail,
         )
         raise RuntimeError("ffmpeg thumbnail generation failed")
 
@@ -246,7 +250,7 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
         raise RuntimeError("ffmpeg is not available to generate thumbnails")
     target_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = target_path.with_suffix(".tmp")
-    vf = f"scale='min({THUMB_MAX_W},iw)':-2:flags=lanczos"
+    vf = f"thumbnail,scale='min({THUMB_MAX_W},iw)':-2:flags=lanczos"
     cmd_fast = [
         ffmpeg,
         "-y",
@@ -255,10 +259,14 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
         "-loglevel",
         "error",
         "-ss",
-        "1.0",
+        THUMB_SEEK_S,
         "-i",
         str(source_path),
         "-an",
+        "-sn",
+        "-dn",
+        "-map",
+        "0:v:0",
         "-frames:v",
         "1",
         "-vf",
@@ -277,8 +285,34 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
         "-i",
         str(source_path),
         "-ss",
-        "1.0",
+        THUMB_SEEK_S,
         "-an",
+        "-sn",
+        "-dn",
+        "-map",
+        "0:v:0",
+        "-frames:v",
+        "1",
+        "-vf",
+        vf,
+        "-q:v",
+        "5",
+        str(temp_path),
+    ]
+    cmd_slow = [
+        ffmpeg,
+        "-y",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(source_path),
+        "-an",
+        "-sn",
+        "-dn",
+        "-map",
+        "0:v:0",
         "-frames:v",
         "1",
         "-vf",
@@ -290,7 +324,10 @@ def _generate_video_thumbnail(source_path: Path, target_path: Path) -> None:
     try:
         _run_ffmpeg(cmd_fast, timeout_s=THUMB_TIMEOUT_S)
     except RuntimeError:
-        _run_ffmpeg(cmd_safe, timeout_s=THUMB_TIMEOUT_FALLBACK_S)
+        try:
+            _run_ffmpeg(cmd_safe, timeout_s=THUMB_TIMEOUT_FALLBACK_S)
+        except RuntimeError:
+            _run_ffmpeg(cmd_slow, timeout_s=THUMB_TIMEOUT_SLOW_S)
     temp_path.replace(target_path)
     temp_path.unlink(missing_ok=True)
 

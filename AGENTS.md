@@ -668,3 +668,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-16)
 - ffmpeg failure logs now emit stderr tail inline for visibility, and image thumbnail scaling respects the same `MEDIA_SYNC_THUMB_MAX_W` cap as videos.
+
+### Latest Implementation Notes (2025-06-17)
+- Video thumbnailing adds a third slow ffmpeg fallback, maps the first video stream explicitly, and logs stdout tail alongside stderr; thumbnail seek/timeouts are now configurable via `MEDIA_SYNC_THUMB_SEEK_S` and `MEDIA_SYNC_THUMB_TIMEOUT_SLOW_S`.
