@@ -72,6 +72,7 @@ def test_explorer_api_fallback():
     assert 'DEFAULT_API_PORT' in html
     assert 'buildFallbackApiBase' in html
     assert 'apiFetch' in html
+    assert 'bootstrapData' in html
 
 
 def test_explorer_context_menu_and_drag_assist():

@@ -3005,6 +3005,21 @@
       updateSelectionUI();
     }
 
+    async function bootstrapData(){
+      await loadSources();
+      await loadProjects();
+      if (!state.projects.length){
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await loadSources();
+        await loadProjects();
+      }
+      if (state.activeProject){
+        await loadMedia();
+      }else{
+        await loadAllMedia();
+      }
+    }
+
     // -------------------------
     // Renderers
     // -------------------------
@@ -3367,16 +3382,20 @@
       resolve(result);
     }
 
-    async function requestNormalizeOrientation(baseUrl, dryRun){
-      let response = await fetch(baseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dry_run: dryRun }),
-      });
-      if (response.status === 405){
-        const fallbackUrl = new URL(baseUrl, window.location.origin);
-        fallbackUrl.searchParams.set('dry_run', dryRun ? 'true' : 'false');
-        response = await fetch(fallbackUrl.toString());
+    async function requestNormalizeOrientation(path, dryRun){
+      let response = null;
+      try{
+        response = await apiFetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dry_run: dryRun }),
+        });
+      }catch(e){
+        response = null;
+      }
+      if (!response || response.status === 405){
+        const join = path.includes('?') ? '&' : '?';
+        response = await apiFetch(`${path}${join}dry_run=${dryRun ? 'true' : 'false'}`);
       }
       const payload = await response.json().catch(() => ({}));
       return { response, payload };
@@ -3393,10 +3412,10 @@
       const button = el('normalizeOrientationBtn');
       button.disabled = true;
       try{
-        const baseUrl = isGlobal
-          ? `${API}/api/media/normalize-orientation`
-          : `${API}/api/projects/${encodeURIComponent(p.name)}/media/normalize-orientation${mediaQuery()}`;
-        const dryResult = await requestNormalizeOrientation(baseUrl, true);
+        const path = isGlobal
+          ? '/api/media/normalize-orientation'
+          : `/api/projects/${encodeURIComponent(p.name)}/media/normalize-orientation${mediaQuery()}`;
+        const dryResult = await requestNormalizeOrientation(path, true);
         if (!dryResult.response.ok){
           throw new Error(dryResult.payload.detail || dryResult.payload.message || 'Dry run failed');
         }
@@ -3420,7 +3439,7 @@
           return;
         }
 
-        const applyResult = await requestNormalizeOrientation(baseUrl, false);
+        const applyResult = await requestNormalizeOrientation(path, false);
         if (!applyResult.response.ok){
           throw new Error(applyResult.payload.detail || applyResult.payload.message || 'Normalize failed');
         }
@@ -3880,11 +3899,7 @@
         syncSidebarMode();
       });
       toast('good','Boot','Loading sources + projects…');
-      await loadSources();
-      await loadProjects();
-      if (!state.activeProject){
-        await loadAllMedia();
-      }
+      await bootstrapData();
       setView('grid');
       updateTopCounts();
       updateSelectionUI();

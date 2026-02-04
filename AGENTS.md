@@ -710,3 +710,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-30)
 - Explorer now falls back to the default API port (8787) if same-origin source/project fetches fail, ensuring projects/media still load when the UI is served from another port.
+
+### Latest Implementation Notes (2025-07-01)
+- Explorer boot now retries source/project loads once before rendering media, and normalization requests use the shared API fetch helper for POST/GET fallback handling.
