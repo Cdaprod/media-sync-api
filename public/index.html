@@ -916,6 +916,21 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
       resolve(result);
     }
 
+    async function requestNormalizeOrientation(url, dryRun) {
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dry_run: dryRun }),
+      });
+      if (response.status === 405) {
+        const fallbackUrl = new URL(url, window.location.origin);
+        fallbackUrl.searchParams.set('dry_run', dryRun ? 'true' : 'false');
+        response = await fetch(fallbackUrl.toString());
+      }
+      const payload = await response.json().catch(() => ({}));
+      return { response, payload };
+    }
+
     async function normalizeOrientation() {
       if (!activeProject) {
         orientationStatus.textContent = 'Choose a project first.';
@@ -926,17 +941,12 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
       const url = `/api/projects/${encodeURIComponent(activeProject.name)}/media/normalize-orientation${query}`;
       try {
         orientationStatus.textContent = 'Scanning for rotated videos...';
-        const dryResp = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dry_run: true }),
-        });
-        const dryPayload = await dryResp.json();
-        if (!dryResp.ok) {
-          const detail = dryPayload.detail || dryPayload.message || 'Dry run failed';
+        const dryResult = await requestNormalizeOrientation(url, true);
+        if (!dryResult.response.ok) {
+          const detail = dryResult.payload.detail || dryResult.payload.message || 'Dry run failed';
           throw new Error(detail);
         }
-        const planned = dryPayload.changed?.length || 0;
+        const planned = dryResult.payload.changed?.length || 0;
         if (!planned) {
           orientationStatus.textContent = 'No rotated videos detected.';
           return;
@@ -951,18 +961,13 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
           return;
         }
         orientationStatus.textContent = `Normalizing ${planned} video(s)...`;
-        const applyResp = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dry_run: false }),
-        });
-        const applyPayload = await applyResp.json();
-        if (!applyResp.ok) {
-          const detail = applyPayload.detail || applyPayload.message || 'Normalize failed';
+        const applyResult = await requestNormalizeOrientation(url, false);
+        if (!applyResult.response.ok) {
+          const detail = applyResult.payload.detail || applyResult.payload.message || 'Normalize failed';
           throw new Error(detail);
         }
-        const fixed = applyPayload.changed?.length || 0;
-        const failed = applyPayload.failed?.length || 0;
+        const fixed = applyResult.payload.changed?.length || 0;
+        const failed = applyResult.payload.failed?.length || 0;
         orientationStatus.textContent = failed
           ? `Normalized ${fixed}. ${failed} failed (see logs).`
           : `Normalized ${fixed} video(s).`;

@@ -704,3 +704,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-28)
 - Explorer HTML escaping now uses regex replacements instead of `replaceAll` to keep the static explorer compatible with older Safari builds.
+
+### Latest Implementation Notes (2025-06-29)
+- Orientation normalization endpoints now accept GET fallbacks (query-driven dry_run) and the static explorers retry normalization requests via GET when POST returns 405.

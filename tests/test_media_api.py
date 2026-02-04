@@ -260,6 +260,43 @@ def test_normalize_orientation_updates_index_and_manifest(
     assert not media_path.with_name(f".bak.{media_path.name}").exists()
 
 
+def test_normalize_orientation_get_apply(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "rotated-get.mov"
+    media_path.write_bytes(b"original-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.storage.orientation as orientation_module
+    import app.api.media as media_module
+
+    def fake_probe(_path):
+        return orientation_module.ProbeVideo(rotation=90, width=1920, height=1080, codec="h264")
+
+    def fake_normalize(path, keep_backup=True, **_kwargs):
+        backup = path.with_name(f".bak.{path.name}")
+        backup.write_bytes(path.read_bytes())
+        path.write_bytes(b"normalized-bytes")
+        return orientation_module.NormalizationResult(changed=True, rotation=90, backup_path=backup)
+
+    monkeypatch.setattr(orientation_module, "ffprobe_video", fake_probe)
+    monkeypatch.setattr(orientation_module, "normalize_video_orientation_in_place", fake_normalize)
+    monkeypatch.setattr(media_module, "ffprobe_video", fake_probe)
+    monkeypatch.setattr(media_module, "normalize_video_orientation_in_place", fake_normalize)
+
+    response = client.get(
+        f"/api/projects/{project_name}/media/normalize-orientation",
+        params={"dry_run": "false"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["dry_run"] is False
+    assert payload["changed"]
+    assert not payload["failed"]
+
 def test_normalize_orientation_all_projects_dry_run(client: TestClient, env_settings: Path, monkeypatch) -> None:
     project_one = _create_project(client)
     project_two = client.post("/api/projects", json={"name": "demo-two"}).json()["name"]

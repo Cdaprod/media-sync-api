@@ -3339,6 +3339,21 @@
       resolve(result);
     }
 
+    async function requestNormalizeOrientation(baseUrl, dryRun){
+      let response = await fetch(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dry_run: dryRun }),
+      });
+      if (response.status === 405){
+        const fallbackUrl = new URL(baseUrl, window.location.origin);
+        fallbackUrl.searchParams.set('dry_run', dryRun ? 'true' : 'false');
+        response = await fetch(fallbackUrl.toString());
+      }
+      const payload = await response.json().catch(() => ({}));
+      return { response, payload };
+    }
+
     async function normalizeOrientation(){
       const p = state.activeProject;
       const isGlobal = !p && state.mediaScope === 'all';
@@ -3353,17 +3368,14 @@
         const baseUrl = isGlobal
           ? `${API}/api/media/normalize-orientation`
           : `${API}/api/projects/${encodeURIComponent(p.name)}/media/normalize-orientation${mediaQuery()}`;
-        const dryResp = await fetch(baseUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dry_run: true }),
-        });
-        const dryPayload = await dryResp.json().catch(() => ({}));
-        if (!dryResp.ok) throw new Error(dryPayload.detail || dryPayload.message || 'Dry run failed');
+        const dryResult = await requestNormalizeOrientation(baseUrl, true);
+        if (!dryResult.response.ok){
+          throw new Error(dryResult.payload.detail || dryResult.payload.message || 'Dry run failed');
+        }
 
-        const planned = (dryPayload.totals && typeof dryPayload.totals.planned === 'number')
-          ? dryPayload.totals.planned
-          : (dryPayload.changed ? dryPayload.changed.length : 0);
+        const planned = (dryResult.payload.totals && typeof dryResult.payload.totals.planned === 'number')
+          ? dryResult.payload.totals.planned
+          : (dryResult.payload.changed ? dryResult.payload.changed.length : 0);
         if (!planned){
           toast('good','Orientation','No rotated videos detected.');
           return;
@@ -3380,20 +3392,17 @@
           return;
         }
 
-        const applyResp = await fetch(baseUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dry_run: false }),
-        });
-        const applyPayload = await applyResp.json().catch(() => ({}));
-        if (!applyResp.ok) throw new Error(applyPayload.detail || applyPayload.message || 'Normalize failed');
+        const applyResult = await requestNormalizeOrientation(baseUrl, false);
+        if (!applyResult.response.ok){
+          throw new Error(applyResult.payload.detail || applyResult.payload.message || 'Normalize failed');
+        }
 
-        const fixed = (applyPayload.totals && typeof applyPayload.totals.changed === 'number')
-          ? applyPayload.totals.changed
-          : (applyPayload.changed ? applyPayload.changed.length : 0);
-        const failed = (applyPayload.totals && typeof applyPayload.totals.failed === 'number')
-          ? applyPayload.totals.failed
-          : (applyPayload.failed ? applyPayload.failed.length : 0);
+        const fixed = (applyResult.payload.totals && typeof applyResult.payload.totals.changed === 'number')
+          ? applyResult.payload.totals.changed
+          : (applyResult.payload.changed ? applyResult.payload.changed.length : 0);
+        const failed = (applyResult.payload.totals && typeof applyResult.payload.totals.failed === 'number')
+          ? applyResult.payload.totals.failed
+          : (applyResult.payload.failed ? applyResult.payload.failed.length : 0);
         const summary = failed
           ? `Normalized ${fixed}. ${failed} failed (see logs).`
           : `Normalized ${fixed} video(s).`;

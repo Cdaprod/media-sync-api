@@ -1016,6 +1016,29 @@ async def normalize_orientation(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/{project_name}/media/normalize-orientation")
+async def normalize_orientation_get(
+    project_name: str,
+    dry_run: bool = True,
+    limit: int | None = None,
+    source: str | None = None,
+):
+    """Normalize video orientation metadata in place for a project (GET fallback).
+
+    Example:
+        curl "http://localhost:8787/api/projects/demo/media/normalize-orientation?dry_run=false"
+    """
+
+    payload = NormalizeOrientationRequest(dry_run=dry_run, limit=limit)
+    resolved = _require_source_and_project(project_name, source)
+    if not (resolved.root / "index.json").exists():
+        raise HTTPException(status_code=404, detail="Project index missing")
+    try:
+        return _normalize_orientation_for_project(resolved, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @global_media_router.post("/normalize-orientation")
 async def normalize_orientation_all(
     payload: NormalizeOrientationRequest,
@@ -1083,6 +1106,22 @@ async def normalize_orientation_all(
         "results": results,
         "instructions": "Set dry_run=false to apply orientation fixes in place.",
     }
+
+
+@global_media_router.get("/normalize-orientation")
+async def normalize_orientation_all_get(
+    dry_run: bool = True,
+    limit: int | None = None,
+    source: str | None = None,
+):
+    """Normalize orientation across all projects in a source (GET fallback).
+
+    Example:
+        curl "http://localhost:8787/api/media/normalize-orientation?dry_run=true"
+    """
+
+    payload = NormalizeOrientationRequest(dry_run=dry_run, limit=limit)
+    return await normalize_orientation_all(payload, source=source)
 
 
 @router.post("/auto-organize")
