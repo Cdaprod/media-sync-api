@@ -680,3 +680,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-20)
 - Explorer sidebars now stay collapsed by default across viewports, with brand-title toggles to open the drawer and mobile no longer overriding masonry columns with fixed grid templates.
+
+### Latest Implementation Notes (2025-06-21)
+- Moved the Projects sidebar section header inside the explorer scroll container so it sticks and hands off cleanly to the other section headers.
