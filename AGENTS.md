@@ -683,3 +683,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-21)
 - Moved the Projects sidebar section header inside the explorer scroll container so it sticks and hands off cleanly to the other section headers.
+
+### Latest Implementation Notes (2025-06-22)
+- Sidebar section headers now stick to the top of the sidebar scroll region (no topbar offset) so the Projects header sits flush above the chips.
