@@ -1270,6 +1270,7 @@
 
             <div class="pillbar">
               <button id="refreshBtn" class="btn" type="button">↻ Refresh</button>
+              <button id="normalizeOrientationBtn" class="btn" type="button" disabled>↻ Normalize Orientation</button>
               <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
               <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
               <button id="deleteSelBtn" class="btn bad" type="button" disabled>🗑 Delete Selected</button>
@@ -2555,6 +2556,7 @@
       el('sendResolveBtn').disabled = !show || !state.activeProject;
       el('clearSelBtn').disabled = !show;
       el('deleteSelBtn').disabled = !show || !state.activeProject;
+      el('normalizeOrientationBtn').disabled = !state.activeProject;
       el('selTagToggle').disabled = !show || !state.activeProject;
       el('selMoveToggle').disabled = !show || !state.activeProject;
       el('selCopyUrls').disabled = !show || !state.activeProject;
@@ -3268,6 +3270,58 @@
       }
     }
 
+    async function normalizeOrientation(){
+      const p = state.activeProject;
+      if (!p){ toast('warn','Orientation','Select a project first'); return; }
+
+      const button = el('normalizeOrientationBtn');
+      button.disabled = true;
+      try{
+        const baseUrl = `${API}/api/projects/${encodeURIComponent(p.name)}/media/normalize-orientation${mediaQuery()}`;
+        const dryResp = await fetch(baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dry_run: true }),
+        });
+        const dryPayload = await dryResp.json().catch(() => ({}));
+        if (!dryResp.ok) throw new Error(dryPayload.detail || dryPayload.message || 'Dry run failed');
+
+        const planned = dryPayload.changed?.length || 0;
+        if (!planned){
+          toast('good','Orientation','No rotated videos detected.');
+          return;
+        }
+
+        const confirmApply = window.confirm(
+          `Normalize orientation for ${planned} video(s)? This overwrites files in place.`
+        );
+        if (!confirmApply){
+          toast('warn','Orientation', `Dry run only — ${planned} clip(s) need normalization.`);
+          return;
+        }
+
+        const applyResp = await fetch(baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dry_run: false }),
+        });
+        const applyPayload = await applyResp.json().catch(() => ({}));
+        if (!applyResp.ok) throw new Error(applyPayload.detail || applyPayload.message || 'Normalize failed');
+
+        const fixed = applyPayload.changed?.length || 0;
+        const failed = applyPayload.failed?.length || 0;
+        const summary = failed
+          ? `Normalized ${fixed}. ${failed} failed (see logs).`
+          : `Normalized ${fixed} video(s).`;
+        toast('good','Orientation', summary);
+        await loadMedia();
+      }catch(e){
+        toast('bad','Orientation', e.message || 'Normalize failed');
+      }finally{
+        button.disabled = !state.activeProject;
+      }
+    }
+
     async function sendToResolve(){
       const p = state.activeProject;
       if (!p){ toast('warn','Resolve','Select a project first'); return; }
@@ -3565,6 +3619,7 @@
     // Upload
     el('uploadBtn').addEventListener('click', uploadActive);
     el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
+    el('normalizeOrientationBtn').addEventListener('click', normalizeOrientation);
 
     const contentArea = document.querySelector('.content');
     if (contentArea){

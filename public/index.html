@@ -164,6 +164,14 @@
         <div id="upload-status" class="muted"></div>
       </div>
 
+      <div id="orientation-panel" class="upload-panel hidden" aria-live="polite">
+        <p class="muted" id="orientation-caption">Normalize rotated videos for this project.</p>
+        <div class="actions-row">
+          <button id="orientation-button" type="button">Normalize orientation</button>
+        </div>
+        <div id="orientation-status" class="muted"></div>
+      </div>
+
       <div id="resolve-panel" class="resolve-panel hidden" aria-live="polite">
         <h4>DaVinci Resolve bridge</h4>
         <p class="muted">Select clips, then send them to the Resolve host agent to open/import.</p>
@@ -326,6 +334,10 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
     const uploadPicker = document.getElementById('upload-picker');
     const uploadButton = document.getElementById('upload-button');
     const uploadStatus = document.getElementById('upload-status');
+    const orientationPanel = document.getElementById('orientation-panel');
+    const orientationCaption = document.getElementById('orientation-caption');
+    const orientationButton = document.getElementById('orientation-button');
+    const orientationStatus = document.getElementById('orientation-status');
     const resolvePanel = document.getElementById('resolve-panel');
     const resolveProjectMode = document.getElementById('resolve-project-mode');
     const resolveProjectName = document.getElementById('resolve-project-name');
@@ -550,12 +562,16 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
       selectedMedia.clear();
       updateSelectionStatus();
       uploadPanel.classList.remove('hidden');
+      orientationPanel.classList.remove('hidden');
       mediaEl.classList.remove('hidden');
       mediaTitle.textContent = `Media in ${project.name}`;
       crumbText.textContent = `${project.source || 'primary'} • ${project.name}`;
       uploadCaption.textContent = `Upload to ${project.name} (${project.source})`;
       uploadStatus.textContent = '';
       uploadFile.value = '';
+      orientationCaption.textContent = `Normalize rotated videos in ${project.name}.`;
+      orientationStatus.textContent = '';
+      orientationButton.disabled = false;
       resolveProjectMode.value = 'current';
       resolveProjectName.value = project.name;
       resolveNewName.value = '';
@@ -597,6 +613,7 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
       selectedMedia.clear();
       updateSelectionStatus();
       mediaEl.classList.remove('hidden');
+      orientationPanel.classList.add('hidden');
       mediaTitle.textContent = 'Media — All Projects';
       crumbText.textContent = 'all projects';
       if (!projects.length) {
@@ -843,6 +860,62 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
       }
     }
 
+    async function normalizeOrientation() {
+      if (!activeProject) {
+        orientationStatus.textContent = 'Choose a project first.';
+        return;
+      }
+      orientationButton.disabled = true;
+      const query = activeProject.source ? `?source=${encodeURIComponent(activeProject.source)}` : '';
+      const url = `/api/projects/${encodeURIComponent(activeProject.name)}/media/normalize-orientation${query}`;
+      try {
+        orientationStatus.textContent = 'Scanning for rotated videos...';
+        const dryResp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dry_run: true }),
+        });
+        const dryPayload = await dryResp.json();
+        if (!dryResp.ok) {
+          const detail = dryPayload.detail || dryPayload.message || 'Dry run failed';
+          throw new Error(detail);
+        }
+        const planned = dryPayload.changed?.length || 0;
+        if (!planned) {
+          orientationStatus.textContent = 'No rotated videos detected.';
+          return;
+        }
+        const confirmApply = window.confirm(
+          `Normalize orientation for ${planned} video(s)? This overwrites files in place.`
+        );
+        if (!confirmApply) {
+          orientationStatus.textContent = `Dry run complete — ${planned} clip(s) need normalization.`;
+          return;
+        }
+        orientationStatus.textContent = `Normalizing ${planned} video(s)...`;
+        const applyResp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dry_run: false }),
+        });
+        const applyPayload = await applyResp.json();
+        if (!applyResp.ok) {
+          const detail = applyPayload.detail || applyPayload.message || 'Normalize failed';
+          throw new Error(detail);
+        }
+        const fixed = applyPayload.changed?.length || 0;
+        const failed = applyPayload.failed?.length || 0;
+        orientationStatus.textContent = failed
+          ? `Normalized ${fixed}. ${failed} failed (see logs).`
+          : `Normalized ${fixed} video(s).`;
+        loadMedia();
+      } catch (err) {
+        orientationStatus.textContent = `Normalize failed: ${err.message}`;
+      } finally {
+        orientationButton.disabled = false;
+      }
+    }
+
     async function sendToResolve() {
       resolveStatus.textContent = '';
       if (!activeProject) {
@@ -935,6 +1008,10 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
         return;
       }
       await uploadFiles(uploadFile.files);
+    });
+
+    orientationButton.addEventListener('click', async () => {
+      await normalizeOrientation();
     });
 
     async function uploadFiles(files) {

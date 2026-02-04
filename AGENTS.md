@@ -686,3 +686,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-22)
 - Sidebar section headers now stick to the top of the sidebar scroll region (no topbar offset) so the Projects header sits flush above the chips.
+
+### Latest Implementation Notes (2025-06-23)
+- Added in-place orientation normalization for rotated videos via `POST /api/projects/{project}/media/normalize-orientation` (dry-run supported). The flow uses ffprobe/ffmpeg, updates existing index + manifest rows without new assets, and cleans up old sha256 metadata/thumbnail sidecars when no longer referenced. Static explorers now include a Normalize Orientation action in their top-level controls.

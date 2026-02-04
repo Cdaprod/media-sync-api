@@ -201,6 +201,65 @@ def test_reindex_skips_thumbnail_assets(client: TestClient, env_settings: Path) 
     assert not listing.json()["media"]
 
 
+def test_normalize_orientation_updates_index_and_manifest(
+    client: TestClient,
+    env_settings: Path,
+    monkeypatch,
+) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "rotated.mov"
+    media_path.write_bytes(b"original-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    from app.storage.index import load_index
+    from app.storage.dedupe import compute_sha256_from_path, lookup_file_hash
+    import app.storage.orientation as orientation_module
+    import app.api.media as media_module
+
+    index_before = load_index(env_settings / project_name)
+    entry_before = index_before["files"][0]
+    old_sha = entry_before["sha256"]
+
+    def fake_probe(_path):
+        return orientation_module.ProbeVideo(rotation=90, width=1920, height=1080, codec="h264")
+
+    def fake_normalize(path, keep_backup=True, **_kwargs):
+        backup = path.with_name(f".bak.{path.name}")
+        backup.write_bytes(path.read_bytes())
+        path.write_bytes(b"normalized-bytes")
+        return orientation_module.NormalizationResult(changed=True, rotation=90, backup_path=backup)
+
+    monkeypatch.setattr(orientation_module, "ffprobe_video", fake_probe)
+    monkeypatch.setattr(orientation_module, "normalize_video_orientation_in_place", fake_normalize)
+    monkeypatch.setattr(media_module, "ffprobe_video", fake_probe)
+    monkeypatch.setattr(media_module, "normalize_video_orientation_in_place", fake_normalize)
+
+    response = client.post(
+        f"/api/projects/{project_name}/media/normalize-orientation",
+        json={"dry_run": False},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["changed"]
+    assert not payload["failed"]
+
+    index_after = load_index(env_settings / project_name)
+    entry_after = index_after["files"][0]
+    new_sha = entry_after["sha256"]
+    assert new_sha != old_sha
+    assert entry_after["relative_path"] == "ingest/originals/rotated.mov"
+
+    manifest_db = env_settings / project_name / "_manifest" / "manifest.db"
+    assert lookup_file_hash(manifest_db, new_sha) == "ingest/originals/rotated.mov"
+    assert lookup_file_hash(manifest_db, old_sha) is None
+    assert compute_sha256_from_path(media_path) == new_sha
+    assert not media_path.with_name(f".bak.{media_path.name}").exists()
+
+
 def test_auto_organize_loose_files(client: TestClient, env_settings: Path) -> None:
     loose_file = env_settings / "loose.mov"
     loose_file.write_bytes(b"orphaned")
