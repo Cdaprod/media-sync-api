@@ -686,3 +686,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-22)
 - Sidebar section headers now stick to the top of the sidebar scroll region (no topbar offset) so the Projects header sits flush above the chips.
+
+### Latest Implementation Notes (2025-06-23)
+- OBS player overlay now supports tap-to-toggle play/pause, grayscale + pause icon overlay when paused, and external control via BroadcastChannel, postMessage, or hash commands.

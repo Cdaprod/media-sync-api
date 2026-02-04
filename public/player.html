@@ -1,8 +1,13 @@
 <!doctype html>
 <!--
   media-sync-api OBS Player
-  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0
+  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0&autoplay=1&loop=1&controls=0&tap=1&id=player
   Example: /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&fit=cover&muted=0
+
+  Control channels:
+  - BroadcastChannel('obs-player-control'): { id: 'player', cmd: 'play'|'pause'|'toggle'|'seek'|'setSrc'|'setMute'|'setVolume' }
+  - postMessage payloads (for iframe embeds)
+  - Hash commands: #play #pause #toggle (refresh browser source to trigger)
 -->
 <html lang="en">
 <head>
@@ -10,53 +15,241 @@
   <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1" />
   <title>media-sync-api — OBS Player</title>
   <style>
+    :root {
+      --bg: transparent;
+      --tap-toggle: 1;
+      --paused-gray: 1;
+      --paused-dim: 0.14;
+      --icon-size: 120px;
+      --icon-opacity: 0.92;
+      --icon-stroke: rgba(0, 0, 0, 0.35);
+      --fade-ms: 140ms;
+    }
+
     html, body {
       margin: 0;
       width: 100%;
       height: 100%;
-      background: transparent;
+      background: var(--bg);
       overflow: hidden;
     }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
     video {
+      position: absolute;
+      inset: 0;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
       display: block;
+      background: transparent;
+      transition: filter var(--fade-ms) linear;
+    }
+
+    .paused video {
+      filter:
+        grayscale(calc(var(--paused-gray) * 1))
+        brightness(calc(1 - var(--paused-dim)));
+    }
+
+    .icon {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: var(--icon-size);
+      height: var(--icon-size);
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--fade-ms) linear, transform var(--fade-ms) ease;
+      filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.45));
+    }
+
+    .paused .icon {
+      opacity: var(--icon-opacity);
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .hotspot {
+      position: absolute;
+      inset: 0;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <video id="v" autoplay playsinline></video>
+  <div class="stage" id="stage">
+    <video id="v" autoplay playsinline preload="auto"></video>
+    <svg class="icon" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stop-color="rgba(255,255,255,0.98)" />
+          <stop offset="1" stop-color="rgba(255,255,255,0.82)" />
+        </linearGradient>
+      </defs>
+      <rect x="22" y="18" width="20" height="64" rx="8" fill="url(#g)" stroke="var(--icon-stroke)" stroke-width="2" />
+      <rect x="58" y="18" width="20" height="64" rx="8" fill="url(#g)" stroke="var(--icon-stroke)" stroke-width="2" />
+    </svg>
+    <div class="hotspot" id="hotspot" aria-hidden="true"></div>
+  </div>
   <script>
-    const qs = new URLSearchParams(location.search);
-    const src = qs.get("src") || "";
-    const fit = qs.get("fit") || "cover";
-    const muted = (qs.get("muted") || "0") === "1";
-    const v = document.getElementById("v");
-    v.style.objectFit = fit;
-    v.muted = true;
-    v.src = src;
+    (() => {
+      const qs = new URLSearchParams(location.search);
+      const src = qs.get("src") || "";
+      const fit = qs.get("fit") || "cover";
+      const muted = (qs.get("muted") || "0") === "1";
+      const autoplay = (qs.get("autoplay") ?? "1") === "1";
+      const loop = (qs.get("loop") ?? "1") === "1";
+      const controls = (qs.get("controls") ?? "0") === "1";
+      const tapToggle = (qs.get("tap") ?? getComputedStyle(document.documentElement)
+        .getPropertyValue("--tap-toggle")
+        .trim() || "1") === "1";
+      const playerId = qs.get("id") || "player";
 
-    async function tryPlay() {
-      try {
-        await v.play();
-      } catch (_) {
-        // ignore autoplay errors
+      const stage = document.getElementById("stage");
+      const v = document.getElementById("v");
+      const hotspot = document.getElementById("hotspot");
+
+      v.style.objectFit = fit;
+      v.muted = muted;
+      v.loop = loop;
+      v.controls = controls;
+      v.autoplay = autoplay;
+      if (src) v.src = src;
+
+      function syncPausedUI() {
+        if (v.paused) {
+          stage.classList.add("paused");
+        } else {
+          stage.classList.remove("paused");
+        }
       }
-    }
 
-    let n = 0;
-    const t = setInterval(async () => {
-      n++;
-      await tryPlay();
-      if (!v.paused || n > 20) clearInterval(t);
-    }, 250);
+      v.addEventListener("play", syncPausedUI);
+      v.addEventListener("pause", syncPausedUI);
+      v.addEventListener("loadedmetadata", syncPausedUI);
+      v.addEventListener("ended", syncPausedUI);
+      syncPausedUI();
 
-    v.addEventListener("playing", () => {
-      if (!muted) {
-        v.muted = false;
+      async function tryPlay() {
+        try {
+          await v.play();
+        } catch (_) {
+          // ignore autoplay errors
+        }
+        syncPausedUI();
       }
-    }, { once: true });
+
+      if (autoplay) {
+        let n = 0;
+        const t = setInterval(async () => {
+          n += 1;
+          await tryPlay();
+          if (!v.paused || n > 20) clearInterval(t);
+        }, 250);
+      }
+
+      let pointerDownAt = 0;
+      let pointerStart = null;
+      let pointerMoved = false;
+
+      function onPointerDown(event) {
+        if (!tapToggle) return;
+        pointerDownAt = performance.now();
+        pointerStart = { x: event.clientX, y: event.clientY };
+        pointerMoved = false;
+        hotspot.setPointerCapture?.(event.pointerId);
+      }
+
+      function onPointerMove(event) {
+        if (!tapToggle || !pointerStart) return;
+        const dx = Math.abs(event.clientX - pointerStart.x);
+        const dy = Math.abs(event.clientY - pointerStart.y);
+        if (dx > 8 || dy > 8) pointerMoved = true;
+      }
+
+      async function onPointerUp() {
+        if (!tapToggle) return;
+        const dt = performance.now() - pointerDownAt;
+        if (pointerMoved) return;
+        if (dt < 600) {
+          if (v.paused) {
+            await tryPlay();
+          } else {
+            v.pause();
+          }
+        }
+      }
+
+      hotspot.addEventListener("pointerdown", onPointerDown);
+      hotspot.addEventListener("pointermove", onPointerMove);
+      hotspot.addEventListener("pointerup", onPointerUp);
+
+      async function handleCmd(msg) {
+        if (!msg || typeof msg !== "object") return;
+        if (msg.id && msg.id !== playerId) return;
+        const cmd = msg.cmd;
+        if (!cmd) return;
+
+        if (cmd === "play") await tryPlay();
+        else if (cmd === "pause") {
+          v.pause();
+          syncPausedUI();
+        } else if (cmd === "toggle") {
+          if (v.paused) await tryPlay();
+          else v.pause();
+        } else if (cmd === "seek" && Number.isFinite(msg.t)) {
+          v.currentTime = Math.max(0, msg.t);
+        } else if (cmd === "setSrc" && typeof msg.src === "string") {
+          const wasPlaying = !v.paused;
+          v.src = msg.src;
+          v.load();
+          if (wasPlaying || autoplay) await tryPlay();
+        } else if (cmd === "setMute" && typeof msg.muted === "boolean") {
+          v.muted = msg.muted;
+        } else if (cmd === "setVolume" && typeof msg.volume === "number") {
+          v.volume = Math.max(0, Math.min(1, msg.volume));
+        }
+      }
+
+      if ("BroadcastChannel" in window) {
+        const bc = new BroadcastChannel("obs-player-control");
+        bc.onmessage = (event) => {
+          handleCmd(event.data);
+        };
+      }
+
+      window.addEventListener("message", (event) => {
+        handleCmd(event.data);
+      });
+
+      async function handleHash() {
+        const h = (location.hash || "").replace("#", "").trim();
+        if (!h) return;
+        await handleCmd({ id: playerId, cmd: h });
+        history.replaceState(null, "", location.pathname + location.search);
+      }
+
+      window.addEventListener("hashchange", handleHash);
+      handleHash();
+
+      window.__PLAYER__ = {
+        id: playerId,
+        play: () => tryPlay(),
+        pause: () => v.pause(),
+        toggle: () => (v.paused ? tryPlay() : v.pause()),
+        setSrc: (s) => handleCmd({ id: playerId, cmd: "setSrc", src: s }),
+        video: v
+      };
+    })();
   </script>
 </body>
 </html>
