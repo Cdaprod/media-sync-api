@@ -1180,7 +1180,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!brand) return;
     const intent = createIntentController({
       onOpen: () => {
-        if (assetDragActive) setSidebarOpen(false);
+        if (assetDragActive) setSidebarOpen(true);
       },
       onClose: () => {
         if (assetDragActive) setSidebarOpen(false);
@@ -1261,7 +1261,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       <div className="topbar-reveal" ref={topbarRevealRef} aria-hidden="true" />
       <div className="topbar" ref={topbarRef}>
         <div className="topbar-inner">
-          <div className="brand" title="LAN-only media-sync-api explorer" ref={brandRef}>
+          <div
+            className="brand"
+            title="LAN-only media-sync-api explorer"
+            ref={brandRef}
+            role="button"
+            tabIndex={0}
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setSidebarOpen((prev) => !prev);
+              }
+            }}
+          >
             <div className="logo" aria-hidden="true"></div>
             <div>
               <h1>media-sync-api</h1>
@@ -1274,7 +1287,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               <button
                 className="btn mobile-only"
                 type="button"
-                onClick={() => setSidebarOpen(false)}
+                onClick={() => setSidebarOpen((prev) => !prev)}
               >
                 Projects
               </button>
