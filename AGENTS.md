@@ -695,3 +695,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-25)
 - Added a global orientation normalization endpoint at `/api/media/normalize-orientation` (all enabled sources by default) and updated the explorer UI to run normalization from the All Projects view with an in-UI modal instead of the browser confirm dialog.
+
+### Latest Implementation Notes (2025-06-26)
+- Explorer normalize-orientation flow avoids nullish coalescing in client JS to keep the All Projects boot path compatible with older Safari builds (prevents the projects/sources list from failing to render).

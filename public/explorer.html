@@ -3357,7 +3357,9 @@
         const dryPayload = await dryResp.json().catch(() => ({}));
         if (!dryResp.ok) throw new Error(dryPayload.detail || dryPayload.message || 'Dry run failed');
 
-        const planned = dryPayload.totals?.planned ?? (dryPayload.changed?.length || 0);
+        const planned = (dryPayload.totals && typeof dryPayload.totals.planned === 'number')
+          ? dryPayload.totals.planned
+          : (dryPayload.changed ? dryPayload.changed.length : 0);
         if (!planned){
           toast('good','Orientation','No rotated videos detected.');
           return;
@@ -3382,8 +3384,12 @@
         const applyPayload = await applyResp.json().catch(() => ({}));
         if (!applyResp.ok) throw new Error(applyPayload.detail || applyPayload.message || 'Normalize failed');
 
-        const fixed = applyPayload.totals?.changed ?? (applyPayload.changed?.length || 0);
-        const failed = applyPayload.totals?.failed ?? (applyPayload.failed?.length || 0);
+        const fixed = (applyPayload.totals && typeof applyPayload.totals.changed === 'number')
+          ? applyPayload.totals.changed
+          : (applyPayload.changed ? applyPayload.changed.length : 0);
+        const failed = (applyPayload.totals && typeof applyPayload.totals.failed === 'number')
+          ? applyPayload.totals.failed
+          : (applyPayload.failed ? applyPayload.failed.length : 0);
         const summary = failed
           ? `Normalized ${fixed}. ${failed} failed (see logs).`
           : `Normalized ${fixed} video(s).`;
