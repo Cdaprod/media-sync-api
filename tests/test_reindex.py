@@ -57,6 +57,25 @@ def test_reindex_allows_get_and_indexes_manual_moves(client, env_settings: Path)
     assert any(entry["relative_path"] == "ingest/originals/relocated.mp4" for entry in index_data["files"])
 
 
+def test_reindex_skips_temporary_artifacts(client, env_settings: Path):
+    created = client.post("/api/projects", json={"name": "temp-skip"})
+    assert created.status_code == 201
+    project_name = created.json()["name"]
+
+    ingest_dir = env_settings / project_name / "ingest" / "originals"
+    ingest_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = ingest_dir / ".tmp.rotate-test.mov"
+    temp_file.write_bytes(b"temp-bytes")
+
+    response = client.post(f"/api/projects/{project_name}/reindex")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["indexed"] == 0
+
+    index_data = json.loads((env_settings / project_name / "index.json").read_text())
+    assert not any(entry["relative_path"] == "ingest/originals/.tmp.rotate-test.mov" for entry in index_data["files"])
+
+
 def test_root_reindex_scans_all_sources(client, env_settings: Path):
     primary = client.post("/api/projects", json={"name": "bulk-primary"})
     assert primary.status_code == 201

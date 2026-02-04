@@ -39,6 +39,7 @@ from app.storage.orientation import OrientationError, ffprobe_video, normalize_v
 from app.storage.paths import (
     ensure_subdirs,
     is_thumbnail_path,
+    is_temporary_path,
     project_path,
     relpath_posix,
     safe_filename,
@@ -400,7 +401,7 @@ async def list_media(project_name: str, source: str | None = None):
                 extra={"project": resolved.name, "path": relative_path},
             )
             continue
-        if is_thumbnail_path(Path(safe_relative)):
+        if is_thumbnail_path(Path(safe_relative)) or is_temporary_path(Path(safe_relative)):
             continue
         item = dict(entry)
         item["relative_path"] = safe_relative
@@ -864,6 +865,9 @@ async def normalize_orientation(
         entry = entries_by_path.get(relative_path)
         if not entry:
             skipped.append({"relative_path": relative_path, "reason": "not_indexed"})
+            continue
+        if is_temporary_path(Path(relative_path)):
+            skipped.append({"relative_path": relative_path, "reason": "temporary_artifact"})
             continue
         if not relative_path.startswith("ingest/originals/"):
             skipped.append({"relative_path": relative_path, "reason": "outside_ingest"})

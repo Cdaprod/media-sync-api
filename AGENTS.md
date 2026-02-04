@@ -689,3 +689,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-23)
 - Added in-place orientation normalization for rotated videos via `POST /api/projects/{project}/media/normalize-orientation` (dry-run supported). The flow uses ffprobe/ffmpeg, updates existing index + manifest rows without new assets, and cleans up old sha256 metadata/thumbnail sidecars when no longer referenced. Static explorers now include a Normalize Orientation action in their top-level controls.
+
+### Latest Implementation Notes (2025-06-24)
+- Reindexing and media listing now skip temporary artifacts (`.tmp.*`, `.bak.*`, `.lock`) so orientation normalization temp files are never indexed and normalize runs ignore temp entries instead of reporting missing_on_disk.
