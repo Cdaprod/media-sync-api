@@ -1180,7 +1180,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!brand) return;
     const intent = createIntentController({
       onOpen: () => {
-        if (assetDragActive) setSidebarOpen(true);
+        if (assetDragActive) setSidebarOpen(false);
       },
       onClose: () => {
         if (assetDragActive) setSidebarOpen(false);
@@ -1274,7 +1274,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               <button
                 className="btn mobile-only"
                 type="button"
-                onClick={() => setSidebarOpen((prev) => !prev)}
+                onClick={() => setSidebarOpen(false)}
               >
                 Projects
               </button>
@@ -1490,7 +1490,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       </div>
 
       <div className="main">
-        <aside className={`sidebar ${isMobile ? 'sidebar-drawer' : ''} ${sidebarOpen ? 'is-open' : ''}`}>
+        <aside className={`sidebar sidebar-drawer ${sidebarOpen ? 'is-open' : ''}`}>
           <div className="section-h">
             <h2>Projects</h2>
             <div className="meta-line">
