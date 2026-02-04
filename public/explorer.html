@@ -1575,7 +1575,8 @@
     }
 
     function escapeHtml(s){
-      return String(s ?? '')
+      const value = s === null || s === undefined ? '' : String(s);
+      return value
         .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
         .replaceAll('"','&quot;').replaceAll("'","&#039;");
     }

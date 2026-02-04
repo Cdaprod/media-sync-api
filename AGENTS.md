@@ -698,3 +698,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-26)
 - Explorer normalize-orientation flow avoids nullish coalescing in client JS to keep the All Projects boot path compatible with older Safari builds (prevents the projects/sources list from failing to render).
+
+### Latest Implementation Notes (2025-06-27)
+- Explorer HTML escaping now avoids the `??` operator to prevent syntax errors on older Safari builds that blocked project/source rendering.
