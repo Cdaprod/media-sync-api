@@ -701,3 +701,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-27)
 - Explorer HTML escaping now avoids the `??` operator to prevent syntax errors on older Safari builds that blocked project/source rendering.
+
+### Latest Implementation Notes (2025-06-28)
+- Explorer HTML escaping now uses regex replacements instead of `replaceAll` to keep the static explorer compatible with older Safari builds.
