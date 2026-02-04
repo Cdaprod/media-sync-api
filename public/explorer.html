@@ -1094,7 +1094,7 @@
     @media (max-width: 860px){
       body{ overflow:auto; }
       .main{ flex-direction: column; overflow:auto; }
-      .sidebar{ display:block; width: 100%; }
+      .sidebar{ width: 100%; }
       .content{ width: 100%; }
       .drawer{ width: 100vw; }
       .topbar-inner{
@@ -1122,7 +1122,6 @@
       .search-toolbar .control{ padding: 5px 8px; font-size:11px; }
       .action-controls .control{ min-width: 120px; }
       .toggle-btn{ padding: 6px 9px; font-size:11px; }
-      .grid{ gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
       .asset .title{ font-size: 11px; }
       .section-h{ padding: 12px 12px 9px; }
       .sidebar{ border-radius: 0; }
@@ -1289,7 +1288,7 @@
 
     <div class="main">
       <!-- Sidebar -->
-      <aside id="sidebar" class="sidebar">
+      <aside id="sidebar" class="sidebar sidebar-drawer">
         <div class="section-h">
           <h2>Projects</h2>
           <div class="meta-line">
@@ -2057,10 +2056,10 @@
       if (!brand) return;
       const intent = createIntentController({
         onOpen: () => {
-          if (ui.assetDragActive) setSidebarOpen(true);
+        if (ui.assetDragActive) setSidebarOpen(false);
         },
         onClose: () => {
-          if (ui.assetDragActive) setSidebarOpen(false);
+        if (ui.assetDragActive) setSidebarOpen(false);
         },
         openDelay: 360,
         closeDelay: 400,
@@ -2772,6 +2771,7 @@
     function setSidebarOpen(open){
       const sb = el('sidebar');
       if (!sb) return;
+      open = false;
       const drawerMode = sb.classList.contains('sidebar-drawer');
       if (!drawerMode){
         sb.style.pointerEvents = 'auto';
@@ -2814,17 +2814,12 @@
     function syncSidebarMode(){
       const sb = el('sidebar');
       if (!sb) return;
-      const mobile = isMobile();
-      sb.classList.toggle('sidebar-drawer', mobile);
-      if (!mobile){
-        sb.classList.remove('is-open');
-        el('sidebarBackdrop')?.classList.remove('show');
-        ui.sidebarOpen = false;
-        sb.style.transform = '';
-        sb.style.pointerEvents = 'auto';
-      }else{
-        setSidebarOpen(false);
-      }
+      sb.classList.add('sidebar-drawer');
+      sb.classList.remove('is-open');
+      el('sidebarBackdrop')?.classList.remove('show');
+      ui.sidebarOpen = false;
+      sb.style.pointerEvents = '';
+      setSidebarOpen(false);
     }
 
     function setView(view){
