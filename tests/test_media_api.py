@@ -260,6 +260,33 @@ def test_normalize_orientation_updates_index_and_manifest(
     assert not media_path.with_name(f".bak.{media_path.name}").exists()
 
 
+def test_normalize_orientation_all_projects_dry_run(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_one = _create_project(client)
+    project_two = client.post("/api/projects", json={"name": "demo-two"}).json()["name"]
+
+    for name in (project_one, project_two):
+        ingest = env_settings / name / "ingest" / "originals"
+        ingest.mkdir(parents=True, exist_ok=True)
+        (ingest / f"{name}.mov").write_bytes(b"rotate-me")
+        reindexed = client.post(f"/api/projects/{name}/reindex")
+        assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+    import app.storage.orientation as orientation_module
+
+    def fake_probe(_path):
+        return orientation_module.ProbeVideo(rotation=90, width=1920, height=1080, codec="h264")
+
+    monkeypatch.setattr(media_module, "ffprobe_video", fake_probe)
+
+    response = client.post("/api/media/normalize-orientation", json={"dry_run": True})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "all"
+    assert payload["projects_processed"] == 2
+    assert payload["totals"]["planned"] == 2
+
+
 def test_auto_organize_loose_files(client: TestClient, env_settings: Path) -> None:
     loose_file = env_settings / "loose.mov"
     loose_file.write_bytes(b"orphaned")

@@ -1192,6 +1192,48 @@
     }
     .context-menu button:hover{ background: rgba(255,255,255,0.08); }
     .context-menu .muted{ color: var(--muted); cursor: default; }
+
+    /* Modal */
+    .modal-backdrop{
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8,12,22,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+      z-index: 120;
+      padding: 16px;
+    }
+    .modal-backdrop.open{
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card{
+      width: min(520px, 94vw);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(13,18,32,0.96);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    .modal-card h3{
+      margin: 0 0 6px 0;
+      font-size: 16px;
+    }
+    .modal-card p{
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .modal-actions{
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 
@@ -2556,7 +2598,8 @@
       el('sendResolveBtn').disabled = !show || !state.activeProject;
       el('clearSelBtn').disabled = !show;
       el('deleteSelBtn').disabled = !show || !state.activeProject;
-      el('normalizeOrientationBtn').disabled = !state.activeProject;
+      const canNormalize = !!state.activeProject || state.mediaScope === 'all';
+      el('normalizeOrientationBtn').disabled = !canNormalize;
       el('selTagToggle').disabled = !show || !state.activeProject;
       el('selMoveToggle').disabled = !show || !state.activeProject;
       el('selCopyUrls').disabled = !show || !state.activeProject;
@@ -3270,14 +3313,42 @@
       }
     }
 
+    // -------------------------
+    // Modal helpers
+    // -------------------------
+    let orientationModalResolve = null;
+    function openOrientationModal({ title, body, confirmLabel }){
+      return new Promise((resolve) => {
+        orientationModalResolve = resolve;
+        el('orientationModalTitle').textContent = title;
+        el('orientationModalBody').textContent = body;
+        el('orientationModalConfirm').textContent = confirmLabel || 'Confirm';
+        el('orientationModal').classList.add('open');
+      });
+    }
+
+    function closeOrientationModal(result){
+      if (!orientationModalResolve) return;
+      el('orientationModal').classList.remove('open');
+      const resolve = orientationModalResolve;
+      orientationModalResolve = null;
+      resolve(result);
+    }
+
     async function normalizeOrientation(){
       const p = state.activeProject;
-      if (!p){ toast('warn','Orientation','Select a project first'); return; }
+      const isGlobal = !p && state.mediaScope === 'all';
+      if (!p && !isGlobal){
+        toast('warn','Orientation','Select a project or use All Projects view.');
+        return;
+      }
 
       const button = el('normalizeOrientationBtn');
       button.disabled = true;
       try{
-        const baseUrl = `${API}/api/projects/${encodeURIComponent(p.name)}/media/normalize-orientation${mediaQuery()}`;
+        const baseUrl = isGlobal
+          ? `${API}/api/media/normalize-orientation`
+          : `${API}/api/projects/${encodeURIComponent(p.name)}/media/normalize-orientation${mediaQuery()}`;
         const dryResp = await fetch(baseUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3286,15 +3357,18 @@
         const dryPayload = await dryResp.json().catch(() => ({}));
         if (!dryResp.ok) throw new Error(dryPayload.detail || dryPayload.message || 'Dry run failed');
 
-        const planned = dryPayload.changed?.length || 0;
+        const planned = dryPayload.totals?.planned ?? (dryPayload.changed?.length || 0);
         if (!planned){
           toast('good','Orientation','No rotated videos detected.');
           return;
         }
 
-        const confirmApply = window.confirm(
-          `Normalize orientation for ${planned} video(s)? This overwrites files in place.`
-        );
+        const scopeLabel = isGlobal ? 'all projects' : p.name;
+        const confirmApply = await openOrientationModal({
+          title: 'Normalize Orientation',
+          body: `Normalize orientation for ${planned} video(s) in ${scopeLabel}? This overwrites files in place.`,
+          confirmLabel: 'Normalize',
+        });
         if (!confirmApply){
           toast('warn','Orientation', `Dry run only — ${planned} clip(s) need normalization.`);
           return;
@@ -3308,8 +3382,8 @@
         const applyPayload = await applyResp.json().catch(() => ({}));
         if (!applyResp.ok) throw new Error(applyPayload.detail || applyPayload.message || 'Normalize failed');
 
-        const fixed = applyPayload.changed?.length || 0;
-        const failed = applyPayload.failed?.length || 0;
+        const fixed = applyPayload.totals?.changed ?? (applyPayload.changed?.length || 0);
+        const failed = applyPayload.totals?.failed ?? (applyPayload.failed?.length || 0);
         const summary = failed
           ? `Normalized ${fixed}. ${failed} failed (see logs).`
           : `Normalized ${fixed} video(s).`;
@@ -3318,7 +3392,8 @@
       }catch(e){
         toast('bad','Orientation', e.message || 'Normalize failed');
       }finally{
-        button.disabled = !state.activeProject;
+        const canNormalize = !!state.activeProject || state.mediaScope === 'all';
+        button.disabled = !canNormalize;
       }
     }
 
@@ -3667,6 +3742,15 @@
       el('selTagInput').value = '';
       updateTagButtons();
     });
+
+    // Orientation modal
+    el('orientationModalCancel').addEventListener('click', () => closeOrientationModal(false));
+    el('orientationModalConfirm').addEventListener('click', () => closeOrientationModal(true));
+    el('orientationModal').addEventListener('click', (event) => {
+      if (event.target === el('orientationModal')){
+        closeOrientationModal(false);
+      }
+    });
     el('selMoveSubmit').addEventListener('click', async () => {
       const select = el('selMoveTarget');
       const value = select?.value || '';
@@ -3693,6 +3777,11 @@
     });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape'){
+        if (el('orientationModal').classList.contains('open')){
+          closeOrientationModal(false);
+          e.preventDefault();
+          return;
+        }
         if (ui.inspectorOpen){
           closeDrawer();
           e.preventDefault();
@@ -3755,5 +3844,15 @@
     });
   </script>
   <div id="contextMenu" class="context-menu" role="menu" aria-hidden="true"></div>
+  <div id="orientationModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="orientationModalTitle">
+    <div class="modal-card">
+      <h3 id="orientationModalTitle">Normalize Orientation</h3>
+      <p id="orientationModalBody">This will overwrite files in place.</p>
+      <div class="modal-actions">
+        <button id="orientationModalCancel" class="btn" type="button">Cancel</button>
+        <button id="orientationModalConfirm" class="btn primary" type="button">Normalize</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

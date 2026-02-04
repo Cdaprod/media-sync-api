@@ -54,6 +54,7 @@ from app.storage.sources import SourceRegistry
 logger = logging.getLogger("media_sync_api.media")
 
 router = APIRouter(prefix="/api/projects", tags=["media"])
+global_media_router = APIRouter(prefix="/api/media", tags=["media"])
 media_router = APIRouter(prefix="/media", tags=["media"])
 thumbnail_router = APIRouter(prefix="/thumbnails", tags=["media"])
 
@@ -819,21 +820,10 @@ async def tag_media(project_name: str, payload: TagMediaRequest, source: str | N
     return {"status": "ok", "updated": updated, "missing": missing}
 
 
-@router.post("/{project_name}/media/normalize-orientation")
-async def normalize_orientation(
-    project_name: str,
+def _normalize_orientation_for_project(
+    resolved: _ResolvedProject,
     payload: NormalizeOrientationRequest,
-    source: str | None = None,
-):
-    """Normalize video orientation metadata in place for a project.
-
-    Example:
-        curl -X POST http://localhost:8787/api/projects/demo/media/normalize-orientation \
-          -H "Content-Type: application/json" \
-          -d '{"dry_run": true}'
-    """
-
-    resolved = _require_source_and_project(project_name, source)
+) -> dict[str, object]:
     index = load_index(resolved.root)
     entries_by_path = {entry.get("relative_path"): entry for entry in index.get("files", [])}
     sha_to_paths: dict[str, set[str]] = {}
@@ -847,10 +837,7 @@ async def normalize_orientation(
     if payload.relative_paths:
         target_paths = []
         for raw_path in payload.relative_paths:
-            try:
-                target_paths.append(_validate_relative_media_path(raw_path))
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            target_paths.append(_validate_relative_media_path(raw_path))
     else:
         target_paths = [path for path in entries_by_path.keys() if isinstance(path, str)]
 
@@ -1002,6 +989,98 @@ async def normalize_orientation(
         "changed": changed,
         "skipped": skipped,
         "failed": failed,
+        "instructions": "Set dry_run=false to apply orientation fixes in place.",
+    }
+
+
+@router.post("/{project_name}/media/normalize-orientation")
+async def normalize_orientation(
+    project_name: str,
+    payload: NormalizeOrientationRequest,
+    source: str | None = None,
+):
+    """Normalize video orientation metadata in place for a project.
+
+    Example:
+        curl -X POST http://localhost:8787/api/projects/demo/media/normalize-orientation \
+          -H "Content-Type: application/json" \
+          -d '{"dry_run": true}'
+    """
+
+    resolved = _require_source_and_project(project_name, source)
+    if not (resolved.root / "index.json").exists():
+        raise HTTPException(status_code=404, detail="Project index missing")
+    try:
+        return _normalize_orientation_for_project(resolved, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@global_media_router.post("/normalize-orientation")
+async def normalize_orientation_all(
+    payload: NormalizeOrientationRequest,
+    source: str | None = None,
+):
+    """Normalize orientation across all projects in a source.
+
+    Example:
+        curl -X POST http://localhost:8787/api/media/normalize-orientation \
+          -H "Content-Type: application/json" \
+          -d '{"dry_run": true}'
+    """
+
+    registry = SourceRegistry(get_settings().project_root)
+    try:
+        sources = registry.list_enabled() if source is None else [registry.require(source)]
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    results: list[dict[str, object]] = []
+    skipped_projects: list[dict[str, str]] = []
+    total_changed = 0
+    total_skipped = 0
+    total_failed = 0
+
+    for active_source in sources:
+        if not active_source.accessible:
+            skipped_projects.append({"project": active_source.name, "reason": "source_unreachable"})
+            continue
+        for path in active_source.root.iterdir() if active_source.root.exists() else []:
+            if not path.is_dir():
+                continue
+            if path.name.startswith("_"):
+                continue
+            try:
+                name = validate_project_name(path.name)
+            except ValueError:
+                continue
+            if not (path / "index.json").exists():
+                skipped_projects.append({"project": name, "reason": "index_missing"})
+                continue
+            resolved = _ResolvedProject(name=name, source_name=active_source.name, root=path)
+            try:
+                result = _normalize_orientation_for_project(resolved, payload)
+            except ValueError as exc:
+                skipped_projects.append({"project": name, "reason": str(exc)})
+                continue
+            results.append(result)
+            total_changed += len(result.get("changed", []))
+            total_skipped += len(result.get("skipped", []))
+            total_failed += len(result.get("failed", []))
+
+    return {
+        "status": "ok",
+        "source": source or "all",
+        "dry_run": payload.dry_run,
+        "projects_processed": len(results),
+        "projects_skipped": skipped_projects,
+        "totals": {
+            "planned": total_changed if payload.dry_run else 0,
+            "changed": 0 if payload.dry_run else total_changed,
+            "skipped": total_skipped,
+            "failed": total_failed,
+        },
+        "results": results,
         "instructions": "Set dry_run=false to apply orientation fixes in place.",
     }
 

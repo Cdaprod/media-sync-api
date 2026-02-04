@@ -692,3 +692,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-24)
 - Reindexing and media listing now skip temporary artifacts (`.tmp.*`, `.bak.*`, `.lock`) so orientation normalization temp files are never indexed and normalize runs ignore temp entries instead of reporting missing_on_disk.
+
+### Latest Implementation Notes (2025-06-25)
+- Added a global orientation normalization endpoint at `/api/media/normalize-orientation` (all enabled sources by default) and updated the explorer UI to run normalization from the All Projects view with an in-UI modal instead of the browser confirm dialog.

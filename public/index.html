@@ -84,6 +84,32 @@
 
     .empty-state { padding: 1.25rem; border: 1px dashed var(--border); border-radius: 10px; text-align: center; color: var(--muted); }
 
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+      padding: 16px;
+      z-index: 120;
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+    .modal-card {
+      width: min(520px, 92vw);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: white;
+      padding: 16px;
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+    }
+    .modal-card h3 { margin: 0 0 6px 0; font-size: 16px; }
+    .modal-card p { margin: 0 0 14px 0; color: var(--muted); font-size: 13px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
     @media (max-width: 960px) {
       body { margin: 1rem; }
       .explorer-shell { grid-template-columns: 1fr; }
@@ -313,6 +339,17 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
 
   <div class="callout">
     Paste your <code>docker-compose.yaml</code> volume line and a sample project path if you need confirmation the mount is correct. The API will respond with guidance in <code>instructions</code> fields too.</div>
+
+  <div id="orientationModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="orientationModalTitle">
+    <div class="modal-card">
+      <h3 id="orientationModalTitle">Normalize Orientation</h3>
+      <p id="orientationModalBody">This will overwrite files in place.</p>
+      <div class="modal-actions">
+        <button id="orientationModalCancel" type="button">Cancel</button>
+        <button id="orientationModalConfirm" class="btn primary" type="button">Normalize</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     const projectsEl = document.getElementById('projects');
@@ -860,6 +897,25 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
       }
     }
 
+    let orientationModalResolve = null;
+    function openOrientationModal({ title, body, confirmLabel }) {
+      return new Promise((resolve) => {
+        orientationModalResolve = resolve;
+        document.getElementById('orientationModalTitle').textContent = title;
+        document.getElementById('orientationModalBody').textContent = body;
+        document.getElementById('orientationModalConfirm').textContent = confirmLabel || 'Confirm';
+        document.getElementById('orientationModal').classList.add('open');
+      });
+    }
+
+    function closeOrientationModal(result) {
+      if (!orientationModalResolve) return;
+      document.getElementById('orientationModal').classList.remove('open');
+      const resolve = orientationModalResolve;
+      orientationModalResolve = null;
+      resolve(result);
+    }
+
     async function normalizeOrientation() {
       if (!activeProject) {
         orientationStatus.textContent = 'Choose a project first.';
@@ -885,9 +941,11 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
           orientationStatus.textContent = 'No rotated videos detected.';
           return;
         }
-        const confirmApply = window.confirm(
-          `Normalize orientation for ${planned} video(s)? This overwrites files in place.`
-        );
+        const confirmApply = await openOrientationModal({
+          title: 'Normalize Orientation',
+          body: `Normalize orientation for ${planned} video(s) in ${activeProject.name}? This overwrites files in place.`,
+          confirmLabel: 'Normalize',
+        });
         if (!confirmApply) {
           orientationStatus.textContent = `Dry run complete — ${planned} clip(s) need normalization.`;
           return;
@@ -1012,6 +1070,14 @@ curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/d
 
     orientationButton.addEventListener('click', async () => {
       await normalizeOrientation();
+    });
+
+    document.getElementById('orientationModalCancel').addEventListener('click', () => closeOrientationModal(false));
+    document.getElementById('orientationModalConfirm').addEventListener('click', () => closeOrientationModal(true));
+    document.getElementById('orientationModal').addEventListener('click', (event) => {
+      if (event.target === document.getElementById('orientationModal')) {
+        closeOrientationModal(false);
+      }
     });
 
     async function uploadFiles(files) {
