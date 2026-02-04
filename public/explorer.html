@@ -2056,7 +2056,7 @@
       if (!brand) return;
       const intent = createIntentController({
         onOpen: () => {
-        if (ui.assetDragActive) setSidebarOpen(false);
+        if (ui.assetDragActive) setSidebarOpen(true);
         },
         onClose: () => {
         if (ui.assetDragActive) setSidebarOpen(false);
@@ -2771,7 +2771,6 @@
     function setSidebarOpen(open){
       const sb = el('sidebar');
       if (!sb) return;
-      open = false;
       const drawerMode = sb.classList.contains('sidebar-drawer');
       if (!drawerMode){
         sb.style.pointerEvents = 'auto';
@@ -2819,7 +2818,6 @@
       el('sidebarBackdrop')?.classList.remove('show');
       ui.sidebarOpen = false;
       sb.style.pointerEvents = '';
-      setSidebarOpen(false);
     }
 
     function setView(view){
