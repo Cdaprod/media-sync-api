@@ -707,3 +707,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-29)
 - Orientation normalization endpoints now accept GET fallbacks (query-driven dry_run) and the static explorers retry normalization requests via GET when POST returns 405.
+
+### Latest Implementation Notes (2025-06-30)
+- Explorer now falls back to the default API port (8787) if same-origin source/project fetches fail, ensuring projects/media still load when the UI is served from another port.

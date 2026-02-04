@@ -1517,7 +1517,35 @@
     // -------------------------
     // Config / state
     // -------------------------
-    const API = ''; // same-origin; keep '' for container-served index.html
+    let API = ''; // same-origin; keep '' for container-served index.html
+    const DEFAULT_API_PORT = '8787';
+    function buildFallbackApiBase(){
+      if (!window.location) return '';
+      const port = String(window.location.port || '');
+      if (port === DEFAULT_API_PORT) return '';
+      if (!window.location.protocol || !window.location.hostname) return '';
+      return `${window.location.protocol}//${window.location.hostname}:${DEFAULT_API_PORT}`;
+    }
+
+    async function apiFetch(path, options){
+      const url = `${API}${path}`;
+      try{
+        const response = await fetch(url, options);
+        if (response.ok || API) return response;
+        const fallback = buildFallbackApiBase();
+        if (!fallback) return response;
+        const retry = await fetch(`${fallback}${path}`, options);
+        if (retry.ok) API = fallback;
+        return retry;
+      }catch(err){
+        if (API) throw err;
+        const fallback = buildFallbackApiBase();
+        if (!fallback) throw err;
+        const retry = await fetch(`${fallback}${path}`, options);
+        if (retry.ok) API = fallback;
+        return retry;
+      }
+    }
     const el = (id) => document.getElementById(id);
 
     const state = {
@@ -2886,7 +2914,7 @@
     // -------------------------
     async function loadSources(){
       try{
-        const r = await fetch(`${API}/api/sources`);
+        const r = await apiFetch('/api/sources');
         if (!r.ok) throw new Error('Failed to list sources');
         state.sources = await r.json();
         renderSources();
@@ -2897,7 +2925,7 @@
 
     async function loadProjects(){
       try{
-        const r = await fetch(`${API}/api/projects`);
+        const r = await apiFetch('/api/projects');
         if (!r.ok) throw new Error('Failed to list projects');
         state.projects = await r.json();
         renderProjects();
@@ -2919,7 +2947,7 @@
       }
       const name = state.activeProject.name;
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/media${mediaQuery()}`);
+        const r = await apiFetch(`/api/projects/${encodeURIComponent(name)}/media${mediaQuery()}`);
         if (!r.ok) throw new Error('Failed to load media list');
         const payload = await r.json();
         state.mediaScope = 'project';
@@ -2955,7 +2983,7 @@
       for (const project of state.projects){
         const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
         try{
-          const r = await fetch(`${API}/api/projects/${encodeURIComponent(project.name)}/media${query}`);
+          const r = await apiFetch(`/api/projects/${encodeURIComponent(project.name)}/media${query}`);
           if (!r.ok) throw new Error('Failed to load media list');
           const payload = await r.json();
           const media = Array.isArray(payload.media) ? payload.media : [];
