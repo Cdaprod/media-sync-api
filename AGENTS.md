@@ -692,3 +692,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-24)
 - OBS player/controller now derive pair keys from `src` (or explicit `pair`), announce presence on `obs-player-registry`, and use pair-scoped BroadcastChannels with idempotent commands; the player shows a copyable pair badge and the controller page provides pair-aware controls.
+
+### Latest Implementation Notes (2025-06-25)
+- Rebuilt the OBS player controller as a touch-first grid UI with scroll/gesture suppression, pair-aware discovery, and idempotent controls aligned to the player BroadcastChannel protocol.
