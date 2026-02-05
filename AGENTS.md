@@ -698,3 +698,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-26)
 - Player `setSrc` idempotency now normalizes media URLs before comparing current vs requested sources so relative `/media/...` inputs don't cause unnecessary reloads.
+
+### Latest Implementation Notes (2025-06-27)
+- OBS push helper and explorer UI now support selecting one of four ASSET_MEDIA slots, passing slot-aware pair keys into `/player.html` so each browser source can be controlled independently.
