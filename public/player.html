@@ -1,11 +1,15 @@
 <!doctype html>
 <!--
   media-sync-api OBS Player
-  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0&autoplay=1&loop=1&controls=0&tap=1&id=player
+  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0&autoplay=1&loop=1&controls=0&tap=1&id=player&pair=<key>&scope=<label>
   Example: /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&fit=cover&muted=0
+  Example (derived pair from src): /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&scope=program
+  Example (explicit pair): /player.html?pair=program&id=player&src=/media/P1-Project/ingest/originals/clip.mp4?source=primary
 
   Control channels:
-  - BroadcastChannel('obs-player-control'): { id: 'player', cmd: 'play'|'pause'|'toggle'|'seek'|'setSrc'|'setMute'|'setVolume' }
+  - BroadcastChannel('obs-player::${pair}'): { pair, id, cmd: 'setPaused'|'setMute'|'setSrc'|'seekAbs'|'seekRel'|'state:get' }
+  - BroadcastChannel('obs-player-registry'): presence + discovery
+  - Legacy BroadcastChannel('obs-player-control'): { id: 'player', cmd: 'play'|'pause'|'toggle'|'seek'|'setSrc'|'setMute'|'setVolume' }
   - postMessage payloads (for iframe embeds)
   - Hash commands: #play #pause #toggle (refresh browser source to trigger)
 -->
@@ -83,6 +87,21 @@
       inset: 0;
       cursor: pointer;
     }
+
+    .pair-badge {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      z-index: 9;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.45);
+      color: rgba(255, 255, 255, 0.85);
+      font: 600 12px/1 system-ui;
+      letter-spacing: 0.3px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -99,6 +118,7 @@
       <rect x="58" y="18" width="20" height="64" rx="8" fill="url(#g)" stroke="var(--icon-stroke)" stroke-width="2" />
     </svg>
     <div class="hotspot" id="hotspot" aria-hidden="true"></div>
+    <div class="pair-badge" id="pairBadge" aria-live="polite"></div>
   </div>
   <script>
     (() => {
@@ -112,11 +132,97 @@
       const tapToggle = (qs.get("tap") ?? getComputedStyle(document.documentElement)
         .getPropertyValue("--tap-toggle")
         .trim() || "1") === "1";
-      const playerId = qs.get("id") || "player";
+      const playerId = (qs.get("id") || "player").trim();
+      const explicitPair = (qs.get("pair") || "").trim();
+      const scope = (qs.get("scope") || "").trim();
+
+      function normalizeSrc(raw) {
+        if (!raw) return "";
+        const u = new URL(raw, window.location.origin);
+        const keep = new Set(["source", "v", "sig"]);
+        const qp = new URLSearchParams();
+        for (const [k, v] of u.searchParams.entries()) {
+          if (keep.has(k)) qp.append(k, v);
+        }
+        qp.sort();
+        u.hash = "";
+        u.search = qp.toString() ? `?${qp.toString()}` : "";
+        return `${u.pathname}${u.search}`;
+      }
+
+      function fnv1a(str) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < str.length; i += 1) {
+          h ^= str.charCodeAt(i);
+          h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+        }
+        return h >>> 0;
+      }
+
+      function base36(n) {
+        return (n >>> 0).toString(36);
+      }
+
+      function slug(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 24) || "x";
+      }
+
+      function deriveHumanPrefix(pathValue) {
+        const parts = String(pathValue || "").split("?")[0].split("/").filter(Boolean);
+        const mediaIdx = parts.indexOf("media");
+        if (mediaIdx >= 0 && parts[mediaIdx + 1]) return slug(parts[mediaIdx + 1]);
+        return slug(parts[0] || "media");
+      }
+
+      const canonicalSrc = normalizeSrc(src);
+      const prefix = scope ? slug(scope) : deriveHumanPrefix(canonicalSrc);
+      const srcHash = canonicalSrc ? base36(fnv1a(canonicalSrc)).slice(0, 6) : "local";
+      const pair = explicitPair || `${prefix}-${srcHash}`;
+      const channelName = `obs-player::${pair}`;
 
       const stage = document.getElementById("stage");
       const v = document.getElementById("v");
       const hotspot = document.getElementById("hotspot");
+      const badge = document.getElementById("pairBadge");
+
+      function copyText(value) {
+        const text = String(value || "");
+        if (!text) return;
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(text).catch(() => {
+            const input = document.createElement("input");
+            input.value = text;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand("copy");
+            input.remove();
+          });
+          return;
+        }
+        const input = document.createElement("input");
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        input.remove();
+      }
+
+      if (badge) {
+        badge.textContent = `${pair} :: ${playerId}`;
+        badge.style.display = "inline-flex";
+        badge.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          copyText(pair);
+          badge.textContent = "copied ✓";
+          setTimeout(() => {
+            badge.textContent = `${pair} :: ${playerId}`;
+          }, 650);
+        });
+      }
 
       v.style.objectFit = fit;
       v.muted = muted;
@@ -193,14 +299,80 @@
       hotspot.addEventListener("pointermove", onPointerMove);
       hotspot.addEventListener("pointerup", onPointerUp);
 
+      const seen = new Map();
+      function seenRecently(msgId, ttlMs = 5000) {
+        if (!msgId) return false;
+        const now = Date.now();
+        for (const [k, t] of seen.entries()) {
+          if (now - t > ttlMs) seen.delete(k);
+        }
+        if (seen.has(msgId)) return true;
+        seen.set(msgId, now);
+        return false;
+      }
+
+      function stateSnapshot() {
+        return {
+          pair,
+          id: playerId,
+          paused: v.paused,
+          muted: v.muted,
+          src: v.currentSrc || v.src || "",
+          t: Number.isFinite(v.currentTime) ? v.currentTime : 0
+        };
+      }
+
+      let pairChannel = null;
+      let legacyChannel = null;
+
+      function broadcastState(meta = {}) {
+        pairChannel?.postMessage({ type: "state", ...stateSnapshot(), ...meta, at: Date.now() });
+      }
+
+      function ack(msg) {
+        pairChannel?.postMessage({
+          type: "ack",
+          ...stateSnapshot(),
+          msgId: msg?.msgId || null,
+          at: Date.now()
+        });
+      }
+
       async function handleCmd(msg) {
         if (!msg || typeof msg !== "object") return;
+        if (msg.pair && msg.pair !== pair) return;
         if (msg.id && msg.id !== playerId) return;
         const cmd = msg.cmd;
         if (!cmd) return;
+        if (seenRecently(msg.msgId)) return;
 
-        if (cmd === "play") await tryPlay();
-        else if (cmd === "pause") {
+        if (cmd === "setPaused") {
+          const wantPaused = !!msg.paused;
+          if (wantPaused && !v.paused) v.pause();
+          if (!wantPaused && v.paused) await tryPlay();
+        } else if (cmd === "setMute") {
+          const wantMuted = !!msg.muted;
+          if (v.muted !== wantMuted) v.muted = wantMuted;
+        } else if (cmd === "setSrc" && typeof msg.src === "string") {
+          const next = msg.src;
+          const cur = v.currentSrc || v.src || "";
+          if (next && cur !== next) {
+            const wasPlaying = !v.paused;
+            v.src = next;
+            v.load();
+            if (wasPlaying || autoplay) await tryPlay();
+          }
+        } else if (cmd === "seekAbs" && Number.isFinite(msg.t)) {
+          v.currentTime = Math.max(0, msg.t);
+        } else if (cmd === "seekRel" && Number.isFinite(msg.dt)) {
+          v.currentTime = Math.max(0, (v.currentTime || 0) + msg.dt);
+        } else if (cmd === "state:get") {
+          broadcastState({ msgId: msg.msgId || null });
+          ack(msg);
+          return;
+        } else if (cmd === "play") {
+          await tryPlay();
+        } else if (cmd === "pause") {
           v.pause();
           syncPausedUI();
         } else if (cmd === "toggle") {
@@ -208,23 +380,35 @@
           else v.pause();
         } else if (cmd === "seek" && Number.isFinite(msg.t)) {
           v.currentTime = Math.max(0, msg.t);
-        } else if (cmd === "setSrc" && typeof msg.src === "string") {
-          const wasPlaying = !v.paused;
-          v.src = msg.src;
-          v.load();
-          if (wasPlaying || autoplay) await tryPlay();
-        } else if (cmd === "setMute" && typeof msg.muted === "boolean") {
-          v.muted = msg.muted;
         } else if (cmd === "setVolume" && typeof msg.volume === "number") {
           v.volume = Math.max(0, Math.min(1, msg.volume));
         }
+
+        ack(msg);
       }
 
       if ("BroadcastChannel" in window) {
-        const bc = new BroadcastChannel("obs-player-control");
-        bc.onmessage = (event) => {
+        pairChannel = new BroadcastChannel(channelName);
+        pairChannel.onmessage = (event) => {
           handleCmd(event.data);
         };
+        legacyChannel = new BroadcastChannel("obs-player-control");
+        legacyChannel.onmessage = (event) => {
+          handleCmd(event.data);
+        };
+
+        const registry = new BroadcastChannel("obs-player-registry");
+        const announce = () => {
+          registry.postMessage({
+            type: "player:presence",
+            pair,
+            id: playerId,
+            at: Date.now(),
+            href: location.href
+          });
+        };
+        announce();
+        setInterval(announce, 1200);
       }
 
       window.addEventListener("message", (event) => {
@@ -241,8 +425,13 @@
       window.addEventListener("hashchange", handleHash);
       handleHash();
 
+      ["play", "pause", "volumechange", "timeupdate", "loadedmetadata", "emptied"].forEach((evt) => {
+        v.addEventListener(evt, () => broadcastState(), { passive: true });
+      });
+
       window.__PLAYER__ = {
         id: playerId,
+        pair,
         play: () => tryPlay(),
         pause: () => v.pause(),
         toggle: () => (v.paused ? tryPlay() : v.pause()),

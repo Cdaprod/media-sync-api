@@ -6,9 +6,21 @@ def test_player_overlay_controls(client):
     assert response.status_code == 200
     body = response.text
     assert "obs-player-control" in body
+    assert "obs-player-registry" in body
+    assert "obs-player::" in body
     assert "BroadcastChannel" in body
     assert "pointerdown" in body
     assert "paused" in body
     assert "grayscale" in body
     assert "postMessage" in body
     assert "hashchange" in body
+
+
+def test_player_controller_page(client):
+    response = client.get("/public/player_controller.html")
+    assert response.status_code == 200
+    body = response.text
+    assert "obs-player-registry" in body
+    assert "obs-player::" in body
+    assert "BroadcastChannel" in body
+    assert "setPaused" in body

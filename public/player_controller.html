@@ -1,0 +1,402 @@
+<!doctype html>
+<!--
+  media-sync-api OBS Player Controller
+  Usage: /player_controller.html?pair=<key>&id=player
+  Usage (derive pair from src): /player_controller.html?src=<encoded_media_url>&scope=<label>
+  Example: /player_controller.html?pair=program
+  Example: /player_controller.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&scope=program
+
+  Control channels:
+  - BroadcastChannel('obs-player::${pair}')
+  - BroadcastChannel('obs-player-registry') for presence
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1" />
+  <title>media-sync-api — OBS Player Controller</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0b10;
+      --panel: rgba(20, 24, 34, 0.86);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f7f7fb;
+      --muted: rgba(255, 255, 255, 0.6);
+      --accent: #71d1ff;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #1a1f2c, #0a0b10 60%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 16px 48px;
+    }
+
+    .shell {
+      max-width: 960px;
+      margin: 0 auto;
+      display: grid;
+      gap: 20px;
+    }
+
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 0;
+      letter-spacing: 0.4px;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(113, 209, 255, 0.12);
+      color: var(--accent);
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(113, 209, 255, 0.35);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      backdrop-filter: blur(18px);
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.cols {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(12, 14, 20, 0.7);
+      color: var(--text);
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: rgba(113, 209, 255, 0.14);
+      color: var(--text);
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      background: rgba(113, 209, 255, 0.28);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .status strong {
+      color: var(--text);
+    }
+
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(12, 14, 20, 0.7);
+      color: var(--text);
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1>OBS Player Controller</h1>
+      <div class="sub">Pair-aware controller for media-sync-api player pages.</div>
+    </header>
+
+    <div class="panel grid">
+      <div class="row">
+        <button class="pill" id="pairBadge" type="button">pair</button>
+        <div class="status" id="presenceStatus">Waiting for player…</div>
+      </div>
+      <div class="grid cols">
+        <div>
+          <label for="targetSelect">Target player id</label>
+          <select id="targetSelect"></select>
+        </div>
+        <div>
+          <label for="srcInput">Source URL</label>
+          <input id="srcInput" placeholder="/media/... or https://" />
+        </div>
+      </div>
+      <div class="row">
+        <button id="playBtn" type="button">Play</button>
+        <button id="pauseBtn" type="button">Pause</button>
+        <button id="muteBtn" type="button">Mute</button>
+        <button id="unmuteBtn" type="button">Unmute</button>
+        <button id="seekBackBtn" type="button">-5s</button>
+        <button id="seekForwardBtn" type="button">+5s</button>
+        <button id="setSrcBtn" type="button">Set Source</button>
+        <button id="stateBtn" type="button">Request State</button>
+      </div>
+      <div class="muted" id="stateReadout">No state yet.</div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const qs = new URLSearchParams(location.search);
+      let pair = (qs.get("pair") || "").trim();
+      const scope = (qs.get("scope") || "").trim();
+      let primaryId = (qs.get("id") || "player").trim();
+
+      function normalizeSrc(raw) {
+        if (!raw) return "";
+        const u = new URL(raw, window.location.origin);
+        const keep = new Set(["source", "v", "sig"]);
+        const qp = new URLSearchParams();
+        for (const [k, v] of u.searchParams.entries()) {
+          if (keep.has(k)) qp.append(k, v);
+        }
+        qp.sort();
+        u.hash = "";
+        u.search = qp.toString() ? `?${qp.toString()}` : "";
+        return `${u.pathname}${u.search}`;
+      }
+
+      function fnv1a(str) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < str.length; i += 1) {
+          h ^= str.charCodeAt(i);
+          h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+        }
+        return h >>> 0;
+      }
+
+      function base36(n) {
+        return (n >>> 0).toString(36);
+      }
+
+      function slug(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 24) || "x";
+      }
+
+      function deriveHumanPrefix(pathValue) {
+        const parts = String(pathValue || "").split("?")[0].split("/").filter(Boolean);
+        const mediaIdx = parts.indexOf("media");
+        if (mediaIdx >= 0 && parts[mediaIdx + 1]) return slug(parts[mediaIdx + 1]);
+        return slug(parts[0] || "media");
+      }
+
+      function derivePairFromSrc(raw) {
+        const canon = normalizeSrc(raw);
+        if (!canon) return "";
+        const prefix = scope ? slug(scope) : deriveHumanPrefix(canon);
+        const hash = base36(fnv1a(canon)).slice(0, 6);
+        return `${prefix}-${hash}`;
+      }
+
+      if (!pair) {
+        const rawSrc = qs.get("src") || "";
+        pair = derivePairFromSrc(rawSrc) || "default";
+      }
+
+      const channelName = `obs-player::${pair}`;
+      const players = new Map();
+      const pairBadge = document.getElementById("pairBadge");
+      const presenceStatus = document.getElementById("presenceStatus");
+      const targetSelect = document.getElementById("targetSelect");
+      const srcInput = document.getElementById("srcInput");
+      const stateReadout = document.getElementById("stateReadout");
+
+      function copyText(value) {
+        const text = String(value || "");
+        if (!text) return;
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(text).catch(() => {
+            const input = document.createElement("input");
+            input.value = text;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand("copy");
+            input.remove();
+          });
+          return;
+        }
+        const input = document.createElement("input");
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        input.remove();
+      }
+
+      pairBadge.textContent = `pair: ${pair}`;
+      pairBadge.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        copyText(pair);
+        pairBadge.textContent = "copied ✓";
+        setTimeout(() => {
+          pairBadge.textContent = `pair: ${pair}`;
+        }, 650);
+      });
+
+      function msgId() {
+        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      }
+
+      function updateTargetOptions() {
+        const current = primaryId;
+        targetSelect.innerHTML = "";
+        const ids = [...players.keys()].sort();
+        if (!ids.length) ids.push(primaryId || "player");
+        for (const id of ids) {
+          const opt = document.createElement("option");
+          opt.value = id;
+          opt.textContent = id;
+          if (id === current) opt.selected = true;
+          targetSelect.appendChild(opt);
+        }
+        primaryId = targetSelect.value;
+      }
+
+      function updatePresence() {
+        const now = Date.now();
+        for (const [id, info] of players.entries()) {
+          if (now - info.at > 4000) players.delete(id);
+        }
+        updateTargetOptions();
+        if (!players.size) {
+          presenceStatus.textContent = "Waiting for player…";
+          return;
+        }
+        presenceStatus.innerHTML = `Connected: <strong>${players.size}</strong> player(s)`;
+      }
+
+      let channel = null;
+      let registry = null;
+      if ("BroadcastChannel" in window) {
+        channel = new BroadcastChannel(channelName);
+        registry = new BroadcastChannel("obs-player-registry");
+
+        registry.onmessage = (event) => {
+          const msg = event.data;
+          if (!msg || msg.type !== "player:presence") return;
+          if (msg.pair !== pair) return;
+          players.set(msg.id, { at: msg.at, href: msg.href });
+          if (!players.has(primaryId)) primaryId = msg.id;
+          updatePresence();
+        };
+
+        channel.onmessage = (event) => {
+          const msg = event.data;
+          if (!msg || typeof msg !== "object") return;
+          if (msg.type !== "ack" && msg.type !== "state") return;
+          const srcLabel = msg.src ? msg.src.split("?")[0] : "";
+          stateReadout.textContent = `state: paused=${msg.paused} muted=${msg.muted} t=${(msg.t ?? 0).toFixed(2)} src=${srcLabel}`;
+        };
+      }
+
+      setInterval(updatePresence, 600);
+      updatePresence();
+
+      targetSelect.addEventListener("change", () => {
+        primaryId = targetSelect.value;
+      });
+
+      function send(cmdObj) {
+        channel?.postMessage({
+          pair,
+          id: primaryId,
+          msgId: msgId(),
+          at: Date.now(),
+          ...cmdObj
+        });
+      }
+
+      document.getElementById("playBtn").addEventListener("click", () => {
+        send({ cmd: "setPaused", paused: false });
+      });
+      document.getElementById("pauseBtn").addEventListener("click", () => {
+        send({ cmd: "setPaused", paused: true });
+      });
+      document.getElementById("muteBtn").addEventListener("click", () => {
+        send({ cmd: "setMute", muted: true });
+      });
+      document.getElementById("unmuteBtn").addEventListener("click", () => {
+        send({ cmd: "setMute", muted: false });
+      });
+      document.getElementById("seekBackBtn").addEventListener("click", () => {
+        send({ cmd: "seekRel", dt: -5 });
+      });
+      document.getElementById("seekForwardBtn").addEventListener("click", () => {
+        send({ cmd: "seekRel", dt: 5 });
+      });
+      document.getElementById("setSrcBtn").addEventListener("click", () => {
+        const value = srcInput.value.trim();
+        if (!value) return;
+        send({ cmd: "setSrc", src: value });
+      });
+      document.getElementById("stateBtn").addEventListener("click", () => {
+        send({ cmd: "state:get" });
+      });
+
+      if (qs.get("src")) srcInput.value = qs.get("src");
+    })();
+  </script>
+</body>
+</html>
