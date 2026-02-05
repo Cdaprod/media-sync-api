@@ -24,3 +24,4 @@ def test_player_controller_page(client):
     assert "obs-player::" in body
     assert "BroadcastChannel" in body
     assert "setPaused" in body
+    assert "touch-action: none" in body
