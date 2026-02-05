@@ -695,3 +695,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-25)
 - Rebuilt the OBS player controller as a touch-first grid UI with scroll/gesture suppression, pair-aware discovery, and idempotent controls aligned to the player BroadcastChannel protocol.
+
+### Latest Implementation Notes (2025-06-26)
+- Player `setSrc` idempotency now normalizes media URLs before comparing current vs requested sources so relative `/media/...` inputs don't cause unnecessary reloads.

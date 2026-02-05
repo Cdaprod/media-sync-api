@@ -163,6 +163,15 @@
         return (n >>> 0).toString(36);
       }
 
+      function normalizeMediaUrl(value) {
+        if (!value) return "";
+        try {
+          return new URL(value, window.location.origin).href;
+        } catch (_) {
+          return String(value);
+        }
+      }
+
       function slug(value) {
         return String(value || "")
           .toLowerCase()
@@ -356,7 +365,9 @@
         } else if (cmd === "setSrc" && typeof msg.src === "string") {
           const next = msg.src;
           const cur = v.currentSrc || v.src || "";
-          if (next && cur !== next) {
+          const nextUrl = normalizeMediaUrl(next);
+          const curUrl = normalizeMediaUrl(cur);
+          if (nextUrl && curUrl !== nextUrl) {
             const wasPlaying = !v.paused;
             v.src = next;
             v.load();
