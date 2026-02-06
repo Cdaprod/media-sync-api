@@ -123,15 +123,23 @@
   <script>
     (() => {
       const qs = new URLSearchParams(location.search);
+      const getParam = (name, fallback) => {
+        const value = qs.get(name);
+        if (value === null || value === undefined || value === "") return fallback;
+        return value;
+      };
       const src = qs.get("src") || "";
       const fit = qs.get("fit") || "cover";
       const muted = (qs.get("muted") || "0") === "1";
-      const autoplay = (qs.get("autoplay") ?? "1") === "1";
-      const loop = (qs.get("loop") ?? "1") === "1";
-      const controls = (qs.get("controls") ?? "0") === "1";
-      const tapToggle = (qs.get("tap") ?? getComputedStyle(document.documentElement)
-        .getPropertyValue("--tap-toggle")
-        .trim() || "1") === "1";
+      const autoplay = getParam("autoplay", "1") === "1";
+      const loop = getParam("loop", "1") === "1";
+      const controls = getParam("controls", "0") === "1";
+      const tapToggle = getParam(
+        "tap",
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--tap-toggle")
+          .trim() || "1"
+      ) === "1";
       const playerId = (qs.get("id") || "player").trim();
       const explicitPair = (qs.get("pair") || "").trim();
       const scope = (qs.get("scope") || "").trim();
@@ -201,7 +209,7 @@
       function copyText(value) {
         const text = String(value || "");
         if (!text) return;
-        if (navigator.clipboard?.writeText) {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           navigator.clipboard.writeText(text).catch(() => {
             const input = document.createElement("input");
             input.value = text;
@@ -281,7 +289,9 @@
         pointerDownAt = performance.now();
         pointerStart = { x: event.clientX, y: event.clientY };
         pointerMoved = false;
-        hotspot.setPointerCapture?.(event.pointerId);
+        if (hotspot.setPointerCapture) {
+          hotspot.setPointerCapture(event.pointerId);
+        }
       }
 
       function onPointerMove(event) {
@@ -335,16 +345,20 @@
       let legacyChannel = null;
 
       function broadcastState(meta = {}) {
-        pairChannel?.postMessage({ type: "state", ...stateSnapshot(), ...meta, at: Date.now() });
+        if (pairChannel) {
+          pairChannel.postMessage({ type: "state", ...stateSnapshot(), ...meta, at: Date.now() });
+        }
       }
 
       function ack(msg) {
-        pairChannel?.postMessage({
-          type: "ack",
-          ...stateSnapshot(),
-          msgId: msg?.msgId || null,
-          at: Date.now()
-        });
+        if (pairChannel) {
+          pairChannel.postMessage({
+            type: "ack",
+            ...stateSnapshot(),
+            msgId: msg && msg.msgId ? msg.msgId : null,
+            at: Date.now()
+          });
+        }
       }
 
       async function handleCmd(msg) {
