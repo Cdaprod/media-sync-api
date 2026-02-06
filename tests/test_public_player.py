@@ -14,6 +14,7 @@ def test_player_overlay_controls(client):
     assert "grayscale" in body
     assert "postMessage" in body
     assert "hashchange" in body
+    assert "player_controller.html" in body
 
 
 def test_player_controller_page(client):

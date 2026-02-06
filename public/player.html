@@ -180,6 +180,17 @@
         }
       }
 
+      function buildControllerUrl() {
+        const controllerUrl = new URL("/player_controller.html", window.location.origin);
+        const params = new URLSearchParams();
+        if (pair) params.set("pair", pair);
+        if (playerId) params.set("id", playerId);
+        if (scope) params.set("scope", scope);
+        if (src) params.set("src", src);
+        controllerUrl.search = params.toString();
+        return controllerUrl.toString();
+      }
+
       function slug(value) {
         return String(value || "")
           .toLowerCase()
@@ -233,7 +244,7 @@
         badge.style.display = "inline-flex";
         badge.addEventListener("pointerdown", (event) => {
           event.preventDefault();
-          copyText(pair);
+          copyText(buildControllerUrl());
           badge.textContent = "copied ✓";
           setTimeout(() => {
             badge.textContent = `${pair} :: ${playerId}`;
