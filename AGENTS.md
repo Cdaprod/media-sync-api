@@ -713,3 +713,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-01)
 - OBS player boot flow now suppresses the paused overlay on initial load, fades in from black via a curtain overlay, and re-arms boot when sources change to avoid flicker.
+
+### Latest Implementation Notes (2025-07-02)
+- Player badge copy now uses the current video source when building the controller URL so runtime setSrc updates are reflected.
