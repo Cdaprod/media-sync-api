@@ -710,3 +710,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-30)
 - Player badge copy action now places the full player controller URL (including pair/src/id/scope) on the clipboard for direct browser pastes.
+
+### Latest Implementation Notes (2025-07-01)
+- OBS player boot flow now suppresses the paused overlay on initial load, fades in from black via a curtain overlay, and re-arms boot when sources change to avoid flicker.

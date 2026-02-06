@@ -15,6 +15,8 @@ def test_player_overlay_controls(client):
     assert "postMessage" in body
     assert "hashchange" in body
     assert "player_controller.html" in body
+    assert "curtain" in body
+    assert "boot" in body
 
 
 def test_player_controller_page(client):
