@@ -82,6 +82,15 @@
       transform: translate(-50%, -50%) scale(1);
     }
 
+    .boot video {
+      filter: none !important;
+    }
+
+    .boot .icon {
+      opacity: 0 !important;
+      transform: translate(-50%, -50%) scale(0.98) !important;
+    }
+
     .hotspot {
       position: absolute;
       inset: 0;
@@ -102,11 +111,30 @@
       border: 1px solid rgba(255, 255, 255, 0.12);
       display: none;
     }
+
+    .curtain {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      opacity: 1;
+      pointer-events: none;
+      transition: opacity 260ms ease;
+      z-index: 8;
+    }
+
+    .boot .curtain {
+      opacity: 1;
+    }
+
+    .ready .curtain {
+      opacity: 0;
+    }
   </style>
 </head>
 <body>
   <div class="stage" id="stage">
     <video id="v" autoplay playsinline preload="auto"></video>
+    <div class="curtain" id="curtain" aria-hidden="true"></div>
     <svg class="icon" viewBox="0 0 100 100" aria-hidden="true">
       <defs>
         <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
@@ -216,6 +244,10 @@
       const v = document.getElementById("v");
       const hotspot = document.getElementById("hotspot");
       const badge = document.getElementById("pairBadge");
+      let booting = true;
+
+      stage.classList.add("boot");
+      stage.classList.remove("ready");
 
       function copyText(value) {
         const text = String(value || "");
@@ -259,7 +291,28 @@
       v.autoplay = autoplay;
       if (src) v.src = src;
 
+      function startBoot(reason) {
+        booting = true;
+        stage.classList.add("boot");
+        stage.classList.remove("ready");
+        stage.classList.remove("paused");
+        if (reason) window.__PLAYER_BOOT_ARMED__ = reason;
+      }
+
+      function endBoot(reason) {
+        if (!booting) return;
+        booting = false;
+        syncPausedUI();
+        stage.classList.remove("boot");
+        stage.classList.add("ready");
+        if (reason) window.__PLAYER_BOOT_REASON__ = reason;
+      }
+
       function syncPausedUI() {
+        if (booting) {
+          stage.classList.remove("paused");
+          return;
+        }
         if (v.paused) {
           stage.classList.add("paused");
         } else {
@@ -272,10 +325,16 @@
       v.addEventListener("loadedmetadata", syncPausedUI);
       v.addEventListener("ended", syncPausedUI);
       syncPausedUI();
+      startBoot("init");
+      setTimeout(() => endBoot("timeout"), 1500);
+
+      v.addEventListener("playing", () => endBoot("playing"), { passive: true });
+      v.addEventListener("loadeddata", () => endBoot("loadeddata"), { passive: true });
 
       async function tryPlay() {
         try {
           await v.play();
+          endBoot("tryPlay");
         } catch (_) {
           // ignore autoplay errors
         }
@@ -394,7 +453,8 @@
           const curUrl = normalizeMediaUrl(cur);
           if (nextUrl && curUrl !== nextUrl) {
             const wasPlaying = !v.paused;
-            v.src = next;
+            startBoot("setSrc");
+            v.src = nextUrl;
             v.load();
             if (wasPlaying || autoplay) await tryPlay();
           }
