@@ -1,0 +1,611 @@
+<!doctype html>
+<!--
+  media-sync-api OBS Player Controller (touch-first)
+  - Designed for iPhone Safari + OBS "Interact" window
+  - Prevents scroll/selection/context menus
+  - Controls player.html via BroadcastChannel('obs-player::<pair>')
+
+  Query params:
+    pair=<key>              (optional explicit pair key)
+    src=<url>               (optional default src; used to derive pair if pair is absent)
+    scope=<label>           (optional label used in pair derivation)
+    id=player               (target player id)
+    grid=3                  (columns: 2..4)
+    scale=1.0               (UI scale)
+    haptics=1               (vibrate on press if supported)
+
+  Example:
+    /player_controller.html?pair=program
+    /player_controller.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&scope=program
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>OBS Player Controller</title>
+
+  <style>
+    :root{
+      --bg0: rgba(0,0,0,0.92);
+      --bg1: rgba(16,16,20,0.92);
+      --tile: rgba(255,255,255,0.06);
+      --tile2: rgba(255,255,255,0.09);
+      --stroke: rgba(255,255,255,0.11);
+      --stroke2: rgba(255,255,255,0.16);
+      --fg: rgba(255,255,255,0.94);
+      --muted: rgba(255,255,255,0.62);
+      --good: rgba(120,255,190,0.85);
+      --warn: rgba(255,220,140,0.92);
+      --bad: rgba(255,120,140,0.90);
+
+      --pad: 14px;
+      --gap: 12px;
+      --radius: 18px;
+      --tileH: 88px;
+      --icon: 28px;
+      --font: 15px;
+
+      --cols: 3;
+      --scale: 1.0;
+    }
+
+    *{
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body{
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(1200px 900px at 20% 10%, var(--bg1), var(--bg0));
+      color: var(--fg);
+      font: 600 calc(var(--font) * var(--scale))/1.1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      touch-action: none;
+    }
+
+    body{
+      overscroll-behavior: none;
+      position: fixed;
+      inset: 0;
+    }
+
+    .wrap{
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: var(--gap);
+      padding: calc(var(--pad) * var(--scale));
+    }
+
+    .topbar{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--gap);
+      align-items: center;
+      padding: calc(10px * var(--scale)) calc(12px * var(--scale));
+      border: 1px solid var(--stroke);
+      border-radius: calc(var(--radius) * var(--scale));
+      background: rgba(255,255,255,0.03);
+      backdrop-filter: blur(10px);
+    }
+
+    .title{
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .title .h{
+      font-size: calc(16px * var(--scale));
+      letter-spacing: 0.4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .title .sub{
+      font-size: calc(12px * var(--scale));
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pill{
+      padding: calc(10px * var(--scale)) calc(12px * var(--scale));
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size: calc(12px * var(--scale));
+      white-space: nowrap;
+    }
+
+    .grid{
+      display: grid;
+      grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+      gap: calc(var(--gap) * var(--scale));
+      align-content: stretch;
+    }
+
+    .btn{
+      height: calc(var(--tileH) * var(--scale));
+      border-radius: calc(var(--radius) * var(--scale));
+      border: 1px solid var(--stroke);
+      background: linear-gradient(180deg, var(--tile2), var(--tile));
+      display: grid;
+      grid-template-rows: 1fr auto;
+      align-items: center;
+      justify-items: center;
+      padding: calc(10px * var(--scale));
+      gap: 8px;
+      cursor: pointer;
+      box-shadow:
+        0 12px 30px rgba(0,0,0,0.35),
+        inset 0 0 0 1px rgba(255,255,255,0.03);
+      transition: transform 90ms ease, border-color 120ms linear, background 120ms linear;
+    }
+
+    .btn:active{
+      transform: scale(0.985);
+      border-color: var(--stroke2);
+      background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+    }
+
+    .btn .ic{
+      width: calc(var(--icon) * var(--scale));
+      height: calc(var(--icon) * var(--scale));
+      opacity: 0.92;
+      filter: drop-shadow(0 8px 18px rgba(0,0,0,0.35));
+    }
+
+    .btn .lbl{
+      font-size: calc(12px * var(--scale));
+      color: var(--muted);
+      letter-spacing: 0.3px;
+    }
+
+    .btn.good { border-color: rgba(120,255,190,0.22); }
+    .btn.warn { border-color: rgba(255,220,140,0.22); }
+    .btn.bad  { border-color: rgba(255,120,140,0.22); }
+
+    .bottombar{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: calc(var(--gap) * var(--scale));
+    }
+
+    .wide{
+      height: calc(60px * var(--scale));
+      border-radius: calc(var(--radius) * var(--scale));
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: calc(13px * var(--scale));
+      cursor: pointer;
+    }
+    .wide:active{
+      transform: scale(0.992);
+      border-color: var(--stroke2);
+      color: var(--fg);
+    }
+
+    .toast{
+      position: fixed;
+      left: 50%;
+      bottom: calc(18px * var(--scale));
+      transform: translateX(-50%);
+      padding: calc(10px * var(--scale)) calc(14px * var(--scale));
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.55);
+      color: rgba(255,255,255,0.86);
+      backdrop-filter: blur(10px);
+      opacity: 0;
+      transition: opacity 180ms ease;
+      pointer-events: none;
+      font-size: calc(12px * var(--scale));
+      letter-spacing: 0.3px;
+      max-width: 90vw;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toast.on{ opacity: 1; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="title">
+      <div class="h">OBS Player Controller</div>
+      <div class="sub" id="subline">Target: <span id="target">player</span> · Pair: <span id="pairLabel">default</span></div>
+    </div>
+    <div class="pill" id="status">Ready</div>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="btn good" data-cmd="play">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M38 26 L78 50 L38 74 Z" fill="currentColor"/>
+      </svg>
+      <div class="lbl">Play</div>
+    </div>
+
+    <div class="btn warn" data-cmd="pause">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="28" y="24" width="16" height="52" rx="6" fill="currentColor"></rect>
+        <rect x="56" y="24" width="16" height="52" rx="6" fill="currentColor"></rect>
+      </svg>
+      <div class="lbl">Pause</div>
+    </div>
+
+    <div class="btn" data-cmd="toggle">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M30 28 H58 A18 18 0 0 1 58 72 H30 Z" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round"/>
+        <path d="M70 50 L88 62 L88 38 Z" fill="currentColor"/>
+      </svg>
+      <div class="lbl">Toggle</div>
+    </div>
+
+    <div class="btn" data-cmd="seek:-5">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M44 50 L18 32 V68 Z" fill="currentColor"/>
+        <path d="M52 32 H80 V68 H52 Z" fill="currentColor" opacity="0.65"/>
+      </svg>
+      <div class="lbl">Back 5s</div>
+    </div>
+
+    <div class="btn" data-cmd="seek:+5">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M56 50 L82 32 V68 Z" fill="currentColor"/>
+        <path d="M20 32 H48 V68 H20 Z" fill="currentColor" opacity="0.65"/>
+      </svg>
+      <div class="lbl">Fwd 5s</div>
+    </div>
+
+    <div class="btn" data-cmd="restart">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M50 22a28 28 0 1 0 26 18" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round"/>
+        <path d="M72 18 L92 20 L80 36 Z" fill="currentColor"/>
+      </svg>
+      <div class="lbl">Restart</div>
+    </div>
+
+    <div class="btn" data-cmd="mute:1">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M22 58 V42 H38 L58 26 V74 L38 58 Z" fill="currentColor"/>
+        <path d="M70 40 L86 60" stroke="currentColor" stroke-width="10" stroke-linecap="round"/>
+        <path d="M86 40 L70 60" stroke="currentColor" stroke-width="10" stroke-linecap="round"/>
+      </svg>
+      <div class="lbl">Mute</div>
+    </div>
+
+    <div class="btn" data-cmd="mute:0">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M22 58 V42 H38 L58 26 V74 L38 58 Z" fill="currentColor"/>
+        <path d="M70 44 C78 50 78 50 70 56" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round"/>
+      </svg>
+      <div class="lbl">Unmute</div>
+    </div>
+
+    <div class="btn" data-cmd="setSrcPrompt">
+      <svg class="ic" viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="18" y="22" width="64" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="10"/>
+        <path d="M32 58 L46 46 L58 58 L70 44" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="lbl">Set Src</div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div class="wide" id="copyUrl">Copy Controller URL</div>
+    <div class="wide" id="swapId">Switch Target</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  document.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
+  document.addEventListener('selectstart', e => e.preventDefault(), { passive:false });
+  document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
+  document.addEventListener('gesturechange', e => e.preventDefault(), { passive:false });
+  document.addEventListener('gestureend', e => e.preventDefault(), { passive:false });
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+
+  const qs = new URLSearchParams(location.search);
+
+  const gridCols = Math.max(2, Math.min(4, parseInt(qs.get('grid') || '3', 10) || 3));
+  const scale = Math.max(0.85, Math.min(1.45, parseFloat(qs.get('scale') || '1.0') || 1.0));
+  const haptics = (qs.get('haptics') ?? '1') === '1';
+
+  document.documentElement.style.setProperty('--cols', String(gridCols));
+  document.documentElement.style.setProperty('--scale', String(scale));
+
+  let targetId = (qs.get('id') || 'player').trim();
+  const defaultSrc = qs.get('src') || '';
+  const scope = (qs.get('scope') || '').trim();
+  let pair = (qs.get('pair') || '').trim();
+
+  function normalizeSrc(raw) {
+    if (!raw) return '';
+    const u = new URL(raw, window.location.origin);
+    const keep = new Set(['source', 'v', 'sig']);
+    const qp = new URLSearchParams();
+    for (const [k, v] of u.searchParams.entries()) {
+      if (keep.has(k)) qp.append(k, v);
+    }
+    qp.sort();
+    u.hash = '';
+    u.search = qp.toString() ? `?${qp.toString()}` : '';
+    return `${u.pathname}${u.search}`;
+  }
+
+  function fnv1a(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i += 1) {
+      h ^= str.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return h >>> 0;
+  }
+
+  function base36(n) {
+    return (n >>> 0).toString(36);
+  }
+
+  function slug(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 24) || 'x';
+  }
+
+  function deriveHumanPrefix(pathValue) {
+    const parts = String(pathValue || '').split('?')[0].split('/').filter(Boolean);
+    const mediaIdx = parts.indexOf('media');
+    if (mediaIdx >= 0 && parts[mediaIdx + 1]) return slug(parts[mediaIdx + 1]);
+    return slug(parts[0] || 'media');
+  }
+
+  function derivePairFromSrc(raw) {
+    const canon = normalizeSrc(raw);
+    if (!canon) return '';
+    const prefix = scope ? slug(scope) : deriveHumanPrefix(canon);
+    const hash = base36(fnv1a(canon)).slice(0, 6);
+    return `${prefix}-${hash}`;
+  }
+
+  if (!pair) {
+    pair = derivePairFromSrc(defaultSrc) || 'default';
+  }
+
+  const targetEl = document.getElementById('target');
+  const statusEl = document.getElementById('status');
+  const toastEl = document.getElementById('toast');
+  const pairLabel = document.getElementById('pairLabel');
+
+  const players = new Map();
+  let lastState = null;
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('on');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>toastEl.classList.remove('on'), 900);
+  }
+
+  function pulseStatus(msg){
+    statusEl.textContent = msg;
+    statusEl.style.color = 'rgba(255,255,255,0.92)';
+    clearTimeout(pulseStatus._t);
+    pulseStatus._t = setTimeout(()=>{
+      statusEl.textContent = 'Ready';
+      statusEl.style.color = 'rgba(255,255,255,0.62)';
+    }, 700);
+  }
+
+  function vibrate(){
+    if (!haptics) return;
+    try { navigator.vibrate?.(12); } catch {}
+  }
+
+  function msgId() {
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function refreshTargetUI(){
+    targetEl.textContent = targetId;
+    pairLabel.textContent = pair;
+  }
+  refreshTargetUI();
+
+  function updatePresenceStatus(){
+    if (!players.size) {
+      statusEl.textContent = 'Waiting…';
+      statusEl.style.color = 'rgba(255,255,255,0.62)';
+      return;
+    }
+    statusEl.textContent = `${players.size} player${players.size === 1 ? '' : 's'}`;
+    statusEl.style.color = 'rgba(120,255,190,0.85)';
+  }
+
+  function cycleTarget(){
+    const ids = [...players.keys()];
+    if (!ids.length) return;
+    const index = ids.indexOf(targetId);
+    targetId = ids[(index + 1) % ids.length];
+    refreshTargetUI();
+    toast(`Target: ${targetId}`);
+  }
+
+  function setTargetIfMissing(nextId){
+    if (!targetId || !players.has(targetId)) {
+      targetId = nextId;
+      refreshTargetUI();
+    }
+  }
+
+  const channelName = `obs-player::${pair}`;
+  let bc = null;
+  let registry = null;
+
+  if ('BroadcastChannel' in window) {
+    bc = new BroadcastChannel(channelName);
+    registry = new BroadcastChannel('obs-player-registry');
+
+    registry.onmessage = (event) => {
+      const msg = event.data;
+      if (!msg || msg.type !== 'player:presence') return;
+      if (msg.pair !== pair) return;
+      players.set(msg.id, { at: msg.at, href: msg.href });
+      setTargetIfMissing(msg.id);
+      updatePresenceStatus();
+    };
+
+    bc.onmessage = (event) => {
+      const msg = event.data;
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type !== 'ack' && msg.type !== 'state') return;
+      lastState = msg;
+      if (msg.id) players.set(msg.id, { at: Date.now(), href: msg.href || '' });
+      updatePresenceStatus();
+    };
+  }
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, info] of players.entries()) {
+      if (now - info.at > 5000) players.delete(id);
+    }
+    updatePresenceStatus();
+  }, 900);
+
+  function send(payload){
+    bc?.postMessage({
+      pair,
+      id: targetId,
+      msgId: msgId(),
+      at: Date.now(),
+      ...payload
+    });
+  }
+
+  function cmdPlay(){ send({ cmd: 'setPaused', paused: false }); pulseStatus('Play'); }
+  function cmdPause(){ send({ cmd: 'setPaused', paused: true }); pulseStatus('Pause'); }
+  function cmdToggle(){
+    if (lastState && typeof lastState.paused === 'boolean') {
+      send({ cmd: 'setPaused', paused: !lastState.paused });
+    } else {
+      send({ cmd: 'toggle' });
+    }
+    pulseStatus('Toggle');
+  }
+
+  function cmdSeek(delta){
+    send({ cmd: 'seekRel', dt: delta });
+    pulseStatus(delta > 0 ? `+${delta}s` : `${delta}s`);
+  }
+
+  function cmdRestart(){
+    send({ cmd: 'seekAbs', t: 0 });
+    send({ cmd: 'setPaused', paused: false });
+    pulseStatus('Restart');
+  }
+
+  function cmdMute(m){
+    send({ cmd: 'setMute', muted: !!m });
+    pulseStatus(m ? 'Muted' : 'Unmuted');
+  }
+
+  async function cmdSetSrcPrompt(){
+    const suggested = defaultSrc || '';
+    const s = prompt('Set media src URL (absolute or /media/...):', suggested);
+    if (!s) return;
+    send({ cmd: 'setSrc', src: s });
+    pulseStatus('Set Src');
+    toast(s);
+  }
+
+  const grid = document.getElementById('grid');
+
+  function handlePress(el){
+    const token = el.getAttribute('data-cmd') || '';
+    vibrate();
+
+    if (token === 'play') return cmdPlay();
+    if (token === 'pause') return cmdPause();
+    if (token === 'toggle') return cmdToggle();
+    if (token === 'restart') return cmdRestart();
+    if (token === 'setSrcPrompt') return cmdSetSrcPrompt();
+
+    if (token.startsWith('seek:')){
+      const v = token.split(':')[1].trim();
+      const dt = parseInt(v, 10);
+      if (!Number.isFinite(dt)) return;
+      return cmdSeek(dt);
+    }
+
+    if (token.startsWith('mute:')){
+      const v = token.split(':')[1].trim();
+      return cmdMute(v === '1');
+    }
+  }
+
+  grid.addEventListener('pointerdown', (e) => {
+    const el = e.target.closest('.btn');
+    if (!el) return;
+    e.preventDefault();
+    handlePress(el);
+  }, { passive:false });
+
+  document.getElementById('copyUrl').addEventListener('pointerdown', async (e) => {
+    e.preventDefault();
+    vibrate();
+    const u = location.href;
+    try {
+      await navigator.clipboard.writeText(u);
+      toast('Copied controller URL');
+    } catch {
+      toast('Copy failed (iOS permission)');
+    }
+  }, { passive:false });
+
+  document.getElementById('swapId').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    vibrate();
+    if (players.size) {
+      cycleTarget();
+      return;
+    }
+    const next = prompt('Target player id:', targetId);
+    if (!next) return;
+    targetId = next.trim();
+    refreshTargetUI();
+    toast(`Target: ${targetId}`);
+  }, { passive:false });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' ') { e.preventDefault(); cmdToggle(); }
+    if (e.key === 'p') cmdPause();
+    if (e.key === 'Enter') cmdPlay();
+    if (e.key === 'ArrowLeft') cmdSeek(-5);
+    if (e.key === 'ArrowRight') cmdSeek(+5);
+  });
+})();
+</script>
+</body>
+</html>

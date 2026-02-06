@@ -713,3 +713,22 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-01)
 - Explorer boot now retries source/project loads once before rendering media, and normalization requests use the shared API fetch helper for POST/GET fallback handling.
+- OBS player overlay now supports tap-to-toggle play/pause, grayscale + pause icon overlay when paused, and external control via BroadcastChannel, postMessage, or hash commands.
+
+### Latest Implementation Notes (2025-06-24)
+- OBS player/controller now derive pair keys from `src` (or explicit `pair`), announce presence on `obs-player-registry`, and use pair-scoped BroadcastChannels with idempotent commands; the player shows a copyable pair badge and the controller page provides pair-aware controls.
+
+### Latest Implementation Notes (2025-06-25)
+- Rebuilt the OBS player controller as a touch-first grid UI with scroll/gesture suppression, pair-aware discovery, and idempotent controls aligned to the player BroadcastChannel protocol.
+
+### Latest Implementation Notes (2025-06-26)
+- Player `setSrc` idempotency now normalizes media URLs before comparing current vs requested sources so relative `/media/...` inputs don't cause unnecessary reloads.
+
+### Latest Implementation Notes (2025-06-27)
+- OBS push helper and explorer UI now support selecting one of four ASSET_MEDIA slots, passing slot-aware pair keys into `/player.html` so each browser source can be controlled independently.
+
+### Latest Implementation Notes (2025-06-28)
+- OBS push helper now auto-creates missing ASSET_MEDIA_{n} scenes and uses slot-specific source names (ASSET_MEDIA_{n}_SOURCE) so multi-slot pushes are idempotent and correctly named.
+
+### Latest Implementation Notes (2025-06-29)
+- Player script now avoids optional chaining/nullish coalescing for broader browser-source compatibility while keeping the same defaults and channel behavior.
