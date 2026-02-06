@@ -32,6 +32,7 @@
 
   const resolveInputName = (sceneName, desired) => {
     const base = String(desired || 'ASSET_MEDIA').trim() || 'ASSET_MEDIA';
+    if (base.endsWith('_SOURCE')) return base;
     if (sceneName && sceneName === base) return `${base}_SOURCE`;
     return base;
   };
@@ -194,6 +195,14 @@
     }
   }
 
+  async function ensureScene(obs, sceneName){
+    if (!sceneName) return;
+    const list = await obs.call('GetSceneList');
+    const scenes = Array.isArray(list?.scenes) ? list.scenes : [];
+    if (scenes.some((scene) => scene.sceneName === sceneName)) return;
+    await obs.call('CreateScene', { sceneName });
+  }
+
   window.obsPushBrowserMedia = async function obsPushBrowserMedia({
     obsHost = '192.168.0.187',
     obsPort = 4455,
@@ -218,7 +227,7 @@
     if (slot && targetSceneName === 'ASSET_MEDIA' && inputName === 'ASSET_MEDIA'){
       const slotLabel = `ASSET_MEDIA_${slot}`;
       sceneName = slotLabel;
-      desiredInputName = slotLabel;
+      desiredInputName = `${slotLabel}_SOURCE`;
       if (!pairKey) pairKey = slotLabel;
     }
 
@@ -226,6 +235,7 @@
     await obs.connect(`ws://${obsHost}:${obsPort}`, obsPassword);
 
     try{
+      await ensureScene(obs, sceneName);
       const inputList = await obs.call('GetInputList');
       const inputs = Array.isArray(inputList?.inputs) ? inputList.inputs : [];
       const resolvedInputName = resolveInputName(sceneName, desiredInputName);

@@ -701,3 +701,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-27)
 - OBS push helper and explorer UI now support selecting one of four ASSET_MEDIA slots, passing slot-aware pair keys into `/player.html` so each browser source can be controlled independently.
+
+### Latest Implementation Notes (2025-06-28)
+- OBS push helper now auto-creates missing ASSET_MEDIA_{n} scenes and uses slot-specific source names (ASSET_MEDIA_{n}_SOURCE) so multi-slot pushes are idempotent and correctly named.
