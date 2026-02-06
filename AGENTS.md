@@ -716,3 +716,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-02)
 - Player badge copy now uses the current video source when building the controller URL so runtime setSrc updates are reflected.
+
+### Latest Implementation Notes (2025-07-03)
+- OBS player now defaults loop=0 so clips play once unless explicitly restarted or loop enabled.

@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   media-sync-api OBS Player
-  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0&autoplay=1&loop=1&controls=0&tap=1&id=player&pair=<key>&scope=<label>
+  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0&autoplay=1&loop=0&controls=0&tap=1&id=player&pair=<key>&scope=<label>
   Example: /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&fit=cover&muted=0
   Example (derived pair from src): /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&scope=program
   Example (explicit pair): /player.html?pair=program&id=player&src=/media/P1-Project/ingest/originals/clip.mp4?source=primary
@@ -160,7 +160,7 @@
       const fit = qs.get("fit") || "cover";
       const muted = (qs.get("muted") || "0") === "1";
       const autoplay = getParam("autoplay", "1") === "1";
-      const loop = getParam("loop", "1") === "1";
+      const loop = getParam("loop", "0") === "1";
       const controls = getParam("controls", "0") === "1";
       const tapToggle = getParam(
         "tap",
