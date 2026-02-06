@@ -707,3 +707,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-29)
 - Player script now avoids optional chaining/nullish coalescing for broader browser-source compatibility while keeping the same defaults and channel behavior.
+
+### Latest Implementation Notes (2025-06-30)
+- Player badge copy action now places the full player controller URL (including pair/src/id/scope) on the clipboard for direct browser pastes.
