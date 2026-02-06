@@ -211,10 +211,11 @@
       function buildControllerUrl() {
         const controllerUrl = new URL("/player_controller.html", window.location.origin);
         const params = new URLSearchParams();
+        const activeSrc = v && (v.currentSrc || v.src) ? normalizeMediaUrl(v.currentSrc || v.src) : src;
         if (pair) params.set("pair", pair);
         if (playerId) params.set("id", playerId);
         if (scope) params.set("scope", scope);
-        if (src) params.set("src", src);
+        if (activeSrc) params.set("src", activeSrc);
         controllerUrl.search = params.toString();
         return controllerUrl.toString();
       }
