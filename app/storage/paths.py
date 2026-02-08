@@ -23,6 +23,8 @@ THUMBNAIL_DIR_NAMES = {
 }
 THUMBNAIL_OUTPUT_DIR = "ingest/thumbnails"
 THUMBNAIL_EXTENSION = ".jpg"
+TEMPORARY_FILE_PREFIXES = (".tmp.", ".bak.")
+TEMPORARY_FILE_SUFFIXES = (".lock",)
 
 
 def is_thumbnail_path(path: str | Path) -> bool:
@@ -39,6 +41,18 @@ def is_thumbnail_path(path: str | Path) -> bool:
     if stem.startswith(("thumb_", "thumbnail_")):
         return True
     if stem.endswith(("_thumb", "-thumb", "_thumbnail", "-thumbnail")):
+        return True
+    return False
+
+
+def is_temporary_path(path: str | Path) -> bool:
+    """Return True when a path looks like a temporary/lock artifact."""
+
+    candidate = Path(path)
+    name = candidate.name.lower()
+    if name.startswith(TEMPORARY_FILE_PREFIXES):
+        return True
+    if any(name.endswith(suffix) for suffix in TEMPORARY_FILE_SUFFIXES):
         return True
     return False
 

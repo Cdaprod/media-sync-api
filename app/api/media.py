@@ -25,18 +25,21 @@ from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageOps
 
 from app.config import get_settings
-from app.storage.dedupe import compute_sha256_from_path, record_file_hash, remove_file_record
-from app.storage.index import append_event, append_file_entry, load_index, remove_entries, seed_index
+from app.storage.dedupe import compute_sha256_from_path, lookup_file_hash, record_file_hash, remove_file_record
+from app.storage.index import append_event, append_file_entry, load_index, remove_entries, seed_index, update_file_entry
 from app.storage.metadata import (
     ensure_metadata,
     metadata_path,
     metadata_relpath,
     remove_metadata,
     update_metadata_tags,
+    VIDEO_EXTENSIONS,
 )
+from app.storage.orientation import OrientationError, ffprobe_video, normalize_video_orientation_in_place
 from app.storage.paths import (
     ensure_subdirs,
     is_thumbnail_path,
+    is_temporary_path,
     project_path,
     relpath_posix,
     safe_filename,
@@ -51,6 +54,7 @@ from app.storage.sources import SourceRegistry
 logger = logging.getLogger("media_sync_api.media")
 
 router = APIRouter(prefix="/api/projects", tags=["media"])
+global_media_router = APIRouter(prefix="/api/media", tags=["media"])
 media_router = APIRouter(prefix="/media", tags=["media"])
 thumbnail_router = APIRouter(prefix="/thumbnails", tags=["media"])
 
@@ -103,6 +107,12 @@ class TagMediaRequest(BaseModel):
     relative_paths: List[str] = Field(default_factory=list)
     add_tags: List[str] = Field(default_factory=list)
     remove_tags: List[str] = Field(default_factory=list)
+
+
+class NormalizeOrientationRequest(BaseModel):
+    relative_paths: List[str] | None = None
+    dry_run: bool = True
+    limit: int | None = Field(default=None, ge=1)
 
 
 def _require_source_and_project(project_name: str, source: str | None) -> _ResolvedProject:
@@ -392,7 +402,7 @@ async def list_media(project_name: str, source: str | None = None):
                 extra={"project": resolved.name, "path": relative_path},
             )
             continue
-        if is_thumbnail_path(Path(safe_relative)):
+        if is_thumbnail_path(Path(safe_relative)) or is_temporary_path(Path(safe_relative)):
             continue
         item = dict(entry)
         item["relative_path"] = safe_relative
@@ -808,6 +818,310 @@ async def tag_media(project_name: str, payload: TagMediaRequest, source: str | N
         )
 
     return {"status": "ok", "updated": updated, "missing": missing}
+
+
+def _normalize_orientation_for_project(
+    resolved: _ResolvedProject,
+    payload: NormalizeOrientationRequest,
+) -> dict[str, object]:
+    index = load_index(resolved.root)
+    entries_by_path = {entry.get("relative_path"): entry for entry in index.get("files", [])}
+    sha_to_paths: dict[str, set[str]] = {}
+    for rel_path, entry in entries_by_path.items():
+        sha = entry.get("sha256")
+        if not sha or not isinstance(rel_path, str):
+            continue
+        sha_to_paths.setdefault(sha, set()).add(rel_path)
+
+    target_paths: list[str]
+    if payload.relative_paths:
+        target_paths = []
+        for raw_path in payload.relative_paths:
+            target_paths.append(_validate_relative_media_path(raw_path))
+    else:
+        target_paths = [path for path in entries_by_path.keys() if isinstance(path, str)]
+
+    if payload.limit:
+        target_paths = target_paths[: payload.limit]
+
+    changed: list[dict[str, object]] = []
+    skipped: list[dict[str, object]] = []
+    failed: list[dict[str, object]] = []
+
+    for relative_path in target_paths:
+        entry = entries_by_path.get(relative_path)
+        if not entry:
+            skipped.append({"relative_path": relative_path, "reason": "not_indexed"})
+            continue
+        if is_temporary_path(Path(relative_path)):
+            skipped.append({"relative_path": relative_path, "reason": "temporary_artifact"})
+            continue
+        if not relative_path.startswith("ingest/originals/"):
+            skipped.append({"relative_path": relative_path, "reason": "outside_ingest"})
+            continue
+        if Path(relative_path).suffix.lower() not in VIDEO_EXTENSIONS:
+            skipped.append({"relative_path": relative_path, "reason": "not_video"})
+            continue
+
+        target = (resolved.root / relative_path).resolve()
+        project_root = resolved.root.resolve()
+        if project_root not in target.parents and target != project_root:
+            failed.append({"relative_path": relative_path, "error": "outside_project"})
+            continue
+        if not target.exists() or not target.is_file():
+            failed.append({"relative_path": relative_path, "error": "missing_on_disk"})
+            continue
+
+        try:
+            probe = ffprobe_video(target)
+        except OrientationError as exc:
+            failed.append({"relative_path": relative_path, "error": str(exc)})
+            continue
+
+        if probe.rotation not in (90, 180, 270):
+            skipped.append({"relative_path": relative_path, "reason": "already_upright"})
+            continue
+
+        if payload.dry_run:
+            changed.append({"relative_path": relative_path, "rotation": probe.rotation, "status": "planned"})
+            continue
+
+        backup_path: Path | None = None
+        try:
+            result = normalize_video_orientation_in_place(target, keep_backup=True)
+            if not result.changed:
+                skipped.append({"relative_path": relative_path, "reason": "no_change"})
+                continue
+            backup_path = result.backup_path
+        except OrientationError as exc:
+            failed.append({"relative_path": relative_path, "error": str(exc)})
+            continue
+
+        new_sha = compute_sha256_from_path(target)
+        previous_sha = entry.get("sha256")
+        existing_path = lookup_file_hash(_manifest_db_path(resolved.root), new_sha)
+        if existing_path and existing_path != relative_path:
+            if backup_path and backup_path.exists():
+                target.unlink(missing_ok=True)
+                backup_path.rename(target)
+            failed.append({"relative_path": relative_path, "error": "sha_collision"})
+            continue
+
+        manifest_db = _manifest_db_path(resolved.root)
+        try:
+            if previous_sha:
+                remove_file_record(manifest_db, previous_sha, relative_path)
+            record_file_hash(manifest_db, new_sha, relative_path)
+            updated_entry = update_file_entry(
+                resolved.root,
+                relative_path,
+                {
+                    "sha256": new_sha,
+                    "size": target.stat().st_size,
+                    "normalized_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            if not updated_entry:
+                raise RuntimeError("index entry missing for normalized file")
+            ensure_metadata(
+                resolved.root,
+                relative_path,
+                new_sha,
+                target,
+                source=resolved.source_name,
+                method="orientation_normalize",
+            )
+        except Exception as exc:
+            remove_file_record(manifest_db, new_sha, relative_path)
+            if previous_sha:
+                record_file_hash(manifest_db, previous_sha, relative_path)
+            remove_metadata(resolved.root, new_sha)
+            if backup_path and backup_path.exists():
+                target.unlink(missing_ok=True)
+                backup_path.rename(target)
+                fallback_sha = previous_sha or compute_sha256_from_path(target)
+                update_file_entry(
+                    resolved.root,
+                    relative_path,
+                    {
+                        "sha256": fallback_sha,
+                        "size": target.stat().st_size,
+                    },
+                )
+            failed.append({"relative_path": relative_path, "error": f"update_failed: {exc}"})
+            continue
+
+        if previous_sha and previous_sha != new_sha:
+            delete_targets = {relative_path}
+            if _should_remove_metadata(previous_sha, delete_targets, sha_to_paths):
+                remove_metadata(resolved.root, previous_sha)
+                thumbnail_path(resolved.root, previous_sha).unlink(missing_ok=True)
+
+        if backup_path and backup_path.exists():
+            backup_path.unlink(missing_ok=True)
+
+        changed.append(
+            {
+                "relative_path": relative_path,
+                "rotation": probe.rotation,
+                "sha256": new_sha,
+                "entry": updated_entry,
+                "status": "normalized",
+            }
+        )
+
+    if changed:
+        append_event(
+            resolved.root,
+            "media_orientation_normalized",
+            {
+                "paths": [item["relative_path"] for item in changed],
+                "dry_run": payload.dry_run,
+                "source": resolved.source_name,
+            },
+        )
+
+    return {
+        "status": "ok",
+        "project": resolved.name,
+        "source": resolved.source_name,
+        "dry_run": payload.dry_run,
+        "changed": changed,
+        "skipped": skipped,
+        "failed": failed,
+        "instructions": "Set dry_run=false to apply orientation fixes in place.",
+    }
+
+
+@router.post("/{project_name}/media/normalize-orientation")
+async def normalize_orientation(
+    project_name: str,
+    payload: NormalizeOrientationRequest,
+    source: str | None = None,
+):
+    """Normalize video orientation metadata in place for a project.
+
+    Example:
+        curl -X POST http://localhost:8787/api/projects/demo/media/normalize-orientation \
+          -H "Content-Type: application/json" \
+          -d '{"dry_run": true}'
+    """
+
+    resolved = _require_source_and_project(project_name, source)
+    if not (resolved.root / "index.json").exists():
+        raise HTTPException(status_code=404, detail="Project index missing")
+    try:
+        return _normalize_orientation_for_project(resolved, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/{project_name}/media/normalize-orientation")
+async def normalize_orientation_get(
+    project_name: str,
+    dry_run: bool = True,
+    limit: int | None = None,
+    source: str | None = None,
+):
+    """Normalize video orientation metadata in place for a project (GET fallback).
+
+    Example:
+        curl "http://localhost:8787/api/projects/demo/media/normalize-orientation?dry_run=false"
+    """
+
+    payload = NormalizeOrientationRequest(dry_run=dry_run, limit=limit)
+    resolved = _require_source_and_project(project_name, source)
+    if not (resolved.root / "index.json").exists():
+        raise HTTPException(status_code=404, detail="Project index missing")
+    try:
+        return _normalize_orientation_for_project(resolved, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@global_media_router.post("/normalize-orientation")
+async def normalize_orientation_all(
+    payload: NormalizeOrientationRequest,
+    source: str | None = None,
+):
+    """Normalize orientation across all projects in a source.
+
+    Example:
+        curl -X POST http://localhost:8787/api/media/normalize-orientation \
+          -H "Content-Type: application/json" \
+          -d '{"dry_run": true}'
+    """
+
+    registry = SourceRegistry(get_settings().project_root)
+    try:
+        sources = registry.list_enabled() if source is None else [registry.require(source)]
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    results: list[dict[str, object]] = []
+    skipped_projects: list[dict[str, str]] = []
+    total_changed = 0
+    total_skipped = 0
+    total_failed = 0
+
+    for active_source in sources:
+        if not active_source.accessible:
+            skipped_projects.append({"project": active_source.name, "reason": "source_unreachable"})
+            continue
+        for path in active_source.root.iterdir() if active_source.root.exists() else []:
+            if not path.is_dir():
+                continue
+            if path.name.startswith("_"):
+                continue
+            try:
+                name = validate_project_name(path.name)
+            except ValueError:
+                continue
+            if not (path / "index.json").exists():
+                skipped_projects.append({"project": name, "reason": "index_missing"})
+                continue
+            resolved = _ResolvedProject(name=name, source_name=active_source.name, root=path)
+            try:
+                result = _normalize_orientation_for_project(resolved, payload)
+            except ValueError as exc:
+                skipped_projects.append({"project": name, "reason": str(exc)})
+                continue
+            results.append(result)
+            total_changed += len(result.get("changed", []))
+            total_skipped += len(result.get("skipped", []))
+            total_failed += len(result.get("failed", []))
+
+    return {
+        "status": "ok",
+        "source": source or "all",
+        "dry_run": payload.dry_run,
+        "projects_processed": len(results),
+        "projects_skipped": skipped_projects,
+        "totals": {
+            "planned": total_changed if payload.dry_run else 0,
+            "changed": 0 if payload.dry_run else total_changed,
+            "skipped": total_skipped,
+            "failed": total_failed,
+        },
+        "results": results,
+        "instructions": "Set dry_run=false to apply orientation fixes in place.",
+    }
+
+
+@global_media_router.get("/normalize-orientation")
+async def normalize_orientation_all_get(
+    dry_run: bool = True,
+    limit: int | None = None,
+    source: str | None = None,
+):
+    """Normalize orientation across all projects in a source (GET fallback).
+
+    Example:
+        curl "http://localhost:8787/api/media/normalize-orientation?dry_run=true"
+    """
+
+    payload = NormalizeOrientationRequest(dry_run=dry_run, limit=limit)
+    return await normalize_orientation_all(payload, source=source)
 
 
 @router.post("/auto-organize")
