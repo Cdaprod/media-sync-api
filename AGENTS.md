@@ -722,3 +722,34 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-04)
 - Normalize-orientation GET endpoints now enforce `limit>=1` at query parsing, and batch normalization now updates in-memory sha→path tracking so shared-old-sha metadata/thumbnail sidecars are cleaned up once orphaned.
+- OBS player overlay now supports tap-to-toggle play/pause, grayscale + pause icon overlay when paused, and external control via BroadcastChannel, postMessage, or hash commands.
+
+### Latest Implementation Notes (2025-06-24)
+- OBS player/controller now derive pair keys from `src` (or explicit `pair`), announce presence on `obs-player-registry`, and use pair-scoped BroadcastChannels with idempotent commands; the player shows a copyable pair badge and the controller page provides pair-aware controls.
+
+### Latest Implementation Notes (2025-06-25)
+- Rebuilt the OBS player controller as a touch-first grid UI with scroll/gesture suppression, pair-aware discovery, and idempotent controls aligned to the player BroadcastChannel protocol.
+
+### Latest Implementation Notes (2025-06-26)
+- Player `setSrc` idempotency now normalizes media URLs before comparing current vs requested sources so relative `/media/...` inputs don't cause unnecessary reloads.
+
+### Latest Implementation Notes (2025-06-27)
+- OBS push helper and explorer UI now support selecting one of four ASSET_MEDIA slots, passing slot-aware pair keys into `/player.html` so each browser source can be controlled independently.
+
+### Latest Implementation Notes (2025-06-28)
+- OBS push helper now auto-creates missing ASSET_MEDIA_{n} scenes and uses slot-specific source names (ASSET_MEDIA_{n}_SOURCE) so multi-slot pushes are idempotent and correctly named.
+
+### Latest Implementation Notes (2025-06-29)
+- Player script now avoids optional chaining/nullish coalescing for broader browser-source compatibility while keeping the same defaults and channel behavior.
+
+### Latest Implementation Notes (2025-06-30)
+- Player badge copy action now places the full player controller URL (including pair/src/id/scope) on the clipboard for direct browser pastes.
+
+### Latest Implementation Notes (2025-07-01)
+- OBS player boot flow now suppresses the paused overlay on initial load, fades in from black via a curtain overlay, and re-arms boot when sources change to avoid flicker.
+
+### Latest Implementation Notes (2025-07-02)
+- Player badge copy now uses the current video source when building the controller URL so runtime setSrc updates are reflected.
+
+### Latest Implementation Notes (2025-07-03)
+- OBS player now defaults loop=0 so clips play once unless explicitly restarted or loop enabled.

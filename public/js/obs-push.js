@@ -2,17 +2,20 @@
  * media-sync-api OBS helper
  * Usage: window.obsPushBrowserMedia({ assetUrl: 'http://host/media/clip.mp4?source=primary' })
  * Example: window.obsPushBrowserMedia({ assetUrl, targetSceneName: 'ASSET_MEDIA', inputName: 'ASSET_MEDIA' })
+ * Example (slot + pair): window.obsPushBrowserMedia({ assetUrl, slot: 2, pairKey: 'ASSET_MEDIA_2' })
  */
 (function(){
   const normalizeName = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
-  const buildPlayerUrl = ({ assetUrl, fit, muted }) => {
+  const buildPlayerUrl = ({ assetUrl, fit, muted, pairKey, playerId }) => {
     const resolvedAssetUrl = new URL(assetUrl, window.location.origin);
     const params = new URLSearchParams({
       src: resolvedAssetUrl.toString(),
       fit,
       muted: muted ? '1' : '0',
     });
+    if (pairKey) params.set('pair', pairKey);
+    if (playerId) params.set('id', playerId);
     return `${resolvedAssetUrl.origin}/player.html?${params.toString()}`;
   };
 
@@ -29,6 +32,7 @@
 
   const resolveInputName = (sceneName, desired) => {
     const base = String(desired || 'ASSET_MEDIA').trim() || 'ASSET_MEDIA';
+    if (base.endsWith('_SOURCE')) return base;
     if (sceneName && sceneName === base) return `${base}_SOURCE`;
     return base;
   };
@@ -191,12 +195,23 @@
     }
   }
 
+  async function ensureScene(obs, sceneName){
+    if (!sceneName) return;
+    const list = await obs.call('GetSceneList');
+    const scenes = Array.isArray(list?.scenes) ? list.scenes : [];
+    if (scenes.some((scene) => scene.sceneName === sceneName)) return;
+    await obs.call('CreateScene', { sceneName });
+  }
+
   window.obsPushBrowserMedia = async function obsPushBrowserMedia({
     obsHost = '192.168.0.187',
     obsPort = 4455,
     obsPassword = '123456',
     targetSceneName = 'ASSET_MEDIA',
     inputName = 'ASSET_MEDIA',
+    slot = null,
+    pairKey = '',
+    playerId = 'player',
     assetUrl,
     width = 1080,
     height = 1920,
@@ -207,17 +222,27 @@
     if (!assetUrl) throw new Error('assetUrl is required');
     if (typeof OBSWebSocket === 'undefined') throw new Error('OBSWebSocket is not available');
 
+    let sceneName = targetSceneName;
+    let desiredInputName = inputName;
+    if (slot && targetSceneName === 'ASSET_MEDIA' && inputName === 'ASSET_MEDIA'){
+      const slotLabel = `ASSET_MEDIA_${slot}`;
+      sceneName = slotLabel;
+      desiredInputName = `${slotLabel}_SOURCE`;
+      if (!pairKey) pairKey = slotLabel;
+    }
+
     const obs = new OBSWebSocket();
     await obs.connect(`ws://${obsHost}:${obsPort}`, obsPassword);
 
     try{
+      await ensureScene(obs, sceneName);
       const inputList = await obs.call('GetInputList');
       const inputs = Array.isArray(inputList?.inputs) ? inputList.inputs : [];
-      const resolvedInputName = resolveInputName(targetSceneName, inputName);
+      const resolvedInputName = resolveInputName(sceneName, desiredInputName);
       const video = await obs.call('GetVideoSettings');
       const baseW = Number(video?.baseWidth || 1080);
       const baseH = Number(video?.baseHeight || 1920);
-      const playerUrl = buildPlayerUrl({ assetUrl, fit, muted });
+      const playerUrl = buildPlayerUrl({ assetUrl, fit, muted, pairKey, playerId });
       const inputSettings = {
         url: playerUrl,
         width: baseW,
@@ -230,11 +255,11 @@
 
       const finalInputName = await ensureBrowserInput(
         obs,
-        targetSceneName,
+        sceneName,
         resolvedInputName,
         inputSettings,
       );
-      await cleanupExtraInputs(obs, inputName, finalInputName);
+      await cleanupExtraInputs(obs, desiredInputName, finalInputName);
 
       try{
         await obs.call('PressInputPropertiesButton', {
@@ -245,17 +270,17 @@
         // ignore
       }
 
-      const sceneItemId = await getSceneItemIdStrict(obs, targetSceneName, finalInputName);
+      const sceneItemId = await getSceneItemIdStrict(obs, sceneName, finalInputName);
       await snapBrowserSourceToCanvas(
         obs,
-        targetSceneName,
+        sceneName,
         sceneItemId,
         finalInputName,
         fit === 'contain' ? 'contain' : 'cover',
       );
 
       if (ensureExclusiveScene){
-        await removeSharedSceneItems(obs, finalInputName, targetSceneName);
+        await removeSharedSceneItems(obs, finalInputName, sceneName);
       }
     }finally{
       await obs.disconnect();

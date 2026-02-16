@@ -1483,6 +1483,13 @@
               <option value="cover" selected>Cover</option>
               <option value="contain">Contain</option>
             </select>
+            <label class="tag" for="obsSlotSelect">Slot</label>
+            <select id="obsSlotSelect" aria-label="OBS slot">
+              <option value="1" selected>Slot 1</option>
+              <option value="2">Slot 2</option>
+              <option value="3">Slot 3</option>
+              <option value="4">Slot 4</option>
+            </select>
             <label class="tag">
               <input id="obsExclusiveToggle" type="checkbox" />
               Exclusive to ASSET_MEDIA
@@ -1882,6 +1889,7 @@
       fit = 'cover',
       muted = false,
       ensureExclusiveScene = false,
+      slot = 1,
       assetUrl,
     }){
       if (!assetUrl) throw new Error('assetUrl is required');
@@ -1899,6 +1907,7 @@
         obsPassword,
         targetSceneName: sceneName,
         inputName,
+        slot,
         assetUrl,
         width: 1080,
         height: 1920,
@@ -3461,6 +3470,7 @@
 
         try{
           const fit = el('obsFitMode')?.value || 'cover';
+          const slot = parseInt(el('obsSlotSelect')?.value || '1', 10) || 1;
           const ensureExclusiveScene = !!el('obsExclusiveToggle')?.checked;
           await obsReplaceAssetMediaUrl({
             obsHost: '192.168.0.187',
@@ -3469,6 +3479,7 @@
             fit,
             ensureExclusiveScene,
             muted: false,
+            slot,
             assetUrl,
           });
           toast('good','OBS', 'Browser source updated.');
