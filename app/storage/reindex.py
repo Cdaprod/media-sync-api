@@ -7,8 +7,9 @@ from typing import Dict, Any, List, Iterable
 from datetime import datetime, timezone
 
 from .dedupe import compute_sha256_from_path, ensure_db, record_file_hash, get_recorded_paths, remove_file_record
-from .index import append_file_entry, load_index, remove_entries
-from .metadata import ensure_metadata, remove_metadata
+from .index import append_file_entry, load_index, remove_entries, update_file_entry
+from .metadata import VIDEO_EXTENSIONS, ensure_metadata, remove_metadata
+from .orientation import OrientationError, ffprobe_video, normalize_video_orientation_in_place
 from .paths import is_thumbnail_path, is_temporary_path, relpath_posix
 
 
@@ -39,22 +40,39 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
     ensure_db(db_path)
 
     existing_index = load_index(project_path)
+    existing_entries = {
+        entry.get("relative_path"): entry
+        for entry in existing_index.get("files", [])
+        if isinstance(entry.get("relative_path"), str)
+    }
     existing_paths = {entry.get("relative_path") for entry in existing_index.get("files", [])}
     relocated = _relocate_misplaced_media(project_path, ingest_path)
 
     new_entries: List[Dict[str, Any]] = []
     seen_paths: set[str] = set()
     skipped_unsupported = 0
+    normalized = 0
+    normalization_failed = 0
     for file_path in ingest_path.rglob("*"):
         if file_path.is_dir():
             continue
         if not _is_supported_media(file_path):
             skipped_unsupported += 1
             continue
+        if _is_video_media(file_path):
+            changed = _maybe_normalize_for_reindex(file_path)
+            if changed is True:
+                normalized += 1
+            elif changed is False:
+                normalization_failed += 1
         rel_path = relpath_posix(file_path, project_path)
         seen_paths.add(rel_path)
         sha = compute_sha256_from_path(file_path)
         duplicate = record_file_hash(db_path, sha, rel_path)
+        existing_entry = existing_entries.get(rel_path)
+        previous_sha = existing_entry.get("sha256") if existing_entry else None
+        if existing_entry and previous_sha and previous_sha != sha:
+            remove_file_record(db_path, previous_sha, rel_path)
         ensure_metadata(
             project_path,
             rel_path,
@@ -66,6 +84,18 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
         if duplicate and rel_path in existing_paths:
             continue
         if rel_path in existing_paths:
+            if existing_entry and previous_sha != sha:
+                update_file_entry(
+                    project_path,
+                    rel_path,
+                    {
+                        "sha256": sha,
+                        "size": file_path.stat().st_size,
+                        "indexed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                if previous_sha:
+                    remove_metadata(project_path, previous_sha)
             continue
         entry = {
             "relative_path": rel_path,
@@ -96,7 +126,35 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
         "removed": len(missing_paths),
         "relocated": relocated,
         "skipped_unsupported": skipped_unsupported,
+        "normalized": normalized,
+        "normalization_failed": normalization_failed,
     }
+
+
+def _is_video_media(path: Path) -> bool:
+    return path.suffix.lower() in VIDEO_EXTENSIONS
+
+
+def _maybe_normalize_for_reindex(file_path: Path) -> bool | None:
+    """Normalize a rotated video before hashing/index writes during reindex.
+
+    Returns:
+        True when normalization changed bytes.
+        False when normalization was attempted but failed.
+        None when no normalization was needed.
+    """
+
+    try:
+        probe = ffprobe_video(file_path)
+    except OrientationError:
+        return None
+    if probe.rotation not in {90, 180, 270}:
+        return None
+    try:
+        result = normalize_video_orientation_in_place(file_path, keep_backup=False)
+        return True if result.changed else None
+    except OrientationError:
+        return False
 
 
 def _relocate_misplaced_media(project_root: Path, ingest_path: Path) -> int:

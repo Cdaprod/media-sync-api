@@ -50,6 +50,8 @@ def _run(cmd: list[str], *, timeout_s: int) -> subprocess.CompletedProcess[str]:
         )
     except subprocess.TimeoutExpired as exc:
         raise OrientationError(f"Command timed out after {timeout_s}s: {' '.join(cmd)}") from exc
+    except FileNotFoundError as exc:
+        raise OrientationError(f"Command not found: {cmd[0]}") from exc
 
 
 def ffprobe_video(path: Path, *, timeout_s: int = 15) -> ProbeVideo:

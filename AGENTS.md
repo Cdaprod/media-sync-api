@@ -716,3 +716,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-02)
 - Reverted explorer-side orientation normalization controls and API-port fallback/retry boot logic; explorer boot again relies on direct same-origin source/project/media loading for stability.
+
+### Latest Implementation Notes (2025-07-03)
+- Reindex now runs orientation normalization for rotated videos before hashing/index upserts, keeping manifest/index SHA values aligned with post-normalized bytes while preserving temp-artifact skipping.
