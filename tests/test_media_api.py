@@ -297,6 +297,76 @@ def test_normalize_orientation_get_apply(client: TestClient, env_settings: Path,
     assert payload["changed"]
     assert not payload["failed"]
 
+
+
+def test_normalize_orientation_get_limit_validation(client: TestClient) -> None:
+    project_name = _create_project(client)
+
+    project_response = client.get(
+        f"/api/projects/{project_name}/media/normalize-orientation",
+        params={"limit": 0},
+    )
+    assert project_response.status_code == 422
+
+    global_response = client.get("/api/media/normalize-orientation", params={"limit": 0})
+    assert global_response.status_code == 422
+
+
+def test_normalize_orientation_cleans_orphaned_shared_sha_sidecars(
+    client: TestClient,
+    env_settings: Path,
+    monkeypatch,
+) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    first = ingest / "a.mov"
+    second = ingest / "b.mov"
+    first.write_bytes(b"same-content")
+    second.write_bytes(b"same-content")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    from app.storage.index import load_index
+    from app.storage.metadata import metadata_path
+    import app.storage.orientation as orientation_module
+    import app.api.media as media_module
+
+    index_before = load_index(env_settings / project_name)
+    old_sha = index_before["files"][0]["sha256"]
+    old_metadata = metadata_path(env_settings / project_name, old_sha)
+    old_thumbnail = env_settings / project_name / "ingest" / "thumbnails" / f"{old_sha}.jpg"
+    old_thumbnail.write_bytes(b"thumb")
+    assert old_metadata.exists()
+    assert old_thumbnail.exists()
+
+    def fake_probe(_path):
+        return orientation_module.ProbeVideo(rotation=90, width=1920, height=1080, codec="h264")
+
+    def fake_normalize(path, keep_backup=True, **_kwargs):
+        backup = path.with_name(f".bak.{path.name}")
+        backup.write_bytes(path.read_bytes())
+        path.write_bytes(("normalized-" + path.name).encode("utf-8"))
+        return orientation_module.NormalizationResult(changed=True, rotation=90, backup_path=backup)
+
+    monkeypatch.setattr(orientation_module, "ffprobe_video", fake_probe)
+    monkeypatch.setattr(orientation_module, "normalize_video_orientation_in_place", fake_normalize)
+    monkeypatch.setattr(media_module, "ffprobe_video", fake_probe)
+    monkeypatch.setattr(media_module, "normalize_video_orientation_in_place", fake_normalize)
+
+    response = client.post(
+        f"/api/projects/{project_name}/media/normalize-orientation",
+        json={"dry_run": False},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["changed"]) == 2
+    assert not payload["failed"]
+
+    assert not old_metadata.exists()
+    assert not old_thumbnail.exists()
+
 def test_normalize_orientation_all_projects_dry_run(client: TestClient, env_settings: Path, monkeypatch) -> None:
     project_one = _create_project(client)
     project_two = client.post("/api/projects", json={"name": "demo-two"}).json()["name"]

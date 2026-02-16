@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageOps
@@ -160,6 +160,19 @@ def _should_remove_metadata(
     if not paths:
         return True
     return paths.issubset(delete_paths)
+
+
+def _remove_sha_path(sha_to_paths: dict[str, set[str]], sha: str, relative_path: str) -> None:
+    paths = sha_to_paths.get(sha)
+    if not paths:
+        return
+    paths.discard(relative_path)
+    if not paths:
+        sha_to_paths.pop(sha, None)
+
+
+def _add_sha_path(sha_to_paths: dict[str, set[str]], sha: str, relative_path: str) -> None:
+    sha_to_paths.setdefault(sha, set()).add(relative_path)
 
 
 def _build_thumbnail_url(project: str, sha256: str, source: str | None) -> str:
@@ -952,8 +965,9 @@ def _normalize_orientation_for_project(
             continue
 
         if previous_sha and previous_sha != new_sha:
-            delete_targets = {relative_path}
-            if _should_remove_metadata(previous_sha, delete_targets, sha_to_paths):
+            _remove_sha_path(sha_to_paths, previous_sha, relative_path)
+            _add_sha_path(sha_to_paths, new_sha, relative_path)
+            if previous_sha not in sha_to_paths:
                 remove_metadata(resolved.root, previous_sha)
                 thumbnail_path(resolved.root, previous_sha).unlink(missing_ok=True)
 
@@ -1020,7 +1034,7 @@ async def normalize_orientation(
 async def normalize_orientation_get(
     project_name: str,
     dry_run: bool = True,
-    limit: int | None = None,
+    limit: int | None = Query(default=None, ge=1),
     source: str | None = None,
 ):
     """Normalize video orientation metadata in place for a project (GET fallback).
@@ -1111,7 +1125,7 @@ async def normalize_orientation_all(
 @global_media_router.get("/normalize-orientation")
 async def normalize_orientation_all_get(
     dry_run: bool = True,
-    limit: int | None = None,
+    limit: int | None = Query(default=None, ge=1),
     source: str | None = None,
 ):
     """Normalize orientation across all projects in a source (GET fallback).

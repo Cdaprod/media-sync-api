@@ -719,3 +719,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-03)
 - Reindex now runs orientation normalization for rotated videos before hashing/index upserts, keeping manifest/index SHA values aligned with post-normalized bytes while preserving temp-artifact skipping.
+
+### Latest Implementation Notes (2025-07-04)
+- Normalize-orientation GET endpoints now enforce `limit>=1` at query parsing, and batch normalization now updates in-memory sha→path tracking so shared-old-sha metadata/thumbnail sidecars are cleaned up once orphaned.
