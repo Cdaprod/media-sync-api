@@ -1192,6 +1192,48 @@
     }
     .context-menu button:hover{ background: rgba(255,255,255,0.08); }
     .context-menu .muted{ color: var(--muted); cursor: default; }
+
+    /* Modal */
+    .modal-backdrop{
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8,12,22,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+      z-index: 120;
+      padding: 16px;
+    }
+    .modal-backdrop.open{
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card{
+      width: min(520px, 94vw);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(13,18,32,0.96);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    .modal-card h3{
+      margin: 0 0 6px 0;
+      font-size: 16px;
+    }
+    .modal-card p{
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .modal-actions{
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 
@@ -1270,7 +1312,7 @@
 
             <div class="pillbar">
               <button id="refreshBtn" class="btn" type="button">↻ Refresh</button>
-              <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
+                            <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
               <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
               <button id="deleteSelBtn" class="btn bad" type="button" disabled>🗑 Delete Selected</button>
               <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
@@ -1539,9 +1581,13 @@
     }
 
     function escapeHtml(s){
-      return String(s ?? '')
-        .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
-        .replaceAll('"','&quot;').replaceAll("'","&#039;");
+      const value = s === null || s === undefined ? '' : String(s);
+      return value
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#039;');
     }
 
     function setContentLoading(active){
@@ -2937,6 +2983,8 @@
       updateSelectionUI();
     }
 
+
+
     // -------------------------
     // Renderers
     // -------------------------
@@ -3276,6 +3324,8 @@
         toast('bad','Move', e.message);
       }
     }
+
+
 
     async function sendToResolve(){
       const p = state.activeProject;
@@ -3623,6 +3673,7 @@
       el('selTagInput').value = '';
       updateTagButtons();
     });
+
     el('selMoveSubmit').addEventListener('click', async () => {
       const select = el('selMoveTarget');
       const value = select?.value || '';

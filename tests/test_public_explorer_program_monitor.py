@@ -67,6 +67,7 @@ def test_explorer_topbar_intent_controller():
     assert 'wireDropdownIntents' in html
 
 
+
 def test_explorer_context_menu_and_drag_assist():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert 'context-menu' in html
