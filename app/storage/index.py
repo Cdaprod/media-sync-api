@@ -91,6 +91,19 @@ def remove_entries(project_path: Path, relative_paths: Iterable[str]) -> Dict[st
     return index
 
 
+def update_file_entry(project_path: Path, relative_path: str, updates: Dict[str, Any]) -> Dict[str, Any] | None:
+    """Update a single index entry matching relative_path with provided fields."""
+
+    index = load_index(project_path)
+    entries: List[Dict[str, Any]] = index.get("files", [])
+    for entry in entries:
+        if entry.get("relative_path") == relative_path:
+            entry.update(updates)
+            save_index(project_path, index)
+            return entry
+    return None
+
+
 def append_event(project_path: Path, event: str, payload: Dict[str, Any]) -> None:
     events_path = project_path / EVENTS_PATH
     events_path.parent.mkdir(parents=True, exist_ok=True)
