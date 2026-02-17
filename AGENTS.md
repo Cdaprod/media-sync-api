@@ -686,3 +686,42 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-06-22)
 - Sidebar section headers now stick to the top of the sidebar scroll region (no topbar offset) so the Projects header sits flush above the chips.
+
+### Latest Implementation Notes (2025-06-23)
+- Added in-place orientation normalization for rotated videos via `POST /api/projects/{project}/media/normalize-orientation` (dry-run supported). The flow uses ffprobe/ffmpeg, updates existing index + manifest rows without new assets, and cleans up old sha256 metadata/thumbnail sidecars when no longer referenced. Static explorers now include a Normalize Orientation action in their top-level controls.
+
+### Latest Implementation Notes (2025-06-24)
+- Reindexing and media listing now skip temporary artifacts (`.tmp.*`, `.bak.*`, `.lock`) so orientation normalization temp files are never indexed and normalize runs ignore temp entries instead of reporting missing_on_disk.
+
+### Latest Implementation Notes (2025-06-25)
+- Added a global orientation normalization endpoint at `/api/media/normalize-orientation` (all enabled sources by default) and updated the explorer UI to run normalization from the All Projects view with an in-UI modal instead of the browser confirm dialog.
+
+### Latest Implementation Notes (2025-06-26)
+- Explorer normalize-orientation flow avoids nullish coalescing in client JS to keep the All Projects boot path compatible with older Safari builds (prevents the projects/sources list from failing to render).
+
+### Latest Implementation Notes (2025-06-27)
+- Explorer HTML escaping now avoids the `??` operator to prevent syntax errors on older Safari builds that blocked project/source rendering.
+
+### Latest Implementation Notes (2025-06-28)
+- Explorer HTML escaping now uses regex replacements instead of `replaceAll` to keep the static explorer compatible with older Safari builds.
+
+### Latest Implementation Notes (2025-06-29)
+- Orientation normalization endpoints now accept GET fallbacks (query-driven dry_run) and the static explorers retry normalization requests via GET when POST returns 405.
+
+### Latest Implementation Notes (2025-06-30)
+- Explorer now falls back to the default API port (8787) if same-origin source/project fetches fail, ensuring projects/media still load when the UI is served from another port.
+
+### Latest Implementation Notes (2025-07-01)
+- Explorer boot now retries source/project loads once before rendering media, and normalization requests use the shared API fetch helper for POST/GET fallback handling.
+
+### Latest Implementation Notes (2025-07-02)
+- Reverted explorer-side orientation normalization controls and API-port fallback/retry boot logic; explorer boot again relies on direct same-origin source/project/media loading for stability.
+
+### Latest Implementation Notes (2025-07-03)
+- Reindex now runs orientation normalization for rotated videos before hashing/index upserts, keeping manifest/index SHA values aligned with post-normalized bytes while preserving temp-artifact skipping.
+
+### Latest Implementation Notes (2025-07-04)
+- Normalize-orientation GET endpoints now enforce `limit>=1` at query parsing, and batch normalization now updates in-memory sha→path tracking so shared-old-sha metadata/thumbnail sidecars are cleaned up once orphaned.
+
+### Latest Implementation Notes (2025-07-05)
+- Added `POST /api/projects/{project}/media/reconcile` to classify origin, detect display-matrix rotation, plan/apply canonical renames, and persist alias/origin metadata while reusing reindex orientation normalization.
