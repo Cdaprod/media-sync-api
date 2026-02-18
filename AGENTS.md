@@ -729,3 +729,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-07-06)
 - Project reconcile now avoids running reindex for `dry_run=true` requests and only allows reindex-time video normalization when `normalize_orientation=true` on apply runs.
 - Reindex metadata cleanup now tracks in-index sha reference counts so shared sha sidecars are only removed when the last referencing path is gone.
+
+### Latest Implementation Notes (2025-07-07)
+- Reindex sha-sidecar cleanup now uses a dedicated refcount decrement helper so shared metadata removal logic is centralized and consistently applied for hash changes and missing-path cleanup.
+- Reindex shared-sha regression coverage now verifies both behaviors: sidecar stays while one duplicate remains and is removed after the last duplicate changes.

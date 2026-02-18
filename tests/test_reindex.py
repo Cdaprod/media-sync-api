@@ -148,6 +148,13 @@ def test_reindex_preserves_shared_sha_metadata_when_one_path_changes(client, env
     dup_b = next(entry for entry in refreshed["files"] if entry["relative_path"] == "ingest/originals/dup-b.mov")
     assert dup_b["sha256"] == sha
 
+    file_two.write_bytes(b"changed-bytes-too")
+    reindex_final = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_final.status_code == 200
+
+    # Once no entries reference the old sha, its sidecar should be removed.
+    assert not sidecar.exists()
+
 def test_root_reindex_scans_all_sources(client, env_settings: Path):
     primary = client.post("/api/projects", json={"name": "bulk-primary"})
     assert primary.status_code == 201

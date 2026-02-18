@@ -104,9 +104,7 @@ def reindex_project(project_path: Path, *, normalize_videos: bool = True) -> Dic
                         "indexed_at": datetime.now(timezone.utc).isoformat(),
                     },
                 )
-                if previous_sha:
-                    sha_ref_counts[previous_sha] = max(sha_ref_counts.get(previous_sha, 0) - 1, 0)
-                if previous_sha and sha_ref_counts.get(previous_sha, 0) == 0:
+                if previous_sha and not _decrement_sha_refcount(sha_ref_counts, previous_sha):
                     remove_metadata(project_path, previous_sha)
             continue
         entry = {
@@ -128,10 +126,8 @@ def reindex_project(project_path: Path, *, normalize_videos: bool = True) -> Dic
                 sha = entry.get("sha256")
                 if sha and db_records.get(sha) == missing:
                     remove_file_record(db_path, sha, missing)
-                if sha:
-                    sha_ref_counts[sha] = max(sha_ref_counts.get(sha, 0) - 1, 0)
-                    if sha_ref_counts.get(sha, 0) == 0:
-                        remove_metadata(project_path, sha)
+                if sha and not _decrement_sha_refcount(sha_ref_counts, sha):
+                    remove_metadata(project_path, sha)
         remove_entries(project_path, missing_paths)
 
     return {
@@ -145,6 +141,16 @@ def reindex_project(project_path: Path, *, normalize_videos: bool = True) -> Dic
     }
 
 
+
+
+def _decrement_sha_refcount(sha_ref_counts: dict[str, int], sha: str | None) -> bool:
+    """Decrease a sha256 reference count and report whether references remain."""
+
+    if not sha:
+        return False
+    updated = max(sha_ref_counts.get(sha, 0) - 1, 0)
+    sha_ref_counts[sha] = updated
+    return updated > 0
 def _is_video_media(path: Path) -> bool:
     return path.suffix.lower() in VIDEO_EXTENSIONS
 
