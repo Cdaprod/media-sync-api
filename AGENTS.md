@@ -725,3 +725,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-05)
 - Added `POST /api/projects/{project}/media/reconcile` to classify origin, detect display-matrix rotation, plan/apply canonical renames, and persist alias/origin metadata while reusing reindex orientation normalization.
+
+### Latest Implementation Notes (2025-07-06)
+- Project reconcile now avoids running reindex for `dry_run=true` requests and only allows reindex-time video normalization when `normalize_orientation=true` on apply runs.
+- Reindex metadata cleanup now tracks in-index sha reference counts so shared sha sidecars are only removed when the last referencing path is gone.

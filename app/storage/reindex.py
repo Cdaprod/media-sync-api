@@ -31,8 +31,13 @@ ALLOWED_MEDIA_EXTENSIONS = {
 }
 
 
-def reindex_project(project_path: Path) -> Dict[str, Any]:
-    """Re-scan project files and ensure hashes and index entries exist."""
+def reindex_project(project_path: Path, *, normalize_videos: bool = True) -> Dict[str, Any]:
+    """Re-scan project files and ensure hashes and index entries exist.
+
+    Args:
+        project_path: Root project path to reconcile.
+        normalize_videos: When true, rotated videos are normalized in place before hashing.
+    """
 
     ingest_path = project_path / INGEST_DIR
     ingest_path.mkdir(parents=True, exist_ok=True)
@@ -45,6 +50,11 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
         for entry in existing_index.get("files", [])
         if isinstance(entry.get("relative_path"), str)
     }
+    sha_ref_counts: dict[str, int] = {}
+    for entry in existing_entries.values():
+        sha = entry.get("sha256")
+        if isinstance(sha, str) and sha:
+            sha_ref_counts[sha] = sha_ref_counts.get(sha, 0) + 1
     existing_paths = {entry.get("relative_path") for entry in existing_index.get("files", [])}
     relocated = _relocate_misplaced_media(project_path, ingest_path)
 
@@ -59,7 +69,7 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
         if not _is_supported_media(file_path):
             skipped_unsupported += 1
             continue
-        if _is_video_media(file_path):
+        if normalize_videos and _is_video_media(file_path):
             changed = _maybe_normalize_for_reindex(file_path)
             if changed is True:
                 normalized += 1
@@ -95,6 +105,8 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
                     },
                 )
                 if previous_sha:
+                    sha_ref_counts[previous_sha] = max(sha_ref_counts.get(previous_sha, 0) - 1, 0)
+                if previous_sha and sha_ref_counts.get(previous_sha, 0) == 0:
                     remove_metadata(project_path, previous_sha)
             continue
         entry = {
@@ -117,7 +129,9 @@ def reindex_project(project_path: Path) -> Dict[str, Any]:
                 if sha and db_records.get(sha) == missing:
                     remove_file_record(db_path, sha, missing)
                 if sha:
-                    remove_metadata(project_path, sha)
+                    sha_ref_counts[sha] = max(sha_ref_counts.get(sha, 0) - 1, 0)
+                    if sha_ref_counts.get(sha, 0) == 0:
+                        remove_metadata(project_path, sha)
         remove_entries(project_path, missing_paths)
 
     return {

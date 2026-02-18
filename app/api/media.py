@@ -1392,8 +1392,24 @@ async def reconcile_project_media(
     """
 
     resolved = _require_source_and_project(project_name, source)
-    reindex_result = reindex_project(resolved.root)
-    index = load_index(resolved.root)
+
+    if payload.dry_run:
+        reindex_result = {
+            "indexed": 0,
+            "files": [],
+            "removed": 0,
+            "relocated": 0,
+            "skipped_unsupported": 0,
+            "normalized": 0,
+            "normalization_failed": 0,
+        }
+        index = load_index(resolved.root)
+    else:
+        reindex_result = reindex_project(
+            resolved.root,
+            normalize_videos=payload.normalize_orientation,
+        )
+        index = load_index(resolved.root)
     entries = [entry for entry in index.get("files", []) if isinstance(entry.get("relative_path"), str)]
     if payload.limit:
         entries = entries[: payload.limit]
@@ -1465,7 +1481,10 @@ async def reconcile_project_media(
                 "normalized": reindex_result.get("normalized", 0),
             },
         )
-        reindex_result = reindex_project(resolved.root)
+        reindex_result = reindex_project(
+            resolved.root,
+            normalize_videos=payload.normalize_orientation,
+        )
 
     return {
         "status": "ok",

@@ -114,6 +114,40 @@ def test_reindex_normalizes_rotated_video_before_hashing(client, env_settings: P
     assert video.read_bytes() == b"after-normalize"
 
 
+
+def test_reindex_preserves_shared_sha_metadata_when_one_path_changes(client, env_settings: Path):
+    created = client.post("/api/projects", json={"name": "shared-sha"})
+    assert created.status_code == 201
+    project_name = created.json()["name"]
+
+    project_dir = env_settings / project_name
+    ingest_dir = project_dir / "ingest" / "originals"
+    ingest_dir.mkdir(parents=True, exist_ok=True)
+    file_one = ingest_dir / "dup-a.mov"
+    file_two = ingest_dir / "dup-b.mov"
+    file_one.write_bytes(b"same-bytes")
+    file_two.write_bytes(b"same-bytes")
+
+    reindex_response = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_response.status_code == 200
+
+    index_data = json.loads((project_dir / "index.json").read_text())
+    sha = next(entry["sha256"] for entry in index_data["files"] if entry["relative_path"] == "ingest/originals/dup-a.mov")
+    sidecar = project_dir / "ingest" / "_metadata" / f"{sha}.json"
+    assert sidecar.exists()
+
+    file_one.write_bytes(b"changed-bytes")
+
+    reindex_again = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_again.status_code == 200
+
+    # dup-b still references the original sha, so its metadata sidecar must remain.
+    assert sidecar.exists()
+
+    refreshed = json.loads((project_dir / "index.json").read_text())
+    dup_b = next(entry for entry in refreshed["files"] if entry["relative_path"] == "ingest/originals/dup-b.mov")
+    assert dup_b["sha256"] == sha
+
 def test_root_reindex_scans_all_sources(client, env_settings: Path):
     primary = client.post("/api/projects", json={"name": "bulk-primary"})
     assert primary.status_code == 201

@@ -429,6 +429,46 @@ def test_reconcile_media_dry_run_classifies_and_plans_rename(client: TestClient,
     assert action["normalize_planned"] is True
 
 
+
+
+def test_reconcile_media_dry_run_does_not_mutate_rotated_media(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "rotate-on-reindex.mov"
+    media_path.write_bytes(b"before-rotation")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+    import app.storage.orientation as orientation_module
+
+    def fake_probe(path, **_kwargs):
+        data = path.read_bytes()
+        rotation = 90 if data == b"before-rotation" else 0
+        return orientation_module.ProbeVideo(rotation=rotation, width=1920, height=1080, codec="h264")
+
+    def fake_normalize(path, **_kwargs):
+        path.write_bytes(b"after-rotation")
+        return orientation_module.NormalizationResult(changed=True, rotation=90, backup_path=None)
+
+    fake_payload = {
+        "format": {"tags": {"creation_time": "2026-01-17T18:57:14Z"}},
+        "streams": [{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 90}]}],
+    }
+
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", lambda _path: fake_payload)
+    monkeypatch.setattr(media_module, "ffprobe_video", fake_probe)
+    monkeypatch.setattr(media_module, "normalize_video_orientation_in_place", fake_normalize)
+
+    response = client.post(
+        f"/api/projects/{project_name}/media/reconcile",
+        json={"dry_run": True, "normalize_orientation": True, "rename_canonical": True},
+    )
+    assert response.status_code == 200
+    assert media_path.read_bytes() == b"before-rotation"
+
 def test_reconcile_media_apply_renames_and_updates_index(client: TestClient, env_settings: Path, monkeypatch) -> None:
     project_name = _create_project(client)
     ingest = env_settings / project_name / "ingest" / "originals"
