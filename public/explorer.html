@@ -3430,18 +3430,45 @@
         ['Hash', item.sha256 || item.hash || ''],
         ['Created', item.created_at || item.createdAt || ''],
         ['Modified', item.updated_at || item.updatedAt || ''],
-        ['Duration', item.duration ? `${item.duration}s` : ''],
-        ['Resolution', (item.width && item.height) ? `${item.width}×${item.height}` : ''],
-        ['Duration (facts)', item.duration ? `${item.duration}s` : 'pending'],
-        ['FPS (facts)', item.fps || 'pending'],
-        ['Codec (facts)', item.codec || 'pending'],
-        ['Audio (facts)', item.audio_channels ? `${item.audio_channels}ch` : 'pending'],
+        ['Duration', item.duration ? `${item.duration}s` : 'unknown'],
+        ['Resolution', (item.width && item.height) ? `${item.width}×${item.height}` : 'unknown'],
+        ['FPS', item.fps || 'unknown'],
+        ['Video codec', item.codec || 'unknown'],
+        ['Audio codec', item.audio_codec || 'unknown'],
+        ['Audio channels', item.audio_channels ? `${item.audio_channels}ch` : 'unknown'],
       ].filter(([_, v]) => String(v || '').trim().length > 0);
 
       kv.innerHTML = rows.map(([k,v]) => `
         <div class="k">${escapeHtml(k)}</div>
         <div class="v">${escapeHtml(v)}</div>
       `).join('');
+
+      const relPath = item.relative_path || '';
+      const factProject = activeProjectName || item.project_name || '';
+      if (factProject && relPath){
+        const factSource = activeSource || item.project_source || '';
+        const sourceQuery = factSource ? `&source=${encodeURIComponent(factSource)}` : '';
+        const factsUrl = `${API}/api/media/facts?project=${encodeURIComponent(factProject)}&relative_path=${encodeURIComponent(relPath)}${sourceQuery}`;
+        fetch(factsUrl)
+          .then((response) => response.ok ? response.json() : null)
+          .then((payload) => {
+            if (!payload || !payload.facts) return;
+            const facts = payload.facts;
+            const factRows = [
+              ['Duration', typeof facts.duration_s === 'number' ? `${facts.duration_s.toFixed(3)}s` : 'unknown'],
+              ['Resolution', (facts.width && facts.height) ? `${facts.width}×${facts.height}` : 'unknown'],
+              ['FPS', typeof facts.fps === 'number' ? String(facts.fps) : 'unknown'],
+              ['Video codec', facts.video_codec || 'unknown'],
+              ['Audio codec', facts.audio_codec || 'unknown'],
+              ['Audio channels', facts.audio_channels ? `${facts.audio_channels}ch` : 'unknown'],
+            ];
+            kv.innerHTML = factRows.map(([k,v]) => `
+              <div class="k">${escapeHtml(k)}</div>
+              <div class="v">${escapeHtml(v)}</div>
+            `).join('') + kv.innerHTML;
+          })
+          .catch(() => {});
+      }
 
       const sha = item.sha256 || item.hash || '';
       if (/^[a-fA-F0-9]{64}$/.test(String(sha))){

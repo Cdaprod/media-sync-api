@@ -1513,6 +1513,14 @@ def _normalize_registry_fallback_path(value: str) -> tuple[str, str, str | None]
                 break
 
     cleaned = unquote(path_candidate).strip().lstrip("/")
+    if "?" in cleaned:
+        cleaned, query = cleaned.split("?", 1)
+        if source_name is None:
+            for chunk in query.split("&"):
+                key, _, raw_value = chunk.partition("=")
+                if key == "source" and raw_value:
+                    source_name = unquote(raw_value)
+                    break
     if cleaned.startswith("media/"):
         cleaned = cleaned[len("media/") :]
 
@@ -1548,6 +1556,93 @@ def _lookup_registry_by_path(project_name: str, relative_path: str, source_name:
             if record:
                 return record
     return None
+
+
+def _parse_frame_rate(value: Any) -> float | None:
+    text = str(value or "").strip()
+    if not text or text == "0/0":
+        return None
+    if "/" in text:
+        num_raw, den_raw = text.split("/", 1)
+        try:
+            num = float(num_raw)
+            den = float(den_raw)
+        except ValueError:
+            return None
+        if den == 0:
+            return None
+        return num / den
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _extract_media_facts(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "duration_s": None,
+            "width": None,
+            "height": None,
+            "fps": None,
+            "video_codec": None,
+            "audio_codec": None,
+            "audio_channels": None,
+            "has_audio": None,
+        }
+
+    duration_s: float | None = None
+    fmt = payload.get("format") if isinstance(payload.get("format"), dict) else {}
+    duration_raw = fmt.get("duration")
+    if duration_raw is not None:
+        try:
+            duration_s = float(duration_raw)
+        except (TypeError, ValueError):
+            duration_s = None
+
+    streams = payload.get("streams") if isinstance(payload.get("streams"), list) else []
+    video_stream = next((s for s in streams if isinstance(s, dict) and s.get("codec_type") == "video"), None)
+    audio_stream = next((s for s in streams if isinstance(s, dict) and s.get("codec_type") == "audio"), None)
+
+    fps = None
+    if isinstance(video_stream, dict):
+        fps = _parse_frame_rate(video_stream.get("avg_frame_rate"))
+        if fps is None:
+            fps = _parse_frame_rate(video_stream.get("r_frame_rate"))
+
+    return {
+        "duration_s": duration_s,
+        "width": int(video_stream.get("width")) if isinstance(video_stream, dict) and video_stream.get("width") else None,
+        "height": int(video_stream.get("height")) if isinstance(video_stream, dict) and video_stream.get("height") else None,
+        "fps": round(fps, 3) if isinstance(fps, float) else None,
+        "video_codec": str(video_stream.get("codec_name")) if isinstance(video_stream, dict) and video_stream.get("codec_name") else None,
+        "audio_codec": str(audio_stream.get("codec_name")) if isinstance(audio_stream, dict) and audio_stream.get("codec_name") else None,
+        "audio_channels": int(audio_stream.get("channels")) if isinstance(audio_stream, dict) and audio_stream.get("channels") else None,
+        "has_audio": isinstance(audio_stream, dict),
+    }
+
+
+@global_media_router.get("/facts")
+async def get_media_facts(project: str, relative_path: str, source: str | None = None):
+    """Return best-effort ffprobe facts for a media asset.
+
+    Example:
+        curl "http://localhost:8787/api/media/facts?project=P1-demo&relative_path=ingest/originals/clip.mov"
+    """
+
+    resolved = _require_source_and_project(project, source)
+    safe_relative = _validate_relative_media_path(relative_path)
+    target = (resolved.root / safe_relative).resolve()
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Media not found")
+    payload = _read_ffprobe_payload(target)
+    return {
+        "project": resolved.name,
+        "source": resolved.source_name,
+        "relative_path": safe_relative,
+        "facts": _extract_media_facts(payload),
+        "instructions": "Facts are best-effort ffprobe values and may be unknown for unsupported assets.",
+    }
 
 
 @router.get("/{project_name}/media/query")

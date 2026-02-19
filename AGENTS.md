@@ -779,3 +779,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Program Monitor handoff payload now includes richer `selected_assets` metadata (`sha256`, per-item project/source/relative_path/stream_url`) while preserving legacy node URL payload compatibility.
 - Registry batch resolve now accepts `fallback_paths` entries containing stream URLs or `project/relative_path` values and resolves them to full registry records for retroactive legacy node upgrades.
 - Explorer inspector preview now appends a registry section (asset_id, canonical name, origin, creation, orientation, aliases, stream/download) using `/api/registry/{sha256}` when hash data is present.
+
+### Latest Implementation Notes (2026-02-19, media facts + resolve hardening)
+- Added `GET /api/media/facts` for best-effort ffprobe metadata (duration, dimensions, fps, codecs, audio channels) so explorer previews can show real media facts without blocking UI on failures.
+- Registry fallback path normalization now explicitly supports full stream URLs, `/media/<project>/<relative>` paths, and `project/relative` strings for retroactive legacy node resolution.
+- Explorer inspector now fetches media facts from `/api/media/facts` and renders unknown-safe values when probe data is unavailable.
