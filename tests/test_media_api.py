@@ -743,3 +743,28 @@ def test_media_query_filters_and_ordering(client: TestClient, env_settings: Path
     paged_payload = paged.json()
     assert len(paged_payload["items"]) == 1
     assert paged_payload["offset"] == 1
+
+
+def test_registry_resolve_supports_fallback_stream_paths(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "legacy.mov"
+    media_path.write_bytes(b"legacy-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    resolved = client.post(
+        "/api/registry/resolve",
+        json={
+            "asset_ids": [],
+            "fallback_paths": {
+                "legacy-node": f"http://example.local/media/{project_name}/ingest/originals/legacy.mov?source=primary"
+            },
+        },
+    )
+    assert resolved.status_code == 200
+    payload = resolved.json()
+    assert "legacy-node" in payload["results"]
+    assert payload["results"]["legacy-node"]["asset_id"].startswith("sha256:")

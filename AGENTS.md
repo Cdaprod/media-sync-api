@@ -773,3 +773,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-02-19, follow-up)
 - Added `GET /api/projects/{project}/media/query` with origin/time window filters plus pagination (`limit`/`offset`) and stable ordering (`creation_time`, then `sha256`) for timeline assembly inventory lookups.
 - Explorer Program Monitor handoff now includes `selected_assets` metadata (`asset_ids`, fallback relative paths, origin hints, creation times) alongside legacy node stream URLs so downstream assemblers can remain sha256-first while keeping backward compatibility.
+
+### Latest Implementation Notes (2026-02-19, all-projects + legacy resolve)
+- Explorer all-projects mode now keeps asset checkboxes and Program Monitor handoff enabled without requiring a project folder selection first.
+- Program Monitor handoff payload now includes richer `selected_assets` metadata (`sha256`, per-item project/source/relative_path/stream_url`) while preserving legacy node URL payload compatibility.
+- Registry batch resolve now accepts `fallback_paths` entries containing stream URLs or `project/relative_path` values and resolves them to full registry records for retroactive legacy node upgrades.
+- Explorer inspector preview now appends a registry section (asset_id, canonical name, origin, creation, orientation, aliases, stream/download) using `/api/registry/{sha256}` when hash data is present.

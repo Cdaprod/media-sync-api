@@ -50,8 +50,16 @@ function buildAssetDescriptorFromCard(cardEl){
   const relative = String(cardEl.dataset.relative || '').trim();
   const origin = String(cardEl.dataset.origin || '').trim() || 'unknown';
   const creationTime = String(cardEl.dataset.creationTime || '').trim() || null;
+  const project = String(cardEl.dataset.project || '').trim() || null;
+  const source = String(cardEl.dataset.source || '').trim() || 'primary';
+  const streamUrl = toAbsoluteUrl(buildStreamUrlFromCard(cardEl));
   return {
     asset_id: /^[A-Fa-f0-9]{64}$/.test(sha) ? `sha256:${sha.toLowerCase()}` : null,
+    sha256: /^[A-Fa-f0-9]{64}$/.test(sha) ? sha.toLowerCase() : null,
+    project,
+    source,
+    relative_path: relative || null,
+    stream_url: streamUrl || null,
     fallback_relative_path: relative || null,
     origin,
     creation_time: creationTime,
@@ -78,9 +86,20 @@ async function openProgramMonitorAndSend(urls, descriptors){
     nodes: urls.map((u) => ({ lines: [u], durationOverride: 'auto' })),
     selected_assets: {
       asset_ids: (descriptors || []).map((item) => item.asset_id).filter(Boolean),
+      sha256: (descriptors || []).map((item) => item.sha256).filter(Boolean),
       fallback_relative_paths: (descriptors || []).map((item) => item.fallback_relative_path).filter(Boolean),
       origins: (descriptors || []).map((item) => item.origin).filter(Boolean),
       creation_times: (descriptors || []).map((item) => item.creation_time).filter(Boolean),
+      items: (descriptors || []).map((item) => ({
+        asset_id: item.asset_id,
+        sha256: item.sha256,
+        project: item.project,
+        source: item.source,
+        relative_path: item.relative_path,
+        stream_url: item.stream_url,
+        origin: item.origin,
+        creation_time: item.creation_time,
+      })),
     },
     meta: {
       sentAt: new Date().toISOString(),

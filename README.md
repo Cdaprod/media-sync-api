@@ -161,6 +161,7 @@ Path alignment for Resolve:
 - `POST /api/projects/{project}/media/reconcile` – classify origin + rotation, plan/apply canonical renames, and persist aliases (`dry_run` + `apply` flags)
 - `GET /api/registry/{sha256}` – authoritative sha256 registry lookup for canonical path/origin/orientation/aliases
 - `POST /api/registry/resolve` – batch registry lookup for `asset_ids` using `sha256:<hash>` identifiers
+  - also supports `fallback_paths` keyed by caller IDs where values are either full stream URLs or `project/relative_path` strings for legacy URL->sha resolution
 - `POST /api/media/normalize-orientation` – normalize rotated videos across all projects (uses all enabled sources when `source` is omitted)
 - `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
 - `GET|POST /reindex` – reconcile every enabled source and project in one sweep
@@ -196,12 +197,23 @@ The explorer “Program Monitor” handoff now sends selected stream nodes plus 
 {
   "selected_assets": {
     "asset_ids": ["sha256:<64hex>"],
+    "sha256": ["<64hex>"],
     "fallback_relative_paths": ["ingest/originals/<name>.mov"],
     "origins": ["obs"],
-    "creation_times": ["2026-01-17T18:57:14+00:00"]
+    "creation_times": ["2026-01-17T18:57:14+00:00"],
+    "items": [{
+      "asset_id": "sha256:<64hex>",
+      "sha256": "<64hex>",
+      "project": "P1-demo",
+      "source": "primary",
+      "relative_path": "ingest/originals/<name>.mov",
+      "stream_url": "http://.../media/P1-demo/ingest/originals/<name>.mov?source=primary"
+    }]
   }
 }
 ```
+
+In all-projects view, checkbox selection now remains enabled and Program Monitor handoff works without first entering a single project folder.
 
 ### Reconcile flag semantics
 - `dry_run=true` (default) is strictly non-mutating (plan only).
