@@ -44,6 +44,20 @@ function buildStreamUrlFromCard(cardEl){
   throw new Error('Could not derive stream URL from selected card.');
 }
 
+function buildAssetDescriptorFromCard(cardEl){
+  if (!cardEl) throw new Error('Missing card element.');
+  const sha = String(cardEl.dataset.sha256 || '').trim();
+  const relative = String(cardEl.dataset.relative || '').trim();
+  const origin = String(cardEl.dataset.origin || '').trim() || 'unknown';
+  const creationTime = String(cardEl.dataset.creationTime || '').trim() || null;
+  return {
+    asset_id: /^[A-Fa-f0-9]{64}$/.test(sha) ? `sha256:${sha.toLowerCase()}` : null,
+    fallback_relative_path: relative || null,
+    origin,
+    creation_time: creationTime,
+  };
+}
+
 function toAbsoluteUrl(url){
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')){
@@ -52,7 +66,7 @@ function toAbsoluteUrl(url){
   return new URL(url, window.location.origin).toString();
 }
 
-async function openProgramMonitorAndSend(urls){
+async function openProgramMonitorAndSend(urls, descriptors){
   const win = window.open(PROGRAM_MONITOR_URL, '_blank');
   if (!win){
     throw new Error('Popup blocked. Allow popups for this site.');
@@ -62,6 +76,12 @@ async function openProgramMonitorAndSend(urls){
     type: IMPORT_TYPE,
     version: 1,
     nodes: urls.map((u) => ({ lines: [u], durationOverride: 'auto' })),
+    selected_assets: {
+      asset_ids: (descriptors || []).map((item) => item.asset_id).filter(Boolean),
+      fallback_relative_paths: (descriptors || []).map((item) => item.fallback_relative_path).filter(Boolean),
+      origins: (descriptors || []).map((item) => item.origin).filter(Boolean),
+      creation_times: (descriptors || []).map((item) => item.creation_time).filter(Boolean),
+    },
     meta: {
       sentAt: new Date().toISOString(),
       from: window.location.origin,
@@ -120,7 +140,7 @@ async function openProgramMonitorAndSend(urls){
 export async function sendSelectedToProgramMonitor(){
   const externalUrls = window.MediaExplorer?.getSelectedStreamUrlsInDomOrder?.();
   if (Array.isArray(externalUrls) && externalUrls.length){
-    await openProgramMonitorAndSend(externalUrls);
+    await openProgramMonitorAndSend(externalUrls, []);
     return;
   }
 
@@ -129,12 +149,13 @@ export async function sendSelectedToProgramMonitor(){
     throw new Error('No items selected.');
   }
 
+  const descriptors = selected.map(buildAssetDescriptorFromCard);
   const urls = selected.map(buildStreamUrlFromCard).map(toAbsoluteUrl).filter(Boolean);
   if (!urls.length){
     throw new Error('No stream URLs found for the selection.');
   }
 
-  await openProgramMonitorAndSend(urls);
+  await openProgramMonitorAndSend(urls, descriptors);
 }
 
 window.ProgramMonitorHandoff = {

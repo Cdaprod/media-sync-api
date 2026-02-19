@@ -769,3 +769,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added authoritative registry endpoints `GET /api/registry/{sha256}` and `POST /api/registry/resolve` so external consumers can resolve canonical path/origin/orientation/aliases from sha256 identity.
 - Reconcile flags now support explicit `apply` semantics: `dry_run=true` is plan-only (no renames/normalization/metadata writes), while `apply=true` (or `dry_run=false`) enables canonical rename + metadata persistence and optional normalization.
 - Canonical filenames now sanitize origin segments for deterministic naming; reconcile renames persist alias history in metadata sidecars and invalidate SHA thumbnails on rename.
+
+### Latest Implementation Notes (2026-02-19, follow-up)
+- Added `GET /api/projects/{project}/media/query` with origin/time window filters plus pagination (`limit`/`offset`) and stable ordering (`creation_time`, then `sha256`) for timeline assembly inventory lookups.
+- Explorer Program Monitor handoff now includes `selected_assets` metadata (`asset_ids`, fallback relative paths, origin hints, creation times) alongside legacy node stream URLs so downstream assemblers can remain sha256-first while keeping backward compatibility.

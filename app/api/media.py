@@ -131,6 +131,17 @@ class RegistryResolveRequest(BaseModel):
     fallback_paths: Dict[str, str] = Field(default_factory=dict)
 
 
+def _parse_iso8601(value: str, field: str) -> datetime:
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {field}; expected ISO8601") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _require_source_and_project(project_name: str, source: str | None) -> _ResolvedProject:
     try:
         name = validate_project_name(project_name)
@@ -1479,6 +1490,77 @@ def _lookup_registry_by_sha(sha: str) -> dict[str, Any] | None:
                 if record:
                     return record
     return None
+
+
+@router.get("/{project_name}/media/query")
+async def query_media_inventory(
+    project_name: str,
+    source: str | None = None,
+    origin: list[str] | None = Query(default=None),
+    created_after: str | None = None,
+    created_before: str | None = None,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
+    """Query project inventory for timeline assembly.
+
+    Example:
+        curl "http://localhost:8787/api/projects/P1-demo/media/query?origin=obs&limit=50"
+    """
+
+    resolved = _require_source_and_project(project_name, source)
+    origin_filter = {item.strip().lower() for item in (origin or []) if isinstance(item, str) and item.strip()}
+    after_dt = _parse_iso8601(created_after, "created_after") if created_after else None
+    before_dt = _parse_iso8601(created_before, "created_before") if created_before else None
+
+    index = load_index(resolved.root)
+    entries = [entry for entry in index.get("files", []) if isinstance(entry, dict)]
+
+    prepared: list[dict[str, Any]] = []
+    for entry in entries:
+        record = _collect_registry_record(resolved.name, resolved.source_name, resolved.root, entry)
+        if not record:
+            continue
+        origin_value = str(record.get("origin", "unknown")).lower()
+        if origin_filter and origin_value not in origin_filter:
+            continue
+        created_raw = record.get("timestamps", {}).get("creation_time")
+        try:
+            created_dt = _parse_iso8601(str(created_raw), "creation_time") if created_raw else datetime.fromtimestamp(0, tz=timezone.utc)
+        except HTTPException:
+            created_dt = datetime.fromtimestamp(0, tz=timezone.utc)
+        if after_dt and created_dt < after_dt:
+            continue
+        if before_dt and created_dt > before_dt:
+            continue
+        prepared.append(
+            {
+                "asset_id": record["asset_id"],
+                "sha256": record["sha256"],
+                "origin": record["origin"],
+                "timestamps": record["timestamps"],
+                "canonical_name": record["canonical_name"],
+                "orientation": record["orientation"],
+                "urls": record["urls"],
+                "relative_path": record["relative_path"],
+            }
+        )
+
+    prepared.sort(key=lambda item: (item.get("timestamps", {}).get("creation_time") or "", item.get("sha256") or ""))
+    window = prepared[offset : offset + limit]
+    next_offset = offset + limit if offset + limit < len(prepared) else None
+
+    return {
+        "project": resolved.name,
+        "source": resolved.source_name,
+        "items": window,
+        "offset": offset,
+        "limit": limit,
+        "next_offset": next_offset,
+        "has_more": next_offset is not None,
+        "total": len(prepared),
+        "instructions": "Use items.asset_id for timeline assembly and /api/registry/resolve for cross-project identity lookups.",
+    }
 
 
 @registry_router.get("/{sha256}")
