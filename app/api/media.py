@@ -57,6 +57,7 @@ logger = logging.getLogger("media_sync_api.media")
 
 router = APIRouter(prefix="/api/projects", tags=["media"])
 global_media_router = APIRouter(prefix="/api/media", tags=["media"])
+registry_router = APIRouter(prefix="/api/registry", tags=["registry"])
 media_router = APIRouter(prefix="/media", tags=["media"])
 thumbnail_router = APIRouter(prefix="/thumbnails", tags=["media"])
 
@@ -119,9 +120,15 @@ class NormalizeOrientationRequest(BaseModel):
 
 class ReconcileMediaRequest(BaseModel):
     dry_run: bool = True
+    apply: bool = False
     limit: int | None = Field(default=None, ge=1)
-    normalize_orientation: bool = True
+    normalize_orientation: bool = False
     rename_canonical: bool = True
+
+
+class RegistryResolveRequest(BaseModel):
+    asset_ids: List[str] = Field(default_factory=list)
+    fallback_paths: Dict[str, str] = Field(default_factory=dict)
 
 
 def _require_source_and_project(project_name: str, source: str | None) -> _ResolvedProject:
@@ -1373,8 +1380,148 @@ def _classify_origin(filename: str, payload: dict[str, Any] | None) -> dict[str,
 
 def _canonical_filename(project_name: str, origin: str, created_at: datetime, sha256: str, extension: str) -> str:
     project_prefix = project_name.split("-", 1)[0]
+    safe_origin = re.sub(r"[^a-z0-9]+", "_", (origin or "unknown").lower()).strip("_") or "unknown"
     ts = created_at.astimezone(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    return f"{project_prefix}_{origin}_{ts}_{sha256[:8]}{extension.lower()}"
+    return f"{project_prefix}_{safe_origin}_{ts}_{sha256[:8]}{extension.lower()}"
+
+
+def _normalize_asset_id(value: str) -> str | None:
+    candidate = (value or "").strip()
+    if candidate.startswith("sha256:"):
+        candidate = candidate.split(":", 1)[1]
+    if THUMBNAIL_SHA_PATTERN.fullmatch(candidate):
+        return candidate.lower()
+    return None
+
+
+def _stable_asset_id(sha256: str) -> str:
+    return f"sha256:{sha256}"
+
+
+def _collect_registry_record(
+    project_name: str,
+    source_name: str,
+    project_root: Path,
+    entry: dict[str, Any],
+) -> dict[str, Any] | None:
+    rel_path = entry.get("relative_path")
+    if not isinstance(rel_path, str):
+        return None
+    try:
+        safe_relative = _validate_relative_media_path(rel_path)
+    except ValueError:
+        return None
+
+    sha = entry.get("sha256")
+    if not isinstance(sha, str) or not THUMBNAIL_SHA_PATTERN.fullmatch(sha):
+        return None
+
+    target = (project_root / safe_relative).resolve()
+    if not target.exists() or not target.is_file():
+        return None
+
+    payload = _read_ffprobe_payload(target)
+    rotation, rotation_source = _detect_rotation_from_ffprobe_payload(payload)
+    created = _extract_creation_timestamp(payload, target)
+    metadata = load_metadata(project_root, sha) or {}
+    aliases = metadata.get("aliases") if isinstance(metadata.get("aliases"), list) else []
+    alias_names = sorted({Path(alias).name for alias in aliases if isinstance(alias, str) and alias.strip()})
+    origin_meta = metadata.get("origin") if isinstance(metadata.get("origin"), dict) else {}
+    origin = origin_meta.get("source") if isinstance(origin_meta.get("source"), str) else _classify_origin(target.name, payload).get("source", "unknown")
+    if origin not in {"nikon_z7", "iphone", "obs", "unknown"}:
+        origin = "unknown"
+
+    return {
+        "sha256": sha,
+        "asset_id": _stable_asset_id(sha),
+        "project": project_name,
+        "source": source_name,
+        "canonical_name": target.name,
+        "relative_path": safe_relative,
+        "ext": target.suffix.lower(),
+        "origin": origin,
+        "timestamps": {
+            "creation_time": created.isoformat(),
+            "best_effort": True,
+        },
+        "orientation": {
+            "rotation": rotation,
+            "normalized": rotation == 0,
+            "detected_from": rotation_source or "none",
+        },
+        "urls": {
+            "stream": _build_stream_url(project_name, safe_relative, source_name),
+            "download": _build_download_url(project_name, safe_relative, source_name),
+        },
+        "aliases": alias_names,
+        "metadata_path": metadata_relpath(project_root, sha) if metadata_path(project_root, sha).exists() else None,
+    }
+
+
+def _lookup_registry_by_sha(sha: str) -> dict[str, Any] | None:
+    settings = get_settings()
+    registry = SourceRegistry(settings.project_root)
+    for source in registry.list_enabled():
+        if not source.root.exists():
+            continue
+        for candidate in source.root.iterdir():
+            if not candidate.is_dir() or candidate.name.startswith("_"):
+                continue
+            try:
+                project_name = validate_project_name(candidate.name)
+            except ValueError:
+                continue
+            index = load_index(candidate)
+            for entry in index.get("files", []):
+                if not isinstance(entry, dict) or entry.get("sha256") != sha:
+                    continue
+                record = _collect_registry_record(project_name, source.name, candidate, entry)
+                if record:
+                    return record
+    return None
+
+
+@registry_router.get("/{sha256}")
+async def get_registry_asset(sha256: str):
+    """Resolve an asset by sha256 identity.
+
+    Example:
+        curl http://localhost:8787/api/registry/0123abcd...deadbeef
+    """
+
+    normalized_sha = _normalize_asset_id(sha256)
+    if not normalized_sha:
+        raise HTTPException(status_code=400, detail="sha256 must be bare 64-char hex")
+    record = _lookup_registry_by_sha(normalized_sha)
+    if not record:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return record
+
+
+@registry_router.post("/resolve")
+async def resolve_registry_assets(payload: RegistryResolveRequest):
+    """Batch-resolve registry entries by sha256 asset ids.
+
+    Example:
+        curl -X POST http://localhost:8787/api/registry/resolve -H 'Content-Type: application/json' \\
+          -d '{"asset_ids":["sha256:<64hex>"]}'
+    """
+
+    results: dict[str, dict[str, Any]] = {}
+    missing: list[str] = []
+    for raw_id in payload.asset_ids:
+        normalized_sha = _normalize_asset_id(raw_id)
+        if not normalized_sha:
+            missing.append(raw_id)
+            continue
+        canonical_id = _stable_asset_id(normalized_sha)
+        record = _lookup_registry_by_sha(normalized_sha)
+        if not record:
+            missing.append(canonical_id)
+            continue
+        results[canonical_id] = record
+
+    return {"results": results, "missing": missing}
 
 
 @router.post("/{project_name}/media/reconcile")
@@ -1393,6 +1540,12 @@ async def reconcile_project_media(
 
     resolved = _require_source_and_project(project_name, source)
 
+    if payload.dry_run and payload.apply:
+        raise HTTPException(status_code=400, detail="dry_run=true cannot be combined with apply=true")
+
+    mutation_allowed = payload.apply or not payload.dry_run
+    normalize_allowed = mutation_allowed and payload.normalize_orientation
+
     if payload.dry_run:
         reindex_result = {
             "indexed": 0,
@@ -1407,7 +1560,7 @@ async def reconcile_project_media(
     else:
         reindex_result = reindex_project(
             resolved.root,
-            normalize_videos=payload.normalize_orientation,
+            normalize_videos=normalize_allowed,
         )
         index = load_index(resolved.root)
     entries = [entry for entry in index.get("files", []) if isinstance(entry.get("relative_path"), str)]
@@ -1440,7 +1593,7 @@ async def reconcile_project_media(
         metadata.setdefault("aliases", [])
         if rel_path not in metadata["aliases"]:
             metadata["aliases"].append(rel_path)
-        if not payload.dry_run and entry.get("sha256"):
+        if mutation_allowed and entry.get("sha256"):
             sidecar = metadata_path(resolved.root, entry["sha256"])
             if sidecar.exists():
                 sidecar.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
@@ -1456,7 +1609,7 @@ async def reconcile_project_media(
         }
         plan.append(action)
 
-        if payload.dry_run or not payload.rename_canonical or canonical_rel == rel_path:
+        if not mutation_allowed or not payload.rename_canonical or canonical_rel == rel_path:
             continue
 
         target = (resolved.root / canonical_rel).resolve()
@@ -1468,10 +1621,20 @@ async def reconcile_project_media(
         if sha:
             remove_file_record(_manifest_db_path(resolved.root), sha, rel_path)
             record_file_hash(_manifest_db_path(resolved.root), sha, new_rel)
+            thumbnail_path(resolved.root, sha).unlink(missing_ok=True)
+            refreshed = load_metadata(resolved.root, sha) or metadata
+            refreshed.setdefault("aliases", [])
+            if rel_path not in refreshed["aliases"]:
+                refreshed["aliases"].append(rel_path)
+            refreshed["relative"] = new_rel
+            refreshed["canonical_name"] = Path(new_rel).name
+            sidecar = metadata_path(resolved.root, sha)
+            if sidecar.exists():
+                sidecar.write_text(json.dumps(refreshed, indent=2, sort_keys=True), encoding="utf-8")
         update_file_entry(resolved.root, rel_path, {"relative_path": new_rel})
         renamed.append({"from": rel_path, "to": new_rel})
 
-    if not payload.dry_run and renamed:
+    if mutation_allowed and renamed:
         append_event(
             resolved.root,
             "media_reconciled",
@@ -1483,7 +1646,7 @@ async def reconcile_project_media(
         )
         reindex_result = reindex_project(
             resolved.root,
-            normalize_videos=payload.normalize_orientation,
+            normalize_videos=normalize_allowed,
         )
 
     return {
@@ -1491,8 +1654,9 @@ async def reconcile_project_media(
         "project": resolved.name,
         "source": resolved.source_name,
         "dry_run": payload.dry_run,
+        "apply": mutation_allowed,
         "reindex": reindex_result,
         "actions": plan,
         "renamed": renamed,
-        "instructions": "Run with dry_run=false to apply canonical renames and metadata updates.",
+        "instructions": "Use dry_run=true for planning only. Set apply=true (or dry_run=false) to persist renames and optional normalization.",
     }
