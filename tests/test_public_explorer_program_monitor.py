@@ -46,6 +46,7 @@ def test_all_projects_selection_and_registry_preview_wiring_present():
     assert "const canSelect = !!state.activeProject || allMode;" in html
     assert "/api/registry/" in html
     assert "Registry Asset ID" in html
+    assert "/api/media/facts" in html
 
 
 def test_explorer_grid_responsive_rules_and_orientation_hooks():

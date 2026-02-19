@@ -768,3 +768,64 @@ def test_registry_resolve_supports_fallback_stream_paths(client: TestClient, env
     payload = resolved.json()
     assert "legacy-node" in payload["results"]
     assert payload["results"]["legacy-node"]["asset_id"].startswith("sha256:")
+
+
+def test_registry_resolve_supports_media_path_and_project_relative(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "fallback.mov"
+    media_path.write_bytes(b"fallback")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    response = client.post(
+        "/api/registry/resolve",
+        json={
+            "asset_ids": [],
+            "fallback_paths": {
+                "media-path": f"/media/{project_name}/ingest/originals/fallback.mov?source=primary",
+                "project-relative": f"{project_name}/ingest/originals/fallback.mov",
+            },
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "media-path" in payload["results"]
+    assert "project-relative" in payload["results"]
+    assert payload["results"]["media-path"]["asset_id"].startswith("sha256:")
+
+
+def test_media_facts_endpoint_returns_probe_payload(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "facts.mov"
+    media_path.write_bytes(b"facts")
+
+    import app.api.media as media_module
+
+    monkeypatch.setattr(
+        media_module,
+        "_read_ffprobe_payload",
+        lambda _path: {
+            "format": {"duration": "12.5"},
+            "streams": [
+                {"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080, "avg_frame_rate": "30000/1001"},
+                {"codec_type": "audio", "codec_name": "aac", "channels": 2},
+            ],
+        },
+    )
+
+    response = client.get(
+        f"/api/media/facts?project={project_name}&relative_path=ingest/originals/facts.mov"
+    )
+    assert response.status_code == 200
+    facts = response.json()["facts"]
+    assert facts["duration_s"] == 12.5
+    assert facts["width"] == 1920
+    assert facts["height"] == 1080
+    assert facts["video_codec"] == "h264"
+    assert facts["audio_codec"] == "aac"
+    assert facts["audio_channels"] == 2

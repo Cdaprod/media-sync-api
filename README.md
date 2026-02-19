@@ -150,6 +150,7 @@ Path alignment for Resolve:
 - `GET /api/projects/{project}` – fetch project index
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
 - `GET /api/projects/{project}/media/query` – filtered inventory query for timeline assembly (`origin`, `created_after`, `created_before`, `limit`, `offset`)
+- `GET /api/media/facts` – best-effort ffprobe facts lookup (`project`, `relative_path`, optional `source`) for preview/inspector media details
 - `GET /thumbnails/{project}/{sha256}.jpg` – serve (and cache) a generated thumbnail for explorer grids
 - `GET /media/{project}/download/{relative_path}` – download a stored media file with `Content-Disposition: attachment`
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` (or `files[]=...`) with sha256 de-dupe (returns `served.stream_url` + `served.download_url`)
@@ -214,6 +215,13 @@ The explorer “Program Monitor” handoff now sends selected stream nodes plus 
 ```
 
 In all-projects view, checkbox selection now remains enabled and Program Monitor handoff works without first entering a single project folder.
+
+### Media facts example
+```bash
+curl "http://192.168.0.25:8787/api/media/facts?project=P1-demo&relative_path=ingest/originals/clip.mov"
+```
+
+Returns best-effort values (duration, dimensions, fps, codecs, audio channels) and reports `unknown` values in the explorer inspector when probe data is unavailable.
 
 ### Reconcile flag semantics
 - `dry_run=true` (default) is strictly non-mutating (plan only).
