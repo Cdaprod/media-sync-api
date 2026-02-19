@@ -149,6 +149,7 @@ Path alignment for Resolve:
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
+- `GET /api/projects/{project}/media/query` – filtered inventory query for timeline assembly (`origin`, `created_after`, `created_before`, `limit`, `offset`)
 - `GET /thumbnails/{project}/{sha256}.jpg` – serve (and cache) a generated thumbnail for explorer grids
 - `GET /media/{project}/download/{relative_path}` – download a stored media file with `Content-Disposition: attachment`
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` (or `files[]=...`) with sha256 de-dupe (returns `served.stream_url` + `served.download_url`)
@@ -186,6 +187,20 @@ curl -X POST http://192.168.0.25:8787/api/registry/resolve \
     "asset_ids": ["sha256:<64hex-sha256>"],
     "fallback_paths": {}
   }'
+```
+
+### Program Monitor selection payload
+The explorer “Program Monitor” handoff now sends selected stream nodes plus a `selected_assets` block:
+
+```json
+{
+  "selected_assets": {
+    "asset_ids": ["sha256:<64hex>"],
+    "fallback_relative_paths": ["ingest/originals/<name>.mov"],
+    "origins": ["obs"],
+    "creation_times": ["2026-01-17T18:57:14+00:00"]
+  }
+}
 ```
 
 ### Reconcile flag semantics

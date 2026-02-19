@@ -19,6 +19,8 @@ def test_program_monitor_handoff_module_payload_shape():
     assert 'durationOverride' in module_text
     assert 'nodes' in module_text
     assert 'meta' in module_text
+    assert 'selected_assets' in module_text
+    assert 'asset_ids' in module_text
     assert 'new URL(PROGRAM_MONITOR_URL)' in module_text
     assert 'sendCount' in module_text
     assert 'clearInterval' in module_text
@@ -31,6 +33,7 @@ def test_program_monitor_handoff_ordering_and_url_resolution():
     assert 'dataset.streamUrl' in module_text
     assert 'dataset.project' in module_text
     assert 'dataset.relative' in module_text
+    assert 'dataset.sha256' in module_text
     assert '/media/' in module_text
 
 

@@ -3110,6 +3110,9 @@
         if (state.selected.has(it.relative_path)) card.classList.add('selected', 'is-selected');
         card.dataset.streamUrl = it.stream_url || it.streamUrl || '';
         card.dataset.relative = it.relative_path || '';
+        card.dataset.sha256 = it.sha256 || '';
+        card.dataset.origin = it.origin || 'unknown';
+        card.dataset.creationTime = it.created_at || it.uploaded_at || it.indexed_at || '';
         card.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
         card.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         card.dataset.kind = kind;
@@ -3160,6 +3163,9 @@
         if (state.selected.has(it.relative_path)) row.classList.add('selected', 'is-selected');
         row.dataset.streamUrl = it.stream_url || it.streamUrl || '';
         row.dataset.relative = it.relative_path || '';
+        row.dataset.sha256 = it.sha256 || '';
+        row.dataset.origin = it.origin || 'unknown';
+        row.dataset.creationTime = it.created_at || it.uploaded_at || it.indexed_at || '';
         row.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
         row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         row.innerHTML = `

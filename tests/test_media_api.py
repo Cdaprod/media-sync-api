@@ -697,3 +697,49 @@ def test_reconcile_dry_run_never_mutates_sidecars_or_files(client: TestClient, e
     assert media_path.read_bytes() == b"before-rotation"
     assert sidecar.read_bytes() == before_sidecar
 
+
+def test_media_query_filters_and_ordering(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    first = ingest / "2026-01-17_18-57-14.mp4"
+    second = ingest / "z7v_0001.mov"
+    first.write_bytes(b"obs-bytes")
+    second.write_bytes(b"nikon-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+
+    def fake_probe(path):
+        name = path.name
+        if name.endswith(".mp4"):
+            return {
+                "format": {"tags": {"creation_time": "2026-01-17T18:57:14Z"}},
+                "streams": [{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 90}]}],
+            }
+        return {
+            "format": {"tags": {"creation_time": "2026-01-17T18:58:14Z"}},
+            "streams": [{"tags": {"rotate": "0"}}],
+        }
+
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", fake_probe)
+
+    response = client.get(f"/api/projects/{project_name}/media/query")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["items"]) == 2
+    assert payload["items"][0]["timestamps"]["creation_time"] <= payload["items"][1]["timestamps"]["creation_time"]
+
+    obs_only = client.get(f"/api/projects/{project_name}/media/query?origin=obs")
+    assert obs_only.status_code == 200
+    obs_items = obs_only.json()["items"]
+    assert len(obs_items) == 1
+    assert obs_items[0]["origin"] == "obs"
+
+    paged = client.get(f"/api/projects/{project_name}/media/query?limit=1&offset=1")
+    assert paged.status_code == 200
+    paged_payload = paged.json()
+    assert len(paged_payload["items"]) == 1
+    assert paged_payload["offset"] == 1
