@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.media import global_media_router, media_router, router as media_api_router, thumbnail_router
+from app.api.media import global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
 from app.api.projects import router as projects_router
 from app.api.sources import router as sources_router
 from app.api.upload import router as upload_router
@@ -68,6 +68,7 @@ def create_app() -> FastAPI:
     application.include_router(projects_router)
     application.include_router(media_api_router)
     application.include_router(global_media_router)
+    application.include_router(registry_router)
     application.include_router(sources_router)
     application.include_router(upload_router)
     application.include_router(reindex_router)

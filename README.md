@@ -157,6 +157,9 @@ Path alignment for Resolve:
 - `POST /api/projects/{project}/upload?op=snapshot` – fetch batch snapshot
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/media/normalize-orientation` – normalize rotated videos in place (`dry_run` supported)
+- `POST /api/projects/{project}/media/reconcile` – classify origin + rotation, plan/apply canonical renames, and persist aliases (`dry_run` + `apply` flags)
+- `GET /api/registry/{sha256}` – authoritative sha256 registry lookup for canonical path/origin/orientation/aliases
+- `POST /api/registry/resolve` – batch registry lookup for `asset_ids` using `sha256:<hash>` identifiers
 - `POST /api/media/normalize-orientation` – normalize rotated videos across all projects (uses all enabled sources when `source` is omitted)
 - `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
 - `GET|POST /reindex` – reconcile every enabled source and project in one sweep
@@ -169,6 +172,26 @@ Path alignment for Resolve:
 - `GET /media/{project}/{relative_path}` – stream a stored media file directly (respects `?source=`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)
 - Resolve bridge endpoints: `POST /api/resolve/open`, `POST /api/resolve/jobs/next`, `POST /api/resolve/jobs/{id}/complete`, `POST /api/resolve/jobs/{id}/fail`
+
+
+### Registry contract examples
+Set `MEDIA_SYNC_REGISTRY_BASE_URL` in external consumers to this API base (for LAN defaults, `http://192.168.0.25:8787`).
+
+```bash
+curl http://192.168.0.25:8787/api/registry/<64hex-sha256>
+
+curl -X POST http://192.168.0.25:8787/api/registry/resolve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "asset_ids": ["sha256:<64hex-sha256>"],
+    "fallback_paths": {}
+  }'
+```
+
+### Reconcile flag semantics
+- `dry_run=true` (default) is strictly non-mutating (plan only).
+- `apply=true` enables mutations (renames + metadata writes).
+- `normalize_orientation=true` only normalizes bytes when mutations are enabled.
 
 ## Response guidance & logging
 - Most responses include an `instructions` field with next-step hints (mounts, reindexing, adapter URL)

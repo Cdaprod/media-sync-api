@@ -764,3 +764,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-03)
 - OBS player now defaults loop=0 so clips play once unless explicitly restarted or loop enabled.
+
+### Latest Implementation Notes (2026-02-19)
+- Added authoritative registry endpoints `GET /api/registry/{sha256}` and `POST /api/registry/resolve` so external consumers can resolve canonical path/origin/orientation/aliases from sha256 identity.
+- Reconcile flags now support explicit `apply` semantics: `dry_run=true` is plan-only (no renames/normalization/metadata writes), while `apply=true` (or `dry_run=false`) enables canonical rename + metadata persistence and optional normalization.
+- Canonical filenames now sanitize origin segments for deterministic naming; reconcile renames persist alias history in metadata sidecars and invalidate SHA thumbnails on rename.

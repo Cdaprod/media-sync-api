@@ -586,3 +586,114 @@ def test_move_media_between_projects(client: TestClient, env_settings: Path) -> 
         entry["relative_path"].endswith("move-me.mov")
         for entry in target_listing.json()["media"]
     )
+
+
+def test_registry_get_and_resolve_aliases(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "2026-01-17_18-57-14.mp4"
+    media_path.write_bytes(b"obs-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+
+    fake_payload = {
+        "format": {"tags": {"creation_time": "2026-01-17T18:57:14Z"}},
+        "streams": [{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 90}]}],
+    }
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", lambda _path: fake_payload)
+
+    reconcile = client.post(
+        f"/api/projects/{project_name}/media/reconcile",
+        json={"dry_run": False, "apply": True, "normalize_orientation": False, "rename_canonical": True},
+    )
+    assert reconcile.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    sha = listing.json()["media"][0]["sha256"]
+
+    resolved = client.get(f"/api/registry/{sha}")
+    assert resolved.status_code == 200
+    payload = resolved.json()
+    assert payload["asset_id"] == f"sha256:{sha}"
+    assert payload["origin"] == "obs"
+    assert payload["orientation"]["rotation"] == 90
+    assert payload["orientation"]["detected_from"] == "display_matrix"
+    assert any(alias.endswith("2026-01-17_18-57-14.mp4") for alias in payload["aliases"])
+
+    batch = client.post(
+        "/api/registry/resolve",
+        json={"asset_ids": [f"sha256:{sha}", "sha256:bad"], "fallback_paths": {}},
+    )
+    assert batch.status_code == 200
+    body = batch.json()
+    assert f"sha256:{sha}" in body["results"]
+    assert "sha256:bad" in body["missing"]
+
+
+def test_reconcile_canonical_naming_is_deterministic_with_collision(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    first = ingest / "IMG_0001 copy.mov"
+    second = ingest / "IMG_0001   copy.mov"
+    first.write_bytes(b"iphone-bytes-a")
+    second.write_bytes(b"iphone-bytes-b")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+
+    fake_payload = {
+        "format": {"tags": {"creation_time": "2026-02-04T11:09:42Z", "com.apple.quicktime.model": "iPhone"}},
+        "streams": [{"tags": {"rotate": "0"}}],
+    }
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", lambda _path: fake_payload)
+
+    apply_one = client.post(
+        f"/api/projects/{project_name}/media/reconcile",
+        json={"dry_run": False, "apply": True, "normalize_orientation": False, "rename_canonical": True},
+    )
+    assert apply_one.status_code == 200
+
+    media_paths = sorted(item["relative_path"] for item in client.get(f"/api/projects/{project_name}/media").json()["media"])
+    assert len(media_paths) == 2
+    assert media_paths[0].startswith("ingest/originals/P")
+    assert media_paths[1].startswith("ingest/originals/P")
+    assert media_paths[0] != media_paths[1]
+
+
+def test_reconcile_dry_run_never_mutates_sidecars_or_files(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "rotate-on-reindex.mov"
+    media_path.write_bytes(b"before-rotation")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+    listing = client.get(f"/api/projects/{project_name}/media").json()["media"][0]
+    sha = listing["sha256"]
+    sidecar = env_settings / project_name / "ingest" / "_metadata" / f"{sha}.json"
+    before_sidecar = sidecar.read_bytes()
+
+    import app.api.media as media_module
+
+    fake_payload = {
+        "format": {"tags": {"creation_time": "2026-01-17T18:57:14Z"}},
+        "streams": [{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 90}]}],
+    }
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", lambda _path: fake_payload)
+
+    response = client.post(
+        f"/api/projects/{project_name}/media/reconcile",
+        json={"dry_run": True, "apply": False, "normalize_orientation": True, "rename_canonical": True},
+    )
+    assert response.status_code == 200
+    assert media_path.read_bytes() == b"before-rotation"
+    assert sidecar.read_bytes() == before_sidecar
+
