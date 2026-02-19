@@ -2605,6 +2605,7 @@
       el('selCount').textContent = String(count);
       const show = count > 0;
       el('selectBar').classList.toggle('show', show);
+      const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
 
       // enable/disable action buttons
       el('sendResolveBtn').disabled = !show || !state.activeProject;
@@ -2612,8 +2613,8 @@
       el('deleteSelBtn').disabled = !show || !state.activeProject;
       el('selTagToggle').disabled = !show || !state.activeProject;
       el('selMoveToggle').disabled = !show || !state.activeProject;
-      el('selCopyUrls').disabled = !show || !state.activeProject;
-      el('btnProgramMonitor').disabled = !show || !state.activeProject;
+      el('selCopyUrls').disabled = !show || !canSelectAcrossProjects;
+      el('btnProgramMonitor').disabled = !show || !canSelectAcrossProjects;
       el('btnProgramMonitor').hidden = !show;
 
       updateTagButtons();
@@ -2627,7 +2628,7 @@
     }
 
     function updateTagButtons(){
-      const hasSelection = state.selected.size > 0 && state.activeProject;
+      const hasSelection = state.selected.size > 0 && (state.activeProject || state.mediaScope === 'all');
       const hasFocused = !!state.focused;
       const batchInput = el('batchTagInput');
       const drawerInput = el('drawerTagInput');
@@ -3051,7 +3052,7 @@
         if (item?.relative_path) itemsByPath.set(item.relative_path, item);
       });
       const allMode = !state.activeProject && state.mediaScope === 'all';
-      const canSelect = !!state.activeProject;
+      const canSelect = !!state.activeProject || allMode;
 
       // GRID
       const g = el('mediaGrid');
@@ -3431,12 +3432,45 @@
         ['Modified', item.updated_at || item.updatedAt || ''],
         ['Duration', item.duration ? `${item.duration}s` : ''],
         ['Resolution', (item.width && item.height) ? `${item.width}×${item.height}` : ''],
+        ['Duration (facts)', item.duration ? `${item.duration}s` : 'pending'],
+        ['FPS (facts)', item.fps || 'pending'],
+        ['Codec (facts)', item.codec || 'pending'],
+        ['Audio (facts)', item.audio_channels ? `${item.audio_channels}ch` : 'pending'],
       ].filter(([_, v]) => String(v || '').trim().length > 0);
 
       kv.innerHTML = rows.map(([k,v]) => `
         <div class="k">${escapeHtml(k)}</div>
         <div class="v">${escapeHtml(v)}</div>
       `).join('');
+
+      const sha = item.sha256 || item.hash || '';
+      if (/^[a-fA-F0-9]{64}$/.test(String(sha))){
+        fetch(`${API}/api/registry/${encodeURIComponent(String(sha).toLowerCase())}`)
+          .then((response) => response.ok ? response.json() : null)
+          .then((registry) => {
+            if (!registry) return;
+            const aliases = Array.isArray(registry.aliases) ? registry.aliases : [];
+            const aliasPreview = aliases.slice(0, 3).join(', ');
+            const regRows = [
+              ['Registry Asset ID', registry.asset_id || ''],
+              ['Canonical Name', registry.canonical_name || ''],
+              ['Origin', registry.origin || 'unknown'],
+              ['Creation (UTC)', registry.timestamps?.creation_time || ''],
+              ['Creation best-effort', String(Boolean(registry.timestamps?.best_effort))],
+              ['Orientation', `${registry.orientation?.rotation ?? 0}° / normalized=${Boolean(registry.orientation?.normalized)}`],
+              ['Detected from', registry.orientation?.detected_from || 'none'],
+              ['Aliases', `${aliases.length}${aliasPreview ? ` (${aliasPreview})` : ''}`],
+              ['Registry stream', registry.urls?.stream || ''],
+              ['Registry download', registry.urls?.download || ''],
+            ].filter(([_, v]) => String(v || '').trim().length > 0);
+            if (!regRows.length) return;
+            kv.insertAdjacentHTML('beforeend', regRows.map(([k,v]) => `
+              <div class="k">${escapeHtml(k)}</div>
+              <div class="v">${escapeHtml(v)}</div>
+            `).join(''));
+          })
+          .catch(() => {});
+      }
 
       // actions
       el('drawerPlay').onclick = () => {

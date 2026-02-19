@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import quote
+from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -1492,6 +1493,63 @@ def _lookup_registry_by_sha(sha: str) -> dict[str, Any] | None:
     return None
 
 
+def _normalize_registry_fallback_path(value: str) -> tuple[str, str, str | None] | None:
+    """Normalize fallback path/url into (project, relative_path, source)."""
+
+    candidate = (value or "").strip()
+    if not candidate:
+        return None
+
+    parsed = urlparse(candidate)
+    path_candidate = candidate
+    source_name: str | None = None
+    if parsed.scheme and parsed.netloc:
+        path_candidate = parsed.path
+        query = parsed.query or ""
+        for chunk in query.split("&"):
+            key, _, raw_value = chunk.partition("=")
+            if key == "source" and raw_value:
+                source_name = unquote(raw_value)
+                break
+
+    cleaned = unquote(path_candidate).strip().lstrip("/")
+    if cleaned.startswith("media/"):
+        cleaned = cleaned[len("media/") :]
+
+    if "/" not in cleaned:
+        return None
+    project_name, relative_part = cleaned.split("/", 1)
+    try:
+        validated_project = validate_project_name(project_name)
+        validated_relative = _validate_relative_media_path(relative_part)
+    except ValueError:
+        return None
+    return validated_project, validated_relative, source_name
+
+
+def _lookup_registry_by_path(project_name: str, relative_path: str, source_name: str | None = None) -> dict[str, Any] | None:
+    settings = get_settings()
+    registry = SourceRegistry(settings.project_root)
+    try:
+        sources = [registry.require(source_name)] if source_name else registry.list_enabled()
+    except ValueError:
+        return None
+    for source in sources:
+        candidate = project_path(source.root, project_name)
+        if not candidate.exists() or not candidate.is_dir():
+            continue
+        index = load_index(candidate)
+        for entry in index.get("files", []):
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("relative_path") != relative_path:
+                continue
+            record = _collect_registry_record(project_name, source.name, candidate, entry)
+            if record:
+                return record
+    return None
+
+
 @router.get("/{project_name}/media/query")
 async def query_media_inventory(
     project_name: str,
@@ -1602,6 +1660,18 @@ async def resolve_registry_assets(payload: RegistryResolveRequest):
             missing.append(canonical_id)
             continue
         results[canonical_id] = record
+
+    for lookup_key, fallback_value in payload.fallback_paths.items():
+        normalized = _normalize_registry_fallback_path(fallback_value)
+        if not normalized:
+            missing.append(lookup_key)
+            continue
+        project_name, relative_path, source_name = normalized
+        record = _lookup_registry_by_path(project_name, relative_path, source_name)
+        if not record:
+            missing.append(lookup_key)
+            continue
+        results[lookup_key] = record
 
     return {"results": results, "missing": missing}
 
