@@ -1,8 +1,17 @@
 <!doctype html>
 <!--
   media-sync-api OBS Player
-  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0
+  Usage: /player.html?src=<encoded_media_url>&fit=cover&muted=0&autoplay=1&loop=0&controls=0&tap=1&id=player&pair=<key>&scope=<label>
   Example: /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&fit=cover&muted=0
+  Example (derived pair from src): /player.html?src=/media/P1-Project/ingest/originals/clip.mp4?source=primary&scope=program
+  Example (explicit pair): /player.html?pair=program&id=player&src=/media/P1-Project/ingest/originals/clip.mp4?source=primary
+
+  Control channels:
+  - BroadcastChannel('obs-player::${pair}'): { pair, id, cmd: 'setPaused'|'setMute'|'setSrc'|'seekAbs'|'seekRel'|'state:get' }
+  - BroadcastChannel('obs-player-registry'): presence + discovery
+  - Legacy BroadcastChannel('obs-player-control'): { id: 'player', cmd: 'play'|'pause'|'toggle'|'seek'|'setSrc'|'setMute'|'setVolume' }
+  - postMessage payloads (for iframe embeds)
+  - Hash commands: #play #pause #toggle (refresh browser source to trigger)
 -->
 <html lang="en">
 <head>
@@ -10,53 +19,523 @@
   <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1" />
   <title>media-sync-api — OBS Player</title>
   <style>
+    :root {
+      --bg: transparent;
+      --tap-toggle: 1;
+      --paused-gray: 1;
+      --paused-dim: 0.14;
+      --icon-size: 120px;
+      --icon-opacity: 0.92;
+      --icon-stroke: rgba(0, 0, 0, 0.35);
+      --fade-ms: 140ms;
+    }
+
     html, body {
       margin: 0;
       width: 100%;
       height: 100%;
-      background: transparent;
+      background: var(--bg);
       overflow: hidden;
     }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
     video {
+      position: absolute;
+      inset: 0;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
       display: block;
+      background: transparent;
+      transition: filter var(--fade-ms) linear;
+    }
+
+    .paused video {
+      filter:
+        grayscale(calc(var(--paused-gray) * 1))
+        brightness(calc(1 - var(--paused-dim)));
+    }
+
+    .icon {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: var(--icon-size);
+      height: var(--icon-size);
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--fade-ms) linear, transform var(--fade-ms) ease;
+      filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.45));
+    }
+
+    .paused .icon {
+      opacity: var(--icon-opacity);
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .boot video {
+      filter: none !important;
+    }
+
+    .boot .icon {
+      opacity: 0 !important;
+      transform: translate(-50%, -50%) scale(0.98) !important;
+    }
+
+    .hotspot {
+      position: absolute;
+      inset: 0;
+      cursor: pointer;
+    }
+
+    .pair-badge {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      z-index: 9;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.45);
+      color: rgba(255, 255, 255, 0.85);
+      font: 600 12px/1 system-ui;
+      letter-spacing: 0.3px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: none;
+    }
+
+    .curtain {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      opacity: 1;
+      pointer-events: none;
+      transition: opacity 260ms ease;
+      z-index: 8;
+    }
+
+    .boot .curtain {
+      opacity: 1;
+    }
+
+    .ready .curtain {
+      opacity: 0;
     }
   </style>
 </head>
 <body>
-  <video id="v" autoplay playsinline></video>
+  <div class="stage" id="stage">
+    <video id="v" autoplay playsinline preload="auto"></video>
+    <div class="curtain" id="curtain" aria-hidden="true"></div>
+    <svg class="icon" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stop-color="rgba(255,255,255,0.98)" />
+          <stop offset="1" stop-color="rgba(255,255,255,0.82)" />
+        </linearGradient>
+      </defs>
+      <rect x="22" y="18" width="20" height="64" rx="8" fill="url(#g)" stroke="var(--icon-stroke)" stroke-width="2" />
+      <rect x="58" y="18" width="20" height="64" rx="8" fill="url(#g)" stroke="var(--icon-stroke)" stroke-width="2" />
+    </svg>
+    <div class="hotspot" id="hotspot" aria-hidden="true"></div>
+    <div class="pair-badge" id="pairBadge" aria-live="polite"></div>
+  </div>
   <script>
-    const qs = new URLSearchParams(location.search);
-    const src = qs.get("src") || "";
-    const fit = qs.get("fit") || "cover";
-    const muted = (qs.get("muted") || "0") === "1";
-    const v = document.getElementById("v");
-    v.style.objectFit = fit;
-    v.muted = true;
-    v.src = src;
+    (() => {
+      const qs = new URLSearchParams(location.search);
+      const getParam = (name, fallback) => {
+        const value = qs.get(name);
+        if (value === null || value === undefined || value === "") return fallback;
+        return value;
+      };
+      const src = qs.get("src") || "";
+      const fit = qs.get("fit") || "cover";
+      const muted = (qs.get("muted") || "0") === "1";
+      const autoplay = getParam("autoplay", "1") === "1";
+      const loop = getParam("loop", "0") === "1";
+      const controls = getParam("controls", "0") === "1";
+      const tapToggle = getParam(
+        "tap",
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--tap-toggle")
+          .trim() || "1"
+      ) === "1";
+      const playerId = (qs.get("id") || "player").trim();
+      const explicitPair = (qs.get("pair") || "").trim();
+      const scope = (qs.get("scope") || "").trim();
 
-    async function tryPlay() {
-      try {
-        await v.play();
-      } catch (_) {
-        // ignore autoplay errors
+      function normalizeSrc(raw) {
+        if (!raw) return "";
+        const u = new URL(raw, window.location.origin);
+        const keep = new Set(["source", "v", "sig"]);
+        const qp = new URLSearchParams();
+        for (const [k, v] of u.searchParams.entries()) {
+          if (keep.has(k)) qp.append(k, v);
+        }
+        qp.sort();
+        u.hash = "";
+        u.search = qp.toString() ? `?${qp.toString()}` : "";
+        return `${u.pathname}${u.search}`;
       }
-    }
 
-    let n = 0;
-    const t = setInterval(async () => {
-      n++;
-      await tryPlay();
-      if (!v.paused || n > 20) clearInterval(t);
-    }, 250);
-
-    v.addEventListener("playing", () => {
-      if (!muted) {
-        v.muted = false;
+      function fnv1a(str) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < str.length; i += 1) {
+          h ^= str.charCodeAt(i);
+          h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+        }
+        return h >>> 0;
       }
-    }, { once: true });
+
+      function base36(n) {
+        return (n >>> 0).toString(36);
+      }
+
+      function normalizeMediaUrl(value) {
+        if (!value) return "";
+        try {
+          return new URL(value, window.location.origin).href;
+        } catch (_) {
+          return String(value);
+        }
+      }
+
+      function buildControllerUrl() {
+        const controllerUrl = new URL("/player_controller.html", window.location.origin);
+        const params = new URLSearchParams();
+        const activeSrc = v && (v.currentSrc || v.src) ? normalizeMediaUrl(v.currentSrc || v.src) : src;
+        if (pair) params.set("pair", pair);
+        if (playerId) params.set("id", playerId);
+        if (scope) params.set("scope", scope);
+        if (activeSrc) params.set("src", activeSrc);
+        controllerUrl.search = params.toString();
+        return controllerUrl.toString();
+      }
+
+      function slug(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 24) || "x";
+      }
+
+      function deriveHumanPrefix(pathValue) {
+        const parts = String(pathValue || "").split("?")[0].split("/").filter(Boolean);
+        const mediaIdx = parts.indexOf("media");
+        if (mediaIdx >= 0 && parts[mediaIdx + 1]) return slug(parts[mediaIdx + 1]);
+        return slug(parts[0] || "media");
+      }
+
+      const canonicalSrc = normalizeSrc(src);
+      const prefix = scope ? slug(scope) : deriveHumanPrefix(canonicalSrc);
+      const srcHash = canonicalSrc ? base36(fnv1a(canonicalSrc)).slice(0, 6) : "local";
+      const pair = explicitPair || `${prefix}-${srcHash}`;
+      const channelName = `obs-player::${pair}`;
+
+      const stage = document.getElementById("stage");
+      const v = document.getElementById("v");
+      const hotspot = document.getElementById("hotspot");
+      const badge = document.getElementById("pairBadge");
+      let booting = true;
+
+      stage.classList.add("boot");
+      stage.classList.remove("ready");
+
+      function copyText(value) {
+        const text = String(value || "");
+        if (!text) return;
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          navigator.clipboard.writeText(text).catch(() => {
+            const input = document.createElement("input");
+            input.value = text;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand("copy");
+            input.remove();
+          });
+          return;
+        }
+        const input = document.createElement("input");
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        input.remove();
+      }
+
+      if (badge) {
+        badge.textContent = `${pair} :: ${playerId}`;
+        badge.style.display = "inline-flex";
+        badge.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          copyText(buildControllerUrl());
+          badge.textContent = "copied ✓";
+          setTimeout(() => {
+            badge.textContent = `${pair} :: ${playerId}`;
+          }, 650);
+        });
+      }
+
+      v.style.objectFit = fit;
+      v.muted = muted;
+      v.loop = loop;
+      v.controls = controls;
+      v.autoplay = autoplay;
+      if (src) v.src = src;
+
+      function startBoot(reason) {
+        booting = true;
+        stage.classList.add("boot");
+        stage.classList.remove("ready");
+        stage.classList.remove("paused");
+        if (reason) window.__PLAYER_BOOT_ARMED__ = reason;
+      }
+
+      function endBoot(reason) {
+        if (!booting) return;
+        booting = false;
+        syncPausedUI();
+        stage.classList.remove("boot");
+        stage.classList.add("ready");
+        if (reason) window.__PLAYER_BOOT_REASON__ = reason;
+      }
+
+      function syncPausedUI() {
+        if (booting) {
+          stage.classList.remove("paused");
+          return;
+        }
+        if (v.paused) {
+          stage.classList.add("paused");
+        } else {
+          stage.classList.remove("paused");
+        }
+      }
+
+      v.addEventListener("play", syncPausedUI);
+      v.addEventListener("pause", syncPausedUI);
+      v.addEventListener("loadedmetadata", syncPausedUI);
+      v.addEventListener("ended", syncPausedUI);
+      syncPausedUI();
+      startBoot("init");
+      setTimeout(() => endBoot("timeout"), 1500);
+
+      v.addEventListener("playing", () => endBoot("playing"), { passive: true });
+      v.addEventListener("loadeddata", () => endBoot("loadeddata"), { passive: true });
+
+      async function tryPlay() {
+        try {
+          await v.play();
+          endBoot("tryPlay");
+        } catch (_) {
+          // ignore autoplay errors
+        }
+        syncPausedUI();
+      }
+
+      if (autoplay) {
+        let n = 0;
+        const t = setInterval(async () => {
+          n += 1;
+          await tryPlay();
+          if (!v.paused || n > 20) clearInterval(t);
+        }, 250);
+      }
+
+      let pointerDownAt = 0;
+      let pointerStart = null;
+      let pointerMoved = false;
+
+      function onPointerDown(event) {
+        if (!tapToggle) return;
+        pointerDownAt = performance.now();
+        pointerStart = { x: event.clientX, y: event.clientY };
+        pointerMoved = false;
+        if (hotspot.setPointerCapture) {
+          hotspot.setPointerCapture(event.pointerId);
+        }
+      }
+
+      function onPointerMove(event) {
+        if (!tapToggle || !pointerStart) return;
+        const dx = Math.abs(event.clientX - pointerStart.x);
+        const dy = Math.abs(event.clientY - pointerStart.y);
+        if (dx > 8 || dy > 8) pointerMoved = true;
+      }
+
+      async function onPointerUp() {
+        if (!tapToggle) return;
+        const dt = performance.now() - pointerDownAt;
+        if (pointerMoved) return;
+        if (dt < 600) {
+          if (v.paused) {
+            await tryPlay();
+          } else {
+            v.pause();
+          }
+        }
+      }
+
+      hotspot.addEventListener("pointerdown", onPointerDown);
+      hotspot.addEventListener("pointermove", onPointerMove);
+      hotspot.addEventListener("pointerup", onPointerUp);
+
+      const seen = new Map();
+      function seenRecently(msgId, ttlMs = 5000) {
+        if (!msgId) return false;
+        const now = Date.now();
+        for (const [k, t] of seen.entries()) {
+          if (now - t > ttlMs) seen.delete(k);
+        }
+        if (seen.has(msgId)) return true;
+        seen.set(msgId, now);
+        return false;
+      }
+
+      function stateSnapshot() {
+        return {
+          pair,
+          id: playerId,
+          paused: v.paused,
+          muted: v.muted,
+          src: v.currentSrc || v.src || "",
+          t: Number.isFinite(v.currentTime) ? v.currentTime : 0
+        };
+      }
+
+      let pairChannel = null;
+      let legacyChannel = null;
+
+      function broadcastState(meta = {}) {
+        if (pairChannel) {
+          pairChannel.postMessage({ type: "state", ...stateSnapshot(), ...meta, at: Date.now() });
+        }
+      }
+
+      function ack(msg) {
+        if (pairChannel) {
+          pairChannel.postMessage({
+            type: "ack",
+            ...stateSnapshot(),
+            msgId: msg && msg.msgId ? msg.msgId : null,
+            at: Date.now()
+          });
+        }
+      }
+
+      async function handleCmd(msg) {
+        if (!msg || typeof msg !== "object") return;
+        if (msg.pair && msg.pair !== pair) return;
+        if (msg.id && msg.id !== playerId) return;
+        const cmd = msg.cmd;
+        if (!cmd) return;
+        if (seenRecently(msg.msgId)) return;
+
+        if (cmd === "setPaused") {
+          const wantPaused = !!msg.paused;
+          if (wantPaused && !v.paused) v.pause();
+          if (!wantPaused && v.paused) await tryPlay();
+        } else if (cmd === "setMute") {
+          const wantMuted = !!msg.muted;
+          if (v.muted !== wantMuted) v.muted = wantMuted;
+        } else if (cmd === "setSrc" && typeof msg.src === "string") {
+          const next = msg.src;
+          const cur = v.currentSrc || v.src || "";
+          const nextUrl = normalizeMediaUrl(next);
+          const curUrl = normalizeMediaUrl(cur);
+          if (nextUrl && curUrl !== nextUrl) {
+            const wasPlaying = !v.paused;
+            startBoot("setSrc");
+            v.src = nextUrl;
+            v.load();
+            if (wasPlaying || autoplay) await tryPlay();
+          }
+        } else if (cmd === "seekAbs" && Number.isFinite(msg.t)) {
+          v.currentTime = Math.max(0, msg.t);
+        } else if (cmd === "seekRel" && Number.isFinite(msg.dt)) {
+          v.currentTime = Math.max(0, (v.currentTime || 0) + msg.dt);
+        } else if (cmd === "state:get") {
+          broadcastState({ msgId: msg.msgId || null });
+          ack(msg);
+          return;
+        } else if (cmd === "play") {
+          await tryPlay();
+        } else if (cmd === "pause") {
+          v.pause();
+          syncPausedUI();
+        } else if (cmd === "toggle") {
+          if (v.paused) await tryPlay();
+          else v.pause();
+        } else if (cmd === "seek" && Number.isFinite(msg.t)) {
+          v.currentTime = Math.max(0, msg.t);
+        } else if (cmd === "setVolume" && typeof msg.volume === "number") {
+          v.volume = Math.max(0, Math.min(1, msg.volume));
+        }
+
+        ack(msg);
+      }
+
+      if ("BroadcastChannel" in window) {
+        pairChannel = new BroadcastChannel(channelName);
+        pairChannel.onmessage = (event) => {
+          handleCmd(event.data);
+        };
+        legacyChannel = new BroadcastChannel("obs-player-control");
+        legacyChannel.onmessage = (event) => {
+          handleCmd(event.data);
+        };
+
+        const registry = new BroadcastChannel("obs-player-registry");
+        const announce = () => {
+          registry.postMessage({
+            type: "player:presence",
+            pair,
+            id: playerId,
+            at: Date.now(),
+            href: location.href
+          });
+        };
+        announce();
+        setInterval(announce, 1200);
+      }
+
+      window.addEventListener("message", (event) => {
+        handleCmd(event.data);
+      });
+
+      async function handleHash() {
+        const h = (location.hash || "").replace("#", "").trim();
+        if (!h) return;
+        await handleCmd({ id: playerId, cmd: h });
+        history.replaceState(null, "", location.pathname + location.search);
+      }
+
+      window.addEventListener("hashchange", handleHash);
+      handleHash();
+
+      ["play", "pause", "volumechange", "timeupdate", "loadedmetadata", "emptied"].forEach((evt) => {
+        v.addEventListener(evt, () => broadcastState(), { passive: true });
+      });
+
+      window.__PLAYER__ = {
+        id: playerId,
+        pair,
+        play: () => tryPlay(),
+        pause: () => v.pause(),
+        toggle: () => (v.paused ? tryPlay() : v.pause()),
+        setSrc: (s) => handleCmd({ id: playerId, cmd: "setSrc", src: s }),
+        video: v
+      };
+    })();
   </script>
 </body>
 </html>
