@@ -57,6 +57,104 @@ def test_reindex_allows_get_and_indexes_manual_moves(client, env_settings: Path)
     assert any(entry["relative_path"] == "ingest/originals/relocated.mp4" for entry in index_data["files"])
 
 
+def test_reindex_skips_temporary_artifacts(client, env_settings: Path):
+    created = client.post("/api/projects", json={"name": "temp-skip"})
+    assert created.status_code == 201
+    project_name = created.json()["name"]
+
+    ingest_dir = env_settings / project_name / "ingest" / "originals"
+    ingest_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = ingest_dir / ".tmp.rotate-test.mov"
+    temp_file.write_bytes(b"temp-bytes")
+
+    response = client.post(f"/api/projects/{project_name}/reindex")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["indexed"] == 0
+
+    index_data = json.loads((env_settings / project_name / "index.json").read_text())
+    assert not any(entry["relative_path"] == "ingest/originals/.tmp.rotate-test.mov" for entry in index_data["files"])
+
+
+def test_reindex_normalizes_rotated_video_before_hashing(client, env_settings: Path, monkeypatch):
+    created = client.post("/api/projects", json={"name": "normalize-on-reindex"})
+    assert created.status_code == 201
+    project_name = created.json()["name"]
+
+    ingest_dir = env_settings / project_name / "ingest" / "originals"
+    ingest_dir.mkdir(parents=True, exist_ok=True)
+    video = ingest_dir / "rotated.mov"
+    video.write_bytes(b"before-normalize")
+
+    import app.storage.orientation as orientation_module
+    import app.storage.reindex as reindex_module
+
+    def fake_probe(path, **_kwargs):
+        data = path.read_bytes()
+        rotation = 90 if data == b"before-normalize" else 0
+        return orientation_module.ProbeVideo(rotation=rotation, width=1920, height=1080, codec="h264")
+
+    def fake_normalize(path, **_kwargs):
+        path.write_bytes(b"after-normalize")
+        return orientation_module.NormalizationResult(changed=True, rotation=90, backup_path=None)
+
+    monkeypatch.setattr(reindex_module, "ffprobe_video", fake_probe)
+    monkeypatch.setattr(reindex_module, "normalize_video_orientation_in_place", fake_normalize)
+
+    response = client.post(f"/api/projects/{project_name}/reindex")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["normalized"] == 1
+    assert payload["normalization_failed"] == 0
+
+    index_data = json.loads((env_settings / project_name / "index.json").read_text())
+    file_entry = next(entry for entry in index_data["files"] if entry["relative_path"] == "ingest/originals/rotated.mov")
+    from app.storage.dedupe import compute_sha256_from_path
+    assert file_entry["sha256"] == compute_sha256_from_path(video)
+    assert video.read_bytes() == b"after-normalize"
+
+
+
+def test_reindex_preserves_shared_sha_metadata_when_one_path_changes(client, env_settings: Path):
+    created = client.post("/api/projects", json={"name": "shared-sha"})
+    assert created.status_code == 201
+    project_name = created.json()["name"]
+
+    project_dir = env_settings / project_name
+    ingest_dir = project_dir / "ingest" / "originals"
+    ingest_dir.mkdir(parents=True, exist_ok=True)
+    file_one = ingest_dir / "dup-a.mov"
+    file_two = ingest_dir / "dup-b.mov"
+    file_one.write_bytes(b"same-bytes")
+    file_two.write_bytes(b"same-bytes")
+
+    reindex_response = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_response.status_code == 200
+
+    index_data = json.loads((project_dir / "index.json").read_text())
+    sha = next(entry["sha256"] for entry in index_data["files"] if entry["relative_path"] == "ingest/originals/dup-a.mov")
+    sidecar = project_dir / "ingest" / "_metadata" / f"{sha}.json"
+    assert sidecar.exists()
+
+    file_one.write_bytes(b"changed-bytes")
+
+    reindex_again = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_again.status_code == 200
+
+    # dup-b still references the original sha, so its metadata sidecar must remain.
+    assert sidecar.exists()
+
+    refreshed = json.loads((project_dir / "index.json").read_text())
+    dup_b = next(entry for entry in refreshed["files"] if entry["relative_path"] == "ingest/originals/dup-b.mov")
+    assert dup_b["sha256"] == sha
+
+    file_two.write_bytes(b"changed-bytes-too")
+    reindex_final = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_final.status_code == 200
+
+    # Once no entries reference the old sha, its sidecar should be removed.
+    assert not sidecar.exists()
+
 def test_root_reindex_scans_all_sources(client, env_settings: Path):
     primary = client.post("/api/projects", json={"name": "bulk-primary"})
     assert primary.status_code == 201

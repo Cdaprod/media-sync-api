@@ -99,14 +99,28 @@ curl http://127.0.0.1:8787/reindex
 ```
 Run this to reconcile every enabled source and project after bulk filesystem edits.
 
-8) Recommended daily workflow
+8) Normalize rotated camera videos (in-place)
+```bash
+curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/normalize-orientation \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+curl -X POST http://127.0.0.1:8787/api/projects/P1-Public-Accountability/media/normalize-orientation \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+curl -X POST http://127.0.0.1:8787/api/media/normalize-orientation \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+```
+This rewrites files in place (same relative path) and updates the existing index + manifest entries, removing the old sha256 when it is no longer referenced.
+
+9) Recommended daily workflow
 - Create/select project before recording
 - Use the Shortcut to push clips; let the API de-dupe
 - Run `/reindex` if you reorganize manually
 - Use `_manifest/files.jsonl` for auditing
 - Treat `ingest/originals/` as the source of truth
 
-8) Quick troubleshooting
+10) Quick troubleshooting
 - iPhone cannot reach API: ensure container binds `0.0.0.0:8787` and firewall allows it
 - Projects not appearing: verify the volume mount points to your Projects folder
 - Upload fails: file exceeds `MEDIA_SYNC_MAX_UPLOAD_MB` or extension unsupported
@@ -142,6 +156,8 @@ Path alignment for Resolve:
 - `POST /api/projects/{project}/upload?op=finalize` – finalize batch and return aggregated served URLs
 - `POST /api/projects/{project}/upload?op=snapshot` – fetch batch snapshot
 - `POST /api/projects/{project}/sync-album` – record audit event
+- `POST /api/projects/{project}/media/normalize-orientation` – normalize rotated videos in place (`dry_run` supported)
+- `POST /api/media/normalize-orientation` – normalize rotated videos across all projects (uses all enabled sources when `source` is omitted)
 - `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
 - `GET|POST /reindex` – reconcile every enabled source and project in one sweep
 - `POST /api/projects/auto-organize` – move loose files sitting in the projects root into `Unsorted-Loose` and reindex
