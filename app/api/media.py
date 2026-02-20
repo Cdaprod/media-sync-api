@@ -1443,6 +1443,9 @@ def _collect_registry_record(
     if origin not in {"nikon_z7", "iphone", "obs", "unknown"}:
         origin = "unknown"
 
+    timeline = _build_timeline_anchor(payload, target, metadata)
+    facts = _extract_media_facts(payload)
+
     return {
         "sha256": sha,
         "asset_id": _stable_asset_id(sha),
@@ -1460,6 +1463,10 @@ def _collect_registry_record(
             "rotation": rotation,
             "normalized": rotation == 0,
             "detected_from": rotation_source or "none",
+        },
+        "timeline": timeline,
+        "facts": {
+            "duration_seconds": facts.get("duration_seconds"),
         },
         "urls": {
             "stream": _build_stream_url(project_name, safe_relative, source_name),
@@ -1578,9 +1585,102 @@ def _parse_frame_rate(value: Any) -> float | None:
         return None
 
 
+def _build_timeline_anchor(
+    payload: dict[str, Any] | None,
+    fallback_path: Path,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    timeline_meta = metadata.get("timeline") if isinstance(metadata, dict) and isinstance(metadata.get("timeline"), dict) else {}
+    if timeline_meta:
+        anchor_time = timeline_meta.get("anchor_time")
+        anchor_source = str(timeline_meta.get("anchor_source") or "unknown")
+        confidence_raw = timeline_meta.get("confidence")
+        try:
+            confidence = float(confidence_raw)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        return {
+            "anchor_time": anchor_time if isinstance(anchor_time, str) else None,
+            "anchor_source": anchor_source,
+            "confidence": max(0.0, min(confidence, 1.0)),
+        }
+
+    if isinstance(payload, dict):
+        fmt = payload.get("format") if isinstance(payload.get("format"), dict) else {}
+        fmt_tags = fmt.get("tags") if isinstance(fmt.get("tags"), dict) else {}
+        quicktime_creation = fmt_tags.get("creation_time")
+        if isinstance(quicktime_creation, str):
+            try:
+                dt = _parse_iso8601(quicktime_creation, "creation_time")
+                return {
+                    "anchor_time": dt.isoformat(),
+                    "anchor_source": "quicktime_creation_time",
+                    "confidence": 0.95,
+                }
+            except HTTPException:
+                pass
+
+        streams = payload.get("streams") if isinstance(payload.get("streams"), list) else []
+        for stream in streams:
+            if not isinstance(stream, dict):
+                continue
+            tags = stream.get("tags") if isinstance(stream.get("tags"), dict) else {}
+            stream_creation = tags.get("creation_time")
+            if isinstance(stream_creation, str):
+                try:
+                    dt = _parse_iso8601(stream_creation, "creation_time")
+                    return {
+                        "anchor_time": dt.isoformat(),
+                        "anchor_source": "quicktime_creation_time",
+                        "confidence": 0.9,
+                    }
+                except HTTPException:
+                    pass
+            for key, source_name in (("timecode", "stream_timecode"), ("TIMECODE", "stream_timecode")):
+                raw = tags.get(key)
+                if isinstance(raw, str):
+                    try:
+                        dt = _parse_iso8601(raw, "timecode")
+                        return {
+                            "anchor_time": dt.isoformat(),
+                            "anchor_source": source_name,
+                            "confidence": 0.65,
+                        }
+                    except HTTPException:
+                        return {
+                            "anchor_time": None,
+                            "anchor_source": source_name,
+                            "confidence": 0.25,
+                        }
+
+        for key in ("timecode", "TIMECODE"):
+            raw = fmt_tags.get(key)
+            if isinstance(raw, str):
+                try:
+                    dt = _parse_iso8601(raw, "timecode")
+                    return {
+                        "anchor_time": dt.isoformat(),
+                        "anchor_source": "format_timecode",
+                        "confidence": 0.6,
+                    }
+                except HTTPException:
+                    return {
+                        "anchor_time": None,
+                        "anchor_source": "format_timecode",
+                        "confidence": 0.2,
+                    }
+
+    return {
+        "anchor_time": datetime.fromtimestamp(fallback_path.stat().st_mtime, tz=timezone.utc).isoformat(),
+        "anchor_source": "filesystem_mtime",
+        "confidence": 0.2,
+    }
+
+
 def _extract_media_facts(payload: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {
+            "duration_seconds": None,
             "duration_s": None,
             "width": None,
             "height": None,
@@ -1611,6 +1711,7 @@ def _extract_media_facts(payload: dict[str, Any] | None) -> dict[str, Any]:
             fps = _parse_frame_rate(video_stream.get("r_frame_rate"))
 
     return {
+        "duration_seconds": duration_s,
         "duration_s": duration_s,
         "width": int(video_stream.get("width")) if isinstance(video_stream, dict) and video_stream.get("width") else None,
         "height": int(video_stream.get("height")) if isinstance(video_stream, dict) and video_stream.get("height") else None,
@@ -1636,11 +1737,23 @@ async def get_media_facts(project: str, relative_path: str, source: str | None =
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="Media not found")
     payload = _read_ffprobe_payload(target)
+    index = load_index(resolved.root)
+    entry = next(
+        (
+            item
+            for item in index.get("files", [])
+            if isinstance(item, dict) and item.get("relative_path") == safe_relative
+        ),
+        None,
+    )
+    sha = entry.get("sha256") if isinstance(entry, dict) else None
+    metadata = load_metadata(resolved.root, sha) if isinstance(sha, str) else None
     return {
         "project": resolved.name,
         "source": resolved.source_name,
         "relative_path": safe_relative,
         "facts": _extract_media_facts(payload),
+        "timeline": _build_timeline_anchor(payload, target, metadata),
         "instructions": "Facts are best-effort ffprobe values and may be unknown for unsupported assets.",
     }
 

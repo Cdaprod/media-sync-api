@@ -784,3 +784,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `GET /api/media/facts` for best-effort ffprobe metadata (duration, dimensions, fps, codecs, audio channels) so explorer previews can show real media facts without blocking UI on failures.
 - Registry fallback path normalization now explicitly supports full stream URLs, `/media/<project>/<relative>` paths, and `project/relative` strings for retroactive legacy node resolution.
 - Explorer inspector now fetches media facts from `/api/media/facts` and renders unknown-safe values when probe data is unavailable.
+
+### Latest Implementation Notes (2026-02-19, timeline anchors)
+- Registry responses and `/api/media/facts` now include `timeline` anchors (`anchor_time`, `anchor_source`, `confidence`) so downstream timeline assembly can align clips deterministically.
+- `/api/media/facts` now returns numeric `duration_seconds` (with legacy `duration_s` retained) plus existing media facts for compatibility.
+- Timeline anchor selection is best-effort and deterministic: prefer creation tags, then timecode hints, then filesystem mtime fallback.
