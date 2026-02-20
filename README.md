@@ -223,6 +223,20 @@ curl "http://192.168.0.25:8787/api/media/facts?project=P1-demo&relative_path=ing
 
 Returns best-effort values (duration, dimensions, fps, codecs, audio channels) and reports `unknown` values in the explorer inspector when probe data is unavailable.
 
+`/api/media/facts` and `/api/registry/*` now also include a timeline anchor object:
+
+```json
+{
+  "timeline": {
+    "anchor_time": "2026-02-16T19:12:23+00:00",
+    "anchor_source": "quicktime_creation_time",
+    "confidence": 0.95
+  }
+}
+```
+
+`anchor_source` values: `quicktime_creation_time`, `stream_timecode`, `format_timecode`, `filesystem_mtime`, `unknown`.
+
 ### Reconcile flag semantics
 - `dry_run=true` (default) is strictly non-mutating (plan only).
 - `apply=true` enables mutations (renames + metadata writes).

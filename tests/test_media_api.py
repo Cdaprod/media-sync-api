@@ -623,6 +623,11 @@ def test_registry_get_and_resolve_aliases(client: TestClient, env_settings: Path
     assert payload["orientation"]["rotation"] == 90
     assert payload["orientation"]["detected_from"] == "display_matrix"
     assert any(alias.endswith("2026-01-17_18-57-14.mp4") for alias in payload["aliases"])
+    assert "timeline" in payload
+    assert "anchor_source" in payload["timeline"]
+    assert "confidence" in payload["timeline"]
+    assert "facts" in payload
+    assert "duration_seconds" in payload["facts"]
 
     batch = client.post(
         "/api/registry/resolve",
@@ -632,6 +637,7 @@ def test_registry_get_and_resolve_aliases(client: TestClient, env_settings: Path
     body = batch.json()
     assert f"sha256:{sha}" in body["results"]
     assert "sha256:bad" in body["missing"]
+    assert "timeline" in body["results"][f"sha256:{sha}"]
 
 
 def test_reconcile_canonical_naming_is_deterministic_with_collision(client: TestClient, env_settings: Path, monkeypatch) -> None:
@@ -823,9 +829,41 @@ def test_media_facts_endpoint_returns_probe_payload(client: TestClient, env_sett
     )
     assert response.status_code == 200
     facts = response.json()["facts"]
+    assert facts["duration_seconds"] == 12.5
     assert facts["duration_s"] == 12.5
     assert facts["width"] == 1920
     assert facts["height"] == 1080
     assert facts["video_codec"] == "h264"
     assert facts["audio_codec"] == "aac"
     assert facts["audio_channels"] == 2
+    timeline = response.json()["timeline"]
+    assert "anchor_source" in timeline
+    assert "confidence" in timeline
+
+
+def test_media_facts_timeline_prefers_quicktime_creation_time(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "timeline.mov"
+    media_path.write_bytes(b"timeline")
+
+    import app.api.media as media_module
+
+    monkeypatch.setattr(
+        media_module,
+        "_read_ffprobe_payload",
+        lambda _path: {
+            "format": {"duration": "1.0", "tags": {"creation_time": "2026-02-16T19:12:23Z"}},
+            "streams": [{"codec_type": "video", "codec_name": "h264", "width": 1280, "height": 720}],
+        },
+    )
+
+    response = client.get(
+        f"/api/media/facts?project={project_name}&relative_path=ingest/originals/timeline.mov"
+    )
+    assert response.status_code == 200
+    timeline = response.json()["timeline"]
+    assert timeline["anchor_source"] == "quicktime_creation_time"
+    assert timeline["anchor_time"].startswith("2026-02-16T19:12:23")
+    assert timeline["confidence"] >= 0.9
