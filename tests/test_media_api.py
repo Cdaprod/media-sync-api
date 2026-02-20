@@ -586,3 +586,284 @@ def test_move_media_between_projects(client: TestClient, env_settings: Path) -> 
         entry["relative_path"].endswith("move-me.mov")
         for entry in target_listing.json()["media"]
     )
+
+
+def test_registry_get_and_resolve_aliases(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "2026-01-17_18-57-14.mp4"
+    media_path.write_bytes(b"obs-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+
+    fake_payload = {
+        "format": {"tags": {"creation_time": "2026-01-17T18:57:14Z"}},
+        "streams": [{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 90}]}],
+    }
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", lambda _path: fake_payload)
+
+    reconcile = client.post(
+        f"/api/projects/{project_name}/media/reconcile",
+        json={"dry_run": False, "apply": True, "normalize_orientation": False, "rename_canonical": True},
+    )
+    assert reconcile.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    sha = listing.json()["media"][0]["sha256"]
+
+    resolved = client.get(f"/api/registry/{sha}")
+    assert resolved.status_code == 200
+    payload = resolved.json()
+    assert payload["asset_id"] == f"sha256:{sha}"
+    assert payload["origin"] == "obs"
+    assert payload["orientation"]["rotation"] == 90
+    assert payload["orientation"]["detected_from"] == "display_matrix"
+    assert any(alias.endswith("2026-01-17_18-57-14.mp4") for alias in payload["aliases"])
+    assert "timeline" in payload
+    assert "anchor_source" in payload["timeline"]
+    assert "confidence" in payload["timeline"]
+    assert "facts" in payload
+    assert "duration_seconds" in payload["facts"]
+
+    batch = client.post(
+        "/api/registry/resolve",
+        json={"asset_ids": [f"sha256:{sha}", "sha256:bad"], "fallback_paths": {}},
+    )
+    assert batch.status_code == 200
+    body = batch.json()
+    assert f"sha256:{sha}" in body["results"]
+    assert "sha256:bad" in body["missing"]
+    assert "timeline" in body["results"][f"sha256:{sha}"]
+
+
+def test_reconcile_canonical_naming_is_deterministic_with_collision(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    first = ingest / "IMG_0001 copy.mov"
+    second = ingest / "IMG_0001   copy.mov"
+    first.write_bytes(b"iphone-bytes-a")
+    second.write_bytes(b"iphone-bytes-b")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+
+    fake_payload = {
+        "format": {"tags": {"creation_time": "2026-02-04T11:09:42Z", "com.apple.quicktime.model": "iPhone"}},
+        "streams": [{"tags": {"rotate": "0"}}],
+    }
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", lambda _path: fake_payload)
+
+    apply_one = client.post(
+        f"/api/projects/{project_name}/media/reconcile",
+        json={"dry_run": False, "apply": True, "normalize_orientation": False, "rename_canonical": True},
+    )
+    assert apply_one.status_code == 200
+
+    media_paths = sorted(item["relative_path"] for item in client.get(f"/api/projects/{project_name}/media").json()["media"])
+    assert len(media_paths) == 2
+    assert media_paths[0].startswith("ingest/originals/P")
+    assert media_paths[1].startswith("ingest/originals/P")
+    assert media_paths[0] != media_paths[1]
+
+
+def test_reconcile_dry_run_never_mutates_sidecars_or_files(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "rotate-on-reindex.mov"
+    media_path.write_bytes(b"before-rotation")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+    listing = client.get(f"/api/projects/{project_name}/media").json()["media"][0]
+    sha = listing["sha256"]
+    sidecar = env_settings / project_name / "ingest" / "_metadata" / f"{sha}.json"
+    before_sidecar = sidecar.read_bytes()
+
+    import app.api.media as media_module
+
+    fake_payload = {
+        "format": {"tags": {"creation_time": "2026-01-17T18:57:14Z"}},
+        "streams": [{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 90}]}],
+    }
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", lambda _path: fake_payload)
+
+    response = client.post(
+        f"/api/projects/{project_name}/media/reconcile",
+        json={"dry_run": True, "apply": False, "normalize_orientation": True, "rename_canonical": True},
+    )
+    assert response.status_code == 200
+    assert media_path.read_bytes() == b"before-rotation"
+    assert sidecar.read_bytes() == before_sidecar
+
+
+def test_media_query_filters_and_ordering(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    first = ingest / "2026-01-17_18-57-14.mp4"
+    second = ingest / "z7v_0001.mov"
+    first.write_bytes(b"obs-bytes")
+    second.write_bytes(b"nikon-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    import app.api.media as media_module
+
+    def fake_probe(path):
+        name = path.name
+        if name.endswith(".mp4"):
+            return {
+                "format": {"tags": {"creation_time": "2026-01-17T18:57:14Z"}},
+                "streams": [{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 90}]}],
+            }
+        return {
+            "format": {"tags": {"creation_time": "2026-01-17T18:58:14Z"}},
+            "streams": [{"tags": {"rotate": "0"}}],
+        }
+
+    monkeypatch.setattr(media_module, "_read_ffprobe_payload", fake_probe)
+
+    response = client.get(f"/api/projects/{project_name}/media/query")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["items"]) == 2
+    assert payload["items"][0]["timestamps"]["creation_time"] <= payload["items"][1]["timestamps"]["creation_time"]
+
+    obs_only = client.get(f"/api/projects/{project_name}/media/query?origin=obs")
+    assert obs_only.status_code == 200
+    obs_items = obs_only.json()["items"]
+    assert len(obs_items) == 1
+    assert obs_items[0]["origin"] == "obs"
+
+    paged = client.get(f"/api/projects/{project_name}/media/query?limit=1&offset=1")
+    assert paged.status_code == 200
+    paged_payload = paged.json()
+    assert len(paged_payload["items"]) == 1
+    assert paged_payload["offset"] == 1
+
+
+def test_registry_resolve_supports_fallback_stream_paths(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "legacy.mov"
+    media_path.write_bytes(b"legacy-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    resolved = client.post(
+        "/api/registry/resolve",
+        json={
+            "asset_ids": [],
+            "fallback_paths": {
+                "legacy-node": f"http://example.local/media/{project_name}/ingest/originals/legacy.mov?source=primary"
+            },
+        },
+    )
+    assert resolved.status_code == 200
+    payload = resolved.json()
+    assert "legacy-node" in payload["results"]
+    assert payload["results"]["legacy-node"]["asset_id"].startswith("sha256:")
+
+
+def test_registry_resolve_supports_media_path_and_project_relative(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "fallback.mov"
+    media_path.write_bytes(b"fallback")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    response = client.post(
+        "/api/registry/resolve",
+        json={
+            "asset_ids": [],
+            "fallback_paths": {
+                "media-path": f"/media/{project_name}/ingest/originals/fallback.mov?source=primary",
+                "project-relative": f"{project_name}/ingest/originals/fallback.mov",
+            },
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "media-path" in payload["results"]
+    assert "project-relative" in payload["results"]
+    assert payload["results"]["media-path"]["asset_id"].startswith("sha256:")
+
+
+def test_media_facts_endpoint_returns_probe_payload(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "facts.mov"
+    media_path.write_bytes(b"facts")
+
+    import app.api.media as media_module
+
+    monkeypatch.setattr(
+        media_module,
+        "_read_ffprobe_payload",
+        lambda _path: {
+            "format": {"duration": "12.5"},
+            "streams": [
+                {"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080, "avg_frame_rate": "30000/1001"},
+                {"codec_type": "audio", "codec_name": "aac", "channels": 2},
+            ],
+        },
+    )
+
+    response = client.get(
+        f"/api/media/facts?project={project_name}&relative_path=ingest/originals/facts.mov"
+    )
+    assert response.status_code == 200
+    facts = response.json()["facts"]
+    assert facts["duration_seconds"] == 12.5
+    assert facts["duration_s"] == 12.5
+    assert facts["width"] == 1920
+    assert facts["height"] == 1080
+    assert facts["video_codec"] == "h264"
+    assert facts["audio_codec"] == "aac"
+    assert facts["audio_channels"] == 2
+    timeline = response.json()["timeline"]
+    assert "anchor_source" in timeline
+    assert "confidence" in timeline
+
+
+def test_media_facts_timeline_prefers_quicktime_creation_time(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "timeline.mov"
+    media_path.write_bytes(b"timeline")
+
+    import app.api.media as media_module
+
+    monkeypatch.setattr(
+        media_module,
+        "_read_ffprobe_payload",
+        lambda _path: {
+            "format": {"duration": "1.0", "tags": {"creation_time": "2026-02-16T19:12:23Z"}},
+            "streams": [{"codec_type": "video", "codec_name": "h264", "width": 1280, "height": 720}],
+        },
+    )
+
+    response = client.get(
+        f"/api/media/facts?project={project_name}&relative_path=ingest/originals/timeline.mov"
+    )
+    assert response.status_code == 200
+    timeline = response.json()["timeline"]
+    assert timeline["anchor_source"] == "quicktime_creation_time"
+    assert timeline["anchor_time"].startswith("2026-02-16T19:12:23")
+    assert timeline["confidence"] >= 0.9

@@ -19,6 +19,10 @@ def test_program_monitor_handoff_module_payload_shape():
     assert 'durationOverride' in module_text
     assert 'nodes' in module_text
     assert 'meta' in module_text
+    assert 'selected_assets' in module_text
+    assert 'asset_ids' in module_text
+    assert 'sha256' in module_text
+    assert 'items' in module_text
     assert 'new URL(PROGRAM_MONITOR_URL)' in module_text
     assert 'sendCount' in module_text
     assert 'clearInterval' in module_text
@@ -31,7 +35,32 @@ def test_program_monitor_handoff_ordering_and_url_resolution():
     assert 'dataset.streamUrl' in module_text
     assert 'dataset.project' in module_text
     assert 'dataset.relative' in module_text
+    assert 'dataset.sha256' in module_text
+    assert 'dataset.origin' in module_text
+    assert 'dataset.creationTime' in module_text
     assert '/media/' in module_text
+
+
+def test_all_projects_selection_and_registry_preview_wiring_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert "const canSelect = !!state.activeProject || allMode;" in html
+    assert "/api/registry/" in html
+    assert "Registry Asset ID" in html
+    assert "/api/media/facts" in html
+    assert "inspectorRequestToken" in html
+    assert "currentInspectorKey" in html
+    assert "const detailSections =" in html
+    assert "renderDetails()" in html
+    assert "detailSections.registry = regRows" in html
+
+
+def test_explorer_ios_touch_guards_and_play_handler():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '-webkit-touch-callout: none' in html
+    assert 'target.addEventListener(\'contextmenu\'' in html
+    assert "if (target.hasPointerCapture(pointerId))" in html
+    assert "media.load?.();" in html
+    assert "media.play?.().catch(() => {});" in html
 
 
 def test_explorer_grid_responsive_rules_and_orientation_hooks():

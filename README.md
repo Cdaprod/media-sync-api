@@ -149,6 +149,8 @@ Path alignment for Resolve:
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index
 - `GET /api/projects/{project}/media` – list indexed media with streamable URLs
+- `GET /api/projects/{project}/media/query` – filtered inventory query for timeline assembly (`origin`, `created_after`, `created_before`, `limit`, `offset`)
+- `GET /api/media/facts` – best-effort ffprobe facts lookup (`project`, `relative_path`, optional `source`) for preview/inspector media details
 - `GET /thumbnails/{project}/{sha256}.jpg` – serve (and cache) a generated thumbnail for explorer grids
 - `GET /media/{project}/download/{relative_path}` – download a stored media file with `Content-Disposition: attachment`
 - `POST /api/projects/{project}/upload` – multipart upload `file=<UploadFile>` (or `files[]=...`) with sha256 de-dupe (returns `served.stream_url` + `served.download_url`)
@@ -157,6 +159,10 @@ Path alignment for Resolve:
 - `POST /api/projects/{project}/upload?op=snapshot` – fetch batch snapshot
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/media/normalize-orientation` – normalize rotated videos in place (`dry_run` supported)
+- `POST /api/projects/{project}/media/reconcile` – classify origin + rotation, plan/apply canonical renames, and persist aliases (`dry_run` + `apply` flags)
+- `GET /api/registry/{sha256}` – authoritative sha256 registry lookup for canonical path/origin/orientation/aliases
+- `POST /api/registry/resolve` – batch registry lookup for `asset_ids` using `sha256:<hash>` identifiers
+  - also supports `fallback_paths` keyed by caller IDs where values are either full stream URLs or `project/relative_path` strings for legacy URL->sha resolution
 - `POST /api/media/normalize-orientation` – normalize rotated videos across all projects (uses all enabled sources when `source` is omitted)
 - `GET|POST /api/projects/{project}/reindex` – rescan ingest/originals for missing hashes/index entries
 - `GET|POST /reindex` – reconcile every enabled source and project in one sweep
@@ -169,6 +175,77 @@ Path alignment for Resolve:
 - `GET /media/{project}/{relative_path}` – stream a stored media file directly (respects `?source=`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)
 - Resolve bridge endpoints: `POST /api/resolve/open`, `POST /api/resolve/jobs/next`, `POST /api/resolve/jobs/{id}/complete`, `POST /api/resolve/jobs/{id}/fail`
+
+
+### Registry contract examples
+Set `MEDIA_SYNC_REGISTRY_BASE_URL` in external consumers to this API base (for LAN defaults, `http://192.168.0.25:8787`).
+
+```bash
+curl http://192.168.0.25:8787/api/registry/<64hex-sha256>
+
+curl -X POST http://192.168.0.25:8787/api/registry/resolve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "asset_ids": ["sha256:<64hex-sha256>"],
+    "fallback_paths": {}
+  }'
+```
+
+### Program Monitor selection payload
+The explorer “Program Monitor” handoff now sends selected stream nodes plus a `selected_assets` block:
+
+```json
+{
+  "selected_assets": {
+    "asset_ids": ["sha256:<64hex>"],
+    "sha256": ["<64hex>"],
+    "fallback_relative_paths": ["ingest/originals/<name>.mov"],
+    "origins": ["obs"],
+    "creation_times": ["2026-01-17T18:57:14+00:00"],
+    "items": [{
+      "asset_id": "sha256:<64hex>",
+      "sha256": "<64hex>",
+      "project": "P1-demo",
+      "source": "primary",
+      "relative_path": "ingest/originals/<name>.mov",
+      "stream_url": "http://.../media/P1-demo/ingest/originals/<name>.mov?source=primary"
+    }]
+  }
+}
+```
+
+In all-projects view, checkbox selection now remains enabled and Program Monitor handoff works without first entering a single project folder.
+
+### Media facts example
+```bash
+curl "http://192.168.0.25:8787/api/media/facts?project=P1-demo&relative_path=ingest/originals/clip.mov"
+```
+
+Returns best-effort values (duration, dimensions, fps, codecs, audio channels) and reports `unknown` values in the explorer inspector when probe data is unavailable.
+
+Explorer inspector UX notes:
+- Inspector detail rows are rendered idempotently (facts/registry enrichments replace stale sections instead of duplicating rows).
+- Touch interactions on cards now suppress iOS callout/text-selection and use pointer gesture guards so tap-to-open remains reliable while scrolling.
+- The inspector Play action now reloads and plays the current stream URL from an explicit user gesture for better iOS Safari compatibility.
+
+`/api/media/facts` and `/api/registry/*` now also include a timeline anchor object:
+
+```json
+{
+  "timeline": {
+    "anchor_time": "2026-02-16T19:12:23+00:00",
+    "anchor_source": "quicktime_creation_time",
+    "confidence": 0.95
+  }
+}
+```
+
+`anchor_source` values: `quicktime_creation_time`, `stream_timecode`, `format_timecode`, `filesystem_mtime`, `unknown`.
+
+### Reconcile flag semantics
+- `dry_run=true` (default) is strictly non-mutating (plan only).
+- `apply=true` enables mutations (renames + metadata writes).
+- `normalize_orientation=true` only normalizes bytes when mutations are enabled.
 
 ## Response guidance & logging
 - Most responses include an `instructions` field with next-step hints (mounts, reindexing, adapter URL)

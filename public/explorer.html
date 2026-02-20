@@ -982,14 +982,37 @@
       display:flex;
       align-items:center;
       justify-content:center;
+      min-height: 220px;
     }
-    .preview video, .preview img{
+    .preview video, .preview img, .preview audio{
       width: 100%;
       height: auto;
+      max-width: 100%;
       display:block;
       background: rgba(0,0,0,0.25);
       max-height: 52vh;
       object-fit: contain;
+    }
+
+    #mediaGrid,
+    #mediaList,
+    .asset,
+    .row,
+    .drawer,
+    .drawer-h,
+    .drawer-body,
+    .preview{
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    input,
+    textarea,
+    select{
+      user-select: text;
+      -webkit-user-select: text;
+      -webkit-touch-callout: default;
     }
 
     .kv{
@@ -1567,6 +1590,8 @@
     const THUMB_LOAD_TIMEOUT_MS = 8000;
     const PREFS_KEY = 'media-sync-explorer-filters-v1';
     const orientationCache = new Map();
+    let inspectorRequestToken = 0;
+    let currentInspectorKey = '';
 
     // -------------------------
     // Utils
@@ -2276,7 +2301,9 @@
       target.addEventListener('pointerup', (event) => {
         if (pointerId !== event.pointerId) return;
         clearLongPress();
-        target.releasePointerCapture(pointerId);
+        if (target.hasPointerCapture(pointerId)){
+          target.releasePointerCapture(pointerId);
+        }
         pointerId = null;
         if (moved){
           ui.dragging = false;
@@ -2291,13 +2318,7 @@
           ui.dragTarget = null;
           return;
         }
-        if (state.selected.has(item.relative_path)) {
-          openDrawer(item);
-        } else if (state.activeProject) {
-          toggleSelected(item.relative_path);
-        } else {
-          openDrawer(item);
-        }
+        openDrawer(item);
       });
 
       target.addEventListener('pointercancel', () => {
@@ -2305,6 +2326,10 @@
         pointerId = null;
         ui.dragging = false;
         ui.assetDragActive = false;
+      });
+
+      target.addEventListener('dragstart', (event) => {
+        event.preventDefault();
       });
 
       target.addEventListener('contextmenu', (event) => {
@@ -2605,6 +2630,7 @@
       el('selCount').textContent = String(count);
       const show = count > 0;
       el('selectBar').classList.toggle('show', show);
+      const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
 
       // enable/disable action buttons
       el('sendResolveBtn').disabled = !show || !state.activeProject;
@@ -2612,8 +2638,8 @@
       el('deleteSelBtn').disabled = !show || !state.activeProject;
       el('selTagToggle').disabled = !show || !state.activeProject;
       el('selMoveToggle').disabled = !show || !state.activeProject;
-      el('selCopyUrls').disabled = !show || !state.activeProject;
-      el('btnProgramMonitor').disabled = !show || !state.activeProject;
+      el('selCopyUrls').disabled = !show || !canSelectAcrossProjects;
+      el('btnProgramMonitor').disabled = !show || !canSelectAcrossProjects;
       el('btnProgramMonitor').hidden = !show;
 
       updateTagButtons();
@@ -2627,7 +2653,7 @@
     }
 
     function updateTagButtons(){
-      const hasSelection = state.selected.size > 0 && state.activeProject;
+      const hasSelection = state.selected.size > 0 && (state.activeProject || state.mediaScope === 'all');
       const hasFocused = !!state.focused;
       const batchInput = el('batchTagInput');
       const drawerInput = el('drawerTagInput');
@@ -3051,7 +3077,7 @@
         if (item?.relative_path) itemsByPath.set(item.relative_path, item);
       });
       const allMode = !state.activeProject && state.mediaScope === 'all';
-      const canSelect = !!state.activeProject;
+      const canSelect = !!state.activeProject || allMode;
 
       // GRID
       const g = el('mediaGrid');
@@ -3110,6 +3136,9 @@
         if (state.selected.has(it.relative_path)) card.classList.add('selected', 'is-selected');
         card.dataset.streamUrl = it.stream_url || it.streamUrl || '';
         card.dataset.relative = it.relative_path || '';
+        card.dataset.sha256 = it.sha256 || '';
+        card.dataset.origin = it.origin || 'unknown';
+        card.dataset.creationTime = it.created_at || it.uploaded_at || it.indexed_at || '';
         card.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
         card.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         card.dataset.kind = kind;
@@ -3160,6 +3189,9 @@
         if (state.selected.has(it.relative_path)) row.classList.add('selected', 'is-selected');
         row.dataset.streamUrl = it.stream_url || it.streamUrl || '';
         row.dataset.relative = it.relative_path || '';
+        row.dataset.sha256 = it.sha256 || '';
+        row.dataset.origin = it.origin || 'unknown';
+        row.dataset.creationTime = it.created_at || it.uploaded_at || it.indexed_at || '';
         row.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
         row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
         row.innerHTML = `
@@ -3376,6 +3408,8 @@
 
       const kind = guessKind(item);
       const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
+      currentInspectorKey = String(item.sha256 || item.relative_path || item.stream_url || title || '');
+      const inspectorToken = ++inspectorRequestToken;
       el('drawerTitle').textContent = title;
       el('drawerSub').textContent = item.relative_path || '';
 
@@ -3387,6 +3421,8 @@
         v.controls = true;
         v.src = item.stream_url || '';
         v.preload = 'metadata';
+        v.playsInline = true;
+        v.setAttribute('playsinline', '');
         preview.appendChild(v);
       }else if (kind === 'image'){
         const img = document.createElement('img');
@@ -3423,19 +3459,98 @@
         ['Hash', item.sha256 || item.hash || ''],
         ['Created', item.created_at || item.createdAt || ''],
         ['Modified', item.updated_at || item.updatedAt || ''],
-        ['Duration', item.duration ? `${item.duration}s` : ''],
-        ['Resolution', (item.width && item.height) ? `${item.width}×${item.height}` : ''],
+        ['Duration', item.duration ? `${item.duration}s` : 'unknown'],
+        ['Resolution', (item.width && item.height) ? `${item.width}×${item.height}` : 'unknown'],
+        ['FPS', item.fps || 'unknown'],
+        ['Video codec', item.codec || 'unknown'],
+        ['Audio codec', item.audio_codec || 'unknown'],
+        ['Audio channels', item.audio_channels ? `${item.audio_channels}ch` : 'unknown'],
       ].filter(([_, v]) => String(v || '').trim().length > 0);
 
-      kv.innerHTML = rows.map(([k,v]) => `
-        <div class="k">${escapeHtml(k)}</div>
-        <div class="v">${escapeHtml(v)}</div>
-      `).join('');
+      const detailSections = {
+        primary: rows,
+        facts: [],
+        registry: [],
+      };
+
+      function renderDetails(){
+        if (inspectorToken !== inspectorRequestToken) return;
+        const currentKey = String(state.focused?.sha256 || state.focused?.relative_path || state.focused?.stream_url || '');
+        if (currentKey !== currentInspectorKey) return;
+        const merged = [
+          ...detailSections.facts,
+          ...detailSections.primary,
+          ...detailSections.registry,
+        ];
+        kv.innerHTML = merged.map(([k,v]) => `
+          <div class="k">${escapeHtml(k)}</div>
+          <div class="v">${escapeHtml(v)}</div>
+        `).join('');
+      }
+      renderDetails();
+
+      const relPath = item.relative_path || '';
+      const factProject = activeProjectName || item.project_name || '';
+      if (factProject && relPath){
+        const factSource = activeSource || item.project_source || '';
+        const sourceQuery = factSource ? `&source=${encodeURIComponent(factSource)}` : '';
+        const factsUrl = `${API}/api/media/facts?project=${encodeURIComponent(factProject)}&relative_path=${encodeURIComponent(relPath)}${sourceQuery}`;
+        fetch(factsUrl)
+          .then((response) => response.ok ? response.json() : null)
+          .then((payload) => {
+            if (!payload || !payload.facts) return;
+            const facts = payload.facts;
+            const factRows = [
+              ['Duration', typeof facts.duration_s === 'number' ? `${facts.duration_s.toFixed(3)}s` : 'unknown'],
+              ['Resolution', (facts.width && facts.height) ? `${facts.width}×${facts.height}` : 'unknown'],
+              ['FPS', typeof facts.fps === 'number' ? String(facts.fps) : 'unknown'],
+              ['Video codec', facts.video_codec || 'unknown'],
+              ['Audio codec', facts.audio_codec || 'unknown'],
+              ['Audio channels', facts.audio_channels ? `${facts.audio_channels}ch` : 'unknown'],
+            ];
+            detailSections.facts = factRows;
+            renderDetails();
+          })
+          .catch(() => {});
+      }
+
+      const sha = item.sha256 || item.hash || '';
+      if (/^[a-fA-F0-9]{64}$/.test(String(sha))){
+        fetch(`${API}/api/registry/${encodeURIComponent(String(sha).toLowerCase())}`)
+          .then((response) => response.ok ? response.json() : null)
+          .then((registry) => {
+            if (!registry) return;
+            const aliases = Array.isArray(registry.aliases) ? registry.aliases : [];
+            const aliasPreview = aliases.slice(0, 3).join(', ');
+            const regRows = [
+              ['Registry Asset ID', registry.asset_id || ''],
+              ['Canonical Name', registry.canonical_name || ''],
+              ['Origin', registry.origin || 'unknown'],
+              ['Creation (UTC)', registry.timestamps?.creation_time || ''],
+              ['Creation best-effort', String(Boolean(registry.timestamps?.best_effort))],
+              ['Orientation', `${registry.orientation?.rotation ?? 0}° / normalized=${Boolean(registry.orientation?.normalized)}`],
+              ['Detected from', registry.orientation?.detected_from || 'none'],
+              ['Aliases', `${aliases.length}${aliasPreview ? ` (${aliasPreview})` : ''}`],
+              ['Registry stream', registry.urls?.stream || ''],
+              ['Registry download', registry.urls?.download || ''],
+            ].filter(([_, v]) => String(v || '').trim().length > 0);
+            if (!regRows.length) return;
+            detailSections.registry = regRows;
+            renderDetails();
+          })
+          .catch(() => {});
+      }
 
       // actions
       el('drawerPlay').onclick = () => {
         const media = preview.querySelector('video, audio');
-        if (media) media.play?.();
+        if (!media) return;
+        const stream = item.stream_url || item.streamUrl || media.getAttribute('src') || '';
+        if (stream){
+          media.src = stream;
+        }
+        media.load?.();
+        media.play?.().catch(() => {});
       };
 
       el('drawerCopy').onclick = async () => {

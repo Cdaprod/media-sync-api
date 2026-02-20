@@ -764,3 +764,33 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2025-07-03)
 - OBS player now defaults loop=0 so clips play once unless explicitly restarted or loop enabled.
+
+### Latest Implementation Notes (2026-02-19)
+- Added authoritative registry endpoints `GET /api/registry/{sha256}` and `POST /api/registry/resolve` so external consumers can resolve canonical path/origin/orientation/aliases from sha256 identity.
+- Reconcile flags now support explicit `apply` semantics: `dry_run=true` is plan-only (no renames/normalization/metadata writes), while `apply=true` (or `dry_run=false`) enables canonical rename + metadata persistence and optional normalization.
+- Canonical filenames now sanitize origin segments for deterministic naming; reconcile renames persist alias history in metadata sidecars and invalidate SHA thumbnails on rename.
+
+### Latest Implementation Notes (2026-02-19, follow-up)
+- Added `GET /api/projects/{project}/media/query` with origin/time window filters plus pagination (`limit`/`offset`) and stable ordering (`creation_time`, then `sha256`) for timeline assembly inventory lookups.
+- Explorer Program Monitor handoff now includes `selected_assets` metadata (`asset_ids`, fallback relative paths, origin hints, creation times) alongside legacy node stream URLs so downstream assemblers can remain sha256-first while keeping backward compatibility.
+
+### Latest Implementation Notes (2026-02-19, all-projects + legacy resolve)
+- Explorer all-projects mode now keeps asset checkboxes and Program Monitor handoff enabled without requiring a project folder selection first.
+- Program Monitor handoff payload now includes richer `selected_assets` metadata (`sha256`, per-item project/source/relative_path/stream_url`) while preserving legacy node URL payload compatibility.
+- Registry batch resolve now accepts `fallback_paths` entries containing stream URLs or `project/relative_path` values and resolves them to full registry records for retroactive legacy node upgrades.
+- Explorer inspector preview now appends a registry section (asset_id, canonical name, origin, creation, orientation, aliases, stream/download) using `/api/registry/{sha256}` when hash data is present.
+
+### Latest Implementation Notes (2026-02-19, media facts + resolve hardening)
+- Added `GET /api/media/facts` for best-effort ffprobe metadata (duration, dimensions, fps, codecs, audio channels) so explorer previews can show real media facts without blocking UI on failures.
+- Registry fallback path normalization now explicitly supports full stream URLs, `/media/<project>/<relative>` paths, and `project/relative` strings for retroactive legacy node resolution.
+- Explorer inspector now fetches media facts from `/api/media/facts` and renders unknown-safe values when probe data is unavailable.
+
+### Latest Implementation Notes (2026-02-19, timeline anchors)
+- Registry responses and `/api/media/facts` now include `timeline` anchors (`anchor_time`, `anchor_source`, `confidence`) so downstream timeline assembly can align clips deterministically.
+- `/api/media/facts` now returns numeric `duration_seconds` (with legacy `duration_s` retained) plus existing media facts for compatibility.
+- Timeline anchor selection is best-effort and deterministic: prefer creation tags, then timecode hints, then filesystem mtime fallback.
+
+### Latest Implementation Notes (2026-02-19, inspector + iOS touch fixes)
+- Explorer inspector details now use token/key-guarded section rendering so async facts/registry responses cannot duplicate rows or update stale assets after focus changes.
+- Inspector Play button now rebinds stream source, calls `load()`, and then `play()` from the click gesture for improved iOS Safari reliability.
+- Card interactions now suppress iOS callout/text-selection in grid/list surfaces and tighten pointer handlers to reduce flash-without-open cases while keeping checkbox multi-select behavior intact in all-projects mode.
