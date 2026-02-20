@@ -789,3 +789,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Registry responses and `/api/media/facts` now include `timeline` anchors (`anchor_time`, `anchor_source`, `confidence`) so downstream timeline assembly can align clips deterministically.
 - `/api/media/facts` now returns numeric `duration_seconds` (with legacy `duration_s` retained) plus existing media facts for compatibility.
 - Timeline anchor selection is best-effort and deterministic: prefer creation tags, then timecode hints, then filesystem mtime fallback.
+
+### Latest Implementation Notes (2026-02-19, inspector + iOS touch fixes)
+- Explorer inspector details now use token/key-guarded section rendering so async facts/registry responses cannot duplicate rows or update stale assets after focus changes.
+- Inspector Play button now rebinds stream source, calls `load()`, and then `play()` from the click gesture for improved iOS Safari reliability.
+- Card interactions now suppress iOS callout/text-selection in grid/list surfaces and tighten pointer handlers to reduce flash-without-open cases while keeping checkbox multi-select behavior intact in all-projects mode.

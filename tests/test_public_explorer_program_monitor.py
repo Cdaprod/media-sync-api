@@ -47,6 +47,20 @@ def test_all_projects_selection_and_registry_preview_wiring_present():
     assert "/api/registry/" in html
     assert "Registry Asset ID" in html
     assert "/api/media/facts" in html
+    assert "inspectorRequestToken" in html
+    assert "currentInspectorKey" in html
+    assert "const detailSections =" in html
+    assert "renderDetails()" in html
+    assert "detailSections.registry = regRows" in html
+
+
+def test_explorer_ios_touch_guards_and_play_handler():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '-webkit-touch-callout: none' in html
+    assert 'target.addEventListener(\'contextmenu\'' in html
+    assert "if (target.hasPointerCapture(pointerId))" in html
+    assert "media.load?.();" in html
+    assert "media.play?.().catch(() => {});" in html
 
 
 def test_explorer_grid_responsive_rules_and_orientation_hooks():

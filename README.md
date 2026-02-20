@@ -223,6 +223,11 @@ curl "http://192.168.0.25:8787/api/media/facts?project=P1-demo&relative_path=ing
 
 Returns best-effort values (duration, dimensions, fps, codecs, audio channels) and reports `unknown` values in the explorer inspector when probe data is unavailable.
 
+Explorer inspector UX notes:
+- Inspector detail rows are rendered idempotently (facts/registry enrichments replace stale sections instead of duplicating rows).
+- Touch interactions on cards now suppress iOS callout/text-selection and use pointer gesture guards so tap-to-open remains reliable while scrolling.
+- The inspector Play action now reloads and plays the current stream URL from an explicit user gesture for better iOS Safari compatibility.
+
 `/api/media/facts` and `/api/registry/*` now also include a timeline anchor object:
 
 ```json
