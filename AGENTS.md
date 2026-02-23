@@ -921,3 +921,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Refined `public/js/explorer-shaders.mjs` so asset effects remain visibly active on iPhone/Safari by combining WebGL where reliable (hover/dissolve) with explicit CSS-based fallbacks (scanline overlay, selection pulse, dissolve veil) when WebGL contexts are unavailable or constrained.
 - Strengthened focus treatment for pointer/touch with immediate transform/box-shadow/filter styling so users can perceive card emphasis even before/without shader compositing.
 - Added shared runtime keyframes (`fx-selection-pulse`, `fx-scanline-pan`) injected once by `AssetFX` and expanded static explorer tests to assert fallback effect hooks remain present.
+
+### Latest Implementation Notes (2026-02-23, viewport re-entry asset FX replay)
+- Added viewport re-entry effect replay support in `AssetFX` via `trackViewport()` + `IntersectionObserver`, so cards can show a brief visual hint again when scrolled back into view instead of only on initial load.
+- Explorer card rendering now calls `cardFX.trackViewport(card, cardThumb)` alongside dissolve wiring so each grid card registers once for visibility-triggered replays within the media grid scroll container.
+- Added a lightweight `fx-visible-hint` animation overlay with throttling (`fxLastVisibleAt`) to avoid excessive replays while still giving obvious feedback during iPhone scroll-back interactions.
+- Updated static explorer tests to assert viewport-tracking methods/keyframes and HTML wiring are present.

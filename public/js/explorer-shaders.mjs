@@ -170,6 +170,8 @@ export class AssetFX {
     this.hoverRaf = 0;
     this.touchTimer = null;
     this.boundGrids = new WeakSet();
+    this.visibilityObserver = null;
+    this.visibilityRoot = null;
   }
 
   attachGrid(gridEl, cardSelector = '.asset') {
@@ -203,6 +205,17 @@ export class AssetFX {
       clearTimeout(this.touchTimer);
       this._blur();
     }, { passive: true });
+
+    this._ensureVisibilityObserver(gridEl);
+  }
+
+  trackViewport(cardEl, imgEl = null) {
+    if (!cardEl) return;
+    if (imgEl) cardEl.__fxThumb = imgEl;
+    if (!this.visibilityObserver) return;
+    if (cardEl.dataset.fxViewportTracked === '1') return;
+    cardEl.dataset.fxViewportTracked = '1';
+    this.visibilityObserver.observe(cardEl);
   }
 
   addScanline(cardEl) {
@@ -388,6 +401,11 @@ export class AssetFX {
     this.hoverTarget = null;
     this.hoverStrength = 0;
     this.hoverGoal = 0;
+    if (this.visibilityObserver) {
+      this.visibilityObserver.disconnect();
+      this.visibilityObserver = null;
+      this.visibilityRoot = null;
+    }
   }
 
   _focus(cardEl) {
@@ -587,6 +605,53 @@ export class AssetFX {
     };
   }
 
+  _ensureVisibilityObserver(rootEl) {
+    if (this.visibilityObserver && this.visibilityRoot === rootEl) return;
+    if (this.visibilityObserver) this.visibilityObserver.disconnect();
+    this.visibilityRoot = rootEl;
+
+    if (!('IntersectionObserver' in window)) {
+      this.visibilityObserver = null;
+      return;
+    }
+
+    this.visibilityObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting || entry.intersectionRatio < 0.35) return;
+        const card = entry.target;
+        const now = Date.now();
+        const last = Number(card.dataset.fxLastVisibleAt || '0');
+        if (now - last < 900) return;
+        card.dataset.fxLastVisibleAt = String(now);
+        const img = card.__fxThumb || card.querySelector('img.asset-thumb');
+        this._replayVisibleHint(card, img);
+      });
+    }, {
+      root: rootEl,
+      threshold: [0.35, 0.6],
+    });
+  }
+
+  _replayVisibleHint(cardEl, imgEl) {
+    if (!cardEl || !imgEl) return;
+    if (!imgEl.complete || imgEl.naturalWidth === 0) return;
+    ensureRelative(cardEl);
+    const veil = createElement('div', 'fx-visible-hint');
+    Object.assign(veil.style, {
+      position: 'absolute',
+      inset: '0',
+      borderRadius: 'inherit',
+      pointerEvents: 'none',
+      zIndex: '3',
+      background: 'linear-gradient(135deg, rgba(86,126,196,0.42), rgba(120,219,255,0.18), rgba(8,14,25,0.0))',
+      mixBlendMode: 'screen',
+      opacity: '0',
+      animation: 'fx-visible-hint 380ms ease-out forwards',
+    });
+    cardEl.appendChild(veil);
+    setTimeout(() => veil.remove(), 420);
+  }
+
   _ensureSharedStyles() {
     if (document.getElementById('asset-fx-shared-styles')) return;
     const style = document.createElement('style');
@@ -600,6 +665,11 @@ export class AssetFX {
       @keyframes fx-scanline-pan {
         0% { background-position-y: 0; }
         100% { background-position-y: 16px; }
+      }
+      @keyframes fx-visible-hint {
+        0% { opacity: 0; transform: scale(0.99); }
+        30% { opacity: 0.92; }
+        100% { opacity: 0; transform: scale(1.01); }
       }
     `;
     document.head.appendChild(style);

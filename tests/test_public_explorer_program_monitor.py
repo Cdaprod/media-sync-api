@@ -152,5 +152,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'pulse(cardEl' in shader_module
     assert 'dissolve(cardEl, imgEl' in shader_module
     assert '_cssDissolve(cardEl, imgEl, duration)' in shader_module
+    assert 'trackViewport(cardEl, imgEl = null)' in shader_module
+    assert '_ensureVisibilityObserver(rootEl)' in shader_module
+    assert '_replayVisibleHint(cardEl, imgEl)' in shader_module
+    assert '@keyframes fx-visible-hint' in shader_module
     assert '@keyframes fx-selection-pulse' in shader_module
     assert 'fx-scanline-overlay' in shader_module
+    assert 'cardFX.trackViewport(card, cardThumb);' in html

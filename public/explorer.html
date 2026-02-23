@@ -3318,7 +3318,10 @@
           </div>
         `;
         const cardThumb = card.querySelector('img.asset-thumb');
-        if (cardThumb) cardFX.dissolve(card, cardThumb);
+        if (cardThumb) {
+          cardFX.dissolve(card, cardThumb);
+          cardFX.trackViewport(card, cardThumb);
+        }
 
         // checkbox toggles selection without opening drawer
         card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
