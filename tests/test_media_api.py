@@ -867,3 +867,60 @@ def test_media_facts_timeline_prefers_quicktime_creation_time(client: TestClient
     assert timeline["anchor_source"] == "quicktime_creation_time"
     assert timeline["anchor_time"].startswith("2026-02-16T19:12:23")
     assert timeline["confidence"] >= 0.9
+
+
+def test_list_media_includes_asset_id(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "asset-id.mov"
+    media_path.write_bytes(b"asset-id")
+
+    reindex = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    media = listing.json()["media"]
+    assert media
+    assert media[0]["asset_id"].startswith("sha256:")
+
+
+def test_bulk_asset_delete_and_tags_across_projects(client: TestClient, env_settings: Path) -> None:
+    first = _create_project(client)
+    second = _create_project(client)
+
+    first_ingest = env_settings / first / "ingest" / "originals"
+    second_ingest = env_settings / second / "ingest" / "originals"
+    first_ingest.mkdir(parents=True, exist_ok=True)
+    second_ingest.mkdir(parents=True, exist_ok=True)
+
+    (first_ingest / "a.mov").write_bytes(b"aaa")
+    (second_ingest / "b.mov").write_bytes(b"bbb")
+
+    assert client.post(f"/api/projects/{first}/reindex").status_code == 200
+    assert client.post(f"/api/projects/{second}/reindex").status_code == 200
+
+    assets = [
+        {"source": "primary", "project": first, "relative_path": "ingest/originals/a.mov"},
+        {"source": "primary", "project": second, "relative_path": "ingest/originals/b.mov"},
+    ]
+
+    tag_response = client.post(
+        "/api/assets/bulk/tags",
+        json={"assets": assets, "add_tags": ["bulk-test"]},
+    )
+    assert tag_response.status_code == 200
+    assert tag_response.json()["updated"] == 2
+
+    delete_response = client.post(
+        "/api/assets/bulk/delete",
+        json={"assets": assets},
+    )
+    assert delete_response.status_code == 200
+    assert delete_response.json()["deleted"] == 2
+
+    first_listing = client.get(f"/api/projects/{first}/media").json()["media"]
+    second_listing = client.get(f"/api/projects/{second}/media").json()["media"]
+    assert first_listing == []
+    assert second_listing == []
