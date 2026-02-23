@@ -854,3 +854,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer selection resolution now falls back to the full `state.media` list when a selected item is hidden by active filters/search, preventing selected-action no-ops with non-zero selection counts.
 - Selection-driven actions (tag/move/delete/resolve/compose and URL derivation) now use a shared `selectionItemByKey` helper so hidden-but-selected assets remain actionable until explicitly cleared.
 - Added static regression assertions to verify the fallback selection resolver wiring in `public/explorer.html`.
+
+
+### Latest Implementation Notes (2026-02-23, all-projects project-scope unlock)
+- Explorer project-scoped bulk actions (Tag/Move/Delete/Compose/Resolve) now unlock in All Projects scope when the current selection resolves to exactly one project/source via selection-key parsing.
+- Mixed-project selections remain selectable for cross-project actions (copy URLs/program monitor) but project-scoped actions now surface clear "Select items from one project first" guardrails instead of silently remaining disabled.
+- Added selection-key parsing helpers and context-aware selected-relative-path extraction so action handlers can infer the target project/source without requiring `state.activeProject`.

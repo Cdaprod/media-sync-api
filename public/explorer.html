@@ -1612,14 +1612,54 @@
         .filter(Boolean);
     }
 
-    function selectedRelativePathsForActiveProject(){
-      const active = state.activeProject;
-      if (!active) return [];
-      const source = active.source || 'primary';
+    function parseSelectedKey(key){
+      const value = String(key || '');
+      if (!value) return { source: '', project: '', relative_path: '' };
+      const first = value.indexOf('::');
+      if (first < 0) return { source: '', project: '', relative_path: value };
+      const second = value.indexOf('::', first + 2);
+      if (second < 0){
+        return {
+          source: value.slice(0, first),
+          project: value.slice(first + 2),
+          relative_path: '',
+        };
+      }
+      return {
+        source: value.slice(0, first),
+        project: value.slice(first + 2, second),
+        relative_path: value.slice(second + 2),
+      };
+    }
+
+    function selectedProjectContextIfSingle(){
+      if (state.activeProject?.name){
+        return { name: state.activeProject.name, source: state.activeProject.source || 'primary' };
+      }
+      const unique = new Set();
+      for (const key of state.selected){
+        const parsed = parseSelectedKey(key);
+        if (!parsed.project || !parsed.relative_path) continue;
+        unique.add(`${parsed.source || 'primary'}::${parsed.project}`);
+      }
+      if (unique.size !== 1) return null;
+      const only = Array.from(unique)[0];
+      const split = parseSelectedKey(`${only}::placeholder`);
+      if (!split.project) return null;
+      return { name: split.project, source: split.source || 'primary' };
+    }
+
+    function selectedRelativePathsForContext(context){
+      if (!context?.name) return [];
+      const source = context.source || 'primary';
       return selectedItems()
-        .filter((item) => itemProjectName(item) === active.name && itemSourceName(item) === source)
+        .filter((item) => itemProjectName(item) === context.name && itemSourceName(item) === source)
         .map((item) => item.relative_path)
         .filter(Boolean);
+    }
+
+    function selectedRelativePathsForAction(){
+      return selectedRelativePathsForContext(selectedProjectContextIfSingle());
     }
 
     const ORIENT_CACHE_NAME = 'media-sync-orient-cache-v1';
@@ -2195,7 +2235,7 @@
 
     function dragPayload(item){
       const key = selectionKey(item);
-      const selected = selectedRelativePathsForActiveProject();
+      const selected = selectedRelativePathsForAction();
       const paths = key && state.selected.has(key) && selected.length
         ? selected
         : [item.relative_path];
@@ -2332,7 +2372,7 @@
           ui.dragging = true;
           ui.dragPointerId = pointerId;
           const key = selectionKey(item);
-          const selected = selectedRelativePathsForActiveProject();
+          const selected = selectedRelativePathsForAction();
           ui.dragPaths = key && state.selected.has(key) && selected.length
             ? selected
             : [item.relative_path];
@@ -2677,15 +2717,17 @@
       const show = count > 0;
       el('selectBar').classList.toggle('show', show);
       const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
+      const scopedContext = selectedProjectContextIfSingle();
+      const canProjectScopedAction = !!scopedContext;
 
       // enable/disable action buttons
-      el('sendResolveBtn').disabled = !show || !state.activeProject;
+      el('sendResolveBtn').disabled = !show || !canProjectScopedAction;
       el('clearSelBtn').disabled = !show;
-      el('deleteSelBtn').disabled = !show || !state.activeProject;
-      el('selTagToggle').disabled = !show || !state.activeProject;
-      el('selMoveToggle').disabled = !show || !state.activeProject;
+      el('deleteSelBtn').disabled = !show || !canProjectScopedAction;
+      el('selTagToggle').disabled = !show || !canProjectScopedAction;
+      el('selMoveToggle').disabled = !show || !canProjectScopedAction;
       el('selCopyUrls').disabled = !show || !canSelectAcrossProjects;
-      el('selCompose').disabled = !show || !state.activeProject;
+      el('selCompose').disabled = !show || !canProjectScopedAction;
       el('btnProgramMonitor').disabled = !show || !canSelectAcrossProjects;
       el('btnProgramMonitor').hidden = !show;
 
@@ -2700,7 +2742,7 @@
     }
 
     function updateTagButtons(){
-      const hasSelection = state.selected.size > 0 && (state.activeProject || state.mediaScope === 'all');
+      const hasSelection = state.selected.size > 0 && !!selectedProjectContextIfSingle();
       const hasFocused = !!state.focused;
       const batchInput = el('batchTagInput');
       const drawerInput = el('drawerTagInput');
@@ -2789,10 +2831,10 @@
       renderTagList(tagList, manualTags, (tag) => applyTagsToPaths([item.relative_path], [], [tag]));
     }
 
-    async function applyTagsToPaths(paths, addTags, removeTags){
-      const p = state.activeProject;
+    async function applyTagsToPaths(paths, addTags, removeTags, context = null){
+      const p = context || selectedProjectContextIfSingle();
       if (!p){
-        toast('warn','Tags','Select a project first');
+        toast('warn','Tags','Select items from one project first');
         return;
       }
       if (!paths.length){
@@ -2806,7 +2848,7 @@
         return;
       }
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/tags${mediaQuery()}`, {
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/tags${p.source && p.source !== 'primary' ? `?source=${encodeURIComponent(p.source)}` : ''}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2829,7 +2871,7 @@
     function renderMoveTargets(){
       const select = el('selMoveTarget');
       if (!select) return;
-      const active = state.activeProject;
+      const active = selectedProjectContextIfSingle();
       const options = state.projects.filter((proj) => {
         if (!active) return true;
         return proj.name !== active.name || proj.source !== active.source;
@@ -3354,11 +3396,11 @@
     }
 
     async function deletePaths(paths){
-      const p = state.activeProject;
-      if (!p){ toast('warn','Delete','Select a project first'); return; }
+      const p = selectedProjectContextIfSingle();
+      if (!p){ toast('warn','Delete','Select items from one project first'); return; }
       if (!paths.length){ toast('warn','Delete','Select one or more clips'); return; }
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/delete${mediaQuery()}`, {
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/delete${p.source && p.source !== 'primary' ? `?source=${encodeURIComponent(p.source)}` : ''}`, {
           method:'POST',
           headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify({ relative_paths: paths }),
@@ -3386,11 +3428,11 @@
     }
 
     async function moveMedia(paths, targetProject){
-      const p = state.activeProject;
-      if (!p){ toast('warn','Move','Select a project first'); return; }
+      const p = selectedProjectContextIfSingle();
+      if (!p){ toast('warn','Move','Select items from one project first'); return; }
       if (!paths.length){ toast('warn','Move','Select one or more clips'); return; }
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/move${mediaQuery()}`, {
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/move${p.source && p.source !== 'primary' ? `?source=${encodeURIComponent(p.source)}` : ''}`, {
           method:'POST',
           headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify({
@@ -3427,7 +3469,7 @@
 
 
     function selectedMediaForActiveProject(){
-      const active = state.activeProject;
+      const active = selectedProjectContextIfSingle();
       if (!active) return [];
       const source = active.source || 'primary';
       return selectedItems().filter((item) => (
@@ -3436,12 +3478,12 @@
     }
 
     async function composeSelectedVideos(){
-      const p = state.activeProject;
+      const p = selectedProjectContextIfSingle();
       if (!p){
-        toast('warn','Compose','Select a project first');
+        toast('warn','Compose','Select items from one project first');
         return;
       }
-      const selected = selectedMediaForActiveProject();
+      const selected = selectedItems().filter((item) => itemProjectName(item) === p.name && itemSourceName(item) === (p.source || 'primary'));
       if (!selected.length){
         toast('warn','Compose','Select one or more clips');
         return;
@@ -3476,8 +3518,8 @@
     }
 
     async function sendToResolve(){
-      const p = state.activeProject;
-      if (!p){ toast('warn','Resolve','Select a project first'); return; }
+      const p = selectedProjectContextIfSingle();
+      if (!p){ toast('warn','Resolve','Select items from one project first'); return; }
       if (!state.selected.size){ toast('warn','Resolve','Select one or more clips'); return; }
 
       const projectMode = el('resolveProjectMode').value;
@@ -3495,12 +3537,12 @@
         new_project_name: projectMode === '__new__'
           ? ((el('resolveNewName').value || '').trim() || null)
           : null,
-        media_rel_paths: selectedRelativePathsForActiveProject(),
+        media_rel_paths: selectedRelativePathsForAction(),
         mode: el('resolveMode').value || 'import',
       };
 
       try{
-        const r = await fetch(`${API}/api/resolve/open${mediaQuery()}`, {
+        const r = await fetch(`${API}/api/resolve/open${p.source && p.source !== 'primary' ? `?source=${encodeURIComponent(p.source)}` : ''}`, {
           method:'POST',
           headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify(body),
@@ -3844,13 +3886,13 @@
 
     el('batchTagAdd').addEventListener('click', () => {
       const tags = parseTagInput(el('batchTagInput').value);
-      applyTagsToPaths(selectedRelativePathsForActiveProject(), tags, []);
+      applyTagsToPaths(selectedRelativePathsForAction(), tags, []);
       el('batchTagInput').value = '';
       updateTagButtons();
     });
     el('batchTagRemove').addEventListener('click', () => {
       const tags = parseTagInput(el('batchTagInput').value);
-      applyTagsToPaths(selectedRelativePathsForActiveProject(), [], tags);
+      applyTagsToPaths(selectedRelativePathsForAction(), [], tags);
       el('batchTagInput').value = '';
       updateTagButtons();
     });
@@ -3882,7 +3924,7 @@
 
     // Clear selection
     el('clearSelBtn').addEventListener('click', clearSelection);
-    el('deleteSelBtn').addEventListener('click', () => deletePaths(selectedRelativePathsForActiveProject()));
+    el('deleteSelBtn').addEventListener('click', () => deletePaths(selectedRelativePathsForAction()));
 
     // Selection bar actions
     el('selTagToggle').addEventListener('click', () => toggleSelectPanel('selTagPanel'));
@@ -3896,13 +3938,13 @@
     el('selTagInput').addEventListener('input', updateTagButtons);
     el('selTagAdd').addEventListener('click', () => {
       const tags = parseTagInput(el('selTagInput').value);
-      applyTagsToPaths(selectedRelativePathsForActiveProject(), tags, []);
+      applyTagsToPaths(selectedRelativePathsForAction(), tags, []);
       el('selTagInput').value = '';
       updateTagButtons();
     });
     el('selTagRemove').addEventListener('click', () => {
       const tags = parseTagInput(el('selTagInput').value);
-      applyTagsToPaths(selectedRelativePathsForActiveProject(), [], tags);
+      applyTagsToPaths(selectedRelativePathsForAction(), [], tags);
       el('selTagInput').value = '';
       updateTagButtons();
     });
@@ -3921,7 +3963,7 @@
         toast('warn','Move','Select a target project');
         return;
       }
-      await moveMedia(selectedRelativePathsForActiveProject(), target);
+      await moveMedia(selectedRelativePathsForAction(), target);
       setSelectPanel('selMovePanel', false);
     });
 
@@ -3955,8 +3997,9 @@
     // Resolve hint updates
     function syncResolveHint(){
       const c = state.selected.size;
+      const scoped = selectedProjectContextIfSingle();
       el('resolveHint').textContent = c
-        ? `${c} item(s) queued.`
+        ? (scoped ? `${c} item(s) queued.` : 'Select items from one project to enable.')
         : 'Select clips to enable.';
     }
     const _origUpdateSelectionUI = updateSelectionUI;
