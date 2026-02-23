@@ -836,3 +836,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Compose overwrite flows now clear stale manifest/index state for the destination `relative_path` before writing new output bytes (`allow_overwrite=true`), preventing duplicate index rows and outdated sha mappings from pointing to overwritten files.
 - Added explicit compose output-name validation helper so invalid `output_name` inputs return HTTP 400 (matching upload-style validation) instead of bubbling as 500 errors.
 - Added compose tests covering overwrite idempotency for a shared output path and invalid compose-upload output name handling.
+
+### Latest Implementation Notes (2026-02-23, docs compose quickstart refresh)
+- Updated `public/index.html` playbook steps to document compose endpoints alongside upload flow, including request examples for `/api/projects/{project}/compose` and `/api/projects/{project}/compose/upload`.
+- Added iPhone Shortcut guidance for compose workflows (multipart repeated `files` fields, JSON body for indexed `relative_paths`, and overwrite/conflict semantics).
+- Clarified that compose responses include `served.stream_url` / `served.download_url` and that `allow_overwrite=false` returns HTTP 409 when destination output already exists.
