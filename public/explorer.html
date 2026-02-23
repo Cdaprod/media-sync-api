@@ -3451,26 +3451,21 @@
     }
 
     async function moveMedia(paths, targetProject){
-      const groups = selectedProjectGroups();
-      if (!groups.length){ toast('warn','Move','Select one or more clips'); return; }
+      const assets = selectedAssetRefsOrdered();
+      if (!assets.length){ toast('warn','Move','Select one or more clips'); return; }
       try{
-        let movedCount = 0;
-        for (const group of groups){
-          const query = group.source && group.source !== 'primary' ? `?source=${encodeURIComponent(group.source)}` : '';
-          const r = await fetch(`${API}/api/projects/${encodeURIComponent(group.project)}/media/move${query}`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({
-              relative_paths: group.relative_paths,
-              target_project: targetProject.name,
-              target_source: targetProject.source || null,
-            }),
-          });
-          const payload = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(payload.detail || payload.message || `Move failed for ${group.project}`);
-          movedCount += payload.moved?.length || 0;
-        }
-        toast('good','Move', `Moved ${movedCount} item(s) to ${targetProject.name}`);
+        const r = await fetch(`${API}/api/assets/bulk/move`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            assets,
+            target_project: targetProject.name,
+            target_source: targetProject.source || null,
+          }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Move failed');
+        toast('good','Move', `Moved ${payload.moved || 0} item(s) to ${targetProject.name}`);
         clearSelectionState();
         state.focused = null;
         setInspectorOpen(false);
@@ -3483,12 +3478,12 @@
     }
 
     async function composeSelectedVideos(){
-      const ordered = selectedItemsOrdered();
-      if (!ordered.length){
+      const assets = selectedAssetRefsOrdered();
+      if (!assets.length){
         toast('warn','Compose','Select one or more clips');
         return;
       }
-      const videos = ordered.filter((item) => guessKind(item) === 'video');
+      const videos = assets.filter((item) => item.kind === 'video');
       if (!videos.length){
         toast('warn','Compose','Select one or more video clips');
         return;
@@ -3501,28 +3496,19 @@
       }
 
       const outputBase = `compose-${Date.now()}.mp4`;
-      const params = new URLSearchParams({
-        output_name: outputBase,
-        target_dir: 'exports',
-        mode: 'auto',
-      });
-      if (outputCtx.source && outputCtx.source !== 'primary'){
-        params.set('source', outputCtx.source);
-      }
-      const form = new FormData();
       try{
-        for (const item of videos){
-          const streamUrl = item.stream_url || item.streamUrl;
-          if (!streamUrl) continue;
-          const response = await fetch(toAbsoluteUrl(streamUrl));
-          if (!response.ok) throw new Error(`Failed to read ${item.relative_path}`);
-          const blob = await response.blob();
-          const filename = (item.relative_path || '').split('/').pop() || `clip-${Date.now()}.mp4`;
-          form.append('files', blob, filename);
-        }
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(outputCtx.name)}/compose/upload?${params.toString()}`, {
+        const r = await fetch(`${API}/api/assets/bulk/compose`, {
           method: 'POST',
-          body: form,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assets: videos,
+            output_project: outputCtx.name,
+            output_source: outputCtx.source || 'primary',
+            output_name: outputBase,
+            target_dir: 'exports',
+            mode: 'auto',
+            allow_overwrite: false,
+          }),
         });
         const payload = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(payload.detail || payload.message || 'Compose failed');

@@ -872,3 +872,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added backend bulk asset endpoints `POST /api/assets/bulk/delete` and `POST /api/assets/bulk/tags` that accept ordered AssetRef payloads (`source`, `project`, `relative_path`) and execute grouped project-scoped operations server-side.
 - Media listing now includes stable `asset_id` (`sha256:<hash>`) for each indexed entry so explorer selection payloads can carry forward a canonical identity.
 - Explorer tag/delete actions now call the new bulk endpoints with ordered asset refs instead of issuing multiple per-project requests in browser code; cross-project order is preserved by `selectedOrder`.
+
+
+### Latest Implementation Notes (2026-02-23, bulk move/compose API bridge)
+- Added backend `POST /api/assets/bulk/move` and `POST /api/assets/bulk/compose` so ordered cross-project selections can be moved/composed via server-side grouped AssetRef execution without browser-side per-project orchestration.
+- Explorer move/compose actions now call the bulk endpoints (`/api/assets/bulk/move`, `/api/assets/bulk/compose`) using ordered asset refs; compose no longer loops through stream-download + re-upload from the browser.
+- Added tests covering bulk move + bulk compose endpoint behavior and static explorer assertions for new bulk endpoint wiring.
