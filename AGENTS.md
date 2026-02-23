@@ -860,3 +860,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer project-scoped bulk actions (Tag/Move/Delete/Compose/Resolve) now unlock in All Projects scope when the current selection resolves to exactly one project/source via selection-key parsing.
 - Mixed-project selections remain selectable for cross-project actions (copy URLs/program monitor) but project-scoped actions now surface clear "Select items from one project first" guardrails instead of silently remaining disabled.
 - Added selection-key parsing helpers and context-aware selected-relative-path extraction so action handlers can infer the target project/source without requiring `state.activeProject`.
+
+
+### Latest Implementation Notes (2026-02-23, cross-project action bridge)
+- Explorer selections now track both membership and explicit selection order (`selected` + `selectedOrder`) so bulk actions can preserve user-picked ordering independent of filter/DOM state.
+- Tag/Delete/Move/Resolve actions now execute across mixed project selections by grouping selected assets per `source::project` and issuing per-project API calls, removing the single-project hard block for these workflows.
+- Compose now supports mixed-project selections by streaming selected video assets in selection order into `/api/projects/{output}/compose/upload`; output target resolves from active project or inferred single-project selection.

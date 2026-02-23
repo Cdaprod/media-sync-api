@@ -1565,6 +1565,7 @@
         untaggedOnly: false,
       },
       selected: new Set(),   // `${source}::${project}::${relative_path}`
+      selectedOrder: [],
       focused: null,         // item
       mediaMeta: {
         types: new Set(),
@@ -1612,6 +1613,23 @@
         .filter(Boolean);
     }
 
+    function selectedItemsOrdered(){
+      const keys = state.selectedOrder.filter((key) => state.selected.has(key));
+      return keys
+        .map((key) => selectionItemByKey(key))
+        .filter(Boolean);
+    }
+
+    function deselectKey(key){
+      state.selected.delete(key);
+      state.selectedOrder = state.selectedOrder.filter((value) => value !== key);
+    }
+
+    function clearSelectionState(){
+      state.selected.clear();
+      state.selectedOrder = [];
+    }
+
     function parseSelectedKey(key){
       const value = String(key || '');
       if (!value) return { source: '', project: '', relative_path: '' };
@@ -1632,27 +1650,36 @@
       };
     }
 
+    function selectedProjectGroups(){
+      const groups = new Map();
+      selectedItemsOrdered().forEach((item) => {
+        const source = itemSourceName(item);
+        const project = itemProjectName(item);
+        const rel = item.relative_path;
+        if (!project || !rel) return;
+        const groupKey = `${source}::${project}`;
+        if (!groups.has(groupKey)){
+          groups.set(groupKey, { source, project, relative_paths: [] });
+        }
+        groups.get(groupKey).relative_paths.push(rel);
+      });
+      return Array.from(groups.values());
+    }
+
     function selectedProjectContextIfSingle(){
       if (state.activeProject?.name){
         return { name: state.activeProject.name, source: state.activeProject.source || 'primary' };
       }
-      const unique = new Set();
-      for (const key of state.selected){
-        const parsed = parseSelectedKey(key);
-        if (!parsed.project || !parsed.relative_path) continue;
-        unique.add(`${parsed.source || 'primary'}::${parsed.project}`);
-      }
-      if (unique.size !== 1) return null;
-      const only = Array.from(unique)[0];
-      const split = parseSelectedKey(`${only}::placeholder`);
-      if (!split.project) return null;
-      return { name: split.project, source: split.source || 'primary' };
+      const groups = selectedProjectGroups();
+      if (groups.length !== 1) return null;
+      const [group] = groups;
+      return { name: group.project, source: group.source || 'primary' };
     }
 
     function selectedRelativePathsForContext(context){
       if (!context?.name) return [];
       const source = context.source || 'primary';
-      return selectedItems()
+      return selectedItemsOrdered()
         .filter((item) => itemProjectName(item) === context.name && itemSourceName(item) === source)
         .map((item) => item.relative_path)
         .filter(Boolean);
@@ -1661,7 +1688,6 @@
     function selectedRelativePathsForAction(){
       return selectedRelativePathsForContext(selectedProjectContextIfSingle());
     }
-
     const ORIENT_CACHE_NAME = 'media-sync-orient-cache-v1';
     const THUMB_MAX_WORKERS = 3;
     const THUMB_LOAD_TIMEOUT_MS = 8000;
@@ -2687,27 +2713,16 @@
     }
 
     function getSelectedStreamUrlsInDomOrder(){
-      const { container, selector } = getVisibleMediaContainer();
-      if (!container) return [];
-      const cards = Array.from(container.querySelectorAll(selector));
-      return cards.map((card) => {
-        const direct = card.dataset.streamUrl || card.dataset.url || '';
-        if (direct){
-          return toAbsoluteUrl(direct);
-        }
-        const project = card.dataset.project || state.activeProject?.name || '';
-        const rel = card.dataset.relative || '';
-        const source = card.dataset.source || 'primary';
-        if (project && rel){
-          const suffix = source && source !== 'primary' ? `?source=${encodeURIComponent(source)}` : '';
-          return toAbsoluteUrl(`/media/${encodeURIComponent(project)}/${encodePath(rel)}${suffix}`);
-        }
-        const key = `${source}::${project}::${rel}`;
-        const item = selectionItemByKey(key);
-        if (item?.stream_url){
-          return toAbsoluteUrl(item.stream_url);
-        }
-        return '';
+      const items = selectedItemsOrdered();
+      return items.map((item) => {
+        const direct = item.stream_url || item.streamUrl || '';
+        if (direct) return toAbsoluteUrl(direct);
+        const project = itemProjectName(item);
+        const rel = item.relative_path || '';
+        const source = itemSourceName(item);
+        if (!project || !rel) return '';
+        const suffix = source && source !== 'primary' ? `?source=${encodeURIComponent(source)}` : '';
+        return toAbsoluteUrl(`/media/${encodeURIComponent(project)}/${encodePath(rel)}${suffix}`);
       }).filter(Boolean);
     }
 
@@ -2717,8 +2732,7 @@
       const show = count > 0;
       el('selectBar').classList.toggle('show', show);
       const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
-      const scopedContext = selectedProjectContextIfSingle();
-      const canProjectScopedAction = !!scopedContext;
+      const canProjectScopedAction = true;
 
       // enable/disable action buttons
       el('sendResolveBtn').disabled = !show || !canProjectScopedAction;
@@ -2742,7 +2756,7 @@
     }
 
     function updateTagButtons(){
-      const hasSelection = state.selected.size > 0 && !!selectedProjectContextIfSingle();
+      const hasSelection = state.selected.size > 0;
       const hasFocused = !!state.focused;
       const batchInput = el('batchTagInput');
       const drawerInput = el('drawerTagInput');
@@ -2832,34 +2846,39 @@
     }
 
     async function applyTagsToPaths(paths, addTags, removeTags, context = null){
-      const p = context || selectedProjectContextIfSingle();
-      if (!p){
-        toast('warn','Tags','Select items from one project first');
-        return;
-      }
-      if (!paths.length){
-        toast('warn','Tags','Select one or more clips');
-        return;
-      }
       const add = (addTags || []).length ? addTags : [];
       const remove = (removeTags || []).length ? removeTags : [];
       if (!add.length && !remove.length){
         toast('warn','Tags','Enter a tag name');
         return;
       }
+
+      const groups = context ? [{ source: context.source || 'primary', project: context.name, relative_paths: paths }] : selectedProjectGroups();
+      if (!groups.length){
+        toast('warn','Tags','Select one or more clips');
+        return;
+      }
+
+      let updatedTotal = 0;
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/tags${p.source && p.source !== 'primary' ? `?source=${encodeURIComponent(p.source)}` : ''}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            relative_paths: paths,
-            add_tags: add,
-            remove_tags: remove,
-          }),
-        });
-        const payload = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(payload.detail || payload.message || 'Tag update failed');
-        toast('good','Tags', `Updated ${payload.updated?.length || 0} assets`);
+        for (const group of groups){
+          const filteredPaths = (group.relative_paths || []).filter(Boolean);
+          if (!filteredPaths.length) continue;
+          const query = group.source && group.source !== 'primary' ? `?source=${encodeURIComponent(group.source)}` : '';
+          const r = await fetch(`${API}/api/projects/${encodeURIComponent(group.project)}/media/tags${query}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              relative_paths: filteredPaths,
+              add_tags: add,
+              remove_tags: remove,
+            }),
+          });
+          const payload = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(payload.detail || payload.message || `Tag update failed for ${group.project}`);
+          updatedTotal += payload.updated?.length || 0;
+        }
+        toast('good','Tags', `Updated ${updatedTotal} assets`);
         if (state.focused){
           await loadDrawerTags(state.focused);
         }
@@ -3062,7 +3081,7 @@
 
     async function loadAllMedia(){
       state.mediaScope = 'all';
-      state.selected.clear();
+      clearSelectionState();
       state.focused = null;
       const items = [];
       if (!state.projects.length){
@@ -3315,7 +3334,7 @@
     async function selectProject(p){
       state.activeProject = p;
       state.mediaScope = 'project';
-      state.selected.clear();
+      clearSelectionState();
       state.focused = null;
 
       // prefill resolve name
@@ -3380,8 +3399,13 @@
       if (!canSelectAcrossProjects) return;
       const key = selectionKey(item);
       if (!key) return;
-      if (state.selected.has(key)) state.selected.delete(key);
-      else state.selected.add(key);
+      if (state.selected.has(key)){
+        deselectKey(key);
+      }else{
+        state.selected.add(key);
+        state.selectedOrder = state.selectedOrder.filter((value) => value !== key);
+        state.selectedOrder.push(key);
+      }
 
       // update selected CSS quickly without full re-render
       // simplest: re-render; media lists are small enough on LAN.
@@ -3390,36 +3414,31 @@
     }
 
     function clearSelection(){
-      state.selected.clear();
+      clearSelectionState();
       renderMedia();
       updateSelectionUI();
     }
 
     async function deletePaths(paths){
-      const p = selectedProjectContextIfSingle();
-      if (!p){ toast('warn','Delete','Select items from one project first'); return; }
-      if (!paths.length){ toast('warn','Delete','Select one or more clips'); return; }
+      const groups = selectedProjectGroups();
+      if (!groups.length){ toast('warn','Delete','Select one or more clips'); return; }
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/delete${p.source && p.source !== 'primary' ? `?source=${encodeURIComponent(p.source)}` : ''}`, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({ relative_paths: paths }),
-        });
-        const payload = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(payload.detail || payload.message || 'Delete failed');
+        for (const group of groups){
+          const query = group.source && group.source !== 'primary' ? `?source=${encodeURIComponent(group.source)}` : '';
+          const r = await fetch(`${API}/api/projects/${encodeURIComponent(group.project)}/media/delete${query}`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ relative_paths: group.relative_paths }),
+          });
+          const payload = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(payload.detail || payload.message || `Delete failed for ${group.project}`);
+        }
         toast('good','Delete','Media removed from disk and index');
-        const pathSet = new Set(paths);
         for (const key of Array.from(state.selected)){
-          const item = selectionItemByKey(key);
-          if (!item) continue;
-          if (itemProjectName(item) === p.name && itemSourceName(item) === (p.source || 'primary') && pathSet.has(item.relative_path)){
-            state.selected.delete(key);
-          }
+          deselectKey(key);
         }
-        if (state.focused && paths.includes(state.focused.relative_path)){
-          state.focused = null;
-          setInspectorOpen(false);
-        }
+        state.focused = null;
+        setInspectorOpen(false);
         await loadMedia();
         updateSelectionUI();
       }catch(e){
@@ -3428,34 +3447,29 @@
     }
 
     async function moveMedia(paths, targetProject){
-      const p = selectedProjectContextIfSingle();
-      if (!p){ toast('warn','Move','Select items from one project first'); return; }
-      if (!paths.length){ toast('warn','Move','Select one or more clips'); return; }
+      const groups = selectedProjectGroups();
+      if (!groups.length){ toast('warn','Move','Select one or more clips'); return; }
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/media/move${p.source && p.source !== 'primary' ? `?source=${encodeURIComponent(p.source)}` : ''}`, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({
-            relative_paths: paths,
-            target_project: targetProject.name,
-            target_source: targetProject.source || null,
-          }),
-        });
-        const payload = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(payload.detail || payload.message || 'Move failed');
-        toast('good','Move', `Moved ${paths.length} item(s) to ${targetProject.name}`);
-        const pathSet = new Set(paths);
-        for (const key of Array.from(state.selected)){
-          const item = selectionItemByKey(key);
-          if (!item) continue;
-          if (itemProjectName(item) === p.name && itemSourceName(item) === (p.source || 'primary') && pathSet.has(item.relative_path)){
-            state.selected.delete(key);
-          }
+        let movedCount = 0;
+        for (const group of groups){
+          const query = group.source && group.source !== 'primary' ? `?source=${encodeURIComponent(group.source)}` : '';
+          const r = await fetch(`${API}/api/projects/${encodeURIComponent(group.project)}/media/move${query}`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({
+              relative_paths: group.relative_paths,
+              target_project: targetProject.name,
+              target_source: targetProject.source || null,
+            }),
+          });
+          const payload = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(payload.detail || payload.message || `Move failed for ${group.project}`);
+          movedCount += payload.moved?.length || 0;
         }
-        if (state.focused && paths.includes(state.focused.relative_path)){
-          state.focused = null;
-          setInspectorOpen(false);
-        }
+        toast('good','Move', `Moved ${movedCount} item(s) to ${targetProject.name}`);
+        clearSelectionState();
+        state.focused = null;
+        setInspectorOpen(false);
         await loadMedia();
         await loadProjects();
         updateSelectionUI();
@@ -3464,49 +3478,47 @@
       }
     }
 
-
-
-
-
-    function selectedMediaForActiveProject(){
-      const active = selectedProjectContextIfSingle();
-      if (!active) return [];
-      const source = active.source || 'primary';
-      return selectedItems().filter((item) => (
-        itemProjectName(item) === active.name && itemSourceName(item) === source
-      ));
-    }
-
     async function composeSelectedVideos(){
-      const p = selectedProjectContextIfSingle();
-      if (!p){
-        toast('warn','Compose','Select items from one project first');
-        return;
-      }
-      const selected = selectedItems().filter((item) => itemProjectName(item) === p.name && itemSourceName(item) === (p.source || 'primary'));
-      if (!selected.length){
+      const ordered = selectedItemsOrdered();
+      if (!ordered.length){
         toast('warn','Compose','Select one or more clips');
         return;
       }
-      const videos = selected.filter((item) => guessKind(item) === 'video');
+      const videos = ordered.filter((item) => guessKind(item) === 'video');
       if (!videos.length){
         toast('warn','Compose','Select one or more video clips');
         return;
       }
+
+      const outputCtx = selectedProjectContextIfSingle() || state.activeProject;
+      if (!outputCtx?.name){
+        toast('warn','Compose','Choose an output project, or select clips from one project.');
+        return;
+      }
+
       const outputBase = `compose-${Date.now()}.mp4`;
-      const body = {
-        inputs: videos.map((item) => item.relative_path),
+      const params = new URLSearchParams({
         output_name: outputBase,
         target_dir: 'exports',
         mode: 'auto',
-        allow_overwrite: false,
-      };
-      const query = p.source ? `?source=${encodeURIComponent(p.source)}` : '';
+      });
+      if (outputCtx.source && outputCtx.source !== 'primary'){
+        params.set('source', outputCtx.source);
+      }
+      const form = new FormData();
       try{
-        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/compose${query}`, {
+        for (const item of videos){
+          const streamUrl = item.stream_url || item.streamUrl;
+          if (!streamUrl) continue;
+          const response = await fetch(toAbsoluteUrl(streamUrl));
+          if (!response.ok) throw new Error(`Failed to read ${item.relative_path}`);
+          const blob = await response.blob();
+          const filename = (item.relative_path || '').split('/').pop() || `clip-${Date.now()}.mp4`;
+          form.append('files', blob, filename);
+        }
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(outputCtx.name)}/compose/upload?${params.toString()}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: form,
         });
         const payload = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(payload.detail || payload.message || 'Compose failed');
@@ -3518,38 +3530,40 @@
     }
 
     async function sendToResolve(){
-      const p = selectedProjectContextIfSingle();
-      if (!p){ toast('warn','Resolve','Select items from one project first'); return; }
-      if (!state.selected.size){ toast('warn','Resolve','Select one or more clips'); return; }
+      const groups = selectedProjectGroups();
+      if (!groups.length){ toast('warn','Resolve','Select one or more clips'); return; }
 
       const projectMode = el('resolveProjectMode').value;
-      let projectValue = p.name;
-
-      if (projectMode === '__new__') projectValue = '__new__';
-      else if (projectMode === '__select__') projectValue = '__select__';
-      else {
-        const v = (el('resolveProjectName').value || '').trim();
-        if (v) projectValue = v;
-      }
-
-      const body = {
-        project: projectValue,
-        new_project_name: projectMode === '__new__'
-          ? ((el('resolveNewName').value || '').trim() || null)
-          : null,
-        media_rel_paths: selectedRelativePathsForAction(),
-        mode: el('resolveMode').value || 'import',
-      };
-
+      let sent = 0;
       try{
-        const r = await fetch(`${API}/api/resolve/open${p.source && p.source !== 'primary' ? `?source=${encodeURIComponent(p.source)}` : ''}`, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify(body),
-        });
-        const payload = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(payload.detail || payload.message || 'Resolve request failed');
-        toast('good','Resolve', `Sent. Job: ${payload.job_id || 'ok'}`);
+        for (const group of groups){
+          let projectValue = group.project;
+          if (projectMode === '__new__') projectValue = '__new__';
+          else if (projectMode === '__select__') projectValue = '__select__';
+          else {
+            const v = (el('resolveProjectName').value || '').trim();
+            if (v) projectValue = v;
+          }
+
+          const body = {
+            project: projectValue,
+            new_project_name: projectMode === '__new__'
+              ? ((el('resolveNewName').value || '').trim() || null)
+              : null,
+            media_rel_paths: group.relative_paths,
+            mode: el('resolveMode').value || 'import',
+          };
+          const query = group.source && group.source !== 'primary' ? `?source=${encodeURIComponent(group.source)}` : '';
+          const r = await fetch(`${API}/api/resolve/open${query}`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(body),
+          });
+          const payload = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(payload.detail || payload.message || `Resolve request failed for ${group.project}`);
+          sent += 1;
+        }
+        toast('good','Resolve', sent > 1 ? `Sent ${sent} jobs.` : 'Sent.');
       }catch(e){
         toast('bad','Resolve', e.message);
       }
@@ -3558,11 +3572,16 @@
     // -------------------------
     // Drawer / inspector
     // -------------------------
+    // Drawer / inspector
+    // -------------------------
     function openDrawer(item){
       state.focused = item;
       if (item?.relative_path && (state.activeProject || state.mediaScope === 'all')){
         const key = selectionKey(item);
-        if (key) state.selected.add(key);
+        if (key && !state.selected.has(key)){
+          state.selected.add(key);
+          state.selectedOrder.push(key);
+        }
       }
 
       const kind = guessKind(item);
@@ -3997,9 +4016,9 @@
     // Resolve hint updates
     function syncResolveHint(){
       const c = state.selected.size;
-      const scoped = selectedProjectContextIfSingle();
+      const groups = selectedProjectGroups();
       el('resolveHint').textContent = c
-        ? (scoped ? `${c} item(s) queued.` : 'Select items from one project to enable.')
+        ? (groups.length > 1 ? `${c} item(s) queued across ${groups.length} projects.` : `${c} item(s) queued.`)
         : 'Select clips to enable.';
     }
     const _origUpdateSelectionUI = updateSelectionUI;
