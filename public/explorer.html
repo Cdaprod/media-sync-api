@@ -1556,7 +1556,10 @@
   <script src="js/obs-websocket.js"></script>
   <script src="js/obs-push.js"></script>
   <script type="module" src="js/program_monitor_handoff.js"></script>
-  <script>
+  <script type="module">
+    import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';
+
+    void ExplorerShaders;
     // -------------------------
     // Config / state
     // -------------------------
@@ -1597,6 +1600,8 @@
       dragPointerId: null,
       dragTarget: null,
     };
+
+    const cardFX = new AssetFX();
 
     const itemsByPath = new Map();
 
@@ -1730,6 +1735,12 @@
     // -------------------------
     // Utils
     // -------------------------
+    function cssEscape(value){
+      const input = String(value ?? '');
+      if (window.CSS?.escape) return window.CSS.escape(input);
+      return input.replace(/([\"\'\\#.:;,!?+*~^$\[\]()=>|/@])/g, '\\$1');
+    }
+
     function toast(type, title, message){
       const t = document.createElement('div');
       t.className = `toast ${type || ''}`;
@@ -3216,6 +3227,7 @@
 
       // GRID
       const g = el('mediaGrid');
+      cardFX.attachGrid(g, '.asset');
       g.innerHTML = '';
       // LIST
       const l = el('mediaList');
@@ -3305,6 +3317,8 @@
             </div>
           </div>
         `;
+        const cardThumb = card.querySelector('img.asset-thumb');
+        if (cardThumb) cardFX.dissolve(card, cardThumb);
 
         // checkbox toggles selection without opening drawer
         card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
@@ -3314,6 +3328,7 @@
 
         wireAssetPointerHandlers(card, it);
         g.appendChild(card);
+        if (kind === 'video') cardFX.addScanline(card);
 
         // ---- list row
         const row = document.createElement('div');
@@ -3425,12 +3440,17 @@
       if (!canSelectAcrossProjects) return;
       const key = selectionKey(item);
       if (!key) return;
+      let selectedCard = null;
       if (state.selected.has(key)){
         deselectKey(key);
       }else{
         state.selected.add(key);
         state.selectedOrder = state.selectedOrder.filter((value) => value !== key);
         state.selectedOrder.push(key);
+        selectedCard = document.querySelector(`.asset[data-source="${cssEscape(itemSourceName(item))}"][data-project="${cssEscape(itemProjectName(item))}"][data-relative="${cssEscape(item.relative_path || '')}"]`);
+      }
+      if (selectedCard){
+        cardFX.pulse(selectedCard);
       }
 
       // update selected CSS quickly without full re-render

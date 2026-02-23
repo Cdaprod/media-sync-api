@@ -910,3 +910,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Reverted the `.topbar` flex-column override so the first-row controls (`.topbar-inner` search/actions layout) return to their original behavior.
 - Kept the second-row media header integration on `.topbar > .section-h` unchanged, including matching horizontal padding with the topbar row (`18px` desktop / `12px` mobile).
 - Retained combined topbar sizing tokens (`--topbar-height = --topbar-row-height + --topbar-subrow-height`) so fixed-offset/reveal spacing still covers both rows.
+
+### Latest Implementation Notes (2026-02-23, explorer shader asset effects wiring)
+- Added `public/js/explorer-shaders.mjs` exporting `AssetFX` with WebGL-driven card effects for hover/touch chromatic glow, video scanline overlay, selection pulse, and thumbnail dissolve.
+- Updated `public/explorer.html` to load the shader module as an ES module, instantiate `cardFX`, and wire effects at existing integration points: grid attach, thumbnail creation, video card append, and selection toggles.
+- Added a `cssEscape` helper in explorer UI code for safe data-attribute selector targeting when pulsing newly selected cards.
+- Extended `tests/test_public_explorer_program_monitor.py` with assertions that shader wiring and `AssetFX` export/methods are present.

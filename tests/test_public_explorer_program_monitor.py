@@ -133,3 +133,21 @@ def test_explorer_selection_bar_compose_action_present():
     assert 'Compose Video(s)' in html
     assert 'async function composeSelectedVideos()' in html
     assert '/compose' in html
+
+
+def test_explorer_shader_asset_fx_wiring_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+
+    assert "import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';" in html
+    assert 'const cardFX = new AssetFX();' in html
+    assert "cardFX.attachGrid(g, '.asset');" in html
+    assert 'cardFX.dissolve(card, cardThumb);' in html
+    assert "if (kind === 'video') cardFX.addScanline(card);" in html
+    assert 'cardFX.pulse(selectedCard);' in html
+
+    assert 'export class AssetFX' in shader_module
+    assert "attachGrid(gridEl, cardSelector = '.asset')" in shader_module
+    assert 'addScanline(cardEl)' in shader_module
+    assert 'pulse(cardEl' in shader_module
+    assert 'dissolve(cardEl, imgEl' in shader_module
