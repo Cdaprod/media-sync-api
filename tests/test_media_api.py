@@ -924,3 +924,78 @@ def test_bulk_asset_delete_and_tags_across_projects(client: TestClient, env_sett
     second_listing = client.get(f"/api/projects/{second}/media").json()["media"]
     assert first_listing == []
     assert second_listing == []
+
+
+def test_bulk_asset_move_across_projects(client: TestClient, env_settings: Path) -> None:
+    first = _create_project(client)
+    second = _create_project(client)
+    target = _create_project(client)
+
+    first_ingest = env_settings / first / "ingest" / "originals"
+    second_ingest = env_settings / second / "ingest" / "originals"
+    first_ingest.mkdir(parents=True, exist_ok=True)
+    second_ingest.mkdir(parents=True, exist_ok=True)
+    (first_ingest / "move-a.mov").write_bytes(b"aaa")
+    (second_ingest / "move-b.mov").write_bytes(b"bbb")
+
+    assert client.post(f"/api/projects/{first}/reindex").status_code == 200
+    assert client.post(f"/api/projects/{second}/reindex").status_code == 200
+
+    assets = [
+        {"source": "primary", "project": first, "relative_path": "ingest/originals/move-a.mov"},
+        {"source": "primary", "project": second, "relative_path": "ingest/originals/move-b.mov"},
+    ]
+
+    response = client.post(
+        "/api/assets/bulk/move",
+        json={"assets": assets, "target_project": target},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["moved"] == 2
+
+    target_listing = client.get(f"/api/projects/{target}/media").json()["media"]
+    assert len(target_listing) == 2
+
+
+def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    first = _create_project(client)
+    second = _create_project(client)
+    output_project = _create_project(client)
+
+    first_ingest = env_settings / first / "ingest" / "originals"
+    second_ingest = env_settings / second / "ingest" / "originals"
+    first_ingest.mkdir(parents=True, exist_ok=True)
+    second_ingest.mkdir(parents=True, exist_ok=True)
+    (first_ingest / "compose-a.mov").write_bytes(b"aaa")
+    (second_ingest / "compose-b.mov").write_bytes(b"bbb")
+
+    assert client.post(f"/api/projects/{first}/reindex").status_code == 200
+    assert client.post(f"/api/projects/{second}/reindex").status_code == 200
+
+    def _fake_concat(inputs, output, mode, *, allow_overwrite):
+        output.write_bytes(b"joined")
+        return "copy"
+
+    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
+
+    assets = [
+        {"source": "primary", "project": first, "relative_path": "ingest/originals/compose-a.mov"},
+        {"source": "primary", "project": second, "relative_path": "ingest/originals/compose-b.mov"},
+    ]
+
+    response = client.post(
+        "/api/assets/bulk/compose",
+        json={
+            "assets": assets,
+            "output_project": output_project,
+            "output_name": "bulk-cut.mp4",
+            "target_dir": "exports",
+            "mode": "auto",
+            "allow_overwrite": False,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"stored", "duplicate"}
+    assert payload["path"].startswith("exports/")

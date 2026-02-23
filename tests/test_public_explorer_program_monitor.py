@@ -121,6 +121,8 @@ def test_explorer_selection_keys_support_all_projects_scope():
     assert "toast('warn','Compose','Choose an output project, or select clips from one project.');" in html
     assert '/api/assets/bulk/delete' in html
     assert '/api/assets/bulk/tags' in html
+    assert '/api/assets/bulk/move' in html
+    assert '/api/assets/bulk/compose' in html
 
 
 def test_explorer_selection_bar_compose_action_present():

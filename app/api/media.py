@@ -21,7 +21,7 @@ from typing import Any, Dict, List
 from urllib.parse import quote
 from urllib.parse import unquote, urlparse
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageOps
@@ -128,6 +128,22 @@ class BulkTagRequest(BaseModel):
     assets: List[AssetRef] = Field(default_factory=list)
     add_tags: List[str] = Field(default_factory=list)
     remove_tags: List[str] = Field(default_factory=list)
+
+
+class BulkMoveRequest(BaseModel):
+    assets: List[AssetRef] = Field(default_factory=list)
+    target_project: str
+    target_source: str | None = None
+
+
+class BulkComposeRequest(BaseModel):
+    assets: List[AssetRef] = Field(default_factory=list)
+    output_project: str
+    output_source: str | None = None
+    output_name: str = "compiled.mp4"
+    target_dir: str = "exports"
+    mode: str = "auto"
+    allow_overwrite: bool = False
 
 
 class NormalizeOrientationRequest(BaseModel):
@@ -711,6 +727,126 @@ async def bulk_tag_media(payload: BulkTagRequest):
         "missing": missing_total,
         "groups": groups,
     }
+
+
+
+
+@bulk_router.post("/bulk/move")
+async def bulk_move_media(payload: BulkMoveRequest):
+    """Move media assets across projects using ordered asset refs.
+
+    Example:
+        curl -X POST http://localhost:8787/api/assets/bulk/move \
+          -H "Content-Type: application/json" \
+          -d '{"assets":[{"source":"primary","project":"demo-a","relative_path":"ingest/originals/a.mov"}],"target_project":"demo-b"}'
+    """
+
+    if not payload.assets:
+        raise HTTPException(status_code=400, detail="assets is required")
+
+    grouped: dict[tuple[str | None, str], list[str]] = {}
+    for asset in payload.assets:
+        grouped.setdefault((asset.source, asset.project), []).append(asset.relative_path)
+
+    groups: list[dict[str, object]] = []
+    moved_total = 0
+    duplicate_total = 0
+    missing_total = 0
+    for (source_name, project_name), rels in grouped.items():
+        result = await move_media(
+            project_name=project_name,
+            payload=MoveMediaRequest(
+                relative_paths=rels,
+                target_project=payload.target_project,
+                target_source=payload.target_source,
+            ),
+            source=source_name,
+        )
+        groups.append(
+            {
+                "source": source_name or "primary",
+                "project": project_name,
+                "moved": result.get("moved", []),
+                "duplicates": result.get("duplicates", []),
+                "missing": result.get("missing", []),
+            }
+        )
+        moved_total += len(result.get("moved", []))
+        duplicate_total += len(result.get("duplicates", []))
+        missing_total += len(result.get("missing", []))
+
+    return {
+        "status": "ok",
+        "moved": moved_total,
+        "duplicates": duplicate_total,
+        "missing": missing_total,
+        "groups": groups,
+    }
+
+
+@bulk_router.post("/bulk/compose")
+async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
+    """Compose ordered asset refs into one output file on the server side.
+
+    Example:
+        curl -X POST http://localhost:8787/api/assets/bulk/compose \
+          -H "Content-Type: application/json" \
+          -d '{"assets":[{"source":"primary","project":"demo-a","relative_path":"ingest/originals/a.mov"}],"output_project":"demo-b","output_name":"cut.mp4"}'
+    """
+
+    if not payload.assets:
+        raise HTTPException(status_code=400, detail="assets is required")
+
+    from app.api.compose import (
+        _concat_files,
+        _prepare_overwrite,
+        _register_output,
+        _resolve_project,
+        _resolve_within_project,
+        _safe_filename_or_400,
+    )
+
+    input_paths: list[Path] = []
+    for asset in payload.assets:
+        resolved = _require_source_and_project(asset.project, asset.source)
+        try:
+            safe_relative = _validate_relative_media_path(asset.relative_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        absolute = (resolved.root / safe_relative).resolve()
+        root = resolved.root.resolve()
+        if root not in absolute.parents and absolute != root:
+            raise HTTPException(status_code=400, detail="Requested path is outside the project")
+        if not absolute.exists() or not absolute.is_file():
+            raise HTTPException(status_code=404, detail=f"Media not found: {asset.project}/{safe_relative}")
+        input_paths.append(absolute)
+
+    name, active_source, output_project_root = _resolve_project(payload.output_project, payload.output_source)
+    target_dir = _resolve_within_project(output_project_root, payload.target_dir.strip() or "exports", require_exists=False)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    output_name = _safe_filename_or_400(payload.output_name, default="compiled.mp4")
+    if not output_name.lower().endswith(".mp4"):
+        output_name = f"{output_name}.mp4"
+    output_abs = _resolve_within_project(
+        output_project_root,
+        f"{target_dir.relative_to(output_project_root).as_posix()}/{output_name}",
+        require_exists=False,
+    )
+    if output_abs.exists() and not payload.allow_overwrite:
+        raise HTTPException(status_code=409, detail="Output already exists. Set allow_overwrite=true or provide a unique output_name.")
+    if output_abs.exists() and payload.allow_overwrite:
+        _prepare_overwrite(output_project_root, output_abs.relative_to(output_project_root).as_posix())
+
+    compose_mode = payload.mode if payload.mode in {"auto", "copy", "encode"} else "auto"
+    mode_used = _concat_files(input_paths, output_abs, compose_mode, allow_overwrite=payload.allow_overwrite)
+    return _register_output(
+        project=output_project_root,
+        project_name=name,
+        active_source=active_source,
+        output_abs=output_abs,
+        request=request,
+        mode_used=mode_used,
+    )
 
 
 @router.post("/{project_name}/media/delete")
