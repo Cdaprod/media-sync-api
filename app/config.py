@@ -42,9 +42,16 @@ class Settings(BaseModel):
     auto_reindex_interval_seconds: int = Field(
         default_factory=lambda: int(os.getenv("MEDIA_SYNC_AUTO_REINDEX_INTERVAL_SECONDS", "60"))
     )
+    temp_root: Path = Field(default_factory=lambda: Path(os.getenv("MEDIA_SYNC_TEMP_ROOT", "/tmp/media-sync-api")))
 
 def ensure_project_root(path: Path) -> None:
     """Ensure the configured project root exists and is a directory."""
+
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def ensure_temp_root(path: Path) -> None:
+    """Ensure the temp staging root exists and is a directory."""
 
     path.mkdir(parents=True, exist_ok=True)
 
@@ -55,6 +62,7 @@ def get_settings() -> Settings:
 
     settings = Settings()
     ensure_project_root(settings.project_root)
+    ensure_temp_root(settings.temp_root)
     return settings
 
 
