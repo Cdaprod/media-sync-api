@@ -116,8 +116,11 @@ def test_explorer_selection_keys_support_all_projects_scope():
     assert 'function selectedProjectContextIfSingle()' in html
     assert 'selectedOrder: []' in html
     assert 'function selectedProjectGroups()' in html
+    assert 'function selectedAssetRefsOrdered()' in html
     assert 'const canProjectScopedAction = true;' in html
     assert "toast('warn','Compose','Choose an output project, or select clips from one project.');" in html
+    assert '/api/assets/bulk/delete' in html
+    assert '/api/assets/bulk/tags' in html
 
 
 def test_explorer_selection_bar_compose_action_present():

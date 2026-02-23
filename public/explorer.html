@@ -1620,6 +1620,20 @@
         .filter(Boolean);
     }
 
+
+    function selectedAssetRefsOrdered(){
+      return selectedItemsOrdered()
+        .map((item) => ({
+          source: itemSourceName(item),
+          project: itemProjectName(item),
+          relative_path: item.relative_path || '',
+          kind: guessKind(item),
+          asset_id: item.asset_id || null,
+          sha256: item.sha256 || null,
+        }))
+        .filter((item) => item.project && item.relative_path);
+    }
+
     function deselectKey(key){
       state.selected.delete(key);
       state.selectedOrder = state.selectedOrder.filter((value) => value !== key);
@@ -2853,32 +2867,27 @@
         return;
       }
 
-      const groups = context ? [{ source: context.source || 'primary', project: context.name, relative_paths: paths }] : selectedProjectGroups();
-      if (!groups.length){
+      const assets = context
+        ? selectedAssetRefsOrdered().filter((item) => item.project === context.name && item.source === (context.source || 'primary'))
+        : selectedAssetRefsOrdered();
+      if (!assets.length){
         toast('warn','Tags','Select one or more clips');
         return;
       }
 
-      let updatedTotal = 0;
       try{
-        for (const group of groups){
-          const filteredPaths = (group.relative_paths || []).filter(Boolean);
-          if (!filteredPaths.length) continue;
-          const query = group.source && group.source !== 'primary' ? `?source=${encodeURIComponent(group.source)}` : '';
-          const r = await fetch(`${API}/api/projects/${encodeURIComponent(group.project)}/media/tags${query}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              relative_paths: filteredPaths,
-              add_tags: add,
-              remove_tags: remove,
-            }),
-          });
-          const payload = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(payload.detail || payload.message || `Tag update failed for ${group.project}`);
-          updatedTotal += payload.updated?.length || 0;
-        }
-        toast('good','Tags', `Updated ${updatedTotal} assets`);
+        const r = await fetch(`${API}/api/assets/bulk/tags`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assets,
+            add_tags: add,
+            remove_tags: remove,
+          }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Tag update failed');
+        toast('good','Tags', `Updated ${payload.updated || 0} assets`);
         if (state.focused){
           await loadDrawerTags(state.focused);
         }
@@ -3420,23 +3429,18 @@
     }
 
     async function deletePaths(paths){
-      const groups = selectedProjectGroups();
-      if (!groups.length){ toast('warn','Delete','Select one or more clips'); return; }
+      const assets = selectedAssetRefsOrdered();
+      if (!assets.length){ toast('warn','Delete','Select one or more clips'); return; }
       try{
-        for (const group of groups){
-          const query = group.source && group.source !== 'primary' ? `?source=${encodeURIComponent(group.source)}` : '';
-          const r = await fetch(`${API}/api/projects/${encodeURIComponent(group.project)}/media/delete${query}`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ relative_paths: group.relative_paths }),
-          });
-          const payload = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(payload.detail || payload.message || `Delete failed for ${group.project}`);
-        }
-        toast('good','Delete','Media removed from disk and index');
-        for (const key of Array.from(state.selected)){
-          deselectKey(key);
-        }
+        const r = await fetch(`${API}/api/assets/bulk/delete`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ assets }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Delete failed');
+        toast('good','Delete', `Media removed (${payload.deleted || 0})`);
+        clearSelectionState();
         state.focused = null;
         setInspectorOpen(false);
         await loadMedia();

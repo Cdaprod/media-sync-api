@@ -57,6 +57,7 @@ from app.storage.sources import SourceRegistry
 logger = logging.getLogger("media_sync_api.media")
 
 router = APIRouter(prefix="/api/projects", tags=["media"])
+bulk_router = APIRouter(prefix="/api/assets", tags=["assets"])
 global_media_router = APIRouter(prefix="/api/media", tags=["media"])
 registry_router = APIRouter(prefix="/api/registry", tags=["registry"])
 media_router = APIRouter(prefix="/media", tags=["media"])
@@ -109,6 +110,22 @@ class DeleteMediaRequest(BaseModel):
 
 class TagMediaRequest(BaseModel):
     relative_paths: List[str] = Field(default_factory=list)
+    add_tags: List[str] = Field(default_factory=list)
+    remove_tags: List[str] = Field(default_factory=list)
+
+
+class AssetRef(BaseModel):
+    source: str | None = None
+    project: str
+    relative_path: str
+
+
+class BulkDeleteRequest(BaseModel):
+    assets: List[AssetRef] = Field(default_factory=list)
+
+
+class BulkTagRequest(BaseModel):
+    assets: List[AssetRef] = Field(default_factory=list)
     add_tags: List[str] = Field(default_factory=list)
     remove_tags: List[str] = Field(default_factory=list)
 
@@ -454,8 +471,10 @@ async def list_media(project_name: str, source: str | None = None):
             if isinstance(sha, str):
                 item["thumb_url"] = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
         sha = item.get("sha256")
-        if isinstance(sha, str) and metadata_path(resolved.root, sha).exists():
-            item["metadata_path"] = metadata_relpath(resolved.root, sha)
+        if isinstance(sha, str):
+            item["asset_id"] = _stable_asset_id(sha)
+            if metadata_path(resolved.root, sha).exists():
+                item["metadata_path"] = metadata_relpath(resolved.root, sha)
         media.append(item)
     sorted_media = sorted(media, key=lambda m: m.get("relative_path", ""))
 
@@ -598,6 +617,100 @@ async def stream_media(project_name: str, relative_path: str, source: str | None
         extra={"project": resolved.name, "source": resolved.source_name, "path": safe_relative},
     )
     return FileResponse(target, media_type=media_type)
+
+
+
+
+@bulk_router.post("/bulk/delete")
+async def bulk_delete_media(payload: BulkDeleteRequest):
+    """Delete media assets across projects using ordered asset refs.
+
+    Example:
+        curl -X POST http://localhost:8787/api/assets/bulk/delete \
+          -H "Content-Type: application/json" \
+          -d '{"assets":[{"source":"primary","project":"demo","relative_path":"ingest/originals/a.mov"}]}'
+    """
+
+    if not payload.assets:
+        raise HTTPException(status_code=400, detail="assets is required")
+
+    grouped: dict[tuple[str | None, str], list[str]] = {}
+    for asset in payload.assets:
+        grouped.setdefault((asset.source, asset.project), []).append(asset.relative_path)
+
+    groups: list[dict[str, object]] = []
+    deleted_total = 0
+    missing_total = 0
+    for (source_name, project_name), rels in grouped.items():
+        result = await delete_media(
+            project_name=project_name,
+            payload=DeleteMediaRequest(relative_paths=rels),
+            source=source_name,
+        )
+        groups.append(
+            {
+                "source": source_name or "primary",
+                "project": project_name,
+                "removed": result.get("removed", []),
+                "missing": result.get("missing", []),
+            }
+        )
+        deleted_total += len(result.get("removed", []))
+        missing_total += len(result.get("missing", []))
+
+    return {
+        "status": "ok",
+        "deleted": deleted_total,
+        "missing": missing_total,
+        "groups": groups,
+    }
+
+
+@bulk_router.post("/bulk/tags")
+async def bulk_tag_media(payload: BulkTagRequest):
+    """Apply manual tags across projects using ordered asset refs.
+
+    Example:
+        curl -X POST http://localhost:8787/api/assets/bulk/tags \
+          -H "Content-Type: application/json" \
+          -d '{"assets":[{"source":"primary","project":"demo","relative_path":"ingest/originals/a.mov"}],"add_tags":["review"]}'
+    """
+
+    if not payload.assets:
+        raise HTTPException(status_code=400, detail="assets is required")
+    if not payload.add_tags and not payload.remove_tags:
+        raise HTTPException(status_code=400, detail="add_tags or remove_tags is required")
+
+    grouped: dict[tuple[str | None, str], list[str]] = {}
+    for asset in payload.assets:
+        grouped.setdefault((asset.source, asset.project), []).append(asset.relative_path)
+
+    groups: list[dict[str, object]] = []
+    updated_total = 0
+    missing_total = 0
+    for (source_name, project_name), rels in grouped.items():
+        result = await tag_media(
+            project_name=project_name,
+            payload=TagMediaRequest(relative_paths=rels, add_tags=payload.add_tags, remove_tags=payload.remove_tags),
+            source=source_name,
+        )
+        groups.append(
+            {
+                "source": source_name or "primary",
+                "project": project_name,
+                "updated": result.get("updated", []),
+                "missing": result.get("missing", []),
+            }
+        )
+        updated_total += len(result.get("updated", []))
+        missing_total += len(result.get("missing", []))
+
+    return {
+        "status": "ok",
+        "updated": updated_total,
+        "missing": missing_total,
+        "groups": groups,
+    }
 
 
 @router.post("/{project_name}/media/delete")

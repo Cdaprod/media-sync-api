@@ -866,3 +866,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer selections now track both membership and explicit selection order (`selected` + `selectedOrder`) so bulk actions can preserve user-picked ordering independent of filter/DOM state.
 - Tag/Delete/Move/Resolve actions now execute across mixed project selections by grouping selected assets per `source::project` and issuing per-project API calls, removing the single-project hard block for these workflows.
 - Compose now supports mixed-project selections by streaming selected video assets in selection order into `/api/projects/{output}/compose/upload`; output target resolves from active project or inferred single-project selection.
+
+
+### Latest Implementation Notes (2026-02-23, bulk assets API bridge)
+- Added backend bulk asset endpoints `POST /api/assets/bulk/delete` and `POST /api/assets/bulk/tags` that accept ordered AssetRef payloads (`source`, `project`, `relative_path`) and execute grouped project-scoped operations server-side.
+- Media listing now includes stable `asset_id` (`sha256:<hash>`) for each indexed entry so explorer selection payloads can carry forward a canonical identity.
+- Explorer tag/delete actions now call the new bulk endpoints with ordered asset refs instead of issuing multiple per-project requests in browser code; cross-project order is preserved by `selectedOrder`.
