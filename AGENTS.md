@@ -905,3 +905,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Adjusted `.topbar` to a vertical flex container (`flex-direction: column; align-items: stretch`) so `.topbar-inner` (row 1) and `.topbar > .section-h` (row 2) stack flush inside the same topbar surface.
 - Refined `.topbar > .section-h` to a fixed subrow height (`height: var(--topbar-subrow-height)`) with zero vertical padding and matched horizontal padding (`18px` desktop / `12px` mobile) so the second row aligns with topbar spacing instead of appearing detached.
 - Kept existing IDs/classes and JS behavior intact; `--topbar-height` remains the combined row+subrow token to preserve layout/reveal offsets.
+
+### Latest Implementation Notes (2026-02-23, topbar first-row regression rollback)
+- Reverted the `.topbar` flex-column override so the first-row controls (`.topbar-inner` search/actions layout) return to their original behavior.
+- Kept the second-row media header integration on `.topbar > .section-h` unchanged, including matching horizontal padding with the topbar row (`18px` desktop / `12px` mobile).
+- Retained combined topbar sizing tokens (`--topbar-height = --topbar-row-height + --topbar-subrow-height`) so fixed-offset/reveal spacing still covers both rows.
