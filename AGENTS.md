@@ -916,3 +916,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated `public/explorer.html` to load the shader module as an ES module, instantiate `cardFX`, and wire effects at existing integration points: grid attach, thumbnail creation, video card append, and selection toggles.
 - Added a `cssEscape` helper in explorer UI code for safe data-attribute selector targeting when pulsing newly selected cards.
 - Extended `tests/test_public_explorer_program_monitor.py` with assertions that shader wiring and `AssetFX` export/methods are present.
+
+### Latest Implementation Notes (2026-02-23, iPhone-visible shader fallback tuning)
+- Refined `public/js/explorer-shaders.mjs` so asset effects remain visibly active on iPhone/Safari by combining WebGL where reliable (hover/dissolve) with explicit CSS-based fallbacks (scanline overlay, selection pulse, dissolve veil) when WebGL contexts are unavailable or constrained.
+- Strengthened focus treatment for pointer/touch with immediate transform/box-shadow/filter styling so users can perceive card emphasis even before/without shader compositing.
+- Added shared runtime keyframes (`fx-selection-pulse`, `fx-scanline-pan`) injected once by `AssetFX` and expanded static explorer tests to assert fallback effect hooks remain present.

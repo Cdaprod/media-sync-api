@@ -151,3 +151,6 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'addScanline(cardEl)' in shader_module
     assert 'pulse(cardEl' in shader_module
     assert 'dissolve(cardEl, imgEl' in shader_module
+    assert '_cssDissolve(cardEl, imgEl, duration)' in shader_module
+    assert '@keyframes fx-selection-pulse' in shader_module
+    assert 'fx-scanline-overlay' in shader_module
