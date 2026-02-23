@@ -884,6 +884,7 @@ def test_list_media_includes_asset_id(client: TestClient, env_settings: Path) ->
     media = listing.json()["media"]
     assert media
     assert media[0]["asset_id"].startswith("sha256:")
+    assert len(media[0]["asset_uuid"]) == 36
 
 
 def test_bulk_asset_delete_and_tags_across_projects(client: TestClient, env_settings: Path) -> None:
@@ -999,3 +1000,22 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
     payload = response.json()
     assert payload["status"] in {"stored", "duplicate"}
     assert payload["path"].startswith("exports/")
+
+
+def test_bulk_delete_accepts_asset_id_without_relative_path(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    (ingest / "id-delete.mov").write_bytes(b"id-delete")
+
+    assert client.post(f"/api/projects/{project_name}/reindex").status_code == 200
+    listing = client.get(f"/api/projects/{project_name}/media").json()["media"]
+    assert listing
+    asset_id = listing[0]["asset_id"]
+
+    response = client.post(
+        "/api/assets/bulk/delete",
+        json={"assets": [{"source": "primary", "project": project_name, "asset_id": asset_id}]},
+    )
+    assert response.status_code == 200
+    assert response.json()["deleted"] == 1
