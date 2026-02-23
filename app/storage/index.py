@@ -114,3 +114,31 @@ def append_event(project_path: Path, event: str, payload: Dict[str, Any]) -> Non
     }
     with events_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
+
+
+def remove_file_entries_for_relative_path(project_path: Path, relative_path: str) -> list[str]:
+    """Remove index entries matching relative_path and return removed sha256 values."""
+
+    normalized = (relative_path or "").replace("\\", "/").lstrip("/")
+    if not normalized:
+        return []
+
+    index = load_index(project_path)
+    entries: List[Dict[str, Any]] = index.get("files", [])
+    kept: List[Dict[str, Any]] = []
+    removed_shas: list[str] = []
+
+    for entry in entries:
+        rel = entry.get("relative_path")
+        if isinstance(rel, str) and rel.replace("\\", "/").lstrip("/") == normalized:
+            sha = entry.get("sha256")
+            if isinstance(sha, str) and sha:
+                removed_shas.append(sha)
+            continue
+        kept.append(entry)
+
+    if len(kept) != len(entries):
+        index["files"] = kept
+        save_index(project_path, index)
+
+    return removed_shas

@@ -89,3 +89,28 @@ def remove_file_record(db_path: Path, sha256: str, relative_path: str) -> None:
             (sha256, relative_path),
         )
         conn.commit()
+
+
+def remove_file_hash_by_sha256(db_path: Path, sha256: str) -> int:
+    """Remove a hash mapping by sha256 and return deleted row count."""
+
+    if not sha256:
+        return 0
+    ensure_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute("DELETE FROM files WHERE sha256 = ?", (sha256,))
+        conn.commit()
+        return int(cursor.rowcount or 0)
+
+
+def remove_file_hashes_by_relative_path(db_path: Path, relative_path: str) -> int:
+    """Remove hash mapping rows that point to relative_path and return deleted row count."""
+
+    normalized = (relative_path or "").replace("\\", "/").lstrip("/")
+    if not normalized:
+        return 0
+    ensure_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.execute("DELETE FROM files WHERE relative_path = ?", (normalized,))
+        conn.commit()
+        return int(cursor.rowcount or 0)

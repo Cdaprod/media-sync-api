@@ -26,8 +26,21 @@ from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
-from app.storage.dedupe import compute_sha256_from_path, lookup_file_hash, record_file_hash
-from app.storage.index import append_event, append_file_entry, bump_count, load_index, save_index
+from app.storage.dedupe import (
+    compute_sha256_from_path,
+    lookup_file_hash,
+    record_file_hash,
+    remove_file_hash_by_sha256,
+    remove_file_hashes_by_relative_path,
+)
+from app.storage.index import (
+    append_event,
+    append_file_entry,
+    bump_count,
+    load_index,
+    remove_file_entries_for_relative_path,
+    save_index,
+)
 from app.storage.metadata import ensure_metadata
 from app.storage.paths import ensure_subdirs, project_path, safe_filename, validate_project_name
 from app.storage.sources import SourceRegistry
@@ -51,6 +64,26 @@ class ComposeRequest(BaseModel):
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_filename_or_400(value: str | None, *, default: str) -> str:
+    """Normalize compose output names and surface validation as HTTP 400."""
+
+    raw = (value or "").strip() or default
+    try:
+        return safe_filename(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _prepare_overwrite(project: Path, output_rel: str) -> None:
+    """Remove stale index and manifest rows before overwriting an output path."""
+
+    manifest_db = project / "_manifest/manifest.db"
+    removed_shas = remove_file_entries_for_relative_path(project, output_rel)
+    remove_file_hashes_by_relative_path(manifest_db, output_rel)
+    for sha in removed_shas:
+        remove_file_hash_by_sha256(manifest_db, sha)
 
 
 def _build_absolute_media_url(
@@ -389,7 +422,7 @@ async def compose_existing(
 
     target_dir = _resolve_within_project(project, payload.target_dir.strip() or "exports", require_exists=False)
     target_dir.mkdir(parents=True, exist_ok=True)
-    output_name = safe_filename(payload.output_name if payload.output_name else "compiled.mp4")
+    output_name = _safe_filename_or_400(payload.output_name, default="compiled.mp4")
     if not output_name.lower().endswith(".mp4"):
         output_name = f"{output_name}.mp4"
     output_abs = _resolve_within_project(project, f"{target_dir.relative_to(project).as_posix()}/{output_name}", require_exists=False)
@@ -398,6 +431,8 @@ async def compose_existing(
             status_code=409,
             detail="Output already exists. Set allow_overwrite=true or provide a unique output_name.",
         )
+    if output_abs.exists() and payload.allow_overwrite:
+        _prepare_overwrite(project, output_abs.relative_to(project).as_posix())
 
     mode_used = _concat_files(inputs, output_abs, payload.mode, allow_overwrite=payload.allow_overwrite)
     logger.info(
@@ -460,7 +495,7 @@ async def compose_upload(
 
         resolved_target_dir = _resolve_within_project(project, target_dir.strip() or "exports", require_exists=False)
         resolved_target_dir.mkdir(parents=True, exist_ok=True)
-        final_name = safe_filename(output_name)
+        final_name = _safe_filename_or_400(output_name, default="compiled.mp4")
         if not final_name.lower().endswith(".mp4"):
             final_name = f"{final_name}.mp4"
         output_abs = _resolve_within_project(
@@ -473,6 +508,8 @@ async def compose_upload(
                 status_code=409,
                 detail="Output already exists. Set allow_overwrite=true or provide a unique output_name.",
             )
+        if output_abs.exists() and allow_overwrite:
+            _prepare_overwrite(project, output_abs.relative_to(project).as_posix())
 
         mode_used = _concat_files(temp_inputs, output_abs, mode, allow_overwrite=allow_overwrite)
         response = _register_output(
