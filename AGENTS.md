@@ -831,3 +831,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2026-02-22, compose style cleanup)
 - Added the missing blank line between compose helper definitions around ffmpeg race detection/error formatting to keep style/lint output clean and diffs easier to scan.
+
+### Latest Implementation Notes (2026-02-22, compose overwrite correctness)
+- Compose overwrite flows now clear stale manifest/index state for the destination `relative_path` before writing new output bytes (`allow_overwrite=true`), preventing duplicate index rows and outdated sha mappings from pointing to overwritten files.
+- Added explicit compose output-name validation helper so invalid `output_name` inputs return HTTP 400 (matching upload-style validation) instead of bubbling as 500 errors.
+- Added compose tests covering overwrite idempotency for a shared output path and invalid compose-upload output name handling.

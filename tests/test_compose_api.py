@@ -202,3 +202,52 @@ def test_compose_maps_ffmpeg_existing_output_race_to_409(client, monkeypatch):
         json={"inputs": ["ingest/originals/a.mp4"], "output_name": "race.mp4", "target_dir": "exports", "mode": "copy"},
     )
     assert response.status_code == 409
+
+
+def test_compose_overwrite_replaces_index_row_instead_of_duplicate(client, monkeypatch):
+    created = client.post("/api/projects", json={"name": "compose-overwrite-index"})
+    project_name = created.json()["name"]
+
+    a = client.post(f"/api/projects/{project_name}/upload", files={"file": ("a.mp4", b"aaa", "video/mp4")}).json()["path"]
+    b = client.post(f"/api/projects/{project_name}/upload", files={"file": ("b.mp4", b"bbb", "video/mp4")}).json()["path"]
+    c = client.post(f"/api/projects/{project_name}/upload", files={"file": ("c.mp4", b"ccc", "video/mp4")}).json()["path"]
+
+    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
+
+    payload_one = {
+        "inputs": [a, b],
+        "output_name": "same.mp4",
+        "target_dir": "exports",
+        "mode": "auto",
+        "allow_overwrite": True,
+    }
+    payload_two = {
+        "inputs": [a, c],
+        "output_name": "same.mp4",
+        "target_dir": "exports",
+        "mode": "auto",
+        "allow_overwrite": True,
+    }
+
+    first = client.post(f"/api/projects/{project_name}/compose", json=payload_one)
+    second = client.post(f"/api/projects/{project_name}/compose", json=payload_two)
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    project_response = client.get(f"/api/projects/{project_name}")
+    assert project_response.status_code == 200
+    files = project_response.json().get("files", [])
+    matches = [item for item in files if item.get("relative_path") == "exports/same.mp4"]
+    assert len(matches) == 1
+
+
+def test_compose_upload_invalid_output_name_returns_400(client):
+    created = client.post("/api/projects", json={"name": "compose-invalid-output"})
+    project_name = created.json()["name"]
+
+    response = client.post(
+        f"/api/projects/{project_name}/compose/upload",
+        params={"output_name": "../evil.mp4"},
+        files=[("files", ("one.mp4", b"111", "video/mp4"))],
+    )
+    assert response.status_code == 400
