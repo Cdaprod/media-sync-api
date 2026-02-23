@@ -1456,6 +1456,7 @@
         <button id="selTagToggle" class="btn" type="button">🏷 Tag Selected</button>
         <button id="selMoveToggle" class="btn" type="button">⇢ Move Selected</button>
         <button id="selCopyUrls" class="btn" type="button">⧉ Copy stream URLs</button>
+        <button id="selCompose" class="btn" type="button">🎬 Compose Video(s)</button>
         <button id="btnProgramMonitor" class="btn" type="button" hidden>➕ Add to Program Monitor</button>
       </div>
 
@@ -1563,7 +1564,7 @@
         selectedOnly: false,
         untaggedOnly: false,
       },
-      selected: new Set(),   // relative_path
+      selected: new Set(),   // `${source}::${project}::${relative_path}`
       focused: null,         // item
       mediaMeta: {
         types: new Set(),
@@ -1584,6 +1585,35 @@
     };
 
     const itemsByPath = new Map();
+
+    function itemProjectName(item){
+      return item?.project_name || item?.project || state.activeProject?.name || '';
+    }
+
+    function itemSourceName(item){
+      return item?.project_source || item?.source || state.activeProject?.source || 'primary';
+    }
+
+    function selectionKey(item){
+      if (!item?.relative_path) return '';
+      return `${itemSourceName(item)}::${itemProjectName(item)}::${item.relative_path}`;
+    }
+
+    function selectedItems(){
+      return Array.from(state.selected)
+        .map((key) => itemsByPath.get(key))
+        .filter(Boolean);
+    }
+
+    function selectedRelativePathsForActiveProject(){
+      const active = state.activeProject;
+      if (!active) return [];
+      const source = active.source || 'primary';
+      return selectedItems()
+        .filter((item) => itemProjectName(item) === active.name && itemSourceName(item) === source)
+        .map((item) => item.relative_path)
+        .filter(Boolean);
+    }
 
     const ORIENT_CACHE_NAME = 'media-sync-orient-cache-v1';
     const THUMB_MAX_WORKERS = 3;
@@ -2157,8 +2187,10 @@
     }
 
     function dragPayload(item){
-      const paths = state.selected.has(item.relative_path)
-        ? Array.from(state.selected)
+      const key = selectionKey(item);
+      const selected = selectedRelativePathsForActiveProject();
+      const paths = key && state.selected.has(key) && selected.length
+        ? selected
         : [item.relative_path];
       return JSON.stringify({ paths });
     }
@@ -2274,10 +2306,12 @@
         target.setPointerCapture(pointerId);
         clearLongPress();
         longPress = setTimeout(() => {
-          const selectedItems = state.selected.has(item.relative_path)
-            ? Array.from(state.selected).map((path) => itemsByPath.get(path)).filter(Boolean)
+          const key = selectionKey(item);
+          const selected = key ? selectedItems() : [];
+          const selectedItemsForMenu = key && state.selected.has(key) && selected.length
+            ? selected
             : [item];
-          openContextMenu({ clientX: pressX, clientY: pressY }, selectedItems);
+          openContextMenu({ clientX: pressX, clientY: pressY }, selectedItemsForMenu);
         }, LONG_PRESS_MS);
       });
 
@@ -2290,8 +2324,10 @@
           clearLongPress();
           ui.dragging = true;
           ui.dragPointerId = pointerId;
-          ui.dragPaths = state.selected.has(item.relative_path)
-            ? Array.from(state.selected)
+          const key = selectionKey(item);
+          const selected = selectedRelativePathsForActiveProject();
+          ui.dragPaths = key && state.selected.has(key) && selected.length
+            ? selected
             : [item.relative_path];
           ui.assetDragActive = true;
           if (event.clientY <= 56) document.body.classList.remove('topbar-hidden');
@@ -2334,10 +2370,12 @@
 
       target.addEventListener('contextmenu', (event) => {
         event.preventDefault();
-        const selectedItems = state.selected.has(item.relative_path)
-          ? Array.from(state.selected).map((path) => itemsByPath.get(path)).filter(Boolean)
+        const key = selectionKey(item);
+        const selected = key ? selectedItems() : [];
+        const selectedItemsForMenu = key && state.selected.has(key) && selected.length
+          ? selected
           : [item];
-        openContextMenu({ clientX: event.clientX, clientY: event.clientY }, selectedItems);
+        openContextMenu({ clientX: event.clientX, clientY: event.clientY }, selectedItemsForMenu);
       });
     }
 
@@ -2585,7 +2623,7 @@
       let items = state.media.filter((it) => {
         if (q && !(it.relative_path || '').toLowerCase().includes(q)) return false;
         if (type !== 'all' && mediaType(it) !== type) return false;
-        if (selectedOnly && !state.selected.has(it.relative_path)) return false;
+        if (selectedOnly && !state.selected.has(selectionKey(it))) return false;
         if (untaggedOnly && hasTags && normalizeTagList(it.tags).length > 0) return false;
         return true;
       });
@@ -2617,7 +2655,8 @@
           const suffix = source && source !== 'primary' ? `?source=${encodeURIComponent(source)}` : '';
           return toAbsoluteUrl(`/media/${encodeURIComponent(project)}/${encodePath(rel)}${suffix}`);
         }
-        const item = state.media.find((entry) => entry.relative_path === rel);
+        const key = `${source}::${project}::${rel}`;
+        const item = itemsByPath.get(key) || state.media.find((entry) => selectionKey(entry) === key);
         if (item?.stream_url){
           return toAbsoluteUrl(item.stream_url);
         }
@@ -2639,6 +2678,7 @@
       el('selTagToggle').disabled = !show || !state.activeProject;
       el('selMoveToggle').disabled = !show || !state.activeProject;
       el('selCopyUrls').disabled = !show || !canSelectAcrossProjects;
+      el('selCompose').disabled = !show || !state.activeProject;
       el('btnProgramMonitor').disabled = !show || !canSelectAcrossProjects;
       el('btnProgramMonitor').hidden = !show;
 
@@ -2959,7 +2999,7 @@
         state.media = sortMediaByRecent(items);
         updateMediaMeta();
         // clear selection if selected files disappeared
-        const existing = new Set(state.media.map(m => m.relative_path));
+        const existing = new Set(state.media.map((m) => selectionKey(m)).filter(Boolean));
         for (const s of Array.from(state.selected)){
           if (!existing.has(s)) state.selected.delete(s);
         }
@@ -3074,7 +3114,8 @@
       const items = filteredMedia();
       itemsByPath.clear();
       items.forEach((item) => {
-        if (item?.relative_path) itemsByPath.set(item.relative_path, item);
+        const key = selectionKey(item);
+        if (key) itemsByPath.set(key, item);
       });
       const allMode = !state.activeProject && state.mediaScope === 'all';
       const canSelect = !!state.activeProject || allMode;
@@ -3133,7 +3174,7 @@
         if (canSelect){
           card.removeAttribute('draggable');
         }
-        if (state.selected.has(it.relative_path)) card.classList.add('selected', 'is-selected');
+        if (state.selected.has(selectionKey(it))) card.classList.add('is-selected');
         card.dataset.streamUrl = it.stream_url || it.streamUrl || '';
         card.dataset.relative = it.relative_path || '';
         card.dataset.sha256 = it.sha256 || '';
@@ -3157,7 +3198,7 @@
               </div>
               <div class="asset-ol-tr">
                 <div class="selector" title="Select">
-                  <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+                  <input type="checkbox" ${state.selected.has(selectionKey(it)) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
                 </div>
               </div>
               <div class="asset-ol-bl">
@@ -3174,7 +3215,7 @@
         // checkbox toggles selection without opening drawer
         card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
           ev.stopPropagation();
-          toggleSelected(it.relative_path);
+          toggleSelected(it);
         });
 
         wireAssetPointerHandlers(card, it);
@@ -3186,7 +3227,7 @@
         if (canSelect){
           row.removeAttribute('draggable');
         }
-        if (state.selected.has(it.relative_path)) row.classList.add('selected', 'is-selected');
+        if (state.selected.has(selectionKey(it))) row.classList.add('is-selected');
         row.dataset.streamUrl = it.stream_url || it.streamUrl || '';
         row.dataset.relative = it.relative_path || '';
         row.dataset.sha256 = it.sha256 || '';
@@ -3205,11 +3246,11 @@
             <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
           </div>
           <div class="actions">
-            <input type="checkbox" ${state.selected.has(it.relative_path) ? 'checked':''} title="Select" ${canSelect ? '' : 'disabled'} />
+            <input type="checkbox" ${state.selected.has(selectionKey(it)) ? 'checked':''} title="Select" ${canSelect ? '' : 'disabled'} />
             <button class="iconbtn" type="button">Preview</button>
           </div>
         `;
-        row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it.relative_path));
+        row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it));
         row.querySelector('button').addEventListener('click', () => openDrawer(it));
         wireAssetPointerHandlers(row, it);
         l.appendChild(row);
@@ -3284,11 +3325,14 @@
     // -------------------------
     // Selection + Resolve
     // -------------------------
-    function toggleSelected(relPath){
-      if (!relPath) return;
-      if (!state.activeProject) return;
-      if (state.selected.has(relPath)) state.selected.delete(relPath);
-      else state.selected.add(relPath);
+    function toggleSelected(item){
+      if (!item?.relative_path) return;
+      const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
+      if (!canSelectAcrossProjects) return;
+      const key = selectionKey(item);
+      if (!key) return;
+      if (state.selected.has(key)) state.selected.delete(key);
+      else state.selected.add(key);
 
       // update selected CSS quickly without full re-render
       // simplest: re-render; media lists are small enough on LAN.
@@ -3315,7 +3359,14 @@
         const payload = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(payload.detail || payload.message || 'Delete failed');
         toast('good','Delete','Media removed from disk and index');
-        for (const path of paths){ state.selected.delete(path); }
+        const pathSet = new Set(paths);
+        for (const key of Array.from(state.selected)){
+          const item = itemsByPath.get(key);
+          if (!item) continue;
+          if (itemProjectName(item) === p.name && itemSourceName(item) === (p.source || 'primary') && pathSet.has(item.relative_path)){
+            state.selected.delete(key);
+          }
+        }
         if (state.focused && paths.includes(state.focused.relative_path)){
           state.focused = null;
           setInspectorOpen(false);
@@ -3344,7 +3395,14 @@
         const payload = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(payload.detail || payload.message || 'Move failed');
         toast('good','Move', `Moved ${paths.length} item(s) to ${targetProject.name}`);
-        for (const path of paths){ state.selected.delete(path); }
+        const pathSet = new Set(paths);
+        for (const key of Array.from(state.selected)){
+          const item = itemsByPath.get(key);
+          if (!item) continue;
+          if (itemProjectName(item) === p.name && itemSourceName(item) === (p.source || 'primary') && pathSet.has(item.relative_path)){
+            state.selected.delete(key);
+          }
+        }
         if (state.focused && paths.includes(state.focused.relative_path)){
           state.focused = null;
           setInspectorOpen(false);
@@ -3358,6 +3416,57 @@
     }
 
 
+
+
+
+    function selectedMediaForActiveProject(){
+      const active = state.activeProject;
+      if (!active) return [];
+      const source = active.source || 'primary';
+      return selectedItems().filter((item) => (
+        itemProjectName(item) === active.name && itemSourceName(item) === source
+      ));
+    }
+
+    async function composeSelectedVideos(){
+      const p = state.activeProject;
+      if (!p){
+        toast('warn','Compose','Select a project first');
+        return;
+      }
+      const selected = selectedMediaForActiveProject();
+      if (!selected.length){
+        toast('warn','Compose','Select one or more clips');
+        return;
+      }
+      const videos = selected.filter((item) => guessKind(item) === 'video');
+      if (!videos.length){
+        toast('warn','Compose','Select one or more video clips');
+        return;
+      }
+      const outputBase = `compose-${Date.now()}.mp4`;
+      const body = {
+        inputs: videos.map((item) => item.relative_path),
+        output_name: outputBase,
+        target_dir: 'exports',
+        mode: 'auto',
+        allow_overwrite: false,
+      };
+      const query = p.source ? `?source=${encodeURIComponent(p.source)}` : '';
+      try{
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(p.name)}/compose${query}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Compose failed');
+        toast('good','Compose', `Created ${payload.path || outputBase}`);
+        await loadMedia();
+      }catch(e){
+        toast('bad','Compose', e.message);
+      }
+    }
 
     async function sendToResolve(){
       const p = state.activeProject;
@@ -3379,7 +3488,7 @@
         new_project_name: projectMode === '__new__'
           ? ((el('resolveNewName').value || '').trim() || null)
           : null,
-        media_rel_paths: Array.from(state.selected),
+        media_rel_paths: selectedRelativePathsForActiveProject(),
         mode: el('resolveMode').value || 'import',
       };
 
@@ -3402,8 +3511,9 @@
     // -------------------------
     function openDrawer(item){
       state.focused = item;
-      if (state.activeProject && item?.relative_path){
-        state.selected.add(item.relative_path);
+      if (item?.relative_path && (state.activeProject || state.mediaScope === 'all')){
+        const key = selectionKey(item);
+        if (key) state.selected.add(key);
       }
 
       const kind = guessKind(item);
@@ -3727,13 +3837,13 @@
 
     el('batchTagAdd').addEventListener('click', () => {
       const tags = parseTagInput(el('batchTagInput').value);
-      applyTagsToPaths(Array.from(state.selected), tags, []);
+      applyTagsToPaths(selectedRelativePathsForActiveProject(), tags, []);
       el('batchTagInput').value = '';
       updateTagButtons();
     });
     el('batchTagRemove').addEventListener('click', () => {
       const tags = parseTagInput(el('batchTagInput').value);
-      applyTagsToPaths(Array.from(state.selected), [], tags);
+      applyTagsToPaths(selectedRelativePathsForActiveProject(), [], tags);
       el('batchTagInput').value = '';
       updateTagButtons();
     });
@@ -3765,7 +3875,7 @@
 
     // Clear selection
     el('clearSelBtn').addEventListener('click', clearSelection);
-    el('deleteSelBtn').addEventListener('click', () => deletePaths(Array.from(state.selected)));
+    el('deleteSelBtn').addEventListener('click', () => deletePaths(selectedRelativePathsForActiveProject()));
 
     // Selection bar actions
     el('selTagToggle').addEventListener('click', () => toggleSelectPanel('selTagPanel'));
@@ -3774,17 +3884,18 @@
       toggleSelectPanel('selMovePanel');
     });
     el('selCopyUrls').addEventListener('click', copySelectedUrls);
+    el('selCompose').addEventListener('click', composeSelectedVideos);
     el('btnProgramMonitor').addEventListener('click', sendSelectedToProgramMonitor);
     el('selTagInput').addEventListener('input', updateTagButtons);
     el('selTagAdd').addEventListener('click', () => {
       const tags = parseTagInput(el('selTagInput').value);
-      applyTagsToPaths(Array.from(state.selected), tags, []);
+      applyTagsToPaths(selectedRelativePathsForActiveProject(), tags, []);
       el('selTagInput').value = '';
       updateTagButtons();
     });
     el('selTagRemove').addEventListener('click', () => {
       const tags = parseTagInput(el('selTagInput').value);
-      applyTagsToPaths(Array.from(state.selected), [], tags);
+      applyTagsToPaths(selectedRelativePathsForActiveProject(), [], tags);
       el('selTagInput').value = '';
       updateTagButtons();
     });
@@ -3803,7 +3914,7 @@
         toast('warn','Move','Select a target project');
         return;
       }
-      await moveMedia(Array.from(state.selected), target);
+      await moveMedia(selectedRelativePathsForActiveProject(), target);
       setSelectPanel('selMovePanel', false);
     });
 
