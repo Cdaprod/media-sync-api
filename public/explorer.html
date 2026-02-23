@@ -1629,6 +1629,7 @@
           relative_path: item.relative_path || '',
           kind: guessKind(item),
           asset_id: item.asset_id || null,
+          asset_uuid: item.asset_uuid || null,
           sha256: item.sha256 || null,
         }))
         .filter((item) => item.project && item.relative_path);

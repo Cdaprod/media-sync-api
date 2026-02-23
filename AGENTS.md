@@ -878,3 +878,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added backend `POST /api/assets/bulk/move` and `POST /api/assets/bulk/compose` so ordered cross-project selections can be moved/composed via server-side grouped AssetRef execution without browser-side per-project orchestration.
 - Explorer move/compose actions now call the bulk endpoints (`/api/assets/bulk/move`, `/api/assets/bulk/compose`) using ordered asset refs; compose no longer loops through stream-download + re-upload from the browser.
 - Added tests covering bulk move + bulk compose endpoint behavior and static explorer assertions for new bulk endpoint wiring.
+
+
+### Latest Implementation Notes (2026-02-23, asset_uuid bridge)
+- Media listing and registry records now include `asset_uuid` alongside `asset_id` (`sha256:<hash>`), with UUIDs deterministically derived from content hashes as a compatibility bridge toward future catalog-stable identities.
+- Bulk asset endpoints now accept `AssetRef` identity fallbacks (`asset_id` / `asset_uuid`) when `relative_path` is omitted, resolving paths from project indexes server-side.
+- Explorer ordered asset refs now include `asset_uuid`, and tests cover asset-identity fallback deletion plus static explorer wiring for UUID-carrying refs.

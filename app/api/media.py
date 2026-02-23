@@ -15,6 +15,7 @@ import re
 import json
 import shutil
 import subprocess
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -117,7 +118,9 @@ class TagMediaRequest(BaseModel):
 class AssetRef(BaseModel):
     source: str | None = None
     project: str
-    relative_path: str
+    relative_path: str | None = None
+    asset_id: str | None = None
+    asset_uuid: str | None = None
 
 
 class BulkDeleteRequest(BaseModel):
@@ -489,6 +492,7 @@ async def list_media(project_name: str, source: str | None = None):
         sha = item.get("sha256")
         if isinstance(sha, str):
             item["asset_id"] = _stable_asset_id(sha)
+            item["asset_uuid"] = _stable_asset_uuid(sha)
             if metadata_path(resolved.root, sha).exists():
                 item["metadata_path"] = metadata_relpath(resolved.root, sha)
         media.append(item)
@@ -652,7 +656,9 @@ async def bulk_delete_media(payload: BulkDeleteRequest):
 
     grouped: dict[tuple[str | None, str], list[str]] = {}
     for asset in payload.assets:
-        grouped.setdefault((asset.source, asset.project), []).append(asset.relative_path)
+        resolved = _require_source_and_project(asset.project, asset.source)
+        rel = _resolve_asset_relative_path(resolved.root, asset)
+        grouped.setdefault((asset.source, asset.project), []).append(rel)
 
     groups: list[dict[str, object]] = []
     deleted_total = 0
@@ -699,7 +705,9 @@ async def bulk_tag_media(payload: BulkTagRequest):
 
     grouped: dict[tuple[str | None, str], list[str]] = {}
     for asset in payload.assets:
-        grouped.setdefault((asset.source, asset.project), []).append(asset.relative_path)
+        resolved = _require_source_and_project(asset.project, asset.source)
+        rel = _resolve_asset_relative_path(resolved.root, asset)
+        grouped.setdefault((asset.source, asset.project), []).append(rel)
 
     groups: list[dict[str, object]] = []
     updated_total = 0
@@ -746,7 +754,9 @@ async def bulk_move_media(payload: BulkMoveRequest):
 
     grouped: dict[tuple[str | None, str], list[str]] = {}
     for asset in payload.assets:
-        grouped.setdefault((asset.source, asset.project), []).append(asset.relative_path)
+        resolved = _require_source_and_project(asset.project, asset.source)
+        rel = _resolve_asset_relative_path(resolved.root, asset)
+        grouped.setdefault((asset.source, asset.project), []).append(rel)
 
     groups: list[dict[str, object]] = []
     moved_total = 0
@@ -809,10 +819,7 @@ async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
     input_paths: list[Path] = []
     for asset in payload.assets:
         resolved = _require_source_and_project(asset.project, asset.source)
-        try:
-            safe_relative = _validate_relative_media_path(asset.relative_path)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        safe_relative = _resolve_asset_relative_path(resolved.root, asset)
         absolute = (resolved.root / safe_relative).resolve()
         root = resolved.root.resolve()
         if root not in absolute.parents and absolute != root:
@@ -1659,6 +1666,46 @@ def _stable_asset_id(sha256: str) -> str:
     return f"sha256:{sha256}"
 
 
+def _stable_asset_uuid(sha256: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"media-sync-api:{sha256.lower()}"))
+
+
+def _normalize_asset_uuid(value: str | None) -> str | None:
+    candidate = (value or "").strip()
+    if not candidate:
+        return None
+    try:
+        return str(uuid.UUID(candidate))
+    except ValueError:
+        return None
+
+
+def _resolve_asset_relative_path(project_root: Path, asset: AssetRef) -> str:
+    if asset.relative_path:
+        try:
+            return _validate_relative_media_path(asset.relative_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    target_sha = _normalize_asset_id(asset.asset_id or "")
+    target_uuid = _normalize_asset_uuid(asset.asset_uuid)
+    if not target_sha and not target_uuid:
+        raise HTTPException(status_code=400, detail="AssetRef requires relative_path, asset_id, or asset_uuid")
+
+    index = load_index(project_root)
+    for entry in index.get("files", []):
+        rel = entry.get("relative_path") if isinstance(entry, dict) else None
+        sha = entry.get("sha256") if isinstance(entry, dict) else None
+        if not isinstance(rel, str) or not isinstance(sha, str):
+            continue
+        if target_sha and sha.lower() == target_sha:
+            return _validate_relative_media_path(rel)
+        if target_uuid and _stable_asset_uuid(sha) == target_uuid:
+            return _validate_relative_media_path(rel)
+
+    raise HTTPException(status_code=404, detail="AssetRef could not be resolved in project index")
+
+
 def _collect_registry_record(
     project_name: str,
     source_name: str,
@@ -1698,6 +1745,7 @@ def _collect_registry_record(
     return {
         "sha256": sha,
         "asset_id": _stable_asset_id(sha),
+        "asset_uuid": _stable_asset_uuid(sha),
         "project": project_name,
         "source": source_name,
         "canonical_name": target.name,
