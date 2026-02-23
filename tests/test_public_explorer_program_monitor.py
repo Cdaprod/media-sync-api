@@ -103,3 +103,19 @@ def test_explorer_context_menu_and_drag_assist():
     assert 'contextMenu' in html
     assert 'wireProjectDragAssist' in html
     assert 'openContextMenu' in html
+
+
+def test_explorer_selection_keys_support_all_projects_scope():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'function selectionKey(item)' in html
+    assert "selected: new Set(),   // `${source}::${project}::${relative_path}`" in html
+    assert "if (!canSelectAcrossProjects) return;" in html
+    assert "if (selectedOnly && !state.selected.has(selectionKey(it))) return false;" in html
+
+
+def test_explorer_selection_bar_compose_action_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'id="selCompose"' in html
+    assert 'Compose Video(s)' in html
+    assert 'async function composeSelectedVideos()' in html
+    assert '/compose' in html

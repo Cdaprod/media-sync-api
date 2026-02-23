@@ -841,3 +841,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated `public/index.html` playbook steps to document compose endpoints alongside upload flow, including request examples for `/api/projects/{project}/compose` and `/api/projects/{project}/compose/upload`.
 - Added iPhone Shortcut guidance for compose workflows (multipart repeated `files` fields, JSON body for indexed `relative_paths`, and overwrite/conflict semantics).
 - Clarified that compose responses include `served.stream_url` / `served.download_url` and that `allow_overwrite=false` returns HTTP 409 when destination output already exists.
+
+
+### Latest Implementation Notes (2026-02-23)
+- Restored `public/explorer.html` bottom selection bar behavior by keying selection state with `source::project::relative_path`, allowing selection/actions in All Projects scope without requiring an active project.
+- Selection-driven utilities (selected-only filter, DOM-order URL copy, context menu, drag/move) now use the composite selection key and `.is-selected` class consistently.
+- Added a bottom-bar “Compose Video(s)” action that posts selected videos (in selection order) to `POST /api/projects/{project}/compose` and refreshes media after success.
+- Updated static explorer regression tests to assert composite selection-key wiring and compose action presence.
