@@ -108,6 +108,7 @@ def test_explorer_context_menu_and_drag_assist():
 def test_explorer_selection_keys_support_all_projects_scope():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert 'function selectionKey(item)' in html
+    assert 'uuid::${source}::${project}::${item.asset_uuid}' in html
     assert "selected: new Set(),   // `${source}::${project}::${relative_path}`" in html
     assert "if (!canSelectAcrossProjects) return;" in html
     assert "if (selectedOnly && !state.selected.has(selectionKey(it))) return false;" in html

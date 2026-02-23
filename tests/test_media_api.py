@@ -1019,3 +1019,75 @@ def test_bulk_delete_accepts_asset_id_without_relative_path(client: TestClient, 
     )
     assert response.status_code == 200
     assert response.json()["deleted"] == 1
+
+
+def test_bulk_delete_asset_id_ambiguous_requires_disambiguation(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    (ingest / "dup-a.mov").write_bytes(b"same-bytes")
+    (ingest / "dup-b.mov").write_bytes(b"same-bytes")
+
+    assert client.post(f"/api/projects/{project_name}/reindex").status_code == 200
+    listing = client.get(f"/api/projects/{project_name}/media").json()["media"]
+    assert len(listing) == 2
+    asset_id = listing[0]["asset_id"]
+
+    response = client.post(
+        "/api/assets/bulk/delete",
+        json={"assets": [{"source": "primary", "project": project_name, "asset_id": asset_id}]},
+    )
+    assert response.status_code == 409
+    assert "matches multiple files" in response.json()["detail"]
+
+
+def test_bulk_move_accepts_asset_id_without_relative_path(client: TestClient, env_settings: Path) -> None:
+    source = _create_project(client)
+    target = _create_project(client)
+    ingest = env_settings / source / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    (ingest / "id-move.mov").write_bytes(b"id-move")
+
+    assert client.post(f"/api/projects/{source}/reindex").status_code == 200
+    listing = client.get(f"/api/projects/{source}/media").json()["media"]
+    asset_id = listing[0]["asset_id"]
+
+    response = client.post(
+        "/api/assets/bulk/move",
+        json={
+            "assets": [{"source": "primary", "project": source, "asset_id": asset_id}],
+            "target_project": target,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["moved"] == 1
+
+
+def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClient, env_settings: Path, monkeypatch) -> None:
+    source = _create_project(client)
+    output_project = _create_project(client)
+    ingest = env_settings / source / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    (ingest / "id-compose.mov").write_bytes(b"id-compose")
+
+    assert client.post(f"/api/projects/{source}/reindex").status_code == 200
+    listing = client.get(f"/api/projects/{source}/media").json()["media"]
+    asset_uuid = listing[0]["asset_uuid"]
+
+    def _fake_concat(inputs, output, mode, *, allow_overwrite):
+        output.write_bytes(b"joined")
+        return "copy"
+
+    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
+
+    response = client.post(
+        "/api/assets/bulk/compose",
+        json={
+            "assets": [{"source": "primary", "project": source, "asset_uuid": asset_uuid}],
+            "output_project": output_project,
+            "output_name": "uuid-cut.mp4",
+            "target_dir": "exports",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["path"].startswith("exports/")
