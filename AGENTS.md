@@ -900,3 +900,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Moved the media status header (`#contentTitle` / `#mediaCount` / `#activePath`) into the fixed `.topbar` as a designed second row using the existing `.section-h` class so only the topbar remains the sticky header surface.
 - Tuned topbar sizing tokens to account for the extra row (`--topbar-row-height` + `--topbar-subrow-height` => `--topbar-height`) and updated the drag-reveal threshold from `56` to `94` so reveal behavior matches the taller bar.
 - Styled only `.topbar > .section-h` to match topbar visuals (same horizontal padding cadence, transparent shared background, subtle divider between rows) while leaving sidebar `.section-h` blocks unchanged.
+
+### Latest Implementation Notes (2026-02-23, topbar second-row flush integration)
+- Adjusted `.topbar` to a vertical flex container (`flex-direction: column; align-items: stretch`) so `.topbar-inner` (row 1) and `.topbar > .section-h` (row 2) stack flush inside the same topbar surface.
+- Refined `.topbar > .section-h` to a fixed subrow height (`height: var(--topbar-subrow-height)`) with zero vertical padding and matched horizontal padding (`18px` desktop / `12px` mobile) so the second row aligns with topbar spacing instead of appearing detached.
+- Kept existing IDs/classes and JS behavior intact; `--topbar-height` remains the combined row+subrow token to preserve layout/reveal offsets.
