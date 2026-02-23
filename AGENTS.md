@@ -884,3 +884,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Media listing and registry records now include `asset_uuid` alongside `asset_id` (`sha256:<hash>`), with UUIDs deterministically derived from content hashes as a compatibility bridge toward future catalog-stable identities.
 - Bulk asset endpoints now accept `AssetRef` identity fallbacks (`asset_id` / `asset_uuid`) when `relative_path` is omitted, resolving paths from project indexes server-side.
 - Explorer ordered asset refs now include `asset_uuid`, and tests cover asset-identity fallback deletion plus static explorer wiring for UUID-carrying refs.
+
+
+### Latest Implementation Notes (2026-02-23, identity semantics guardrails)
+- AssetRef identity resolution now enforces precedence `asset_uuid` → `asset_id` → `relative_path`, with explicit 409 ambiguity errors when hash/uuid identity matches multiple project paths unless `relative_path` disambiguates.
+- Added server-side support for identity-only bulk operations across delete/tags/move/compose, so callers may omit `relative_path` when providing `asset_id`/`asset_uuid`.
+- Explorer selection keys now prefer `asset_uuid` (`uuid::source::project::asset_uuid`) when available to reduce key churn/collision from path renames.

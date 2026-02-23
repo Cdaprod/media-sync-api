@@ -1596,8 +1596,11 @@
     }
 
     function selectionKey(item){
+      const source = itemSourceName(item);
+      const project = itemProjectName(item);
+      if (item?.asset_uuid) return `uuid::${source}::${project}::${item.asset_uuid}`;
       if (!item?.relative_path) return '';
-      return `${itemSourceName(item)}::${itemProjectName(item)}::${item.relative_path}`;
+      return `${source}::${project}::${item.relative_path}`;
     }
 
     function selectionItemByKey(key){

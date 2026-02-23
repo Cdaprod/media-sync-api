@@ -1681,27 +1681,59 @@ def _normalize_asset_uuid(value: str | None) -> str | None:
 
 
 def _resolve_asset_relative_path(project_root: Path, asset: AssetRef) -> str:
+    safe_relative: str | None = None
     if asset.relative_path:
         try:
-            return _validate_relative_media_path(asset.relative_path)
+            safe_relative = _validate_relative_media_path(asset.relative_path)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    target_sha = _normalize_asset_id(asset.asset_id or "")
     target_uuid = _normalize_asset_uuid(asset.asset_uuid)
-    if not target_sha and not target_uuid:
+    target_sha = _normalize_asset_id(asset.asset_id or "")
+    if not target_uuid and not target_sha and not safe_relative:
         raise HTTPException(status_code=400, detail="AssetRef requires relative_path, asset_id, or asset_uuid")
 
     index = load_index(project_root)
-    for entry in index.get("files", []):
-        rel = entry.get("relative_path") if isinstance(entry, dict) else None
-        sha = entry.get("sha256") if isinstance(entry, dict) else None
-        if not isinstance(rel, str) or not isinstance(sha, str):
-            continue
-        if target_sha and sha.lower() == target_sha:
-            return _validate_relative_media_path(rel)
-        if target_uuid and _stable_asset_uuid(sha) == target_uuid:
-            return _validate_relative_media_path(rel)
+
+    def _matches(predicate) -> list[str]:
+        hits: list[str] = []
+        for entry in index.get("files", []):
+            rel = entry.get("relative_path") if isinstance(entry, dict) else None
+            sha = entry.get("sha256") if isinstance(entry, dict) else None
+            if not isinstance(rel, str) or not isinstance(sha, str):
+                continue
+            if predicate(sha):
+                hits.append(_validate_relative_media_path(rel))
+        return hits
+
+    if target_uuid:
+        matches = _matches(lambda sha: _stable_asset_uuid(sha) == target_uuid)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            if safe_relative and safe_relative in matches:
+                return safe_relative
+            raise HTTPException(
+                status_code=409,
+                detail="asset_uuid matches multiple files in project; provide relative_path to disambiguate",
+            )
+        raise HTTPException(status_code=404, detail="asset_uuid could not be resolved in project index")
+
+    if target_sha:
+        matches = _matches(lambda sha: sha.lower() == target_sha)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            if safe_relative and safe_relative in matches:
+                return safe_relative
+            raise HTTPException(
+                status_code=409,
+                detail="asset_id matches multiple files in project; provide asset_uuid or relative_path",
+            )
+        raise HTTPException(status_code=404, detail="asset_id could not be resolved in project index")
+
+    if safe_relative:
+        return safe_relative
 
     raise HTTPException(status_code=404, detail="AssetRef could not be resolved in project index")
 
