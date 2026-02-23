@@ -28,7 +28,9 @@
       --radius: 18px;
       --radius2: 12px;
       --ring: 0 0 0 3px rgba(124,58,237,0.25);
-      --topbar-height: 56px;
+      --topbar-row-height: 56px;
+      --topbar-subrow-height: 38px;
+      --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
       --topbar-offset: var(--topbar-height);
       --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
       --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
@@ -131,7 +133,7 @@
     }
     .topbar-inner{
       position: relative;
-      min-height: var(--topbar-height);
+      min-height: var(--topbar-row-height);
       display:flex;
       align-items:center;
       justify-content: space-between;
@@ -534,6 +536,15 @@
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
+    }
+    .topbar > .section-h{
+      z-index: 0;
+      padding: 8px 18px;
+      background: transparent;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
     }
     .sidebar .section-h{
       top: 0;
@@ -1150,6 +1161,7 @@
       .toggle-btn{ padding: 6px 9px; font-size:11px; }
       .asset .title{ font-size: 11px; }
       .section-h{ padding: 12px 12px 9px; }
+      .topbar > .section-h{ padding: 8px 12px; }
       .sidebar{ border-radius: 0; }
       .drawer{ height: 85%; top: auto; bottom: 0; border-left: none; border-top: 1px solid var(--border); transform: translateY(110%); right:0; width:100%; }
       .drawer.open{ transform: translateY(0%); }
@@ -1352,6 +1364,14 @@
           </div>
         </div>
       </div>
+      <div class="section-h">
+        <h2 id="contentTitle">Media</h2>
+        <div class="meta-line">
+          <span id="mediaCount">0 items</span>
+          <span>•</span>
+          <span id="activePath" class="kbd">no project</span>
+        </div>
+      </div>
     </div>
 
     <div class="main">
@@ -1432,15 +1452,6 @@
           <div class="spinner"></div>
           <div>Preparing thumbnails…</div>
         </div>
-        <div class="section-h">
-          <h2 id="contentTitle">Media</h2>
-          <div class="meta-line">
-            <span id="mediaCount">0 items</span>
-            <span>•</span>
-            <span id="activePath" class="kbd">no project</span>
-          </div>
-        </div>
-
         <div class="scroll">
           <div id="mediaGrid" class="grid"></div>
           <div id="mediaList" class="list" style="display:none;"></div>
@@ -2421,7 +2432,7 @@
             ? selected
             : [item.relative_path];
           ui.assetDragActive = true;
-          if (event.clientY <= 56) document.body.classList.remove('topbar-hidden');
+          if (event.clientY <= 94) document.body.classList.remove('topbar-hidden');
         }
       });
 
