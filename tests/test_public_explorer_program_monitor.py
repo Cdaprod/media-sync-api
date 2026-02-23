@@ -113,6 +113,9 @@ def test_explorer_selection_keys_support_all_projects_scope():
     assert "if (selectedOnly && !state.selected.has(selectionKey(it))) return false;" in html
     assert 'function selectionItemByKey(key)' in html
     assert 'return state.media.find((entry) => selectionKey(entry) === key) || null;' in html
+    assert 'function selectedProjectContextIfSingle()' in html
+    assert 'const canProjectScopedAction = !!scopedContext;' in html
+    assert "toast('warn','Compose','Select items from one project first');" in html
 
 
 def test_explorer_selection_bar_compose_action_present():
