@@ -848,3 +848,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Selection-driven utilities (selected-only filter, DOM-order URL copy, context menu, drag/move) now use the composite selection key and `.is-selected` class consistently.
 - Added a bottom-bar “Compose Video(s)” action that posts selected videos (in selection order) to `POST /api/projects/{project}/compose` and refreshes media after success.
 - Updated static explorer regression tests to assert composite selection-key wiring and compose action presence.
+
+
+### Latest Implementation Notes (2026-02-23, selection hidden-filter fix)
+- Explorer selection resolution now falls back to the full `state.media` list when a selected item is hidden by active filters/search, preventing selected-action no-ops with non-zero selection counts.
+- Selection-driven actions (tag/move/delete/resolve/compose and URL derivation) now use a shared `selectionItemByKey` helper so hidden-but-selected assets remain actionable until explicitly cleared.
+- Added static regression assertions to verify the fallback selection resolver wiring in `public/explorer.html`.

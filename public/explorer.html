@@ -1599,9 +1599,16 @@
       return `${itemSourceName(item)}::${itemProjectName(item)}::${item.relative_path}`;
     }
 
+    function selectionItemByKey(key){
+      if (!key) return null;
+      const visible = itemsByPath.get(key);
+      if (visible) return visible;
+      return state.media.find((entry) => selectionKey(entry) === key) || null;
+    }
+
     function selectedItems(){
       return Array.from(state.selected)
-        .map((key) => itemsByPath.get(key))
+        .map((key) => selectionItemByKey(key))
         .filter(Boolean);
     }
 
@@ -2656,7 +2663,7 @@
           return toAbsoluteUrl(`/media/${encodeURIComponent(project)}/${encodePath(rel)}${suffix}`);
         }
         const key = `${source}::${project}::${rel}`;
-        const item = itemsByPath.get(key) || state.media.find((entry) => selectionKey(entry) === key);
+        const item = selectionItemByKey(key);
         if (item?.stream_url){
           return toAbsoluteUrl(item.stream_url);
         }
@@ -3361,7 +3368,7 @@
         toast('good','Delete','Media removed from disk and index');
         const pathSet = new Set(paths);
         for (const key of Array.from(state.selected)){
-          const item = itemsByPath.get(key);
+          const item = selectionItemByKey(key);
           if (!item) continue;
           if (itemProjectName(item) === p.name && itemSourceName(item) === (p.source || 'primary') && pathSet.has(item.relative_path)){
             state.selected.delete(key);
@@ -3397,7 +3404,7 @@
         toast('good','Move', `Moved ${paths.length} item(s) to ${targetProject.name}`);
         const pathSet = new Set(paths);
         for (const key of Array.from(state.selected)){
-          const item = itemsByPath.get(key);
+          const item = selectionItemByKey(key);
           if (!item) continue;
           if (itemProjectName(item) === p.name && itemSourceName(item) === (p.source || 'primary') && pathSet.has(item.relative_path)){
             state.selected.delete(key);
