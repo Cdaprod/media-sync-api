@@ -890,3 +890,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - AssetRef identity resolution now enforces precedence `asset_uuid` → `asset_id` → `relative_path`, with explicit 409 ambiguity errors when hash/uuid identity matches multiple project paths unless `relative_path` disambiguates.
 - Added server-side support for identity-only bulk operations across delete/tags/move/compose, so callers may omit `relative_path` when providing `asset_id`/`asset_uuid`.
 - Explorer selection keys now prefer `asset_uuid` (`uuid::source::project::asset_uuid`) when available to reduce key churn/collision from path renames.
+
+### Latest Implementation Notes (2026-02-23, topbar-only sticky layout)
+- Updated `public/explorer.html` layout so only the TopBar remains sticky/fixed while media content scrolls in `.content .scroll`; the content header (`.section-h`) is no longer sticky.
+- Moved main viewport spacing to `.main` via `padding-top: var(--topbar-offset)` so hiding/revealing the topbar no longer fights nested sticky offsets and the media pane can use full available height.
+- Removed extra centered-shell spacing in explorer main layout (`max-width`, side padding, and inter-column gap) to allow full-bleed content and avoid wasted scroll area around the media grid/list.
