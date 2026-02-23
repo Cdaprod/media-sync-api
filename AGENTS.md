@@ -895,3 +895,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated `public/explorer.html` layout so only the TopBar remains sticky/fixed while media content scrolls in `.content .scroll`; the content header (`.section-h`) is no longer sticky.
 - Moved main viewport spacing to `.main` via `padding-top: var(--topbar-offset)` so hiding/revealing the topbar no longer fights nested sticky offsets and the media pane can use full available height.
 - Removed extra centered-shell spacing in explorer main layout (`max-width`, side padding, and inter-column gap) to allow full-bleed content and avoid wasted scroll area around the media grid/list.
+
+### Latest Implementation Notes (2026-02-23, topbar section row integration)
+- Moved the media status header (`#contentTitle` / `#mediaCount` / `#activePath`) into the fixed `.topbar` as a designed second row using the existing `.section-h` class so only the topbar remains the sticky header surface.
+- Tuned topbar sizing tokens to account for the extra row (`--topbar-row-height` + `--topbar-subrow-height` => `--topbar-height`) and updated the drag-reveal threshold from `56` to `94` so reveal behavior matches the taller bar.
+- Styled only `.topbar > .section-h` to match topbar visuals (same horizontal padding cadence, transparent shared background, subtle divider between rows) while leaving sidebar `.section-h` blocks unchanged.
