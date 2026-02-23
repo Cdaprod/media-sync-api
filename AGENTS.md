@@ -794,3 +794,37 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer inspector details now use token/key-guarded section rendering so async facts/registry responses cannot duplicate rows or update stale assets after focus changes.
 - Inspector Play button now rebinds stream source, calls `load()`, and then `play()` from the click gesture for improved iOS Safari reliability.
 - Card interactions now suppress iOS callout/text-selection in grid/list surfaces and tighten pointer handlers to reduce flash-without-open cases while keeping checkbox multi-select behavior intact in all-projects mode.
+
+### Latest Implementation Notes (2026-02-22)
+- Added compose endpoints without changing existing upload semantics:
+  - `POST /api/projects/{project}/compose` composes already-indexed project-relative inputs into one output.
+  - `POST /api/projects/{project}/compose/upload` stages multipart clips under `MEDIA_SYNC_TEMP_ROOT`, composes one output, and always deletes the temp job directory in `finally`.
+- Compose outputs are registered like normal assets (sha256 dedupe, metadata sidecar, index append, events) and returned with `served.stream_url` / `served.download_url` including source scoping.
+- Added `MEDIA_SYNC_TEMP_ROOT` (default `/tmp/media-sync-api`) to keep compose staging outside project roots so explorers only discover final project artifacts.
+
+### Latest Implementation Notes (2026-02-22, compose hardening follow-up)
+- Hardened compose temp isolation: compose-upload now rejects `MEDIA_SYNC_TEMP_ROOT` values that are under any enabled source root to prevent temporary clips from being discovered by explorer scans.
+- Compose endpoints now default to non-destructive output behavior with `allow_overwrite=false`; existing output names return HTTP 409 unless callers explicitly opt in.
+- `auto` concat mode now uses ffprobe stream/format signatures (video + audio fields) before attempting stream copy, falling back to encode for incompatible inputs.
+- Added compose tests for overwrite conflict handling, cleanup on compose failure, source-scoped URL query preservation, and temp-root isolation guardrails.
+
+
+### Latest Implementation Notes (2026-02-22, compose guard/compatibility refinement)
+- Compose environment validation now runs for both compose entrypoints (`/compose` and `/compose/upload`) and rejects temp roots that resolve under project/source roots (symlink-safe via resolved paths).
+- Copy-mode compatibility checks now focus on stream-level ffprobe fields (video/audio codec params + timing/extradata) without container-format matching to reduce unnecessary encode fallback.
+
+
+### Latest Implementation Notes (2026-02-22, compose robustness follow-up)
+- Temp-root isolation now validates against enabled SourceRegistry roots as the primary scan surface and returns HTTP 503 for compose misconfiguration instead of generic 500 errors.
+- Compose no longer reports speculative `temp_cleaned`; cleanup remains `finally`-enforced while tests assert no leftover `compose_*` job directories.
+- `mode=auto|copy` compatibility checks were narrowed to practical stream invariants (video/audio codec + shape/rate layout fields), and ffmpeg failures now return both stderr/stdout tails for debugging.
+- Compose-existing now requires inputs to already exist in `index.json` entries to enforce the indexed-asset contract.
+
+### Latest Implementation Notes (2026-02-22, compose stability polish)
+- Compose temp-root validation now falls back to the default source root when enabled-source enumeration returns empty, avoiding false 503 failures during bootstrap while still failing closed on source-enumeration exceptions.
+- Compose temp job cleanup uses defensive `rmtree(..., ignore_errors=True)` so cleanup failures cannot mask the original upload/ffmpeg error.
+- ffmpeg `-n` race failures that report existing output now map to HTTP 409, and compose-existing index-miss errors now cap the response preview to avoid oversized error bodies.
+
+### Latest Implementation Notes (2026-02-22, compose race-detection polish)
+- Compose existing-output race detection now also recognizes ffmpeg "not overwriting" wording in addition to "file exists/already exists" so `allow_overwrite=false` races consistently map to HTTP 409.
+- Compose race mapping test now uses a realistic `subprocess.CompletedProcess` stub for clearer parity with production subprocess behavior.
