@@ -828,3 +828,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-02-22, compose race-detection polish)
 - Compose existing-output race detection now also recognizes ffmpeg "not overwriting" wording in addition to "file exists/already exists" so `allow_overwrite=false` races consistently map to HTTP 409.
 - Compose race mapping test now uses a realistic `subprocess.CompletedProcess` stub for clearer parity with production subprocess behavior.
+
+### Latest Implementation Notes (2026-02-22, compose style cleanup)
+- Added the missing blank line between compose helper definitions around ffmpeg race detection/error formatting to keep style/lint output clean and diffs easier to scan.

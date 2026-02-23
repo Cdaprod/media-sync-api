@@ -190,6 +190,8 @@ def _error_tail(value: str | None) -> str:
 def _ffmpeg_indicates_existing_output(result: subprocess.CompletedProcess[str]) -> bool:
     combined = ((result.stderr or "") + "\n" + (result.stdout or "")).lower()
     return "file exists" in combined or "already exists" in combined or "not overwriting" in combined
+
+
 def _raise_ffmpeg_error(prefix: str, result: subprocess.CompletedProcess[str], *, status_code: int = 500) -> None:
     stderr_tail = _error_tail(result.stderr)
     stdout_tail = _error_tail(result.stdout)
