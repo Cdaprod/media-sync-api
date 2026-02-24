@@ -1564,6 +1564,30 @@
     // -------------------------
     const API = ''; // same-origin; keep '' for container-served index.html
     const el = (id) => document.getElementById(id);
+    const FX_DEBUG = new URLSearchParams(window.location.search).get('fxdebug') === '1';
+
+    if (FX_DEBUG) {
+      const proto = HTMLCanvasElement.prototype;
+      const origGetContext = proto.getContext;
+      if (origGetContext && !origGetContext.__assetfx_patched) {
+        const wrappedGetContext = function wrappedGetContext(type, attrs) {
+          if (type === 'webgl' || type === 'webgl2') {
+            window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];
+            window.__webgl_ctx_calls.push({
+              type,
+              attrs: attrs ? Object.keys(attrs) : null,
+              stack: (new Error('getContext')).stack,
+              t: performance.now(),
+              canvasId: this.id || null,
+              dataset: { ...this.dataset },
+            });
+          }
+          return origGetContext.call(this, type, attrs);
+        };
+        wrappedGetContext.__assetfx_patched = true;
+        proto.getContext = wrappedGetContext;
+      }
+    }
 
     const state = {
       projects: [],

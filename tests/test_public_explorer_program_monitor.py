@@ -153,6 +153,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'function enqueueThumbApply(task)' in html
     assert 'requestAnimationFrame(flushThumbApplyQueue);' in html
     assert 'loading="lazy"' not in html
+    assert "const FX_DEBUG = new URLSearchParams(window.location.search).get('fxdebug') === '1';" in html
+    assert 'window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];' in html
 
     assert 'export class AssetFX' in shader_module
     assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
@@ -181,6 +183,11 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });" in shader_module
     assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
     assert 'window.__assetfx_audit = () =>' in shader_module
+    assert 'contextsCreated:' in shader_module
+    assert 'overlayCanvases:' in shader_module
+    assert 'webglCanvases:' in shader_module
+    assert 'attachedRootId:' in shader_module
+    assert 'window.__assetfx_dump_canvases = () =>' in shader_module
     assert 'readyInViewNotPlayedCount:' in shader_module
     assert 'renderSampledCount:' in shader_module
     assert 'droppedByCapCount:' in shader_module
@@ -213,6 +220,10 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
     assert 'renderCandidates.sort((a, b) => a[8] - b[8]);' in shader_module
+    assert 'this.sampleHoldMs = 250;' in shader_module
+    assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
+    assert '_renderDebugBadge(cardEl' in shader_module
+    assert '.fx-debug-badge {' in shader_module
     assert "const typeCode = kind === 'video' ? 1 : (kind === 'audio' ? 2 : 0);" in shader_module
 
 

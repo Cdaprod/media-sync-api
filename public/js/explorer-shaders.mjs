@@ -136,8 +136,16 @@ if (typeof window !== 'undefined') {
   };
   window.__assetfx_audit = () => {
     const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
+    const allCanvases = Array.from(document.querySelectorAll('canvas'));
     const owner = FX_GLOBAL.__assetfx_global_context_owner || null;
+    const webglCalls = Array.isArray(FX_GLOBAL.__webgl_ctx_calls) ? FX_GLOBAL.__webgl_ctx_calls : [];
+    const webglCanvasKeys = new Set(webglCalls.map((entry) => `${entry?.canvasId || 'no-id'}::${entry?.dataset?.assetfxOverlayId || 'no-overlay'}`));
     const report = {
+      contextsCreated: __DBG_GL_CONTEXTS_CREATED,
+      contextsPrevented: __DBG_PREVENTED_SECOND_CONTEXT,
+      overlayCanvases: overlays.length,
+      allCanvases: allCanvases.length,
+      webglCanvases: webglCanvasKeys.size,
       overlays: overlays.length,
       overlayIds: overlays.map((el) => el.dataset.assetfxOverlayId || null),
       roots: overlays.map((el) => el.parentElement?.dataset?.assetfxRootId || null),
@@ -151,6 +159,7 @@ if (typeof window !== 'undefined') {
       readyInViewNotPlayedCount: FX_GLOBAL.__assetfx_instance?.readyInViewNotPlayedCount || 0,
       renderSampledCount: FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0,
       droppedByCapCount: FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0,
+      attachedRootId: FX_GLOBAL.__assetfx_instance?.container?.dataset?.assetfxRootId || null,
       owner: owner ? {
         canvasId: owner.canvasId,
         rootId: owner.rootId,
@@ -161,6 +170,20 @@ if (typeof window !== 'undefined') {
     console.table(report.calls.map((entry, i) => ({ idx: i, site: entry.site, rootId: entry.rootId || '', canvasId: entry.canvasId || '', at: entry.at })));
     return report;
   };
+}
+
+if (typeof window !== 'undefined') {
+  window.__assetfx_dump_canvases = () => (
+    [...document.querySelectorAll('canvas')].map((c) => ({
+      id: c.id || null,
+      assetfx: c.dataset.assetfx || null,
+      overlayId: c.dataset.assetfxOverlayId || null,
+      rootId: c.dataset.assetfxRootId || null,
+      w: c.width,
+      h: c.height,
+      className: c.className || null,
+    }))
+  );
 }
 const FRAG = `
 precision mediump float;
@@ -314,6 +337,9 @@ export class AssetFX {
     this.liteFx = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('fx') === 'lite'
       : false;
+    this.fxDebug = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('fxdebug') === '1'
+      : false;
 
     this.visibilityObserver = null;
     this.scrollReplayScheduled = false;
@@ -330,6 +356,8 @@ export class AssetFX {
     };
     this._tapGuardCleanup = null;
     this._resizeObserver = null;
+    this.sampleHoldMs = 250;
+    this.sampledCardsUntil = new WeakMap();
 
     this._ensureSharedStyles();
     if (typeof window !== 'undefined') window.__assetfx_instance = this;
@@ -746,6 +774,7 @@ export class AssetFX {
     if (visible && card.dataset.fxReady === '1') this.visibleCards.add(card);
     else {
       this.visibleCards.delete(card);
+      this.sampledCardsUntil.delete(card);
       this.pendingDissolves = this.pendingDissolves.filter((entry) => entry.cardEl !== card);
     }
     this.layoutDirty = true;
@@ -986,7 +1015,9 @@ export class AssetFX {
       const tileCenterX = (x1 + x2) * 0.5;
       const tileCenterY = (y1 + y2) * 0.5;
       const dist2 = ((tileCenterX - cx) * (tileCenterX - cx)) + ((tileCenterY - cy) * (tileCenterY - cy));
-      renderCandidates.push([x1, y1, x2, y2, typeCode, selected, energy, readyFade, dist2]);
+      const holdUntil = this.sampledCardsUntil.get(card) || 0;
+      const holdBoost = holdUntil > performance.now() ? -1e12 : 0;
+      renderCandidates.push([x1, y1, x2, y2, typeCode, selected, energy, readyFade, dist2 + holdBoost, card]);
 
       const last = this.lastPlayedAt.get(card) || 0;
       if (!this.activeDissolves.has(card) && (Date.now() - last >= this.cooldownMs)) {
@@ -995,7 +1026,24 @@ export class AssetFX {
     });
     const totalCandidates = renderCandidates.length;
     renderCandidates.sort((a, b) => a[8] - b[8]);
-    renderCandidates.slice(0, this.maxRenderCards).forEach((row) => cards.push(row));
+    renderCandidates.slice(0, this.maxRenderCards).forEach((row) => {
+      cards.push(row);
+      this.sampledCardsUntil.set(row[9], performance.now() + this.sampleHoldMs);
+      if (this.fxDebug) {
+        this._renderDebugBadge(row[9], { sampled: true, inView: true, ready: true });
+      }
+    });
+    if (this.fxDebug) {
+      this.visibleCards.forEach((card) => {
+        if (!card?.isConnected) return;
+        const ready = card.dataset.fxReady === '1';
+        const inView = card.dataset.fxInView === '1';
+        const last = this.lastPlayedAt.get(card) || 0;
+        const played = (Date.now() - last) < this.cooldownMs;
+        const sampled = (this.sampledCardsUntil.get(card) || 0) > performance.now();
+        this._renderDebugBadge(card, { ready, inView, played, sampled });
+      });
+    }
     this.renderSampledCount = cards.length;
     this.droppedByCapCount = Math.max(0, totalCandidates - cards.length);
     this.layoutDirty = false;
@@ -1034,6 +1082,17 @@ export class AssetFX {
       gl.uniform1i(gl.getUniformLocation(this.program, 'u_tile_params'), 0);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  _renderDebugBadge(cardEl, { ready = false, inView = false, played = false, sampled = false } = {}) {
+    if (!this.fxDebug || !cardEl) return;
+    let badge = cardEl.querySelector('.fx-debug-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'fx-debug-badge';
+      cardEl.appendChild(badge);
+    }
+    badge.textContent = `${ready ? 'R' : '-'}${inView ? 'V' : '-'}${played ? 'P' : '-'}${sampled ? 'S' : '-'}`;
   }
 
   _ensureSharedStyles() {
@@ -1076,6 +1135,20 @@ export class AssetFX {
         mix-blend-mode: screen;
         background: linear-gradient(135deg, rgba(86,126,196,0.45), rgba(120,219,255,0.2), rgba(8,14,25,0));
         animation: fx-visible-hint 380ms ease-out forwards;
+      }
+      .fx-debug-badge {
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        z-index: 13;
+        font-size: 10px;
+        font-family: monospace;
+        background: rgba(0,0,0,0.75);
+        color: #9ef;
+        border: 1px solid rgba(158,238,255,0.4);
+        border-radius: 6px;
+        padding: 2px 4px;
+        pointer-events: none;
       }
       @keyframes fx-selection-pulse {
         0% { opacity: 0.95; transform: scale(0.94); box-shadow: 0 0 0 0 rgba(80,220,255,0.58); }

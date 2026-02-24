@@ -1036,3 +1036,15 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Overlay render sampling now prioritizes tiles nearest viewport center before applying `maxRenderCards`, reducing random-looking mixed FX in the same visible region.
 - Runtime diagnostics expanded (`readyInViewNotPlayedCount`, `renderSampledCount`, `droppedByCapCount`) and surfaced in `window.__assetfx_dbg`/`window.__assetfx_audit()`.
 - Static tests updated for unified entry hooks, center-priority sampling sort, and new audit counters.
+
+### Latest Implementation Notes (2026-02-24, fxdebug webgl call tracing + sampling hysteresis)
+- Added `?fxdebug=1` instrumentation in `public/explorer.html` that idempotently wraps `HTMLCanvasElement.prototype.getContext` and records WebGL context call stacks into `window.__webgl_ctx_calls` for on-device diagnostics.
+- Expanded `window.__assetfx_audit()` in `public/js/explorer-shaders.mjs` to report copy/paste-friendly sanity metrics (`contextsCreated`, `contextsPrevented`, `overlayCanvases`, `allCanvases`, `webglCanvases`, `attachedRootId`, plus queue/sampling counters).
+- Added `window.__assetfx_dump_canvases()` helper returning metadata for every canvas on the page to quickly locate non-AssetFX WebGL users.
+- Added sampled-set hysteresis (`sampleHoldMs`, `sampledCardsUntil`) to reduce cap thrash holes when `maxRenderCards` is enforced during scroll.
+- Added optional debug card badges (`RVPS`) in fxdebug mode to visualize per-tile ready/in-view/played/sampled state when validating entry behavior.
+
+
+### Latest Implementation Notes (2026-02-24, maintenance: handoff refresh)
+- Performed a no-code maintenance pass to refresh agent handoff continuity and confirm repository instructions are still aligned with the latest `fxdebug`/AssetFX diagnostics work.
+- Verified tree state before/after the refresh to keep future commits anchored to an explicit AGENTS.md update checkpoint.
