@@ -952,3 +952,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added explicit renderer identity marker (`data-fx-renderer-id`) on the grid container for debugging/verification that rebinds keep the same shared renderer instance.
 - Added `_getRenderer` / `_saveRenderer` helpers and synchronized RAF handle updates in the shared render loop to keep singleton lifecycle stable across repeated init/bind calls.
 - Expanded static tests to assert singleton symbols/wiring are present and shared renderer teardown paths remain explicit.
+
+### Latest Implementation Notes (2026-02-24, stable FX root binding)
+- Explorer grid FX attachment now targets a stable scroll-root (`#mediaGridRoot` / `[data-fx-grid-root="1"]`) instead of the frequently re-rendered `#mediaGrid` node, preserving shared renderer identity across media refreshes.
+- Updated static explorer shader wiring assertions to reflect root-resolution + `attachGrid(gridRoot, '.asset')` integration.

@@ -1454,7 +1454,7 @@
           <div class="spinner"></div>
           <div>Preparing thumbnails…</div>
         </div>
-        <div class="scroll">
+        <div id="mediaGridRoot" class="scroll" data-fx-grid-root="1">
           <div id="mediaGrid" class="grid"></div>
           <div id="mediaList" class="list" style="display:none;"></div>
         </div>
@@ -3227,7 +3227,8 @@
 
       // GRID
       const g = el('mediaGrid');
-      cardFX.attachGrid(g, '.asset');
+      const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root="1"]') || g;
+      cardFX.attachGrid(gridRoot, '.asset');
       g.innerHTML = '';
       // LIST
       const l = el('mediaList');

@@ -141,7 +141,8 @@ def test_explorer_shader_asset_fx_wiring_present():
 
     assert "import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';" in html
     assert 'const cardFX = new AssetFX();' in html
-    assert "cardFX.attachGrid(g, '.asset');" in html
+    assert "const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root=\"1\"]') || g;" in html
+    assert "cardFX.attachGrid(gridRoot, '.asset');" in html
     assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
     assert 'cardFX.pulse(selectedCard);' in html
 
