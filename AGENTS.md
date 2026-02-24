@@ -981,3 +981,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added visibility/render workload limits (`visibleCards` tracking + `maxRenderCards` cap) so overlay RAF sampling targets a bounded visible subset instead of scanning all tracked cards each frame.
 - Added low-motion controls: respects `prefers-reduced-motion` and URL `?fx=lite` mode to suppress heavy replay hints/dissolve behavior while keeping base grid interactions intact.
 - Expanded static explorer tests to assert throttling/lite-mode symbols and ensure `_playDissolve` no longer performs image opacity style transitions.
+
+### Latest Implementation Notes (2026-02-24, queue hygiene + disconnected-card pruning)
+- Added `AssetFX._pruneDisconnected()` and call sites in both replay sweep and render loop so disconnected DOM nodes are removed from `trackedCards`, `visibleCards`, `activeDissolves`, and pending dissolve tasks.
+- Dissolve queue now has bounded overflow policy (`maxPendingDissolves = 60`); newer requests are preferred and stale/offscreen tasks are dropped, including immediate pending-task removal when cards leave viewport.
+- Dissolve finalize path now guarantees `activeDissolves` cleanup even on unexpected completion errors, preventing stuck active slots during long scroll sessions.
+- Expanded runtime diagnostics (`window.__assetfx_dbg` + `window.__assetfx_audit()`) with live queue/active/visible counters for leak/starvation inspection.
+- Updated static + gated Playwright tests to assert new queue hygiene symbols and runtime bounds (`pending <= 60`, `active <= 6`).

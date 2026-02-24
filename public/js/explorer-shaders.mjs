@@ -95,6 +95,9 @@ if (typeof window !== 'undefined') {
     get contexts() { return __DBG_GL_CONTEXTS_CREATED; },
     get renderers() { return __DBG_RENDERERS_CREATED; },
     get prevented() { return __DBG_PREVENTED_SECOND_CONTEXT; },
+    get activeDissolves() { return FX_GLOBAL.__assetfx_instance?.activeDissolves?.size || 0; },
+    get pendingDissolves() { return FX_GLOBAL.__assetfx_instance?.pendingDissolves?.length || 0; },
+    get visibleCards() { return FX_GLOBAL.__assetfx_instance?.visibleCards?.size || 0; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
   };
   window.__assetfx_audit = () => {
@@ -108,6 +111,9 @@ if (typeof window !== 'undefined') {
       contexts: __DBG_GL_CONTEXTS_CREATED,
       renderers: __DBG_RENDERERS_CREATED,
       preventedSecondContext: __DBG_PREVENTED_SECOND_CONTEXT,
+      activeDissolves: FX_GLOBAL.__assetfx_instance?.activeDissolves?.size || 0,
+      pendingDissolves: FX_GLOBAL.__assetfx_instance?.pendingDissolves?.length || 0,
+      visibleCards: FX_GLOBAL.__assetfx_instance?.visibleCards?.size || 0,
       owner: owner ? {
         canvasId: owner.canvasId,
         rootId: owner.rootId,
@@ -219,6 +225,7 @@ export class AssetFX {
     this.lastPlayedAt = new WeakMap();
     this.cooldownMs = 1000;
     this.maxActiveEffects = 6;
+    this.maxPendingDissolves = 60;
     this.maxRenderCards = 28;
 
     this.activeDissolves = new Set();
@@ -243,6 +250,7 @@ export class AssetFX {
     this._tapGuardCleanup = null;
 
     this._ensureSharedStyles();
+    if (typeof window !== 'undefined') window.__assetfx_instance = this;
   }
 
   init(container) {
@@ -508,18 +516,25 @@ export class AssetFX {
 
   _enqueueDissolve(cardEl, imgEl, duration) {
     if (!cardEl || !imgEl || this.prefersReducedMotion) return;
+    this._pruneDisconnected();
+    if (!this.visibleCards.has(cardEl)) return;
     if (this.activeDissolves.has(cardEl)) return;
     const exists = this.pendingDissolves.some((entry) => entry.cardEl === cardEl);
     if (exists) return;
-    this.pendingDissolves.push({ cardEl, imgEl, duration });
+    this.pendingDissolves.push({ cardEl, imgEl, duration, queuedAt: performance.now() });
+    if (this.pendingDissolves.length > this.maxPendingDissolves) {
+      this.pendingDissolves.splice(0, this.pendingDissolves.length - this.maxPendingDissolves);
+    }
     this._runNextDissolve();
   }
 
   _runNextDissolve() {
+    this._pruneDisconnected();
     while (this.pendingDissolves.length && this.activeDissolves.size < this.maxActiveEffects) {
-      const task = this.pendingDissolves.shift();
+      const task = this.pendingDissolves.pop();
       if (!task?.cardEl?.isConnected || !task?.imgEl?.isConnected) continue;
       const { cardEl, duration } = task;
+      if (!this.visibleCards.has(cardEl)) continue;
       this.activeDissolves.add(cardEl);
 
       ensureRelative(cardEl);
@@ -528,15 +543,24 @@ export class AssetFX {
       cardEl.appendChild(veil);
       this._boostScanline(cardEl, Math.max(200, duration * 0.7));
 
+      const finalize = () => {
+        veil.remove();
+        cardEl.classList.remove('fx-entry-active');
+        this.activeDissolves.delete(cardEl);
+        this._runNextDissolve();
+      };
+
       cardEl.classList.add('fx-entry-active');
       requestAnimationFrame(() => {
         veil.classList.add('is-active');
         const doneMs = Math.max(200, duration) + 120;
         setTimeout(() => {
-          veil.remove();
-          cardEl.classList.remove('fx-entry-active');
-          this.activeDissolves.delete(cardEl);
-          this._runNextDissolve();
+          try {
+            finalize();
+          } catch {
+            this.activeDissolves.delete(cardEl);
+            this._runNextDissolve();
+          }
         }, doneMs);
       });
     }
@@ -547,8 +571,27 @@ export class AssetFX {
     if (card.dataset.fxInView === next) return false;
     card.dataset.fxInView = next;
     if (visible) this.visibleCards.add(card);
-    else this.visibleCards.delete(card);
+    else {
+      this.visibleCards.delete(card);
+      this.pendingDissolves = this.pendingDissolves.filter((entry) => entry.cardEl !== card);
+    }
     return true;
+  }
+
+
+  _pruneDisconnected() {
+    this.trackedCards.forEach((card) => {
+      if (!card?.isConnected) this.trackedCards.delete(card);
+    });
+    this.visibleCards.forEach((card) => {
+      if (!card?.isConnected) this.visibleCards.delete(card);
+    });
+    this.activeDissolves.forEach((card) => {
+      if (!card?.isConnected) this.activeDissolves.delete(card);
+    });
+    this.pendingDissolves = this.pendingDissolves.filter((entry) => (
+      !!entry?.cardEl?.isConnected && !!entry?.imgEl?.isConnected && this.visibleCards.has(entry.cardEl)
+    ));
   }
 
   _ensureObserver(rootEl) {
@@ -637,6 +680,7 @@ export class AssetFX {
   }
 
   _replaySweep() {
+    this._pruneDisconnected();
     if (!this.container || !this.trackedCards.size) return;
     const rootRect = this.container.getBoundingClientRect();
     const minOverlap = Math.max(18, rootRect.height * 0.1);
@@ -711,6 +755,7 @@ export class AssetFX {
   }
 
   _render() {
+    this._pruneDisconnected();
     if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
     const dpr = window.devicePixelRatio || 1;
     const rect = this.container.getBoundingClientRect();

@@ -178,6 +178,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "console.info('AssetFX: prevented second WebGL context; reusing global overlay');" in shader_module
     assert 'const rootId = ensureRootId(gridRoot);' in shader_module
     assert 'this.maxActiveEffects = 6;' in shader_module
+    assert 'this.maxPendingDissolves = 60;' in shader_module
+    assert 'this._pruneDisconnected();' in shader_module
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
 
@@ -234,8 +236,14 @@ def test_explorer_assetfx_context_singleton_runtime_with_playwright():
             page.wait_for_timeout(500)
             contexts = page.evaluate("window.__assetfx_dbg?.contexts ?? null")
             overlays = page.evaluate("document.querySelectorAll('canvas[data-assetfx=\"overlay\"]').length")
+            pending = page.evaluate("window.__assetfx_dbg?.pendingDissolves ?? null")
+            active = page.evaluate("window.__assetfx_dbg?.activeDissolves ?? null")
             assert contexts is not None
             assert contexts <= 1
             assert overlays <= 1
+            assert pending is not None
+            assert pending <= 60
+            assert active is not None
+            assert active <= 6
         finally:
             browser.close()
