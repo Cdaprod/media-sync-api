@@ -1000,3 +1000,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added first-pass material presets driven by tile type and selection state (video scan/phosphor accents, audio shimmer accents, image vignette basis, and selection-glass highlight streak/fresnel) multiplied by ready fade.
 - Render packing now uploads explicit per-tile material parameters from DOM state (`kind`, `.is-selected`, boost-derived energy, readiness fade) instead of the previous single `u_video` scalar.
 - Updated static shader assertions to cover new material uniforms/tileUV anchoring and per-tile parameter packing symbols.
+
+### Latest Implementation Notes (2026-02-24, readiness ownership cleanup: decode-aware + single loader path)
+- Explorer card thumbs now use `loading="eager" decoding="async" fetchpriority="low"` in both grid/list markup to avoid mixing browser lazy-loading scheduling with the existing JS thumb queue (`loadThumbQueue`).
+- Card thumbs are initialized with `data-thumb-state="pending"` so load state ownership remains explicit in JS and consistent with the existing queue/error updates.
+- `AssetFX.bindCardMedia()` readiness marking is now decode-aware: `markReady` awaits `img.decode()` when available before setting `data-fx-ready`/`data-ready`, with safe fallback for Safari/cross-origin decode rejections.
+- Static tests now assert the eager+decode thumb attributes and decode-aware readiness path to lock the lifecycle separation between structure CSS and JS/FX readiness.

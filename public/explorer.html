@@ -3300,9 +3300,9 @@
 
         card.innerHTML = `
           <div class="thumb">
-            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
-              data-thumb-fallback="${escapeHtml(fallbackThumb)}" />
+              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
             <div class="asset-overlay">
               <div class="asset-ol-tl">
                 <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
@@ -3347,9 +3347,9 @@
         row.dataset.selectKey = selectKey;
         row.innerHTML = `
           <div class="mini">
-            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
-              data-thumb-fallback="${escapeHtml(fallbackThumb)}" />
+              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
           </div>
           <div class="info">
             <div class="t">${escapeHtml(title)}</div>

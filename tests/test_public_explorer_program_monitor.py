@@ -148,6 +148,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "cardFX.attachGrid(gridRoot, '.asset');" in html
     assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
     assert 'cardFX.pulse(selectedCard);' in html
+    assert 'loading="eager" decoding="async" fetchpriority="low"' in html
+    assert 'loading="lazy"' not in html
 
     assert 'export class AssetFX' in shader_module
     assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
@@ -181,6 +183,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.maxPendingDissolves = 60;' in shader_module
     assert "cardEl.dataset.fxReady = '0';" in shader_module
     assert "cardEl.dataset.ready = '1';" in shader_module
+    assert 'await imgEl.decode();' in shader_module
     assert 'this.readyFadeMs = 220;' in shader_module
     assert 'this._pruneDisconnected();' in shader_module
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module

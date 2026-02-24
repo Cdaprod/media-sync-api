@@ -501,7 +501,14 @@ export class AssetFX {
     this.dissolve(cardEl, imgEl, { allowReplay: true });
 
     if (typeof imgEl.__fxReadyCleanup === 'function') imgEl.__fxReadyCleanup();
-    const markReady = () => {
+    const markReady = async () => {
+      if (typeof imgEl.decode === 'function') {
+        try {
+          await imgEl.decode();
+        } catch {
+          // Safari can reject decode() for cross-origin/cached edge cases; fallback to load completion.
+        }
+      }
       cardEl.dataset.fxReady = '1';
       cardEl.dataset.ready = '1';
       cardEl.dataset.fxReadyAt = String(performance.now());
@@ -513,9 +520,11 @@ export class AssetFX {
       this.visibleCards.delete(cardEl);
     };
 
-    if (imgEl.complete && imgEl.naturalWidth > 0) markReady();
+    if (imgEl.complete && imgEl.naturalWidth > 0) void markReady();
     else {
-      imgEl.addEventListener('load', markReady, { once: true });
+      imgEl.addEventListener('load', () => {
+        void markReady();
+      }, { once: true });
       imgEl.addEventListener('error', markError, { once: true });
     }
     imgEl.__fxReadyCleanup = () => {
