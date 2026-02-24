@@ -3292,6 +3292,8 @@
         card.dataset.orient = orient;
         card.dataset.orientLocked = orientLocked ? 'true' : 'false';
         card.dataset.thumbKey = thumbKey || '';
+        const selectKey = selectionKey(it);
+        card.dataset.selectKey = selectKey;
 
         card.innerHTML = `
           <div class="thumb">
@@ -3304,7 +3306,7 @@
               </div>
               <div class="asset-ol-tr">
                 <div class="selector" title="Select">
-                  <input type="checkbox" ${state.selected.has(selectionKey(it)) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+                  <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
                 </div>
               </div>
               <div class="asset-ol-bl">
@@ -3321,12 +3323,6 @@
         if (cardThumb) {
           cardFX.bindCardMedia(card, cardThumb, { kind });
         }
-
-        // checkbox toggles selection without opening drawer
-        card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          toggleSelected(it);
-        });
 
         wireAssetPointerHandlers(card, it);
         g.appendChild(card);
@@ -3345,6 +3341,7 @@
         row.dataset.creationTime = it.created_at || it.uploaded_at || it.indexed_at || '';
         row.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
         row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
+        row.dataset.selectKey = selectKey;
         row.innerHTML = `
           <div class="mini">
             <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
@@ -3356,11 +3353,10 @@
             <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
           </div>
           <div class="actions">
-            <input type="checkbox" ${state.selected.has(selectionKey(it)) ? 'checked':''} title="Select" ${canSelect ? '' : 'disabled'} />
+            <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} title="Select" ${canSelect ? '' : 'disabled'} />
             <button class="iconbtn" type="button">Preview</button>
           </div>
         `;
-        row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it));
         row.querySelector('button').addEventListener('click', () => openDrawer(it));
         wireAssetPointerHandlers(row, it);
         l.appendChild(row);
@@ -3435,34 +3431,42 @@
     // -------------------------
     // Selection + Resolve
     // -------------------------
-    function toggleSelected(item){
+    function updateSelectionDomForKey(key, checked){
+      if (!key) return;
+      const escaped = cssEscape(key);
+      document.querySelectorAll(`[data-select-key="${escaped}"]`).forEach((node) => {
+        if (node.matches('input[type="checkbox"]')) node.checked = checked;
+        const card = node.closest('.asset, .row');
+        if (card) card.classList.toggle('is-selected', checked);
+      });
+    }
+
+    function toggleSelected(item, { domNode = null } = {}){
       if (!item?.relative_path) return;
       const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
       if (!canSelectAcrossProjects) return;
       const key = selectionKey(item);
       if (!key) return;
-      let selectedCard = null;
+      let checked = false;
       if (state.selected.has(key)){
         deselectKey(key);
+        checked = false;
       }else{
         state.selected.add(key);
         state.selectedOrder = state.selectedOrder.filter((value) => value !== key);
         state.selectedOrder.push(key);
-        selectedCard = document.querySelector(`.asset[data-source="${cssEscape(itemSourceName(item))}"][data-project="${cssEscape(itemProjectName(item))}"][data-relative="${cssEscape(item.relative_path || '')}"]`);
+        checked = true;
       }
-      if (selectedCard){
-        cardFX.pulse(selectedCard);
-      }
-
-      // update selected CSS quickly without full re-render
-      // simplest: re-render; media lists are small enough on LAN.
-      renderMedia();
+      updateSelectionDomForKey(key, checked);
+      const selectedCard = domNode?.closest('.asset') || document.querySelector(`.asset[data-select-key="${cssEscape(key)}"]`);
+      if (checked && selectedCard) cardFX.pulse(selectedCard);
       updateSelectionUI();
     }
 
     function clearSelection(){
+      const keys = Array.from(state.selected);
       clearSelectionState();
-      renderMedia();
+      keys.forEach((key) => updateSelectionDomForKey(key, false));
       updateSelectionUI();
     }
 
@@ -4055,11 +4059,65 @@
       syncResolveHint();
     };
 
+
+    function wireSelectionDelegation(){
+      const MOVE_THRESHOLD = 12;
+      const pointers = new Map();
+      const handlePointerDown = (event) => {
+        const input = event.target.closest('input[type="checkbox"][data-select-key]');
+        if (!input) return;
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, moved: false, t: Date.now() });
+      };
+      const handlePointerMove = (event) => {
+        const rec = pointers.get(event.pointerId);
+        if (!rec) return;
+        const dx = event.clientX - rec.x;
+        const dy = event.clientY - rec.y;
+        if ((dx * dx + dy * dy) > MOVE_THRESHOLD * MOVE_THRESHOLD) rec.moved = true;
+      };
+      const handlePointerUp = (event) => {
+        const rec = pointers.get(event.pointerId);
+        if (!rec) return;
+        if (rec.moved && rec.input?.isConnected) rec.input.dataset.fxSuppressToggle = '1';
+        pointers.delete(event.pointerId);
+      };
+      const handleChange = (event) => {
+        const input = event.target.closest('input[type="checkbox"][data-select-key]');
+        if (!input) return;
+        if (input.dataset.fxSuppressToggle === '1'){
+          delete input.dataset.fxSuppressToggle;
+          input.checked = !input.checked;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        const key = input.dataset.selectKey || '';
+        const item = selectionItemByKey(key);
+        if (!item) return;
+        toggleSelected(item, { domNode: input });
+        event.stopPropagation();
+      };
+      ['mediaGrid','mediaList'].forEach((id) => {
+        const root = el(id);
+        if (!root || root.dataset.selectionDelegated === '1') return;
+        root.dataset.selectionDelegated = '1';
+        root.addEventListener('pointerdown', handlePointerDown, true);
+        root.addEventListener('pointermove', handlePointerMove, true);
+        root.addEventListener('pointerup', handlePointerUp, true);
+        root.addEventListener('pointercancel', handlePointerUp, true);
+        root.addEventListener('change', handleChange, true);
+        root.addEventListener('click', (event) => {
+          if (event.target.closest('input[type="checkbox"][data-select-key]')) event.stopPropagation();
+        }, true);
+      });
+    }
+
     // Boot
     document.addEventListener('DOMContentLoaded', async () => {
       wireTopbarIntent();
       wireDropdownIntents();
       wireProjectDragAssist();
+      wireSelectionDelegation();
       document.addEventListener('pointerdown', (event) => {
         const menu = el('contextMenu');
         if (!menu?.classList.contains('open')) return;

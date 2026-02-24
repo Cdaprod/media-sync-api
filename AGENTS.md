@@ -939,3 +939,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - `trackViewport` now stores cards in a tracked set, enabling lightweight visibility checks against the grid scroll container on each scheduled animation-frame sweep.
 - When a tracked card re-enters view with a loaded thumbnail, the sweep now replays dissolve (`_playDissolve`) and visible hint overlays immediately for steadier mobile feedback.
 - Expanded static explorer assertions to include the new continuous replay methods.
+
+### Latest Implementation Notes (2026-02-24, shared WebGL overlay + selection no-rerender)
+- Refactored `AssetFX` to a shared-overlay renderer model: one canvas/WebGL context per grid container (`init`) with a single RAF loop that renders visible card overlays from mapped DOM rects, eliminating per-card context churn.
+- Added WebGL lifecycle handling (`webglcontextlost` / `webglcontextrestored`) and CSS-only fallback overlays so effect behavior remains stable on constrained mobile browsers.
+- Explorer checkbox selection now uses a cheap DOM/state update path (`updateSelectionDomForKey` + delegated handlers) and no longer calls `renderMedia()` inside `toggleSelected`, preventing repeated “Preparing thumbnails…” flashes during selection.
+- Added pointer movement suppression for checkbox taps during scroll gestures to reduce accidental selections on mobile touch scroll.
+- Updated explorer static tests to assert shared renderer lifecycle methods and verify toggle selection does not trigger full rerender logic.

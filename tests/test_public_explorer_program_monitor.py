@@ -150,17 +150,21 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'addScanline(cardEl)' in shader_module
     assert 'pulse(cardEl' in shader_module
     assert 'dissolve(cardEl, imgEl' in shader_module
-    assert '_cssDissolve(cardEl, imgEl, duration)' in shader_module
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
     assert 'bindCardMedia(cardEl, imgEl, { kind = \'' in shader_module
-    assert '_ensureVisibilityObserver(rootEl)' in shader_module
-    assert '_ensureScrollReplay(rootEl)' in shader_module
-    assert '_scheduleScrollReplay()' in shader_module
-    assert '_runScrollReplaySweep()' in shader_module
-    assert '_replayVisibleHint(cardEl, imgEl)' in shader_module
-    assert '_playDissolve(cardEl, imgEl, duration)' in shader_module
-    assert '_boostScanline(cardEl, duration = 420)' in shader_module
+    assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
     assert '@keyframes fx-visible-hint' in shader_module
     assert '@keyframes fx-selection-pulse' in shader_module
-    assert 'fx-scanline-overlay' in shader_module
-    assert 'allowReplay = false' in shader_module
+
+
+def test_explorer_selection_toggle_does_not_full_rerender():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'function updateSelectionDomForKey(key, checked)' in html
+    assert 'function wireSelectionDelegation()' in html
+    assert 'renderMedia();' in html
+    toggle_idx = html.index('function toggleSelected(')
+    clear_idx = html.index('function clearSelection(')
+    toggle_block = html[toggle_idx:clear_idx]
+    assert 'renderMedia();' not in toggle_block
+    assert 'setContentLoading(true);' not in toggle_block
+    assert 'loadThumbQueue' not in toggle_block

@@ -1,21 +1,16 @@
 /**
  * public/js/explorer-shaders.mjs
- * Asset explorer WebGL/CSS visual effects with iPhone-safe fallbacks.
+ * Shared AssetFX renderer for explorer cards.
  *
  * Example:
  *   import { AssetFX } from './js/explorer-shaders.mjs';
  *   const fx = new AssetFX();
+ *   fx.init(document.getElementById('mediaGrid'));
  *   fx.attachGrid(document.getElementById('mediaGrid'), '.asset');
  */
 
-function createElement(tag, className) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  return node;
-}
-
 function ensureRelative(el) {
-  if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+  if (el && getComputedStyle(el).position === 'static') el.style.position = 'relative';
 }
 
 function cssEscape(value) {
@@ -24,725 +19,477 @@ function cssEscape(value) {
   return text.replace(/(["'\\#.:;,!?+*~^$\[\]()=>|/@])/g, '\\$1');
 }
 
-function supportsWebGL() {
-  try {
-    const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl'));
-  } catch {
-    return false;
-  }
+function createNode(tag, className) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  return node;
 }
+
+const VERT = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main(){
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+`;
+
+const MAX_RECTS = 64;
+const FRAG = `
+precision mediump float;
+varying vec2 v_uv;
+uniform vec2 u_resolution;
+uniform float u_time;
+uniform int u_rect_count;
+uniform vec4 u_rects[${MAX_RECTS}];
+uniform float u_video[${MAX_RECTS}];
+
+void main(){
+  vec2 px = vec2(v_uv.x * u_resolution.x, (1.0 - v_uv.y) * u_resolution.y);
+  vec3 color = vec3(0.0);
+  float alpha = 0.0;
+  for (int i = 0; i < ${MAX_RECTS}; i++) {
+    if (i >= u_rect_count) break;
+    vec4 r = u_rects[i];
+    if (px.x < r.x || px.y < r.y || px.x > r.z || px.y > r.w) continue;
+
+    float y = px.y - r.y;
+    float line = 0.5 + 0.5 * sin((y * 1.35) + (u_time * 2.2));
+    float vignette = 1.0 - smoothstep(0.0, 0.9, distance((px - vec2((r.x + r.z) * 0.5, (r.y + r.w) * 0.5)) / vec2(max((r.z-r.x)*0.5,1.0), max((r.w-r.y)*0.5,1.0)), vec2(0.0)));
+    float grain = fract(sin(dot(px + vec2(float(i), u_time), vec2(12.9898, 78.233))) * 43758.5453);
+
+    float scan = mix(0.0, 0.22, u_video[i]) * (0.45 + line * 0.55);
+    float sparkle = (grain - 0.5) * 0.08;
+    float cardAlpha = 0.18 + (u_video[i] * 0.18);
+
+    color += vec3(0.28, 0.72, 0.95) * scan * vignette + vec3(sparkle * 0.4);
+    alpha += cardAlpha * vignette;
+  }
+
+  alpha = clamp(alpha, 0.0, 0.55);
+  gl_FragColor = vec4(color, alpha);
+}
+`;
 
 function compileShader(gl, type, source) {
   const shader = gl.createShader(type);
-  if (!shader) throw new Error('Could not create shader');
+  if (!shader) throw new Error('shader-create-failed');
   gl.shaderSource(shader, source.trim());
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const info = gl.getShaderInfoLog(shader) || 'shader compile error';
+    const err = gl.getShaderInfoLog(shader) || 'shader compile failed';
     gl.deleteShader(shader);
-    throw new Error(info);
+    throw new Error(err);
   }
   return shader;
 }
 
-function buildProgram(gl, vertexSource, fragmentSource) {
+function createProgram(gl, vertSource, fragSource) {
   const program = gl.createProgram();
-  if (!program) throw new Error('Could not create program');
-  const vert = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
-  const frag = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  if (!program) throw new Error('program-create-failed');
+  const vert = compileShader(gl, gl.VERTEX_SHADER, vertSource);
+  const frag = compileShader(gl, gl.FRAGMENT_SHADER, fragSource);
   gl.attachShader(program, vert);
   gl.attachShader(program, frag);
   gl.linkProgram(program);
   gl.deleteShader(vert);
   gl.deleteShader(frag);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const info = gl.getProgramInfoLog(program) || 'program link error';
+    const err = gl.getProgramInfoLog(program) || 'program-link-failed';
     gl.deleteProgram(program);
-    throw new Error(info);
+    throw new Error(err);
   }
   return program;
 }
 
 function createQuad(gl) {
-  const buffer = gl.createBuffer();
-  if (!buffer) throw new Error('Could not create quad buffer');
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  const buf = gl.createBuffer();
+  if (!buf) throw new Error('quad-buffer-failed');
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  return buffer;
+  return buf;
 }
 
-function useQuad(gl, program, buffer) {
+function bindQuad(gl, program, buffer) {
   const loc = gl.getAttribLocation(program, 'a_pos');
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 }
 
-const VERT = `
-attribute vec2 a_pos;
-varying vec2 v_uv;
-void main() {
-  v_uv = a_pos * 0.5 + 0.5;
-  gl_Position = vec4(a_pos, 0.0, 1.0);
-}
-`;
-
-const HOVER_FRAG = `
-precision mediump float;
-varying vec2 v_uv;
-uniform float u_time;
-uniform float u_strength;
-uniform sampler2D u_thumb;
-uniform bool u_has_thumb;
-
-void main() {
-  vec2 center = vec2(0.5);
-  vec2 dir = v_uv - center;
-  float strength = clamp(u_strength, 0.0, 1.0);
-  float ca = 0.012 * strength;
-  vec3 color = vec3(0.08, 0.12, 0.18);
-
-  if (u_has_thumb) {
-    float r = texture2D(u_thumb, v_uv + dir * ca).r;
-    float g = texture2D(u_thumb, v_uv).g;
-    float b = texture2D(u_thumb, v_uv - dir * ca).b;
-    color = vec3(r, g, b);
-  }
-
-  float edge = smoothstep(0.36, 0.70, length(dir));
-  float pulse = 0.5 + 0.5 * sin(u_time * 3.0);
-  vec3 glow = mix(vec3(0.25, 0.55, 1.0), vec3(0.55, 0.95, 1.0), pulse);
-  color += glow * edge * strength * 0.70;
-
-  gl_FragColor = vec4(color, strength);
-}
-`;
-
-const DISSOLVE_FRAG = `
-precision mediump float;
-varying vec2 v_uv;
-uniform float u_progress;
-uniform float u_time;
-uniform sampler2D u_thumb;
-
-float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(vec2 p){
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  float a = hash(i);
-  float b = hash(i + vec2(1.0, 0.0));
-  float c = hash(i + vec2(0.0, 1.0));
-  float d = hash(i + vec2(1.0, 1.0));
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
-
-void main() {
-  float progress = clamp(u_progress, 0.0, 1.0);
-  float field = noise(v_uv * 6.0 + vec2(u_time * 0.2, 0.0));
-  float mask = smoothstep(progress - 0.15, progress + 0.15, field);
-  float sweep = fract((v_uv.x * 0.7 + v_uv.y * 0.35) - u_time * 0.5);
-  float shimmer = smoothstep(0.0, 0.3, sweep) * smoothstep(0.7, 0.3, sweep);
-  vec3 skeleton = mix(vec3(0.06, 0.08, 0.12), vec3(0.16, 0.21, 0.30), shimmer * (1.0 - progress));
-  vec3 thumb = texture2D(u_thumb, v_uv).rgb;
-  float edge = exp(-abs(field - progress) * 18.0);
-  vec3 edgeColor = vec3(0.45, 0.88, 1.0) * edge * 0.65;
-  gl_FragColor = vec4(mix(skeleton, thumb, mask) + edgeColor, 1.0);
-}
-`;
-
 export class ExplorerShaders {}
 
 export class AssetFX {
   constructor() {
-    this.webglEnabled = supportsWebGL();
-    this.hoverCanvas = null;
-    this.hoverGL = null;
-    this.hoverProgram = null;
-    this.hoverQuad = null;
-    this.hoverTexture = null;
-    this.hoverHasTexture = false;
-    this.hoverTarget = null;
-    this.hoverStrength = 0;
-    this.hoverGoal = 0;
-    this.hoverStart = performance.now();
-    this.hoverRaf = 0;
-    this.touchTimer = null;
+    this.container = null;
+    this.overlay = null;
+    this.gl = null;
+    this.program = null;
+    this.quad = null;
+    this.raf = 0;
+    this.start = performance.now();
+
     this.boundGrids = new WeakSet();
-    this.visibilityObserver = null;
-    this.visibilityRoot = null;
     this.trackedCards = new Set();
+    this.lastPlayedAt = new WeakMap();
+    this.cooldownMs = 1000;
+
+    this.visibilityObserver = null;
     this.scrollReplayScheduled = false;
-    this.scrollReplayRoot = null;
+    this.fallbackSweepEnabled = !('IntersectionObserver' in window);
+
+    this.pointerState = new Map();
+
+    this._ensureSharedStyles();
+  }
+
+  init(container) {
+    if (!container) return;
+    if (this.container === container && this.overlay) return;
+    this.destroyRenderer();
+
+    this.container = container;
+    ensureRelative(container);
+    const canvas = createNode('canvas', 'fx-shared-overlay');
+    Object.assign(canvas.style, {
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
+      pointerEvents: 'none',
+      zIndex: '2',
+      opacity: '0.92',
+    });
+    container.appendChild(canvas);
+    this.overlay = canvas;
+
+    const gl = canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: false });
+    if (!gl) {
+      this.gl = null;
+      this.program = null;
+      return;
+    }
+    this.gl = gl;
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    try {
+      this.program = createProgram(gl, VERT, FRAG);
+      this.quad = createQuad(gl);
+    } catch {
+      this.program = null;
+      this.quad = null;
+      return;
+    }
+
+    canvas.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault();
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.program = null;
+      this.quad = null;
+    });
+
+    canvas.addEventListener('webglcontextrestored', () => {
+      if (!this.gl) return;
+      try {
+        this.program = createProgram(this.gl, VERT, FRAG);
+        this.quad = createQuad(this.gl);
+      } catch {
+        this.program = null;
+        this.quad = null;
+      }
+      this._startLoop();
+    });
+
+    this._startLoop();
+  }
+
+  destroyRenderer() {
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    if (this.overlay) this.overlay.remove();
+    this.overlay = null;
+    this.gl = null;
+    this.program = null;
+    this.quad = null;
+  }
+
+  destroy() {
+    this.destroyRenderer();
+    if (this.visibilityObserver) {
+      this.visibilityObserver.disconnect();
+      this.visibilityObserver = null;
+    }
+    this.trackedCards.clear();
+    this.lastPlayedAt = new WeakMap();
+    this.boundGrids = new WeakSet();
+    this.pointerState.clear();
   }
 
   attachGrid(gridEl, cardSelector = '.asset') {
     if (!gridEl || this.boundGrids.has(gridEl)) return;
     this.boundGrids.add(gridEl);
+    this.init(gridEl);
 
-    gridEl.addEventListener('pointerenter', (event) => {
-      const card = event.target.closest(cardSelector);
-      if (card) this._focus(card);
-    }, true);
+    const replaySchedule = () => this._scheduleReplaySweep();
+    gridEl.addEventListener('scroll', replaySchedule, { passive: true });
+    gridEl.addEventListener('touchmove', replaySchedule, { passive: true });
+    window.addEventListener('resize', replaySchedule, { passive: true });
 
-    gridEl.addEventListener('pointerleave', (event) => {
-      const card = event.target.closest(cardSelector);
-      if (card && card === this.hoverTarget) this._blur();
-    }, true);
-
-    gridEl.addEventListener('touchstart', (event) => {
-      const card = event.target.closest(cardSelector);
-      if (!card) return;
-      this._focus(card);
-      clearTimeout(this.touchTimer);
-      this.touchTimer = setTimeout(() => this._blur(), 700);
-    }, { passive: true });
-
-    gridEl.addEventListener('touchend', () => {
-      clearTimeout(this.touchTimer);
-      this.touchTimer = setTimeout(() => this._blur(), 180);
-    }, { passive: true });
-
-    gridEl.addEventListener('touchcancel', () => {
-      clearTimeout(this.touchTimer);
-      this._blur();
-    }, { passive: true });
-
-    this._ensureVisibilityObserver(gridEl);
-    this._ensureScrollReplay(gridEl);
+    this._wireTapGuard(gridEl, cardSelector);
+    this._ensureObserver(gridEl);
   }
 
   trackViewport(cardEl, imgEl = null) {
     if (!cardEl) return;
     if (imgEl) cardEl.__fxThumb = imgEl;
-    if (!this.visibilityObserver) return;
-    if (cardEl.dataset.fxViewportTracked === '1') return;
-    cardEl.dataset.fxViewportTracked = '1';
     this.trackedCards.add(cardEl);
-    this.visibilityObserver.observe(cardEl);
+    if (this.visibilityObserver) this.visibilityObserver.observe(cardEl);
+    if (this.fallbackSweepEnabled) this._scheduleReplaySweep();
   }
 
   bindCardMedia(cardEl, imgEl, { kind = '' } = {}) {
     if (!cardEl || !imgEl) return;
+    cardEl.dataset.fxKind = kind || '';
     this.trackViewport(cardEl, imgEl);
     if (kind === 'video') this.addScanline(cardEl);
     this.dissolve(cardEl, imgEl, { allowReplay: true });
   }
 
   addScanline(cardEl) {
-    if (!cardEl || cardEl.dataset.scanlineFx === 'on') return () => {};
-    ensureRelative(cardEl);
-    cardEl.dataset.scanlineFx = 'on';
-
-    const overlay = createElement('div', 'fx-scanline-overlay');
-    Object.assign(overlay.style, {
-      position: 'absolute',
-      inset: '0',
-      borderRadius: 'inherit',
-      pointerEvents: 'none',
-      zIndex: '2',
-      mixBlendMode: 'overlay',
-      backgroundImage: 'repeating-linear-gradient(180deg, rgba(255,255,255,0.12) 0, rgba(255,255,255,0.12) 1px, rgba(0,0,0,0.0) 2px, rgba(0,0,0,0.0) 4px)',
-      opacity: '0.42',
-      transition: 'opacity 220ms ease',
-      animation: 'fx-scanline-pan 4.5s linear infinite',
-    });
-
-    this._ensureSharedStyles();
-    cardEl.appendChild(overlay);
-
-    return () => {
-      overlay.remove();
-      delete cardEl.dataset.scanlineFx;
-    };
+    if (!cardEl) return;
+    cardEl.dataset.fxScanline = '1';
+    this._scheduleReplaySweep();
   }
 
   pulse(cardEl, { duration = 520 } = {}) {
-    if (!cardEl) return () => {};
+    if (!cardEl) return;
     ensureRelative(cardEl);
-    const ring = createElement('div', 'fx-selection-pulse');
-    Object.assign(ring.style, {
-      position: 'absolute',
-      inset: '0',
-      borderRadius: 'inherit',
-      border: '2px solid rgba(80, 220, 255, 0.88)',
-      boxShadow: '0 0 0 0 rgba(80, 220, 255, 0.65)',
-      pointerEvents: 'none',
-      zIndex: '12',
-      animation: `fx-selection-pulse ${Math.max(240, duration)}ms cubic-bezier(0.16, 1, 0.3, 1) forwards`,
-    });
-
-    this._ensureSharedStyles();
+    const ring = createNode('div', 'fx-selection-pulse');
+    ring.style.animationDuration = `${Math.max(220, duration)}ms`;
     cardEl.appendChild(ring);
-    const timeout = window.setTimeout(() => ring.remove(), Math.max(240, duration) + 80);
-    return () => {
-      clearTimeout(timeout);
-      ring.remove();
-    };
+    setTimeout(() => ring.remove(), Math.max(220, duration) + 90);
   }
 
-  dissolve(cardEl, imgEl, { duration = 600, allowReplay = false } = {}) {
+  dissolve(cardEl, imgEl, { duration = 520, allowReplay = false } = {}) {
     if (!cardEl || !imgEl) return { cancel: () => {} };
-    ensureRelative(cardEl);
+    if (typeof imgEl.__fxDissolveCleanup === 'function') imgEl.__fxDissolveCleanup();
 
-    if (allowReplay) {
-      if (typeof imgEl.__fxDissolveCleanup === 'function') imgEl.__fxDissolveCleanup();
-      const play = () => {
-        if (imgEl.dataset.thumbUrl && imgEl.getAttribute('src') === imgEl.dataset.thumbFallback) return;
-        this._playDissolve(cardEl, imgEl, duration);
-      };
-      const onLoad = () => play();
-      imgEl.addEventListener('load', onLoad);
-      if (imgEl.complete && imgEl.naturalWidth > 0) play();
-      imgEl.__fxDissolveCleanup = () => imgEl.removeEventListener('load', onLoad);
-      return { cancel: imgEl.__fxDissolveCleanup };
-    }
+    const play = () => {
+      if (imgEl.dataset.thumbUrl && imgEl.getAttribute('src') === imgEl.dataset.thumbFallback) return;
+      this._playDissolve(cardEl, imgEl, duration, allowReplay);
+    };
 
-    return this._playDissolve(cardEl, imgEl, duration);
+    const onLoad = () => play();
+    imgEl.addEventListener('load', onLoad);
+    if (imgEl.complete && imgEl.naturalWidth > 0) play();
+
+    imgEl.__fxDissolveCleanup = () => imgEl.removeEventListener('load', onLoad);
+    return { cancel: imgEl.__fxDissolveCleanup };
   }
 
-  _playDissolve(cardEl, imgEl, duration) {
+  _playDissolve(cardEl, imgEl, duration, allowReplay) {
     const now = Date.now();
-    const last = Number(cardEl.dataset.fxDissolveAt || '0');
-    if (now - last < 220) return { cancel: () => {} };
-    cardEl.dataset.fxDissolveAt = String(now);
-    this._boostScanline(cardEl);
+    const last = this.lastPlayedAt.get(cardEl) || 0;
+    if (allowReplay && now - last < this.cooldownMs) return;
+    this.lastPlayedAt.set(cardEl, now);
 
-    if (!this.webglEnabled) {
-      const fallback = this._cssDissolve(cardEl, imgEl, duration);
-      return { cancel: fallback };
-    }
+    ensureRelative(cardEl);
+    const veil = createNode('div', 'fx-dissolve-veil');
+    veil.style.transitionDuration = `${Math.max(180, duration)}ms`;
+    cardEl.appendChild(veil);
+    this._boostScanline(cardEl, Math.max(200, duration * 0.7));
 
-    const rect = cardEl.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round((rect.width || 160) * dpr));
-    canvas.height = Math.max(1, Math.round((rect.height || 160) * dpr));
-    Object.assign(canvas.style, {
-      position: 'absolute',
-      inset: '0',
-      width: '100%',
-      height: '100%',
-      borderRadius: 'inherit',
-      pointerEvents: 'none',
-      zIndex: '3',
+    requestAnimationFrame(() => {
+      veil.classList.add('is-active');
+      setTimeout(() => veil.remove(), Math.max(200, duration) + 120);
     });
 
-    cardEl.appendChild(canvas);
-    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false });
-    if (!gl) {
-      canvas.remove();
-      const fallback = this._cssDissolve(cardEl, imgEl, duration);
-      return { cancel: fallback };
-    }
-
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.viewport(0, 0, canvas.width, canvas.height);
-
-    let program;
-    let quad;
-    try {
-      program = buildProgram(gl, VERT, DISSOLVE_FRAG);
-      quad = createQuad(gl);
-    } catch {
-      canvas.remove();
-      const fallback = this._cssDissolve(cardEl, imgEl, duration);
-      return { cancel: fallback };
-    }
-
-    let texture = null;
-    let revealStart = 0;
-    let raf = 0;
-    let cancelled = false;
-    const startedAt = performance.now();
-
-    const loadTexture = () => {
-      if (cancelled) return;
-      try {
-        texture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imgEl);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      } catch {
-        texture = null;
-      }
-      revealStart = performance.now();
-      imgEl.style.opacity = '0';
-      imgEl.style.transition = 'opacity 0s';
-      setTimeout(() => {
-        imgEl.style.transition = 'opacity 100ms ease';
-        imgEl.style.opacity = '1';
-      }, Math.round(duration * 0.85));
-    };
-
-    const draw = () => {
-      if (cancelled) return;
-      const now = performance.now();
-      const progress = revealStart ? Math.min(1, (now - revealStart) / duration) : 0;
-
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      useQuad(gl, program, quad);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_progress'), progress);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_time'), (now - startedAt) * 0.001);
-      if (texture) {
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.uniform1i(gl.getUniformLocation(program, 'u_thumb'), 0);
-      }
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-      if (progress >= 1 || !canvas.isConnected) {
-        canvas.remove();
-        return;
-      }
-      raf = requestAnimationFrame(draw);
-    };
-
-    if (imgEl.complete && imgEl.naturalWidth > 0) {
-      loadTexture();
-    } else {
-      imgEl.addEventListener('load', loadTexture, { once: true });
-    }
-
-    raf = requestAnimationFrame(draw);
-
-    return {
-      cancel: () => {
-        cancelled = true;
-        cancelAnimationFrame(raf);
-        canvas.remove();
-      },
-    };
+    imgEl.style.opacity = '0';
+    imgEl.style.transition = 'opacity 120ms ease';
+    requestAnimationFrame(() => { imgEl.style.opacity = '1'; });
   }
 
-  destroy() {
-    cancelAnimationFrame(this.hoverRaf);
-    this.hoverRaf = 0;
-    clearTimeout(this.touchTimer);
-    this.touchTimer = null;
-    if (this.hoverCanvas) this.hoverCanvas.remove();
-    this.hoverCanvas = null;
-    this.hoverGL = null;
-    this.hoverProgram = null;
-    this.hoverQuad = null;
-    this.hoverTexture = null;
-    this.hoverHasTexture = false;
-    this.hoverTarget = null;
-    this.hoverStrength = 0;
-    this.hoverGoal = 0;
+  _ensureObserver(rootEl) {
     if (this.visibilityObserver) {
       this.visibilityObserver.disconnect();
       this.visibilityObserver = null;
-      this.visibilityRoot = null;
     }
-    this.trackedCards.clear();
-    this.scrollReplayRoot = null;
-    this.scrollReplayScheduled = false;
-  }
-
-  _focus(cardEl) {
-    if (!cardEl) return;
-    this._setCardFocusStyle(cardEl, true);
-    this.hoverTarget = cardEl;
-    this.hoverGoal = 1;
-    this._startHoverLoop();
-  }
-
-  _blur() {
-    if (this.hoverTarget) this._setCardFocusStyle(this.hoverTarget, false);
-    this.hoverGoal = 0;
-  }
-
-  _startHoverLoop() {
-    if (this.hoverRaf) return;
-    if (!this.webglEnabled) return;
-    this._ensureHoverCanvas();
-    if (!this.hoverGL || !this.hoverProgram || !this.hoverQuad) return;
-    const tick = () => {
-      this._drawHover();
-      this.hoverRaf = requestAnimationFrame(tick);
-    };
-    this.hoverRaf = requestAnimationFrame(tick);
-  }
-
-  _drawHover() {
-    const gl = this.hoverGL;
-    const canvas = this.hoverCanvas;
-    const card = this.hoverTarget;
-    if (!gl || !canvas || !this.hoverProgram || !this.hoverQuad) return;
-
-    this.hoverStrength += (this.hoverGoal - this.hoverStrength) * 0.14;
-    if (!card || !card.isConnected) {
-      this.hoverGoal = 0;
-      this.hoverTarget = null;
-    }
-
-    if (!this.hoverTarget || this.hoverStrength < 0.01) {
-      canvas.style.opacity = '0';
-      return;
-    }
-
-    const active = this.hoverTarget;
-    const rect = active.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const width = Math.max(1, Math.round(rect.width * dpr));
-    const height = Math.max(1, Math.round(rect.height * dpr));
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-      gl.viewport(0, 0, width, height);
-    }
-
-    Object.assign(canvas.style, {
-      left: `${rect.left}px`,
-      top: `${rect.top}px`,
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
-      opacity: String(this.hoverStrength),
-    });
-
-    this._syncHoverTexture(active);
-
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.useProgram(this.hoverProgram);
-    useQuad(gl, this.hoverProgram, this.hoverQuad);
-    gl.uniform1f(gl.getUniformLocation(this.hoverProgram, 'u_time'), (performance.now() - this.hoverStart) * 0.001);
-    gl.uniform1f(gl.getUniformLocation(this.hoverProgram, 'u_strength'), this.hoverStrength);
-    if (this.hoverHasTexture && this.hoverTexture) {
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, this.hoverTexture);
-      gl.uniform1i(gl.getUniformLocation(this.hoverProgram, 'u_thumb'), 0);
-      gl.uniform1i(gl.getUniformLocation(this.hoverProgram, 'u_has_thumb'), 1);
-    } else {
-      gl.uniform1i(gl.getUniformLocation(this.hoverProgram, 'u_has_thumb'), 0);
-    }
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  }
-
-  _ensureHoverCanvas() {
-    if (this.hoverCanvas) return;
-    const canvas = document.createElement('canvas');
-    Object.assign(canvas.style, {
-      position: 'fixed',
-      pointerEvents: 'none',
-      borderRadius: 'inherit',
-      zIndex: '32',
-      opacity: '0',
-      transition: 'opacity 140ms ease',
-    });
-    document.body.appendChild(canvas);
-    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false });
-    if (!gl) {
-      canvas.remove();
-      this.webglEnabled = false;
-      return;
-    }
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-    try {
-      this.hoverProgram = buildProgram(gl, VERT, HOVER_FRAG);
-      this.hoverQuad = createQuad(gl);
-      this.hoverGL = gl;
-      this.hoverCanvas = canvas;
-    } catch {
-      canvas.remove();
-      this.webglEnabled = false;
-      this.hoverGL = null;
-      this.hoverProgram = null;
-      this.hoverQuad = null;
-    }
-  }
-
-  _syncHoverTexture(cardEl) {
-    const gl = this.hoverGL;
-    if (!gl) return;
-    const img = cardEl.querySelector('img.asset-thumb');
-    if (!img?.complete || img.naturalWidth === 0) {
-      this.hoverHasTexture = false;
-      return;
-    }
-    try {
-      if (!this.hoverTexture) this.hoverTexture = gl.createTexture();
-      if (!this.hoverTexture) {
-        this.hoverHasTexture = false;
-        return;
-      }
-      gl.bindTexture(gl.TEXTURE_2D, this.hoverTexture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      this.hoverHasTexture = true;
-    } catch {
-      this.hoverHasTexture = false;
-    }
-  }
-
-  _setCardFocusStyle(cardEl, active) {
-    if (!cardEl) return;
-    cardEl.style.transition = cardEl.style.transition || 'transform 180ms ease, box-shadow 180ms ease, filter 180ms ease';
-    if (active) {
-      cardEl.style.transform = 'translateY(-1px) scale(1.01)';
-      cardEl.style.boxShadow = '0 8px 20px rgba(40, 180, 255, 0.35), 0 0 0 1px rgba(80, 220, 255, 0.45) inset';
-      cardEl.style.filter = 'saturate(1.12)';
-    } else {
-      cardEl.style.transform = '';
-      cardEl.style.boxShadow = '';
-      cardEl.style.filter = '';
-    }
-  }
-
-  _cssDissolve(cardEl, imgEl, duration) {
-    ensureRelative(cardEl);
-    const veil = createElement('div', 'fx-dissolve-fallback');
-    Object.assign(veil.style, {
-      position: 'absolute',
-      inset: '0',
-      borderRadius: 'inherit',
-      pointerEvents: 'none',
-      zIndex: '3',
-      background: 'linear-gradient(125deg, rgba(28,45,78,0.95), rgba(39,95,143,0.72), rgba(92,189,223,0.38))',
-      opacity: '1',
-      transition: `opacity ${Math.max(220, duration)}ms ease`,
-    });
-    cardEl.appendChild(veil);
-
-    let cancelled = false;
-    const reveal = () => {
-      if (cancelled) return;
-      imgEl.style.opacity = '0';
-      imgEl.style.transition = 'opacity 0s';
-      requestAnimationFrame(() => {
-        veil.style.opacity = '0';
-        setTimeout(() => {
-          imgEl.style.transition = 'opacity 120ms ease';
-          imgEl.style.opacity = '1';
-          veil.remove();
-        }, Math.max(80, Math.round(duration * 0.7)));
-      });
-    };
-
-    if (imgEl.complete && imgEl.naturalWidth > 0) {
-      reveal();
-    } else {
-      imgEl.addEventListener('load', reveal, { once: true });
-    }
-
-    return () => {
-      cancelled = true;
-      veil.remove();
-    };
-  }
-
-  _ensureVisibilityObserver(rootEl) {
-    if (this.visibilityObserver && this.visibilityRoot === rootEl) return;
-    if (this.visibilityObserver) this.visibilityObserver.disconnect();
-    this.visibilityRoot = rootEl;
-
     if (!('IntersectionObserver' in window)) {
-      this.visibilityObserver = null;
+      this.fallbackSweepEnabled = true;
       return;
     }
 
+    this.fallbackSweepEnabled = false;
     this.visibilityObserver = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting || entry.intersectionRatio < 0.35) return;
+      for (const entry of entries) {
         const card = entry.target;
-        const now = Date.now();
-        const last = Number(card.dataset.fxLastVisibleAt || '0');
-        if (now - last < 900) return;
-        card.dataset.fxLastVisibleAt = String(now);
+        if (!card?.isConnected) continue;
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
-        this._replayVisibleHint(card, img);
+        if (!img) continue;
+        if (entry.isIntersecting && entry.intersectionRatio > 0.35) {
+          if (card.dataset.fxInView !== '1') {
+            card.dataset.fxInView = '1';
+            if (img.complete && img.naturalWidth > 0) {
+              this._playDissolve(card, img, 420, true);
+              this._showVisibleHint(card);
+            }
+          }
+        } else {
+          card.dataset.fxInView = '0';
+        }
+      }
+    }, { root: rootEl, threshold: [0.35, 0.65] });
+
+    this.trackedCards.forEach((card) => this.visibilityObserver.observe(card));
+  }
+
+  _wireTapGuard(gridEl, cardSelector) {
+    const threshold = 13;
+    gridEl.addEventListener('pointerdown', (event) => {
+      const input = event.target.closest('input[type="checkbox"][data-select-key]');
+      if (!input) return;
+      this.pointerState.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+        input,
+        startedAt: Date.now(),
       });
-    }, {
-      root: rootEl,
-      threshold: [0.35, 0.6],
-    });
+    }, true);
+
+    gridEl.addEventListener('pointermove', (event) => {
+      const rec = this.pointerState.get(event.pointerId);
+      if (!rec) return;
+      const dx = event.clientX - rec.x;
+      const dy = event.clientY - rec.y;
+      if ((dx * dx + dy * dy) > threshold * threshold) rec.moved = true;
+    }, true);
+
+    const finish = (event) => {
+      const rec = this.pointerState.get(event.pointerId);
+      if (!rec) return;
+      this.pointerState.delete(event.pointerId);
+      if (!rec.input?.isConnected) return;
+      if (rec.moved) rec.input.dataset.fxSuppressToggle = '1';
+    };
+
+    gridEl.addEventListener('pointerup', finish, true);
+    gridEl.addEventListener('pointercancel', finish, true);
   }
 
-  _ensureScrollReplay(rootEl) {
-    if (!rootEl || this.scrollReplayRoot === rootEl) return;
-    this.scrollReplayRoot = rootEl;
-    const schedule = () => this._scheduleScrollReplay();
-    rootEl.addEventListener('scroll', schedule, { passive: true });
-    rootEl.addEventListener('touchmove', schedule, { passive: true });
-    window.addEventListener('resize', schedule, { passive: true });
-    schedule();
-  }
-
-  _scheduleScrollReplay() {
+  _scheduleReplaySweep() {
     if (this.scrollReplayScheduled) return;
     this.scrollReplayScheduled = true;
     requestAnimationFrame(() => {
       this.scrollReplayScheduled = false;
-      this._runScrollReplaySweep();
+      this._replaySweep();
     });
   }
 
-  _runScrollReplaySweep() {
-    const root = this.scrollReplayRoot;
-    if (!root || !this.trackedCards.size) return;
-    const bounds = root.getBoundingClientRect();
-    const minVisiblePx = Math.max(24, bounds.height * 0.12);
+  _replaySweep() {
+    if (!this.container || !this.trackedCards.size) return;
+    const rootRect = this.container.getBoundingClientRect();
+    const minOverlap = Math.max(18, rootRect.height * 0.1);
     this.trackedCards.forEach((card) => {
       if (!card?.isConnected) {
         this.trackedCards.delete(card);
         return;
       }
       const rect = card.getBoundingClientRect();
-      const overlap = Math.min(rect.bottom, bounds.bottom) - Math.max(rect.top, bounds.top);
-      const isVisible = overlap > minVisiblePx;
+      const overlap = Math.min(rect.bottom, rootRect.bottom) - Math.max(rect.top, rootRect.top);
+      const visible = overlap > minOverlap;
       const wasVisible = card.dataset.fxInView === '1';
-      if (isVisible && !wasVisible) {
+      if (visible && !wasVisible) {
         card.dataset.fxInView = '1';
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
         if (img?.complete && img.naturalWidth > 0) {
-          this._playDissolve(card, img, 420);
-          this._replayVisibleHint(card, img);
+          this._playDissolve(card, img, 420, true);
+          this._showVisibleHint(card);
         }
-      } else if (!isVisible && wasVisible) {
+      } else if (!visible && wasVisible) {
         card.dataset.fxInView = '0';
       }
     });
   }
 
-  _replayVisibleHint(cardEl, imgEl) {
-    if (!cardEl || !imgEl) return;
-    if (!imgEl.complete || imgEl.naturalWidth === 0) return;
+  _showVisibleHint(cardEl) {
     ensureRelative(cardEl);
-    const veil = createElement('div', 'fx-visible-hint');
-    Object.assign(veil.style, {
-      position: 'absolute',
-      inset: '0',
-      borderRadius: 'inherit',
-      pointerEvents: 'none',
-      zIndex: '3',
-      background: 'linear-gradient(135deg, rgba(86,126,196,0.42), rgba(120,219,255,0.18), rgba(8,14,25,0.0))',
-      mixBlendMode: 'screen',
-      opacity: '0',
-      animation: 'fx-visible-hint 380ms ease-out forwards',
-    });
-    cardEl.appendChild(veil);
-    setTimeout(() => veil.remove(), 420);
+    const hint = createNode('div', 'fx-visible-hint');
+    cardEl.appendChild(hint);
+    setTimeout(() => hint.remove(), 430);
   }
 
-  _boostScanline(cardEl, duration = 420) {
-    const overlay = cardEl?.querySelector('.fx-scanline-overlay');
-    if (!overlay) return;
-    overlay.style.opacity = '0.68';
+  _boostScanline(cardEl, duration = 320) {
+    cardEl.dataset.fxScanlineBoost = '1';
     setTimeout(() => {
-      if (overlay.isConnected) overlay.style.opacity = '0.42';
+      if (cardEl?.isConnected) cardEl.dataset.fxScanlineBoost = '0';
     }, duration);
+  }
+
+  _startLoop() {
+    if (this.raf || !this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
+    const tick = () => {
+      this._render();
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
+  }
+
+  _render() {
+    if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.container.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width * dpr));
+    const height = Math.max(1, Math.round(rect.height * dpr));
+    if (this.overlay.width !== width || this.overlay.height !== height) {
+      this.overlay.width = width;
+      this.overlay.height = height;
+    }
+
+    const cards = [];
+    this.trackedCards.forEach((card) => {
+      if (!card?.isConnected) return;
+      if (card.dataset.fxInView !== '1') return;
+      const cr = card.getBoundingClientRect();
+      const x1 = (cr.left - rect.left) * dpr;
+      const y1 = (cr.top - rect.top) * dpr;
+      const x2 = (cr.right - rect.left) * dpr;
+      const y2 = (cr.bottom - rect.top) * dpr;
+      const inBounds = x2 > 0 && y2 > 0 && x1 < width && y1 < height;
+      if (!inBounds) return;
+      const isVideo = card.dataset.fxKind === 'video' ? 1 : 0;
+      const boosted = card.dataset.fxScanlineBoost === '1' ? 1 : 0;
+      cards.push([x1, y1, x2, y2, isVideo, boosted]);
+    });
+
+    const gl = this.gl;
+    gl.viewport(0, 0, width, height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    if (!cards.length) return;
+
+    gl.useProgram(this.program);
+    bindQuad(gl, this.program, this.quad);
+
+    const rectData = new Float32Array(MAX_RECTS * 4);
+    const videoData = new Float32Array(MAX_RECTS);
+    cards.slice(0, MAX_RECTS).forEach((row, i) => {
+      rectData[i * 4] = row[0];
+      rectData[i * 4 + 1] = row[1];
+      rectData[i * 4 + 2] = row[2];
+      rectData[i * 4 + 3] = row[3];
+      videoData[i] = row[4] ? (row[5] ? 1.0 : 0.82) : 0.25;
+    });
+
+    gl.uniform2f(gl.getUniformLocation(this.program, 'u_resolution'), width, height);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_time'), (performance.now() - this.start) * 0.001);
+    gl.uniform1i(gl.getUniformLocation(this.program, 'u_rect_count'), Math.min(cards.length, MAX_RECTS));
+    gl.uniform4fv(gl.getUniformLocation(this.program, 'u_rects'), rectData);
+    gl.uniform1fv(gl.getUniformLocation(this.program, 'u_video'), videoData);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   _ensureSharedStyles() {
@@ -750,18 +497,45 @@ export class AssetFX {
     const style = document.createElement('style');
     style.id = 'asset-fx-shared-styles';
     style.textContent = `
+      .fx-selection-pulse {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        border: 2px solid rgba(80, 220, 255, 0.88);
+        box-shadow: 0 0 0 0 rgba(80, 220, 255, 0.6);
+        pointer-events: none;
+        z-index: 12;
+        animation: fx-selection-pulse 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+      .fx-dissolve-veil {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        z-index: 3;
+        opacity: 0.9;
+        background: linear-gradient(130deg, rgba(20, 42, 76, 0.95), rgba(66, 129, 182, 0.66), rgba(90, 219, 255, 0.22));
+        transition: opacity 420ms ease;
+      }
+      .fx-dissolve-veil.is-active { opacity: 0; }
+      .fx-visible-hint {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        z-index: 4;
+        mix-blend-mode: screen;
+        background: linear-gradient(135deg, rgba(86,126,196,0.45), rgba(120,219,255,0.2), rgba(8,14,25,0));
+        animation: fx-visible-hint 380ms ease-out forwards;
+      }
       @keyframes fx-selection-pulse {
         0% { opacity: 0.95; transform: scale(0.94); box-shadow: 0 0 0 0 rgba(80,220,255,0.58); }
         70% { opacity: 0.55; transform: scale(1.02); box-shadow: 0 0 0 12px rgba(80,220,255,0.0); }
         100% { opacity: 0; transform: scale(1.04); box-shadow: 0 0 0 18px rgba(80,220,255,0.0); }
       }
-      @keyframes fx-scanline-pan {
-        0% { background-position-y: 0; }
-        100% { background-position-y: 16px; }
-      }
       @keyframes fx-visible-hint {
         0% { opacity: 0; transform: scale(0.99); }
-        30% { opacity: 0.92; }
+        30% { opacity: 0.9; }
         100% { opacity: 0; transform: scale(1.01); }
       }
     `;
