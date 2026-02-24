@@ -172,6 +172,9 @@ export class AssetFX {
     this.boundGrids = new WeakSet();
     this.visibilityObserver = null;
     this.visibilityRoot = null;
+    this.trackedCards = new Set();
+    this.scrollReplayScheduled = false;
+    this.scrollReplayRoot = null;
   }
 
   attachGrid(gridEl, cardSelector = '.asset') {
@@ -207,6 +210,7 @@ export class AssetFX {
     }, { passive: true });
 
     this._ensureVisibilityObserver(gridEl);
+    this._ensureScrollReplay(gridEl);
   }
 
   trackViewport(cardEl, imgEl = null) {
@@ -215,6 +219,7 @@ export class AssetFX {
     if (!this.visibilityObserver) return;
     if (cardEl.dataset.fxViewportTracked === '1') return;
     cardEl.dataset.fxViewportTracked = '1';
+    this.trackedCards.add(cardEl);
     this.visibilityObserver.observe(cardEl);
   }
 
@@ -436,6 +441,9 @@ export class AssetFX {
       this.visibilityObserver = null;
       this.visibilityRoot = null;
     }
+    this.trackedCards.clear();
+    this.scrollReplayRoot = null;
+    this.scrollReplayScheduled = false;
   }
 
   _focus(cardEl) {
@@ -659,6 +667,52 @@ export class AssetFX {
     }, {
       root: rootEl,
       threshold: [0.35, 0.6],
+    });
+  }
+
+  _ensureScrollReplay(rootEl) {
+    if (!rootEl || this.scrollReplayRoot === rootEl) return;
+    this.scrollReplayRoot = rootEl;
+    const schedule = () => this._scheduleScrollReplay();
+    rootEl.addEventListener('scroll', schedule, { passive: true });
+    rootEl.addEventListener('touchmove', schedule, { passive: true });
+    window.addEventListener('resize', schedule, { passive: true });
+    schedule();
+  }
+
+  _scheduleScrollReplay() {
+    if (this.scrollReplayScheduled) return;
+    this.scrollReplayScheduled = true;
+    requestAnimationFrame(() => {
+      this.scrollReplayScheduled = false;
+      this._runScrollReplaySweep();
+    });
+  }
+
+  _runScrollReplaySweep() {
+    const root = this.scrollReplayRoot;
+    if (!root || !this.trackedCards.size) return;
+    const bounds = root.getBoundingClientRect();
+    const minVisiblePx = Math.max(24, bounds.height * 0.12);
+    this.trackedCards.forEach((card) => {
+      if (!card?.isConnected) {
+        this.trackedCards.delete(card);
+        return;
+      }
+      const rect = card.getBoundingClientRect();
+      const overlap = Math.min(rect.bottom, bounds.bottom) - Math.max(rect.top, bounds.top);
+      const isVisible = overlap > minVisiblePx;
+      const wasVisible = card.dataset.fxInView === '1';
+      if (isVisible && !wasVisible) {
+        card.dataset.fxInView = '1';
+        const img = card.__fxThumb || card.querySelector('img.asset-thumb');
+        if (img?.complete && img.naturalWidth > 0) {
+          this._playDissolve(card, img, 420);
+          this._replayVisibleHint(card, img);
+        }
+      } else if (!isVisible && wasVisible) {
+        card.dataset.fxInView = '0';
+      }
     });
   }
 

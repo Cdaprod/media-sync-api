@@ -154,6 +154,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
     assert 'bindCardMedia(cardEl, imgEl, { kind = \'' in shader_module
     assert '_ensureVisibilityObserver(rootEl)' in shader_module
+    assert '_ensureScrollReplay(rootEl)' in shader_module
+    assert '_scheduleScrollReplay()' in shader_module
+    assert '_runScrollReplaySweep()' in shader_module
     assert '_replayVisibleHint(cardEl, imgEl)' in shader_module
     assert '_playDissolve(cardEl, imgEl, duration)' in shader_module
     assert '_boostScanline(cardEl, duration = 420)' in shader_module

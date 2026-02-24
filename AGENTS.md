@@ -933,3 +933,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - `AssetFX.dissolve` now supports replay-aware binding (`allowReplay`) and delegates to `_playDissolve`, letting dissolves run when thumbnails load/reload instead of only at first card render.
 - Added dissolve throttling (`fxDissolveAt`) and scanline boost coordination (`_boostScanline`) so dissolve and scanline effects are visible together rather than placeholders visually overpowering dissolve transitions.
 - Updated static explorer tests to validate the new binding API and replay/synchronization helper methods.
+
+### Latest Implementation Notes (2026-02-23, continuous scroll replay sweep)
+- Added a scroll-driven replay sweep in `AssetFX` (`_ensureScrollReplay` + `_scheduleScrollReplay` + `_runScrollReplaySweep`) so effects trigger continuously as assets move in/out of view during up/down scrolling, not only at initial load/intersection events.
+- `trackViewport` now stores cards in a tracked set, enabling lightweight visibility checks against the grid scroll container on each scheduled animation-frame sweep.
+- When a tracked card re-enters view with a loaded thumbnail, the sweep now replays dissolve (`_playDissolve`) and visible hint overlays immediately for steadier mobile feedback.
+- Expanded static explorer assertions to include the new continuous replay methods.
