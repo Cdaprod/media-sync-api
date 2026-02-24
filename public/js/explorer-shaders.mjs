@@ -35,6 +35,8 @@ void main(){
 `;
 
 const MAX_RECTS = 64;
+const RENDERERS = new WeakMap();
+let RENDERER_SEQ = 0;
 const FRAG = `
 precision mediump float;
 varying vec2 v_uv;
@@ -145,7 +147,16 @@ export class AssetFX {
 
   init(container) {
     if (!container) return;
-    if (this.container === container && this.overlay) return;
+    const shared = this._getRenderer(container);
+    if (shared){
+      this.container = container;
+      this.overlay = shared.overlay;
+      this.gl = shared.gl;
+      this.program = shared.program;
+      this.quad = shared.quad;
+      this.raf = shared.raf;
+      return;
+    }
     this.destroyRenderer();
 
     this.container = container;
@@ -162,6 +173,7 @@ export class AssetFX {
     });
     container.appendChild(canvas);
     this.overlay = canvas;
+    container.dataset.fxRendererId = String(++RENDERER_SEQ);
 
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: false });
     if (!gl) {
@@ -203,6 +215,7 @@ export class AssetFX {
     });
 
     this._startLoop();
+    this._saveRenderer(container);
   }
 
   destroyRenderer() {
@@ -213,6 +226,7 @@ export class AssetFX {
     this.gl = null;
     this.program = null;
     this.quad = null;
+    if (this.container && RENDERERS.has(this.container)) RENDERERS.delete(this.container);
   }
 
   destroy() {
@@ -433,8 +447,33 @@ export class AssetFX {
     const tick = () => {
       this._render();
       this.raf = requestAnimationFrame(tick);
+      if (this.container && RENDERERS.has(this.container)) {
+        const shared = RENDERERS.get(this.container);
+        shared.raf = this.raf;
+      }
     };
     this.raf = requestAnimationFrame(tick);
+  }
+
+  _getRenderer(container) {
+    const shared = RENDERERS.get(container);
+    if (!shared) return null;
+    if (!shared.overlay?.isConnected) {
+      RENDERERS.delete(container);
+      return null;
+    }
+    return shared;
+  }
+
+  _saveRenderer(container) {
+    if (!container || !this.overlay) return;
+    RENDERERS.set(container, {
+      overlay: this.overlay,
+      gl: this.gl,
+      program: this.program,
+      quad: this.quad,
+      raf: this.raf,
+    });
   }
 
   _render() {

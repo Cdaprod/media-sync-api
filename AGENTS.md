@@ -946,3 +946,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer checkbox selection now uses a cheap DOM/state update path (`updateSelectionDomForKey` + delegated handlers) and no longer calls `renderMedia()` inside `toggleSelected`, preventing repeated “Preparing thumbnails…” flashes during selection.
 - Added pointer movement suppression for checkbox taps during scroll gestures to reduce accidental selections on mobile touch scroll.
 - Updated explorer static tests to assert shared renderer lifecycle methods and verify toggle selection does not trigger full rerender logic.
+
+### Latest Implementation Notes (2026-02-24, renderer singleton enforcement)
+- Added module-level renderer registry (`RENDERERS` WeakMap) so `AssetFX.init(container)` reuses an existing shared overlay/context per grid root instead of re-creating renderer state.
+- Added explicit renderer identity marker (`data-fx-renderer-id`) on the grid container for debugging/verification that rebinds keep the same shared renderer instance.
+- Added `_getRenderer` / `_saveRenderer` helpers and synchronized RAF handle updates in the shared render loop to keep singleton lifecycle stable across repeated init/bind calls.
+- Expanded static tests to assert singleton symbols/wiring are present and shared renderer teardown paths remain explicit.

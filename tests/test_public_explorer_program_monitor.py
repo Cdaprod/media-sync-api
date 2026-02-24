@@ -153,6 +153,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
     assert 'bindCardMedia(cardEl, imgEl, { kind = \'' in shader_module
     assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
+    assert 'const RENDERERS = new WeakMap();' in shader_module
+    assert "container.dataset.fxRendererId = String(++RENDERER_SEQ);" in shader_module
+    assert '_getRenderer(container)' in shader_module
+    assert '_saveRenderer(container)' in shader_module
     assert '@keyframes fx-visible-hint' in shader_module
     assert '@keyframes fx-selection-pulse' in shader_module
 
@@ -168,3 +172,10 @@ def test_explorer_selection_toggle_does_not_full_rerender():
     assert 'renderMedia();' not in toggle_block
     assert 'setContentLoading(true);' not in toggle_block
     assert 'loadThumbQueue' not in toggle_block
+
+
+def test_explorer_shared_renderer_singleton_symbols_present():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert "if (this.container && RENDERERS.has(this.container))" in shader_module
+    assert 'RENDERERS.set(container, {' in shader_module
+    assert 'if (this.container && RENDERERS.has(this.container)) RENDERERS.delete(this.container);' in shader_module
