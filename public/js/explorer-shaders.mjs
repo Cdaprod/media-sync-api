@@ -35,15 +35,31 @@ void main(){
 `;
 
 const MAX_RECTS = 64;
-const RENDERERS = new WeakMap();
-let RENDERER_SEQ = 0;
-let __DBG_GL_CONTEXTS_CREATED = 0;
-let __DBG_RENDERERS_CREATED = 0;
+const FX_GLOBAL = typeof window !== 'undefined' ? window : globalThis;
+const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();
+FX_GLOBAL.__assetfx_renderers = RENDERERS;
+let RENDERER_SEQ = Number(FX_GLOBAL.__assetfx_renderer_seq || 0);
+let __DBG_GL_CONTEXTS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_contexts || 0);
+let __DBG_RENDERERS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_renderers || 0);
+const __DBG_GL_CONTEXT_CALLS = FX_GLOBAL.__assetfx_dbg_context_calls || [];
+
+function markContextCall(site) {
+  __DBG_GL_CONTEXTS_CREATED += 1;
+  FX_GLOBAL.__assetfx_dbg_contexts = __DBG_GL_CONTEXTS_CREATED;
+  __DBG_GL_CONTEXT_CALLS.push({
+    site,
+    at: new Date().toISOString(),
+    stack: (new Error('assetfx-getcontext')).stack || '',
+  });
+  if (__DBG_GL_CONTEXT_CALLS.length > 12) __DBG_GL_CONTEXT_CALLS.shift();
+  FX_GLOBAL.__assetfx_dbg_context_calls = __DBG_GL_CONTEXT_CALLS;
+}
 
 if (typeof window !== 'undefined') {
   window.__assetfx_dbg = {
     get contexts() { return __DBG_GL_CONTEXTS_CREATED; },
     get renderers() { return __DBG_RENDERERS_CREATED; },
+    get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
   };
 }
 const FRAG = `
@@ -196,11 +212,13 @@ export class AssetFX {
     if (!canvas.isConnected || canvas.parentElement !== container) container.appendChild(canvas);
     this.overlay = canvas;
     container.dataset.fxRendererId = String(++RENDERER_SEQ);
+    FX_GLOBAL.__assetfx_renderer_seq = RENDERER_SEQ;
 
     __DBG_RENDERERS_CREATED += 1;
+    FX_GLOBAL.__assetfx_dbg_renderers = __DBG_RENDERERS_CREATED;
     this._saveRenderer(container);
 
-    __DBG_GL_CONTEXTS_CREATED += 1;
+    markContextCall('AssetFX.init:webgl');
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: false });
     if (!gl) {
       this.gl = null;
@@ -300,12 +318,14 @@ export class AssetFX {
       this.visibilityObserver.disconnect();
       this.visibilityObserver = null;
     }
+    this.pointerState.clear();
     if (!this.trackedCards.size) {
       cancelAnimationFrame(this.raf);
       this.raf = 0;
       if (this.container) this._saveRenderer(this.container);
     }
     this._attachedGridRoot = null;
+    this._attachedCardSelector = '.asset';
   }
 
   trackViewport(cardEl, imgEl = null) {

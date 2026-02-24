@@ -962,3 +962,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added singleton instrumentation in `public/js/explorer-shaders.mjs`: renderer/context debug counters and `window.__assetfx_dbg` getters plus overlay marker `canvas[data-assetfx="overlay"]` to verify one shared overlay/context per grid root.
 - `init()` now reuses connected overlay canvases per root, removes duplicate overlay nodes if present, and updates shared renderer state before/after WebGL lifecycle events so `_playDissolve()` remains CSS-only with no per-card WebGL context creation.
 - Expanded static regression tests to assert debug export presence, attach idempotency guard, and `_playDissolve()` block exclusion of `getContext`/`createElement('canvas')`.
+
+### Latest Implementation Notes (2026-02-24, global singleton guard + getContext call tracing)
+- `AssetFX` now keeps renderer state in `window`-backed globals (`__assetfx_renderers`, sequence/debug counters) so singleton behavior survives module re-evaluation and remains one overlay/context per grid root.
+- Added `markContextCall()` instrumentation for each WebGL context creation attempt and exposed recent call metadata via `window.__assetfx_dbg.calls` for runtime tracing when diagnosing context explosion regressions.
+- Explorer now reuses a global `window.__assetfx_instance` singleton `AssetFX` instance to avoid duplicate renderer objects if the module script executes again.
+- Updated static explorer tests to assert global renderer-map wiring, context-call instrumentation markers, and singleton instance reuse wiring in `public/explorer.html`.

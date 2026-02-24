@@ -140,7 +140,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
 
     assert "import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';" in html
-    assert 'const cardFX = new AssetFX();' in html
+    assert 'window.__assetfx_instance instanceof AssetFX' in html
     assert "const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root=\"1\"]') || g;" in html
     assert "cardFX.attachGrid(gridRoot, '.asset');" in html
     assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
@@ -154,7 +154,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
     assert 'bindCardMedia(cardEl, imgEl, { kind = \'' in shader_module
     assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
-    assert 'const RENDERERS = new WeakMap();' in shader_module
+    assert 'const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();' in shader_module
     assert "container.dataset.fxRendererId = String(++RENDERER_SEQ);" in shader_module
     assert '_getRenderer(container)' in shader_module
     assert '_saveRenderer(container)' in shader_module
@@ -167,6 +167,8 @@ def test_explorer_shader_asset_fx_wiring_present():
 def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
     assert 'window.__assetfx_dbg = {' in shader_module
+    assert 'get calls() { return [...__DBG_GL_CONTEXT_CALLS]; }' in shader_module
+    assert "markContextCall('AssetFX.init:webgl');" in shader_module
     assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
 
 

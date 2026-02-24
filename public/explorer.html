@@ -1601,7 +1601,9 @@
       dragTarget: null,
     };
 
-    const cardFX = new AssetFX();
+    const cardFX = window.__assetfx_instance instanceof AssetFX
+      ? window.__assetfx_instance
+      : (window.__assetfx_instance = new AssetFX());
 
     const itemsByPath = new Map();
 
