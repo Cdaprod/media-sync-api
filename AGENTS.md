@@ -1013,3 +1013,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added layout invalidation + rect caching (`layoutDirty`, `cardRectCache`) with `ResizeObserver`/scroll-triggered invalidation so tile rects are not recomputed from `getBoundingClientRect()` for every visible card on every RAF tick.
 - Removed CSS filter-driven per-tile appearance animation hooks on `.asset` / `.asset-thumb` (hover brightness + baked filter) so visual energy remains shader-owned rather than split across CSS and WebGL.
 - Updated static tests to assert decode backpressure, media-element readiness unification, and layout/resize invalidation symbols.
+
+### Latest Implementation Notes (2026-02-24, CSS motion ownership tightened for AssetFX)
+- Removed hover transform motion from `.asset:hover` in `public/explorer.html` so per-tile movement is no longer split between CSS hover transforms and shader-driven FX state.
+- `.asset` transitions now keep only border-color for hover affordance while geometric/energy motion remains owned by `AssetFX` animations.
+- Added a regression test asserting the hover transform is absent and border-only hover styling remains, to prevent reintroducing CSS-vs-shader motion contention.

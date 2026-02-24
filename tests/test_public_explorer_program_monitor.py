@@ -232,6 +232,13 @@ def test_explorer_shared_renderer_singleton_symbols_present():
     assert 'if (this.container && RENDERERS.has(this.container)) RENDERERS.delete(this.container);' in shader_module
 
 
+
+
+def test_explorer_asset_css_visual_animation_is_minimized():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '.asset:hover{ border-color: rgba(255,255,255,0.12); }' in html
+    assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
+
 @pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")
 def test_explorer_assetfx_context_singleton_runtime_with_playwright():
     playwright = pytest.importorskip("playwright.sync_api")
