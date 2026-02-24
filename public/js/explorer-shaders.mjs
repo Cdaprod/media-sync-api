@@ -35,6 +35,7 @@ void main(){
 `;
 
 const MAX_RECTS = 64;
+const RECT_INSET_PX = 4;
 const FX_GLOBAL = typeof window !== 'undefined' ? window : globalThis;
 const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();
 FX_GLOBAL.__assetfx_renderers = RENDERERS;
@@ -131,6 +132,7 @@ if (typeof window !== 'undefined') {
     get visibleCards() { return FX_GLOBAL.__assetfx_instance?.visibleCards?.size || 0; },
     get readyInViewNotPlayedCount() { return FX_GLOBAL.__assetfx_instance?.readyInViewNotPlayedCount || 0; },
     get renderSampledCount() { return FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0; },
+    get renderCandidatesCount() { return FX_GLOBAL.__assetfx_instance?.renderCandidatesCount || 0; },
     get droppedByCapCount() { return FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
   };
@@ -158,6 +160,7 @@ if (typeof window !== 'undefined') {
       visibleCards: FX_GLOBAL.__assetfx_instance?.visibleCards?.size || 0,
       readyInViewNotPlayedCount: FX_GLOBAL.__assetfx_instance?.readyInViewNotPlayedCount || 0,
       renderSampledCount: FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0,
+      renderCandidatesCount: FX_GLOBAL.__assetfx_instance?.renderCandidatesCount || 0,
       droppedByCapCount: FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0,
       attachedRootId: FX_GLOBAL.__assetfx_instance?.container?.dataset?.assetfxRootId || null,
       owner: owner ? {
@@ -319,6 +322,7 @@ export class AssetFX {
     this.cardRectCache = new WeakMap();
     this.readyInViewNotPlayedCount = 0;
     this.renderSampledCount = 0;
+    this.renderCandidatesCount = 0;
     this.droppedByCapCount = 0;
 
     this.prefersReducedMotion = typeof window !== 'undefined'
@@ -338,19 +342,26 @@ export class AssetFX {
     this.pointerState = new Map();
     this._attachedGridRoot = null;
     this._attachedCardSelector = '.asset';
-    this._boundScheduleReplay = () => this._scheduleReplaySweep();
-    this._boundWindowResize = () => this._scheduleReplaySweep();
-    this._boundContainerResize = () => {
-      this.layoutDirty = true;
-      this._scheduleReplaySweep();
-    };
+    this._boundScheduleReplay = () => this._markLayoutDirty();
+    this._boundWindowResize = () => this._markLayoutDirty();
+    this._boundContainerResize = () => this._markLayoutDirty();
     this._tapGuardCleanup = null;
     this._resizeObserver = null;
     this.sampleHoldMs = 250;
     this.sampledCardsUntil = new WeakMap();
+    this.debugOverlay = null;
+    this._boundVisualViewportChange = () => this._markLayoutDirty();
 
     this._ensureSharedStyles();
     if (typeof window !== 'undefined') window.__assetfx_instance = this;
+  }
+
+
+
+  _markLayoutDirty() {
+    this.layoutDirty = true;
+    this.cardRectCache = new WeakMap();
+    this._scheduleReplaySweep();
   }
 
   init(container) {
@@ -368,6 +379,7 @@ export class AssetFX {
       this.program = shared.program;
       this.quad = shared.quad;
       this.tileParamTexture = shared.tileParamTexture;
+      this.debugOverlay = shared.debugOverlay || null;
       this.raf = shared.raf;
       return;
     }
@@ -386,6 +398,7 @@ export class AssetFX {
         this.program = ownerShared.program;
         this.quad = ownerShared.quad;
         this.tileParamTexture = ownerShared.tileParamTexture;
+        this.debugOverlay = ownerShared.debugOverlay || null;
         this.raf = ownerShared.raf;
         RENDERERS.set(container, ownerShared);
         setGlobalContextOwner({ rootEl: container, canvasEl: owner.canvasEl, stack: owner.stack });
@@ -415,11 +428,30 @@ export class AssetFX {
       width: '100%',
       height: '100%',
       pointerEvents: 'none',
-      zIndex: '2',
+      zIndex: '3',
       opacity: '0.92',
     });
     if (!canvas.isConnected || canvas.parentElement !== container) container.appendChild(canvas);
+
+    const debugCanvases = Array.from(container.querySelectorAll('canvas[data-assetfx="debug"]'));
+    const debugOverlay = debugCanvases.shift() || createNode('canvas', 'fx-debug-overlay');
+    debugCanvases.forEach((node) => node.remove());
+    debugOverlay.classList.add('fx-debug-overlay');
+    debugOverlay.dataset.assetfx = 'debug';
+    Object.assign(debugOverlay.style, {
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
+      pointerEvents: 'none',
+      zIndex: '4',
+      opacity: this.fxDebug ? '1' : '0',
+      display: this.fxDebug ? 'block' : 'none',
+    });
+    if (!debugOverlay.isConnected || debugOverlay.parentElement !== container) container.appendChild(debugOverlay);
+
     this.overlay = canvas;
+    this.debugOverlay = debugOverlay;
     ensureOverlayId(canvas);
     container.dataset.fxRendererId = String(++RENDERER_SEQ);
     FX_GLOBAL.__assetfx_renderer_seq = RENDERER_SEQ;
@@ -501,7 +533,9 @@ export class AssetFX {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     if (this.overlay) this.overlay.remove();
+    if (this.debugOverlay) this.debugOverlay.remove();
     this.overlay = null;
+    this.debugOverlay = null;
     this.gl = null;
     this.program = null;
     this.quad = null;
@@ -522,6 +556,7 @@ export class AssetFX {
     this.pendingDissolves = [];
     this.readyInViewNotPlayedCount = 0;
     this.renderSampledCount = 0;
+    this.renderCandidatesCount = 0;
     this.droppedByCapCount = 0;
     this.lastPlayedAt = new WeakMap();
     this.boundGrids = new WeakSet();
@@ -551,6 +586,10 @@ export class AssetFX {
       this._resizeObserver = new ResizeObserver(this._boundContainerResize);
       this._resizeObserver.observe(gridRoot);
     }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });
+      window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });
+    }
 
     this._tapGuardCleanup = this._wireTapGuard(gridRoot, cardSelector);
     this._ensureObserver(gridRoot);
@@ -565,6 +604,10 @@ export class AssetFX {
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
+    }
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this._boundVisualViewportChange);
+      window.visualViewport.removeEventListener('scroll', this._boundVisualViewportChange);
     }
     if (typeof this._tapGuardCleanup === 'function') this._tapGuardCleanup();
     this._tapGuardCleanup = null;
@@ -591,7 +634,7 @@ export class AssetFX {
     this.trackedCards.add(cardEl);
     if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
     if (this.visibilityObserver) this.visibilityObserver.observe(cardEl);
-    if (this.fallbackSweepEnabled) this._scheduleReplaySweep();
+    this._markLayoutDirty();
   }
 
   bindCardMedia(cardEl, mediaEl, { kind = '' } = {}) {
@@ -612,6 +655,7 @@ export class AssetFX {
       cardEl.dataset.ready = '1';
       cardEl.dataset.fxReadyAt = String(performance.now());
       if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
+      this._markLayoutDirty();
       this._maybePlayEntryOnReady(cardEl, mediaEl, kind);
     };
 
@@ -880,6 +924,7 @@ export class AssetFX {
     this._pruneDisconnected();
     if (!this.container || !this.trackedCards.size) return;
     this.layoutDirty = true;
+    this.cardRectCache = new WeakMap();
     const rootRect = this.container.getBoundingClientRect();
     const minOverlap = Math.max(18, rootRect.height * 0.1);
     this.trackedCards.forEach((card) => {
@@ -944,6 +989,7 @@ export class AssetFX {
       program: this.program,
       quad: this.quad,
       tileParamTexture: this.tileParamTexture,
+      debugOverlay: this.debugOverlay,
       raf: this.raf,
     });
   }
@@ -952,9 +998,9 @@ export class AssetFX {
     this._pruneDisconnected();
     if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
     const dpr = window.devicePixelRatio || 1;
-    const rect = this.container.getBoundingClientRect();
-    const width = Math.max(1, Math.round(rect.width * dpr));
-    const height = Math.max(1, Math.round(rect.height * dpr));
+    const canvasRect = this.overlay.getBoundingClientRect();
+    const width = Math.max(1, Math.round(canvasRect.width * dpr));
+    const height = Math.max(1, Math.round(canvasRect.height * dpr));
     if (this.overlay.width !== width || this.overlay.height !== height) {
       this.overlay.width = width;
       this.overlay.height = height;
@@ -963,6 +1009,7 @@ export class AssetFX {
     const cards = [];
     const renderCandidates = [];
     this.renderSampledCount = 0;
+    this.renderCandidatesCount = 0;
     this.droppedByCapCount = 0;
     this.readyInViewNotPlayedCount = 0;
     if (this.layoutDirty) this.cardRectCache = new WeakMap();
@@ -977,12 +1024,19 @@ export class AssetFX {
         cr = card.getBoundingClientRect();
         this.cardRectCache.set(card, cr);
       }
-      const x1 = (cr.left - rect.left) * dpr;
-      const y1 = (cr.top - rect.top) * dpr;
-      const x2 = (cr.right - rect.left) * dpr;
-      const y2 = (cr.bottom - rect.top) * dpr;
-      const inBounds = x2 > 0 && y2 > 0 && x1 < width && y1 < height;
-      if (!inBounds) return;
+      let x1 = (cr.left - canvasRect.left) * dpr;
+      let y1 = (cr.top - canvasRect.top) * dpr;
+      let x2 = (cr.right - canvasRect.left) * dpr;
+      let y2 = (cr.bottom - canvasRect.top) * dpr;
+      x1 += RECT_INSET_PX * dpr;
+      y1 += RECT_INSET_PX * dpr;
+      x2 -= RECT_INSET_PX * dpr;
+      y2 -= RECT_INSET_PX * dpr;
+      x1 = Math.max(0, Math.min(width, x1));
+      y1 = Math.max(0, Math.min(height, y1));
+      x2 = Math.max(0, Math.min(width, x2));
+      y2 = Math.max(0, Math.min(height, y2));
+      if (x2 <= x1 || y2 <= y1) return;
       const typeCode = 0;
       const selected = card.classList.contains('is-selected') ? 1 : 0;
       const readyAt = Number(card.dataset.fxReadyAt || 0);
@@ -1001,6 +1055,7 @@ export class AssetFX {
       }
     });
     const totalCandidates = renderCandidates.length;
+    this.renderCandidatesCount = totalCandidates;
     renderCandidates.sort((a, b) => a[8] - b[8]);
     renderCandidates.slice(0, this.maxRenderCards).forEach((row) => {
       cards.push(row);
@@ -1023,6 +1078,7 @@ export class AssetFX {
     this.renderSampledCount = cards.length;
     this.droppedByCapCount = Math.max(0, totalCandidates - cards.length);
     this.layoutDirty = false;
+    this._renderDebugRects(cards, width, height);
 
     const gl = this.gl;
     gl.viewport(0, 0, width, height);
@@ -1058,6 +1114,40 @@ export class AssetFX {
       gl.uniform1i(gl.getUniformLocation(this.program, 'u_tile_params'), 0);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  _renderDebugRects(cards, width, height) {
+    if (!this.debugOverlay) return;
+    if (!this.fxDebug) {
+      const ctx = this.debugOverlay.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width || 0, this.debugOverlay.height || 0);
+      return;
+    }
+    const ctx = this.debugOverlay.getContext('2d');
+    if (!ctx) return;
+    if (this.debugOverlay.width !== width || this.debugOverlay.height !== height) {
+      this.debugOverlay.width = width;
+      this.debugOverlay.height = height;
+    }
+    ctx.clearRect(0, 0, width, height);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(60, 200, 255, 0.9)';
+    ctx.strokeRect(0.5, 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+    ctx.strokeStyle = 'rgba(120, 255, 170, 0.95)';
+    cards.forEach((row, idx) => {
+      const x = row[0];
+      const y = row[1];
+      const w = Math.max(1, row[2] - row[0]);
+      const h = Math.max(1, row[3] - row[1]);
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, w - 1), Math.max(1, h - 1));
+      if (idx < 24) {
+        ctx.fillStyle = 'rgba(10, 16, 32, 0.72)';
+        ctx.fillRect(x + 2, y + 2, 20, 12);
+        ctx.fillStyle = '#8ef0ff';
+        ctx.font = '10px monospace';
+        ctx.fillText(String(idx + 1), x + 4, y + 11);
+      }
+    });
   }
 
   _renderDebugBadge(cardEl, { ready = false, inView = false, played = false, sampled = false } = {}) {
@@ -1110,6 +1200,12 @@ export class AssetFX {
         mix-blend-mode: screen;
         background: linear-gradient(135deg, rgba(86,126,196,0.45), rgba(120,219,255,0.2), rgba(8,14,25,0));
         animation: fx-visible-hint 380ms ease-out forwards;
+      }
+      .fx-debug-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 4;
       }
       .fx-debug-badge {
         position: absolute;

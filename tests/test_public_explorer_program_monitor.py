@@ -171,6 +171,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_saveRenderer(container)' in shader_module
     assert '@keyframes fx-visible-hint' in shader_module
     assert '@keyframes fx-selection-pulse' in shader_module
+    assert '.fx-debug-overlay {' in shader_module
 
 
 
@@ -215,12 +216,25 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
+    assert "position: 'absolute'" in shader_module
+    assert 'if (!canvas.isConnected || canvas.parentElement !== container) container.appendChild(canvas);' in shader_module
     assert 'const tileParamData = new Uint8Array(MAX_RECTS * 4);' in shader_module
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
     assert 'renderCandidates.sort((a, b) => a[8] - b[8]);' in shader_module
     assert 'this.sampleHoldMs = 250;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
+    assert 'const RECT_INSET_PX = 4;' in shader_module
+    assert 'const canvasRect = this.overlay.getBoundingClientRect();' in shader_module
+    assert 'let x1 = (cr.left - canvasRect.left) * dpr;' in shader_module
+    assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
+    assert 'x1 = Math.max(0, Math.min(width, x1));' in shader_module
+    assert "window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });" in shader_module
+    assert "window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });" in shader_module
+    assert "const debugOverlay = debugCanvases.shift() || createNode('canvas', 'fx-debug-overlay');" in shader_module
+    assert "debugOverlay.dataset.assetfx = 'debug';" in shader_module
+    assert '_renderDebugRects(cards, width, height);' in shader_module
+    assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
     assert '.fx-debug-badge {' in shader_module
     assert "const typeCode = 0;" in shader_module

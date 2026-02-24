@@ -1055,3 +1055,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Removed video-only scanline boost/state plumbing (`addScanline`, `_boostScanline`, `fxScanlineBoost`) and normalized per-card energy math to selection-only contribution.
 - Replaced the entry veil animation from left-to-right scale transforms with a vertical fade-only dissolve to eliminate the right/left sweep behavior.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` to match the new unified `_playEntry(...)` signature and constant tile type packing.
+
+
+### Latest Implementation Notes (2026-02-24, iOS Safari rect anchoring + gutter clamp diagnostics)
+- AssetFX render rects are now computed in overlay-canvas local space (`overlay.getBoundingClientRect()` basis), with a fixed inset (`RECT_INSET_PX = 4`) and per-rect clamp/invalid-drop to prevent shader bleed into card gutters.
+- Overlay ownership remains single-canvas but now includes an optional debug canvas (`data-assetfx="debug"`) layered above WebGL when `?fxdebug=1` for sampled-rect outline verification on device.
+- Layout invalidation is now more aggressive: scroll, resize observer, window resize, visualViewport resize/scroll, track/bind readiness updates all mark layout dirty and clear rect cache.
+- Runtime diagnostics now include `renderCandidatesCount` alongside sampled/dropped counters so cap behavior is easier to reason about during mobile troubleshooting.
+- Static tests were updated to assert overlay-local rect math symbols, inset/clamp hooks, visualViewport invalidation listeners, and debug overlay wiring.
