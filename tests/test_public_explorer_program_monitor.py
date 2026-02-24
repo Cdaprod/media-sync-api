@@ -211,7 +211,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.renderSampledCount = 0;' in shader_module
     assert 'this.droppedByCapCount = 0;' in shader_module
     assert "if (typeof ResizeObserver !== 'undefined') {" in shader_module
-    assert 'this.readyFadeMs = 220;' in shader_module
+    assert 'this.readyFadeMs = 240;' in shader_module
+    assert 'this.entryMs = 260;' in shader_module
     assert 'this._pruneDisconnected();' in shader_module
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
@@ -238,10 +239,16 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "debugOverlay.dataset.assetfx = 'debug';" in shader_module
     assert '_renderDebugRects(cards, width, height);' in shader_module
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
+    assert 'const ALWAYS_ON_PASS_ENABLED = true;' in shader_module
+    assert 'const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;' in shader_module
+    assert 'const adaptiveMaxRenderCards = Math.max(this.minRenderCards, Math.min(totalCandidates, dynamicCap));' in shader_module
+    assert 'this.maxRenderCardsAdaptive = adaptiveMaxRenderCards;' in shader_module
+    assert 'const sampledCards = new Set();' in shader_module
     assert 'this.lastExitedAt = new WeakMap();' in shader_module
     assert "if (card.dataset.fxReady === '1') this._playExit(card);" in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
     assert '.fx-debug-badge {' in shader_module
+    assert "badge.textContent = `${alwaysOn ? 'A' : '-'}${ready ? 'R' : '-'}${inView ? 'V' : '-'}${sampled ? 'S' : (pending ? 'P' : '-')}`;" in shader_module
     assert "const typeCode = 0;" in shader_module
 
 

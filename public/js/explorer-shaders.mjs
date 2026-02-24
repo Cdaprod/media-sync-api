@@ -36,6 +36,7 @@ void main(){
 
 const MAX_RECTS = 64;
 const RECT_INSET_PX = 4;
+const ALWAYS_ON_PASS_ENABLED = true;
 const FX_GLOBAL = typeof window !== 'undefined' ? window : globalThis;
 const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();
 FX_GLOBAL.__assetfx_renderers = RENDERERS;
@@ -134,6 +135,7 @@ if (typeof window !== 'undefined') {
     get renderSampledCount() { return FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0; },
     get renderCandidatesCount() { return FX_GLOBAL.__assetfx_instance?.renderCandidatesCount || 0; },
     get droppedByCapCount() { return FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0; },
+    get maxRenderCardsAdaptive() { return FX_GLOBAL.__assetfx_instance?.maxRenderCardsAdaptive || 0; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
   };
   window.__assetfx_audit = () => {
@@ -162,6 +164,8 @@ if (typeof window !== 'undefined') {
       renderSampledCount: FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0,
       renderCandidatesCount: FX_GLOBAL.__assetfx_instance?.renderCandidatesCount || 0,
       droppedByCapCount: FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0,
+      maxRenderCardsAdaptive: FX_GLOBAL.__assetfx_instance?.maxRenderCardsAdaptive || 0,
+      alwaysOnPassEnabled: ALWAYS_ON_PASS_ENABLED,
       attachedRootId: FX_GLOBAL.__assetfx_instance?.container?.dataset?.assetfxRootId || null,
       owner: owner ? {
         canvasId: owner.canvasId,
@@ -204,8 +208,14 @@ vec4 sampleParams(int idx) {
 
 void main(){
   vec2 px = vec2(v_uv.x * u_resolution.x, (1.0 - v_uv.y) * u_resolution.y);
-  vec3 color = vec3(0.0);
-  float alpha = 0.0;
+  vec2 uv = vec2(v_uv.x, 1.0 - v_uv.y);
+  float globalVignette = 1.0 - smoothstep(0.18, 0.95, length(uv - vec2(0.5)));
+  float globalGrain = fract(sin(dot((uv + vec2(u_time * 0.02, u_time * 0.01)) * 171.7, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  float globalScan = 0.5 + 0.5 * sin((uv.y * u_resolution.y * 0.045) + u_time * 1.4);
+  vec3 color = vec3(0.022, 0.045, 0.074) * (0.55 + globalVignette * 0.45);
+  color += vec3(globalGrain * 0.014);
+  color += vec3(0.025, 0.055, 0.08) * globalScan * 0.12;
+  float alpha = 0.055 + globalVignette * 0.035;
 
   for (int i = 0; i < ${MAX_RECTS}; i++) {
     if (i >= u_rect_count) break;
@@ -232,12 +242,12 @@ void main(){
     vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.38 + verticalPulse * 0.2) * sel;
 
     vec3 material = base
-      + vec3(0.07, 0.16, 0.24) * centerGlow
-      + vec3(0.18, 0.42, 0.68) * verticalPulse * 0.35
-      + glass
-      + vec3((grain - 0.5) * 0.045);
+      + vec3(0.045, 0.10, 0.16) * centerGlow
+      + vec3(0.10, 0.24, 0.40) * verticalPulse * 0.22
+      + glass * 0.72
+      + vec3((grain - 0.5) * 0.026);
 
-    float cardAlpha = (0.06 + edge * 0.2 + energy * 0.18 + sel * 0.25) * ready;
+    float cardAlpha = (0.045 + edge * 0.12 + energy * 0.10 + sel * 0.14) * ready;
     color += material * ready;
     alpha += cardAlpha;
   }
@@ -314,8 +324,12 @@ export class AssetFX {
     this.cooldownMs = 1000;
     this.maxActiveEffects = 6;
     this.maxPendingDissolves = 60;
-    this.maxRenderCards = 28;
-    this.readyFadeMs = 220;
+    this.minRenderCards = 18;
+    this.maxRenderCardsLowTier = 32;
+    this.maxRenderCardsHighTier = 42;
+    this.maxRenderCardsAdaptive = this.maxRenderCardsLowTier;
+    this.readyFadeMs = 240;
+    this.entryMs = 260;
 
     this.activeDissolves = new Set();
     this.pendingDissolves = [];
@@ -324,6 +338,7 @@ export class AssetFX {
     this.readyInViewNotPlayedCount = 0;
     this.renderSampledCount = 0;
     this.renderCandidatesCount = 0;
+    this.maxRenderCardsAdaptive = this.maxRenderCardsLowTier;
     this.droppedByCapCount = 0;
 
     this.prefersReducedMotion = typeof window !== 'undefined'
@@ -708,7 +723,7 @@ export class AssetFX {
     setTimeout(() => ring.remove(), Math.max(220, duration) + 90);
   }
 
-  dissolve(cardEl, imgEl, { duration = 520, allowReplay = false } = {}) {
+  dissolve(cardEl, imgEl, { duration = this.entryMs, allowReplay = false } = {}) {
     if (!cardEl || !imgEl) return { cancel: () => {} };
     if (typeof imgEl.__fxDissolveCleanup === 'function') imgEl.__fxDissolveCleanup();
 
@@ -819,7 +834,7 @@ export class AssetFX {
     const now = Date.now();
     const last = this.lastPlayedAt.get(cardEl) || 0;
     if (now - last < this.cooldownMs) return;
-    this._playEntry(cardEl, mediaEl, 420, true);
+    this._playEntry(cardEl, mediaEl, this.entryMs, true);
   }
 
 
@@ -858,7 +873,7 @@ export class AssetFX {
         if (entry.isIntersecting && entry.intersectionRatio > 0.35) {
           const entered = this._setCardInView(card, true);
           if (entered && img.complete && img.naturalWidth > 0) {
-            if (this._canRunFx()) this._playDissolve(card, img, 420, true);
+            if (this._canRunFx()) this._playDissolve(card, img, this.entryMs, true);
             if (!this.prefersReducedMotion) this._showVisibleHint(card);
           }
         } else {
@@ -942,7 +957,7 @@ export class AssetFX {
         const entered = this._setCardInView(card, true);
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
         if (entered && img?.complete && img.naturalWidth > 0) {
-          if (this._canRunFx()) this._playDissolve(card, img, 420, true);
+          if (this._canRunFx()) this._playDissolve(card, img, this.entryMs, true);
           if (!this.prefersReducedMotion) this._showVisibleHint(card);
         }
       } else {
@@ -1057,7 +1072,7 @@ export class AssetFX {
       const selected = card.classList.contains('is-selected') ? 1 : 0;
       const readyAt = Number(card.dataset.fxReadyAt || 0);
       const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;
-      const energy = Math.min(1, 0.24 + selected * 0.5);
+      const energy = Math.min(0.86, (0.14 + selected * 0.26) * (0.62 + readyFade * 0.38));
       const tileCenterX = (x1 + x2) * 0.5;
       const tileCenterY = (y1 + y2) * 0.5;
       const dist2 = ((tileCenterX - cx) * (tileCenterX - cx)) + ((tileCenterY - cy) * (tileCenterY - cy));
@@ -1072,12 +1087,20 @@ export class AssetFX {
     });
     const totalCandidates = renderCandidates.length;
     this.renderCandidatesCount = totalCandidates;
+    const deviceMemory = Number(window.navigator?.deviceMemory || 0);
+    const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
+    const lowTier = (deviceMemory > 0 && deviceMemory <= 4) || smallScreen;
+    const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;
+    const adaptiveMaxRenderCards = Math.max(this.minRenderCards, Math.min(totalCandidates, dynamicCap));
+    this.maxRenderCardsAdaptive = adaptiveMaxRenderCards;
     renderCandidates.sort((a, b) => a[8] - b[8]);
-    renderCandidates.slice(0, this.maxRenderCards).forEach((row) => {
+    const sampledCards = new Set();
+    renderCandidates.slice(0, adaptiveMaxRenderCards).forEach((row) => {
       cards.push(row);
+      sampledCards.add(row[9]);
       this.sampledCardsUntil.set(row[9], performance.now() + this.sampleHoldMs);
       if (this.fxDebug) {
-        this._renderDebugBadge(row[9], { sampled: true, inView: true, ready: true });
+        this._renderDebugBadge(row[9], { sampled: true, pending: false, inView: true, ready: true, alwaysOn: ALWAYS_ON_PASS_ENABLED });
       }
     });
     if (this.fxDebug) {
@@ -1085,14 +1108,13 @@ export class AssetFX {
         if (!card?.isConnected) return;
         const ready = card.dataset.fxReady === '1';
         const inView = card.dataset.fxInView === '1';
-        const last = this.lastPlayedAt.get(card) || 0;
-        const played = (Date.now() - last) < this.cooldownMs;
-        const sampled = (this.sampledCardsUntil.get(card) || 0) > performance.now();
-        this._renderDebugBadge(card, { ready, inView, played, sampled });
+        const sampled = sampledCards.has(card);
+        const pending = ready && inView && !sampled;
+        this._renderDebugBadge(card, { ready, inView, sampled, pending, alwaysOn: ALWAYS_ON_PASS_ENABLED });
       });
     }
     this.renderSampledCount = cards.length;
-    this.droppedByCapCount = Math.max(0, totalCandidates - cards.length);
+    this.droppedByCapCount = Math.max(0, totalCandidates - adaptiveMaxRenderCards);
     this.layoutDirty = false;
     this._renderDebugRects(cards, width, height);
 
@@ -1166,7 +1188,7 @@ export class AssetFX {
     });
   }
 
-  _renderDebugBadge(cardEl, { ready = false, inView = false, played = false, sampled = false } = {}) {
+  _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, alwaysOn = true } = {}) {
     if (!this.fxDebug || !cardEl) return;
     let badge = cardEl.querySelector('.fx-debug-badge');
     if (!badge) {
@@ -1174,7 +1196,7 @@ export class AssetFX {
       badge.className = 'fx-debug-badge';
       cardEl.appendChild(badge);
     }
-    badge.textContent = `${ready ? 'R' : '-'}${inView ? 'V' : '-'}${played ? 'P' : '-'}${sampled ? 'S' : '-'}`;
+    badge.textContent = `${alwaysOn ? 'A' : '-'}${ready ? 'R' : '-'}${inView ? 'V' : '-'}${sampled ? 'S' : (pending ? 'P' : '-')}`;
   }
 
   _ensureSharedStyles() {
@@ -1204,7 +1226,7 @@ export class AssetFX {
       }
       .fx-dissolve-veil.is-active { opacity: 0; }
       .asset.fx-entry-active {
-        transform: translateY(-1px) scale(1.01);
+        transform: translateY(-0.5px) scale(1.005);
         transition: transform 160ms ease-out;
       }
       .fx-exit-veil {

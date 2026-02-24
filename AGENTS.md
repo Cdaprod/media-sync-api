@@ -1070,3 +1070,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Exit effects are cooldown-gated (`lastExitedAt`) for idempotence and to avoid rapid flicker during threshold jitter while scrolling.
 - Added `.fx-exit-veil` + `@keyframes fx-exit-veil` shared styles and reduced-motion disable wiring alongside existing FX overlays.
 - Static tests now assert the exit pathway symbols so future refactors preserve leave-behavior semantics.
+
+
+### Latest Implementation Notes (2026-02-24, adaptive premium sampling + always-on pass)
+- AssetFX shader now applies a subtle always-on global pass (low-amplitude vignette/grain/scanline) so all in-view tiles retain baseline FX presence even when premium tile sampling is capped.
+- Premium tile sampling remains center-priority but now uses an adaptive cap (`minRenderCards`, `maxRenderCardsLowTier`, `maxRenderCardsHighTier`, `maxRenderCardsAdaptive`) driven by visible candidate count + coarse device tier heuristics for iPhone stability.
+- Debug badges now include an always-on marker (`A`) and premium state (`S` sampled, `P` pending-not-sampled, `-` neither) to make cap behavior legible while validating mobile scroll behavior.
+- Entry timing was smoothed/tightened (`entryMs = 260`, `readyFadeMs = 240`) and premium energy multipliers were reduced for less flashy transitions.
+- Static tests were updated to assert the adaptive-cap/always-on symbols and the updated debug badge semantics.
