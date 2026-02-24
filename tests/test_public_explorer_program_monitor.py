@@ -157,7 +157,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'pulse(cardEl' in shader_module
     assert 'dissolve(cardEl, imgEl' in shader_module
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
-    assert 'bindCardMedia(cardEl, imgEl, { kind = \'' in shader_module
+    assert 'bindCardMedia(cardEl, mediaEl, { kind = \'' in shader_module
     assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
     assert 'const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();' in shader_module
     assert "container.dataset.fxRendererId = String(++RENDERER_SEQ);" in shader_module
@@ -184,6 +184,12 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "cardEl.dataset.fxReady = '0';" in shader_module
     assert "cardEl.dataset.ready = '1';" in shader_module
     assert 'await imgEl.decode();' in shader_module
+    assert 'const MAX_PARALLEL_DECODES = 3;' in shader_module
+    assert 'const DECODE_QUEUE = [];' in shader_module
+    assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
+    assert 'this.layoutDirty = true;' in shader_module
+    assert 'this.cardRectCache = new WeakMap();' in shader_module
+    assert "if (typeof ResizeObserver !== 'undefined') {" in shader_module
     assert 'this.readyFadeMs = 220;' in shader_module
     assert 'this._pruneDisconnected();' in shader_module
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module

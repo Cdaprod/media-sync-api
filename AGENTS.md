@@ -1006,3 +1006,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Card thumbs are initialized with `data-thumb-state="pending"` so load state ownership remains explicit in JS and consistent with the existing queue/error updates.
 - `AssetFX.bindCardMedia()` readiness marking is now decode-aware: `markReady` awaits `img.decode()` when available before setting `data-fx-ready`/`data-ready`, with safe fallback for Safari/cross-origin decode rejections.
 - Static tests now assert the eager+decode thumb attributes and decode-aware readiness path to lock the lifecycle separation between structure CSS and JS/FX readiness.
+
+### Latest Implementation Notes (2026-02-24, lifecycle split hardening: decode backpressure + geometry caching)
+- `AssetFX.bindCardMedia()` now accepts a generic `mediaEl` and unifies readiness semantics across image/video/audio tiles (`load+decode`, `loadeddata`, `loadedmetadata`) before setting `data-fx-ready`.
+- Added decode backpressure in `public/js/explorer-shaders.mjs` (`MAX_PARALLEL_DECODES = 3`) to limit concurrent `img.decode()` work and reduce iPhone/Safari decode spikes during large grid renders.
+- Added layout invalidation + rect caching (`layoutDirty`, `cardRectCache`) with `ResizeObserver`/scroll-triggered invalidation so tile rects are not recomputed from `getBoundingClientRect()` for every visible card on every RAF tick.
+- Removed CSS filter-driven per-tile appearance animation hooks on `.asset` / `.asset-thumb` (hover brightness + baked filter) so visual energy remains shader-owned rather than split across CSS and WebGL.
+- Updated static tests to assert decode backpressure, media-element readiness unification, and layout/resize invalidation symbols.

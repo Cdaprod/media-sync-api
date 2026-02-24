@@ -45,6 +45,37 @@ let __DBG_GL_CONTEXTS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_contexts || 0);
 let __DBG_RENDERERS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_renderers || 0);
 const __DBG_GL_CONTEXT_CALLS = FX_GLOBAL.__assetfx_dbg_context_calls || [];
 let __DBG_PREVENTED_SECOND_CONTEXT = Number(FX_GLOBAL.__assetfx_dbg_prevented_second_context || 0);
+const MAX_PARALLEL_DECODES = 3;
+let ACTIVE_DECODES = 0;
+const DECODE_QUEUE = [];
+
+function runDecodeTask(task) {
+  ACTIVE_DECODES += 1;
+  Promise.resolve()
+    .then(task)
+    .catch(() => {})
+    .finally(() => {
+      ACTIVE_DECODES = Math.max(0, ACTIVE_DECODES - 1);
+      const next = DECODE_QUEUE.shift();
+      if (next) runDecodeTask(next);
+    });
+}
+
+function decodeImageWithBackpressure(imgEl) {
+  if (!imgEl || typeof imgEl.decode !== 'function') return Promise.resolve();
+  return new Promise((resolve) => {
+    const task = async () => {
+      try {
+        await imgEl.decode();
+      } catch {
+        // Safari can reject decode() for cross-origin/cached edge cases; fallback to load completion.
+      }
+      resolve();
+    };
+    if (ACTIVE_DECODES < MAX_PARALLEL_DECODES) runDecodeTask(task);
+    else DECODE_QUEUE.push(task);
+  });
+}
 
 function ensureOverlayId(canvas) {
   if (!canvas) return '';
@@ -262,6 +293,8 @@ export class AssetFX {
 
     this.activeDissolves = new Set();
     this.pendingDissolves = [];
+    this.layoutDirty = true;
+    this.cardRectCache = new WeakMap();
 
     this.prefersReducedMotion = typeof window !== 'undefined'
       ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
@@ -279,7 +312,12 @@ export class AssetFX {
     this._attachedCardSelector = '.asset';
     this._boundScheduleReplay = () => this._scheduleReplaySweep();
     this._boundWindowResize = () => this._scheduleReplaySweep();
+    this._boundContainerResize = () => {
+      this.layoutDirty = true;
+      this._scheduleReplaySweep();
+    };
     this._tapGuardCleanup = null;
+    this._resizeObserver = null;
 
     this._ensureSharedStyles();
     if (typeof window !== 'undefined') window.__assetfx_instance = this;
@@ -454,6 +492,10 @@ export class AssetFX {
     gridRoot.addEventListener('scroll', this._boundScheduleReplay, { passive: true });
     gridRoot.addEventListener('touchmove', this._boundScheduleReplay, { passive: true });
     window.addEventListener('resize', this._boundWindowResize, { passive: true });
+    if (typeof ResizeObserver !== 'undefined') {
+      this._resizeObserver = new ResizeObserver(this._boundContainerResize);
+      this._resizeObserver.observe(gridRoot);
+    }
 
     this._tapGuardCleanup = this._wireTapGuard(gridRoot, cardSelector);
     this._ensureObserver(gridRoot);
@@ -465,6 +507,10 @@ export class AssetFX {
     gridRoot.removeEventListener('scroll', this._boundScheduleReplay);
     gridRoot.removeEventListener('touchmove', this._boundScheduleReplay);
     window.removeEventListener('resize', this._boundWindowResize);
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
     if (typeof this._tapGuardCleanup === 'function') this._tapGuardCleanup();
     this._tapGuardCleanup = null;
     if (this.visibilityObserver) {
@@ -472,6 +518,8 @@ export class AssetFX {
       this.visibilityObserver = null;
     }
     this.pointerState.clear();
+    this.layoutDirty = true;
+    this.cardRectCache = new WeakMap();
     this.pendingDissolves = [];
     if (!this.trackedCards.size) {
       cancelAnimationFrame(this.raf);
@@ -491,45 +539,61 @@ export class AssetFX {
     if (this.fallbackSweepEnabled) this._scheduleReplaySweep();
   }
 
-  bindCardMedia(cardEl, imgEl, { kind = '' } = {}) {
-    if (!cardEl || !imgEl) return;
+  bindCardMedia(cardEl, mediaEl, { kind = '' } = {}) {
+    if (!cardEl || !mediaEl) return;
     cardEl.dataset.fxKind = kind || '';
     cardEl.dataset.fxReady = '0';
     cardEl.dataset.ready = '0';
-    this.trackViewport(cardEl, imgEl);
+    this.trackViewport(cardEl, mediaEl);
     if (kind === 'video') this.addScanline(cardEl);
-    this.dissolve(cardEl, imgEl, { allowReplay: true });
+    this.dissolve(cardEl, mediaEl, { allowReplay: true });
 
-    if (typeof imgEl.__fxReadyCleanup === 'function') imgEl.__fxReadyCleanup();
+    if (typeof mediaEl.__fxReadyCleanup === 'function') mediaEl.__fxReadyCleanup();
+
     const markReady = async () => {
-      if (typeof imgEl.decode === 'function') {
-        try {
-          await imgEl.decode();
-        } catch {
-          // Safari can reject decode() for cross-origin/cached edge cases; fallback to load completion.
-        }
+      if (kind === 'image' || mediaEl.tagName === 'IMG') {
+        await decodeImageWithBackpressure(mediaEl);
       }
       cardEl.dataset.fxReady = '1';
       cardEl.dataset.ready = '1';
       cardEl.dataset.fxReadyAt = String(performance.now());
       if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
     };
+
     const markError = () => {
       cardEl.dataset.fxReady = '0';
       cardEl.dataset.ready = '0';
       this.visibleCards.delete(cardEl);
     };
 
-    if (imgEl.complete && imgEl.naturalWidth > 0) void markReady();
+    const onImgLoad = () => { void markReady(); };
+    const onVideoReady = () => { void markReady(); };
+
+    const isImage = kind === 'image' || mediaEl.tagName === 'IMG';
+    const isVideo = kind === 'video' || mediaEl.tagName === 'VIDEO';
+    const isAudio = kind === 'audio' || mediaEl.tagName === 'AUDIO';
+
+    if (isImage && mediaEl.complete && mediaEl.naturalWidth > 0) void markReady();
+    else if (isVideo && mediaEl.readyState >= 2) void markReady();
+    else if (isAudio && mediaEl.readyState >= 1) void markReady();
     else {
-      imgEl.addEventListener('load', () => {
-        void markReady();
-      }, { once: true });
-      imgEl.addEventListener('error', markError, { once: true });
+      if (isImage) {
+        mediaEl.addEventListener('load', onImgLoad, { once: true });
+        mediaEl.addEventListener('error', markError, { once: true });
+      } else if (isVideo) {
+        mediaEl.addEventListener('loadeddata', onVideoReady, { once: true });
+        mediaEl.addEventListener('error', markError, { once: true });
+      } else if (isAudio) {
+        mediaEl.addEventListener('loadedmetadata', onVideoReady, { once: true });
+        mediaEl.addEventListener('error', markError, { once: true });
+      }
     }
-    imgEl.__fxReadyCleanup = () => {
-      imgEl.removeEventListener('load', markReady);
-      imgEl.removeEventListener('error', markError);
+
+    mediaEl.__fxReadyCleanup = () => {
+      mediaEl.removeEventListener('load', onImgLoad);
+      mediaEl.removeEventListener('loadeddata', onVideoReady);
+      mediaEl.removeEventListener('loadedmetadata', onVideoReady);
+      mediaEl.removeEventListener('error', markError);
     };
   }
 
@@ -642,6 +706,7 @@ export class AssetFX {
       this.visibleCards.delete(card);
       this.pendingDissolves = this.pendingDissolves.filter((entry) => entry.cardEl !== card);
     }
+    this.layoutDirty = true;
     return true;
   }
 
@@ -749,6 +814,7 @@ export class AssetFX {
   _replaySweep() {
     this._pruneDisconnected();
     if (!this.container || !this.trackedCards.size) return;
+    this.layoutDirty = true;
     const rootRect = this.container.getBoundingClientRect();
     const minOverlap = Math.max(18, rootRect.height * 0.1);
     this.trackedCards.forEach((card) => {
@@ -835,12 +901,17 @@ export class AssetFX {
 
     const cards = [];
     let sampled = 0;
+    if (this.layoutDirty) this.cardRectCache = new WeakMap();
     this.visibleCards.forEach((card) => {
       if (sampled >= this.maxRenderCards) return;
       if (!card?.isConnected) return;
       if (card.dataset.fxInView !== '1') return;
       if (card.dataset.fxReady !== '1') return;
-      const cr = card.getBoundingClientRect();
+      let cr = this.cardRectCache.get(card);
+      if (!cr || this.layoutDirty) {
+        cr = card.getBoundingClientRect();
+        this.cardRectCache.set(card, cr);
+      }
       const x1 = (cr.left - rect.left) * dpr;
       const y1 = (cr.top - rect.top) * dpr;
       const x2 = (cr.right - rect.left) * dpr;
@@ -857,6 +928,7 @@ export class AssetFX {
       cards.push([x1, y1, x2, y2, typeCode, selected, energy, readyFade]);
       sampled += 1;
     });
+    this.layoutDirty = false;
 
     const gl = this.gl;
     gl.viewport(0, 0, width, height);
