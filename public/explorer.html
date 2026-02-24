@@ -754,11 +754,11 @@
       border-radius: var(--asset-radius);
       overflow:hidden;
       cursor:pointer;
-      transition: transform var(--dur-fast) var(--ease-snappy), filter var(--dur-fast) var(--ease-settle), border-color var(--dur-fast) var(--ease-settle);
+      transition: border-color var(--dur-fast) var(--ease-settle);
       position: relative;
       will-change: transform;
     }
-    .asset:hover{ transform: translateY(-1px) scale(1.005); filter: brightness(1.03); border-color: rgba(255,255,255,0.12); }
+    .asset:hover{ border-color: rgba(255,255,255,0.12); }
 
     .thumb{
       background: rgba(0,0,0,0.18);
@@ -784,7 +784,6 @@
       width: 100%; height: 100%;
       object-fit: cover;
       display:block;
-      filter: saturate(1.05) contrast(1.03);
     }
     .thumb .fallback{
       font-size: 12px;
@@ -1454,7 +1453,7 @@
           <div class="spinner"></div>
           <div>Preparing thumbnails…</div>
         </div>
-        <div class="scroll">
+        <div id="mediaGridRoot" class="scroll" data-fx-grid-root="1">
           <div id="mediaGrid" class="grid"></div>
           <div id="mediaList" class="list" style="display:none;"></div>
         </div>
@@ -1556,7 +1555,10 @@
   <script src="js/obs-websocket.js"></script>
   <script src="js/obs-push.js"></script>
   <script type="module" src="js/program_monitor_handoff.js"></script>
-  <script>
+  <script type="module">
+    import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';
+
+    void ExplorerShaders;
     // -------------------------
     // Config / state
     // -------------------------
@@ -1597,6 +1599,10 @@
       dragPointerId: null,
       dragTarget: null,
     };
+
+    const cardFX = window.__assetfx_instance instanceof AssetFX
+      ? window.__assetfx_instance
+      : (window.__assetfx_instance = new AssetFX());
 
     const itemsByPath = new Map();
 
@@ -1730,6 +1736,12 @@
     // -------------------------
     // Utils
     // -------------------------
+    function cssEscape(value){
+      const input = String(value ?? '');
+      if (window.CSS?.escape) return window.CSS.escape(input);
+      return input.replace(/([\"\'\\#.:;,!?+*~^$\[\]()=>|/@])/g, '\\$1');
+    }
+
     function toast(type, title, message){
       const t = document.createElement('div');
       t.className = `toast ${type || ''}`;
@@ -3216,6 +3228,8 @@
 
       // GRID
       const g = el('mediaGrid');
+      const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root="1"]') || g;
+      cardFX.attachGrid(gridRoot, '.asset');
       g.innerHTML = '';
       // LIST
       const l = el('mediaList');
@@ -3280,19 +3294,21 @@
         card.dataset.orient = orient;
         card.dataset.orientLocked = orientLocked ? 'true' : 'false';
         card.dataset.thumbKey = thumbKey || '';
+        const selectKey = selectionKey(it);
+        card.dataset.selectKey = selectKey;
 
         card.innerHTML = `
           <div class="thumb">
-            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
-              data-thumb-fallback="${escapeHtml(fallbackThumb)}" />
+              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
             <div class="asset-overlay">
               <div class="asset-ol-tl">
                 <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
               </div>
               <div class="asset-ol-tr">
                 <div class="selector" title="Select">
-                  <input type="checkbox" ${state.selected.has(selectionKey(it)) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+                  <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
                 </div>
               </div>
               <div class="asset-ol-bl">
@@ -3305,12 +3321,10 @@
             </div>
           </div>
         `;
-
-        // checkbox toggles selection without opening drawer
-        card.querySelector('input[type="checkbox"]').addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          toggleSelected(it);
-        });
+        const cardThumb = card.querySelector('img.asset-thumb');
+        if (cardThumb) {
+          cardFX.bindCardMedia(card, cardThumb, { kind });
+        }
 
         wireAssetPointerHandlers(card, it);
         g.appendChild(card);
@@ -3329,22 +3343,22 @@
         row.dataset.creationTime = it.created_at || it.uploaded_at || it.indexed_at || '';
         row.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
         row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
+        row.dataset.selectKey = selectKey;
         row.innerHTML = `
           <div class="mini">
-            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="lazy"
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
-              data-thumb-fallback="${escapeHtml(fallbackThumb)}" />
+              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
           </div>
           <div class="info">
             <div class="t">${escapeHtml(title)}</div>
             <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
           </div>
           <div class="actions">
-            <input type="checkbox" ${state.selected.has(selectionKey(it)) ? 'checked':''} title="Select" ${canSelect ? '' : 'disabled'} />
+            <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} title="Select" ${canSelect ? '' : 'disabled'} />
             <button class="iconbtn" type="button">Preview</button>
           </div>
         `;
-        row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleSelected(it));
         row.querySelector('button').addEventListener('click', () => openDrawer(it));
         wireAssetPointerHandlers(row, it);
         l.appendChild(row);
@@ -3419,29 +3433,42 @@
     // -------------------------
     // Selection + Resolve
     // -------------------------
-    function toggleSelected(item){
+    function updateSelectionDomForKey(key, checked){
+      if (!key) return;
+      const escaped = cssEscape(key);
+      document.querySelectorAll(`[data-select-key="${escaped}"]`).forEach((node) => {
+        if (node.matches('input[type="checkbox"]')) node.checked = checked;
+        const card = node.closest('.asset, .row');
+        if (card) card.classList.toggle('is-selected', checked);
+      });
+    }
+
+    function toggleSelected(item, { domNode = null } = {}){
       if (!item?.relative_path) return;
       const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
       if (!canSelectAcrossProjects) return;
       const key = selectionKey(item);
       if (!key) return;
+      let checked = false;
       if (state.selected.has(key)){
         deselectKey(key);
+        checked = false;
       }else{
         state.selected.add(key);
         state.selectedOrder = state.selectedOrder.filter((value) => value !== key);
         state.selectedOrder.push(key);
+        checked = true;
       }
-
-      // update selected CSS quickly without full re-render
-      // simplest: re-render; media lists are small enough on LAN.
-      renderMedia();
+      updateSelectionDomForKey(key, checked);
+      const selectedCard = domNode?.closest('.asset') || document.querySelector(`.asset[data-select-key="${cssEscape(key)}"]`);
+      if (checked && selectedCard) cardFX.pulse(selectedCard);
       updateSelectionUI();
     }
 
     function clearSelection(){
+      const keys = Array.from(state.selected);
       clearSelectionState();
-      renderMedia();
+      keys.forEach((key) => updateSelectionDomForKey(key, false));
       updateSelectionUI();
     }
 
@@ -4034,11 +4061,65 @@
       syncResolveHint();
     };
 
+
+    function wireSelectionDelegation(){
+      const MOVE_THRESHOLD = 12;
+      const pointers = new Map();
+      const handlePointerDown = (event) => {
+        const input = event.target.closest('input[type="checkbox"][data-select-key]');
+        if (!input) return;
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, moved: false, t: Date.now() });
+      };
+      const handlePointerMove = (event) => {
+        const rec = pointers.get(event.pointerId);
+        if (!rec) return;
+        const dx = event.clientX - rec.x;
+        const dy = event.clientY - rec.y;
+        if ((dx * dx + dy * dy) > MOVE_THRESHOLD * MOVE_THRESHOLD) rec.moved = true;
+      };
+      const handlePointerUp = (event) => {
+        const rec = pointers.get(event.pointerId);
+        if (!rec) return;
+        if (rec.moved && rec.input?.isConnected) rec.input.dataset.fxSuppressToggle = '1';
+        pointers.delete(event.pointerId);
+      };
+      const handleChange = (event) => {
+        const input = event.target.closest('input[type="checkbox"][data-select-key]');
+        if (!input) return;
+        if (input.dataset.fxSuppressToggle === '1'){
+          delete input.dataset.fxSuppressToggle;
+          input.checked = !input.checked;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        const key = input.dataset.selectKey || '';
+        const item = selectionItemByKey(key);
+        if (!item) return;
+        toggleSelected(item, { domNode: input });
+        event.stopPropagation();
+      };
+      ['mediaGrid','mediaList'].forEach((id) => {
+        const root = el(id);
+        if (!root || root.dataset.selectionDelegated === '1') return;
+        root.dataset.selectionDelegated = '1';
+        root.addEventListener('pointerdown', handlePointerDown, true);
+        root.addEventListener('pointermove', handlePointerMove, true);
+        root.addEventListener('pointerup', handlePointerUp, true);
+        root.addEventListener('pointercancel', handlePointerUp, true);
+        root.addEventListener('change', handleChange, true);
+        root.addEventListener('click', (event) => {
+          if (event.target.closest('input[type="checkbox"][data-select-key]')) event.stopPropagation();
+        }, true);
+      });
+    }
+
     // Boot
     document.addEventListener('DOMContentLoaded', async () => {
       wireTopbarIntent();
       wireDropdownIntents();
       wireProjectDragAssist();
+      wireSelectionDelegation();
       document.addEventListener('pointerdown', (event) => {
         const menu = el('contextMenu');
         if (!menu?.classList.contains('open')) return;

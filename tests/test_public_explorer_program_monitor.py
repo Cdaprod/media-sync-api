@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+
+import pytest
 
 
 def test_explorer_includes_program_monitor_button():
@@ -133,3 +136,140 @@ def test_explorer_selection_bar_compose_action_present():
     assert 'Compose Video(s)' in html
     assert 'async function composeSelectedVideos()' in html
     assert '/compose' in html
+
+
+def test_explorer_shader_asset_fx_wiring_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+
+    assert "import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';" in html
+    assert 'window.__assetfx_instance instanceof AssetFX' in html
+    assert "const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root=\"1\"]') || g;" in html
+    assert "cardFX.attachGrid(gridRoot, '.asset');" in html
+    assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
+    assert 'cardFX.pulse(selectedCard);' in html
+    assert 'loading="eager" decoding="async" fetchpriority="low"' in html
+    assert 'loading="lazy"' not in html
+
+    assert 'export class AssetFX' in shader_module
+    assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
+    assert 'addScanline(cardEl)' in shader_module
+    assert 'pulse(cardEl' in shader_module
+    assert 'dissolve(cardEl, imgEl' in shader_module
+    assert 'trackViewport(cardEl, imgEl = null)' in shader_module
+    assert 'bindCardMedia(cardEl, mediaEl, { kind = \'' in shader_module
+    assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
+    assert 'const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();' in shader_module
+    assert "container.dataset.fxRendererId = String(++RENDERER_SEQ);" in shader_module
+    assert '_getRenderer(container)' in shader_module
+    assert '_saveRenderer(container)' in shader_module
+    assert '@keyframes fx-visible-hint' in shader_module
+    assert '@keyframes fx-selection-pulse' in shader_module
+
+
+
+
+def test_explorer_asset_fx_debug_and_attach_idempotency_present():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert 'window.__assetfx_dbg = {' in shader_module
+    assert 'get calls() { return [...__DBG_GL_CONTEXT_CALLS]; }' in shader_module
+    assert "markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });" in shader_module
+    assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
+    assert 'window.__assetfx_audit = () =>' in shader_module
+    assert 'FX_GLOBAL.__assetfx_global_context_owner' in shader_module
+    assert "console.info('AssetFX: prevented second WebGL context; reusing global overlay');" in shader_module
+    assert 'const rootId = ensureRootId(gridRoot);' in shader_module
+    assert 'this.maxActiveEffects = 6;' in shader_module
+    assert 'this.maxPendingDissolves = 60;' in shader_module
+    assert "cardEl.dataset.fxReady = '0';" in shader_module
+    assert "cardEl.dataset.ready = '1';" in shader_module
+    assert 'await imgEl.decode();' in shader_module
+    assert 'const MAX_PARALLEL_DECODES = 3;' in shader_module
+    assert 'const DECODE_QUEUE = [];' in shader_module
+    assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
+    assert 'this.layoutDirty = true;' in shader_module
+    assert 'this.cardRectCache = new WeakMap();' in shader_module
+    assert "if (typeof ResizeObserver !== 'undefined') {" in shader_module
+    assert 'this.readyFadeMs = 220;' in shader_module
+    assert 'this._pruneDisconnected();' in shader_module
+    assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
+    assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
+    assert "if (card.dataset.fxReady !== '1') return;" in shader_module
+    assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
+    assert 'uniform float u_type[' in shader_module
+    assert 'uniform float u_sel[' in shader_module
+    assert 'uniform float u_energy[' in shader_module
+    assert 'vec2 tileUV = (px - r.xy)' in shader_module
+    assert "const typeCode = kind === 'video' ? 1 : (kind === 'audio' ? 2 : 0);" in shader_module
+
+
+def test_explorer_play_dissolve_has_no_webgl_creation():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    start = shader_module.index('_playDissolve(cardEl, imgEl, duration, allowReplay) {')
+    end = shader_module.index('_ensureObserver(rootEl) {')
+    block = shader_module[start:end]
+    assert 'getContext(' not in block
+    assert "createElement('canvas')" not in block
+    assert 'imgEl.style.opacity' not in block
+
+def test_explorer_selection_toggle_does_not_full_rerender():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'function updateSelectionDomForKey(key, checked)' in html
+    assert 'function wireSelectionDelegation()' in html
+    assert 'renderMedia();' in html
+    toggle_idx = html.index('function toggleSelected(')
+    clear_idx = html.index('function clearSelection(')
+    toggle_block = html[toggle_idx:clear_idx]
+    assert 'renderMedia();' not in toggle_block
+    assert 'setContentLoading(true);' not in toggle_block
+    assert 'loadThumbQueue' not in toggle_block
+
+
+def test_explorer_shared_renderer_singleton_symbols_present():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert "if (this.container && RENDERERS.has(this.container))" in shader_module
+    assert 'RENDERERS.set(container, {' in shader_module
+    assert 'if (this.container && RENDERERS.has(this.container)) RENDERERS.delete(this.container);' in shader_module
+
+
+
+
+def test_explorer_asset_css_visual_animation_is_minimized():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '.asset:hover{ border-color: rgba(255,255,255,0.12); }' in html
+    assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
+
+@pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")
+def test_explorer_assetfx_context_singleton_runtime_with_playwright():
+    playwright = pytest.importorskip("playwright.sync_api")
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        try:
+            page.goto("http://127.0.0.1:8787/public/explorer.html", wait_until="domcontentloaded")
+            page.wait_for_timeout(1200)
+            page.evaluate("""() => {
+              const root = document.getElementById('mediaGridRoot');
+              if (!root) return;
+              for (let i = 0; i < 6; i++) {
+                root.scrollTop = i % 2 ? 0 : root.scrollHeight;
+                root.dispatchEvent(new Event('scroll'));
+              }
+              document.querySelectorAll('input[type=\"checkbox\"][data-select-key]').forEach((el, idx) => {
+                if (idx < 5) el.click();
+              });
+            }""")
+            page.wait_for_timeout(500)
+            contexts = page.evaluate("window.__assetfx_dbg?.contexts ?? null")
+            overlays = page.evaluate("document.querySelectorAll('canvas[data-assetfx=\"overlay\"]').length")
+            pending = page.evaluate("window.__assetfx_dbg?.pendingDissolves ?? null")
+            active = page.evaluate("window.__assetfx_dbg?.activeDissolves ?? null")
+            assert contexts is not None
+            assert contexts <= 1
+            assert overlays <= 1
+            assert pending is not None
+            assert pending <= 60
+            assert active is not None
+            assert active <= 6
+        finally:
+            browser.close()
