@@ -3319,8 +3319,7 @@
         `;
         const cardThumb = card.querySelector('img.asset-thumb');
         if (cardThumb) {
-          cardFX.dissolve(card, cardThumb);
-          cardFX.trackViewport(card, cardThumb);
+          cardFX.bindCardMedia(card, cardThumb, { kind });
         }
 
         // checkbox toggles selection without opening drawer
@@ -3331,7 +3330,6 @@
 
         wireAssetPointerHandlers(card, it);
         g.appendChild(card);
-        if (kind === 'video') cardFX.addScanline(card);
 
         // ---- list row
         const row = document.createElement('div');

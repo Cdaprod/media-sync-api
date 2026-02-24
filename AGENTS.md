@@ -927,3 +927,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer card rendering now calls `cardFX.trackViewport(card, cardThumb)` alongside dissolve wiring so each grid card registers once for visibility-triggered replays within the media grid scroll container.
 - Added a lightweight `fx-visible-hint` animation overlay with throttling (`fxLastVisibleAt`) to avoid excessive replays while still giving obvious feedback during iPhone scroll-back interactions.
 - Updated static explorer tests to assert viewport-tracking methods/keyframes and HTML wiring are present.
+
+### Latest Implementation Notes (2026-02-23, dissolve/scanline synchronization and replay fix)
+- Replaced per-call explorer wiring (`dissolve` + `trackViewport` + `addScanline`) with a single `cardFX.bindCardMedia(card, img, { kind })` integration point so thumbnail lifecycle, scanline setup, and replay behavior stay synchronized.
+- `AssetFX.dissolve` now supports replay-aware binding (`allowReplay`) and delegates to `_playDissolve`, letting dissolves run when thumbnails load/reload instead of only at first card render.
+- Added dissolve throttling (`fxDissolveAt`) and scanline boost coordination (`_boostScanline`) so dissolve and scanline effects are visible together rather than placeholders visually overpowering dissolve transitions.
+- Updated static explorer tests to validate the new binding API and replay/synchronization helper methods.

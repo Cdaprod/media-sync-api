@@ -218,6 +218,13 @@ export class AssetFX {
     this.visibilityObserver.observe(cardEl);
   }
 
+  bindCardMedia(cardEl, imgEl, { kind = '' } = {}) {
+    if (!cardEl || !imgEl) return;
+    this.trackViewport(cardEl, imgEl);
+    if (kind === 'video') this.addScanline(cardEl);
+    this.dissolve(cardEl, imgEl, { allowReplay: true });
+  }
+
   addScanline(cardEl) {
     if (!cardEl || cardEl.dataset.scanlineFx === 'on') return () => {};
     ensureRelative(cardEl);
@@ -270,9 +277,32 @@ export class AssetFX {
     };
   }
 
-  dissolve(cardEl, imgEl, { duration = 600 } = {}) {
+  dissolve(cardEl, imgEl, { duration = 600, allowReplay = false } = {}) {
     if (!cardEl || !imgEl) return { cancel: () => {} };
     ensureRelative(cardEl);
+
+    if (allowReplay) {
+      if (typeof imgEl.__fxDissolveCleanup === 'function') imgEl.__fxDissolveCleanup();
+      const play = () => {
+        if (imgEl.dataset.thumbUrl && imgEl.getAttribute('src') === imgEl.dataset.thumbFallback) return;
+        this._playDissolve(cardEl, imgEl, duration);
+      };
+      const onLoad = () => play();
+      imgEl.addEventListener('load', onLoad);
+      if (imgEl.complete && imgEl.naturalWidth > 0) play();
+      imgEl.__fxDissolveCleanup = () => imgEl.removeEventListener('load', onLoad);
+      return { cancel: imgEl.__fxDissolveCleanup };
+    }
+
+    return this._playDissolve(cardEl, imgEl, duration);
+  }
+
+  _playDissolve(cardEl, imgEl, duration) {
+    const now = Date.now();
+    const last = Number(cardEl.dataset.fxDissolveAt || '0');
+    if (now - last < 220) return { cancel: () => {} };
+    cardEl.dataset.fxDissolveAt = String(now);
+    this._boostScanline(cardEl);
 
     if (!this.webglEnabled) {
       const fallback = this._cssDissolve(cardEl, imgEl, duration);
@@ -650,6 +680,15 @@ export class AssetFX {
     });
     cardEl.appendChild(veil);
     setTimeout(() => veil.remove(), 420);
+  }
+
+  _boostScanline(cardEl, duration = 420) {
+    const overlay = cardEl?.querySelector('.fx-scanline-overlay');
+    if (!overlay) return;
+    overlay.style.opacity = '0.68';
+    setTimeout(() => {
+      if (overlay.isConnected) overlay.style.opacity = '0.42';
+    }, duration);
   }
 
   _ensureSharedStyles() {

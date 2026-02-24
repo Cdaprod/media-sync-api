@@ -142,8 +142,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';" in html
     assert 'const cardFX = new AssetFX();' in html
     assert "cardFX.attachGrid(g, '.asset');" in html
-    assert 'cardFX.dissolve(card, cardThumb);' in html
-    assert "if (kind === 'video') cardFX.addScanline(card);" in html
+    assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
     assert 'cardFX.pulse(selectedCard);' in html
 
     assert 'export class AssetFX' in shader_module
@@ -153,9 +152,12 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'dissolve(cardEl, imgEl' in shader_module
     assert '_cssDissolve(cardEl, imgEl, duration)' in shader_module
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
+    assert 'bindCardMedia(cardEl, imgEl, { kind = \'' in shader_module
     assert '_ensureVisibilityObserver(rootEl)' in shader_module
     assert '_replayVisibleHint(cardEl, imgEl)' in shader_module
+    assert '_playDissolve(cardEl, imgEl, duration)' in shader_module
+    assert '_boostScanline(cardEl, duration = 420)' in shader_module
     assert '@keyframes fx-visible-hint' in shader_module
     assert '@keyframes fx-selection-pulse' in shader_module
     assert 'fx-scanline-overlay' in shader_module
-    assert 'cardFX.trackViewport(card, cardThumb);' in html
+    assert 'allowReplay = false' in shader_module
