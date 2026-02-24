@@ -37,6 +37,15 @@ void main(){
 const MAX_RECTS = 64;
 const RENDERERS = new WeakMap();
 let RENDERER_SEQ = 0;
+let __DBG_GL_CONTEXTS_CREATED = 0;
+let __DBG_RENDERERS_CREATED = 0;
+
+if (typeof window !== 'undefined') {
+  window.__assetfx_dbg = {
+    get contexts() { return __DBG_GL_CONTEXTS_CREATED; },
+    get renderers() { return __DBG_RENDERERS_CREATED; },
+  };
+}
 const FRAG = `
 precision mediump float;
 varying vec2 v_uv;
@@ -141,12 +150,21 @@ export class AssetFX {
     this.fallbackSweepEnabled = !('IntersectionObserver' in window);
 
     this.pointerState = new Map();
+    this._attachedGridRoot = null;
+    this._attachedCardSelector = '.asset';
+    this._boundScheduleReplay = () => this._scheduleReplaySweep();
+    this._boundWindowResize = () => this._scheduleReplaySweep();
+    this._tapGuardCleanup = null;
 
     this._ensureSharedStyles();
   }
 
   init(container) {
     if (!container) return;
+    if (this.container === container && this.overlay?.isConnected && this.gl) {
+      this._startLoop();
+      return;
+    }
     const shared = this._getRenderer(container);
     if (shared){
       this.container = container;
@@ -161,7 +179,11 @@ export class AssetFX {
 
     this.container = container;
     ensureRelative(container);
-    const canvas = createNode('canvas', 'fx-shared-overlay');
+    const canvases = Array.from(container.querySelectorAll('canvas[data-assetfx="overlay"]'));
+    const canvas = canvases.shift() || createNode('canvas', 'fx-shared-overlay');
+    canvases.forEach((node) => node.remove());
+    canvas.classList.add('fx-shared-overlay');
+    canvas.dataset.assetfx = 'overlay';
     Object.assign(canvas.style, {
       position: 'absolute',
       inset: '0',
@@ -171,14 +193,19 @@ export class AssetFX {
       zIndex: '2',
       opacity: '0.92',
     });
-    container.appendChild(canvas);
+    if (!canvas.isConnected || canvas.parentElement !== container) container.appendChild(canvas);
     this.overlay = canvas;
     container.dataset.fxRendererId = String(++RENDERER_SEQ);
 
+    __DBG_RENDERERS_CREATED += 1;
+    this._saveRenderer(container);
+
+    __DBG_GL_CONTEXTS_CREATED += 1;
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: false });
     if (!gl) {
       this.gl = null;
       this.program = null;
+      this._saveRenderer(container);
       return;
     }
     this.gl = gl;
@@ -191,6 +218,7 @@ export class AssetFX {
     } catch {
       this.program = null;
       this.quad = null;
+      this._saveRenderer(container);
       return;
     }
 
@@ -211,11 +239,12 @@ export class AssetFX {
         this.program = null;
         this.quad = null;
       }
+      this._saveRenderer(container);
       this._startLoop();
     });
 
-    this._startLoop();
     this._saveRenderer(container);
+    this._startLoop();
   }
 
   destroyRenderer() {
@@ -230,6 +259,7 @@ export class AssetFX {
   }
 
   destroy() {
+    this.detachGrid();
     this.destroyRenderer();
     if (this.visibilityObserver) {
       this.visibilityObserver.disconnect();
@@ -241,18 +271,41 @@ export class AssetFX {
     this.pointerState.clear();
   }
 
-  attachGrid(gridEl, cardSelector = '.asset') {
-    if (!gridEl || this.boundGrids.has(gridEl)) return;
-    this.boundGrids.add(gridEl);
-    this.init(gridEl);
+  attachGrid(gridRoot, cardSelector = '.asset') {
+    if (!gridRoot) return;
+    if (this._attachedGridRoot === gridRoot) return;
+    this.detachGrid();
+    this._attachedGridRoot = gridRoot;
+    this._attachedCardSelector = cardSelector;
+    this.boundGrids.add(gridRoot);
+    this.init(gridRoot);
 
-    const replaySchedule = () => this._scheduleReplaySweep();
-    gridEl.addEventListener('scroll', replaySchedule, { passive: true });
-    gridEl.addEventListener('touchmove', replaySchedule, { passive: true });
-    window.addEventListener('resize', replaySchedule, { passive: true });
+    gridRoot.addEventListener('scroll', this._boundScheduleReplay, { passive: true });
+    gridRoot.addEventListener('touchmove', this._boundScheduleReplay, { passive: true });
+    window.addEventListener('resize', this._boundWindowResize, { passive: true });
 
-    this._wireTapGuard(gridEl, cardSelector);
-    this._ensureObserver(gridEl);
+    this._tapGuardCleanup = this._wireTapGuard(gridRoot, cardSelector);
+    this._ensureObserver(gridRoot);
+  }
+
+  detachGrid() {
+    const gridRoot = this._attachedGridRoot;
+    if (!gridRoot) return;
+    gridRoot.removeEventListener('scroll', this._boundScheduleReplay);
+    gridRoot.removeEventListener('touchmove', this._boundScheduleReplay);
+    window.removeEventListener('resize', this._boundWindowResize);
+    if (typeof this._tapGuardCleanup === 'function') this._tapGuardCleanup();
+    this._tapGuardCleanup = null;
+    if (this.visibilityObserver) {
+      this.visibilityObserver.disconnect();
+      this.visibilityObserver = null;
+    }
+    if (!this.trackedCards.size) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      if (this.container) this._saveRenderer(this.container);
+    }
+    this._attachedGridRoot = null;
   }
 
   trackViewport(cardEl, imgEl = null) {
@@ -361,9 +414,10 @@ export class AssetFX {
 
   _wireTapGuard(gridEl, cardSelector) {
     const threshold = 13;
-    gridEl.addEventListener('pointerdown', (event) => {
+    const onPointerDown = (event) => {
       const input = event.target.closest('input[type="checkbox"][data-select-key]');
       if (!input) return;
+      if (cardSelector && !event.target.closest(cardSelector)) return;
       this.pointerState.set(event.pointerId, {
         x: event.clientX,
         y: event.clientY,
@@ -371,15 +425,15 @@ export class AssetFX {
         input,
         startedAt: Date.now(),
       });
-    }, true);
+    };
 
-    gridEl.addEventListener('pointermove', (event) => {
+    const onPointerMove = (event) => {
       const rec = this.pointerState.get(event.pointerId);
       if (!rec) return;
       const dx = event.clientX - rec.x;
       const dy = event.clientY - rec.y;
       if ((dx * dx + dy * dy) > threshold * threshold) rec.moved = true;
-    }, true);
+    };
 
     const finish = (event) => {
       const rec = this.pointerState.get(event.pointerId);
@@ -389,8 +443,17 @@ export class AssetFX {
       if (rec.moved) rec.input.dataset.fxSuppressToggle = '1';
     };
 
+    gridEl.addEventListener('pointerdown', onPointerDown, true);
+    gridEl.addEventListener('pointermove', onPointerMove, true);
     gridEl.addEventListener('pointerup', finish, true);
     gridEl.addEventListener('pointercancel', finish, true);
+
+    return () => {
+      gridEl.removeEventListener('pointerdown', onPointerDown, true);
+      gridEl.removeEventListener('pointermove', onPointerMove, true);
+      gridEl.removeEventListener('pointerup', finish, true);
+      gridEl.removeEventListener('pointercancel', finish, true);
+    };
   }
 
   _scheduleReplaySweep() {

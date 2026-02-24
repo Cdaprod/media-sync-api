@@ -956,3 +956,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-02-24, stable FX root binding)
 - Explorer grid FX attachment now targets a stable scroll-root (`#mediaGridRoot` / `[data-fx-grid-root="1"]`) instead of the frequently re-rendered `#mediaGrid` node, preserving shared renderer identity across media refreshes.
 - Updated static explorer shader wiring assertions to reflect root-resolution + `attachGrid(gridRoot, '.asset')` integration.
+
+### Latest Implementation Notes (2026-02-24, WebGL singleton hardening + instrumentation)
+- Hardened `AssetFX` renderer lifecycle with explicit attach/detach idempotency (`_attachedGridRoot` guard + `detachGrid()` cleanup for observers/listeners/tap guards) to prevent repeated binding churn from spawning duplicate runtime hooks.
+- Added singleton instrumentation in `public/js/explorer-shaders.mjs`: renderer/context debug counters and `window.__assetfx_dbg` getters plus overlay marker `canvas[data-assetfx="overlay"]` to verify one shared overlay/context per grid root.
+- `init()` now reuses connected overlay canvases per root, removes duplicate overlay nodes if present, and updates shared renderer state before/after WebGL lifecycle events so `_playDissolve()` remains CSS-only with no per-card WebGL context creation.
+- Expanded static regression tests to assert debug export presence, attach idempotency guard, and `_playDissolve()` block exclusion of `getContext`/`createElement('canvas')`.

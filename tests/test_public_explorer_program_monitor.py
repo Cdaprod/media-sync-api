@@ -147,7 +147,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'cardFX.pulse(selectedCard);' in html
 
     assert 'export class AssetFX' in shader_module
-    assert "attachGrid(gridEl, cardSelector = '.asset')" in shader_module
+    assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
     assert 'addScanline(cardEl)' in shader_module
     assert 'pulse(cardEl' in shader_module
     assert 'dissolve(cardEl, imgEl' in shader_module
@@ -161,6 +161,22 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '@keyframes fx-visible-hint' in shader_module
     assert '@keyframes fx-selection-pulse' in shader_module
 
+
+
+
+def test_explorer_asset_fx_debug_and_attach_idempotency_present():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert 'window.__assetfx_dbg = {' in shader_module
+    assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
+
+
+def test_explorer_play_dissolve_has_no_webgl_creation():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    start = shader_module.index('_playDissolve(cardEl, imgEl, duration, allowReplay) {')
+    end = shader_module.index('_ensureObserver(rootEl) {')
+    block = shader_module[start:end]
+    assert 'getContext(' not in block
+    assert "createElement('canvas')" not in block
 
 def test_explorer_selection_toggle_does_not_full_rerender():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
