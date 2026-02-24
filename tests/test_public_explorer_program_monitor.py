@@ -162,6 +162,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
     assert 'bindCardMedia(cardEl, mediaEl, { kind = \'' in shader_module
     assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
+    assert "_playEntry(cardEl, imgEl, duration, allowReplay, kind = '')" in shader_module
+    assert "_maybePlayEntryOnReady(cardEl, mediaEl, kind = '')" in shader_module
     assert 'const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();' in shader_module
     assert "container.dataset.fxRendererId = String(++RENDERER_SEQ);" in shader_module
     assert '_getRenderer(container)' in shader_module
@@ -179,6 +181,9 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });" in shader_module
     assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
     assert 'window.__assetfx_audit = () =>' in shader_module
+    assert 'readyInViewNotPlayedCount:' in shader_module
+    assert 'renderSampledCount:' in shader_module
+    assert 'droppedByCapCount:' in shader_module
     assert 'FX_GLOBAL.__assetfx_global_context_owner' in shader_module
     assert "console.info('AssetFX: prevented second WebGL context; reusing global overlay');" in shader_module
     assert 'const rootId = ensureRootId(gridRoot);' in shader_module
@@ -192,6 +197,9 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
     assert 'this.layoutDirty = true;' in shader_module
     assert 'this.cardRectCache = new WeakMap();' in shader_module
+    assert 'this.readyInViewNotPlayedCount = 0;' in shader_module
+    assert 'this.renderSampledCount = 0;' in shader_module
+    assert 'this.droppedByCapCount = 0;' in shader_module
     assert "if (typeof ResizeObserver !== 'undefined') {" in shader_module
     assert 'this.readyFadeMs = 220;' in shader_module
     assert 'this._pruneDisconnected();' in shader_module
@@ -204,6 +212,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'const tileParamData = new Uint8Array(MAX_RECTS * 4);' in shader_module
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
+    assert 'renderCandidates.sort((a, b) => a[8] - b[8]);' in shader_module
     assert "const typeCode = kind === 'video' ? 1 : (kind === 'audio' ? 2 : 0);" in shader_module
 
 

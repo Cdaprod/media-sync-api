@@ -129,6 +129,9 @@ if (typeof window !== 'undefined') {
     get activeDissolves() { return FX_GLOBAL.__assetfx_instance?.activeDissolves?.size || 0; },
     get pendingDissolves() { return FX_GLOBAL.__assetfx_instance?.pendingDissolves?.length || 0; },
     get visibleCards() { return FX_GLOBAL.__assetfx_instance?.visibleCards?.size || 0; },
+    get readyInViewNotPlayedCount() { return FX_GLOBAL.__assetfx_instance?.readyInViewNotPlayedCount || 0; },
+    get renderSampledCount() { return FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0; },
+    get droppedByCapCount() { return FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
   };
   window.__assetfx_audit = () => {
@@ -145,6 +148,9 @@ if (typeof window !== 'undefined') {
       activeDissolves: FX_GLOBAL.__assetfx_instance?.activeDissolves?.size || 0,
       pendingDissolves: FX_GLOBAL.__assetfx_instance?.pendingDissolves?.length || 0,
       visibleCards: FX_GLOBAL.__assetfx_instance?.visibleCards?.size || 0,
+      readyInViewNotPlayedCount: FX_GLOBAL.__assetfx_instance?.readyInViewNotPlayedCount || 0,
+      renderSampledCount: FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0,
+      droppedByCapCount: FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0,
       owner: owner ? {
         canvasId: owner.canvasId,
         rootId: owner.rootId,
@@ -298,6 +304,9 @@ export class AssetFX {
     this.pendingDissolves = [];
     this.layoutDirty = true;
     this.cardRectCache = new WeakMap();
+    this.readyInViewNotPlayedCount = 0;
+    this.renderSampledCount = 0;
+    this.droppedByCapCount = 0;
 
     this.prefersReducedMotion = typeof window !== 'undefined'
       ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
@@ -493,6 +502,9 @@ export class AssetFX {
     this.visibleCards.clear();
     this.activeDissolves.clear();
     this.pendingDissolves = [];
+    this.readyInViewNotPlayedCount = 0;
+    this.renderSampledCount = 0;
+    this.droppedByCapCount = 0;
     this.lastPlayedAt = new WeakMap();
     this.boundGrids = new WeakSet();
     this.pointerState.clear();
@@ -583,6 +595,7 @@ export class AssetFX {
       cardEl.dataset.ready = '1';
       cardEl.dataset.fxReadyAt = String(performance.now());
       if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
+      this._maybePlayEntryOnReady(cardEl, mediaEl, kind);
     };
 
     const markError = () => {
@@ -643,7 +656,7 @@ export class AssetFX {
 
     const play = () => {
       if (imgEl.dataset.thumbUrl && imgEl.getAttribute('src') === imgEl.dataset.thumbFallback) return;
-      this._playDissolve(cardEl, imgEl, duration, allowReplay);
+      this._playEntry(cardEl, imgEl, duration, allowReplay, cardEl.dataset.fxKind || '');
     };
 
     const onLoad = () => play();
@@ -655,13 +668,17 @@ export class AssetFX {
   }
 
   _playDissolve(cardEl, imgEl, duration, allowReplay) {
+    this._playEntry(cardEl, imgEl, duration, allowReplay, cardEl?.dataset?.fxKind || '');
+  }
+
+  _playEntry(cardEl, imgEl, duration, allowReplay, kind = '') {
     if (!this._canRunFx()) return;
     const now = Date.now();
     const last = this.lastPlayedAt.get(cardEl) || 0;
     if (allowReplay && now - last < this.cooldownMs) return;
     this.lastPlayedAt.set(cardEl, now);
 
-    this._enqueueDissolve(cardEl, imgEl, duration);
+    this._enqueueDissolve(cardEl, imgEl, duration, kind);
   }
 
 
@@ -669,7 +686,7 @@ export class AssetFX {
     return !this.prefersReducedMotion && !this.liteFx;
   }
 
-  _enqueueDissolve(cardEl, imgEl, duration) {
+  _enqueueDissolve(cardEl, imgEl, duration, kind = '') {
     if (!cardEl || !imgEl || this.prefersReducedMotion) return;
     this._pruneDisconnected();
     if (cardEl.dataset.fxReady !== '1') return;
@@ -677,7 +694,7 @@ export class AssetFX {
     if (this.activeDissolves.has(cardEl)) return;
     const exists = this.pendingDissolves.some((entry) => entry.cardEl === cardEl);
     if (exists) return;
-    this.pendingDissolves.push({ cardEl, imgEl, duration, queuedAt: performance.now() });
+    this.pendingDissolves.push({ cardEl, imgEl, duration, kind, queuedAt: performance.now() });
     if (this.pendingDissolves.length > this.maxPendingDissolves) {
       this.pendingDissolves.splice(0, this.pendingDissolves.length - this.maxPendingDissolves);
     }
@@ -689,7 +706,7 @@ export class AssetFX {
     while (this.pendingDissolves.length && this.activeDissolves.size < this.maxActiveEffects) {
       const task = this.pendingDissolves.pop();
       if (!task?.cardEl?.isConnected || !task?.imgEl?.isConnected) continue;
-      const { cardEl, duration } = task;
+      const { cardEl, duration, kind } = task;
       if (!this.visibleCards.has(cardEl)) continue;
       this.activeDissolves.add(cardEl);
 
@@ -697,7 +714,7 @@ export class AssetFX {
       const veil = createNode('div', 'fx-dissolve-veil');
       veil.style.transitionDuration = `${Math.max(180, duration)}ms`;
       cardEl.appendChild(veil);
-      this._boostScanline(cardEl, Math.max(200, duration * 0.7));
+      if (kind === 'video') this._boostScanline(cardEl, Math.max(200, duration * 0.7));
 
       const finalize = () => {
         veil.remove();
@@ -733,6 +750,17 @@ export class AssetFX {
     }
     this.layoutDirty = true;
     return true;
+  }
+
+  _maybePlayEntryOnReady(cardEl, mediaEl, kind = '') {
+    if (!cardEl || !mediaEl) return;
+    if (!this._canRunFx()) return;
+    if (cardEl.dataset.fxInView !== '1' && !this.visibleCards.has(cardEl)) return;
+    if (this.activeDissolves.has(cardEl)) return;
+    const now = Date.now();
+    const last = this.lastPlayedAt.get(cardEl) || 0;
+    if (now - last < this.cooldownMs) return;
+    this._playEntry(cardEl, mediaEl, 420, true, kind);
   }
 
 
@@ -926,10 +954,14 @@ export class AssetFX {
     }
 
     const cards = [];
-    let sampled = 0;
+    const renderCandidates = [];
+    this.renderSampledCount = 0;
+    this.droppedByCapCount = 0;
+    this.readyInViewNotPlayedCount = 0;
     if (this.layoutDirty) this.cardRectCache = new WeakMap();
+    const cx = width * 0.5;
+    const cy = height * 0.5;
     this.visibleCards.forEach((card) => {
-      if (sampled >= this.maxRenderCards) return;
       if (!card?.isConnected) return;
       if (card.dataset.fxInView !== '1') return;
       if (card.dataset.fxReady !== '1') return;
@@ -951,9 +983,21 @@ export class AssetFX {
       const readyAt = Number(card.dataset.fxReadyAt || 0);
       const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;
       const energy = Math.min(1, 0.24 + selected * 0.5 + boosted * 0.26 + (typeCode == 1 ? 0.14 : 0.0));
-      cards.push([x1, y1, x2, y2, typeCode, selected, energy, readyFade]);
-      sampled += 1;
+      const tileCenterX = (x1 + x2) * 0.5;
+      const tileCenterY = (y1 + y2) * 0.5;
+      const dist2 = ((tileCenterX - cx) * (tileCenterX - cx)) + ((tileCenterY - cy) * (tileCenterY - cy));
+      renderCandidates.push([x1, y1, x2, y2, typeCode, selected, energy, readyFade, dist2]);
+
+      const last = this.lastPlayedAt.get(card) || 0;
+      if (!this.activeDissolves.has(card) && (Date.now() - last >= this.cooldownMs)) {
+        this.readyInViewNotPlayedCount += 1;
+      }
     });
+    const totalCandidates = renderCandidates.length;
+    renderCandidates.sort((a, b) => a[8] - b[8]);
+    renderCandidates.slice(0, this.maxRenderCards).forEach((row) => cards.push(row));
+    this.renderSampledCount = cards.length;
+    this.droppedByCapCount = Math.max(0, totalCandidates - cards.length);
     this.layoutDirty = false;
 
     const gl = this.gl;

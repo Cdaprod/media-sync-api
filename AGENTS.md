@@ -1029,3 +1029,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Render pass now packs tile params into a `Uint8Array` (RGBA: type, selected, energy, ready) and uploads as a 1D texture (`MAX_RECTS x 1`) each frame before drawing.
 - Shared renderer state now persists `tileParamTexture` across singleton reuse/restores, preserving the one-overlay/one-context architecture while reducing uniform churn.
 - Static tests were updated to assert packed tile-parameter texture symbols (`u_tile_params`, `tileParamTexture`, `Uint8Array`, `texImage2D` upload path).
+
+### Latest Implementation Notes (2026-02-24, deterministic entry catch-up + center-priority sampling)
+- Entry visuals are now unified through `_playEntry(...)`: every eligible tile runs the same top-to-bottom veil entry pass, with scanline boost applied only when `kind === 'video'`.
+- Ready-in-view catch-up added: when media flips ready in `bindCardMedia()`, `_maybePlayEntryOnReady()` now schedules a one-time entry for visible tiles that missed initial enqueue windows.
+- Overlay render sampling now prioritizes tiles nearest viewport center before applying `maxRenderCards`, reducing random-looking mixed FX in the same visible region.
+- Runtime diagnostics expanded (`readyInViewNotPlayedCount`, `renderSampledCount`, `droppedByCapCount`) and surfaced in `window.__assetfx_dbg`/`window.__assetfx_audit()`.
+- Static tests updated for unified entry hooks, center-priority sampling sort, and new audit counters.
