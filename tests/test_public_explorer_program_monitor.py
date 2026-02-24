@@ -179,9 +179,14 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'const rootId = ensureRootId(gridRoot);' in shader_module
     assert 'this.maxActiveEffects = 6;' in shader_module
     assert 'this.maxPendingDissolves = 60;' in shader_module
+    assert "cardEl.dataset.fxReady = '0';" in shader_module
+    assert "cardEl.dataset.ready = '1';" in shader_module
+    assert 'this.readyFadeMs = 220;' in shader_module
     assert 'this._pruneDisconnected();' in shader_module
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
+    assert "if (card.dataset.fxReady !== '1') return;" in shader_module
+    assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
 
 
 def test_explorer_play_dissolve_has_no_webgl_creation():

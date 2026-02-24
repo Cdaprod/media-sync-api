@@ -227,6 +227,7 @@ export class AssetFX {
     this.maxActiveEffects = 6;
     this.maxPendingDissolves = 60;
     this.maxRenderCards = 28;
+    this.readyFadeMs = 220;
 
     this.activeDissolves = new Set();
     this.pendingDissolves = [];
@@ -462,9 +463,34 @@ export class AssetFX {
   bindCardMedia(cardEl, imgEl, { kind = '' } = {}) {
     if (!cardEl || !imgEl) return;
     cardEl.dataset.fxKind = kind || '';
+    cardEl.dataset.fxReady = '0';
+    cardEl.dataset.ready = '0';
     this.trackViewport(cardEl, imgEl);
     if (kind === 'video') this.addScanline(cardEl);
     this.dissolve(cardEl, imgEl, { allowReplay: true });
+
+    if (typeof imgEl.__fxReadyCleanup === 'function') imgEl.__fxReadyCleanup();
+    const markReady = () => {
+      cardEl.dataset.fxReady = '1';
+      cardEl.dataset.ready = '1';
+      cardEl.dataset.fxReadyAt = String(performance.now());
+      if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
+    };
+    const markError = () => {
+      cardEl.dataset.fxReady = '0';
+      cardEl.dataset.ready = '0';
+      this.visibleCards.delete(cardEl);
+    };
+
+    if (imgEl.complete && imgEl.naturalWidth > 0) markReady();
+    else {
+      imgEl.addEventListener('load', markReady, { once: true });
+      imgEl.addEventListener('error', markError, { once: true });
+    }
+    imgEl.__fxReadyCleanup = () => {
+      imgEl.removeEventListener('load', markReady);
+      imgEl.removeEventListener('error', markError);
+    };
   }
 
   addScanline(cardEl) {
@@ -517,6 +543,7 @@ export class AssetFX {
   _enqueueDissolve(cardEl, imgEl, duration) {
     if (!cardEl || !imgEl || this.prefersReducedMotion) return;
     this._pruneDisconnected();
+    if (cardEl.dataset.fxReady !== '1') return;
     if (!this.visibleCards.has(cardEl)) return;
     if (this.activeDissolves.has(cardEl)) return;
     const exists = this.pendingDissolves.some((entry) => entry.cardEl === cardEl);
@@ -570,7 +597,7 @@ export class AssetFX {
     const next = visible ? '1' : '0';
     if (card.dataset.fxInView === next) return false;
     card.dataset.fxInView = next;
-    if (visible) this.visibleCards.add(card);
+    if (visible && card.dataset.fxReady === '1') this.visibleCards.add(card);
     else {
       this.visibleCards.delete(card);
       this.pendingDissolves = this.pendingDissolves.filter((entry) => entry.cardEl !== card);
@@ -772,6 +799,7 @@ export class AssetFX {
       if (sampled >= this.maxRenderCards) return;
       if (!card?.isConnected) return;
       if (card.dataset.fxInView !== '1') return;
+      if (card.dataset.fxReady !== '1') return;
       const cr = card.getBoundingClientRect();
       const x1 = (cr.left - rect.left) * dpr;
       const y1 = (cr.top - rect.top) * dpr;
@@ -781,7 +809,9 @@ export class AssetFX {
       if (!inBounds) return;
       const isVideo = card.dataset.fxKind === 'video' ? 1 : 0;
       const boosted = card.dataset.fxScanlineBoost === '1' ? 1 : 0;
-      cards.push([x1, y1, x2, y2, isVideo, boosted]);
+      const readyAt = Number(card.dataset.fxReadyAt || 0);
+      const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;
+      cards.push([x1, y1, x2, y2, isVideo, boosted, readyFade]);
       sampled += 1;
     });
 
@@ -802,7 +832,8 @@ export class AssetFX {
       rectData[i * 4 + 1] = row[1];
       rectData[i * 4 + 2] = row[2];
       rectData[i * 4 + 3] = row[3];
-      videoData[i] = row[4] ? (row[5] ? 1.0 : 0.82) : 0.25;
+      const base = row[4] ? (row[5] ? 1.0 : 0.82) : 0.25;
+      videoData[i] = base * row[6];
     });
 
     gl.uniform2f(gl.getUniformLocation(this.program, 'u_resolution'), width, height);

@@ -988,3 +988,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Dissolve finalize path now guarantees `activeDissolves` cleanup even on unexpected completion errors, preventing stuck active slots during long scroll sessions.
 - Expanded runtime diagnostics (`window.__assetfx_dbg` + `window.__assetfx_audit()`) with live queue/active/visible counters for leak/starvation inspection.
 - Updated static + gated Playwright tests to assert new queue hygiene symbols and runtime bounds (`pending <= 60`, `active <= 6`).
+
+### Latest Implementation Notes (2026-02-24, tile readiness-gated FX synchronization)
+- AssetFX card media binding now tracks per-tile readiness (`data-fx-ready` + `data-ready`) from image load/error events so overlay effects are deferred until thumbnails are actually decoded/ready.
+- Visible-card inclusion and dissolve queue enqueueing now require ready tiles, preventing shader passes from running over placeholder/unloaded cards during progressive media loading.
+- Added per-tile ready fade ramp (`fxReadyAt` + `readyFadeMs`) to smooth FX intensity as assets become ready, reducing apparent mismatch between DOM load timing and shader overlay timing.
+- Updated static tests to assert readiness-gating symbols and ready-fade calculations in the shader module.
