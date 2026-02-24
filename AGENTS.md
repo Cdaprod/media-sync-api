@@ -1048,3 +1048,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-02-24, maintenance: handoff refresh)
 - Performed a no-code maintenance pass to refresh agent handoff continuity and confirm repository instructions are still aligned with the latest `fxdebug`/AssetFX diagnostics work.
 - Verified tree state before/after the refresh to keep future commits anchored to an explicit AGENTS.md update checkpoint.
+
+
+### Latest Implementation Notes (2026-02-24, AssetFX uniform pass + no lateral sweep)
+- Simplified AssetFX tile shading to a single shared material path for all asset kinds so cards no longer render different per-type effects.
+- Removed video-only scanline boost/state plumbing (`addScanline`, `_boostScanline`, `fxScanlineBoost`) and normalized per-card energy math to selection-only contribution.
+- Replaced the entry veil animation from left-to-right scale transforms with a vertical fade-only dissolve to eliminate the right/left sweep behavior.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` to match the new unified `_playEntry(...)` signature and constant tile type packing.

@@ -158,13 +158,12 @@ def test_explorer_shader_asset_fx_wiring_present():
 
     assert 'export class AssetFX' in shader_module
     assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
-    assert 'addScanline(cardEl)' in shader_module
     assert 'pulse(cardEl' in shader_module
     assert 'dissolve(cardEl, imgEl' in shader_module
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
     assert 'bindCardMedia(cardEl, mediaEl, { kind = \'' in shader_module
     assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
-    assert "_playEntry(cardEl, imgEl, duration, allowReplay, kind = '')" in shader_module
+    assert "_playEntry(cardEl, imgEl, duration, allowReplay)" in shader_module
     assert "_maybePlayEntryOnReady(cardEl, mediaEl, kind = '')" in shader_module
     assert 'const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();' in shader_module
     assert "container.dataset.fxRendererId = String(++RENDERER_SEQ);" in shader_module
@@ -224,7 +223,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
     assert '.fx-debug-badge {' in shader_module
-    assert "const typeCode = kind === 'video' ? 1 : (kind === 'audio' ? 2 : 0);" in shader_module
+    assert "const typeCode = 0;" in shader_module
 
 
 def test_explorer_play_dissolve_has_no_webgl_creation():

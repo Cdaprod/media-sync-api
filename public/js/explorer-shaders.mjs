@@ -212,7 +212,6 @@ void main(){
     vec2 tileUV = (px - r.xy) / max(r.zw - r.xy, vec2(1.0));
     tileUV = clamp(tileUV, 0.0, 1.0);
     vec4 params = sampleParams(i);
-    float typeV = params.r * 2.0;
     float sel = params.g;
     float energy = params.b;
     float ready = params.a;
@@ -220,27 +219,18 @@ void main(){
 
     float edge = smoothstep(0.0, 0.08, tileUV.x) * smoothstep(0.0, 0.08, tileUV.y)
       * smoothstep(0.0, 0.08, 1.0 - tileUV.x) * smoothstep(0.0, 0.08, 1.0 - tileUV.y);
-    float radial = 1.0 - smoothstep(0.18, 0.92, length(tileUV - vec2(0.5)));
+    float centerGlow = 1.0 - smoothstep(0.1, 0.92, length(tileUV - vec2(0.5)));
     float grain = fract(sin(dot(tileUV * (48.0 + float(i)), vec2(12.9898, 78.233)) + u_time * 1.8) * 43758.5453);
 
-    // type-driven material basis
+    // single shared material pass for all assets (no type-specific sweeps)
     vec3 base = mix(vec3(0.07, 0.17, 0.28), vec3(0.10, 0.26, 0.42), edge);
-    float videoMix = smoothstep(0.65, 1.35, typeV);
-    float audioMix = smoothstep(1.55, 2.3, typeV);
-
-    float scan = (0.5 + 0.5 * sin((tileUV.y * 580.0) + u_time * 2.4)) * videoMix;
-    float shimmer = (0.5 + 0.5 * sin((tileUV.x * 52.0) + u_time * 4.4)) * audioMix;
-    float imageVignette = smoothstep(0.95, 0.28, length(tileUV - vec2(0.5))) * (1.0 - videoMix) * (1.0 - audioMix);
-
-    // selection glass pass
-    float streak = smoothstep(0.44, 0.5, fract(tileUV.x + tileUV.y * 0.35 + u_time * 0.22));
-    float fresnel = pow(1.0 - clamp(dot(normalize(tileUV - vec2(0.5)), vec2(0.65, 0.35)), 0.0, 1.0), 2.0);
-    vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.42 + streak * 0.22) * sel;
+    float verticalPulse = 0.5 + 0.5 * sin((tileUV.y * 500.0) + u_time * 2.2);
+    float fresnel = pow(1.0 - clamp(dot(normalize(tileUV - vec2(0.5)), vec2(0.0, 1.0)), 0.0, 1.0), 2.0);
+    vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.38 + verticalPulse * 0.2) * sel;
 
     vec3 material = base
-      + vec3(0.05, 0.11, 0.18) * imageVignette
-      + vec3(0.18, 0.42, 0.68) * scan
-      + vec3(0.26, 0.36, 0.72) * shimmer
+      + vec3(0.07, 0.16, 0.24) * centerGlow
+      + vec3(0.18, 0.42, 0.68) * verticalPulse * 0.35
       + glass
       + vec3((grain - 0.5) * 0.045);
 
@@ -610,7 +600,6 @@ export class AssetFX {
     cardEl.dataset.fxReady = '0';
     cardEl.dataset.ready = '0';
     this.trackViewport(cardEl, mediaEl);
-    if (kind === 'video') this.addScanline(cardEl);
     this.dissolve(cardEl, mediaEl, { allowReplay: true });
 
     if (typeof mediaEl.__fxReadyCleanup === 'function') mediaEl.__fxReadyCleanup();
@@ -663,11 +652,6 @@ export class AssetFX {
     };
   }
 
-  addScanline(cardEl) {
-    if (!cardEl) return;
-    cardEl.dataset.fxScanline = '1';
-    this._scheduleReplaySweep();
-  }
 
   pulse(cardEl, { duration = 520 } = {}) {
     if (!cardEl) return;
@@ -684,7 +668,7 @@ export class AssetFX {
 
     const play = () => {
       if (imgEl.dataset.thumbUrl && imgEl.getAttribute('src') === imgEl.dataset.thumbFallback) return;
-      this._playEntry(cardEl, imgEl, duration, allowReplay, cardEl.dataset.fxKind || '');
+      this._playEntry(cardEl, imgEl, duration, allowReplay);
     };
 
     const onLoad = () => play();
@@ -696,17 +680,17 @@ export class AssetFX {
   }
 
   _playDissolve(cardEl, imgEl, duration, allowReplay) {
-    this._playEntry(cardEl, imgEl, duration, allowReplay, cardEl?.dataset?.fxKind || '');
+    this._playEntry(cardEl, imgEl, duration, allowReplay);
   }
 
-  _playEntry(cardEl, imgEl, duration, allowReplay, kind = '') {
+  _playEntry(cardEl, imgEl, duration, allowReplay) {
     if (!this._canRunFx()) return;
     const now = Date.now();
     const last = this.lastPlayedAt.get(cardEl) || 0;
     if (allowReplay && now - last < this.cooldownMs) return;
     this.lastPlayedAt.set(cardEl, now);
 
-    this._enqueueDissolve(cardEl, imgEl, duration, kind);
+    this._enqueueDissolve(cardEl, imgEl, duration);
   }
 
 
@@ -714,7 +698,7 @@ export class AssetFX {
     return !this.prefersReducedMotion && !this.liteFx;
   }
 
-  _enqueueDissolve(cardEl, imgEl, duration, kind = '') {
+  _enqueueDissolve(cardEl, imgEl, duration) {
     if (!cardEl || !imgEl || this.prefersReducedMotion) return;
     this._pruneDisconnected();
     if (cardEl.dataset.fxReady !== '1') return;
@@ -722,7 +706,7 @@ export class AssetFX {
     if (this.activeDissolves.has(cardEl)) return;
     const exists = this.pendingDissolves.some((entry) => entry.cardEl === cardEl);
     if (exists) return;
-    this.pendingDissolves.push({ cardEl, imgEl, duration, kind, queuedAt: performance.now() });
+    this.pendingDissolves.push({ cardEl, imgEl, duration, queuedAt: performance.now() });
     if (this.pendingDissolves.length > this.maxPendingDissolves) {
       this.pendingDissolves.splice(0, this.pendingDissolves.length - this.maxPendingDissolves);
     }
@@ -734,7 +718,7 @@ export class AssetFX {
     while (this.pendingDissolves.length && this.activeDissolves.size < this.maxActiveEffects) {
       const task = this.pendingDissolves.pop();
       if (!task?.cardEl?.isConnected || !task?.imgEl?.isConnected) continue;
-      const { cardEl, duration, kind } = task;
+      const { cardEl, duration } = task;
       if (!this.visibleCards.has(cardEl)) continue;
       this.activeDissolves.add(cardEl);
 
@@ -742,7 +726,6 @@ export class AssetFX {
       const veil = createNode('div', 'fx-dissolve-veil');
       veil.style.transitionDuration = `${Math.max(180, duration)}ms`;
       cardEl.appendChild(veil);
-      if (kind === 'video') this._boostScanline(cardEl, Math.max(200, duration * 0.7));
 
       const finalize = () => {
         veil.remove();
@@ -789,7 +772,7 @@ export class AssetFX {
     const now = Date.now();
     const last = this.lastPlayedAt.get(cardEl) || 0;
     if (now - last < this.cooldownMs) return;
-    this._playEntry(cardEl, mediaEl, 420, true, kind);
+    this._playEntry(cardEl, mediaEl, 420, true);
   }
 
 
@@ -928,12 +911,7 @@ export class AssetFX {
     setTimeout(() => hint.remove(), 430);
   }
 
-  _boostScanline(cardEl, duration = 320) {
-    cardEl.dataset.fxScanlineBoost = '1';
-    setTimeout(() => {
-      if (cardEl?.isConnected) cardEl.dataset.fxScanlineBoost = '0';
-    }, duration);
-  }
+
 
   _startLoop() {
     if (this.raf || !this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
@@ -1005,13 +983,11 @@ export class AssetFX {
       const y2 = (cr.bottom - rect.top) * dpr;
       const inBounds = x2 > 0 && y2 > 0 && x1 < width && y1 < height;
       if (!inBounds) return;
-      const kind = card.dataset.fxKind || '';
-      const typeCode = kind === 'video' ? 1 : (kind === 'audio' ? 2 : 0);
+      const typeCode = 0;
       const selected = card.classList.contains('is-selected') ? 1 : 0;
-      const boosted = card.dataset.fxScanlineBoost === '1' ? 1 : 0;
       const readyAt = Number(card.dataset.fxReadyAt || 0);
       const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;
-      const energy = Math.min(1, 0.24 + selected * 0.5 + boosted * 0.26 + (typeCode == 1 ? 0.14 : 0.0));
+      const energy = Math.min(1, 0.24 + selected * 0.5);
       const tileCenterX = (x1 + x2) * 0.5;
       const tileCenterY = (y1 + y2) * 0.5;
       const dist2 = ((tileCenterX - cx) * (tileCenterX - cx)) + ((tileCenterY - cy) * (tileCenterY - cy));
@@ -1116,12 +1092,11 @@ export class AssetFX {
         border-radius: inherit;
         pointer-events: none;
         z-index: 3;
-        background: linear-gradient(130deg, rgba(20, 42, 76, 0.95), rgba(66, 129, 182, 0.66), rgba(90, 219, 255, 0.22));
-        transform-origin: left center;
-        transform: scaleX(1);
-        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+        background: linear-gradient(180deg, rgba(20, 42, 76, 0.95), rgba(66, 129, 182, 0.66), rgba(90, 219, 255, 0.22));
+        transition: opacity 320ms ease;
+        opacity: 0.74;
       }
-      .fx-dissolve-veil.is-active { transform: scaleX(0.01); }
+      .fx-dissolve-veil.is-active { opacity: 0; }
       .asset.fx-entry-active {
         transform: translateY(-1px) scale(1.01);
         transition: transform 160ms ease-out;
