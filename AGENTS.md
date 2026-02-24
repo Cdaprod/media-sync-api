@@ -974,3 +974,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `window.__assetfx_audit()` to report overlay count, estimated active WebGL owner, context/render counters, and recent `getContext` call traces with root/canvas identifiers for fast console diagnosis.
 - Root/canvas identity is now explicit (`data-assetfx-root-id`, `data-assetfx-overlay-id`), and context-call tracing (`markContextCall`) records those IDs so repeated initialization paths can be pinpointed.
 - Static tests now assert owner-lock + audit wiring and include an opt-in Playwright runtime singleton assertion test (`RUN_PLAYWRIGHT_E2E=1`).
+
+### Latest Implementation Notes (2026-02-24, opacity-storm throttling + lite FX mode)
+- AssetFX dissolve replay now runs through a capped global queue (`maxActiveEffects = 6`) to prevent large scroll bursts from animating dozens of cards at once; replay requests enqueue and drain as active dissolves complete.
+- Removed per-thumbnail opacity writes from `_playDissolve`; dissolve now uses queued veil + transform-only entry emphasis (`.asset.fx-entry-active`) to reduce compositor pressure during scroll.
+- Added visibility/render workload limits (`visibleCards` tracking + `maxRenderCards` cap) so overlay RAF sampling targets a bounded visible subset instead of scanning all tracked cards each frame.
+- Added low-motion controls: respects `prefers-reduced-motion` and URL `?fx=lite` mode to suppress heavy replay hints/dissolve behavior while keeping base grid interactions intact.
+- Expanded static explorer tests to assert throttling/lite-mode symbols and ensure `_playDissolve` no longer performs image opacity style transitions.

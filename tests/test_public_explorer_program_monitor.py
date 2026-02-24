@@ -177,6 +177,9 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'FX_GLOBAL.__assetfx_global_context_owner' in shader_module
     assert "console.info('AssetFX: prevented second WebGL context; reusing global overlay');" in shader_module
     assert 'const rootId = ensureRootId(gridRoot);' in shader_module
+    assert 'this.maxActiveEffects = 6;' in shader_module
+    assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
+    assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
 
 
 def test_explorer_play_dissolve_has_no_webgl_creation():
@@ -186,6 +189,7 @@ def test_explorer_play_dissolve_has_no_webgl_creation():
     block = shader_module[start:end]
     assert 'getContext(' not in block
     assert "createElement('canvas')" not in block
+    assert 'imgEl.style.opacity' not in block
 
 def test_explorer_selection_toggle_does_not_full_rerender():
     html = Path('public/explorer.html').read_text(encoding='utf-8')

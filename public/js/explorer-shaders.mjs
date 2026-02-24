@@ -215,8 +215,21 @@ export class AssetFX {
 
     this.boundGrids = new WeakSet();
     this.trackedCards = new Set();
+    this.visibleCards = new Set();
     this.lastPlayedAt = new WeakMap();
     this.cooldownMs = 1000;
+    this.maxActiveEffects = 6;
+    this.maxRenderCards = 28;
+
+    this.activeDissolves = new Set();
+    this.pendingDissolves = [];
+
+    this.prefersReducedMotion = typeof window !== 'undefined'
+      ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
+      : false;
+    this.liteFx = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('fx') === 'lite'
+      : false;
 
     this.visibilityObserver = null;
     this.scrollReplayScheduled = false;
@@ -374,9 +387,13 @@ export class AssetFX {
       this.visibilityObserver = null;
     }
     this.trackedCards.clear();
+    this.visibleCards.clear();
+    this.activeDissolves.clear();
+    this.pendingDissolves = [];
     this.lastPlayedAt = new WeakMap();
     this.boundGrids = new WeakSet();
     this.pointerState.clear();
+    this.pendingDissolves = [];
   }
 
   attachGrid(gridRoot, cardSelector = '.asset') {
@@ -415,6 +432,7 @@ export class AssetFX {
       this.visibilityObserver = null;
     }
     this.pointerState.clear();
+    this.pendingDissolves = [];
     if (!this.trackedCards.size) {
       cancelAnimationFrame(this.raf);
       this.raf = 0;
@@ -428,6 +446,7 @@ export class AssetFX {
     if (!cardEl) return;
     if (imgEl) cardEl.__fxThumb = imgEl;
     this.trackedCards.add(cardEl);
+    if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
     if (this.visibilityObserver) this.visibilityObserver.observe(cardEl);
     if (this.fallbackSweepEnabled) this._scheduleReplaySweep();
   }
@@ -473,25 +492,63 @@ export class AssetFX {
   }
 
   _playDissolve(cardEl, imgEl, duration, allowReplay) {
+    if (!this._canRunFx()) return;
     const now = Date.now();
     const last = this.lastPlayedAt.get(cardEl) || 0;
     if (allowReplay && now - last < this.cooldownMs) return;
     this.lastPlayedAt.set(cardEl, now);
 
-    ensureRelative(cardEl);
-    const veil = createNode('div', 'fx-dissolve-veil');
-    veil.style.transitionDuration = `${Math.max(180, duration)}ms`;
-    cardEl.appendChild(veil);
-    this._boostScanline(cardEl, Math.max(200, duration * 0.7));
+    this._enqueueDissolve(cardEl, imgEl, duration);
+  }
 
-    requestAnimationFrame(() => {
-      veil.classList.add('is-active');
-      setTimeout(() => veil.remove(), Math.max(200, duration) + 120);
-    });
 
-    imgEl.style.opacity = '0';
-    imgEl.style.transition = 'opacity 120ms ease';
-    requestAnimationFrame(() => { imgEl.style.opacity = '1'; });
+  _canRunFx() {
+    return !this.prefersReducedMotion && !this.liteFx;
+  }
+
+  _enqueueDissolve(cardEl, imgEl, duration) {
+    if (!cardEl || !imgEl || this.prefersReducedMotion) return;
+    if (this.activeDissolves.has(cardEl)) return;
+    const exists = this.pendingDissolves.some((entry) => entry.cardEl === cardEl);
+    if (exists) return;
+    this.pendingDissolves.push({ cardEl, imgEl, duration });
+    this._runNextDissolve();
+  }
+
+  _runNextDissolve() {
+    while (this.pendingDissolves.length && this.activeDissolves.size < this.maxActiveEffects) {
+      const task = this.pendingDissolves.shift();
+      if (!task?.cardEl?.isConnected || !task?.imgEl?.isConnected) continue;
+      const { cardEl, duration } = task;
+      this.activeDissolves.add(cardEl);
+
+      ensureRelative(cardEl);
+      const veil = createNode('div', 'fx-dissolve-veil');
+      veil.style.transitionDuration = `${Math.max(180, duration)}ms`;
+      cardEl.appendChild(veil);
+      this._boostScanline(cardEl, Math.max(200, duration * 0.7));
+
+      cardEl.classList.add('fx-entry-active');
+      requestAnimationFrame(() => {
+        veil.classList.add('is-active');
+        const doneMs = Math.max(200, duration) + 120;
+        setTimeout(() => {
+          veil.remove();
+          cardEl.classList.remove('fx-entry-active');
+          this.activeDissolves.delete(cardEl);
+          this._runNextDissolve();
+        }, doneMs);
+      });
+    }
+  }
+
+  _setCardInView(card, visible) {
+    const next = visible ? '1' : '0';
+    if (card.dataset.fxInView === next) return false;
+    card.dataset.fxInView = next;
+    if (visible) this.visibleCards.add(card);
+    else this.visibleCards.delete(card);
+    return true;
   }
 
   _ensureObserver(rootEl) {
@@ -512,15 +569,13 @@ export class AssetFX {
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
         if (!img) continue;
         if (entry.isIntersecting && entry.intersectionRatio > 0.35) {
-          if (card.dataset.fxInView !== '1') {
-            card.dataset.fxInView = '1';
-            if (img.complete && img.naturalWidth > 0) {
-              this._playDissolve(card, img, 420, true);
-              this._showVisibleHint(card);
-            }
+          const entered = this._setCardInView(card, true);
+          if (entered && img.complete && img.naturalWidth > 0) {
+            if (this._canRunFx()) this._playDissolve(card, img, 420, true);
+            if (!this.prefersReducedMotion) this._showVisibleHint(card);
           }
         } else {
-          card.dataset.fxInView = '0';
+          this._setCardInView(card, false);
         }
       }
     }, { root: rootEl, threshold: [0.35, 0.65] });
@@ -593,21 +648,21 @@ export class AssetFX {
       const rect = card.getBoundingClientRect();
       const overlap = Math.min(rect.bottom, rootRect.bottom) - Math.max(rect.top, rootRect.top);
       const visible = overlap > minOverlap;
-      const wasVisible = card.dataset.fxInView === '1';
-      if (visible && !wasVisible) {
-        card.dataset.fxInView = '1';
+      if (visible) {
+        const entered = this._setCardInView(card, true);
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
-        if (img?.complete && img.naturalWidth > 0) {
-          this._playDissolve(card, img, 420, true);
-          this._showVisibleHint(card);
+        if (entered && img?.complete && img.naturalWidth > 0) {
+          if (this._canRunFx()) this._playDissolve(card, img, 420, true);
+          if (!this.prefersReducedMotion) this._showVisibleHint(card);
         }
-      } else if (!visible && wasVisible) {
-        card.dataset.fxInView = '0';
+      } else {
+        this._setCardInView(card, false);
       }
     });
   }
 
   _showVisibleHint(cardEl) {
+    if (this.prefersReducedMotion || this.liteFx) return;
     ensureRelative(cardEl);
     const hint = createNode('div', 'fx-visible-hint');
     cardEl.appendChild(hint);
@@ -667,7 +722,9 @@ export class AssetFX {
     }
 
     const cards = [];
-    this.trackedCards.forEach((card) => {
+    let sampled = 0;
+    this.visibleCards.forEach((card) => {
+      if (sampled >= this.maxRenderCards) return;
       if (!card?.isConnected) return;
       if (card.dataset.fxInView !== '1') return;
       const cr = card.getBoundingClientRect();
@@ -680,6 +737,7 @@ export class AssetFX {
       const isVideo = card.dataset.fxKind === 'video' ? 1 : 0;
       const boosted = card.dataset.fxScanlineBoost === '1' ? 1 : 0;
       cards.push([x1, y1, x2, y2, isVideo, boosted]);
+      sampled += 1;
     });
 
     const gl = this.gl;
@@ -731,11 +789,16 @@ export class AssetFX {
         border-radius: inherit;
         pointer-events: none;
         z-index: 3;
-        opacity: 0.9;
         background: linear-gradient(130deg, rgba(20, 42, 76, 0.95), rgba(66, 129, 182, 0.66), rgba(90, 219, 255, 0.22));
-        transition: opacity 420ms ease;
+        transform-origin: left center;
+        transform: scaleX(1);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
       }
-      .fx-dissolve-veil.is-active { opacity: 0; }
+      .fx-dissolve-veil.is-active { transform: scaleX(0.01); }
+      .asset.fx-entry-active {
+        transform: translateY(-1px) scale(1.01);
+        transition: transform 160ms ease-out;
+      }
       .fx-visible-hint {
         position: absolute;
         inset: 0;
@@ -755,6 +818,10 @@ export class AssetFX {
         0% { opacity: 0; transform: scale(0.99); }
         30% { opacity: 0.9; }
         100% { opacity: 0; transform: scale(1.01); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .fx-selection-pulse, .fx-visible-hint, .fx-dissolve-veil { animation: none !important; transition: none !important; }
+        .asset.fx-entry-active { transform: none !important; }
       }
     `;
     document.head.appendChild(style);
