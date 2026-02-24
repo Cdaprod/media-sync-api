@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+
+import pytest
 
 
 def test_explorer_includes_program_monitor_button():
@@ -168,8 +171,12 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
     assert 'window.__assetfx_dbg = {' in shader_module
     assert 'get calls() { return [...__DBG_GL_CONTEXT_CALLS]; }' in shader_module
-    assert "markContextCall('AssetFX.init:webgl');" in shader_module
+    assert "markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });" in shader_module
     assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
+    assert 'window.__assetfx_audit = () =>' in shader_module
+    assert 'FX_GLOBAL.__assetfx_global_context_owner' in shader_module
+    assert "console.info('AssetFX: prevented second WebGL context; reusing global overlay');" in shader_module
+    assert 'const rootId = ensureRootId(gridRoot);' in shader_module
 
 
 def test_explorer_play_dissolve_has_no_webgl_creation():
@@ -198,3 +205,33 @@ def test_explorer_shared_renderer_singleton_symbols_present():
     assert "if (this.container && RENDERERS.has(this.container))" in shader_module
     assert 'RENDERERS.set(container, {' in shader_module
     assert 'if (this.container && RENDERERS.has(this.container)) RENDERERS.delete(this.container);' in shader_module
+
+
+@pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")
+def test_explorer_assetfx_context_singleton_runtime_with_playwright():
+    playwright = pytest.importorskip("playwright.sync_api")
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        try:
+            page.goto("http://127.0.0.1:8787/public/explorer.html", wait_until="domcontentloaded")
+            page.wait_for_timeout(1200)
+            page.evaluate("""() => {
+              const root = document.getElementById('mediaGridRoot');
+              if (!root) return;
+              for (let i = 0; i < 6; i++) {
+                root.scrollTop = i % 2 ? 0 : root.scrollHeight;
+                root.dispatchEvent(new Event('scroll'));
+              }
+              document.querySelectorAll('input[type=\"checkbox\"][data-select-key]').forEach((el, idx) => {
+                if (idx < 5) el.click();
+              });
+            }""")
+            page.wait_for_timeout(500)
+            contexts = page.evaluate("window.__assetfx_dbg?.contexts ?? null")
+            overlays = page.evaluate("document.querySelectorAll('canvas[data-assetfx=\"overlay\"]').length")
+            assert contexts is not None
+            assert contexts <= 1
+            assert overlays <= 1
+        finally:
+            browser.close()

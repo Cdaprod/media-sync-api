@@ -39,27 +39,84 @@ const FX_GLOBAL = typeof window !== 'undefined' ? window : globalThis;
 const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();
 FX_GLOBAL.__assetfx_renderers = RENDERERS;
 let RENDERER_SEQ = Number(FX_GLOBAL.__assetfx_renderer_seq || 0);
+let OVERLAY_SEQ = Number(FX_GLOBAL.__assetfx_overlay_seq || 0);
+let ROOT_SEQ = Number(FX_GLOBAL.__assetfx_root_seq || 0);
 let __DBG_GL_CONTEXTS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_contexts || 0);
 let __DBG_RENDERERS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_renderers || 0);
 const __DBG_GL_CONTEXT_CALLS = FX_GLOBAL.__assetfx_dbg_context_calls || [];
+let __DBG_PREVENTED_SECOND_CONTEXT = Number(FX_GLOBAL.__assetfx_dbg_prevented_second_context || 0);
 
-function markContextCall(site) {
+function ensureOverlayId(canvas) {
+  if (!canvas) return '';
+  if (!canvas.dataset.assetfxOverlayId) {
+    canvas.dataset.assetfxOverlayId = `assetfx-overlay-${++OVERLAY_SEQ}`;
+    FX_GLOBAL.__assetfx_overlay_seq = OVERLAY_SEQ;
+  }
+  return canvas.dataset.assetfxOverlayId;
+}
+
+function ensureRootId(rootEl) {
+  if (!rootEl) return '';
+  if (!rootEl.dataset.assetfxRootId) {
+    rootEl.dataset.assetfxRootId = `assetfx-root-${++ROOT_SEQ}`;
+    FX_GLOBAL.__assetfx_root_seq = ROOT_SEQ;
+  }
+  return rootEl.dataset.assetfxRootId;
+}
+
+function markContextCall(site, extra = {}) {
   __DBG_GL_CONTEXTS_CREATED += 1;
   FX_GLOBAL.__assetfx_dbg_contexts = __DBG_GL_CONTEXTS_CREATED;
   __DBG_GL_CONTEXT_CALLS.push({
     site,
+    ...extra,
     at: new Date().toISOString(),
     stack: (new Error('assetfx-getcontext')).stack || '',
   });
-  if (__DBG_GL_CONTEXT_CALLS.length > 12) __DBG_GL_CONTEXT_CALLS.shift();
+  if (__DBG_GL_CONTEXT_CALLS.length > 20) __DBG_GL_CONTEXT_CALLS.shift();
   FX_GLOBAL.__assetfx_dbg_context_calls = __DBG_GL_CONTEXT_CALLS;
+}
+
+function setGlobalContextOwner({ rootEl, canvasEl, stack = '' } = {}) {
+  const rootId = ensureRootId(rootEl);
+  const canvasId = ensureOverlayId(canvasEl);
+  FX_GLOBAL.__assetfx_global_context_owner = {
+    canvasId,
+    rootId,
+    createdAt: FX_GLOBAL.__assetfx_global_context_owner?.createdAt || new Date().toISOString(),
+    stack: stack || FX_GLOBAL.__assetfx_global_context_owner?.stack || '',
+    canvasEl,
+    rootEl,
+  };
 }
 
 if (typeof window !== 'undefined') {
   window.__assetfx_dbg = {
     get contexts() { return __DBG_GL_CONTEXTS_CREATED; },
     get renderers() { return __DBG_RENDERERS_CREATED; },
+    get prevented() { return __DBG_PREVENTED_SECOND_CONTEXT; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
+  };
+  window.__assetfx_audit = () => {
+    const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
+    const owner = FX_GLOBAL.__assetfx_global_context_owner || null;
+    const report = {
+      overlays: overlays.length,
+      overlayIds: overlays.map((el) => el.dataset.assetfxOverlayId || null),
+      roots: overlays.map((el) => el.parentElement?.dataset?.assetfxRootId || null),
+      estimatedWebglCanvases: owner?.canvasEl?.isConnected ? 1 : 0,
+      contexts: __DBG_GL_CONTEXTS_CREATED,
+      renderers: __DBG_RENDERERS_CREATED,
+      preventedSecondContext: __DBG_PREVENTED_SECOND_CONTEXT,
+      owner: owner ? {
+        canvasId: owner.canvasId,
+        rootId: owner.rootId,
+        createdAt: owner.createdAt,
+      } : null,
+      calls: __DBG_GL_CONTEXT_CALLS.slice(-10),
+    };
+    console.table(report.calls.map((entry, i) => ({ idx: i, site: entry.site, rootId: entry.rootId || '', canvasId: entry.canvasId || '', at: entry.at })));
+    return report;
   };
 }
 const FRAG = `
@@ -177,6 +234,7 @@ export class AssetFX {
 
   init(container) {
     if (!container) return;
+    const rootId = ensureRootId(container);
     if (this.container === container && this.overlay?.isConnected && this.gl) {
       this._startLoop();
       return;
@@ -191,6 +249,34 @@ export class AssetFX {
       this.raf = shared.raf;
       return;
     }
+
+    const owner = FX_GLOBAL.__assetfx_global_context_owner;
+    if (owner?.canvasEl?.isConnected && owner?.rootEl?.isConnected) {
+      const ownerShared = this._getRenderer(owner.rootEl);
+      if (ownerShared) {
+        if (owner.canvasEl.parentElement !== container) {
+          ensureRelative(container);
+          container.appendChild(owner.canvasEl);
+        }
+        this.container = container;
+        this.overlay = owner.canvasEl;
+        this.gl = ownerShared.gl;
+        this.program = ownerShared.program;
+        this.quad = ownerShared.quad;
+        this.raf = ownerShared.raf;
+        RENDERERS.set(container, ownerShared);
+        setGlobalContextOwner({ rootEl: container, canvasEl: owner.canvasEl, stack: owner.stack });
+        if (!FX_GLOBAL.__assetfx_warned_second_context) {
+          console.info('AssetFX: prevented second WebGL context; reusing global overlay');
+          FX_GLOBAL.__assetfx_warned_second_context = true;
+        }
+        __DBG_PREVENTED_SECOND_CONTEXT += 1;
+        FX_GLOBAL.__assetfx_dbg_prevented_second_context = __DBG_PREVENTED_SECOND_CONTEXT;
+        this._startLoop();
+        return;
+      }
+    }
+
     this.destroyRenderer();
 
     this.container = container;
@@ -211,6 +297,7 @@ export class AssetFX {
     });
     if (!canvas.isConnected || canvas.parentElement !== container) container.appendChild(canvas);
     this.overlay = canvas;
+    ensureOverlayId(canvas);
     container.dataset.fxRendererId = String(++RENDERER_SEQ);
     FX_GLOBAL.__assetfx_renderer_seq = RENDERER_SEQ;
 
@@ -218,7 +305,7 @@ export class AssetFX {
     FX_GLOBAL.__assetfx_dbg_renderers = __DBG_RENDERERS_CREATED;
     this._saveRenderer(container);
 
-    markContextCall('AssetFX.init:webgl');
+    markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false, premultipliedAlpha: false });
     if (!gl) {
       this.gl = null;
@@ -227,6 +314,7 @@ export class AssetFX {
       return;
     }
     this.gl = gl;
+    setGlobalContextOwner({ rootEl: container, canvasEl: canvas, stack: (new Error('assetfx-context-owner')).stack || '' });
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -266,6 +354,8 @@ export class AssetFX {
   }
 
   destroyRenderer() {
+    const owner = FX_GLOBAL.__assetfx_global_context_owner;
+    if (owner?.canvasEl && this.overlay && owner.canvasEl === this.overlay) FX_GLOBAL.__assetfx_global_context_owner = null;
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     if (this.overlay) this.overlay.remove();
@@ -291,12 +381,18 @@ export class AssetFX {
 
   attachGrid(gridRoot, cardSelector = '.asset') {
     if (!gridRoot) return;
+    const rootId = ensureRootId(gridRoot);
     if (this._attachedGridRoot === gridRoot) return;
     this.detachGrid();
     this._attachedGridRoot = gridRoot;
     this._attachedCardSelector = cardSelector;
     this.boundGrids.add(gridRoot);
     this.init(gridRoot);
+
+    const owner = FX_GLOBAL.__assetfx_global_context_owner;
+    if (owner && owner.rootId && owner.rootId !== rootId) {
+      setGlobalContextOwner({ rootEl: gridRoot, canvasEl: this.overlay, stack: owner.stack });
+    }
 
     gridRoot.addEventListener('scroll', this._boundScheduleReplay, { passive: true });
     gridRoot.addEventListener('touchmove', this._boundScheduleReplay, { passive: true });

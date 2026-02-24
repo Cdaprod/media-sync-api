@@ -968,3 +968,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `markContextCall()` instrumentation for each WebGL context creation attempt and exposed recent call metadata via `window.__assetfx_dbg.calls` for runtime tracing when diagnosing context explosion regressions.
 - Explorer now reuses a global `window.__assetfx_instance` singleton `AssetFX` instance to avoid duplicate renderer objects if the module script executes again.
 - Updated static explorer tests to assert global renderer-map wiring, context-call instrumentation markers, and singleton instance reuse wiring in `public/explorer.html`.
+
+### Latest Implementation Notes (2026-02-24, page-level context owner lock + runtime audit)
+- Added a page-level AssetFX WebGL owner lock (`window.__assetfx_global_context_owner`) so `init()` prevents a second context when attach/init is invoked against a different root; the existing global overlay/context is reattached and reused instead.
+- Added `window.__assetfx_audit()` to report overlay count, estimated active WebGL owner, context/render counters, and recent `getContext` call traces with root/canvas identifiers for fast console diagnosis.
+- Root/canvas identity is now explicit (`data-assetfx-root-id`, `data-assetfx-overlay-id`), and context-call tracing (`markContextCall`) records those IDs so repeated initialization paths can be pinpointed.
+- Static tests now assert owner-lock + audit wiring and include an opt-in Playwright runtime singleton assertion test (`RUN_PLAYWRIGHT_E2E=1`).
