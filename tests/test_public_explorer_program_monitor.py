@@ -163,6 +163,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
     assert 'bindCardMedia(cardEl, mediaEl, { kind = \'' in shader_module
     assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
+    assert '_playExit(cardEl, { duration = 260 } = {})' in shader_module
     assert "_playEntry(cardEl, imgEl, duration, allowReplay)" in shader_module
     assert "_maybePlayEntryOnReady(cardEl, mediaEl, kind = '')" in shader_module
     assert 'const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();' in shader_module
@@ -172,6 +173,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '@keyframes fx-visible-hint' in shader_module
     assert '@keyframes fx-selection-pulse' in shader_module
     assert '.fx-debug-overlay {' in shader_module
+    assert '.fx-exit-veil {' in shader_module
+    assert '@keyframes fx-exit-veil' in shader_module
 
 
 
@@ -235,6 +238,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "debugOverlay.dataset.assetfx = 'debug';" in shader_module
     assert '_renderDebugRects(cards, width, height);' in shader_module
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
+    assert 'this.lastExitedAt = new WeakMap();' in shader_module
+    assert "if (card.dataset.fxReady === '1') this._playExit(card);" in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
     assert '.fx-debug-badge {' in shader_module
     assert "const typeCode = 0;" in shader_module

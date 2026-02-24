@@ -310,6 +310,7 @@ export class AssetFX {
     this.trackedCards = new Set();
     this.visibleCards = new Set();
     this.lastPlayedAt = new WeakMap();
+    this.lastExitedAt = new WeakMap();
     this.cooldownMs = 1000;
     this.maxActiveEffects = 6;
     this.maxPendingDissolves = 60;
@@ -559,6 +560,7 @@ export class AssetFX {
     this.renderCandidatesCount = 0;
     this.droppedByCapCount = 0;
     this.lastPlayedAt = new WeakMap();
+    this.lastExitedAt = new WeakMap();
     this.boundGrids = new WeakSet();
     this.pointerState.clear();
     this.pendingDissolves = [];
@@ -800,6 +802,7 @@ export class AssetFX {
     card.dataset.fxInView = next;
     if (visible && card.dataset.fxReady === '1') this.visibleCards.add(card);
     else {
+      if (card.dataset.fxReady === '1') this._playExit(card);
       this.visibleCards.delete(card);
       this.sampledCardsUntil.delete(card);
       this.pendingDissolves = this.pendingDissolves.filter((entry) => entry.cardEl !== card);
@@ -957,6 +960,19 @@ export class AssetFX {
   }
 
 
+
+  _playExit(cardEl, { duration = 260 } = {}) {
+    if (!cardEl || !this._canRunFx()) return;
+    const now = Date.now();
+    const last = this.lastExitedAt.get(cardEl) || 0;
+    if (now - last < Math.max(420, this.cooldownMs * 0.6)) return;
+    this.lastExitedAt.set(cardEl, now);
+    ensureRelative(cardEl);
+    const veil = createNode('div', 'fx-exit-veil');
+    veil.style.animationDuration = `${Math.max(180, duration)}ms`;
+    cardEl.appendChild(veil);
+    setTimeout(() => veil.remove(), Math.max(180, duration) + 80);
+  }
 
   _startLoop() {
     if (this.raf || !this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
@@ -1191,6 +1207,15 @@ export class AssetFX {
         transform: translateY(-1px) scale(1.01);
         transition: transform 160ms ease-out;
       }
+      .fx-exit-veil {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        z-index: 5;
+        background: linear-gradient(180deg, rgba(5, 9, 16, 0.56), rgba(8, 18, 32, 0.08));
+        animation: fx-exit-veil 260ms ease-out forwards;
+      }
       .fx-visible-hint {
         position: absolute;
         inset: 0;
@@ -1226,13 +1251,18 @@ export class AssetFX {
         70% { opacity: 0.55; transform: scale(1.02); box-shadow: 0 0 0 12px rgba(80,220,255,0.0); }
         100% { opacity: 0; transform: scale(1.04); box-shadow: 0 0 0 18px rgba(80,220,255,0.0); }
       }
+      @keyframes fx-exit-veil {
+        0% { opacity: 0.0; }
+        35% { opacity: 0.72; }
+        100% { opacity: 0.0; }
+      }
       @keyframes fx-visible-hint {
         0% { opacity: 0; transform: scale(0.99); }
         30% { opacity: 0.9; }
         100% { opacity: 0; transform: scale(1.01); }
       }
       @media (prefers-reduced-motion: reduce) {
-        .fx-selection-pulse, .fx-visible-hint, .fx-dissolve-veil { animation: none !important; transition: none !important; }
+        .fx-selection-pulse, .fx-visible-hint, .fx-dissolve-veil, .fx-exit-veil { animation: none !important; transition: none !important; }
         .asset.fx-entry-active { transform: none !important; }
       }
     `;

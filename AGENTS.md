@@ -1063,3 +1063,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Layout invalidation is now more aggressive: scroll, resize observer, window resize, visualViewport resize/scroll, track/bind readiness updates all mark layout dirty and clear rect cache.
 - Runtime diagnostics now include `renderCandidatesCount` alongside sampled/dropped counters so cap behavior is easier to reason about during mobile troubleshooting.
 - Static tests were updated to assert overlay-local rect math symbols, inset/clamp hooks, visualViewport invalidation listeners, and debug overlay wiring.
+
+
+### Latest Implementation Notes (2026-02-24, viewport-leave exit FX pass)
+- AssetFX now applies an explicit per-card exit veil (`_playExit`) when ready tiles leave the in-view set, so scroll behavior emphasizes FX-out instead of only FX-in on enter.
+- Exit effects are cooldown-gated (`lastExitedAt`) for idempotence and to avoid rapid flicker during threshold jitter while scrolling.
+- Added `.fx-exit-veil` + `@keyframes fx-exit-veil` shared styles and reduced-motion disable wiring alongside existing FX overlays.
+- Static tests now assert the exit pathway symbols so future refactors preserve leave-behavior semantics.
