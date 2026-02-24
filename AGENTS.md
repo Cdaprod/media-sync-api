@@ -994,3 +994,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Visible-card inclusion and dissolve queue enqueueing now require ready tiles, preventing shader passes from running over placeholder/unloaded cards during progressive media loading.
 - Added per-tile ready fade ramp (`fxReadyAt` + `readyFadeMs`) to smooth FX intensity as assets become ready, reducing apparent mismatch between DOM load timing and shader overlay timing.
 - Updated static tests to assert readiness-gating symbols and ready-fade calculations in the shader module.
+
+### Latest Implementation Notes (2026-02-24, tile-local material shader pass)
+- Replaced the prior global-style overlay blend with tile-local material shading in `public/js/explorer-shaders.mjs`: shader now consumes per-tile arrays (`u_type`, `u_sel`, `u_energy`, `u_ready`) and computes `tileUV` per rect for tile-anchored effects.
+- Added first-pass material presets driven by tile type and selection state (video scan/phosphor accents, audio shimmer accents, image vignette basis, and selection-glass highlight streak/fresnel) multiplied by ready fade.
+- Render packing now uploads explicit per-tile material parameters from DOM state (`kind`, `.is-selected`, boost-derived energy, readiness fade) instead of the previous single `u_video` scalar.
+- Updated static shader assertions to cover new material uniforms/tileUV anchoring and per-tile parameter packing symbols.

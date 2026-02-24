@@ -132,31 +132,62 @@ uniform vec2 u_resolution;
 uniform float u_time;
 uniform int u_rect_count;
 uniform vec4 u_rects[${MAX_RECTS}];
-uniform float u_video[${MAX_RECTS}];
+uniform float u_type[${MAX_RECTS}];
+uniform float u_sel[${MAX_RECTS}];
+uniform float u_energy[${MAX_RECTS}];
+uniform float u_ready[${MAX_RECTS}];
 
 void main(){
   vec2 px = vec2(v_uv.x * u_resolution.x, (1.0 - v_uv.y) * u_resolution.y);
   vec3 color = vec3(0.0);
   float alpha = 0.0;
+
   for (int i = 0; i < ${MAX_RECTS}; i++) {
     if (i >= u_rect_count) break;
     vec4 r = u_rects[i];
     if (px.x < r.x || px.y < r.y || px.x > r.z || px.y > r.w) continue;
 
-    float y = px.y - r.y;
-    float line = 0.5 + 0.5 * sin((y * 1.35) + (u_time * 2.2));
-    float vignette = 1.0 - smoothstep(0.0, 0.9, distance((px - vec2((r.x + r.z) * 0.5, (r.y + r.w) * 0.5)) / vec2(max((r.z-r.x)*0.5,1.0), max((r.w-r.y)*0.5,1.0)), vec2(0.0)));
-    float grain = fract(sin(dot(px + vec2(float(i), u_time), vec2(12.9898, 78.233))) * 43758.5453);
+    vec2 tileUV = (px - r.xy) / max(r.zw - r.xy, vec2(1.0));
+    tileUV = clamp(tileUV, 0.0, 1.0);
+    float ready = clamp(u_ready[i], 0.0, 1.0);
+    if (ready <= 0.01) continue;
 
-    float scan = mix(0.0, 0.22, u_video[i]) * (0.45 + line * 0.55);
-    float sparkle = (grain - 0.5) * 0.08;
-    float cardAlpha = 0.18 + (u_video[i] * 0.18);
+    float edge = smoothstep(0.0, 0.08, tileUV.x) * smoothstep(0.0, 0.08, tileUV.y)
+      * smoothstep(0.0, 0.08, 1.0 - tileUV.x) * smoothstep(0.0, 0.08, 1.0 - tileUV.y);
+    float radial = 1.0 - smoothstep(0.18, 0.92, length(tileUV - vec2(0.5)));
+    float grain = fract(sin(dot(tileUV * (48.0 + float(i)), vec2(12.9898, 78.233)) + u_time * 1.8) * 43758.5453);
 
-    color += vec3(0.28, 0.72, 0.95) * scan * vignette + vec3(sparkle * 0.4);
-    alpha += cardAlpha * vignette;
+    float sel = clamp(u_sel[i], 0.0, 1.0);
+    float energy = clamp(u_energy[i], 0.0, 1.0);
+    float typeV = u_type[i];
+
+    // type-driven material basis
+    vec3 base = mix(vec3(0.07, 0.17, 0.28), vec3(0.10, 0.26, 0.42), edge);
+    float videoMix = smoothstep(0.65, 1.35, typeV);
+    float audioMix = smoothstep(1.55, 2.3, typeV);
+
+    float scan = (0.5 + 0.5 * sin((tileUV.y * 580.0) + u_time * 2.4)) * videoMix;
+    float shimmer = (0.5 + 0.5 * sin((tileUV.x * 52.0) + u_time * 4.4)) * audioMix;
+    float imageVignette = smoothstep(0.95, 0.28, length(tileUV - vec2(0.5))) * (1.0 - videoMix) * (1.0 - audioMix);
+
+    // selection glass pass
+    float streak = smoothstep(0.44, 0.5, fract(tileUV.x + tileUV.y * 0.35 + u_time * 0.22));
+    float fresnel = pow(1.0 - clamp(dot(normalize(tileUV - vec2(0.5)), vec2(0.65, 0.35)), 0.0, 1.0), 2.0);
+    vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.42 + streak * 0.22) * sel;
+
+    vec3 material = base
+      + vec3(0.05, 0.11, 0.18) * imageVignette
+      + vec3(0.18, 0.42, 0.68) * scan
+      + vec3(0.26, 0.36, 0.72) * shimmer
+      + glass
+      + vec3((grain - 0.5) * 0.045);
+
+    float cardAlpha = (0.06 + edge * 0.2 + energy * 0.18 + sel * 0.25) * ready;
+    color += material * ready;
+    alpha += cardAlpha;
   }
 
-  alpha = clamp(alpha, 0.0, 0.55);
+  alpha = clamp(alpha, 0.0, 0.62);
   gl_FragColor = vec4(color, alpha);
 }
 `;
@@ -807,11 +838,14 @@ export class AssetFX {
       const y2 = (cr.bottom - rect.top) * dpr;
       const inBounds = x2 > 0 && y2 > 0 && x1 < width && y1 < height;
       if (!inBounds) return;
-      const isVideo = card.dataset.fxKind === 'video' ? 1 : 0;
+      const kind = card.dataset.fxKind || '';
+      const typeCode = kind === 'video' ? 1 : (kind === 'audio' ? 2 : 0);
+      const selected = card.classList.contains('is-selected') ? 1 : 0;
       const boosted = card.dataset.fxScanlineBoost === '1' ? 1 : 0;
       const readyAt = Number(card.dataset.fxReadyAt || 0);
       const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;
-      cards.push([x1, y1, x2, y2, isVideo, boosted, readyFade]);
+      const energy = Math.min(1, 0.24 + selected * 0.5 + boosted * 0.26 + (typeCode == 1 ? 0.14 : 0.0));
+      cards.push([x1, y1, x2, y2, typeCode, selected, energy, readyFade]);
       sampled += 1;
     });
 
@@ -826,21 +860,29 @@ export class AssetFX {
     bindQuad(gl, this.program, this.quad);
 
     const rectData = new Float32Array(MAX_RECTS * 4);
-    const videoData = new Float32Array(MAX_RECTS);
+    const typeData = new Float32Array(MAX_RECTS);
+    const selData = new Float32Array(MAX_RECTS);
+    const energyData = new Float32Array(MAX_RECTS);
+    const readyData = new Float32Array(MAX_RECTS);
     cards.slice(0, MAX_RECTS).forEach((row, i) => {
       rectData[i * 4] = row[0];
       rectData[i * 4 + 1] = row[1];
       rectData[i * 4 + 2] = row[2];
       rectData[i * 4 + 3] = row[3];
-      const base = row[4] ? (row[5] ? 1.0 : 0.82) : 0.25;
-      videoData[i] = base * row[6];
+      typeData[i] = row[4];
+      selData[i] = row[5];
+      energyData[i] = row[6];
+      readyData[i] = row[7];
     });
 
     gl.uniform2f(gl.getUniformLocation(this.program, 'u_resolution'), width, height);
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_time'), (performance.now() - this.start) * 0.001);
     gl.uniform1i(gl.getUniformLocation(this.program, 'u_rect_count'), Math.min(cards.length, MAX_RECTS));
     gl.uniform4fv(gl.getUniformLocation(this.program, 'u_rects'), rectData);
-    gl.uniform1fv(gl.getUniformLocation(this.program, 'u_video'), videoData);
+    gl.uniform1fv(gl.getUniformLocation(this.program, 'u_type'), typeData);
+    gl.uniform1fv(gl.getUniformLocation(this.program, 'u_sel'), selData);
+    gl.uniform1fv(gl.getUniformLocation(this.program, 'u_energy'), energyData);
+    gl.uniform1fv(gl.getUniformLocation(this.program, 'u_ready'), readyData);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
