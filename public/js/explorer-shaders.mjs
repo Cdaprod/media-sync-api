@@ -43,6 +43,9 @@ void main(){
 const MAX_RECTS = 64;
 const RECT_INSET_PX = 4;
 const ALWAYS_ON_PASS_ENABLED = true;
+const SAMPLE_STICK_MS = 420;
+const SETTLE_DELAY_MS = 120;
+const FAST_SCROLL_THRESHOLD = 0.95;
 const FX_GLOBAL = typeof window !== 'undefined' ? window : globalThis;
 const RENDERERS = FX_GLOBAL.__assetfx_renderers || new WeakMap();
 FX_GLOBAL.__assetfx_renderers = RENDERERS;
@@ -145,6 +148,10 @@ if (typeof window !== 'undefined') {
     get scrollVelocityEma() { return FX_GLOBAL.__assetfx_instance?.scrollVelocityEma || 0; },
     get motionDamp() { return FX_GLOBAL.__assetfx_instance?.motionDamp || 0; },
     get fpsEma() { return FX_GLOBAL.__assetfx_instance?.fpsEma || 0; },
+    get sampleCursor() { return FX_GLOBAL.__assetfx_instance?.sampleCursor || 0; },
+    get samplingFrozen() { return FX_GLOBAL.__assetfx_instance?.samplingFrozen === true; },
+    get stickyRetainedCount() { return FX_GLOBAL.__assetfx_instance?.stickyRetainedCount || 0; },
+    get entryPendingCount() { return FX_GLOBAL.__assetfx_instance?.entryPendingCount || 0; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
   };
   window.__assetfx_audit = () => {
@@ -179,6 +186,11 @@ if (typeof window !== 'undefined') {
       motionDamp: FX_GLOBAL.__assetfx_instance?.motionDamp || 0,
       fpsEma: FX_GLOBAL.__assetfx_instance?.fpsEma || 0,
       capNow: FX_GLOBAL.__assetfx_instance?.capNow || 0,
+      sampleCursor: FX_GLOBAL.__assetfx_instance?.sampleCursor || 0,
+      samplingFrozen: FX_GLOBAL.__assetfx_instance?.samplingFrozen === true,
+      stickyRetainedCount: FX_GLOBAL.__assetfx_instance?.stickyRetainedCount || 0,
+      sweepFilledCount: FX_GLOBAL.__assetfx_instance?.sweepFilledCount || 0,
+      entryPendingCount: FX_GLOBAL.__assetfx_instance?.entryPendingCount || 0,
       attachedRootId: FX_GLOBAL.__assetfx_instance?.container?.dataset?.assetfxRootId || null,
       owner: owner ? {
         canvasId: owner.canvasId,
@@ -351,6 +363,13 @@ export class AssetFX {
     this._lastFrameAt = 0;
     this._lastScrollAt = 0;
     this._lastScrollY = 0;
+    this.sampleCursor = 0;
+    this.samplingFrozen = false;
+    this.samplingSettleUntil = 0;
+    this.lastSampledCards = [];
+    this.stickyRetainedCount = 0;
+    this.sweepFilledCount = 0;
+    this.entryPendingCount = 0;
 
     this.activeDissolves = new Set();
     this.pendingDissolves = [];
@@ -386,7 +405,7 @@ export class AssetFX {
     this._boundContainerResize = () => this._markLayoutDirty();
     this._tapGuardCleanup = null;
     this._resizeObserver = null;
-    this.sampleHoldMs = 250;
+    this.sampleHoldMs = SAMPLE_STICK_MS;
     this.sampledCardsUntil = new WeakMap();
     this.debugOverlay = null;
     this._boundVisualViewportChange = () => this._markLayoutDirty();
@@ -407,6 +426,7 @@ export class AssetFX {
       const dy = Math.abs(y - this._lastScrollY);
       const v = dy / dt; // px/ms
       this.scrollVelocityEma = (this.scrollVelocityEma * 0.82) + (v * 0.18);
+      this.samplingSettleUntil = now + SETTLE_DELAY_MS;
     }
     this._lastScrollAt = now;
     this._lastScrollY = y;
@@ -420,8 +440,8 @@ export class AssetFX {
   }
 
   _markLayoutDirty() {
+    if (!this.layoutDirty) this.cardRectCache = new WeakMap();
     this.layoutDirty = true;
-    this.cardRectCache = new WeakMap();
     this._scheduleReplaySweep();
   }
 
@@ -718,6 +738,7 @@ export class AssetFX {
       cardEl.dataset.fxReadyAt = String(performance.now());
       if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
       this._markLayoutDirty();
+      this._ensureEntryPending(cardEl, mediaEl, this.entryMs);
       this._maybePlayEntryOnReady(cardEl, mediaEl, kind);
     };
 
@@ -789,14 +810,24 @@ export class AssetFX {
     this._playEntry(cardEl, imgEl, duration, allowReplay);
   }
 
+  _ensureEntryPending(cardEl, imgEl, duration = this.entryMs) {
+    if (!cardEl || !imgEl) return;
+    if (cardEl.dataset.fxEntryPlayed === '1') return;
+    if (cardEl.dataset.fxEntryPending === '1') return;
+    cardEl.dataset.fxEntryPending = '1';
+    cardEl.dataset.fxEntryFrames = '2';
+    cardEl.__fxEntryMedia = imgEl;
+    cardEl.__fxEntryDuration = duration;
+    this.entryPendingCount += 1;
+  }
+
   _playEntry(cardEl, imgEl, duration, allowReplay) {
     if (!this._canRunFx()) return;
     const now = Date.now();
     const last = this.lastPlayedAt.get(cardEl) || 0;
     if (allowReplay && now - last < this.cooldownMs) return;
     this.lastPlayedAt.set(cardEl, now);
-
-    this._enqueueDissolve(cardEl, imgEl, duration);
+    this._ensureEntryPending(cardEl, imgEl, duration);
   }
 
 
@@ -861,11 +892,16 @@ export class AssetFX {
     const next = visible ? '1' : '0';
     if (card.dataset.fxInView === next) return false;
     card.dataset.fxInView = next;
-    if (visible && card.dataset.fxReady === '1') this.visibleCards.add(card);
+    if (visible && card.dataset.fxReady === '1') {
+      this.visibleCards.add(card);
+      const mediaEl = card.__fxThumb || card.querySelector('img.asset-thumb,video,audio');
+      if (mediaEl) this._ensureEntryPending(card, mediaEl, this.entryMs);
+    }
     else {
       if (card.dataset.fxReady === '1') this._playExit(card);
       this.visibleCards.delete(card);
       this.sampledCardsUntil.delete(card);
+      card.dataset.fxEntryPending = '0';
       this.pendingDissolves = this.pendingDissolves.filter((entry) => entry.cardEl !== card);
     }
     this.layoutDirty = true;
@@ -880,7 +916,7 @@ export class AssetFX {
     const now = Date.now();
     const last = this.lastPlayedAt.get(cardEl) || 0;
     if (now - last < this.cooldownMs) return;
-    this._playEntry(cardEl, mediaEl, this.entryMs, true);
+    this._ensureEntryPending(cardEl, mediaEl, this.entryMs);
   }
 
 
@@ -1152,16 +1188,85 @@ export class AssetFX {
     adaptiveMaxRenderCards = Math.min(totalCandidates, adaptiveMaxRenderCards);
     this.maxRenderCardsAdaptive = adaptiveMaxRenderCards;
     this.capNow = adaptiveMaxRenderCards;
-    renderCandidates.sort((a, b) => a[8] - b[8]);
+    const nowPerf = performance.now();
+    const freezeByVelocity = this.scrollVelocityEma > FAST_SCROLL_THRESHOLD;
+    const freezeBySettle = nowPerf < this.samplingSettleUntil;
+    this.samplingFrozen = freezeByVelocity || freezeBySettle;
+
+    const rowsByCard = new Map(renderCandidates.map((row) => [row[9], row]));
+    const stickyCards = [];
+    rowsByCard.forEach((row, card) => {
+      const stickUntil = this.sampledCardsUntil.get(card) || 0;
+      if (stickUntil > nowPerf) stickyCards.push(card);
+    });
+
+    const visibleOrder = [...renderCandidates].sort((a, b) => ((a[1] - b[1]) || (a[0] - b[0])));
+    const sweepCards = [];
+    if (visibleOrder.length) {
+      if (this.sampleCursor >= visibleOrder.length) this.sampleCursor = this.sampleCursor % visibleOrder.length;
+      let cursor = this.sampleCursor;
+      while (sweepCards.length < adaptiveMaxRenderCards && sweepCards.length < visibleOrder.length) {
+        sweepCards.push(visibleOrder[cursor][9]);
+        cursor = (cursor + 1) % visibleOrder.length;
+      }
+      if (!this.samplingFrozen) {
+        const step = this.motionDamp > 0.75 ? 2 : 1;
+        this.sampleCursor = (this.sampleCursor + step) % visibleOrder.length;
+      }
+    }
+
+    const frozenCards = this.samplingFrozen ? this.lastSampledCards.filter((card) => rowsByCard.has(card)) : [];
+    const selectedCards = [];
+    const selectedSet = new Set();
+    const pushCard = (card) => {
+      if (!card || selectedSet.has(card) || !rowsByCard.has(card) || selectedCards.length >= adaptiveMaxRenderCards) return;
+      selectedCards.push(card);
+      selectedSet.add(card);
+    };
+
+    stickyCards.forEach(pushCard);
+    if (this.samplingFrozen) frozenCards.forEach(pushCard);
+    sweepCards.forEach(pushCard);
+
     const sampledCards = new Set();
-    renderCandidates.slice(0, adaptiveMaxRenderCards).forEach((row) => {
+    this.stickyRetainedCount = 0;
+    selectedCards.forEach((card) => {
+      const row = rowsByCard.get(card);
+      if (!row) return;
       cards.push(row);
-      sampledCards.add(row[9]);
-      this.sampledCardsUntil.set(row[9], performance.now() + this.sampleHoldMs);
+      sampledCards.add(card);
+      const stickUntil = this.sampledCardsUntil.get(card) || 0;
+      if (stickUntil > nowPerf) this.stickyRetainedCount += 1;
+      this.sampledCardsUntil.set(card, nowPerf + SAMPLE_STICK_MS);
       if (this.fxDebug) {
-        this._renderDebugBadge(row[9], { sampled: true, pending: false, inView: true, ready: true, alwaysOn: ALWAYS_ON_PASS_ENABLED });
+        const sticky = stickUntil > nowPerf;
+        this._renderDebugBadge(card, { sampled: true, sticky, pending: false, inView: true, ready: true, alwaysOn: ALWAYS_ON_PASS_ENABLED });
       }
     });
+    this.sweepFilledCount = Math.max(0, cards.length - this.stickyRetainedCount);
+    this.lastSampledCards = [...sampledCards];
+
+    // finalize pending entry once sampling decision settles (sampled or 2 raf cycles)
+    this.entryPendingCount = 0;
+    this.visibleCards.forEach((card) => {
+      if (!card?.isConnected) return;
+      if (card.dataset.fxReady !== '1' || card.dataset.fxInView !== '1') return;
+      if (card.dataset.fxEntryPlayed === '1') return;
+      if (card.dataset.fxEntryPending !== '1') return;
+      const framesLeft = Math.max(0, Number(card.dataset.fxEntryFrames || '0'));
+      const shouldFinalize = sampledCards.has(card) || framesLeft <= 0;
+      if (shouldFinalize) {
+        const mediaEl = card.__fxEntryMedia || card.__fxThumb || card.querySelector('img.asset-thumb,video,audio');
+        if (mediaEl) this._enqueueDissolve(card, mediaEl, Number(card.__fxEntryDuration || this.entryMs));
+        card.dataset.fxEntryPending = '0';
+        card.dataset.fxEntryPlayed = '1';
+        card.dataset.fxEntryFrames = '0';
+      } else {
+        card.dataset.fxEntryFrames = String(framesLeft - 1);
+        this.entryPendingCount += 1;
+      }
+    });
+
     if (this.fxDebug) {
       this.visibleCards.forEach((card) => {
         if (!card?.isConnected) return;
@@ -1169,11 +1274,12 @@ export class AssetFX {
         const inView = card.dataset.fxInView === '1';
         const sampled = sampledCards.has(card);
         const pending = ready && inView && !sampled;
-        this._renderDebugBadge(card, { ready, inView, sampled, pending, alwaysOn: ALWAYS_ON_PASS_ENABLED });
+        const sticky = sampled && ((this.sampledCardsUntil.get(card) || 0) > (nowPerf + SAMPLE_STICK_MS - 16));
+        this._renderDebugBadge(card, { ready, inView, sampled, pending, sticky, alwaysOn: ALWAYS_ON_PASS_ENABLED });
       });
     }
     this.renderSampledCount = cards.length;
-    this.droppedByCapCount = Math.max(0, totalCandidates - adaptiveMaxRenderCards);
+    this.droppedByCapCount = Math.max(0, totalCandidates - cards.length);
     this.layoutDirty = false;
     this._renderDebugRects(cards, width, height);
 
@@ -1248,7 +1354,7 @@ export class AssetFX {
     });
   }
 
-  _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, alwaysOn = true } = {}) {
+  _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, sticky = false, alwaysOn = true } = {}) {
     if (!this.fxDebug || !cardEl) return;
     let badge = cardEl.querySelector('.fx-debug-badge');
     if (!badge) {
@@ -1256,7 +1362,7 @@ export class AssetFX {
       badge.className = 'fx-debug-badge';
       cardEl.appendChild(badge);
     }
-    badge.textContent = `${alwaysOn ? 'A' : '-'}${ready ? 'R' : '-'}${inView ? 'V' : '-'}${sampled ? 'S' : (pending ? 'P' : '-')}`;
+    badge.textContent = `${alwaysOn ? 'A' : '-'}${ready ? 'R' : '-'}${inView ? 'V' : '-'}${sampled ? (sticky ? 'K' : 'S') : (pending ? 'P' : '-')}`;
   }
 
   _ensureSharedStyles() {

@@ -1092,3 +1092,13 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Fixed `wireSelectionDelegation()` pointer tracking in `public/explorer.html` to persist the active checkbox node (`input`) in `pointers` records.
 - This restores drag-suppression behavior in `handlePointerUp` (`rec.input.dataset.fxSuppressToggle = '1'`) so accidental checkbox toggles are blocked after pointer movement, including list-view flows outside the AssetFX tap guard.
 - Static tests now assert the pointer map payload includes `input` to prevent regressions in delegated selection handling.
+
+
+### Latest Implementation Notes (2026-02-24, premium coverage stabilization: sweep + stickiness + entry guarantee)
+- Added premium sampling hysteresis and stabilization constants (`SAMPLE_STICK_MS`, `SETTLE_DELAY_MS`, `FAST_SCROLL_THRESHOLD`) so sampled tiles persist briefly and sampling freezes during fast scroll / settle windows.
+- Replaced pure center-priority slicing with a deterministic viewport sweep (`sampleCursor`) plus sticky retention and frozen-set reuse to distribute premium coverage across all visible tiles over time instead of favoring only initial rows.
+- Added entry guarantee lifecycle (`_ensureEntryPending`, `fxEntryPending`, `fxEntryFrames`, `fxEntryPlayed`) so ready+visible tiles receive a one-time premium entry once sampling settles (sampled immediately or after two RAF frames).
+- Expanded runtime diagnostics with `sampleCursor`, `samplingFrozen`, `stickyRetainedCount`, `sweepFilledCount`, and `entryPendingCount`, and updated fxdebug badge semantics to include sticky sampled state (`K`).
+- Static tests were updated to assert sweep/hysteresis/entry-guarantee symbols and the updated debug badge output contract.
+
+- Follow-up cleanup: removed duplicate constructor re-initialization of `lastSampledCards`/`sampleCursor` so sweep state is defined once and easier to reason about.

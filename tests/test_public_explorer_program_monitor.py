@@ -225,8 +225,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'const tileParamData = new Uint8Array(MAX_RECTS * 4);' in shader_module
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
-    assert 'renderCandidates.sort((a, b) => a[8] - b[8]);' in shader_module
-    assert 'this.sampleHoldMs = 250;' in shader_module
+    assert 'const visibleOrder = [...renderCandidates].sort((a, b) => ((a[1] - b[1]) || (a[0] - b[0])));' in shader_module
+    assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert 'const RECT_INSET_PX = 4;' in shader_module
     assert 'const canvasRect = this.overlay.getBoundingClientRect();' in shader_module
@@ -252,12 +252,33 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);' in shader_module
     assert 'const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));' in shader_module
     assert 'if (this.fpsEma > 55) adaptiveMaxRenderCards =' in shader_module
+    assert 'const SAMPLE_STICK_MS = 420;' in shader_module
+    assert 'const SETTLE_DELAY_MS = 120;' in shader_module
+    assert 'const FAST_SCROLL_THRESHOLD = 0.95;' in shader_module
+    assert 'this.sampleCursor = 0;' in shader_module
+    assert 'this.samplingFrozen = false;' in shader_module
+    assert 'this.samplingSettleUntil = 0;' in shader_module
+    assert 'this.lastSampledCards = [];' in shader_module
+    assert 'this.stickyRetainedCount = 0;' in shader_module
+    assert 'this.sweepFilledCount = 0;' in shader_module
+    assert 'this.entryPendingCount = 0;' in shader_module
+    assert 'this._ensureEntryPending(cardEl, imgEl, duration);' in shader_module
+    assert "cardEl.dataset.fxEntryPending = '1';" in shader_module
+    assert "card.dataset.fxEntryPlayed = '1';" in shader_module
+    assert 'const freezeByVelocity = this.scrollVelocityEma > FAST_SCROLL_THRESHOLD;' in shader_module
+    assert 'const freezeBySettle = nowPerf < this.samplingSettleUntil;' in shader_module
+    assert 'const frozenCards = this.samplingFrozen ? this.lastSampledCards.filter((card) => rowsByCard.has(card)) : [];' in shader_module
+    assert 'this.lastSampledCards = [...sampledCards];' in shader_module
+    assert 'this.stickyRetainedCount = 0;' in shader_module
+    assert 'this.sweepFilledCount = Math.max(0, cards.length - this.stickyRetainedCount);' in shader_module
+    assert 'this.entryPendingCount += 1;' in shader_module
+    assert '_renderDebugBadge(card, { ready, inView, sampled, pending, sticky, alwaysOn: ALWAYS_ON_PASS_ENABLED });' in shader_module
     assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);" in shader_module
     assert 'this.lastExitedAt = new WeakMap();' in shader_module
     assert "if (card.dataset.fxReady === '1') this._playExit(card);" in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
     assert '.fx-debug-badge {' in shader_module
-    assert "badge.textContent = `${alwaysOn ? 'A' : '-'}${ready ? 'R' : '-'}${inView ? 'V' : '-'}${sampled ? 'S' : (pending ? 'P' : '-')}`;" in shader_module
+    assert "badge.textContent = `${alwaysOn ? 'A' : '-'}${ready ? 'R' : '-'}${inView ? 'V' : '-'}${sampled ? (sticky ? 'K' : 'S') : (pending ? 'P' : '-')}`;" in shader_module
     assert "const typeCode = 0;" in shader_module
 
 
