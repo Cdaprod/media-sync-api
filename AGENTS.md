@@ -1078,3 +1078,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Debug badges now include an always-on marker (`A`) and premium state (`S` sampled, `P` pending-not-sampled, `-` neither) to make cap behavior legible while validating mobile scroll behavior.
 - Entry timing was smoothed/tightened (`entryMs = 260`, `readyFadeMs = 240`) and premium energy multipliers were reduced for less flashy transitions.
 - Static tests were updated to assert the adaptive-cap/always-on symbols and the updated debug badge semantics.
+
+
+### Latest Implementation Notes (2026-02-24, temporal smoothing: scroll damping + adaptive cap stabilization)
+- AssetFX now tracks smoothed scroll velocity (`scrollVelocityEma`) and applies motion damping (`motionDamp`) so premium/entry intensity softens during fast flicks and settles smoothly when scroll velocity drops.
+- Added coarse FPS EMA (`fpsEma`) driven cap tuning to the existing center-priority sampling, with visible-count-aware adaptive cap sizing to keep viewport coverage high while still backing off under load.
+- Fragment shader now includes `u_motion_damp` to reduce scanline contrast during high-velocity scrolling; baseline always-on pass remains subtle and continuous.
+- Runtime diagnostics expanded with `scrollVelocityEma`, `motionDamp`, `fpsEma`, and `capNow` to make temporal behavior auditable in `__assetfx_dbg`/`__assetfx_audit()`.
+- Static tests were updated to assert scroll-damping symbols, motion-damp uniform wiring, and adaptive cap/FPS tuning hooks.

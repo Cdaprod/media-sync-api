@@ -25,6 +25,12 @@ function createNode(tag, className) {
   return node;
 }
 
+
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / Math.max(1e-6, edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 const VERT = `
 attribute vec2 a_pos;
 varying vec2 v_uv;
@@ -136,6 +142,9 @@ if (typeof window !== 'undefined') {
     get renderCandidatesCount() { return FX_GLOBAL.__assetfx_instance?.renderCandidatesCount || 0; },
     get droppedByCapCount() { return FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0; },
     get maxRenderCardsAdaptive() { return FX_GLOBAL.__assetfx_instance?.maxRenderCardsAdaptive || 0; },
+    get scrollVelocityEma() { return FX_GLOBAL.__assetfx_instance?.scrollVelocityEma || 0; },
+    get motionDamp() { return FX_GLOBAL.__assetfx_instance?.motionDamp || 0; },
+    get fpsEma() { return FX_GLOBAL.__assetfx_instance?.fpsEma || 0; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
   };
   window.__assetfx_audit = () => {
@@ -166,6 +175,10 @@ if (typeof window !== 'undefined') {
       droppedByCapCount: FX_GLOBAL.__assetfx_instance?.droppedByCapCount || 0,
       maxRenderCardsAdaptive: FX_GLOBAL.__assetfx_instance?.maxRenderCardsAdaptive || 0,
       alwaysOnPassEnabled: ALWAYS_ON_PASS_ENABLED,
+      scrollVelocityEma: FX_GLOBAL.__assetfx_instance?.scrollVelocityEma || 0,
+      motionDamp: FX_GLOBAL.__assetfx_instance?.motionDamp || 0,
+      fpsEma: FX_GLOBAL.__assetfx_instance?.fpsEma || 0,
+      capNow: FX_GLOBAL.__assetfx_instance?.capNow || 0,
       attachedRootId: FX_GLOBAL.__assetfx_instance?.container?.dataset?.assetfxRootId || null,
       owner: owner ? {
         canvasId: owner.canvasId,
@@ -200,6 +213,7 @@ uniform float u_time;
 uniform int u_rect_count;
 uniform vec4 u_rects[${MAX_RECTS}];
 uniform sampler2D u_tile_params;
+uniform float u_motion_damp;
 
 vec4 sampleParams(int idx) {
   float x = (float(idx) + 0.5) / float(${MAX_RECTS});
@@ -214,7 +228,7 @@ void main(){
   float globalScan = 0.5 + 0.5 * sin((uv.y * u_resolution.y * 0.045) + u_time * 1.4);
   vec3 color = vec3(0.022, 0.045, 0.074) * (0.55 + globalVignette * 0.45);
   color += vec3(globalGrain * 0.014);
-  color += vec3(0.025, 0.055, 0.08) * globalScan * 0.12;
+  color += vec3(0.025, 0.055, 0.08) * globalScan * (0.04 + 0.08 * u_motion_damp);
   float alpha = 0.055 + globalVignette * 0.035;
 
   for (int i = 0; i < ${MAX_RECTS}; i++) {
@@ -330,6 +344,13 @@ export class AssetFX {
     this.maxRenderCardsAdaptive = this.maxRenderCardsLowTier;
     this.readyFadeMs = 240;
     this.entryMs = 260;
+    this.scrollVelocityEma = 0;
+    this.motionDamp = 1;
+    this.fpsEma = 60;
+    this.capNow = this.maxRenderCardsAdaptive;
+    this._lastFrameAt = 0;
+    this._lastScrollAt = 0;
+    this._lastScrollY = 0;
 
     this.activeDissolves = new Set();
     this.pendingDissolves = [];
@@ -338,7 +359,6 @@ export class AssetFX {
     this.readyInViewNotPlayedCount = 0;
     this.renderSampledCount = 0;
     this.renderCandidatesCount = 0;
-    this.maxRenderCardsAdaptive = this.maxRenderCardsLowTier;
     this.droppedByCapCount = 0;
 
     this.prefersReducedMotion = typeof window !== 'undefined'
@@ -358,7 +378,10 @@ export class AssetFX {
     this.pointerState = new Map();
     this._attachedGridRoot = null;
     this._attachedCardSelector = '.asset';
-    this._boundScheduleReplay = () => this._markLayoutDirty();
+    this._boundScheduleReplay = (event) => {
+      this._recordScrollMotion(event);
+      this._markLayoutDirty();
+    };
     this._boundWindowResize = () => this._markLayoutDirty();
     this._boundContainerResize = () => this._markLayoutDirty();
     this._tapGuardCleanup = null;
@@ -373,6 +396,28 @@ export class AssetFX {
   }
 
 
+
+  _recordScrollMotion(event) {
+    const root = this._attachedGridRoot || this.container;
+    if (!root) return;
+    const now = performance.now();
+    const y = Number(root.scrollTop || 0);
+    if (this._lastScrollAt > 0) {
+      const dt = Math.max(1, now - this._lastScrollAt);
+      const dy = Math.abs(y - this._lastScrollY);
+      const v = dy / dt; // px/ms
+      this.scrollVelocityEma = (this.scrollVelocityEma * 0.82) + (v * 0.18);
+    }
+    this._lastScrollAt = now;
+    this._lastScrollY = y;
+  }
+
+  _updateMotionDamp() {
+    const now = performance.now();
+    const age = this._lastScrollAt > 0 ? (now - this._lastScrollAt) : 1000;
+    const vDecayed = this.scrollVelocityEma * Math.exp(-age / 220);
+    this.motionDamp = 1.0 - smoothstep(0.2, 1.2, vDecayed);
+  }
 
   _markLayoutDirty() {
     this.layoutDirty = true;
@@ -786,6 +831,7 @@ export class AssetFX {
       ensureRelative(cardEl);
       const veil = createNode('div', 'fx-dissolve-veil');
       veil.style.transitionDuration = `${Math.max(180, duration)}ms`;
+      veil.style.opacity = String(0.18 + this.motionDamp * 0.42);
       cardEl.appendChild(veil);
 
       const finalize = () => {
@@ -992,6 +1038,13 @@ export class AssetFX {
   _startLoop() {
     if (this.raf || !this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
     const tick = () => {
+      const now = performance.now();
+      if (this._lastFrameAt > 0) {
+        const dt = Math.max(1, now - this._lastFrameAt);
+        const fps = 1000 / dt;
+        this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);
+      }
+      this._lastFrameAt = now;
       this._render();
       this.raf = requestAnimationFrame(tick);
       if (this.container && RENDERERS.has(this.container)) {
@@ -1037,6 +1090,7 @@ export class AssetFX {
       this.overlay.height = height;
     }
 
+    this._updateMotionDamp();
     const cards = [];
     const renderCandidates = [];
     this.renderSampledCount = 0;
@@ -1072,7 +1126,7 @@ export class AssetFX {
       const selected = card.classList.contains('is-selected') ? 1 : 0;
       const readyAt = Number(card.dataset.fxReadyAt || 0);
       const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;
-      const energy = Math.min(0.86, (0.14 + selected * 0.26) * (0.62 + readyFade * 0.38));
+      const energy = Math.min(0.76, (0.12 + selected * 0.2) * (0.64 + readyFade * 0.36) * (0.56 + this.motionDamp * 0.44));
       const tileCenterX = (x1 + x2) * 0.5;
       const tileCenterY = (y1 + y2) * 0.5;
       const dist2 = ((tileCenterX - cx) * (tileCenterX - cx)) + ((tileCenterY - cy) * (tileCenterY - cy));
@@ -1091,8 +1145,13 @@ export class AssetFX {
     const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
     const lowTier = (deviceMemory > 0 && deviceMemory <= 4) || smallScreen;
     const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;
-    const adaptiveMaxRenderCards = Math.max(this.minRenderCards, Math.min(totalCandidates, dynamicCap));
+    const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));
+    let adaptiveMaxRenderCards = Math.min(totalCandidates, Math.min(dynamicCap, visibleDrivenCap));
+    if (this.fpsEma > 55) adaptiveMaxRenderCards = Math.min(totalCandidates, Math.min(MAX_RECTS, adaptiveMaxRenderCards + 4));
+    if (this.fpsEma < 45) adaptiveMaxRenderCards = Math.max(this.minRenderCards, adaptiveMaxRenderCards - 4);
+    adaptiveMaxRenderCards = Math.min(totalCandidates, adaptiveMaxRenderCards);
     this.maxRenderCardsAdaptive = adaptiveMaxRenderCards;
+    this.capNow = adaptiveMaxRenderCards;
     renderCandidates.sort((a, b) => a[8] - b[8]);
     const sampledCards = new Set();
     renderCandidates.slice(0, adaptiveMaxRenderCards).forEach((row) => {
@@ -1144,6 +1203,7 @@ export class AssetFX {
     gl.uniform2f(gl.getUniformLocation(this.program, 'u_resolution'), width, height);
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_time'), (performance.now() - this.start) * 0.001);
     gl.uniform1i(gl.getUniformLocation(this.program, 'u_rect_count'), Math.min(cards.length, MAX_RECTS));
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);
     gl.uniform4fv(gl.getUniformLocation(this.program, 'u_rects'), rectData);
     if (this.tileParamTexture) {
       gl.activeTexture(gl.TEXTURE0);

@@ -241,9 +241,18 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
     assert 'const ALWAYS_ON_PASS_ENABLED = true;' in shader_module
     assert 'const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;' in shader_module
-    assert 'const adaptiveMaxRenderCards = Math.max(this.minRenderCards, Math.min(totalCandidates, dynamicCap));' in shader_module
+    assert 'let adaptiveMaxRenderCards = Math.min(totalCandidates, Math.min(dynamicCap, visibleDrivenCap));' in shader_module
     assert 'this.maxRenderCardsAdaptive = adaptiveMaxRenderCards;' in shader_module
     assert 'const sampledCards = new Set();' in shader_module
+    assert 'uniform float u_motion_damp;' in shader_module
+    assert 'this._recordScrollMotion(event);' in shader_module
+    assert 'this._updateMotionDamp();' in shader_module
+    assert 'this.scrollVelocityEma = (this.scrollVelocityEma * 0.82) + (v * 0.18);' in shader_module
+    assert 'this.motionDamp = 1.0 - smoothstep(0.2, 1.2, vDecayed);' in shader_module
+    assert 'this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);' in shader_module
+    assert 'const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));' in shader_module
+    assert 'if (this.fpsEma > 55) adaptiveMaxRenderCards =' in shader_module
+    assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);" in shader_module
     assert 'this.lastExitedAt = new WeakMap();' in shader_module
     assert "if (card.dataset.fxReady === '1') this._playExit(card);" in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
