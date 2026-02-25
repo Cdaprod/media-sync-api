@@ -274,6 +274,7 @@ def test_explorer_selection_toggle_does_not_full_rerender():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert 'function updateSelectionDomForKey(key, checked)' in html
     assert 'function wireSelectionDelegation()' in html
+    assert 'pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, moved: false, t: Date.now(), input });' in html
     assert 'renderMedia();' in html
     toggle_idx = html.index('function toggleSelected(')
     clear_idx = html.index('function clearSelection(')

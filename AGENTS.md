@@ -1086,3 +1086,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Fragment shader now includes `u_motion_damp` to reduce scanline contrast during high-velocity scrolling; baseline always-on pass remains subtle and continuous.
 - Runtime diagnostics expanded with `scrollVelocityEma`, `motionDamp`, `fpsEma`, and `capNow` to make temporal behavior auditable in `__assetfx_dbg`/`__assetfx_audit()`.
 - Static tests were updated to assert scroll-damping symbols, motion-damp uniform wiring, and adaptive cap/FPS tuning hooks.
+
+
+### Latest Implementation Notes (2026-02-24, selection delegation drag suppression fix)
+- Fixed `wireSelectionDelegation()` pointer tracking in `public/explorer.html` to persist the active checkbox node (`input`) in `pointers` records.
+- This restores drag-suppression behavior in `handlePointerUp` (`rec.input.dataset.fxSuppressToggle = '1'`) so accidental checkbox toggles are blocked after pointer movement, including list-view flows outside the AssetFX tap guard.
+- Static tests now assert the pointer map payload includes `input` to prevent regressions in delegated selection handling.

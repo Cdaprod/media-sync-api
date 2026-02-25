@@ -4120,7 +4120,7 @@
       const handlePointerDown = (event) => {
         const input = event.target.closest('input[type="checkbox"][data-select-key]');
         if (!input) return;
-        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, moved: false, t: Date.now() });
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, moved: false, t: Date.now(), input });
       };
       const handlePointerMove = (event) => {
         const rec = pointers.get(event.pointerId);
