@@ -1109,3 +1109,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added a fixed background impulse canvas that renders subtle tap ripples on pointerdown events so touch interactions feel responsive even when premium card sampling is capped/frozen.
 - AssetFX premium sampling now force-includes all visible selected cards (even over cap), keeps scroll-freeze/stickiness behavior, and drives shader-level selection glow via `u_selected` + `u_select_pulse` with eased ramp down on deselect.
 - Top bar hide/reveal transitions now include blur + mask-based material reveal while preserving existing pointer-event gating and intent-controller behavior.
+- Selection checkboxes now render order numbers in-place (`.sel-order`) while preserving existing checkbox hit target size; numeric text is intentionally darkened for readability against selected glow styling.

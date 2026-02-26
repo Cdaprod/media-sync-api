@@ -956,9 +956,40 @@
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       transition: border-color 0.2s ease, background 0.2s ease;
+      position: relative;
+      overflow: hidden;
     }
     .selector:hover{ border-color: var(--asset-accent); }
-    .selector input{ width: 14px; height: 14px; accent-color: var(--asset-accent); }
+    .selector input{
+      width: 14px;
+      height: 14px;
+      opacity: 0;
+      margin: 0;
+      position: relative;
+      z-index: 2;
+      cursor: pointer;
+    }
+    .selector .sel-order{
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: rgba(10, 18, 24, 0.95);
+      text-shadow: 0 1px 0 rgba(255,255,255,0.2);
+      opacity: 0;
+      transform: scale(0.92);
+      transition: opacity 120ms var(--ease-settle), transform 120ms var(--ease-settle);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .asset.is-selected .selector .sel-order{
+      opacity: 1;
+      transform: scale(1);
+    }
+
 
     .asset.is-selected{
       border-color: rgba(74,240,192,0.65);
@@ -3450,6 +3481,7 @@
               <div class="asset-ol-tr">
                 <div class="selector" title="Select">
                   <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+                  <span class="sel-order" aria-hidden="true"></span>
                 </div>
               </div>
               <div class="asset-ol-bl">
@@ -3504,6 +3536,7 @@
         wireAssetPointerHandlers(row, it);
         l.appendChild(row);
       });
+      syncSelectionOrderBadges();
       const activeContainer = state.view === 'grid' ? g : l;
       const thumbTargets = Array.from(activeContainer.querySelectorAll('img.asset-thumb[data-thumb-url]'));
       void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => setContentLoading(false));
@@ -3574,6 +3607,27 @@
     // -------------------------
     // Selection + Resolve
     // -------------------------
+    function selectionOrderIndexMap(){
+      const orderMap = new Map();
+      state.selectedOrder
+        .filter((value) => state.selected.has(value))
+        .forEach((value, idx) => orderMap.set(value, idx + 1));
+      return orderMap;
+    }
+
+    function syncSelectionOrderBadges(){
+      const orderMap = selectionOrderIndexMap();
+      document.querySelectorAll('.asset .selector .sel-order').forEach((badge) => {
+        const key = badge.closest('.asset')?.dataset.selectKey || '';
+        if (!key) {
+          badge.textContent = '';
+          return;
+        }
+        const order = orderMap.get(key);
+        badge.textContent = order ? String(Math.min(order, 99)) : '';
+      });
+    }
+
     function updateSelectionDomForKey(key, checked){
       if (!key) return;
       const escaped = cssEscape(key);
@@ -3582,6 +3636,7 @@
         const card = node.closest('.asset, .row');
         if (card) card.classList.toggle('is-selected', checked);
       });
+      syncSelectionOrderBadges();
     }
 
     function toggleSelected(item, { domNode = null } = {}){

@@ -325,6 +325,9 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert '.asset:hover{' in html
     assert 'transform: translateY(-2px);' in html
     assert '@media (pointer: coarse){' in html
+    assert '.selector .sel-order{' in html
+    assert 'color: rgba(10, 18, 24, 0.95);' in html
+    assert 'syncSelectionOrderBadges();' in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
 
 @pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")
@@ -371,3 +374,11 @@ def test_explorer_card_shell_skin_and_bg_impulse_present():
     assert 'id="bgImpulseCanvas" class="bg-impulse-canvas"' in html
     assert 'function wireBackgroundImpulse()' in html
     assert "document.addEventListener('pointerdown', pushImpulse, { passive: true });" in html
+
+
+def test_explorer_selection_order_badge_wiring_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '<span class="sel-order" aria-hidden="true"></span>' in html
+    assert 'function selectionOrderIndexMap()' in html
+    assert 'function syncSelectionOrderBadges()' in html
+    assert "badge.textContent = order ? String(Math.min(order, 99)) : '';" in html
