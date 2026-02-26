@@ -1102,3 +1102,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Static tests were updated to assert sweep/hysteresis/entry-guarantee symbols and the updated debug badge output contract.
 
 - Follow-up cleanup: removed duplicate constructor re-initialization of `lastSampledCards`/`sampleCursor` so sweep state is defined once and easier to reason about.
+
+
+### Latest Implementation Notes (2026-02-26, prototype card skin + selection glow force-sampling)
+- Explorer card shell visuals were updated to align with the prototype language (subtle glass badges, compact checkbox treatment, scrim-backed metadata, play overlay + preview pill) while preserving existing DOM/data flow and selection wiring.
+- Added a fixed background impulse canvas that renders subtle tap ripples on pointerdown events so touch interactions feel responsive even when premium card sampling is capped/frozen.
+- AssetFX premium sampling now force-includes all visible selected cards (even over cap), keeps scroll-freeze/stickiness behavior, and drives shader-level selection glow via `u_selected` + `u_select_pulse` with eased ramp down on deselect.
+- Top bar hide/reveal transitions now include blur + mask-based material reveal while preserving existing pointer-event gating and intent-controller behavior.

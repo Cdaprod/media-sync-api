@@ -274,6 +274,12 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.entryPendingCount += 1;' in shader_module
     assert '_renderDebugBadge(card, { ready, inView, sampled, pending, sticky, alwaysOn: ALWAYS_ON_PASS_ENABLED });' in shader_module
     assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);" in shader_module
+    assert "uniform float u_selected;" in shader_module
+    assert "uniform float u_select_pulse;" in shader_module
+    assert "selectedVisibleCards.forEach((card) => {" in shader_module
+    assert "if (sampledCards.has(card)) return;" in shader_module
+    assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_selected'), selectedVisibleCards.length > 0 ? 1 : 0);" in shader_module
+    assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_select_pulse'), this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));" in shader_module
     assert 'this.lastExitedAt = new WeakMap();' in shader_module
     assert "if (card.dataset.fxReady === '1') this._playExit(card);" in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
@@ -316,7 +322,9 @@ def test_explorer_shared_renderer_singleton_symbols_present():
 
 def test_explorer_asset_css_visual_animation_is_minimized():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
-    assert '.asset:hover{ border-color: rgba(255,255,255,0.12); }' in html
+    assert '.asset:hover{' in html
+    assert 'transform: translateY(-2px);' in html
+    assert '@media (pointer: coarse){' in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
 
 @pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")
@@ -353,3 +361,13 @@ def test_explorer_assetfx_context_singleton_runtime_with_playwright():
             assert active <= 6
         finally:
             browser.close()
+
+
+def test_explorer_card_shell_skin_and_bg_impulse_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '.asset .scrim{' in html
+    assert '.asset .play-btn{' in html
+    assert '.asset .preview-pill{' in html
+    assert 'id="bgImpulseCanvas" class="bg-impulse-canvas"' in html
+    assert 'function wireBackgroundImpulse()' in html
+    assert "document.addEventListener('pointerdown', pushImpulse, { passive: true });" in html

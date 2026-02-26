@@ -226,6 +226,8 @@ uniform int u_rect_count;
 uniform vec4 u_rects[${MAX_RECTS}];
 uniform sampler2D u_tile_params;
 uniform float u_motion_damp;
+uniform float u_selected;
+uniform float u_select_pulse;
 
 vec4 sampleParams(int idx) {
   float x = (float(idx) + 0.5) / float(${MAX_RECTS});
@@ -265,15 +267,16 @@ void main(){
     vec3 base = mix(vec3(0.07, 0.17, 0.28), vec3(0.10, 0.26, 0.42), edge);
     float verticalPulse = 0.5 + 0.5 * sin((tileUV.y * 500.0) + u_time * 2.2);
     float fresnel = pow(1.0 - clamp(dot(normalize(tileUV - vec2(0.5)), vec2(0.0, 1.0)), 0.0, 1.0), 2.0);
-    vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.38 + verticalPulse * 0.2) * sel;
+    float selectedEnergy = sel * (0.75 + (u_selected * 0.25) + (u_select_pulse * 0.55));
+    vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.42 + verticalPulse * 0.22) * selectedEnergy;
 
     vec3 material = base
       + vec3(0.045, 0.10, 0.16) * centerGlow
       + vec3(0.10, 0.24, 0.40) * verticalPulse * 0.22
-      + glass * 0.72
+      + glass * 0.82
       + vec3((grain - 0.5) * 0.026);
 
-    float cardAlpha = (0.045 + edge * 0.12 + energy * 0.10 + sel * 0.14) * ready;
+    float cardAlpha = (0.045 + edge * 0.12 + energy * 0.10 + selectedEnergy * 0.16) * ready;
     color += material * ready;
     alpha += cardAlpha;
   }
@@ -358,6 +361,8 @@ export class AssetFX {
     this.entryMs = 260;
     this.scrollVelocityEma = 0;
     this.motionDamp = 1;
+    this.selectPulse = 0;
+    this.selectionGlowTarget = 0;
     this.fpsEma = 60;
     this.capNow = this.maxRenderCardsAdaptive;
     this._lastFrameAt = 0;
@@ -437,6 +442,14 @@ export class AssetFX {
     const age = this._lastScrollAt > 0 ? (now - this._lastScrollAt) : 1000;
     const vDecayed = this.scrollVelocityEma * Math.exp(-age / 220);
     this.motionDamp = 1.0 - smoothstep(0.2, 1.2, vDecayed);
+  }
+
+  _updateSelectionGlow(nowPerf, selectedCount) {
+    this.selectionGlowTarget = selectedCount > 0 ? 1 : 0;
+    const easeMs = this.selectionGlowTarget > this.selectPulse ? 220 : 320;
+    const dt = this._lastFrameAt > 0 ? Math.max(0, nowPerf - this._lastFrameAt) : 16;
+    const t = Math.min(1, dt / easeMs);
+    this.selectPulse += (this.selectionGlowTarget - this.selectPulse) * t;
   }
 
   _markLayoutDirty() {
@@ -1194,6 +1207,9 @@ export class AssetFX {
     this.samplingFrozen = freezeByVelocity || freezeBySettle;
 
     const rowsByCard = new Map(renderCandidates.map((row) => [row[9], row]));
+    const selectedVisibleCards = renderCandidates
+      .filter((row) => row[5] > 0)
+      .map((row) => row[9]);
     const stickyCards = [];
     rowsByCard.forEach((row, card) => {
       const stickUntil = this.sampledCardsUntil.get(card) || 0;
@@ -1246,6 +1262,15 @@ export class AssetFX {
     this.sweepFilledCount = Math.max(0, cards.length - this.stickyRetainedCount);
     this.lastSampledCards = [...sampledCards];
 
+    selectedVisibleCards.forEach((card) => {
+      const row = rowsByCard.get(card);
+      if (!row) return;
+      if (sampledCards.has(card)) return;
+      cards.push(row);
+      sampledCards.add(card);
+      this.sampledCardsUntil.set(card, nowPerf + SAMPLE_STICK_MS);
+    });
+
     // finalize pending entry once sampling decision settles (sampled or 2 raf cycles)
     this.entryPendingCount = 0;
     this.visibleCards.forEach((card) => {
@@ -1280,6 +1305,7 @@ export class AssetFX {
     }
     this.renderSampledCount = cards.length;
     this.droppedByCapCount = Math.max(0, totalCandidates - cards.length);
+    this._updateSelectionGlow(nowPerf, selectedVisibleCards.length);
     this.layoutDirty = false;
     this._renderDebugRects(cards, width, height);
 
@@ -1310,6 +1336,8 @@ export class AssetFX {
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_time'), (performance.now() - this.start) * 0.001);
     gl.uniform1i(gl.getUniformLocation(this.program, 'u_rect_count'), Math.min(cards.length, MAX_RECTS));
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_selected'), selectedVisibleCards.length > 0 ? 1 : 0);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_select_pulse'), this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));
     gl.uniform4fv(gl.getUniformLocation(this.program, 'u_rects'), rectData);
     if (this.tileParamTexture) {
       gl.activeTexture(gl.TEXTURE0);

@@ -15,8 +15,9 @@
       --grid-col-width: 160px;
       --card-bg: rgba(255,255,255,0.05);
       --card-border: rgba(255,255,255,0.10);
-      --asset-radius: 4px;
-      --asset-border: rgba(255,255,255,0);
+      --asset-radius: 6px;
+      --asset-border: rgba(255,255,255,0.08);
+      --asset-accent: #4af0c0;
       --text: rgba(255,255,255,0.92);
       --muted: rgba(255,255,255,0.65);
       --muted2: rgba(255,255,255,0.45);
@@ -84,6 +85,17 @@
       min-height: 0;
     }
 
+    .bg-impulse-canvas{
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.4;
+    }
+    .app{ position: relative; z-index: 1; }
+
     .mobile-only{ display:none; }
 
     .backdrop{
@@ -111,13 +123,19 @@
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      transition: transform var(--dur-med) var(--ease-snappy), opacity var(--dur-med) var(--ease-settle), margin-bottom var(--dur-med) var(--ease-settle);
+      transition: transform var(--dur-slow) var(--ease-snappy), opacity var(--dur-med) var(--ease-settle), margin-bottom var(--dur-slow) var(--ease-settle), filter var(--dur-med) var(--ease-settle), -webkit-filter var(--dur-med) var(--ease-settle);
+      filter: blur(0px);
+      -webkit-filter: blur(0px);
+      -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.92) 74%, rgba(0,0,0,0.72) 100%);
+      mask-image: linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.92) 74%, rgba(0,0,0,0.72) 100%);
     }
     body.topbar-hidden .topbar{
       transform: translateY(calc(-1 * var(--topbar-height)));
       opacity: 0;
       pointer-events: none;
       margin-bottom: calc(-1 * var(--topbar-height));
+      filter: blur(4px);
+      -webkit-filter: blur(4px);
     }
     .topbar-reveal{
       position: fixed;
@@ -750,15 +768,22 @@
       break-inside: avoid;
       margin-bottom: var(--grid-gap);
       border: 1px solid var(--asset-border);
-      background: transparent;
+      background: rgba(16,18,28,0.88);
       border-radius: var(--asset-radius);
       overflow:hidden;
       cursor:pointer;
-      transition: border-color var(--dur-fast) var(--ease-settle);
+      transition: border-color var(--dur-fast) var(--ease-settle), box-shadow var(--dur-med) var(--ease-settle), transform var(--dur-med) var(--ease-settle);
       position: relative;
       will-change: transform;
     }
-    .asset:hover{ border-color: rgba(255,255,255,0.12); }
+    .asset:hover{
+      border-color: rgba(255,255,255,0.2);
+      box-shadow: 0 12px 42px rgba(0,0,0,0.46), 0 0 0 1px rgba(74,240,192,0.08);
+      transform: translateY(-2px);
+    }
+    @media (pointer: coarse){
+      .asset:hover{ transform: none; }
+    }
 
     .thumb{
       background: rgba(0,0,0,0.18);
@@ -797,6 +822,13 @@
       inset: 0;
       pointer-events: none;
     }
+    .asset .scrim{
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.34) 42%, rgba(0,0,0,0.05) 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
     .asset .asset-ol-tl{
       position: absolute;
       left: 8px;
@@ -821,6 +853,51 @@
       gap: 6px;
       pointer-events: none;
     }
+
+    .asset .play-btn{
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .asset:hover .play-btn{ opacity: 1; }
+    .asset[data-kind="image"] .play-btn,
+    .asset[data-kind="doc"] .play-btn{ opacity: 0 !important; }
+    .asset .play-btn-inner{
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.62);
+      border: 1.5px solid rgba(255,255,255,0.45);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .asset .preview-pill{
+      position: absolute;
+      right: 8px;
+      bottom: 48px;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--asset-accent);
+      background: rgba(74,240,192,0.15);
+      border: 1px solid rgba(74,240,192,0.32);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 2;
+    }
+    .asset:hover .preview-pill{ opacity: 1; }
+
     .asset .asset-ol-bottom{
       position: absolute;
       left: 0;
@@ -829,8 +906,8 @@
       padding: 10px 10px 12px;
       display: grid;
       gap: 4px;
-      background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.2), rgba(0,0,0,0));
       pointer-events: none;
+      z-index: 2;
     }
     .asset .asset-title{
       font-size: 12px;
@@ -851,33 +928,41 @@
       white-space: nowrap;
     }
     .badge{
-      font-size: 11px;
-      padding: 4px 8px;
-      border-radius: 999px;
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      padding: 3px 7px;
+      border-radius: 3px;
       border: 1px solid var(--border);
-      background: rgba(0,0,0,0.25);
-      color: rgba(255,255,255,0.85);
+      background: rgba(10,12,20,0.56);
+      color: rgba(235,241,255,0.88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
-    .badge.kind-video{ border-color: rgba(59,130,246,0.35); }
-    .badge.kind-image{ border-color: rgba(34,197,94,0.35); }
-    .badge.kind-audio{ border-color: rgba(245,158,11,0.35); }
-    .badge.kind-doc{ border-color: rgba(124,58,237,0.35); }
+    .badge.kind-video{ background: rgba(32,96,255,0.3); border-color: rgba(32,96,255,0.5); color: #80b0ff; }
+    .badge.kind-image{ background: rgba(32,160,255,0.3); border-color: rgba(32,160,255,0.5); color: #80d0ff; }
+    .badge.kind-audio{ background: rgba(144,32,255,0.3); border-color: rgba(144,32,255,0.5); color: #c080ff; }
+    .badge.kind-doc{ background: rgba(124,58,237,0.28); border-color: rgba(124,58,237,0.5); color: #ccb4ff; }
 
     .selector{
-      width: 34px; height: 34px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: rgba(0,0,0,0.25);
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      background: rgba(0,0,0,0.4);
       display:flex;
       align-items:center;
       justify-content:center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: border-color 0.2s ease, background 0.2s ease;
     }
-    .selector input{ width: 16px; height: 16px; }
+    .selector:hover{ border-color: var(--asset-accent); }
+    .selector input{ width: 14px; height: 14px; accent-color: var(--asset-accent); }
 
-    .asset.selected{
-      border-color: rgba(124,58,237,0.55);
-      box-shadow: 0 0 0 3px rgba(124,58,237,0.12) inset;
-      transform: translateY(-1px);
+    .asset.is-selected{
+      border-color: rgba(74,240,192,0.65);
+      box-shadow: 0 0 0 1px rgba(74,240,192,0.6), 0 10px 38px rgba(74,240,192,0.11);
     }
 
     /* List row variant */
@@ -1274,6 +1359,7 @@
 </head>
 
 <body>
+  <canvas id="bgImpulseCanvas" class="bg-impulse-canvas" aria-hidden="true"></canvas>
   <div class="topbar-reveal" id="topbarReveal" aria-hidden="true"></div>
   <div class="app">
     <div class="topbar">
@@ -3354,6 +3440,9 @@
             <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
               data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
+            <div class="scrim"></div>
+            <div class="play-btn" aria-hidden="true"><div class="play-btn-inner">▶</div></div>
+            <div class="preview-pill" aria-hidden="true">preview</div>
             <div class="asset-overlay">
               <div class="asset-ol-tl">
                 <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
@@ -4114,6 +4203,60 @@
     };
 
 
+    
+    function wireBackgroundImpulse(){
+      const canvas = el('bgImpulseCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d', { alpha: true });
+      if (!ctx) return;
+      let width = 0;
+      let height = 0;
+      let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const impulses = [];
+      const IMPULSE_MS = 220;
+      const resize = () => {
+        dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        width = Math.max(1, window.innerWidth || 1);
+        height = Math.max(1, window.innerHeight || 1);
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      };
+      resize();
+      window.addEventListener('resize', resize);
+      const pushImpulse = (event) => {
+        const x = Number(event.clientX || width * 0.5);
+        const y = Number(event.clientY || height * 0.5);
+        impulses.push({ x, y, t: performance.now() });
+      };
+      document.addEventListener('pointerdown', pushImpulse, { passive: true });
+      const loop = () => {
+        const now = performance.now();
+        while (impulses.length && (now - impulses[0].t) > IMPULSE_MS) impulses.shift();
+        ctx.clearRect(0, 0, width, height);
+        impulses.forEach((impulse) => {
+          const age = now - impulse.t;
+          const progress = Math.max(0, Math.min(1, age / IMPULSE_MS));
+          const ringRadius = 12 + (Math.max(width, height) * 0.2 * progress);
+          const alpha = (1 - progress) * 0.13;
+          const coreAlpha = (1 - progress) * 0.08;
+          const grad = ctx.createRadialGradient(impulse.x, impulse.y, Math.max(2, ringRadius * 0.3), impulse.x, impulse.y, ringRadius);
+          grad.addColorStop(0, `rgba(74,240,192,${coreAlpha})`);
+          grad.addColorStop(0.55, `rgba(74,240,192,${alpha})`);
+          grad.addColorStop(1, 'rgba(74,240,192,0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(impulse.x, impulse.y, ringRadius, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    }
+
+
     function wireSelectionDelegation(){
       const MOVE_THRESHOLD = 12;
       const pointers = new Map();
@@ -4172,6 +4315,7 @@
       wireDropdownIntents();
       wireProjectDragAssist();
       wireSelectionDelegation();
+      wireBackgroundImpulse();
       document.addEventListener('pointerdown', (event) => {
         const menu = el('contextMenu');
         if (!menu?.classList.contains('open')) return;
