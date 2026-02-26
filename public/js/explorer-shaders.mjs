@@ -267,16 +267,16 @@ void main(){
     vec3 base = mix(vec3(0.07, 0.17, 0.28), vec3(0.10, 0.26, 0.42), edge);
     float verticalPulse = 0.5 + 0.5 * sin((tileUV.y * 500.0) + u_time * 2.2);
     float fresnel = pow(1.0 - clamp(dot(normalize(tileUV - vec2(0.5)), vec2(0.0, 1.0)), 0.0, 1.0), 2.0);
-    float selectedEnergy = sel * (0.75 + (u_selected * 0.25) + (u_select_pulse * 0.55));
+    float selectedEnergy = sel * (0.95 + (u_selected * 0.35) + (u_select_pulse * 0.75));
     vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.42 + verticalPulse * 0.22) * selectedEnergy;
 
     vec3 material = base
       + vec3(0.045, 0.10, 0.16) * centerGlow
       + vec3(0.10, 0.24, 0.40) * verticalPulse * 0.22
-      + glass * 0.82
+      + glass * 1.04
       + vec3((grain - 0.5) * 0.026);
 
-    float cardAlpha = (0.045 + edge * 0.12 + energy * 0.10 + selectedEnergy * 0.16) * ready;
+    float cardAlpha = (0.05 + edge * 0.13 + energy * 0.11 + selectedEnergy * 0.24) * ready;
     color += material * ready;
     alpha += cardAlpha;
   }

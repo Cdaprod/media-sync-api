@@ -276,6 +276,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);" in shader_module
     assert "uniform float u_selected;" in shader_module
     assert "uniform float u_select_pulse;" in shader_module
+    assert "float selectedEnergy = sel * (0.95 + (u_selected * 0.35) + (u_select_pulse * 0.75));" in shader_module
     assert "selectedVisibleCards.forEach((card) => {" in shader_module
     assert "if (sampledCards.has(card)) return;" in shader_module
     assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_selected'), selectedVisibleCards.length > 0 ? 1 : 0);" in shader_module
@@ -326,7 +327,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'transform: translateY(-2px);' in html
     assert '@media (pointer: coarse){' in html
     assert '.selector .sel-order{' in html
-    assert 'color: rgba(10, 18, 24, 0.95);' in html
+    assert 'color: var(--asset-accent);' in html
     assert 'syncSelectionOrderBadges();' in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
 
@@ -382,3 +383,6 @@ def test_explorer_selection_order_badge_wiring_present():
     assert 'function selectionOrderIndexMap()' in html
     assert 'function syncSelectionOrderBadges()' in html
     assert "badge.textContent = order ? String(Math.min(order, 99)) : '';" in html
+    assert '<button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>' in html
+    assert '<button id="clearSelBtnTop" class="btn" type="button" disabled>✕ Clear</button>' in html
+    assert "if (clearBtnTop) clearBtnTop.disabled = !show;" in html
