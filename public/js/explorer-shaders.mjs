@@ -239,10 +239,10 @@ void main(){
   vec2 uv = vec2(v_uv.x, 1.0 - v_uv.y);
   float globalVignette = 1.0 - smoothstep(0.18, 0.95, length(uv - vec2(0.5)));
   float globalGrain = fract(sin(dot((uv + vec2(u_time * 0.02, u_time * 0.01)) * 171.7, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
-  float globalScan = 0.5 + 0.5 * sin((uv.y * u_resolution.y * 0.045) + u_time * 1.4);
-  vec3 color = vec3(0.022, 0.045, 0.074) * (0.55 + globalVignette * 0.45);
-  color += vec3(globalGrain * 0.014);
-  color += vec3(0.025, 0.055, 0.08) * globalScan * (0.04 + 0.08 * u_motion_damp);
+  float globalScan = 0.5 + 0.5 * sin((uv.y * u_resolution.y * 0.03) + u_time * 1.0);
+  vec3 color = vec3(0.022, 0.045, 0.074) * (0.58 + globalVignette * 0.42);
+  color += vec3(globalGrain * 0.01);
+  color += vec3(0.02, 0.045, 0.07) * globalScan * (0.02 + 0.05 * u_motion_damp);
   float alpha = 0.055 + globalVignette * 0.035;
 
   for (int i = 0; i < ${MAX_RECTS}; i++) {
@@ -265,14 +265,14 @@ void main(){
 
     // single shared material pass for all assets (no type-specific sweeps)
     vec3 base = mix(vec3(0.07, 0.17, 0.28), vec3(0.10, 0.26, 0.42), edge);
-    float verticalPulse = 0.5 + 0.5 * sin((tileUV.y * 500.0) + u_time * 2.2);
+    float verticalPulse = 0.5 + 0.5 * sin((tileUV.y * 320.0) + u_time * 1.6);
     float fresnel = pow(1.0 - clamp(dot(normalize(tileUV - vec2(0.5)), vec2(0.0, 1.0)), 0.0, 1.0), 2.0);
     float selectedEnergy = sel * (0.95 + (u_selected * 0.35) + (u_select_pulse * 0.75));
     vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.42 + verticalPulse * 0.22) * selectedEnergy;
 
     vec3 material = base
       + vec3(0.045, 0.10, 0.16) * centerGlow
-      + vec3(0.10, 0.24, 0.40) * verticalPulse * 0.22
+      + vec3(0.08, 0.18, 0.30) * verticalPulse * 0.14
       + glass * 1.04
       + vec3((grain - 0.5) * 0.026);
 
@@ -281,7 +281,7 @@ void main(){
     alpha += cardAlpha;
   }
 
-  alpha = clamp(alpha, 0.0, 0.62);
+  alpha = clamp(alpha, 0.0, 0.54);
   gl_FragColor = vec4(color, alpha);
 }
 `;
@@ -354,8 +354,8 @@ export class AssetFX {
     this.maxActiveEffects = 6;
     this.maxPendingDissolves = 60;
     this.minRenderCards = 18;
-    this.maxRenderCardsLowTier = 32;
-    this.maxRenderCardsHighTier = 42;
+    this.maxRenderCardsLowTier = 22;
+    this.maxRenderCardsHighTier = 30;
     this.maxRenderCardsAdaptive = this.maxRenderCardsLowTier;
     this.readyFadeMs = 240;
     this.entryMs = 260;

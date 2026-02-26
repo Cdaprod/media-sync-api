@@ -241,6 +241,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
     assert 'const ALWAYS_ON_PASS_ENABLED = true;' in shader_module
     assert 'const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;' in shader_module
+    assert 'this.maxRenderCardsLowTier = 22;' in shader_module
+    assert 'this.maxRenderCardsHighTier = 30;' in shader_module
     assert 'let adaptiveMaxRenderCards = Math.min(totalCandidates, Math.min(dynamicCap, visibleDrivenCap));' in shader_module
     assert 'this.maxRenderCardsAdaptive = adaptiveMaxRenderCards;' in shader_module
     assert 'const sampledCards = new Set();' in shader_module
@@ -329,6 +331,9 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert '.selector .sel-order{' in html
     assert 'color: var(--asset-accent);' in html
     assert 'syncSelectionOrderBadges();' in html
+    assert '.topbar{' in html and 'z-index: 120;' in html
+    assert '.actions-panel{' in html and 'z-index: 170;' in html
+    assert '.dropdown-menu{' in html and 'z-index: 180;' in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
 
 @pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")
