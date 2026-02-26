@@ -241,6 +241,10 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
     assert 'const ALWAYS_ON_PASS_ENABLED = true;' in shader_module
     assert 'const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;' in shader_module
+    assert 'this.maxRenderPixelsLowTier = 1450000;' in shader_module
+    assert 'this.maxRenderPixelsHighTier = 2400000;' in shader_module
+    assert 'const pixelBudget = Math.min(pixelBudgetCap, pixelBudgetDynamic);' in shader_module
+    assert 'if (!force && (this.renderPixelsNow + rowPixels) > pixelBudget) return;' in shader_module
     assert 'this.maxRenderCardsLowTier = 22;' in shader_module
     assert 'this.maxRenderCardsHighTier = 30;' in shader_module
     assert 'let adaptiveMaxRenderCards = Math.min(totalCandidates, Math.min(dynamicCap, visibleDrivenCap));' in shader_module
@@ -252,6 +256,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.scrollVelocityEma = (this.scrollVelocityEma * 0.82) + (v * 0.18);' in shader_module
     assert 'this.motionDamp = 1.0 - smoothstep(0.2, 1.2, vDecayed);' in shader_module
     assert 'this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);' in shader_module
+    assert 'const lowTierFrameSkip = ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
+    assert 'if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();' in shader_module
     assert 'const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));' in shader_module
     assert 'if (this.fpsEma > 55) adaptiveMaxRenderCards =' in shader_module
     assert 'const SAMPLE_STICK_MS = 420;' in shader_module

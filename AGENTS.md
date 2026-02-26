@@ -1114,3 +1114,5 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Fixed topbar/action menu stacking so actions/dropdowns render above the asset grid (`z-index` layering), and reduced AssetFX overlay cost by lowering adaptive premium caps plus softening baseline scanline/pulse intensity for smoother scroll behavior on iPhone-class devices.
 
 - Actions menu now uses a fixed `#ui-portal` host (body-level portal) for panel rendering so Safari stacking contexts from card/grid/FX layers cannot place it behind assets; open-state positioning now computes from the Actions trigger and includes optional `fxdebug` z-index/transform ancestry logging.
+
+- AssetFX efficiency tuning: added low/high-tier per-frame pixel budgets (`maxRenderPixelsLowTier`/`maxRenderPixelsHighTier`) to bound premium card coverage cost, plus low-tier fast-scroll frame skipping so overlay rendering runs at half-rate during high-velocity flicks while preserving selected-card force sampling.

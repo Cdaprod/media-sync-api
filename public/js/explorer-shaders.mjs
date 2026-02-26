@@ -186,6 +186,7 @@ if (typeof window !== 'undefined') {
       motionDamp: FX_GLOBAL.__assetfx_instance?.motionDamp || 0,
       fpsEma: FX_GLOBAL.__assetfx_instance?.fpsEma || 0,
       capNow: FX_GLOBAL.__assetfx_instance?.capNow || 0,
+      renderPixelsNow: FX_GLOBAL.__assetfx_instance?.renderPixelsNow || 0,
       sampleCursor: FX_GLOBAL.__assetfx_instance?.sampleCursor || 0,
       samplingFrozen: FX_GLOBAL.__assetfx_instance?.samplingFrozen === true,
       stickyRetainedCount: FX_GLOBAL.__assetfx_instance?.stickyRetainedCount || 0,
@@ -357,6 +358,9 @@ export class AssetFX {
     this.maxRenderCardsLowTier = 22;
     this.maxRenderCardsHighTier = 30;
     this.maxRenderCardsAdaptive = this.maxRenderCardsLowTier;
+    this.maxRenderPixelsLowTier = 1450000;
+    this.maxRenderPixelsHighTier = 2400000;
+    this.renderPixelsNow = 0;
     this.readyFadeMs = 240;
     this.entryMs = 260;
     this.scrollVelocityEma = 0;
@@ -368,6 +372,7 @@ export class AssetFX {
     this._lastFrameAt = 0;
     this._lastScrollAt = 0;
     this._lastScrollY = 0;
+    this._frameCounter = 0;
     this.sampleCursor = 0;
     this.samplingFrozen = false;
     this.samplingSettleUntil = 0;
@@ -1094,7 +1099,11 @@ export class AssetFX {
         this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);
       }
       this._lastFrameAt = now;
-      this._render();
+      this._frameCounter += 1;
+      const deviceMemory = Number(window.navigator?.deviceMemory || 0);
+      const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
+      const lowTierFrameSkip = ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;
+      if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();
       this.raf = requestAnimationFrame(tick);
       if (this.container && RENDERERS.has(this.container)) {
         const shared = RENDERERS.get(this.container);
@@ -1193,6 +1202,10 @@ export class AssetFX {
     const deviceMemory = Number(window.navigator?.deviceMemory || 0);
     const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
     const lowTier = (deviceMemory > 0 && deviceMemory <= 4) || smallScreen;
+    const pixelBudgetCap = lowTier ? this.maxRenderPixelsLowTier : this.maxRenderPixelsHighTier;
+    const pixelBudgetDynamic = Math.round(width * height * (lowTier ? 0.9 : 1.2));
+    const pixelBudget = Math.min(pixelBudgetCap, pixelBudgetDynamic);
+    this.renderPixelsNow = 0;
     const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;
     const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));
     let adaptiveMaxRenderCards = Math.min(totalCandidates, Math.min(dynamicCap, visibleDrivenCap));
@@ -1234,15 +1247,19 @@ export class AssetFX {
     const frozenCards = this.samplingFrozen ? this.lastSampledCards.filter((card) => rowsByCard.has(card)) : [];
     const selectedCards = [];
     const selectedSet = new Set();
-    const pushCard = (card) => {
+    const pushCard = (card, force = false) => {
       if (!card || selectedSet.has(card) || !rowsByCard.has(card) || selectedCards.length >= adaptiveMaxRenderCards) return;
+      const row = rowsByCard.get(card);
+      const rowPixels = Math.max(1, (row[2] - row[0]) * (row[3] - row[1]));
+      if (!force && (this.renderPixelsNow + rowPixels) > pixelBudget) return;
+      this.renderPixelsNow += rowPixels;
       selectedCards.push(card);
       selectedSet.add(card);
     };
 
-    stickyCards.forEach(pushCard);
-    if (this.samplingFrozen) frozenCards.forEach(pushCard);
-    sweepCards.forEach(pushCard);
+    stickyCards.forEach((card) => pushCard(card));
+    if (this.samplingFrozen) frozenCards.forEach((card) => pushCard(card));
+    sweepCards.forEach((card) => pushCard(card));
 
     const sampledCards = new Set();
     this.stickyRetainedCount = 0;
@@ -1268,6 +1285,7 @@ export class AssetFX {
       if (sampledCards.has(card)) return;
       cards.push(row);
       sampledCards.add(card);
+      this.renderPixelsNow += Math.max(1, (row[2] - row[0]) * (row[3] - row[1]));
       this.sampledCardsUntil.set(card, nowPerf + SAMPLE_STICK_MS);
     });
 
