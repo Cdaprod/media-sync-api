@@ -334,6 +334,8 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert '.topbar{' in html and 'z-index: 120;' in html
     assert '.actions-panel{' in html and 'z-index: 170;' in html
     assert '.dropdown-menu{' in html and 'z-index: 180;' in html
+    assert '#ui-portal{' in html and 'z-index: 100000;' in html
+    assert '#ui-portal .actions-panel{' in html and 'pointer-events: auto;' in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
 
 @pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")
@@ -391,3 +393,6 @@ def test_explorer_selection_order_badge_wiring_present():
     assert '<button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>' in html
     assert '<button id="clearSelBtnTop" class="btn" type="button" disabled>✕ Clear</button>' in html
     assert "if (clearBtnTop) clearBtnTop.disabled = !show;" in html
+    assert '<div id="ui-portal" aria-hidden="false"></div>' in html
+    assert "if (actionsPanel && actionsPanel.parentElement !== uiPortal) uiPortal.appendChild(actionsPanel);" in html
+    assert "console.debug('[actions-panel]', { zIndex: getComputedStyle(actionsPanel).zIndex, transformedAncestor });" in html

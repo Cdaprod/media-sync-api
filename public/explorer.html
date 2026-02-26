@@ -96,6 +96,16 @@
     }
     .app{ position: relative; z-index: 1; }
 
+    #ui-portal{
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      pointer-events: none;
+    }
+    #ui-portal .actions-panel{
+      pointer-events: auto;
+    }
+
     .mobile-only{ display:none; }
 
     .backdrop{
@@ -359,8 +369,8 @@
       justify-content: flex-end;
     }
     .actions-panel{
-      position: absolute;
-      top: calc(100% + 8px);
+      position: fixed;
+      top: 72px;
       right: 18px;
       min-width: min(520px, 92vw);
       background: rgba(11,16,32,0.96);
@@ -4070,7 +4080,47 @@
 
     const actionsToggle = el('actionsToggle');
     const actionsPanel = el('actionsPanel');
+    const uiPortal = (() => {
+      let host = el('ui-portal');
+      if (!host){
+        host = document.createElement('div');
+        host.id = 'ui-portal';
+        document.body.appendChild(host);
+      }
+      return host;
+    })();
+    if (actionsPanel && actionsPanel.parentElement !== uiPortal) uiPortal.appendChild(actionsPanel);
+
+    const positionActionsPanel = () => {
+      if (!actionsToggle || !actionsPanel) return;
+      const rect = actionsToggle.getBoundingClientRect();
+      const panelWidth = Math.min(520, Math.max(280, window.innerWidth * 0.92));
+      const right = Math.max(12, window.innerWidth - rect.right);
+      const top = Math.min(window.innerHeight - 16, rect.bottom + 8);
+      actionsPanel.style.top = `${top}px`;
+      actionsPanel.style.right = `${right}px`;
+      actionsPanel.style.width = `${panelWidth}px`;
+      actionsPanel.style.maxWidth = '92vw';
+      if (FX_DEBUG){
+        const transformedAncestor = (() => {
+          let node = actionsPanel.parentElement;
+          while (node){
+            const transform = getComputedStyle(node).transform;
+            if (transform && transform !== 'none') return node.id || node.className || node.tagName;
+            node = node.parentElement;
+          }
+          return null;
+        })();
+        console.debug('[actions-panel]', { zIndex: getComputedStyle(actionsPanel).zIndex, transformedAncestor });
+      }
+    };
+
     const toggleActions = (open) => {
+      if (!actionsPanel) return;
+      if (open){
+        if (actionsPanel.parentElement !== uiPortal) uiPortal.appendChild(actionsPanel);
+        positionActionsPanel();
+      }
       actionsPanel.classList.toggle('open', open);
       actionsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     };
@@ -4078,6 +4128,9 @@
       event.stopPropagation();
       const isOpen = actionsPanel.classList.contains('open');
       toggleActions(!isOpen);
+    });
+    window.addEventListener('resize', () => {
+      if (actionsPanel.classList.contains('open')) positionActionsPanel();
     });
     document.addEventListener('click', (event) => {
       if (!actionsPanel.classList.contains('open')) return;
@@ -4401,6 +4454,7 @@
       updateSelectionUI();
     });
   </script>
+  <div id="ui-portal" aria-hidden="false"></div>
   <div id="contextMenu" class="context-menu" role="menu" aria-hidden="true"></div>
 </body>
 </html>
