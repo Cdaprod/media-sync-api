@@ -220,8 +220,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
-    assert "position: 'fixed'" in shader_module
-    assert 'if (!canvas.isConnected || canvas.parentElement !== document.body) document.body.appendChild(canvas);' in shader_module
+    assert "position: 'absolute'" in shader_module
+    assert "if (!canvas.isConnected || canvas.parentElement !== container) container.prepend(canvas);" in shader_module
     assert 'const tileParamData = new Uint8Array(MAX_RECTS * 4);' in shader_module
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
@@ -229,9 +229,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert 'const RECT_INSET_PX = 4;' in shader_module
-    assert 'const vv = window.visualViewport;' in shader_module
-    assert 'if (this.overlay.style.transform !== transform) this.overlay.style.transform = transform;' in shader_module
-    assert 'if (this.debugOverlay) this.debugOverlay.style.transform = transform;' in shader_module
+    assert "if (this.container.dataset.fxSuspend === '1') {" in shader_module
+    assert 'this.gl.clear(this.gl.COLOR_BUFFER_BIT);' in shader_module
     assert 'const canvasRect = this.overlay.getBoundingClientRect();' in shader_module
     assert 'let x1 = (cr.left - canvasRect.left) * dpr;' in shader_module
     assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
@@ -254,6 +253,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.maxRenderCardsAdaptive = adaptiveMaxRenderCards;' in shader_module
     assert 'const sampledCards = new Set();' in shader_module
     assert 'uniform float u_motion_damp;' in shader_module
+    assert 'uniform float u_scroll_fast;' in shader_module
     assert 'this._recordScrollMotion(event);' in shader_module
     assert 'this._updateMotionDamp();' in shader_module
     assert 'this.scrollVelocityEma = (this.scrollVelocityEma * 0.82) + (v * 0.18);' in shader_module
@@ -287,6 +287,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.entryPendingCount += 1;' in shader_module
     assert '_renderDebugBadge(card, { ready, inView, sampled, pending, sticky, alwaysOn: ALWAYS_ON_PASS_ENABLED });' in shader_module
     assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);" in shader_module
+    assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_scroll_fast'), this.scrollFast);" in shader_module
     assert "uniform float u_selected;" in shader_module
     assert "uniform float u_select_pulse;" in shader_module
     assert "float selectedEnergy = sel * (0.95 + (u_selected * 0.35) + (u_select_pulse * 0.75));" in shader_module
@@ -342,14 +343,16 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert '.selector .sel-order{' in html
     assert 'color: var(--asset-accent);' in html
     assert 'syncSelectionOrderBadges();' in html
-    assert '.topbar{' in html and 'z-index: 120;' in html
-    assert '.actions-panel{' in html and 'z-index: 170;' in html
-    assert '.dropdown-menu{' in html and 'z-index: 180;' in html
-    assert '#ui-portal{' in html and 'z-index: 100000;' in html
-    assert '.toasts{' in html and 'z-index: 200000;' in html
+    assert '.topbar{' in html and 'z-index: var(--z-topbar);' in html
+    assert '.actions-panel{' in html and 'z-index: var(--z-modal);' in html
+    assert '.dropdown-menu{' in html and 'z-index: var(--z-dropdown);' in html
+    assert '#ui-portal{' in html and 'z-index: var(--z-dropdown);' in html
+    assert '.toasts{' in html and 'z-index: var(--z-toast);' in html
     assert 'function ensureToastHost()' in html
     assert 'if (host.parentElement !== document.body) document.body.appendChild(host);' in html
     assert '#ui-portal .actions-panel{' in html and 'pointer-events: auto;' in html
+    assert 'function setFxSuspend(suspend)' in html
+    assert "setFxSuspend(open || ui.inspectorOpen);" in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
 
 @pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")

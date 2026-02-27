@@ -1123,3 +1123,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-02-27, maintenance: validation checkpoint)
 - Ran the focused explorer static coverage suite (`pytest -q tests/test_public_explorer_program_monitor.py`) after the latest AssetFX/toast layering work; result remained green (`19 passed, 1 skipped`).
 - Added this checkpoint entry to keep AGENTS handoff continuity explicit for the next agent per repo policy (update AGENTS.md on every commit).
+
+### Latest Implementation Notes (2026-02-27, explorer FX layering/alignment follow-up)
+- Re-anchored AssetFX overlay/debug canvases to the explorer scroll root (`[data-fx-grid-root="1"]`) with absolute in-root positioning and root-prepend attachment, replacing viewport-fixed body overlays to eliminate scroll drift and panel bleed-through.
+- Added FX suspension wiring (`setFxSuspend`) so inspector/actions overlays temporarily clear+pause shader rendering while open, then resume when closed.
+- Added shader-level scroll calm uniform (`u_scroll_fast`) driven by decayed scroll velocity to reduce selection glare/entry intensity during fast scrolling while keeping baseline scanline texture.
+- Updated explorer static assertions and reran the focused monitor suite (`19 passed, 1 skipped`) after these fixes.

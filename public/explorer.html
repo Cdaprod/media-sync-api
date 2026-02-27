@@ -33,6 +33,12 @@
       --topbar-subrow-height: 38px;
       --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
       --topbar-offset: var(--topbar-height);
+      --z-fx: 10;
+      --z-grid: 20;
+      --z-topbar: 5000;
+      --z-toast: 6000;
+      --z-modal: 7000;
+      --z-dropdown: 8000;
       --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
       --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
       --dur-fast: 160ms;
@@ -70,6 +76,7 @@
         var(--bg);
       color: var(--text);
       overflow: hidden;
+      position: relative;
     }
     body.topbar-hidden{
       --topbar-offset: 0px;
@@ -99,7 +106,7 @@
     #ui-portal{
       position: fixed;
       inset: 0;
-      z-index: 100000;
+      z-index: var(--z-dropdown);
       pointer-events: none;
     }
     #ui-portal .actions-panel{
@@ -128,7 +135,7 @@
       top: 0;
       left: 0;
       right: 0;
-      z-index: 120;
+      z-index: var(--z-topbar);
       background: rgba(11,16,32,0.65);
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(10px);
@@ -144,8 +151,6 @@
       opacity: 0;
       pointer-events: none;
       margin-bottom: calc(-1 * var(--topbar-height));
-      filter: blur(4px);
-      -webkit-filter: blur(4px);
     }
     .topbar-reveal{
       position: fixed;
@@ -230,6 +235,7 @@
       color: var(--muted);
       white-space: nowrap;
       overflow: hidden;
+      position: relative;
       text-overflow: ellipsis;
       max-width: 180px;
     }
@@ -323,7 +329,7 @@
       display: none;
       flex-direction: column;
       gap: 4px;
-      z-index: 180;
+      z-index: var(--z-dropdown);
     }
     .dropdown[open] .dropdown-menu{ display: flex; }
     .dropdown-menu button{
@@ -354,6 +360,7 @@
       height: 1px;
       width: 1px;
       overflow: hidden;
+      position: relative;
       clip: rect(1px, 1px, 1px, 1px);
       white-space: nowrap;
       border: 0;
@@ -381,7 +388,7 @@
       display: none;
       flex-direction: column;
       gap: 10px;
-      z-index: 170;
+      z-index: var(--z-modal);
     }
     .actions-panel.open{ display:flex; }
     .btn{
@@ -414,6 +421,7 @@
       border: 1px solid var(--border);
       border-radius: 999px;
       overflow: hidden;
+      position: relative;
       background: rgba(255,255,255,0.05);
     }
     .seg button{
@@ -469,6 +477,7 @@
       background: transparent;
       box-shadow: none;
       overflow: hidden;
+      position: relative;
       display:flex;
       flex-direction: column;
       min-height: 0;
@@ -614,10 +623,27 @@
     .content .scroll{
       overflow: auto;
       flex: 1;
+      position: relative;
+      z-index: var(--z-grid);
     }
     .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
     .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
     .scroll::-webkit-scrollbar-track{ background: rgba(255,255,255,0.04); }
+
+    #mediaGridRoot > .fx-shared-overlay,
+    #mediaGridRoot > .fx-debug-overlay{
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #mediaGridRoot > .fx-shared-overlay{
+      z-index: var(--z-fx);
+    }
+    #mediaGridRoot > .fx-debug-overlay{
+      z-index: calc(var(--z-fx) + 1);
+    }
 
     /* Project chips */
     .chips{
@@ -926,6 +952,7 @@
       color: rgba(255,255,255,0.95);
       text-shadow: 0 1px 2px rgba(0,0,0,0.45);
       overflow: hidden;
+      position: relative;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -934,6 +961,7 @@
       color: rgba(255,255,255,0.72);
       text-shadow: 0 1px 2px rgba(0,0,0,0.45);
       overflow: hidden;
+      position: relative;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -968,6 +996,7 @@
       transition: border-color 0.2s ease, background 0.2s ease;
       position: relative;
       overflow: hidden;
+      position: relative;
     }
     .selector:hover{ border-color: var(--asset-accent); }
     .selector input{
@@ -1057,7 +1086,7 @@
       transform: translateX(110%);
       opacity: 0;
       transition: transform var(--dur-slow) var(--ease-settle), opacity var(--dur-med) var(--ease-settle);
-      z-index: 80;
+      z-index: var(--z-modal);
       display:flex;
       flex-direction: column;
       min-height: 0;
@@ -1229,7 +1258,7 @@
       position: fixed;
       top: calc(env(safe-area-inset-top, 0px) + 12px);
       right: 16px;
-      z-index: 200000;
+      z-index: var(--z-toast);
       display:flex;
       flex-direction: column;
       gap: 10px;
@@ -3212,10 +3241,19 @@
       el('sidebarBackdrop')?.classList.toggle('show', open);
     }
 
+
+    function setFxSuspend(suspend){
+      const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root="1"]');
+      if (!gridRoot) return;
+      if (suspend) gridRoot.dataset.fxSuspend = '1';
+      else delete gridRoot.dataset.fxSuspend;
+    }
+
     function setInspectorOpen(open){
       const d = el('drawer');
       if (!d) return;
       ui.inspectorOpen = open;
+      setFxSuspend(open || el('actionsPanel')?.classList.contains('open'));
       if (open){
         d.classList.add('open');
         d.setAttribute('aria-hidden', 'false');
@@ -4137,6 +4175,7 @@
       }
       actionsPanel.classList.toggle('open', open);
       actionsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      setFxSuspend(open || ui.inspectorOpen);
     };
     actionsToggle.addEventListener('click', (event) => {
       event.stopPropagation();

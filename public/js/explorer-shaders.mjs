@@ -227,6 +227,7 @@ uniform int u_rect_count;
 uniform vec4 u_rects[${MAX_RECTS}];
 uniform sampler2D u_tile_params;
 uniform float u_motion_damp;
+uniform float u_scroll_fast;
 uniform float u_selected;
 uniform float u_select_pulse;
 
@@ -269,7 +270,9 @@ void main(){
     float verticalPulse = 0.5 + 0.5 * sin((tileUV.y * 320.0) + u_time * 1.6);
     float fresnel = pow(1.0 - clamp(dot(normalize(tileUV - vec2(0.5)), vec2(0.0, 1.0)), 0.0, 1.0), 2.0);
     float selectedEnergy = sel * (0.95 + (u_selected * 0.35) + (u_select_pulse * 0.75));
-    vec3 glass = vec3(0.28, 0.78, 1.0) * (fresnel * 0.42 + verticalPulse * 0.22) * selectedEnergy;
+    float scrollCalm = 1.0 - smoothstep(0.0, 1.0, u_scroll_fast);
+    float glare = (fresnel * 0.22 + verticalPulse * 0.11) * scrollCalm;
+    vec3 glass = vec3(0.28, 0.78, 1.0) * glare * selectedEnergy;
 
     vec3 material = base
       + vec3(0.045, 0.10, 0.16) * centerGlow
@@ -277,7 +280,7 @@ void main(){
       + glass * 1.04
       + vec3((grain - 0.5) * 0.026);
 
-    float cardAlpha = (0.05 + edge * 0.13 + energy * 0.11 + selectedEnergy * 0.24) * ready;
+    float cardAlpha = (0.05 + edge * 0.13 + energy * 0.11 + selectedEnergy * (0.14 + 0.08 * scrollCalm)) * ready;
     color += material * ready;
     alpha += cardAlpha;
   }
@@ -365,6 +368,7 @@ export class AssetFX {
     this.entryMs = 260;
     this.scrollVelocityEma = 0;
     this.motionDamp = 1;
+    this.scrollFast = 0;
     this.selectPulse = 0;
     this.selectionGlowTarget = 0;
     this.fpsEma = 60;
@@ -447,6 +451,7 @@ export class AssetFX {
     const age = this._lastScrollAt > 0 ? (now - this._lastScrollAt) : 1000;
     const vDecayed = this.scrollVelocityEma * Math.exp(-age / 220);
     this.motionDamp = 1.0 - smoothstep(0.2, 1.2, vDecayed);
+    this.scrollFast = Math.max(0, Math.min(1, vDecayed / FAST_SCROLL_THRESHOLD));
   }
 
   _updateSelectionGlow(nowPerf, selectedCount) {
@@ -522,16 +527,15 @@ export class AssetFX {
     canvas.classList.add('fx-shared-overlay');
     canvas.dataset.assetfx = 'overlay';
     Object.assign(canvas.style, {
-      position: 'fixed',
-      top: '0',
-      left: '0',
-      width: '100vw',
-      height: '100vh',
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
       pointerEvents: 'none',
-      zIndex: '3',
-      opacity: '0.92',
+      zIndex: '1',
+      opacity: '0.9',
     });
-    if (!canvas.isConnected || canvas.parentElement !== document.body) document.body.appendChild(canvas);
+    if (!canvas.isConnected || canvas.parentElement !== container) container.prepend(canvas);
 
     const debugCanvases = Array.from(document.querySelectorAll('canvas[data-assetfx="debug"]'));
     const debugOverlay = debugCanvases.shift() || createNode('canvas', 'fx-debug-overlay');
@@ -539,17 +543,16 @@ export class AssetFX {
     debugOverlay.classList.add('fx-debug-overlay');
     debugOverlay.dataset.assetfx = 'debug';
     Object.assign(debugOverlay.style, {
-      position: 'fixed',
-      top: '0',
-      left: '0',
-      width: '100vw',
-      height: '100vh',
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
       pointerEvents: 'none',
-      zIndex: '4',
+      zIndex: '2',
       opacity: this.fxDebug ? '1' : '0',
       display: this.fxDebug ? 'block' : 'none',
     });
-    if (!debugOverlay.isConnected || debugOverlay.parentElement !== document.body) document.body.appendChild(debugOverlay);
+    if (!debugOverlay.isConnected || debugOverlay.parentElement !== container) container.prepend(debugOverlay);
 
     this.overlay = canvas;
     this.debugOverlay = debugOverlay;
@@ -1075,7 +1078,7 @@ export class AssetFX {
     ensureRelative(cardEl);
     const hint = createNode('div', 'fx-visible-hint');
     cardEl.appendChild(hint);
-    setTimeout(() => hint.remove(), 430);
+    setTimeout(() => hint.remove(), 320);
   }
 
 
@@ -1143,23 +1146,17 @@ export class AssetFX {
   _render() {
     this._pruneDisconnected();
     if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
-    const dpr = window.devicePixelRatio || 1;
-    const vv = window.visualViewport;
-    if (vv) {
-      const tx = Math.round(vv.offsetLeft || 0);
-      const ty = Math.round(vv.offsetTop || 0);
-      const transform = `translate(${tx}px, ${ty}px)`;
-      if (this.overlay.style.transform !== transform) this.overlay.style.transform = transform;
-      if (this.debugOverlay) this.debugOverlay.style.transform = transform;
-      const wPx = `${Math.max(1, Math.round(vv.width || window.innerWidth))}px`;
-      const hPx = `${Math.max(1, Math.round(vv.height || window.innerHeight))}px`;
-      if (this.overlay.style.width !== wPx) this.overlay.style.width = wPx;
-      if (this.overlay.style.height !== hPx) this.overlay.style.height = hPx;
+    if (this.container.dataset.fxSuspend === '1') {
+      this.gl.viewport(0, 0, this.overlay.width || 1, this.overlay.height || 1);
+      this.gl.clearColor(0, 0, 0, 0);
+      this.gl.clear(this.gl.COLOR_BUFFER_BIT);
       if (this.debugOverlay) {
-        if (this.debugOverlay.style.width !== wPx) this.debugOverlay.style.width = wPx;
-        if (this.debugOverlay.style.height !== hPx) this.debugOverlay.style.height = hPx;
+        const ctx = this.debugOverlay.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width, this.debugOverlay.height);
       }
+      return;
     }
+    const dpr = window.devicePixelRatio || 1;
     const canvasRect = this.overlay.getBoundingClientRect();
     const width = Math.max(1, Math.round(canvasRect.width * dpr));
     const height = Math.max(1, Math.round(canvasRect.height * dpr));
@@ -1374,6 +1371,7 @@ export class AssetFX {
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_time'), (performance.now() - this.start) * 0.001);
     gl.uniform1i(gl.getUniformLocation(this.program, 'u_rect_count'), Math.min(cards.length, MAX_RECTS));
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_scroll_fast'), this.scrollFast);
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_selected'), selectedVisibleCards.length > 0 ? 1 : 0);
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_select_pulse'), this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));
     gl.uniform4fv(gl.getUniformLocation(this.program, 'u_rects'), rectData);
@@ -1477,8 +1475,8 @@ export class AssetFX {
         pointer-events: none;
         z-index: 4;
         mix-blend-mode: screen;
-        background: linear-gradient(135deg, rgba(86,126,196,0.2), rgba(120,219,255,0.1), rgba(8,14,25,0));
-        animation: fx-visible-hint 240ms ease-out forwards;
+        background: linear-gradient(135deg, rgba(86,126,196,0.14), rgba(120,219,255,0.06), rgba(8,14,25,0));
+        animation: fx-visible-hint 200ms ease-out forwards;
       }
       .fx-debug-overlay {
         position: absolute;
@@ -1512,7 +1510,7 @@ export class AssetFX {
       }
       @keyframes fx-visible-hint {
         0% { opacity: 0; transform: scale(0.99); }
-        30% { opacity: 0.9; }
+        30% { opacity: 0.58; }
         100% { opacity: 0; transform: scale(1.01); }
       }
       @media (prefers-reduced-motion: reduce) {
