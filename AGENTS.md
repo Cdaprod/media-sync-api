@@ -1116,3 +1116,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Actions menu now uses a fixed `#ui-portal` host (body-level portal) for panel rendering so Safari stacking contexts from card/grid/FX layers cannot place it behind assets; open-state positioning now computes from the Actions trigger and includes optional `fxdebug` z-index/transform ancestry logging.
 
 - AssetFX efficiency tuning: added low/high-tier per-frame pixel budgets (`maxRenderPixelsLowTier`/`maxRenderPixelsHighTier`) to bound premium card coverage cost, plus low-tier fast-scroll frame skipping so overlay rendering runs at half-rate during high-velocity flicks while preserving selected-card force sampling.
+
+- Toast notifications now use a body-level fixed host (`ensureToastHost`) with very high z-index/isolation so they never render behind topbar/action UI, and AssetFX overlays were moved to viewport-fixed body canvases with `visualViewport` offset/size tracking so fxdebug coverage and ARVK sampling remain valid across full-page scroll ranges.
+- Reduced scroll-entry glare cost/intensity by gating visible-hint overlays during active scroll/motion and downscaling hint opacity/duration so scanlines remain while reflection bursts are less expensive and less visually aggressive.
+
+### Latest Implementation Notes (2026-02-27, maintenance: validation checkpoint)
+- Ran the focused explorer static coverage suite (`pytest -q tests/test_public_explorer_program_monitor.py`) after the latest AssetFX/toast layering work; result remained green (`19 passed, 1 skipped`).
+- Added this checkpoint entry to keep AGENTS handoff continuity explicit for the next agent per repo policy (update AGENTS.md on every commit).

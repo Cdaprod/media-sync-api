@@ -1227,14 +1227,17 @@
     /* Toasts */
     .toasts{
       position: fixed;
-      top: 74px;
+      top: calc(env(safe-area-inset-top, 0px) + 12px);
       right: 16px;
-      z-index: 80;
+      z-index: 200000;
       display:flex;
       flex-direction: column;
       gap: 10px;
+      pointer-events: none;
+      isolation: isolate;
     }
     .toast{
+      pointer-events: auto;
       border: 1px solid var(--border);
       background: rgba(11,16,32,0.78);
       border-radius: 14px;
@@ -1894,11 +1897,22 @@
       return input.replace(/([\"\'\\#.:;,!?+*~^$\[\]()=>|/@])/g, '\\$1');
     }
 
+    function ensureToastHost(){
+      let host = el('toasts');
+      if (!host){
+        host = document.createElement('div');
+        host.id = 'toasts';
+        host.className = 'toasts';
+      }
+      if (host.parentElement !== document.body) document.body.appendChild(host);
+      return host;
+    }
+
     function toast(type, title, message){
       const t = document.createElement('div');
       t.className = `toast ${type || ''}`;
       t.innerHTML = `<div class="t">${escapeHtml(title || 'Info')}</div><div class="m">${escapeHtml(message || '')}</div>`;
-      el('toasts').appendChild(t);
+      ensureToastHost().appendChild(t);
       setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(-4px)'; }, 2600);
       setTimeout(() => t.remove(), 3100);
     }
@@ -4430,6 +4444,7 @@
       wireProjectDragAssist();
       wireSelectionDelegation();
       wireBackgroundImpulse();
+      ensureToastHost();
       document.addEventListener('pointerdown', (event) => {
         const menu = el('contextMenu');
         if (!menu?.classList.contains('open')) return;

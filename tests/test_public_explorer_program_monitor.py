@@ -220,8 +220,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
-    assert "position: 'absolute'" in shader_module
-    assert 'if (!canvas.isConnected || canvas.parentElement !== container) container.appendChild(canvas);' in shader_module
+    assert "position: 'fixed'" in shader_module
+    assert 'if (!canvas.isConnected || canvas.parentElement !== document.body) document.body.appendChild(canvas);' in shader_module
     assert 'const tileParamData = new Uint8Array(MAX_RECTS * 4);' in shader_module
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
@@ -229,6 +229,9 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert 'const RECT_INSET_PX = 4;' in shader_module
+    assert 'const vv = window.visualViewport;' in shader_module
+    assert 'if (this.overlay.style.transform !== transform) this.overlay.style.transform = transform;' in shader_module
+    assert 'if (this.debugOverlay) this.debugOverlay.style.transform = transform;' in shader_module
     assert 'const canvasRect = this.overlay.getBoundingClientRect();' in shader_module
     assert 'let x1 = (cr.left - canvasRect.left) * dpr;' in shader_module
     assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
@@ -257,6 +260,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.motionDamp = 1.0 - smoothstep(0.2, 1.2, vDecayed);' in shader_module
     assert 'this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);' in shader_module
     assert 'const lowTierFrameSkip = ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
+    assert 'if (this.scrollVelocityEma > 0.35 || this.motionDamp < 0.8) return;' in shader_module
+    assert 'if (Math.random() > 0.35) return;' in shader_module
     assert 'if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();' in shader_module
     assert 'const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));' in shader_module
     assert 'if (this.fpsEma > 55) adaptiveMaxRenderCards =' in shader_module
@@ -341,6 +346,9 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert '.actions-panel{' in html and 'z-index: 170;' in html
     assert '.dropdown-menu{' in html and 'z-index: 180;' in html
     assert '#ui-portal{' in html and 'z-index: 100000;' in html
+    assert '.toasts{' in html and 'z-index: 200000;' in html
+    assert 'function ensureToastHost()' in html
+    assert 'if (host.parentElement !== document.body) document.body.appendChild(host);' in html
     assert '#ui-portal .actions-panel{' in html and 'pointer-events: auto;' in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
 

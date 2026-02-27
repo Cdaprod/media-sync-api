@@ -516,38 +516,40 @@ export class AssetFX {
 
     this.container = container;
     ensureRelative(container);
-    const canvases = Array.from(container.querySelectorAll('canvas[data-assetfx="overlay"]'));
+    const canvases = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
     const canvas = canvases.shift() || createNode('canvas', 'fx-shared-overlay');
     canvases.forEach((node) => node.remove());
     canvas.classList.add('fx-shared-overlay');
     canvas.dataset.assetfx = 'overlay';
     Object.assign(canvas.style, {
-      position: 'absolute',
-      inset: '0',
-      width: '100%',
-      height: '100%',
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '100vw',
+      height: '100vh',
       pointerEvents: 'none',
       zIndex: '3',
       opacity: '0.92',
     });
-    if (!canvas.isConnected || canvas.parentElement !== container) container.appendChild(canvas);
+    if (!canvas.isConnected || canvas.parentElement !== document.body) document.body.appendChild(canvas);
 
-    const debugCanvases = Array.from(container.querySelectorAll('canvas[data-assetfx="debug"]'));
+    const debugCanvases = Array.from(document.querySelectorAll('canvas[data-assetfx="debug"]'));
     const debugOverlay = debugCanvases.shift() || createNode('canvas', 'fx-debug-overlay');
     debugCanvases.forEach((node) => node.remove());
     debugOverlay.classList.add('fx-debug-overlay');
     debugOverlay.dataset.assetfx = 'debug';
     Object.assign(debugOverlay.style, {
-      position: 'absolute',
-      inset: '0',
-      width: '100%',
-      height: '100%',
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '100vw',
+      height: '100vh',
       pointerEvents: 'none',
       zIndex: '4',
       opacity: this.fxDebug ? '1' : '0',
       display: this.fxDebug ? 'block' : 'none',
     });
-    if (!debugOverlay.isConnected || debugOverlay.parentElement !== container) container.appendChild(debugOverlay);
+    if (!debugOverlay.isConnected || debugOverlay.parentElement !== document.body) document.body.appendChild(debugOverlay);
 
     this.overlay = canvas;
     this.debugOverlay = debugOverlay;
@@ -1068,6 +1070,8 @@ export class AssetFX {
 
   _showVisibleHint(cardEl) {
     if (this.prefersReducedMotion || this.liteFx) return;
+    if (this.scrollVelocityEma > 0.35 || this.motionDamp < 0.8) return;
+    if (Math.random() > 0.35) return;
     ensureRelative(cardEl);
     const hint = createNode('div', 'fx-visible-hint');
     cardEl.appendChild(hint);
@@ -1140,6 +1144,22 @@ export class AssetFX {
     this._pruneDisconnected();
     if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
     const dpr = window.devicePixelRatio || 1;
+    const vv = window.visualViewport;
+    if (vv) {
+      const tx = Math.round(vv.offsetLeft || 0);
+      const ty = Math.round(vv.offsetTop || 0);
+      const transform = `translate(${tx}px, ${ty}px)`;
+      if (this.overlay.style.transform !== transform) this.overlay.style.transform = transform;
+      if (this.debugOverlay) this.debugOverlay.style.transform = transform;
+      const wPx = `${Math.max(1, Math.round(vv.width || window.innerWidth))}px`;
+      const hPx = `${Math.max(1, Math.round(vv.height || window.innerHeight))}px`;
+      if (this.overlay.style.width !== wPx) this.overlay.style.width = wPx;
+      if (this.overlay.style.height !== hPx) this.overlay.style.height = hPx;
+      if (this.debugOverlay) {
+        if (this.debugOverlay.style.width !== wPx) this.debugOverlay.style.width = wPx;
+        if (this.debugOverlay.style.height !== hPx) this.debugOverlay.style.height = hPx;
+      }
+    }
     const canvasRect = this.overlay.getBoundingClientRect();
     const width = Math.max(1, Math.round(canvasRect.width * dpr));
     const height = Math.max(1, Math.round(canvasRect.height * dpr));
@@ -1457,8 +1477,8 @@ export class AssetFX {
         pointer-events: none;
         z-index: 4;
         mix-blend-mode: screen;
-        background: linear-gradient(135deg, rgba(86,126,196,0.45), rgba(120,219,255,0.2), rgba(8,14,25,0));
-        animation: fx-visible-hint 380ms ease-out forwards;
+        background: linear-gradient(135deg, rgba(86,126,196,0.2), rgba(120,219,255,0.1), rgba(8,14,25,0));
+        animation: fx-visible-hint 240ms ease-out forwards;
       }
       .fx-debug-overlay {
         position: absolute;
