@@ -1628,8 +1628,9 @@
         <button id="selMoveToggle" class="btn" type="button">⇢ Move Selected</button>
         <button id="selCopyUrls" class="btn" type="button">⧉ Copy stream URLs</button>
         <button id="selCompose" class="btn" type="button">🎬 Compose Video(s)</button>
-        <button id="clearSelBtn" class="btn" type="button" disabled>✕ Clear</button>
         <button id="btnProgramMonitor" class="btn" type="button" hidden>➕ Add to Program Monitor</button>
+        <button id=“btnFluxGallery” class=“btn” type=“button” hidden>⚡ Send to Flux Gallery</button>
+        <button id=“clearSelBtn” class=“btn” type=“button” disabled>✕ Clear</button>
       </div>
 
       <div class="selectbar-panel" id="selTagPanel">
@@ -1715,6 +1716,7 @@
   <script src="js/obs-websocket.js"></script>
   <script src="js/obs-push.js"></script>
   <script type="module" src="js/program_monitor_handoff.js"></script>
+  <script type="module" src="js/flux_gallery_handoff.js"></script>
   <script type="module">
     import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';
 
@@ -3013,6 +3015,8 @@
       el('selCompose').disabled = !show || !canProjectScopedAction;
       el('btnProgramMonitor').disabled = !show || !canSelectAcrossProjects;
       el('btnProgramMonitor').hidden = !show;
+      el('btnFluxGallery').disabled = !show;
+      el('btnFluxGallery').hidden = !show;
 
       updateTagButtons();
       if (!show){
@@ -3220,6 +3224,34 @@
         alert(e?.message || String(e));
         if (btn) btn.textContent = prev;
       }finally{
+        updateSelectionUI();
+      }
+    }
+
+    async function sendSelectedToFluxGallery(){
+      const btn = el('btnFluxGallery');
+      const prev = btn?.textContent || ' ⚡ Send to Flux Gallery';
+    
+      if (!window.FluxGalleryHandoff?.sendSelectedToFluxGallery){
+        alert('Flux Gallery handoff is unavailable. Did flux_gallery_handoff.js load?');
+        return;
+      }
+    
+      try{
+        if (btn){
+          btn.textContent = 'Sending...';
+          btn.disabled = true;
+        }
+        await window.FluxGalleryHandoff.sendSelectedToFluxGallery();
+        if (btn){
+          btn.textContent = 'Sent ✓';
+          setTimeout(() => { btn.textContent = prev; }, 900);
+        }
+      }catch(e){
+        alert(e?.message || String(e));
+        if (btn) btn.textContent = prev;
+      }finally{
+        if (btn) btn.disabled = false;
         updateSelectionUI();
       }
     }
@@ -4296,6 +4328,7 @@
     el('selCopyUrls').addEventListener('click', copySelectedUrls);
     el('selCompose').addEventListener('click', composeSelectedVideos);
     el('btnProgramMonitor').addEventListener('click', sendSelectedToProgramMonitor);
+    el('btnFluxGallery')?.addEventListener('click', sendSelectedToFluxGallery);
     el('selTagInput').addEventListener('input', updateTagButtons);
     el('selTagAdd').addEventListener('click', () => {
       const tags = parseTagInput(el('selTagInput').value);
