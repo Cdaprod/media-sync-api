@@ -618,6 +618,17 @@ async def compose_upload(
     if not files:
         raise HTTPException(status_code=400, detail="files must include at least one upload")
 
+    logger.info(
+        "compose_upload_received",
+        extra={
+            "project": name,
+            "source": active_source.name,
+            "file_count": len(files),
+            "filenames": [f.filename for f in files],
+            "incremental": incremental,
+        },
+    )
+    
     settings = get_settings()
     max_bytes = settings.max_upload_mb * 1024 * 1024
 
