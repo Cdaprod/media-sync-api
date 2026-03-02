@@ -31,132 +31,6 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MaskField
-// Builds a per-frame heatmap texture from layout data (not pixels).
-// Independent of DOM virtualization — rebuilt from live getBoundingClientRect().
-// Pointer events feed persistent impulses via alpha decay.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const MASK_SIZE        = 512;
-const MASK_DECAY_ALPHA = 0.07;
-const IMPULSE_RADIUS   = 48;
-const IMPULSE_STRENGTH = 0.70;
-const IMPULSE_LIFETIME = 1800; // ms
-const HOVER_RADIUS     = 28;
-const HOVER_STRENGTH   = 0.38;
-
-export class MaskField {
-  constructor(gridRoot, assetSel = '.asset') {
-    this._root = gridRoot;
-    this._sel  = assetSel;
-
-    this._canvas = document.createElement('canvas');
-    this._canvas.width  = MASK_SIZE;
-    this._canvas.height = MASK_SIZE;
-    this._canvas.className = 'fx-mask-canvas';
-    Object.assign(this._canvas.style, { display: 'none', position: 'absolute', top: '0', left: '0', pointerEvents: 'none' });
-    this._root.appendChild(this._canvas);
-    this._ctx = this._canvas.getContext('2d', { willReadFrequently: false });
-
-    this._impulses = [];
-    this._hoverNx  = -1;
-    this._hoverNy  = -1;
-    this._rafId    = null;
-    this._dirty    = true;
-
-    this._onMove  = (e) => {
-      const r = this._root.getBoundingClientRect();
-      this._hoverNx = (e.clientX - r.left) / Math.max(1, r.width);
-      this._hoverNy = (e.clientY - r.top)  / Math.max(1, r.height);
-      this._dirty   = true;
-    };
-    this._onLeave = () => { this._hoverNx = -1; this._hoverNy = -1; };
-    this._onDown  = (e) => {
-      const r  = this._root.getBoundingClientRect();
-      const nx = (e.clientX - r.left) / Math.max(1, r.width);
-      const ny = (e.clientY - r.top)  / Math.max(1, r.height);
-      this._impulses.push({ nx, ny, strength: IMPULSE_STRENGTH, radius: IMPULSE_RADIUS, born: performance.now() });
-      this._dirty = true;
-    };
-
-    this._root.addEventListener('pointermove',  this._onMove,  { passive: true });
-    this._root.addEventListener('pointerleave', this._onLeave, { passive: true });
-    this._root.addEventListener('pointerdown',  this._onDown,  { passive: true });
-    this._tick();
-  }
-
-  pulseCard(cardEl) {
-    if (!cardEl) return;
-    const rr = this._root.getBoundingClientRect();
-    const cr = cardEl.getBoundingClientRect();
-    const nx = (cr.left + cr.width  * 0.5 - rr.left) / Math.max(1, rr.width);
-    const ny = (cr.top  + cr.height * 0.5 - rr.top)  / Math.max(1, rr.height);
-    this._impulses.push({ nx, ny, strength: 0.92, radius: 58, born: performance.now() });
-    this._dirty = true;
-  }
-
-  get canvas() { return this._canvas; }
-
-  destroy() {
-    if (this._rafId) cancelAnimationFrame(this._rafId);
-    this._root.removeEventListener('pointermove',  this._onMove);
-    this._root.removeEventListener('pointerleave', this._onLeave);
-    this._root.removeEventListener('pointerdown',  this._onDown);
-    this._canvas.remove();
-  }
-
-  _tick() {
-    this._rafId = requestAnimationFrame(() => {
-      if (this._dirty) { this._rebuild(); this._dirty = false; }
-      this._dirty = (this._hoverNx >= 0) || this._impulses.length > 0;
-      this._tick();
-    });
-  }
-
-  _rebuild() {
-    const ctx = this._ctx, W = MASK_SIZE, H = MASK_SIZE, now = performance.now();
-    ctx.fillStyle = `rgba(0,0,0,${MASK_DECAY_ALPHA})`;
-    ctx.fillRect(0, 0, W, H);
-
-    const rr = this._root.getBoundingClientRect();
-    if (rr.width > 0 && rr.height > 0) {
-      this._root.querySelectorAll(this._sel).forEach((el) => {
-        const r = el.getBoundingClientRect();
-        const x = ((r.left  - rr.left) / rr.width)  * W;
-        const y = ((r.top   - rr.top)  / rr.height) * H;
-        const w = (r.width  / rr.width)  * W;
-        const h = (r.height / rr.height) * H;
-        if (w > 0 && h > 0) { ctx.fillStyle = 'rgba(255,255,255,0.055)'; ctx.fillRect(x, y, w, h); }
-      });
-    }
-
-    if (this._hoverNx >= 0) this._blob(this._hoverNx * W, this._hoverNy * H, HOVER_RADIUS, HOVER_STRENGTH, '74,240,192');
-
-    this._impulses = this._impulses.filter((imp) => {
-      const age = now - imp.born;
-      if (age > IMPULSE_LIFETIME) return false;
-      const t = age / IMPULSE_LIFETIME;
-      this._blob(imp.nx * W, imp.ny * H, imp.radius * (1 + t * 1.8), imp.strength * (1 - t * t), '124,200,255');
-      return true;
-    });
-  }
-
-  _blob(cx, cy, radius, alpha, rgb) {
-    const r = Math.max(1, radius);
-    const g = this._ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    g.addColorStop(0,   `rgba(${rgb},${alpha})`);
-    g.addColorStop(0.5, `rgba(${rgb},${alpha * 0.5})`);
-    g.addColorStop(1,   `rgba(${rgb},0)`);
-    this._ctx.fillStyle = g;
-    this._ctx.beginPath();
-    this._ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    this._ctx.fill();
-  }
-}
-
 const VERT = `
 attribute vec2 a_pos;
 varying vec2 v_uv;
@@ -356,8 +230,6 @@ uniform float u_motion_damp;
 uniform float u_scroll_fast;
 uniform float u_selected;
 uniform float u_select_pulse;
-uniform sampler2D u_mask;
-uniform float u_mask_enabled;
 
 vec4 sampleParams(int idx) {
   float x = (float(idx) + 0.5) / float(${MAX_RECTS});
@@ -476,12 +348,6 @@ export class AssetFX {
     this.tileParamTexture = null;
     this.raf = 0;
     this.start = performance.now();
-
-    // PATCH: MaskField state
-    this._maskField     = null;
-    this._maskTexture   = null;
-    this._maskAllocated = false;
-    this._u             = null;
 
     this.boundGrids = new WeakSet();
     this.trackedCards = new Set();
@@ -617,9 +483,6 @@ export class AssetFX {
       this.program = shared.program;
       this.quad = shared.quad;
       this.tileParamTexture = shared.tileParamTexture;
-      this._maskTexture = shared.maskTexture || null;
-      this._maskAllocated = shared.maskAllocated === true;
-      this._u = shared.uCache || this._u;
       this.debugOverlay = shared.debugOverlay || null;
       this.raf = shared.raf;
       return;
@@ -714,22 +577,8 @@ export class AssetFX {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-    // Bonus: lock pixel-store state for predictable canvas→texture uploads.
-    // Y-orientation is handled in shader (sample with uv, not v_uv), so keep UNPACK_FLIP_Y false.
-    // UNPACK_PREMULTIPLY_ALPHA false prevents heat values being altered on upload.
-    // ALIGNMENT 1 avoids row-padding surprises on non-power-of-two canvas widths.
-    try {
-      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-      if ('UNPACK_COLORSPACE_CONVERSION_WEBGL' in gl) {
-        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-      }
-    } catch {}
-
     try {
       this.program = createProgram(gl, VERT, FRAG);
-      this._cacheUniforms();
       this.quad = createQuad(gl);
       this.tileParamTexture = gl.createTexture();
       if (this.tileParamTexture) {
@@ -739,22 +588,10 @@ export class AssetFX {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
-
-      this._maskTexture = gl.createTexture();
-      if (this._maskTexture) {
-        gl.bindTexture(gl.TEXTURE_2D, this._maskTexture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      }
-      this._maskAllocated = false;
     } catch {
       this.program = null;
       this.quad = null;
       this.tileParamTexture = null;
-      this._maskTexture = null;
-      this._maskAllocated = false;
       this._saveRenderer(container);
       return;
     }
@@ -766,15 +603,12 @@ export class AssetFX {
       this.program = null;
       this.quad = null;
       this.tileParamTexture = null;
-      this._maskTexture = null;
-      this._maskAllocated = false;
     });
 
     canvas.addEventListener('webglcontextrestored', () => {
       if (!this.gl) return;
       try {
         this.program = createProgram(this.gl, VERT, FRAG);
-        this._cacheUniforms();
         this.quad = createQuad(this.gl);
         this.tileParamTexture = this.gl.createTexture();
         if (this.tileParamTexture) {
@@ -976,7 +810,6 @@ export class AssetFX {
     ring.style.animationDuration = `${Math.max(220, duration)}ms`;
     cardEl.appendChild(ring);
     setTimeout(() => ring.remove(), Math.max(220, duration) + 90);
-    this._maskField?.pulseCard(cardEl);
   }
 
   dissolve(cardEl, imgEl, { duration = this.entryMs, allowReplay = false } = {}) {
@@ -1305,34 +1138,10 @@ export class AssetFX {
       program: this.program,
       quad: this.quad,
       tileParamTexture: this.tileParamTexture,
-      maskTexture: this._maskTexture,
-      maskAllocated: this._maskAllocated,
-      uCache: this._u,
       debugOverlay: this.debugOverlay,
       raf: this.raf,
     });
   }
-
-  // ── Uniform cache ─────────────────────────────────────────────────────────
-  _cacheUniforms() {
-    const gl = this.gl;
-    if (!gl || !this.program) return;
-    const loc = (n) => gl.getUniformLocation(this.program, n);
-    this._u = {
-      u_resolution:   loc('u_resolution'),
-      u_time:         loc('u_time'),
-      u_rect_count:   loc('u_rect_count'),
-      u_rects:        loc('u_rects'),
-      u_tile_params:  loc('u_tile_params'),
-      u_motion_damp:  loc('u_motion_damp'),
-      u_scroll_fast:  loc('u_scroll_fast'),
-      u_selected:     loc('u_selected'),
-      u_select_pulse: loc('u_select_pulse'),
-      u_mask:         loc('u_mask'),
-      u_mask_enabled: loc('u_mask_enabled'),
-    };
-  }
-
 
   _render() {
     this._pruneDisconnected();
@@ -1545,9 +1354,6 @@ export class AssetFX {
     gl.useProgram(this.program);
     bindQuad(gl, this.program, this.quad);
 
-    const U = this._u;
-    if (!U) return;
-
     const rectData = new Float32Array(MAX_RECTS * 4);
     const tileParamData = new Uint8Array(MAX_RECTS * 4);
     cards.slice(0, MAX_RECTS).forEach((row, i) => {
@@ -1561,42 +1367,19 @@ export class AssetFX {
       tileParamData[i * 4 + 3] = Math.max(0, Math.min(255, Math.round(row[7] * 255))); // ready in A
     });
 
-    gl.uniform2f(U.u_resolution, width, height);
-    gl.uniform1f(U.u_time, (performance.now() - this.start) * 0.001);
-    gl.uniform1i(U.u_rect_count, Math.min(cards.length, MAX_RECTS));
-    gl.uniform1f(U.u_motion_damp, this.motionDamp);
-    gl.uniform1f(U.u_scroll_fast, this.scrollFast);
+    gl.uniform2f(gl.getUniformLocation(this.program, 'u_resolution'), width, height);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_time'), (performance.now() - this.start) * 0.001);
+    gl.uniform1i(gl.getUniformLocation(this.program, 'u_rect_count'), Math.min(cards.length, MAX_RECTS));
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_scroll_fast'), this.scrollFast);
     gl.uniform1f(gl.getUniformLocation(this.program, 'u_selected'), selectedVisibleCards.length > 0 ? 1 : 0);
-    gl.uniform1f(U.u_select_pulse, this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));
-    gl.uniform4fv(U.u_rects, rectData);
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_select_pulse'), this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));
+    gl.uniform4fv(gl.getUniformLocation(this.program, 'u_rects'), rectData);
     if (this.tileParamTexture) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.tileParamTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);
-      gl.uniform1i(U.u_tile_params, 0);
-
-    // TEXTURE1 — MaskField heatmap
-    const hasMask = !!(this._maskField && this._maskTexture);
-    gl.uniform1f(U.u_mask_enabled, hasMask ? 1.0 : 0.0);
-    if (hasMask) {
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, this._maskTexture);
-
-      // Allocate GPU storage once; update per-frame with texSubImage2D.
-      if (!this._maskAllocated) {
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MASK_SIZE, MASK_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-        this._maskAllocated = true;
-        this._saveRenderer(container);
-      }
-
-      // Reassert pixel-store state before each upload — other code paths can change it.
-      try { gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); } catch {}
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this._maskField.canvas);
-      gl.uniform1i(U.u_mask, 1);
-    } else {
-      this._maskAllocated = false;
-    }
-
+      gl.uniform1i(gl.getUniformLocation(this.program, 'u_tile_params'), 0);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
