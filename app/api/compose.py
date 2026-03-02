@@ -1,3 +1,5 @@
+# /app/api/compose.py
+
 """Compose endpoints for media-sync-api.
 
 Example (existing files):
@@ -12,6 +14,7 @@ Example (upload then compose):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import shutil
@@ -23,6 +26,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
@@ -47,6 +51,8 @@ from app.storage.sources import SourceRegistry
 
 router = APIRouter(prefix="/api/projects", tags=["compose"])
 logger = logging.getLogger("media_sync_api.compose")
+
+COMPOSE_SESSION_PREFIX = "compose_session_"
 
 
 class ComposeRequest(BaseModel):
@@ -386,6 +392,97 @@ def _indexed_path_set(project: Path) -> set[str]:
     return result
 
 
+def _header_str(request: Request, key: str) -> str | None:
+    val = request.headers.get(key)
+    if not val:
+        return None
+    val = val.strip()
+    return val or None
+
+
+def _header_int(request: Request, key: str) -> int | None:
+    raw = _header_str(request, key)
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _session_key(project_name: str, run_id: str) -> str:
+    h = hashlib.sha1(f"{project_name}::{run_id}".encode("utf-8")).hexdigest()[:16]
+    return f"{COMPOSE_SESSION_PREFIX}{project_name}_{h}"
+
+
+def _session_dir(settings: Any, project_name: str, run_id: str) -> Path:
+    return Path(settings.temp_root) / _session_key(project_name, run_id)
+
+
+def _session_meta_path(session_dir: Path) -> Path:
+    return session_dir / "meta.json"
+
+
+def _load_session_meta(session_dir: Path) -> dict[str, Any]:
+    meta_path = _session_meta_path(session_dir)
+    if not meta_path.exists():
+        return {}
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_session_meta_atomic(session_dir: Path, meta: dict[str, Any]) -> None:
+    tmp = session_dir / "meta.json.tmp"
+    tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(_session_meta_path(session_dir))
+
+
+def _prune_old_sessions(temp_root: Path, *, max_age_seconds: int = 3600) -> None:
+    now = datetime.now(timezone.utc).timestamp()
+    try:
+        for child in temp_root.iterdir():
+            if not child.is_dir():
+                continue
+            if not child.name.startswith(COMPOSE_SESSION_PREFIX):
+                continue
+            meta = _load_session_meta(child)
+            created = meta.get("created_ts")
+            if not isinstance(created, (int, float)):
+                shutil.rmtree(child, ignore_errors=True)
+                continue
+            if (now - float(created)) > max_age_seconds:
+                shutil.rmtree(child, ignore_errors=True)
+    except Exception:
+        return
+
+
+def _next_compiled_sequence(project: Path) -> int:
+    index = load_index(project)
+    if not isinstance(index, dict):
+        index = {}
+    counts = index.get("counts")
+    if not isinstance(counts, dict):
+        counts = {}
+    current = counts.get("compose_compiled_seq")
+    if not isinstance(current, int):
+        current = 0
+    current += 1
+    counts["compose_compiled_seq"] = current
+    index["counts"] = counts
+    save_index(project, index)
+    return current
+
+
+def _compiled_name(base_name: str, seq: int) -> str:
+    name = (base_name or "").strip() or "compiled.mp4"
+    if not name.lower().endswith(".mp4"):
+        name = f"{name}.mp4"
+    stem = Path(name).stem
+    return f"{stem}-{seq:04d}.mp4"
+
+
 @router.post("/{project_name}/compose")
 async def compose_existing(
     project_name: str,
@@ -462,7 +559,15 @@ async def compose_upload(
 ):
     """Upload many clips and return one composed artifact.
 
-    Example:
+    Supports TWO flows:
+    1) Legacy: a single POST with multiple `files=...` parts -> compose immediately
+    2) Incremental: one POST per clip with headers:
+         - X-Compose-Time  : run/session key (string)
+         - X-Compose-Index : clip index (Shortcuts Repeat Index; usually 1-based)
+         - X-Compose-Count : total clips in run
+       -> stage each clip, and when last clip arrives compose immediately.
+
+    Example (legacy):
         curl -X POST 'http://localhost:8787/api/projects/demo/compose/upload?output_name=final.mp4' \
           -F 'files=@/path/a.mp4' -F 'files=@/path/b.mp4'
     """
@@ -474,56 +579,202 @@ async def compose_upload(
 
     settings = get_settings()
     max_bytes = settings.max_upload_mb * 1024 * 1024
-    temp_job_dir = Path(tempfile.mkdtemp(prefix="compose_", dir=settings.temp_root))
 
-    try:
-        temp_inputs: list[Path] = []
-        for index, upload in enumerate(files):
-            safe_name = safe_filename(upload.filename or f"clip-{index}.mp4")
-            target = temp_job_dir / f"{index:04d}_{safe_name}"
-            written = 0
-            with target.open("wb") as handle:
-                while True:
-                    chunk = await upload.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    written += len(chunk)
-                    if written > max_bytes:
-                        raise HTTPException(status_code=413, detail="Upload exceeds configured limit")
-                    handle.write(chunk)
-            temp_inputs.append(target)
+    # Opportunistic cleanup of old incremental sessions
+    _prune_old_sessions(Path(settings.temp_root), max_age_seconds=3600)
 
-        resolved_target_dir = _resolve_within_project(project, target_dir.strip() or "exports", require_exists=False)
-        resolved_target_dir.mkdir(parents=True, exist_ok=True)
-        final_name = _safe_filename_or_400(output_name, default="compiled.mp4")
-        if not final_name.lower().endswith(".mp4"):
-            final_name = f"{final_name}.mp4"
-        output_abs = _resolve_within_project(
-            project,
-            f"{resolved_target_dir.relative_to(project).as_posix()}/{final_name}",
-            require_exists=False,
-        )
-        if output_abs.exists() and not allow_overwrite:
-            raise HTTPException(
-                status_code=409,
-                detail="Output already exists. Set allow_overwrite=true or provide a unique output_name.",
+    run_id = _header_str(request, "X-Compose-Time")
+    idx = _header_int(request, "X-Compose-Index")
+    total = _header_int(request, "X-Compose-Count")
+
+    incremental = run_id is not None and idx is not None and total is not None and len(files) == 1
+
+    if not incremental:
+        # -------------------------
+        # Legacy: single request, many files
+        # -------------------------
+        temp_job_dir = Path(tempfile.mkdtemp(prefix="compose_", dir=settings.temp_root))
+        try:
+            temp_inputs: list[Path] = []
+            for index, upload in enumerate(files):
+                safe_name = safe_filename(upload.filename or f"clip-{index}.mp4")
+                target = temp_job_dir / f"{index:04d}_{safe_name}"
+                written = 0
+                with target.open("wb") as handle:
+                    while True:
+                        chunk = await upload.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        if written > max_bytes:
+                            raise HTTPException(status_code=413, detail="Upload exceeds configured limit")
+                        handle.write(chunk)
+                temp_inputs.append(target)
+
+            resolved_target_dir = _resolve_within_project(project, target_dir.strip() or "exports", require_exists=False)
+            resolved_target_dir.mkdir(parents=True, exist_ok=True)
+            final_name = _safe_filename_or_400(output_name, default="compiled.mp4")
+            if not final_name.lower().endswith(".mp4"):
+                final_name = f"{final_name}.mp4"
+            output_abs = _resolve_within_project(
+                project,
+                f"{resolved_target_dir.relative_to(project).as_posix()}/{final_name}",
+                require_exists=False,
             )
-        if output_abs.exists() and allow_overwrite:
-            _prepare_overwrite(project, output_abs.relative_to(project).as_posix())
+            if output_abs.exists() and not allow_overwrite:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Output already exists. Set allow_overwrite=true or provide a unique output_name.",
+                )
+            if output_abs.exists() and allow_overwrite:
+                _prepare_overwrite(project, output_abs.relative_to(project).as_posix())
 
-        mode_used = _concat_files(temp_inputs, output_abs, mode, allow_overwrite=allow_overwrite)
-        response = _register_output(
-            project=project,
-            project_name=name,
-            active_source=active_source,
-            output_abs=output_abs,
-            request=request,
-            mode_used=mode_used,
+            mode_used = _concat_files(temp_inputs, output_abs, mode, allow_overwrite=allow_overwrite)
+            response = _register_output(
+                project=project,
+                project_name=name,
+                active_source=active_source,
+                output_abs=output_abs,
+                request=request,
+                mode_used=mode_used,
+            )
+            logger.info(
+                "compose_upload_complete",
+                extra={"project": name, "source": active_source.name, "output": response.get("path"), "mode": mode_used},
+            )
+            return response
+        finally:
+            shutil.rmtree(temp_job_dir, ignore_errors=True)
+
+    # -------------------------
+    # Incremental: one clip per POST
+    # -------------------------
+
+    # Shortcuts Repeat Index is typically 1-based; normalize safely.
+    if total <= 0:
+        raise HTTPException(status_code=400, detail="Invalid X-Compose-Count (must be > 0)")
+
+    if 1 <= idx <= total:
+        idx0 = idx - 1
+    else:
+        idx0 = idx
+
+    if idx0 < 0 or idx0 >= total:
+        raise HTTPException(status_code=400, detail=f"Invalid X-Compose-Index for count (idx={idx}, total={total})")
+
+    session_dir = _session_dir(settings, name, run_id)
+    session_dir.mkdir(parents=True, exist_ok=True)
+
+    meta = _load_session_meta(session_dir)
+    if not meta:
+        meta = {
+            "project": name,
+            "source": active_source.name,
+            "run_id": run_id,
+            "created_at": _now_iso(),
+            "created_ts": datetime.now(timezone.utc).timestamp(),
+            "count": total,
+            "received": [],
+            "closed": False,
+        }
+
+    if meta.get("closed") is True:
+        raise HTTPException(
+            status_code=409,
+            detail="Compose session already closed (X-Compose-Time reused). Use millisecond precision in your time format.",
         )
-        logger.info(
-            "compose_upload_complete",
-            extra={"project": name, "source": active_source.name, "output": response.get("path"), "mode": mode_used},
+
+    existing_count = meta.get("count")
+    if isinstance(existing_count, int) and existing_count != total:
+        raise HTTPException(status_code=409, detail=f"Session count mismatch: existing={existing_count}, header={total}")
+
+    upload = files[0]
+    safe_name = safe_filename(upload.filename or f"clip-{idx0}.mp4")
+    target = session_dir / f"{idx0:04d}_{safe_name}"
+
+    written = 0
+    with target.open("wb") as handle:
+        while True:
+            chunk = await upload.read(1024 * 1024)
+            if not chunk:
+                break
+            written += len(chunk)
+            if written > max_bytes:
+                raise HTTPException(status_code=413, detail="Upload exceeds configured limit")
+            handle.write(chunk)
+
+    received = meta.get("received")
+    if not isinstance(received, list):
+        received = []
+    if idx0 not in received:
+        received.append(idx0)
+        received.sort()
+    meta["received"] = received
+    _save_session_meta_atomic(session_dir, meta)
+
+    is_last = (idx0 == total - 1)
+    if not is_last:
+        missing = [i for i in range(total) if i not in set(received)]
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "staged",
+                "project": name,
+                "source": active_source.name,
+                "run_id": run_id,
+                "received": len(received),
+                "count": total,
+                "missing_preview": missing[:25],
+                "note": "Send remaining clips; final clip (index=count-1) triggers compose immediately.",
+            },
         )
-        return response
-    finally:
-        shutil.rmtree(temp_job_dir, ignore_errors=True)
+
+    # Last clip arrived. Ensure we have all parts.
+    missing = [i for i in range(total) if i not in set(received)]
+    if missing:
+        raise HTTPException(status_code=409, detail=f"Last clip received but session missing indices: {missing[:50]}")
+
+    resolved_target_dir = _resolve_within_project(project, target_dir.strip() or "exports", require_exists=False)
+    resolved_target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Server-managed unique name. (Ignore allow_overwrite in incremental mode.)
+    seq = _next_compiled_sequence(project)
+    base = _safe_filename_or_400(output_name, default="compiled.mp4")
+    final_name = _compiled_name(base, seq)
+
+    output_abs = _resolve_within_project(
+        project,
+        f"{resolved_target_dir.relative_to(project).as_posix()}/{final_name}",
+        require_exists=False,
+    )
+
+    # Gather staged inputs in order
+    temp_inputs: list[Path] = []
+    for i in range(total):
+        match = sorted(session_dir.glob(f"{i:04d}_*"))
+        if not match:
+            raise HTTPException(status_code=500, detail=f"Session file missing on disk for index {i}")
+        temp_inputs.append(match[0])
+
+    mode_used = _concat_files(temp_inputs, output_abs, mode, allow_overwrite=False)
+
+    response = _register_output(
+        project=project,
+        project_name=name,
+        active_source=active_source,
+        output_abs=output_abs,
+        request=request,
+        mode_used=mode_used,
+    )
+
+    # Close + cleanup
+    meta["closed"] = True
+    meta["closed_at"] = _now_iso()
+    _save_session_meta_atomic(session_dir, meta)
+    shutil.rmtree(session_dir, ignore_errors=True)
+
+    logger.info(
+        "compose_upload_incremental_complete",
+        extra={"project": name, "source": active_source.name, "run_id": run_id, "output": response.get("path"), "mode": mode_used},
+    )
+    return response

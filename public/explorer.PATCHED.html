@@ -1,0 +1,4547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>media-sync-api — Explorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root{
+      --bg: #0b1020;
+      --panel: rgba(255,255,255,0.06);
+      --panel2: rgba(255,255,255,0.09);
+      --border: rgba(255,255,255,0.10);
+      --grid-gap: 4px;
+      --grid-col-width: 160px;
+      --card-bg: rgba(255,255,255,0.05);
+      --card-border: rgba(255,255,255,0.10);
+      --asset-radius: 6px;
+      --asset-border: rgba(255,255,255,0.08);
+      --asset-accent: #4af0c0;
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.65);
+      --muted2: rgba(255,255,255,0.45);
+      --brand: #7c3aed;   /* violet */
+      --brand2:#22c55e;   /* green */
+      --warn: #f59e0b;
+      --bad:  #ef4444;
+      --shadow: 0 16px 50px rgba(0,0,0,0.45);
+      --radius: 18px;
+      --radius2: 12px;
+      --ring: 0 0 0 3px rgba(124,58,237,0.25);
+      --topbar-row-height: 56px;
+      --topbar-subrow-height: 38px;
+      --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
+      --topbar-offset: var(--topbar-height);
+      --z-fx: 10;
+      --z-grid: 20;
+      --z-topbar: 5000;
+      --z-toast: 6000;
+      --z-modal: 7000;
+      --z-dropdown: 8000;
+      --ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
+      --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+      --dur-fast: 160ms;
+      --dur-med: 240ms;
+      --dur-slow: 320ms;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    @media (min-width: 700px){
+      :root{ --grid-col-width: 180px; }
+    }
+    @media (min-width: 1100px){
+      :root{ --grid-col-width: 210px; }
+    }
+    @media (min-width: 1400px){
+      :root{ --grid-col-width: 240px; }
+    }
+    @media (min-width: 900px){
+      :root{ --grid-gap: 6px; }
+    }
+    @media (max-width: 420px){
+      :root{ --grid-gap: 6px; --grid-col-width: 150px; }
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body{
+      margin:0;
+      font-family: var(--sans);
+      background:
+        radial-gradient(1200px 600px at 10% 0%, rgba(124,58,237,0.25), transparent 60%),
+        radial-gradient(1000px 500px at 90% 10%, rgba(34,197,94,0.18), transparent 55%),
+        radial-gradient(900px 500px at 50% 90%, rgba(59,130,246,0.12), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      position: relative;
+    }
+    body.topbar-hidden{
+      --topbar-offset: 0px;
+    }
+
+    a { color: inherit; }
+    code { font-family: var(--mono); }
+
+    .app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .bg-impulse-canvas{
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.4;
+    }
+    .app{ position: relative; z-index: 1; }
+
+    #ui-portal{
+      position: fixed;
+      inset: 0;
+      z-index: var(--z-dropdown);
+      pointer-events: none;
+    }
+    #ui-portal .actions-panel{
+      pointer-events: auto;
+    }
+
+    .mobile-only{ display:none; }
+
+    .backdrop{
+      position: fixed;
+      inset:0;
+      background: rgba(6,8,14,0.6);
+      opacity:0;
+      pointer-events:none;
+      transition: opacity var(--dur-med) var(--ease-settle);
+      z-index:65;
+    }
+    .backdrop.show{ opacity:1; pointer-events:auto; }
+    #drawerBackdrop{
+      background: rgba(6,8,14,0.35);
+    }
+
+    /* Top bar */
+    .topbar{
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: var(--z-topbar);
+      background: rgba(11,16,32,0.65);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: transform var(--dur-slow) var(--ease-snappy), opacity var(--dur-med) var(--ease-settle), margin-bottom var(--dur-slow) var(--ease-settle), filter var(--dur-med) var(--ease-settle), -webkit-filter var(--dur-med) var(--ease-settle);
+      filter: blur(0px);
+      -webkit-filter: blur(0px);
+      -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.92) 74%, rgba(0,0,0,0.72) 100%);
+      mask-image: linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.92) 74%, rgba(0,0,0,0.72) 100%);
+    }
+    body.topbar-hidden .topbar{
+      transform: translateY(calc(-1 * var(--topbar-height)));
+      opacity: 0;
+      pointer-events: none;
+      margin-bottom: calc(-1 * var(--topbar-height));
+    }
+    .topbar-reveal{
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--topbar-height);
+      z-index: 115;
+      pointer-events: auto;
+    }
+    body:not(.topbar-hidden) .topbar-reveal{
+      pointer-events: none;
+    }
+    .topbar-inner{
+      position: relative;
+      min-height: var(--topbar-row-height);
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 18px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      min-width: 0;
+      max-width: 210px;
+    }
+    .brand-text{
+      min-width: 0;
+      display:flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .brand h1{
+      margin:0;
+      font-size: 14px;
+      letter-spacing: 0.35px;
+      font-weight: 750;
+      line-height: 1.1;
+      color: var(--text);
+      cursor: pointer;
+      position: relative;
+    }
+    .brand h1 button{
+      all: unset;
+      cursor: pointer;
+      display: inline-flex;
+      position: relative;
+    }
+    .brand-title{
+      display: inline-block;
+      background: linear-gradient(120deg, #f0f3ff 5%, #a7d3ff 55%, #c6ffe2 90%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 4px 14px rgba(60,130,255,0.18);
+      transition: transform var(--dur-med) var(--ease-snappy), opacity var(--dur-med) var(--ease-settle);
+      will-change: transform, opacity;
+    }
+    .brand-title.is-secondary{
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+    }
+    .brand.projects-open .brand-title.is-primary{
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    .brand.projects-open .brand-title.is-secondary{
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .brand .sub{
+      margin:0;
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      position: relative;
+      text-overflow: ellipsis;
+      max-width: 180px;
+    }
+
+    .toolbar{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex: 1;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+    .topbar-controls{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .search{
+      flex: 1;
+      max-width: 420px;
+      min-width: 180px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+    }
+    .search input{
+      width: 100%;
+      flex: 1;
+      min-width: 0;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .search input::placeholder{ color: var(--muted2); }
+    .search-toolbar{
+      display:flex;
+      align-items:center;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .control{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      min-height: 28px;
+    }
+    select.control{
+      appearance: none;
+      padding-right: 26px;
+      background-image: linear-gradient(45deg, transparent 50%, rgba(255,255,255,0.6) 50%),
+        linear-gradient(135deg, rgba(255,255,255,0.6) 50%, transparent 50%);
+      background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+    .dropdown{
+      position: relative;
+    }
+    .dropdown summary{
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+    .dropdown summary::-webkit-details-marker{ display: none; }
+    .dropdown summary::marker{ content: ''; }
+    .dropdown-menu{
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      min-width: 160px;
+      background: rgba(11,16,32,0.98);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 6px;
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      z-index: var(--z-dropdown);
+    }
+    .dropdown[open] .dropdown-menu{ display: flex; }
+    .dropdown-menu button{
+      width: 100%;
+      text-align: left;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .dropdown-menu button:hover{
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.08);
+    }
+    .dropdown-menu button[disabled]{
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .dropdown-menu button.is-active{
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(124,58,237,0.35);
+    }
+    .visually-hidden{
+      position: absolute !important;
+      height: 1px;
+      width: 1px;
+      overflow: hidden;
+      position: relative;
+      clip: rect(1px, 1px, 1px, 1px);
+      white-space: nowrap;
+      border: 0;
+      padding: 0;
+      margin: -1px;
+    }
+
+    .pillbar{
+      display:flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .actions-panel{
+      position: fixed;
+      top: 72px;
+      right: 18px;
+      min-width: min(520px, 92vw);
+      background: rgba(11,16,32,0.96);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 12px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      z-index: var(--z-modal);
+    }
+    .actions-panel.open{ display:flex; }
+    .btn{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      cursor:pointer;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+      user-select:none;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.16); }
+    .btn:active{ transform: translateY(0px); }
+    .btn.primary{ border-color: rgba(124,58,237,0.45); background: rgba(124,58,237,0.18); }
+    .btn.good{ border-color: rgba(34,197,94,0.45); background: rgba(34,197,94,0.14); }
+    .btn.bad{ border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.14); }
+    .btn[disabled]{ opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .seg{
+      display:inline-flex;
+      flex: 0 0 auto;
+      width: max-content;
+      max-width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      background: rgba(255,255,255,0.05);
+    }
+    .seg button{
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor:pointer;
+    }
+    .seg button.active{
+      background: rgba(255,255,255,0.10);
+      color: var(--text);
+    }
+    .action-controls{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .action-controls .control{
+      min-width: 140px;
+    }
+    .toggle-btn{
+      padding: 6px 10px;
+      font-size: 11px;
+    }
+    .toggle-btn.is-on{
+      border-color: rgba(124,58,237,0.45);
+      background: rgba(124,58,237,0.18);
+      color: var(--text);
+    }
+
+    /* Main layout */
+    .main{
+      flex: 1;
+      min-height: 0;
+      display:flex;
+      max-width: none;
+      width: 100%;
+      margin: 0;
+      padding: var(--topbar-offset) 0 0;
+      gap: 0;
+      transition: padding-top var(--dur-med) var(--ease-settle);
+    }
+
+    .sidebar{
+      width: 330px;
+      min-width: 260px;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      overflow: hidden;
+      position: relative;
+      display:flex;
+      flex-direction: column;
+      min-height: 0;
+      position: relative;
+      z-index: 50;
+    }
+
+    .sidebar.sidebar-drawer{
+      position: fixed;
+      top: 70px;
+      left: 0;
+      height: calc(100% - 70px);
+      width: min(420px, 100vw - 24px);
+      max-width: 100%;
+      transform: translateX(-105%);
+      opacity: 0;
+      transition: transform var(--dur-slow) var(--ease-settle), opacity var(--dur-med) var(--ease-settle);
+      pointer-events: none;
+      z-index: 90;
+      will-change: transform, opacity;
+    }
+    .sidebar.sidebar-drawer.is-open{
+      transform: translateX(0%);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .content{
+      flex:1;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      overflow:hidden;
+      display:flex;
+      flex-direction: column;
+      min-height: 0;
+      position: relative;
+    }
+    .content.drag-active{
+      outline: 2px dashed rgba(124,58,237,0.6);
+      outline-offset: -6px;
+      background: rgba(124,58,237,0.08);
+    }
+
+    .content.is-loading .grid,
+    .content.is-loading .list{
+      opacity: 0;
+      pointer-events: none;
+    }
+    .content-loading{
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      color: var(--muted);
+      background: radial-gradient(circle at 50% 40%, rgba(18,24,44,0.75), rgba(10,13,24,0.92));
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--dur-med) var(--ease-settle);
+    }
+    .content.is-loading .content-loading{
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .content-loading .spinner{
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: rgba(124,58,237,0.8);
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin{
+      to { transform: rotate(360deg); }
+    }
+
+    .section-h{
+      position: relative;
+      z-index: 1;
+      padding: 12px 8px 8px;
+      display:flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: rgba(11,16,32,0.55);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .topbar > .section-h{
+      padding: 0 18px;
+      height: var(--topbar-subrow-height);
+      display:flex;
+      align-items:center;
+      background: transparent;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .sidebar .section-h{
+      top: 0;
+    }
+    .section-h h2{
+      margin:0;
+      font-size: 13px;
+      letter-spacing: 0.35px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .meta-line{
+      font-size: 12px;
+      color: var(--muted);
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .kbd{
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+    }
+
+    .scroll{
+      min-height: 0;
+    }
+    .sidebar .scroll{
+      overflow: auto;
+    }
+    .content .scroll{
+      overflow: auto;
+      flex: 1;
+      position: relative;
+      z-index: var(--z-grid);
+    }
+    .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
+    .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
+    .scroll::-webkit-scrollbar-track{ background: rgba(255,255,255,0.04); }
+
+    #mediaGridRoot > .fx-shared-overlay,
+    #mediaGridRoot > .fx-debug-overlay{
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #mediaGridRoot > .fx-shared-overlay{
+      z-index: var(--z-fx);
+    }
+    #mediaGridRoot > .fx-debug-overlay{
+      z-index: calc(var(--z-fx) + 1);
+    }
+
+    /* Project chips */
+    .chips{
+      padding: 12px;
+      display:flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      cursor:pointer;
+      transition: background 120ms ease, transform 120ms ease, border-color 120ms ease;
+      max-width: 100%;
+      display:flex;
+      gap: 8px;
+      align-items:center;
+    }
+    .chip:hover{ background: rgba(255,255,255,0.09); transform: translateY(-1px); }
+    .chip.active{
+      border-color: rgba(124,58,237,0.55);
+      background: rgba(124,58,237,0.16);
+      box-shadow: 0 0 0 3px rgba(124,58,237,0.12) inset;
+    }
+    .chip .dot{
+      width: 8px; height: 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.25);
+    }
+    .chip.active .dot{
+      background: linear-gradient(135deg, rgba(124,58,237,0.9), rgba(34,197,94,0.8));
+    }
+    .chip .name{
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 250px;
+    }
+
+    /* Sources */
+    .sources{
+      padding: 12px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .card{
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,0.05);
+      padding: 10px 10px;
+    }
+    .card strong { font-size: 12px; }
+    .card .small { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .tagrow{ display:flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag{
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(255,255,255,0.04);
+    }
+    .taglist{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .taglist .tag{
+      border-color: rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+    .taglist .tag-button{
+      border: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: inherit;
+    }
+    .taglist .tag-button span{
+      opacity: 0.7;
+      font-size: 11px;
+    }
+    .tag.good{ border-color: rgba(34,197,94,0.35); color: rgba(187,247,208,0.85); background: rgba(34,197,94,0.12); }
+    .tag.bad{ border-color: rgba(239,68,68,0.35); color: rgba(254,202,202,0.85); background: rgba(239,68,68,0.12); }
+    .tag-panel{
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+    }
+    .tag-panel.is-hidden{
+      display: none;
+    }
+    .drawer-tag-panel{
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      top: 14px;
+      z-index: 5;
+      margin-top: 0;
+      background: rgba(11,16,32,0.96);
+      box-shadow: var(--shadow);
+      display: none;
+    }
+    .drawer-tag-panel.open{
+      display: block;
+    }
+    .drawer-tag-panel .taglist{
+      max-height: 120px;
+      overflow: auto;
+    }
+    .drawer-tag-panel .tag-editor{
+      margin-top: 10px;
+    }
+    .drawer-body{
+      position: relative;
+    }
+    .tag-editor{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      align-items: center;
+    }
+    .tag-editor input{
+      flex: 1 1 180px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+    }
+
+    /* Grid/List */
+    .grid{
+      padding: 4px;
+      column-width: var(--grid-col-width);
+      column-gap: var(--grid-gap);
+      column-fill: balance;
+    }
+    .list{
+      padding: 10px 12px;
+      display:flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .asset{
+      display: inline-block;
+      width: 100%;
+      break-inside: avoid;
+      margin-bottom: var(--grid-gap);
+      border: 1px solid var(--asset-border);
+      background: rgba(16,18,28,0.88);
+      border-radius: var(--asset-radius);
+      overflow:hidden;
+      cursor:pointer;
+      transition: border-color var(--dur-fast) var(--ease-settle), box-shadow var(--dur-med) var(--ease-settle), transform var(--dur-med) var(--ease-settle);
+      position: relative;
+      will-change: transform;
+    }
+    .asset:hover{
+      border-color: rgba(255,255,255,0.2);
+      box-shadow: 0 12px 42px rgba(0,0,0,0.46), 0 0 0 1px rgba(74,240,192,0.08);
+      transform: translateY(-2px);
+    }
+    @media (pointer: coarse){
+      .asset:hover{ transform: none; }
+    }
+
+    .thumb{
+      background: rgba(0,0,0,0.18);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position: relative;
+      overflow:hidden;
+    }
+    .asset[data-kind="image"] .thumb,
+    .asset[data-kind="video"] .thumb{
+      aspect-ratio: 1 / 1;
+    }
+    .asset[data-kind="audio"] .thumb{
+      aspect-ratio: 1 / 1;
+      display:grid;
+      place-items:center;
+    }
+    .asset[data-orient="portrait"] .thumb{ aspect-ratio: 3 / 4; }
+    .asset[data-orient="landscape"] .thumb{ aspect-ratio: 4 / 3; }
+    .asset[data-orient="square"] .thumb{ aspect-ratio: 1 / 1; }
+    .asset-thumb{
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display:block;
+    }
+    .thumb .fallback{
+      font-size: 12px;
+      color: var(--muted);
+      padding: 14px;
+      text-align:center;
+    }
+
+    .asset .asset-overlay{
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .asset .scrim{
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.34) 42%, rgba(0,0,0,0.05) 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .asset .asset-ol-tl{
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      display:flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      max-width: calc(100% - 20px);
+      pointer-events: auto;
+    }
+    .asset .asset-ol-tr{
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      pointer-events: auto;
+    }
+    .asset .asset-ol-bl{
+      position: absolute;
+      left: 8px;
+      bottom: 46px;
+      display:flex;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .asset .play-btn{
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .asset:hover .play-btn{ opacity: 1; }
+    .asset[data-kind="image"] .play-btn,
+    .asset[data-kind="doc"] .play-btn{ opacity: 0 !important; }
+    .asset .play-btn-inner{
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.62);
+      border: 1.5px solid rgba(255,255,255,0.45);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .asset .preview-pill{
+      position: absolute;
+      right: 8px;
+      bottom: 48px;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--asset-accent);
+      background: rgba(74,240,192,0.15);
+      border: 1px solid rgba(74,240,192,0.32);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 2;
+    }
+    .asset:hover .preview-pill{ opacity: 1; }
+
+    .asset .asset-ol-bottom{
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 10px 12px;
+      display: grid;
+      gap: 4px;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .asset .asset-title{
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.2;
+      color: rgba(255,255,255,0.95);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+      overflow: hidden;
+      position: relative;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .asset .asset-subtitle{
+      font-size: 11px;
+      color: rgba(255,255,255,0.72);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+      overflow: hidden;
+      position: relative;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .badge{
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      padding: 3px 7px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      background: rgba(10,12,20,0.56);
+      color: rgba(235,241,255,0.88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .badge.kind-video{ background: rgba(32,96,255,0.3); border-color: rgba(32,96,255,0.5); color: #80b0ff; }
+    .badge.kind-image{ background: rgba(32,160,255,0.3); border-color: rgba(32,160,255,0.5); color: #80d0ff; }
+    .badge.kind-audio{ background: rgba(144,32,255,0.3); border-color: rgba(144,32,255,0.5); color: #c080ff; }
+    .badge.kind-doc{ background: rgba(124,58,237,0.28); border-color: rgba(124,58,237,0.5); color: #ccb4ff; }
+
+    .selector{
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      background: rgba(0,0,0,0.4);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: border-color 0.2s ease, background 0.2s ease;
+      position: relative;
+      overflow: hidden;
+      position: relative;
+    }
+    .selector:hover{ border-color: var(--asset-accent); }
+    .selector input{
+      width: 14px;
+      height: 14px;
+      opacity: 0;
+      margin: 0;
+      position: relative;
+      z-index: 2;
+      cursor: pointer;
+    }
+    .selector .sel-order{
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--asset-accent);
+      text-shadow: 0 0 6px rgba(74,240,192,0.42), 0 1px 2px rgba(0,0,0,0.62);
+      opacity: 0;
+      transform: scale(0.92);
+      transition: opacity 120ms var(--ease-settle), transform 120ms var(--ease-settle);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .asset.is-selected .selector .sel-order{
+      opacity: 1;
+      transform: scale(1);
+    }
+
+
+    .asset.is-selected{
+      border-color: rgba(74,240,192,0.92);
+      box-shadow: 0 0 0 1px rgba(74,240,192,0.85), 0 0 28px rgba(74,240,192,0.34), 0 12px 44px rgba(74,240,192,0.22);
+    }
+
+    /* List row variant */
+    .row{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      padding: 10px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,0.05);
+    }
+    .row:hover{ border-color: rgba(255,255,255,0.16); background: rgba(255,255,255,0.07); }
+    .row .mini{
+      width: 86px; height: 54px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow:hidden;
+      background: rgba(255,255,255,0.04);
+      flex-shrink:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .row .mini img{ width:100%; height:100%; object-fit: cover; display:block; }
+    .row .info{ flex:1; min-width:0; }
+    .row .info .t{ font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .info .s{ font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
+    .row .actions{ display:flex; align-items:center; gap: 8px; }
+    .iconbtn{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor:pointer;
+    }
+    .iconbtn:hover{ background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.16); }
+    .row .actions input{ width: 16px; height: 16px; }
+
+    /* Inspector drawer */
+    .drawer{
+      position: fixed;
+      top: 0; right: 0;
+      height: 100%;
+      width: min(520px, 100vw);
+      background: #0b1020;
+      border-left: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      transform: translateX(110%);
+      opacity: 0;
+      transition: transform var(--dur-slow) var(--ease-settle), opacity var(--dur-med) var(--ease-settle);
+      z-index: var(--z-modal);
+      display:flex;
+      flex-direction: column;
+      min-height: 0;
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+    .drawer.open{ transform: translateX(0%); opacity: 1; pointer-events: auto; }
+    .drawer-h{
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      display:flex;
+      align-items:flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .drawer-h .title{
+      min-width:0;
+    }
+    .drawer-h .title h3{
+      margin:0;
+      font-size: 14px;
+      font-weight: 780;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 360px;
+    }
+    .drawer-h .title .sub{
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 420px;
+    }
+    .xbtn{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      cursor:pointer;
+    }
+    .xbtn:hover{ background: rgba(255,255,255,0.10); }
+
+    .drawer-body{
+      padding: 14px;
+      display:flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow:auto;
+      min-height: 0;
+    }
+    .preview{
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,0.04);
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height: 220px;
+    }
+    .preview video, .preview img, .preview audio{
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      display:block;
+      background: rgba(0,0,0,0.25);
+      max-height: 52vh;
+      object-fit: contain;
+    }
+
+    #mediaGrid,
+    #mediaList,
+    .asset,
+    .row,
+    .drawer,
+    .drawer-h,
+    .drawer-body,
+    .preview{
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    input,
+    textarea,
+    select{
+      user-select: text;
+      -webkit-user-select: text;
+      -webkit-touch-callout: default;
+    }
+
+    .kv{
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,0.04);
+      padding: 10px;
+      display:grid;
+      grid-template-columns: 120px 1fr;
+      gap: 8px 10px;
+      font-size: 12px;
+      align-items:center;
+    }
+    .kv .k{ color: var(--muted); }
+    .kv .v{ color: var(--text); overflow-wrap:anywhere; }
+
+    .drawer-actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+
+    /* Bottom selection bar */
+    .selectbar{
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 16px;
+      z-index: 55;
+      display:none;
+      background: rgba(11,16,32,0.75);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 12px;
+      box-shadow: var(--shadow);
+      gap: 10px;
+      align-items: stretch;
+      flex-direction: column;
+      max-width: min(980px, calc(100vw - 24px));
+      width: min(980px, calc(100vw - 24px));
+    }
+    .selectbar.show{ display:flex; }
+    .selectbar-row{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items:center;
+    }
+    .selectbar .count{ font-size: 12px; color: var(--muted); }
+    .selectbar .sep{ width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
+    .selectbar .btn{ padding: 8px 11px; }
+    .selectbar-panel{
+      display:none;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+    .selectbar-panel.open{
+      display:block;
+    }
+    .selectbar-panel select{
+      flex: 1 1 180px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+    }
+
+    .mobile-fab{
+      display:none;
+    }
+
+    /* Toasts */
+    .toasts{
+      position: fixed;
+      top: calc(env(safe-area-inset-top, 0px) + 12px);
+      right: 16px;
+      z-index: var(--z-toast);
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+      isolation: isolate;
+    }
+    .toast{
+      pointer-events: auto;
+      border: 1px solid var(--border);
+      background: rgba(11,16,32,0.78);
+      border-radius: 14px;
+      padding: 10px 12px;
+      min-width: 260px;
+      max-width: 360px;
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      color: var(--text);
+    }
+    .toast .t{ font-weight: 700; margin-bottom: 3px; }
+    .toast .m{ color: var(--muted); }
+    .toast.good{ border-color: rgba(34,197,94,0.35); }
+    .toast.warn{ border-color: rgba(245,158,11,0.35); }
+    .toast.bad{ border-color: rgba(239,68,68,0.35); }
+
+    /* Mobile */
+    @media (max-width: 980px){
+      .sidebar{ width: 320px; }
+    }
+    @media (max-width: 860px){
+      body{ overflow:auto; }
+      .main{ flex-direction: column; overflow:auto; }
+      .sidebar{ width: 100%; }
+      .content{ width: 100%; }
+      .drawer{ width: 100vw; }
+      .topbar-inner{
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+      }
+      .brand{
+        min-width: 0;
+        gap: 8px;
+      }
+      .toolbar{
+        width: auto;
+        flex: 1;
+        justify-content: flex-end;
+      }
+      .topbar-controls{
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .search{ max-width: 200px; min-width: 120px; }
+      .btn{ padding: 7px 10px; font-size:11px; }
+      .seg button{ padding: 7px 9px; font-size:11px; }
+      .search-toolbar .control{ padding: 5px 8px; font-size:11px; }
+      .action-controls .control{ min-width: 120px; }
+      .toggle-btn{ padding: 6px 9px; font-size:11px; }
+      .asset .title{ font-size: 11px; }
+      .section-h{ padding: 12px 12px 9px; }
+      .topbar > .section-h{ padding: 0 12px; }
+      .sidebar{ border-radius: 0; }
+      .drawer{ height: 85%; top: auto; bottom: 0; border-left: none; border-top: 1px solid var(--border); transform: translateY(110%); right:0; width:100%; }
+      .drawer.open{ transform: translateY(0%); }
+      .sidebar.sidebar-drawer{ top: 52px; height: calc(100% - 52px); border-radius: 0; }
+      .mobile-only{ display:block; }
+    }
+    @media (max-width: 860px){
+      .actions-panel{
+        position: fixed;
+        top: 58px;
+        left: 12px;
+        right: 12px;
+      }
+    }
+    @media (prefers-reduced-motion: reduce){
+      .asset,
+      .drawer,
+      .sidebar.sidebar-drawer,
+      .backdrop,
+      .brand-title{
+        transition-duration: 1ms !important;
+      }
+    }
+    .sidebar{
+      background: rgba(11,16,32,0.92);
+    }
+    .sidebar .scroll{
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
+    .sidebar select,
+    .sidebar option,
+    .drawer select,
+    .drawer option{
+      color: var(--text);
+      background: #0b1020;
+    }
+
+    /* Context menu */
+    .context-menu{
+      position: fixed;
+      min-width: 180px;
+      padding: 8px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(11,16,32,0.96);
+      box-shadow: var(--shadow);
+      z-index: 90;
+      display: none;
+    }
+    .context-menu.open{ display: block; }
+    .context-menu button{
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .context-menu button:hover{ background: rgba(255,255,255,0.08); }
+    .context-menu .muted{ color: var(--muted); cursor: default; }
+
+    /* Modal */
+    .modal-backdrop{
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8,12,22,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+      z-index: 120;
+      padding: 16px;
+    }
+    .modal-backdrop.open{
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card{
+      width: min(520px, 94vw);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(13,18,32,0.96);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    .modal-card h3{
+      margin: 0 0 6px 0;
+      font-size: 16px;
+    }
+    .modal-card p{
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .modal-actions{
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="bgImpulseCanvas" class="bg-impulse-canvas" aria-hidden="true"></canvas>
+  <div class="topbar-reveal" id="topbarReveal" aria-hidden="true"></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div class="brand" id="brandToggle" title="LAN-only media-sync-api explorer">
+          <div class="brand-text">
+            <h1>
+              <button id="brandTitle" type="button" aria-label="Toggle projects panel">
+                <span class="brand-title is-primary">Cdaprod’s Explorer</span>
+                <span class="brand-title is-secondary">Cdaprod’s Projects</span>
+              </button>
+            </h1>
+            <div class="sub">media-sync-api</div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="topbar-controls">
+            <div class="search" role="search">
+              <span class="kbd">⌘K</span>
+              <input id="q" placeholder="Search filename, path… (client-side filter)" autocomplete="off" />
+              <div class="search-toolbar" aria-label="Search filters">
+                <details id="typeFilterDropdown" class="dropdown">
+                  <summary class="control" aria-label="Filter by media type">
+                    Type: <span id="typeFilterLabel">All types</span>
+                  </summary>
+                  <div class="dropdown-menu" role="listbox" aria-label="Media type filters">
+                    <button type="button" data-value="all">All types</button>
+                    <button type="button" data-value="video">Video</button>
+                    <button type="button" data-value="image">Image</button>
+                    <button type="button" data-value="audio">Audio</button>
+                    <button type="button" data-value="overlay" id="typeOptionOverlay">Overlay</button>
+                    <button type="button" data-value="unknown">Unknown</button>
+                  </div>
+                </details>
+              </div>
+            </div>
+            <button id="actionsToggle" class="btn" type="button" aria-expanded="false">Actions ▾</button>
+          </div>
+          <div id="actionsPanel" class="actions-panel" role="region" aria-label="Explorer actions">
+            <div class="seg" aria-label="View mode">
+              <button id="viewGrid" class="active" type="button">Grid</button>
+              <button id="viewList" type="button">List</button>
+            </div>
+
+            <div class="action-controls" aria-label="Sort and quick filters">
+              <select id="sortFilter" class="control visually-hidden" aria-label="Sort media">
+                <option value="newest">Sort: Newest</option>
+                <option value="oldest">Sort: Oldest</option>
+                <option value="name-asc">Sort: Name A→Z</option>
+                <option value="name-desc">Sort: Name Z→A</option>
+                <option value="size-desc" id="sortOptionSizeDesc">Sort: Size big→small</option>
+                <option value="size-asc" id="sortOptionSizeAsc">Sort: Size small→big</option>
+              </select>
+              <details id="sortFilterDropdown" class="dropdown">
+                <summary class="control" aria-label="Sort media">
+                  Sort: <span id="sortFilterLabel">Newest</span>
+                </summary>
+                <div class="dropdown-menu" role="listbox" aria-label="Sort media">
+                  <button type="button" data-value="newest">Sort: Newest</button>
+                  <button type="button" data-value="oldest">Sort: Oldest</button>
+                  <button type="button" data-value="name-asc">Sort: Name A→Z</button>
+                  <button type="button" data-value="name-desc">Sort: Name Z→A</button>
+                  <button type="button" data-value="size-desc" id="sortMenuSizeDesc">Sort: Size big→small</button>
+                  <button type="button" data-value="size-asc" id="sortMenuSizeAsc">Sort: Size small→big</button>
+                </div>
+              </details>
+              <div class="pillbar">
+                <button id="toggleSelectedOnly" class="btn toggle-btn" type="button">Selected only</button>
+                <button id="toggleUntaggedOnly" class="btn toggle-btn" type="button">Untagged only</button>
+              </div>
+            </div>
+
+            <div class="pillbar">
+              <button id="refreshBtn" class="btn" type="button">↻ Refresh</button>
+                            <button id="pickUploadBtn" class="btn good" type="button">＋ Upload</button>
+              <button id="sendResolveBtn" class="btn primary" type="button" disabled>⇢ Send to Resolve</button>
+              <button id="deleteSelBtn" class="btn bad" type="button" disabled>🗑 Delete Selected</button>
+              <button id="clearSelBtnTop" class="btn" type="button" disabled>✕ Clear</button>
+            </div>
+
+            <div class="tag-panel" id="batchTagPanel">
+              <div class="small">Tag selected assets</div>
+              <div class="tag-editor">
+                <input id="batchTagInput" type="text" placeholder="e.g. highlight, vertical" />
+                <button id="batchTagAdd" class="btn" type="button" disabled>＋ Tag</button>
+                <button id="batchTagRemove" class="btn" type="button" disabled>− Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section-h">
+        <h2 id="contentTitle">Media</h2>
+        <div class="meta-line">
+          <span id="mediaCount">0 items</span>
+          <span>•</span>
+          <span id="activePath" class="kbd">no project</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <!-- Sidebar -->
+      <aside id="sidebar" class="sidebar sidebar-drawer">
+        <div class="scroll">
+          <div class="section-h">
+            <h2>Projects</h2>
+            <div class="meta-line">
+              <span id="projCount">…</span>
+              <span class="kbd">Click</span>
+            </div>
+          </div>
+          <div id="projects" class="chips"></div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Sources</h2>
+            <div class="meta-line"><span class="kbd">/api/sources</span></div>
+          </div>
+          <div id="sources" class="sources"></div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Resolve</h2>
+            <div class="meta-line"><span class="kbd">/api/resolve/open</span></div>
+          </div>
+          <div style="padding: 12px;">
+            <div class="card">
+              <strong>Mode</strong>
+              <div class="small">Queue selected clips, then dispatch.</div>
+              <div style="display:grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px;">
+                <label style="font-size:12px; color:var(--muted);">Project mode</label>
+                <select id="resolveProjectMode" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
+                  <option value="current">Use current project</option>
+                  <option value="__select__">Let host choose</option>
+                  <option value="__new__">Create new project</option>
+                </select>
+
+                <label style="font-size:12px; color:var(--muted);">Project name</label>
+                <input id="resolveProjectName" placeholder="P1-Public-Accountability"
+                  style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+
+                <label style="font-size:12px; color:var(--muted);">New project name (if creating)</label>
+                <input id="resolveNewName" placeholder="P3-Editorial"
+                  style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);" />
+
+                <label style="font-size:12px; color:var(--muted);">Action</label>
+                <select id="resolveMode" style="padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text);">
+                  <option value="import">Import into media pool</option>
+                  <option value="reveal_in_explorer">Reveal in Explorer/Finder</option>
+                </select>
+
+                <div class="small" id="resolveHint">Select clips to enable.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-h" style="border-top:1px solid var(--border);">
+            <h2>Upload</h2>
+            <div class="meta-line"><span class="kbd">/api/projects/*/upload</span></div>
+          </div>
+          <div style="padding: 12px;">
+            <div class="card">
+              <strong>Upload to active project</strong>
+              <div class="small" id="uploadCaption">Pick a project first.</div>
+              <div style="display:flex; gap:10px; align-items:center; margin-top: 10px; flex-wrap: wrap;">
+                <input id="uploadFile" type="file" style="max-width: 100%; color: var(--muted);" />
+                <button id="uploadBtn" class="btn good" type="button" disabled>Upload</button>
+              </div>
+              <div class="small" id="uploadStatus" style="margin-top:8px;"></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Content -->
+      <section class="content" id="mediaScroll">
+        <div class="content-loading" aria-hidden="true">
+          <div class="spinner"></div>
+          <div>Preparing thumbnails…</div>
+        </div>
+        <div id="mediaGridRoot" class="scroll" data-fx-grid-root="1">
+          <div id="mediaGrid" class="grid"></div>
+          <div id="mediaList" class="list" style="display:none;"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Bottom selection bar -->
+    <div id="selectBar" class="selectbar" role="status" aria-live="polite">
+      <div class="selectbar-row">
+        <div class="count"><span id="selCount">0</span> selected</div>
+        <div class="sep"></div>
+        <button id="selTagToggle" class="btn" type="button">🏷 Tag Selected</button>
+        <button id="selMoveToggle" class="btn" type="button">⇢ Move Selected</button>
+        <button id="selCopyUrls" class="btn" type="button">⧉ Copy stream URLs</button>
+        <button id="selCompose" class="btn" type="button">🎬 Compose Video(s)</button>
+        <button id="btnProgramMonitor" class="btn" type="button" hidden>➕ Add to Program Monitor</button>
+        <button id=“btnFluxGallery” class=“btn” type=“button” hidden>⚡ Send to Flux Gallery</button>
+        <button id=“clearSelBtn” class=“btn” type=“button” disabled>✕ Clear</button>
+      </div>
+
+      <div class="selectbar-panel" id="selTagPanel">
+        <div class="small">Add or remove tags for selected assets</div>
+        <div class="tag-editor">
+          <input id="selTagInput" type="text" placeholder="tag, another tag" />
+          <button id="selTagAdd" class="btn" type="button">＋ Tag</button>
+          <button id="selTagRemove" class="btn" type="button">− Remove</button>
+        </div>
+      </div>
+
+      <div class="selectbar-panel" id="selMovePanel">
+        <div class="small">Move selected assets to a project</div>
+        <div class="tag-editor">
+          <select id="selMoveTarget" aria-label="Move target project"></select>
+          <button id="selMoveSubmit" class="btn" type="button">⇢ Move</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector drawer -->
+    <aside id="drawer" class="drawer" aria-hidden="true">
+      <div class="drawer-h">
+        <div class="title">
+          <h3 id="drawerTitle">—</h3>
+          <div id="drawerSub" class="sub">—</div>
+        </div>
+        <button id="drawerClose" class="xbtn" type="button" aria-label="Close inspector">✕</button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="preview" id="drawerPreview"></div>
+
+        <div class="drawer-actions">
+          <button id="drawerPlay" class="btn" type="button">▶ Play</button>
+          <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
+          <button id="drawerTagToggle" class="btn" type="button">🏷 Tag</button>
+          <button id="drawerSendOBS" class="btn" type="button">📺 Send to OBS</button>
+          <button id="drawerDelete" class="btn bad" type="button">🗑 Delete</button>
+        </div>
+
+        <div class="tag-panel" id="drawerObsPanel">
+          <div class="small">OBS Send settings</div>
+          <div class="tag-editor">
+            <label class="tag" for="obsFitMode">Fit</label>
+            <select id="obsFitMode" aria-label="OBS fit mode">
+              <option value="cover" selected>Cover</option>
+              <option value="contain">Contain</option>
+            </select>
+            <label class="tag" for="obsSlotSelect">Slot</label>
+            <select id="obsSlotSelect" aria-label="OBS slot">
+              <option value="1" selected>Slot 1</option>
+              <option value="2">Slot 2</option>
+              <option value="3">Slot 3</option>
+              <option value="4">Slot 4</option>
+            </select>
+            <label class="tag">
+              <input id="obsExclusiveToggle" type="checkbox" />
+              Exclusive to ASSET_MEDIA
+            </label>
+          </div>
+        </div>
+
+        <div class="tag-panel drawer-tag-panel" id="drawerTagPanel">
+          <div class="taglist" id="drawerTagList"></div>
+          <div class="tag-editor">
+            <input id="drawerTagInput" type="text" placeholder="Add or remove tag…" />
+            <button id="drawerTagAdd" class="btn" type="button">＋ Tag</button>
+            <button id="drawerTagRemove" class="btn" type="button">− Remove</button>
+          </div>
+        </div>
+
+        <div class="kv" id="drawerKV"></div>
+      </div>
+    </aside>
+
+    <!-- Toasts -->
+    <div class="toasts" id="toasts"></div>
+    <div id="sidebarBackdrop" class="backdrop"></div>
+    <div id="drawerBackdrop" class="backdrop" style="z-index:70;"></div>
+  </div>
+
+  <script src="js/obs-websocket.js"></script>
+  <script src="js/obs-push.js"></script>
+  <script type="module" src="js/program_monitor_handoff.js"></script>
+  <script type="module" src="js/flux_gallery_handoff.js"></script>
+  <script type="module">
+    import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';
+
+    void ExplorerShaders;
+    // -------------------------
+    // Config / state
+    // -------------------------
+    const API = ''; // same-origin; keep '' for container-served index.html
+    const el = (id) => document.getElementById(id);
+    const FX_DEBUG = new URLSearchParams(window.location.search).get('fxdebug') === '1';
+
+    if (FX_DEBUG) {
+      const proto = HTMLCanvasElement.prototype;
+      const origGetContext = proto.getContext;
+      if (origGetContext && !origGetContext.__assetfx_patched) {
+        const wrappedGetContext = function wrappedGetContext(type, attrs) {
+          if (type === 'webgl' || type === 'webgl2') {
+            window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];
+            window.__webgl_ctx_calls.push({
+              type,
+              attrs: attrs ? Object.keys(attrs) : null,
+              stack: (new Error('getContext')).stack,
+              t: performance.now(),
+              canvasId: this.id || null,
+              dataset: { ...this.dataset },
+            });
+          }
+          return origGetContext.call(this, type, attrs);
+        };
+        wrappedGetContext.__assetfx_patched = true;
+        proto.getContext = wrappedGetContext;
+      }
+    }
+
+    const state = {
+      projects: [],
+      sources: [],
+      activeProject: null,   // {name, source, ...}
+      media: [],             // items from /media
+      mediaScope: 'project', // project|all
+      view: 'grid',          // grid|list
+      q: '',
+      filters: {
+        type: 'all',
+        sort: 'newest',
+        selectedOnly: false,
+        untaggedOnly: false,
+      },
+      selected: new Set(),   // `${source}::${project}::${relative_path}`
+      selectedOrder: [],
+      focused: null,         // item
+      mediaMeta: {
+        types: new Set(),
+        hasTags: false,
+        hasSize: false,
+      },
+    };
+
+    const ui = {
+      sidebarOpen: false,
+      inspectorOpen: false,
+      dragActive: false,
+      assetDragActive: false,
+      dragging: false,
+      dragPaths: [],
+      dragPointerId: null,
+      dragTarget: null,
+    };
+
+    const cardFX = window.__assetfx_instance instanceof AssetFX
+      ? window.__assetfx_instance
+      : (window.__assetfx_instance = new AssetFX());
+
+    const itemsByPath = new Map();
+
+    function itemProjectName(item){
+      return item?.project_name || item?.project || state.activeProject?.name || '';
+    }
+
+    function itemSourceName(item){
+      return item?.project_source || item?.source || state.activeProject?.source || 'primary';
+    }
+
+    function selectionKey(item){
+      const source = itemSourceName(item);
+      const project = itemProjectName(item);
+      if (item?.asset_uuid) return `uuid::${source}::${project}::${item.asset_uuid}`;
+      if (!item?.relative_path) return '';
+      return `${source}::${project}::${item.relative_path}`;
+    }
+
+    function selectionItemByKey(key){
+      if (!key) return null;
+      const visible = itemsByPath.get(key);
+      if (visible) return visible;
+      return state.media.find((entry) => selectionKey(entry) === key) || null;
+    }
+
+    function selectedItems(){
+      return Array.from(state.selected)
+        .map((key) => selectionItemByKey(key))
+        .filter(Boolean);
+    }
+
+    function selectedItemsOrdered(){
+      const keys = state.selectedOrder.filter((key) => state.selected.has(key));
+      return keys
+        .map((key) => selectionItemByKey(key))
+        .filter(Boolean);
+    }
+
+
+    function selectedAssetRefsOrdered(){
+      return selectedItemsOrdered()
+        .map((item) => ({
+          source: itemSourceName(item),
+          project: itemProjectName(item),
+          relative_path: item.relative_path || '',
+          kind: guessKind(item),
+          asset_id: item.asset_id || null,
+          asset_uuid: item.asset_uuid || null,
+          sha256: item.sha256 || null,
+        }))
+        .filter((item) => item.project && item.relative_path);
+    }
+
+    function deselectKey(key){
+      state.selected.delete(key);
+      state.selectedOrder = state.selectedOrder.filter((value) => value !== key);
+    }
+
+    function clearSelectionState(){
+      state.selected.clear();
+      state.selectedOrder = [];
+    }
+
+    function parseSelectedKey(key){
+      const value = String(key || '');
+      if (!value) return { source: '', project: '', relative_path: '' };
+      const first = value.indexOf('::');
+      if (first < 0) return { source: '', project: '', relative_path: value };
+      const second = value.indexOf('::', first + 2);
+      if (second < 0){
+        return {
+          source: value.slice(0, first),
+          project: value.slice(first + 2),
+          relative_path: '',
+        };
+      }
+      return {
+        source: value.slice(0, first),
+        project: value.slice(first + 2, second),
+        relative_path: value.slice(second + 2),
+      };
+    }
+
+    function selectedProjectGroups(){
+      const groups = new Map();
+      selectedItemsOrdered().forEach((item) => {
+        const source = itemSourceName(item);
+        const project = itemProjectName(item);
+        const rel = item.relative_path;
+        if (!project || !rel) return;
+        const groupKey = `${source}::${project}`;
+        if (!groups.has(groupKey)){
+          groups.set(groupKey, { source, project, relative_paths: [] });
+        }
+        groups.get(groupKey).relative_paths.push(rel);
+      });
+      return Array.from(groups.values());
+    }
+
+    function selectedProjectContextIfSingle(){
+      if (state.activeProject?.name){
+        return { name: state.activeProject.name, source: state.activeProject.source || 'primary' };
+      }
+      const groups = selectedProjectGroups();
+      if (groups.length !== 1) return null;
+      const [group] = groups;
+      return { name: group.project, source: group.source || 'primary' };
+    }
+
+    function selectedRelativePathsForContext(context){
+      if (!context?.name) return [];
+      const source = context.source || 'primary';
+      return selectedItemsOrdered()
+        .filter((item) => itemProjectName(item) === context.name && itemSourceName(item) === source)
+        .map((item) => item.relative_path)
+        .filter(Boolean);
+    }
+
+    function selectedRelativePathsForAction(){
+      return selectedRelativePathsForContext(selectedProjectContextIfSingle());
+    }
+    const ORIENT_CACHE_NAME = 'media-sync-orient-cache-v1';
+    const THUMB_MAX_WORKERS = 3;
+    const THUMB_LOAD_TIMEOUT_MS = 8000;
+    const PREFS_KEY = 'media-sync-explorer-filters-v1';
+    const orientationCache = new Map();
+    let inspectorRequestToken = 0;
+    let currentInspectorKey = '';
+
+    // -------------------------
+    // Utils
+    // -------------------------
+    function cssEscape(value){
+      const input = String(value ?? '');
+      if (window.CSS?.escape) return window.CSS.escape(input);
+      return input.replace(/([\"\'\\#.:;,!?+*~^$\[\]()=>|/@])/g, '\\$1');
+    }
+
+    function ensureToastHost(){
+      let host = el('toasts');
+      if (!host){
+        host = document.createElement('div');
+        host.id = 'toasts';
+        host.className = 'toasts';
+      }
+      if (host.parentElement !== document.body) document.body.appendChild(host);
+      return host;
+    }
+
+    function toast(type, title, message){
+      const t = document.createElement('div');
+      t.className = `toast ${type || ''}`;
+      t.innerHTML = `<div class="t">${escapeHtml(title || 'Info')}</div><div class="m">${escapeHtml(message || '')}</div>`;
+      ensureToastHost().appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(-4px)'; }, 2600);
+      setTimeout(() => t.remove(), 3100);
+    }
+
+    function escapeHtml(s){
+      const value = s === null || s === undefined ? '' : String(s);
+      return value
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#039;');
+    }
+
+    function setContentLoading(active){
+      const content = document.querySelector('.content');
+      if (!content) return;
+      content.classList.toggle('is-loading', Boolean(active));
+    }
+
+    function loadOrientationCache(){
+      try{
+        const raw = window.localStorage.getItem(ORIENT_CACHE_NAME);
+        if (!raw) return;
+        const entries = JSON.parse(raw);
+        if (Array.isArray(entries)){
+          for (const [key, value] of entries){
+            if (key && value) orientationCache.set(key, value);
+          }
+        }
+      }catch{}
+    }
+
+    function persistOrientationCache(){
+      try{
+        const entries = Array.from(orientationCache.entries()).slice(-1000);
+        window.localStorage.setItem(ORIENT_CACHE_NAME, JSON.stringify(entries));
+      }catch{}
+    }
+
+    function cacheOrientation(key, orient){
+      if (!key || !orient) return;
+      if (orientationCache.get(key) === orient) return;
+      orientationCache.set(key, orient);
+      persistOrientationCache();
+    }
+
+    function getCachedOrientation(key){
+      if (!key) return null;
+      return orientationCache.get(key) || null;
+    }
+
+    function thumbCacheKey(item){
+      const project = item?.project_name || item?.project || '';
+      const source = item?.project_source || item?.source || '';
+      const rel = item?.relative_path || '';
+      const sha = item?.sha256 || item?.hash || '';
+      return [source, project, rel, sha].filter(Boolean).join('|');
+    }
+
+    function normalizeThumbUrl(rawUrl){
+      if (!rawUrl) return null;
+      if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')){
+        try{
+          const parsed = new URL(rawUrl);
+          if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'){
+            return `${window.location.origin}${parsed.pathname}${parsed.search}`;
+          }
+          return parsed.href;
+        }catch{
+          return rawUrl;
+        }
+      }
+      return rawUrl;
+    }
+
+    const THUMB_APPLY_PER_FRAME = 4;
+    let thumbApplyScheduled = false;
+    const thumbApplyQueue = [];
+
+    function flushThumbApplyQueue(){
+      thumbApplyScheduled = false;
+      let budget = THUMB_APPLY_PER_FRAME;
+      while (budget > 0 && thumbApplyQueue.length){
+        const task = thumbApplyQueue.shift();
+        try { task(); } catch {}
+        budget -= 1;
+      }
+      if (thumbApplyQueue.length){
+        thumbApplyScheduled = true;
+        requestAnimationFrame(flushThumbApplyQueue);
+      }
+    }
+
+    function enqueueThumbApply(task){
+      thumbApplyQueue.push(task);
+      if (thumbApplyScheduled) return;
+      thumbApplyScheduled = true;
+      requestAnimationFrame(flushThumbApplyQueue);
+    }
+
+    function loadThumbQueue(targets, timeoutMs){
+      if (!targets.length) return Promise.resolve();
+      const jobs = targets.map((target) => ({
+        target,
+        url: target.dataset.thumbUrl,
+        fallback: target.dataset.thumbFallback,
+      })).filter(job => job.url);
+      if (!jobs.length) return Promise.resolve();
+      let active = 0;
+      let index = 0;
+      let resolved = false;
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          if (resolved) return;
+          resolved = true;
+          resolve();
+        }, timeoutMs);
+        const startNext = () => {
+          while (active < THUMB_MAX_WORKERS && index < jobs.length){
+            const job = jobs[index++];
+            if (!job?.url){
+              continue;
+            }
+            active += 1;
+            const loader = new Image();
+            loader.onload = () => {
+              enqueueThumbApply(() => {
+                if (!job.target?.isConnected) return;
+                job.target.src = job.url;
+                job.target.dataset.thumbState = 'loaded';
+                if (job.target.complete){
+                  updateCardOrientation(job.target);
+                }else{
+                  job.target.addEventListener('load', () => updateCardOrientation(job.target), { once: true });
+                }
+              });
+              active -= 1;
+              if (index >= jobs.length && active === 0 && !resolved){
+                resolved = true;
+                clearTimeout(timer);
+                resolve();
+              }else{
+                startNext();
+              }
+            };
+            loader.onerror = () => {
+              if (job.fallback){
+                job.target.src = job.fallback;
+              }
+              job.target.dataset.thumbState = 'error';
+              active -= 1;
+              if (index >= jobs.length && active === 0 && !resolved){
+                resolved = true;
+                clearTimeout(timer);
+                resolve();
+              }else{
+                startNext();
+              }
+            };
+            loader.src = job.url;
+          }
+          if (index >= jobs.length && active === 0 && !resolved){
+            resolved = true;
+            clearTimeout(timer);
+            resolve();
+          }
+        };
+        startNext();
+      });
+    }
+
+    function encodePath(path){
+      return String(path || '')
+        .split('/')
+        .map(segment => encodeURIComponent(segment))
+        .join('/');
+    }
+
+    window.MediaExplorer = {
+      getSelectedStreamUrlsInDomOrder,
+    };
+
+    function formatBytes(bytes){
+      const n = Number(bytes || 0);
+      if (!isFinite(n) || n <= 0) return '0 B';
+      const units = ['B','KB','MB','GB','TB'];
+      let i = 0;
+      let v = n;
+      while (v >= 1024 && i < units.length - 1){ v /= 1024; i++; }
+      return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    function parseTimestamp(value){
+      if (!value) return 0;
+      const ts = Date.parse(value);
+      return Number.isNaN(ts) ? 0 : ts;
+    }
+
+    function filenameTimestamp(relativePath){
+      if (!relativePath) return 0;
+      const name = relativePath.split('/').pop() || relativePath;
+      const dateTimeMatch = name.match(/(\d{4})-(\d{2})-(\d{2})[T_ -]?(\d{2})-(\d{2})-(\d{2})/);
+      if (dateTimeMatch){
+        const [, year, month, day, hour, minute, second] = dateTimeMatch;
+        return Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+      }
+      const dateMatch = name.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch){
+        const [, year, month, day] = dateMatch;
+        return Date.parse(`${year}-${month}-${day}T00:00:00`);
+      }
+      return 0;
+    }
+
+    function itemTimestamp(item){
+      return Math.max(
+        parseTimestamp(item.updated_at),
+        parseTimestamp(item.updatedAt),
+        parseTimestamp(item.created_at),
+        parseTimestamp(item.createdAt),
+        parseTimestamp(item.uploaded_at),
+        parseTimestamp(item.uploadedAt),
+        parseTimestamp(item.indexed_at),
+        parseTimestamp(item.indexedAt),
+        filenameTimestamp(item.relative_path),
+      );
+    }
+
+    function sortMediaByRecent(items){
+      return items.slice().sort((a, b) => {
+        const delta = itemTimestamp(b) - itemTimestamp(a);
+        if (delta !== 0) return delta;
+        return String(b.relative_path || '').localeCompare(String(a.relative_path || ''));
+      });
+    }
+
+    function sortMediaItems(items, sortKey, hasSize){
+      const list = items.slice();
+      const nameCompare = (a, b) => String(a.relative_path || '').localeCompare(String(b.relative_path || ''));
+      const sizeValue = (item) => {
+        const value = Number(item.size);
+        return Number.isFinite(value) ? value : null;
+      };
+      const sortNewest = () => list.sort((a, b) => {
+        const delta = itemTimestamp(b) - itemTimestamp(a);
+        if (delta !== 0) return delta;
+        return nameCompare(a, b);
+      });
+
+      if (sortKey === 'oldest'){
+        return list.sort((a, b) => {
+          const delta = itemTimestamp(a) - itemTimestamp(b);
+          if (delta !== 0) return delta;
+          return nameCompare(a, b);
+        });
+      }
+      if (sortKey === 'name-asc'){
+        return list.sort(nameCompare);
+      }
+      if (sortKey === 'name-desc'){
+        return list.sort((a, b) => nameCompare(b, a));
+      }
+      if ((sortKey === 'size-desc' || sortKey === 'size-asc') && hasSize){
+        const direction = sortKey === 'size-desc' ? -1 : 1;
+        return list.sort((a, b) => {
+          const aSize = sizeValue(a);
+          const bSize = sizeValue(b);
+          if (aSize == null && bSize == null) return nameCompare(a, b);
+          if (aSize == null) return 1;
+          if (bSize == null) return -1;
+          const delta = (aSize - bSize) * direction;
+          if (delta !== 0) return delta;
+          return nameCompare(a, b);
+        });
+      }
+      return sortNewest();
+    }
+
+    function projectLabel(item){
+      const name = item.project_name || item.project || '';
+      const source = item.project_source || item.source || '';
+      if (!name) return '';
+      return source ? `${name} (${source})` : name;
+    }
+
+    function toAbsoluteUrl(path){
+      if (!path) return '';
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path;
+      }
+      return new URL(path, window.location.origin).toString();
+    }
+
+    function ensureObsWebsocketLoaded(){
+      if (typeof OBSWebSocket !== 'undefined') return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-obs-websocket]');
+        if (existing){
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error('OBSWebSocket failed to load')), { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'js/obs-websocket.js';
+        script.async = true;
+        script.dataset.obsWebsocket = 'true';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('OBSWebSocket failed to load'));
+        document.head.appendChild(script);
+      });
+    }
+
+    function ensureObsPushHelperLoaded(){
+      if (typeof window.obsPushBrowserMedia === 'function') return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-obs-push]');
+        if (existing){
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error('OBS push helper failed to load')), { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'js/obs-push.js';
+        script.async = true;
+        script.dataset.obsPush = 'true';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('OBS push helper failed to load'));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function obsReplaceAssetMediaUrl({
+      obsHost = '192.168.0.187',
+      obsPort = 4455,
+      sceneName = 'ASSET_MEDIA',
+      inputName = 'ASSET_MEDIA',
+      obsPassword = '123456',
+      fit = 'cover',
+      muted = false,
+      ensureExclusiveScene = false,
+      slot = 1,
+      assetUrl,
+    }){
+      if (!assetUrl) throw new Error('assetUrl is required');
+      await ensureObsWebsocketLoaded();
+      await ensureObsPushHelperLoaded();
+      if (typeof OBSWebSocket === 'undefined'){
+        throw new Error('OBSWebSocket is not available. Load obs-websocket-js v5 before this script.');
+      }
+      if (!window.obsPushBrowserMedia){
+        throw new Error('OBS push helper is unavailable.');
+      }
+      await window.obsPushBrowserMedia({
+        obsHost,
+        obsPort,
+        obsPassword,
+        targetSceneName: sceneName,
+        inputName,
+        slot,
+        assetUrl,
+        width: 1080,
+        height: 1920,
+        fit,
+        ensureExclusiveScene,
+        muted,
+      });
+    }
+
+    function buildThumbFallback(label){
+      const safeLabel = String(label || 'MEDIA').replace(/[^a-z0-9 ]/gi, '').slice(0, 12) || 'MEDIA';
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#2a2d3a"/>
+              <stop offset="100%" stop-color="#1d2030"/>
+            </linearGradient>
+          </defs>
+          <rect width="640" height="360" rx="28" fill="url(#bg)"/>
+          <rect x="24" y="24" width="592" height="312" rx="22" fill="rgba(255,255,255,0.06)"/>
+          <text x="50%" y="52%" dominant-baseline="middle" text-anchor="middle" fill="#b7bcc8"
+            font-family="Inter, system-ui, sans-serif" font-size="48" font-weight="600" letter-spacing="2">
+            ${safeLabel.toUpperCase()}
+          </text>
+        </svg>
+      `;
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    }
+
+    async function copyTextWithFallback(text){
+      if (!text) return false;
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
+        try{
+          await navigator.clipboard.writeText(text);
+          return true;
+        }catch(e){
+          // fallback continues below
+        }
+      }
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      temp.setAttribute('readonly','');
+      temp.style.position = 'fixed';
+      temp.style.top = '-1000px';
+      temp.style.left = '-1000px';
+      document.body.appendChild(temp);
+      temp.focus();
+      temp.select();
+      let ok = false;
+      try{
+        ok = document.execCommand('copy');
+      }catch(e){
+        ok = false;
+      }
+      temp.remove();
+      if (ok) return true;
+      if (typeof window.prompt === 'function'){
+        window.prompt('Copy to clipboard', text);
+        return true;
+      }
+      return false;
+    }
+
+    function createIntentController({ onOpen, onClose, openDelay = 0, closeDelay = 240 } = {}){
+      let openTimer = null;
+      let closeTimer = null;
+      let isOpen = false;
+      let pinned = false;
+
+      function clearTimers(){
+        if (openTimer) clearTimeout(openTimer);
+        if (closeTimer) clearTimeout(closeTimer);
+        openTimer = null;
+        closeTimer = null;
+      }
+
+      function setOpen(next){
+        if (isOpen === next) return;
+        isOpen = next;
+        if (isOpen) onOpen?.();
+        else onClose?.();
+      }
+
+      function scheduleOpen(delay = openDelay){
+        if (pinned) return;
+        clearTimers();
+        openTimer = setTimeout(() => {
+          setOpen(true);
+        }, delay);
+      }
+
+      function scheduleClose(delay = closeDelay){
+        if (pinned) return;
+        clearTimers();
+        closeTimer = setTimeout(() => {
+          if (!pinned) setOpen(false);
+        }, delay);
+      }
+
+      function setPinned(next){
+        pinned = next;
+        if (pinned){
+          clearTimers();
+          setOpen(true);
+        }
+      }
+
+      return {
+        setOpen,
+        scheduleOpen,
+        scheduleClose,
+        setPinned,
+        isPinned: () => pinned,
+        clearTimers,
+      };
+    }
+
+    function wireTopbarIntent(){
+      const topbar = document.querySelector('.topbar');
+      const reveal = el('topbarReveal');
+      const search = el('q');
+      if (!topbar || !reveal) return;
+      const supportsHover = window.matchMedia('(hover: hover)').matches;
+
+      const intent = createIntentController({
+        onOpen: () => document.body.classList.remove('topbar-hidden'),
+        onClose: () => document.body.classList.add('topbar-hidden'),
+        closeDelay: 600,
+      });
+
+      function hasOpenMenus(){
+        const actionsPanel = el('actionsPanel');
+        const hasDropdown = !!document.querySelector('details.dropdown[open]');
+        return !!actionsPanel?.classList.contains('open') || hasDropdown;
+      }
+
+      function shouldKeepOpen(){
+        return ui.dragging || ui.sidebarOpen || hasOpenMenus() || topbar.contains(document.activeElement);
+      }
+
+      const handleEnter = () => intent.scheduleOpen(0);
+      const handleLeave = () => {
+        if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
+      };
+      topbar.addEventListener('pointerenter', handleEnter);
+      topbar.addEventListener('pointerleave', handleLeave);
+      topbar.addEventListener('focusin', () => intent.setPinned(true));
+      topbar.addEventListener('focusout', () => {
+        intent.setPinned(false);
+        if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
+      });
+      reveal.addEventListener('pointerenter', handleEnter);
+      reveal.addEventListener('pointerleave', handleLeave);
+      reveal.addEventListener('pointerdown', handleEnter);
+      reveal.addEventListener('pointermove', () => {
+        if (ui.dragging) intent.scheduleOpen(0);
+      });
+
+      document.addEventListener('pointerdown', (event) => {
+        if (intent.isPinned()) return;
+        if (topbar.contains(event.target) || reveal.contains(event.target)) return;
+        if (!shouldKeepOpen()) intent.scheduleClose(120);
+      });
+
+      if (search){
+        search.addEventListener('focusin', () => intent.setPinned(true));
+        search.addEventListener('focusout', () => {
+          intent.setPinned(false);
+          if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
+        });
+      }
+
+      intent.setOpen(true);
+    }
+
+    function wireDropdownIntents(){
+      const dropdowns = Array.from(document.querySelectorAll('details.dropdown'));
+      if (!dropdowns.length) return;
+
+      dropdowns.forEach((dropdown) => {
+        const intent = createIntentController({
+          onOpen: () => dropdown.setAttribute('open', ''),
+          onClose: () => dropdown.removeAttribute('open'),
+          openDelay: 80,
+          closeDelay: 200,
+        });
+
+        dropdown.addEventListener('pointerenter', () => intent.scheduleOpen());
+        dropdown.addEventListener('pointerleave', () => intent.scheduleClose());
+      });
+
+      document.addEventListener('pointerdown', (event) => {
+        dropdowns.forEach((dropdown) => {
+          if (!dropdown.hasAttribute('open')) return;
+          if (dropdown.contains(event.target)) return;
+          dropdown.removeAttribute('open');
+        });
+      });
+    }
+
+    function wireProjectDragAssist(){
+      const brand = el('brandToggle');
+      if (!brand) return;
+      const intent = createIntentController({
+        onOpen: () => {
+        if (ui.assetDragActive) setSidebarOpen(true);
+        },
+        onClose: () => {
+        if (ui.assetDragActive) setSidebarOpen(false);
+        },
+        openDelay: 360,
+        closeDelay: 400,
+      });
+
+      brand.addEventListener('pointerenter', () => {
+        if (ui.assetDragActive) intent.scheduleOpen(320);
+      });
+      brand.addEventListener('pointerleave', () => {
+        if (ui.assetDragActive) intent.scheduleClose(260);
+      });
+    }
+
+    function dragPayload(item){
+      const key = selectionKey(item);
+      const selected = selectedRelativePathsForAction();
+      const paths = key && state.selected.has(key) && selected.length
+        ? selected
+        : [item.relative_path];
+      return JSON.stringify({ paths });
+    }
+
+    function getContextActions(items){
+      const count = items.length;
+      if (!count) return [];
+      const single = count === 1;
+      const item = items[0];
+      const actions = [];
+      if (single){
+        actions.push({ id: 'preview', label: 'Open preview', handler: () => openDrawer(item) });
+        actions.push({
+          id: 'copy-stream',
+          label: 'Copy stream URL',
+          handler: () => copyStreamUrl(item),
+        });
+        actions.push({
+          id: 'download',
+          label: 'Download',
+          handler: () => {
+            const url = item.download_url || item.stream_url || '';
+            if (url) window.open(toAbsoluteUrl(url), '_blank');
+          },
+        });
+      }else{
+        actions.push({
+          id: 'copy-streams',
+          label: 'Copy stream URLs',
+          handler: () => copySelectedUrls(),
+        });
+      }
+      actions.push({
+        id: 'move',
+        label: 'Move to project…',
+        handler: () => {
+          renderMoveTargets();
+          toggleSelectPanel('selMovePanel');
+        },
+      });
+      actions.push({
+        id: 'delete',
+        label: `Delete ${count} item${count > 1 ? 's' : ''}`,
+        handler: () => deletePaths(items.map((entry) => entry.relative_path)),
+      });
+      return actions;
+    }
+
+    function positionContextMenu(menu, x, y){
+      const padding = 12;
+      const rect = menu.getBoundingClientRect();
+      const maxX = window.innerWidth - rect.width - padding;
+      const maxY = window.innerHeight - rect.height - padding;
+      const left = Math.max(padding, Math.min(x, maxX));
+      const top = Math.max(padding, Math.min(y, maxY));
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    }
+
+    function openContextMenu(position, items){
+      const menu = el('contextMenu');
+      if (!menu) return;
+      const actions = getContextActions(items);
+      if (!actions.length) return;
+      closeContextMenu();
+      menu.innerHTML = actions.map((action) => (
+        `<button type="button" data-action="${action.id}">${escapeHtml(action.label)}</button>`
+      )).join('');
+      menu.classList.add('open');
+      menu.setAttribute('aria-hidden', 'false');
+      requestAnimationFrame(() => positionContextMenu(menu, position.clientX, position.clientY));
+      menu.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const action = actions.find((item) => item.id === btn.dataset.action);
+          closeContextMenu();
+          action?.handler?.();
+        }, { once: true });
+      });
+    }
+
+    function closeContextMenu(){
+      const menu = el('contextMenu');
+      if (!menu) return;
+      menu.classList.remove('open');
+      menu.setAttribute('aria-hidden', 'true');
+    }
+
+    function wireAssetPointerHandlers(target, item){
+      const POINTER_THRESHOLD = 8;
+      const LONG_PRESS_MS = 480;
+      let pointerId = null;
+      let startX = 0;
+      let startY = 0;
+      let moved = false;
+      let longPress = null;
+      let pressX = 0;
+      let pressY = 0;
+
+      function clearLongPress(){
+        if (longPress) clearTimeout(longPress);
+        longPress = null;
+      }
+
+      target.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if (event.target.closest('input, button, a, summary')) return;
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+        pressX = event.clientX;
+        pressY = event.clientY;
+        moved = false;
+        target.setPointerCapture(pointerId);
+        clearLongPress();
+        longPress = setTimeout(() => {
+          const key = selectionKey(item);
+          const selected = key ? selectedItems() : [];
+          const selectedItemsForMenu = key && state.selected.has(key) && selected.length
+            ? selected
+            : [item];
+          openContextMenu({ clientX: pressX, clientY: pressY }, selectedItemsForMenu);
+        }, LONG_PRESS_MS);
+      });
+
+      target.addEventListener('pointermove', (event) => {
+        if (pointerId !== event.pointerId) return;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        if (!moved && (dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD){
+          moved = true;
+          clearLongPress();
+          ui.dragging = true;
+          ui.dragPointerId = pointerId;
+          const key = selectionKey(item);
+          const selected = selectedRelativePathsForAction();
+          ui.dragPaths = key && state.selected.has(key) && selected.length
+            ? selected
+            : [item.relative_path];
+          ui.assetDragActive = true;
+          if (event.clientY <= 94) document.body.classList.remove('topbar-hidden');
+        }
+      });
+
+      target.addEventListener('pointerup', (event) => {
+        if (pointerId !== event.pointerId) return;
+        clearLongPress();
+        if (target.hasPointerCapture(pointerId)){
+          target.releasePointerCapture(pointerId);
+        }
+        pointerId = null;
+        if (moved){
+          ui.dragging = false;
+          ui.assetDragActive = false;
+          const dropEl = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.chip');
+          if (dropEl?.dataset?.project){
+            const target = state.projects.find((proj) => (
+              proj.name === dropEl.dataset.project && String(proj.source || '') === String(dropEl.dataset.source || '')
+            ));
+            if (target) moveMedia(ui.dragPaths, target);
+          }
+          ui.dragTarget = null;
+          return;
+        }
+        openDrawer(item);
+      });
+
+      target.addEventListener('pointercancel', () => {
+        clearLongPress();
+        pointerId = null;
+        ui.dragging = false;
+        ui.assetDragActive = false;
+      });
+
+      target.addEventListener('dragstart', (event) => {
+        event.preventDefault();
+      });
+
+      target.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        const key = selectionKey(item);
+        const selected = key ? selectedItems() : [];
+        const selectedItemsForMenu = key && state.selected.has(key) && selected.length
+          ? selected
+          : [item];
+        openContextMenu({ clientX: event.clientX, clientY: event.clientY }, selectedItemsForMenu);
+      });
+    }
+
+    function guessKind(item){
+      // Prefer backend-provided kind/mime if present.
+      const k = (item.kind || item.type || '').toLowerCase();
+      if (k) return k;
+      const p = (item.relative_path || '').toLowerCase();
+      if (/\.(mp4|mov|mkv|webm|m4v|avi)$/.test(p)) return 'video';
+      if (/\.(jpg|jpeg|png|gif|webp|heic)$/.test(p)) return 'image';
+      if (/\.(mp3|wav|m4a|aac|flac)$/.test(p)) return 'audio';
+      return 'document';
+    }
+
+    function inferOrientation(width, height){
+      const w = Number(width) || 0;
+      const h = Number(height) || 0;
+      if (!w || !h) return null;
+      const ratio = w / h;
+      if (ratio > 1.15) return 'landscape';
+      if (ratio < 0.87) return 'portrait';
+      return 'square';
+    }
+
+    function inferOrientationFromItem(item){
+      return inferOrientation(item?.width, item?.height);
+    }
+
+    function updateCardOrientation(card, mediaEl){
+      if (!card || !mediaEl) return;
+      if (card.dataset.orientLocked === 'true') return;
+      const orient = inferOrientation(
+        mediaEl.naturalWidth || mediaEl.videoWidth,
+        mediaEl.naturalHeight || mediaEl.videoHeight,
+      );
+      if (orient){
+        card.dataset.orient = orient;
+        const cacheKey = card.dataset.thumbKey || card.dataset.relative || '';
+        cacheOrientation(cacheKey, orient);
+      }
+    }
+
+    function kindBadgeClass(kind){
+      if (kind === 'video') return 'kind-video';
+      if (kind === 'image') return 'kind-image';
+      if (kind === 'audio') return 'kind-audio';
+      return 'kind-doc';
+    }
+
+    function isMobile(){
+      return window.matchMedia('(max-width: 860px)').matches;
+    }
+
+    function mediaQuery(){
+      const p = state.activeProject;
+      if (!p) return '';
+      return p.source ? `?source=${encodeURIComponent(p.source)}` : '';
+    }
+
+    function parseTagInput(value){
+      return String(value || '')
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+    }
+
+    const TYPE_LABELS = {
+      all: 'All types',
+      video: 'Video',
+      image: 'Image',
+      audio: 'Audio',
+      overlay: 'Overlay',
+      unknown: 'Unknown',
+    };
+    const SORT_LABELS = {
+      newest: 'Newest',
+      oldest: 'Oldest',
+      'name-asc': 'Name A→Z',
+      'name-desc': 'Name Z→A',
+      'size-desc': 'Size big→small',
+      'size-asc': 'Size small→big',
+    };
+
+    function typeLabel(value){
+      return TYPE_LABELS[value] || 'All types';
+    }
+
+    function sortLabel(value){
+      return SORT_LABELS[value] || 'Newest';
+    }
+
+    function normalizeTagList(value){
+      if (!value) return [];
+      if (Array.isArray(value)) return value.filter(Boolean);
+      return String(value)
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+    }
+
+    function mediaType(item){
+      const raw = (item.kind || item.type || '').toLowerCase();
+      if (raw.includes('overlay')) return 'overlay';
+      if (['video', 'image', 'audio'].includes(raw)) return raw;
+      if (raw) return 'unknown';
+      const p = (item.relative_path || '').toLowerCase();
+      if (/\.(mp4|mov|mkv|webm|m4v|avi)$/.test(p)) return 'video';
+      if (/\.(jpg|jpeg|png|gif|webp|heic)$/.test(p)) return 'image';
+      if (/\.(mp3|wav|m4a|aac|flac)$/.test(p)) return 'audio';
+      return 'unknown';
+    }
+
+    function collectMediaMeta(items){
+      const types = new Set();
+      let hasTags = false;
+      let hasSize = false;
+      for (const item of items){
+        types.add(mediaType(item));
+        if (!hasTags && normalizeTagList(item.tags).length > 0) hasTags = true;
+        if (!hasSize && Number.isFinite(Number(item.size))) hasSize = true;
+      }
+      return { types, hasTags, hasSize };
+    }
+
+    function loadFilterPrefs(){
+      try{
+        const raw = window.localStorage.getItem(PREFS_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object'){
+          state.filters.type = parsed.type || state.filters.type;
+          state.filters.sort = parsed.sort || state.filters.sort;
+          state.filters.selectedOnly = Boolean(parsed.selectedOnly);
+          state.filters.untaggedOnly = Boolean(parsed.untaggedOnly);
+        }
+      }catch{}
+    }
+
+    function persistFilterPrefs(){
+      try{
+        window.localStorage.setItem(PREFS_KEY, JSON.stringify(state.filters));
+      }catch{}
+    }
+
+    function reconcileFilters(){
+      const meta = state.mediaMeta;
+      const hasOverlay = meta.types.has('overlay');
+      const hasSize = meta.hasSize;
+      const hasTags = meta.hasTags;
+
+      const overlayOption = el('typeOptionOverlay');
+      if (overlayOption){
+        overlayOption.disabled = !hasOverlay;
+        overlayOption.hidden = !hasOverlay;
+      }
+      if (state.filters.type === 'overlay' && !hasOverlay){
+        state.filters.type = 'all';
+      }
+
+      const sortSizeDesc = el('sortOptionSizeDesc');
+      const sortSizeAsc = el('sortOptionSizeAsc');
+      if (sortSizeDesc) sortSizeDesc.disabled = !hasSize;
+      if (sortSizeAsc) sortSizeAsc.disabled = !hasSize;
+      const sortMenuSizeDesc = el('sortMenuSizeDesc');
+      const sortMenuSizeAsc = el('sortMenuSizeAsc');
+      if (sortMenuSizeDesc) sortMenuSizeDesc.disabled = !hasSize;
+      if (sortMenuSizeAsc) sortMenuSizeAsc.disabled = !hasSize;
+      if ((state.filters.sort === 'size-desc' || state.filters.sort === 'size-asc') && !hasSize){
+        state.filters.sort = 'newest';
+      }
+
+      if (!hasTags && state.filters.untaggedOnly){
+        state.filters.untaggedOnly = false;
+      }
+
+      const typeLabelEl = el('typeFilterLabel');
+      if (typeLabelEl) typeLabelEl.textContent = typeLabel(state.filters.type);
+      const sortSelect = el('sortFilter');
+      if (sortSelect) sortSelect.value = state.filters.sort;
+      const sortLabelEl = el('sortFilterLabel');
+      if (sortLabelEl) sortLabelEl.textContent = sortLabel(state.filters.sort);
+
+      const typeButtons = Array.from(document.querySelectorAll('#typeFilterDropdown .dropdown-menu button[data-value]'));
+      typeButtons.forEach((button) => {
+        const value = button.dataset.value;
+        button.classList.toggle('is-active', value === state.filters.type);
+      });
+      const sortButtons = Array.from(document.querySelectorAll('#sortFilterDropdown .dropdown-menu button[data-value]'));
+      sortButtons.forEach((button) => {
+        const value = button.dataset.value;
+        button.classList.toggle('is-active', value === state.filters.sort);
+      });
+
+      setToggleState('toggleSelectedOnly', state.filters.selectedOnly);
+      setToggleState('toggleUntaggedOnly', state.filters.untaggedOnly);
+      if (!hasTags){
+        const toggle = el('toggleUntaggedOnly');
+        if (toggle){
+          toggle.disabled = true;
+          toggle.title = 'No tagged items yet';
+        }
+      }else{
+        const toggle = el('toggleUntaggedOnly');
+        if (toggle){
+          toggle.disabled = false;
+          toggle.title = '';
+        }
+      }
+    }
+
+    function updateMediaMeta(){
+      state.mediaMeta = collectMediaMeta(state.media);
+      reconcileFilters();
+      persistFilterPrefs();
+    }
+
+    function setToggleState(id, active){
+      const button = el(id);
+      if (!button) return;
+      button.classList.toggle('is-on', active);
+    }
+
+    function setFilterState(next){
+      state.filters = { ...state.filters, ...next };
+      reconcileFilters();
+      persistFilterPrefs();
+      renderMedia();
+      updateTopCounts();
+    }
+
+    function updateTopCounts(){
+      el('projCount').textContent = `${state.projects.length} total`;
+      const name = state.activeProject?.name || (state.mediaScope === 'all' ? 'all projects' : 'no project');
+      el('activePath').textContent = name;
+      el('contentTitle').textContent = state.activeProject
+        ? `Media — ${name}`
+        : (state.mediaScope === 'all' ? 'Media — All Projects' : 'Media');
+      el('mediaCount').textContent = `${filteredMedia().length} items`;
+    }
+
+    function filteredMedia(){
+      const q = state.q.trim().toLowerCase();
+      const { type, selectedOnly, untaggedOnly } = state.filters;
+      const hasTags = state.mediaMeta.hasTags;
+      let items = state.media.filter((it) => {
+        if (q && !(it.relative_path || '').toLowerCase().includes(q)) return false;
+        if (type !== 'all' && mediaType(it) !== type) return false;
+        if (selectedOnly && !state.selected.has(selectionKey(it))) return false;
+        if (untaggedOnly && hasTags && normalizeTagList(it.tags).length > 0) return false;
+        return true;
+      });
+      items = sortMediaItems(items, state.filters.sort, state.mediaMeta.hasSize);
+      return items;
+    }
+
+    function getVisibleMediaContainer(){
+      const grid = el('mediaGrid');
+      const list = el('mediaList');
+      const gridVisible = grid && window.getComputedStyle(grid).display !== 'none';
+      if (gridVisible) return { container: grid, selector: '.asset.is-selected' };
+      return { container: list, selector: '.row.is-selected' };
+    }
+
+    function getSelectedStreamUrlsInDomOrder(){
+      const items = selectedItemsOrdered();
+      return items.map((item) => {
+        const direct = item.stream_url || item.streamUrl || '';
+        if (direct) return toAbsoluteUrl(direct);
+        const project = itemProjectName(item);
+        const rel = item.relative_path || '';
+        const source = itemSourceName(item);
+        if (!project || !rel) return '';
+        const suffix = source && source !== 'primary' ? `?source=${encodeURIComponent(source)}` : '';
+        return toAbsoluteUrl(`/media/${encodeURIComponent(project)}/${encodePath(rel)}${suffix}`);
+      }).filter(Boolean);
+    }
+
+    function updateSelectionUI(){
+      const count = state.selected.size;
+      el('selCount').textContent = String(count);
+      const show = count > 0;
+      el('selectBar').classList.toggle('show', show);
+      const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
+      const canProjectScopedAction = true;
+
+      // enable/disable action buttons
+      el('sendResolveBtn').disabled = !show || !canProjectScopedAction;
+      const clearBtn = el('clearSelBtn');
+      const clearBtnTop = el('clearSelBtnTop');
+      if (clearBtn) clearBtn.disabled = !show;
+      if (clearBtnTop) clearBtnTop.disabled = !show;
+      el('deleteSelBtn').disabled = !show || !canProjectScopedAction;
+      el('selTagToggle').disabled = !show || !canProjectScopedAction;
+      el('selMoveToggle').disabled = !show || !canProjectScopedAction;
+      el('selCopyUrls').disabled = !show || !canSelectAcrossProjects;
+      el('selCompose').disabled = !show || !canProjectScopedAction;
+      el('btnProgramMonitor').disabled = !show || !canSelectAcrossProjects;
+      el('btnProgramMonitor').hidden = !show;
+      el('btnFluxGallery').disabled = !show;
+      el('btnFluxGallery').hidden = !show;
+
+      updateTagButtons();
+      if (!show){
+        setSelectPanel('selTagPanel', false);
+        setSelectPanel('selMovePanel', false);
+      }
+      el('drawerDelete').disabled = !state.focused;
+      const obsUrl = state.focused?.stream_url || state.focused?.streamUrl || '';
+      el('drawerSendOBS').disabled = !state.focused || !obsUrl;
+    }
+
+    function updateTagButtons(){
+      const hasSelection = state.selected.size > 0;
+      const hasFocused = !!state.focused;
+      const batchInput = el('batchTagInput');
+      const drawerInput = el('drawerTagInput');
+      const selInput = el('selTagInput');
+      const batchHasValue = !!parseTagInput(batchInput?.value).length;
+      const drawerHasValue = !!parseTagInput(drawerInput?.value).length;
+      const selHasValue = !!parseTagInput(selInput?.value).length;
+
+      el('batchTagAdd').disabled = !hasSelection || !batchHasValue;
+      el('batchTagRemove').disabled = !hasSelection || !batchHasValue;
+      el('drawerTagAdd').disabled = !hasFocused || !drawerHasValue;
+      el('drawerTagRemove').disabled = !hasFocused || !drawerHasValue;
+      el('drawerTagToggle').disabled = !hasFocused;
+      el('selTagAdd').disabled = !hasSelection || !selHasValue;
+      el('selTagRemove').disabled = !hasSelection || !selHasValue;
+    }
+
+    function setSelectPanel(panelId, open){
+      const panel = el(panelId);
+      if (!panel) return;
+      panel.classList.toggle('open', open);
+    }
+
+    function toggleSelectPanel(panelId){
+      const panel = el(panelId);
+      if (!panel) return;
+      const willOpen = !panel.classList.contains('open');
+      setSelectPanel('selTagPanel', false);
+      setSelectPanel('selMovePanel', false);
+      setSelectPanel(panelId, willOpen);
+      if (willOpen){
+        const input = panel.querySelector('input, select');
+        input?.focus?.();
+      }
+    }
+
+    async function fetchMetadata(item){
+      if (!item?.metadata_path) return null;
+      const p = state.activeProject;
+      if (!p) return null;
+      const url = `${API}/media/${encodeURIComponent(p.name)}/${encodePath(item.metadata_path)}${mediaQuery()}`;
+      try{
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        return await r.json();
+      }catch{
+        return null;
+      }
+    }
+
+    function renderTagList(container, tags, onRemove){
+      container.innerHTML = '';
+      const list = Array.isArray(tags) ? tags : [];
+      if (!list.length){
+        const empty = document.createElement('span');
+        empty.className = 'tag';
+        empty.textContent = 'No tags';
+        container.appendChild(empty);
+        return;
+      }
+      list.forEach((tag) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tag tag-button';
+        const label = document.createElement('span');
+        label.textContent = tag;
+        const remove = document.createElement('span');
+        remove.textContent = '×';
+        btn.appendChild(label);
+        btn.appendChild(remove);
+        btn.addEventListener('click', () => onRemove(tag));
+        container.appendChild(btn);
+      });
+    }
+
+    async function loadDrawerTags(item){
+      const tagList = el('drawerTagList');
+      if (!tagList) return;
+      if (!item){
+        tagList.innerHTML = '';
+        return;
+      }
+      tagList.innerHTML = '<span class="tag">Loading…</span>';
+      const metadata = await fetchMetadata(item);
+      const manualTags = metadata?.tags?.manual || [];
+      renderTagList(tagList, manualTags, (tag) => applyTagsToPaths([item.relative_path], [], [tag]));
+    }
+
+    async function applyTagsToPaths(paths, addTags, removeTags, context = null){
+      const add = (addTags || []).length ? addTags : [];
+      const remove = (removeTags || []).length ? removeTags : [];
+      if (!add.length && !remove.length){
+        toast('warn','Tags','Enter a tag name');
+        return;
+      }
+
+      const assets = context
+        ? selectedAssetRefsOrdered().filter((item) => item.project === context.name && item.source === (context.source || 'primary'))
+        : selectedAssetRefsOrdered();
+      if (!assets.length){
+        toast('warn','Tags','Select one or more clips');
+        return;
+      }
+
+      try{
+        const r = await fetch(`${API}/api/assets/bulk/tags`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assets,
+            add_tags: add,
+            remove_tags: remove,
+          }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Tag update failed');
+        toast('good','Tags', `Updated ${payload.updated || 0} assets`);
+        if (state.focused){
+          await loadDrawerTags(state.focused);
+        }
+      }catch(e){
+        toast('bad','Tags', e.message);
+      }
+    }
+
+    function renderMoveTargets(){
+      const select = el('selMoveTarget');
+      if (!select) return;
+      const active = selectedProjectContextIfSingle();
+      const options = state.projects.filter((proj) => {
+        if (!active) return true;
+        return proj.name !== active.name || proj.source !== active.source;
+      });
+
+      select.innerHTML = '';
+      if (!options.length){
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'No other projects available';
+        select.appendChild(opt);
+        select.disabled = true;
+        return;
+      }
+      select.disabled = false;
+      options.forEach((proj) => {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify({ name: proj.name, source: proj.source || null });
+        opt.textContent = proj.source ? `${proj.name} (${proj.source})` : proj.name;
+        select.appendChild(opt);
+      });
+    }
+
+    async function copySelectedUrls(){
+      if (!state.selected.size){
+        toast('warn','Copy','Select one or more clips');
+        return;
+      }
+      const urls = getSelectedStreamUrlsInDomOrder();
+      if (!urls.length){
+        toast('warn','Copy','No stream URLs found');
+        return;
+      }
+      const text = urls.join('\n');
+      const ok = await copyTextWithFallback(text);
+      if (ok){
+        toast('good','Copied', `Copied ${urls.length} URL(s)`);
+      }else{
+        toast('warn','Clipboard', 'Copy failed — please copy manually.');
+      }
+    }
+
+    async function sendSelectedToProgramMonitor(){
+      const btn = el('btnProgramMonitor');
+      const prev = btn?.textContent || '➕ Add to Program Monitor';
+      if (!window.ProgramMonitorHandoff?.sendSelectedToProgramMonitor){
+        alert('Program Monitor handoff is unavailable. Reload the page.');
+        return;
+      }
+      try{
+        if (btn){
+          btn.textContent = 'Sending…';
+          btn.disabled = true;
+        }
+        await window.ProgramMonitorHandoff.sendSelectedToProgramMonitor();
+        if (btn){
+          btn.textContent = 'Sent ✓';
+          setTimeout(() => {
+            btn.textContent = prev;
+          }, 900);
+        }
+      }catch(e){
+        alert(e?.message || String(e));
+        if (btn) btn.textContent = prev;
+      }finally{
+        updateSelectionUI();
+      }
+    }
+
+    async function sendSelectedToFluxGallery(){
+      const btn = el('btnFluxGallery');
+      const prev = btn?.textContent || ' ⚡ Send to Flux Gallery';
+    
+      if (!window.FluxGalleryHandoff?.sendSelectedToFluxGallery){
+        alert('Flux Gallery handoff is unavailable. Did flux_gallery_handoff.js load?');
+        return;
+      }
+    
+      try{
+        if (btn){
+          btn.textContent = 'Sending...';
+          btn.disabled = true;
+        }
+        await window.FluxGalleryHandoff.sendSelectedToFluxGallery();
+        if (btn){
+          btn.textContent = 'Sent ✓';
+          setTimeout(() => { btn.textContent = prev; }, 900);
+        }
+      }catch(e){
+        alert(e?.message || String(e));
+        if (btn) btn.textContent = prev;
+      }finally{
+        if (btn) btn.disabled = false;
+        updateSelectionUI();
+      }
+    }
+
+    function setSidebarOpen(open){
+      const sb = el('sidebar');
+      if (!sb) return;
+      const drawerMode = sb.classList.contains('sidebar-drawer');
+      if (!drawerMode){
+        sb.style.pointerEvents = 'auto';
+        ui.sidebarOpen = false;
+        el('brandToggle')?.classList.remove('projects-open');
+        el('sidebarBackdrop')?.classList.remove('show');
+        return;
+      }
+      ui.sidebarOpen = open;
+      sb.classList.toggle('is-open', open);
+      el('brandToggle')?.classList.toggle('projects-open', open);
+      el('sidebarBackdrop')?.classList.toggle('show', open);
+    }
+
+
+    function setFxSuspend(suspend){
+      const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root="1"]');
+      if (!gridRoot) return;
+      if (suspend) gridRoot.dataset.fxSuspend = '1';
+      else delete gridRoot.dataset.fxSuspend;
+    }
+
+    function setInspectorOpen(open){
+      const d = el('drawer');
+      if (!d) return;
+      ui.inspectorOpen = open;
+      setFxSuspend(open || el('actionsPanel')?.classList.contains('open'));
+      if (open){
+        d.classList.add('open');
+        d.setAttribute('aria-hidden', 'false');
+      }else{
+        d.classList.remove('open');
+        d.setAttribute('aria-hidden', 'true');
+      }
+      el('drawerBackdrop')?.classList.toggle('show', open);
+      if (!open){
+        el('drawerTagPanel')?.classList.remove('open');
+      }
+    }
+
+    function setDragActive(active){
+      ui.dragActive = active;
+      const content = document.querySelector('.content');
+      if (content){
+        content.classList.toggle('drag-active', active);
+      }
+    }
+
+    function syncSidebarMode(){
+      const sb = el('sidebar');
+      if (!sb) return;
+      sb.classList.add('sidebar-drawer');
+      sb.classList.remove('is-open');
+      el('sidebarBackdrop')?.classList.remove('show');
+      ui.sidebarOpen = false;
+      sb.style.pointerEvents = '';
+    }
+
+    function setView(view){
+      state.view = view;
+      el('viewGrid').classList.toggle('active', view === 'grid');
+      el('viewList').classList.toggle('active', view === 'list');
+      el('mediaGrid').style.display = (view === 'grid') ? '' : 'none';
+      el('mediaList').style.display = (view === 'list') ? '' : 'none';
+      renderMedia();
+    }
+
+    // -------------------------
+    // Fetchers
+    // -------------------------
+    async function loadSources(){
+      try{
+        const r = await fetch(`${API}/api/sources`);
+        if (!r.ok) throw new Error('Failed to list sources');
+        state.sources = await r.json();
+        renderSources();
+      }catch(e){
+        toast('bad','Sources', e.message);
+      }
+    }
+
+    async function loadProjects(){
+      try{
+        const r = await fetch(`${API}/api/projects`);
+        if (!r.ok) throw new Error('Failed to list projects');
+        state.projects = await r.json();
+        renderProjects();
+        updateTopCounts();
+        renderMoveTargets();
+      }catch(e){
+        toast('bad','Projects', e.message);
+      }
+    }
+
+    async function loadMedia(){
+      if (!state.activeProject){
+        state.media = [];
+        state.mediaScope = 'project';
+        updateMediaMeta();
+        renderMedia();
+        updateTopCounts();
+        return;
+      }
+      const name = state.activeProject.name;
+      try{
+        const r = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/media${mediaQuery()}`);
+        if (!r.ok) throw new Error('Failed to load media list');
+        const payload = await r.json();
+        state.mediaScope = 'project';
+        const items = Array.isArray(payload.media) ? payload.media : [];
+        state.media = sortMediaByRecent(items);
+        updateMediaMeta();
+        // clear selection if selected files disappeared
+        const existing = new Set(state.media.map((m) => selectionKey(m)).filter(Boolean));
+        for (const s of Array.from(state.selected)){
+          if (!existing.has(s)) state.selected.delete(s);
+        }
+        renderMedia();
+        updateTopCounts();
+        updateSelectionUI();
+      }catch(e){
+        toast('bad','Media', e.message);
+      }
+    }
+
+    async function loadAllMedia(){
+      state.mediaScope = 'all';
+      clearSelectionState();
+      state.focused = null;
+      const items = [];
+      if (!state.projects.length){
+        state.media = [];
+        updateMediaMeta();
+        renderMedia();
+        updateTopCounts();
+        updateSelectionUI();
+        return;
+      }
+      for (const project of state.projects){
+        const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
+        try{
+          const r = await fetch(`${API}/api/projects/${encodeURIComponent(project.name)}/media${query}`);
+          if (!r.ok) throw new Error('Failed to load media list');
+          const payload = await r.json();
+          const media = Array.isArray(payload.media) ? payload.media : [];
+          media.forEach((item) => {
+            items.push({
+              ...item,
+              project_name: project.name,
+              project_source: project.source || null,
+            });
+          });
+        }catch(e){
+          toast('warn','Media', `Skipped ${project.name}: ${e.message}`);
+        }
+      }
+      state.media = sortMediaByRecent(items);
+      updateMediaMeta();
+      renderMedia();
+      updateTopCounts();
+      updateSelectionUI();
+    }
+
+
+
+    // -------------------------
+    // Renderers
+    // -------------------------
+    function renderSources(){
+      const root = el('sources');
+      root.innerHTML = '';
+      if (!state.sources.length){
+        root.innerHTML = `<div class="card"><strong>No sources</strong><div class="small">Only the primary mount is available.</div></div>`;
+        return;
+      }
+      for (const s of state.sources){
+        const card = document.createElement('div');
+        card.className = 'card';
+        const reach = s.accessible ? 'reachable' : 'unreachable';
+        const enabled = s.enabled ? 'enabled' : 'disabled';
+        card.innerHTML =
+          `<strong>${escapeHtml(s.name)}</strong>
+           <div class="small">${escapeHtml(s.root || '')}</div>
+           <div class="tagrow">
+             <span class="tag ${s.enabled ? 'good':''}">${escapeHtml(enabled)}</span>
+             <span class="tag ${s.accessible ? 'good':'bad'}">${escapeHtml(reach)}</span>
+             <span class="tag">${escapeHtml(s.type || 'local')}</span>
+           </div>`;
+        root.appendChild(card);
+      }
+    }
+
+    function renderProjects(){
+      const root = el('projects');
+      root.innerHTML = '';
+      if (!state.projects.length){
+        root.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;">No projects yet — create via <code>/api/projects</code>.</div>`;
+        return;
+      }
+      for (const p of state.projects){
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        if (state.activeProject && state.activeProject.name === p.name) chip.classList.add('active');
+        chip.dataset.project = p.name;
+        chip.dataset.source = p.source || '';
+        chip.title = p.instructions || 'Browse this project';
+        chip.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="name">${escapeHtml(p.name)}</span>`;
+        chip.addEventListener('click', () => selectProject(p));
+        chip.addEventListener('pointerenter', () => {
+          if (!ui.dragging) return;
+          chip.classList.add('active');
+          ui.dragTarget = p;
+        });
+        chip.addEventListener('pointerleave', () => {
+          if (!ui.dragging) return;
+          chip.classList.remove('active');
+          if (ui.dragTarget?.name === p.name) ui.dragTarget = null;
+        });
+        root.appendChild(chip);
+      }
+      el('projCount').textContent = `${state.projects.length} total`;
+    }
+
+    function renderMedia(){
+      setContentLoading(true);
+      const items = filteredMedia();
+      itemsByPath.clear();
+      items.forEach((item) => {
+        const key = selectionKey(item);
+        if (key) itemsByPath.set(key, item);
+      });
+      const allMode = !state.activeProject && state.mediaScope === 'all';
+      const canSelect = !!state.activeProject || allMode;
+
+      // GRID
+      const g = el('mediaGrid');
+      const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root="1"]') || g;
+      cardFX.attachGrid(gridRoot, '.asset');
+      g.innerHTML = '';
+      // LIST
+      const l = el('mediaList');
+      l.innerHTML = '';
+
+      if (!state.activeProject && !allMode){
+        const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
+          Select a project to view media.
+        </div>`;
+        g.innerHTML = empty;
+        l.innerHTML = empty;
+        setContentLoading(false);
+        return;
+      }
+
+      if (!items.length){
+        const empty = `<div style="padding:16px;color:var(--muted);font-size:12px;">
+          ${allMode
+            ? 'No indexed files yet across all projects.'
+            : 'No indexed files yet. Upload then run <code>/reindex</code>.'}
+        </div>`;
+        g.innerHTML = empty;
+        l.innerHTML = empty;
+        setContentLoading(false);
+        return;
+      }
+
+      items.forEach((it) => {
+        const kind = guessKind(it);
+        const title = it.relative_path?.split('/').pop() || it.relative_path || 'unnamed';
+        const proj = projectLabel(it);
+        const sub = proj ? `${it.relative_path || ''} • ${proj}` : (it.relative_path || '');
+        const size = formatBytes(it.size);
+
+        // If your API can provide a lightweight thumbnail URL (recommended), use it:
+        // - it.thumb_url (image/jpg) for videos/images
+        // Otherwise we can still show the actual stream_url for images (not always great for big video files).
+        const thumbKey = thumbCacheKey(it);
+        const cachedOrient = getCachedOrientation(thumbKey || it.relative_path || '');
+        const itemOrient = inferOrientationFromItem(it);
+        const orient = itemOrient || cachedOrient || 'square';
+        const orientLocked = Boolean(itemOrient || cachedOrient);
+        const fallbackThumb = buildThumbFallback(kind);
+        const thumbUrl = normalizeThumbUrl(it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null));
+        const safeThumbUrl = fallbackThumb;
+
+        // ---- grid card
+        const card = document.createElement('div');
+        card.className = 'asset';
+        if (canSelect){
+          card.removeAttribute('draggable');
+        }
+        if (state.selected.has(selectionKey(it))) card.classList.add('is-selected');
+        card.dataset.streamUrl = it.stream_url || it.streamUrl || '';
+        card.dataset.relative = it.relative_path || '';
+        card.dataset.sha256 = it.sha256 || '';
+        card.dataset.origin = it.origin || 'unknown';
+        card.dataset.creationTime = it.created_at || it.uploaded_at || it.indexed_at || '';
+        card.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
+        card.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
+        card.dataset.kind = kind;
+        card.dataset.orient = orient;
+        card.dataset.orientLocked = orientLocked ? 'true' : 'false';
+        card.dataset.thumbKey = thumbKey || '';
+        const selectKey = selectionKey(it);
+        card.dataset.selectKey = selectKey;
+
+        card.innerHTML = `
+          <div class="thumb">
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
+              ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
+              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
+            <div class="scrim"></div>
+            <div class="play-btn" aria-hidden="true"><div class="play-btn-inner">▶</div></div>
+            <div class="preview-pill" aria-hidden="true">preview</div>
+            <div class="asset-overlay">
+              <div class="asset-ol-tl">
+                <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
+              </div>
+              <div class="asset-ol-tr">
+                <div class="selector" title="Select">
+                  <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+                  <span class="sel-order" aria-hidden="true"></span>
+                </div>
+              </div>
+              <div class="asset-ol-bl">
+                <span class="badge">${escapeHtml(size)}</span>
+              </div>
+              <div class="asset-ol-bottom">
+                <div class="asset-title">${escapeHtml(title)}</div>
+                <div class="asset-subtitle">${escapeHtml(sub)}</div>
+              </div>
+            </div>
+          </div>
+        `;
+        const cardThumb = card.querySelector('img.asset-thumb');
+        if (cardThumb) {
+          cardFX.bindCardMedia(card, cardThumb, { kind });
+        }
+
+        wireAssetPointerHandlers(card, it);
+        g.appendChild(card);
+
+        // ---- list row
+        const row = document.createElement('div');
+        row.className = 'row';
+        if (canSelect){
+          row.removeAttribute('draggable');
+        }
+        if (state.selected.has(selectionKey(it))) row.classList.add('is-selected');
+        row.dataset.streamUrl = it.stream_url || it.streamUrl || '';
+        row.dataset.relative = it.relative_path || '';
+        row.dataset.sha256 = it.sha256 || '';
+        row.dataset.origin = it.origin || 'unknown';
+        row.dataset.creationTime = it.created_at || it.uploaded_at || it.indexed_at || '';
+        row.dataset.project = it.project_name || it.project || state.activeProject?.name || '';
+        row.dataset.source = it.project_source || it.source || state.activeProject?.source || '';
+        row.dataset.selectKey = selectKey;
+        row.innerHTML = `
+          <div class="mini">
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
+              ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
+              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
+          </div>
+          <div class="info">
+            <div class="t">${escapeHtml(title)}</div>
+            <div class="s">${escapeHtml(sub)} • ${escapeHtml(size)} • ${escapeHtml(kind)}</div>
+          </div>
+          <div class="actions">
+            <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} title="Select" ${canSelect ? '' : 'disabled'} />
+            <button class="iconbtn" type="button">Preview</button>
+          </div>
+        `;
+        row.querySelector('button').addEventListener('click', () => openDrawer(it));
+        wireAssetPointerHandlers(row, it);
+        l.appendChild(row);
+      });
+      syncSelectionOrderBadges();
+      const activeContainer = state.view === 'grid' ? g : l;
+      const thumbTargets = Array.from(activeContainer.querySelectorAll('img.asset-thumb[data-thumb-url]'));
+      void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => setContentLoading(false));
+    }
+
+    // -------------------------
+    // Project selection + upload
+    // -------------------------
+    async function selectProject(p){
+      state.activeProject = p;
+      state.mediaScope = 'project';
+      clearSelectionState();
+      state.focused = null;
+
+      // prefill resolve name
+      el('resolveProjectMode').value = 'current';
+      el('resolveProjectName').value = p.name || '';
+      el('resolveNewName').value = '';
+
+      el('uploadCaption').textContent = `Upload to ${p.name}${p.source ? ` (${p.source})` : ''}`;
+      el('uploadBtn').disabled = false;
+
+      renderProjects();
+      updateTopCounts();
+      renderMoveTargets();
+      updateSelectionUI();
+      toast('good', 'Project', `Selected ${p.name}`);
+      await loadMedia();
+    }
+
+    async function uploadActive(){
+      const p = state.activeProject;
+      if (!p){ toast('warn','Upload','Select a project first'); return; }
+      const f = el('uploadFile').files?.[0];
+      if (!f){ toast('warn','Upload','Pick a file first'); return; }
+      await uploadFiles([f]);
+    }
+
+    async function uploadFiles(files){
+      const p = state.activeProject;
+      if (!p){ toast('warn','Upload','Select a project first'); return; }
+      if (!files.length){ return; }
+
+      el('uploadBtn').disabled = true;
+      el('uploadStatus').textContent = 'Uploading…';
+
+      try{
+        for (const f of files){
+          const form = new FormData();
+          form.append('file', f);
+          const url = p.upload_url || `${API}/api/projects/${encodeURIComponent(p.name)}/upload${mediaQuery()}`;
+          const r = await fetch(url, { method:'POST', body: form });
+          const payload = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(payload.detail || payload.message || 'Upload failed');
+        }
+        const msg = files.length > 1 ? 'Uploads stored.' : 'Upload stored.';
+        el('uploadStatus').textContent = msg;
+        toast('good', 'Upload', msg);
+        await loadMedia();
+      }catch(e){
+        el('uploadStatus').textContent = `Upload failed: ${e.message}`;
+        toast('bad','Upload', e.message);
+      }finally{
+        el('uploadBtn').disabled = false;
+      }
+    }
+
+    // -------------------------
+    // Selection + Resolve
+    // -------------------------
+    function selectionOrderIndexMap(){
+      const orderMap = new Map();
+      state.selectedOrder
+        .filter((value) => state.selected.has(value))
+        .forEach((value, idx) => orderMap.set(value, idx + 1));
+      return orderMap;
+    }
+
+    function syncSelectionOrderBadges(){
+      const orderMap = selectionOrderIndexMap();
+      document.querySelectorAll('.asset .selector .sel-order').forEach((badge) => {
+        const key = badge.closest('.asset')?.dataset.selectKey || '';
+        if (!key) {
+          badge.textContent = '';
+          return;
+        }
+        const order = orderMap.get(key);
+        badge.textContent = order ? String(Math.min(order, 99)) : '';
+      });
+    }
+
+    function updateSelectionDomForKey(key, checked){
+      if (!key) return;
+      const escaped = cssEscape(key);
+      document.querySelectorAll(`[data-select-key="${escaped}"]`).forEach((node) => {
+        if (node.matches('input[type="checkbox"]')) node.checked = checked;
+        const card = node.closest('.asset, .row');
+        if (card) card.classList.toggle('is-selected', checked);
+      });
+      syncSelectionOrderBadges();
+    }
+
+    function toggleSelected(item, { domNode = null } = {}){
+      if (!item?.relative_path) return;
+      const canSelectAcrossProjects = state.activeProject || state.mediaScope === 'all';
+      if (!canSelectAcrossProjects) return;
+      const key = selectionKey(item);
+      if (!key) return;
+      let checked = false;
+      if (state.selected.has(key)){
+        deselectKey(key);
+        checked = false;
+      }else{
+        state.selected.add(key);
+        state.selectedOrder = state.selectedOrder.filter((value) => value !== key);
+        state.selectedOrder.push(key);
+        checked = true;
+      }
+      updateSelectionDomForKey(key, checked);
+      const selectedCard = domNode?.closest('.asset') || document.querySelector(`.asset[data-select-key="${cssEscape(key)}"]`);
+      if (checked && selectedCard) cardFX.pulse(selectedCard);
+      updateSelectionUI();
+    }
+
+    function clearSelection(){
+      const keys = Array.from(state.selected);
+      clearSelectionState();
+      keys.forEach((key) => updateSelectionDomForKey(key, false));
+      updateSelectionUI();
+    }
+
+    async function deletePaths(paths){
+      const assets = selectedAssetRefsOrdered();
+      if (!assets.length){ toast('warn','Delete','Select one or more clips'); return; }
+      try{
+        const r = await fetch(`${API}/api/assets/bulk/delete`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ assets }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Delete failed');
+        toast('good','Delete', `Media removed (${payload.deleted || 0})`);
+        clearSelectionState();
+        state.focused = null;
+        setInspectorOpen(false);
+        await loadMedia();
+        updateSelectionUI();
+      }catch(e){
+        toast('bad','Delete', e.message);
+      }
+    }
+
+    async function moveMedia(paths, targetProject){
+      const assets = selectedAssetRefsOrdered();
+      if (!assets.length){ toast('warn','Move','Select one or more clips'); return; }
+      try{
+        const r = await fetch(`${API}/api/assets/bulk/move`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            assets,
+            target_project: targetProject.name,
+            target_source: targetProject.source || null,
+          }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Move failed');
+        toast('good','Move', `Moved ${payload.moved || 0} item(s) to ${targetProject.name}`);
+        clearSelectionState();
+        state.focused = null;
+        setInspectorOpen(false);
+        await loadMedia();
+        await loadProjects();
+        updateSelectionUI();
+      }catch(e){
+        toast('bad','Move', e.message);
+      }
+    }
+
+    async function composeSelectedVideos(){
+      const assets = selectedAssetRefsOrdered();
+      if (!assets.length){
+        toast('warn','Compose','Select one or more clips');
+        return;
+      }
+      const videos = assets.filter((item) => item.kind === 'video');
+      if (!videos.length){
+        toast('warn','Compose','Select one or more video clips');
+        return;
+      }
+
+      const outputCtx = selectedProjectContextIfSingle() || state.activeProject;
+      if (!outputCtx?.name){
+        toast('warn','Compose','Choose an output project, or select clips from one project.');
+        return;
+      }
+
+      const outputBase = `compose-${Date.now()}.mp4`;
+      try{
+        const r = await fetch(`${API}/api/assets/bulk/compose`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assets: videos,
+            output_project: outputCtx.name,
+            output_source: outputCtx.source || 'primary',
+            output_name: outputBase,
+            target_dir: 'exports',
+            mode: 'auto',
+            allow_overwrite: false,
+          }),
+        });
+        const payload = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(payload.detail || payload.message || 'Compose failed');
+        toast('good','Compose', `Created ${payload.path || outputBase}`);
+        await loadMedia();
+      }catch(e){
+        toast('bad','Compose', e.message);
+      }
+    }
+
+    async function sendToResolve(){
+      const groups = selectedProjectGroups();
+      if (!groups.length){ toast('warn','Resolve','Select one or more clips'); return; }
+
+      const projectMode = el('resolveProjectMode').value;
+      let sent = 0;
+      try{
+        for (const group of groups){
+          let projectValue = group.project;
+          if (projectMode === '__new__') projectValue = '__new__';
+          else if (projectMode === '__select__') projectValue = '__select__';
+          else {
+            const v = (el('resolveProjectName').value || '').trim();
+            if (v) projectValue = v;
+          }
+
+          const body = {
+            project: projectValue,
+            new_project_name: projectMode === '__new__'
+              ? ((el('resolveNewName').value || '').trim() || null)
+              : null,
+            media_rel_paths: group.relative_paths,
+            mode: el('resolveMode').value || 'import',
+          };
+          const query = group.source && group.source !== 'primary' ? `?source=${encodeURIComponent(group.source)}` : '';
+          const r = await fetch(`${API}/api/resolve/open${query}`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(body),
+          });
+          const payload = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(payload.detail || payload.message || `Resolve request failed for ${group.project}`);
+          sent += 1;
+        }
+        toast('good','Resolve', sent > 1 ? `Sent ${sent} jobs.` : 'Sent.');
+      }catch(e){
+        toast('bad','Resolve', e.message);
+      }
+    }
+
+    // -------------------------
+    // Drawer / inspector
+    // -------------------------
+    // Drawer / inspector
+    // -------------------------
+    function openDrawer(item){
+      state.focused = item;
+      if (item?.relative_path && (state.activeProject || state.mediaScope === 'all')){
+        const key = selectionKey(item);
+        if (key && !state.selected.has(key)){
+          state.selected.add(key);
+          state.selectedOrder.push(key);
+        }
+      }
+
+      const kind = guessKind(item);
+      const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
+      currentInspectorKey = String(item.sha256 || item.relative_path || item.stream_url || title || '');
+      const inspectorToken = ++inspectorRequestToken;
+      el('drawerTitle').textContent = title;
+      el('drawerSub').textContent = item.relative_path || '';
+
+      // preview
+      const preview = el('drawerPreview');
+      preview.innerHTML = '';
+      if (kind === 'video'){
+        const v = document.createElement('video');
+        v.controls = true;
+        v.src = item.stream_url || '';
+        v.preload = 'metadata';
+        v.playsInline = true;
+        v.setAttribute('playsinline', '');
+        preview.appendChild(v);
+      }else if (kind === 'image'){
+        const img = document.createElement('img');
+        img.src = item.stream_url || item.thumb_url || item.thumbnail_url || '';
+        img.alt = title;
+        preview.appendChild(img);
+      }else if (kind === 'audio'){
+        const a = document.createElement('audio');
+        a.controls = true;
+        a.src = item.stream_url || '';
+        preview.appendChild(a);
+      }else{
+        const box = document.createElement('div');
+        box.style.padding = '14px';
+        box.style.color = 'var(--muted)';
+        box.style.fontSize = '12px';
+        box.innerHTML = `No native preview for this type.<br><span class="kbd">${escapeHtml(kind)}</span>`;
+        preview.appendChild(box);
+      }
+
+      // metadata table (show what you have; hides gracefully if missing)
+      const kv = el('drawerKV');
+      const activeProjectName = state.activeProject?.name || item.project_name || '';
+      const activeSource = state.activeProject?.source || item.project_source || '';
+      const rows = [
+        ['Kind', kind],
+        ['Size', formatBytes(item.size)],
+        ['Stream', item.stream_url || '(none)'],
+        ['Source', activeSource || '(primary)'],
+        ['Project', activeProjectName || '(none)'],
+        ['Relative', item.relative_path || '(none)'],
+        // Optional fields if your API provides them:
+        ['MIME', item.mime || item.content_type || ''],
+        ['Hash', item.sha256 || item.hash || ''],
+        ['Created', item.created_at || item.createdAt || ''],
+        ['Modified', item.updated_at || item.updatedAt || ''],
+        ['Duration', item.duration ? `${item.duration}s` : 'unknown'],
+        ['Resolution', (item.width && item.height) ? `${item.width}×${item.height}` : 'unknown'],
+        ['FPS', item.fps || 'unknown'],
+        ['Video codec', item.codec || 'unknown'],
+        ['Audio codec', item.audio_codec || 'unknown'],
+        ['Audio channels', item.audio_channels ? `${item.audio_channels}ch` : 'unknown'],
+      ].filter(([_, v]) => String(v || '').trim().length > 0);
+
+      const detailSections = {
+        primary: rows,
+        facts: [],
+        registry: [],
+      };
+
+      function renderDetails(){
+        if (inspectorToken !== inspectorRequestToken) return;
+        const currentKey = String(state.focused?.sha256 || state.focused?.relative_path || state.focused?.stream_url || '');
+        if (currentKey !== currentInspectorKey) return;
+        const merged = [
+          ...detailSections.facts,
+          ...detailSections.primary,
+          ...detailSections.registry,
+        ];
+        kv.innerHTML = merged.map(([k,v]) => `
+          <div class="k">${escapeHtml(k)}</div>
+          <div class="v">${escapeHtml(v)}</div>
+        `).join('');
+      }
+      renderDetails();
+
+      const relPath = item.relative_path || '';
+      const factProject = activeProjectName || item.project_name || '';
+      if (factProject && relPath){
+        const factSource = activeSource || item.project_source || '';
+        const sourceQuery = factSource ? `&source=${encodeURIComponent(factSource)}` : '';
+        const factsUrl = `${API}/api/media/facts?project=${encodeURIComponent(factProject)}&relative_path=${encodeURIComponent(relPath)}${sourceQuery}`;
+        fetch(factsUrl)
+          .then((response) => response.ok ? response.json() : null)
+          .then((payload) => {
+            if (!payload || !payload.facts) return;
+            const facts = payload.facts;
+            const factRows = [
+              ['Duration', typeof facts.duration_s === 'number' ? `${facts.duration_s.toFixed(3)}s` : 'unknown'],
+              ['Resolution', (facts.width && facts.height) ? `${facts.width}×${facts.height}` : 'unknown'],
+              ['FPS', typeof facts.fps === 'number' ? String(facts.fps) : 'unknown'],
+              ['Video codec', facts.video_codec || 'unknown'],
+              ['Audio codec', facts.audio_codec || 'unknown'],
+              ['Audio channels', facts.audio_channels ? `${facts.audio_channels}ch` : 'unknown'],
+            ];
+            detailSections.facts = factRows;
+            renderDetails();
+          })
+          .catch(() => {});
+      }
+
+      const sha = item.sha256 || item.hash || '';
+      if (/^[a-fA-F0-9]{64}$/.test(String(sha))){
+        fetch(`${API}/api/registry/${encodeURIComponent(String(sha).toLowerCase())}`)
+          .then((response) => response.ok ? response.json() : null)
+          .then((registry) => {
+            if (!registry) return;
+            const aliases = Array.isArray(registry.aliases) ? registry.aliases : [];
+            const aliasPreview = aliases.slice(0, 3).join(', ');
+            const regRows = [
+              ['Registry Asset ID', registry.asset_id || ''],
+              ['Canonical Name', registry.canonical_name || ''],
+              ['Origin', registry.origin || 'unknown'],
+              ['Creation (UTC)', registry.timestamps?.creation_time || ''],
+              ['Creation best-effort', String(Boolean(registry.timestamps?.best_effort))],
+              ['Orientation', `${registry.orientation?.rotation ?? 0}° / normalized=${Boolean(registry.orientation?.normalized)}`],
+              ['Detected from', registry.orientation?.detected_from || 'none'],
+              ['Aliases', `${aliases.length}${aliasPreview ? ` (${aliasPreview})` : ''}`],
+              ['Registry stream', registry.urls?.stream || ''],
+              ['Registry download', registry.urls?.download || ''],
+            ].filter(([_, v]) => String(v || '').trim().length > 0);
+            if (!regRows.length) return;
+            detailSections.registry = regRows;
+            renderDetails();
+          })
+          .catch(() => {});
+      }
+
+      // actions
+      el('drawerPlay').onclick = () => {
+        const media = preview.querySelector('video, audio');
+        if (!media) return;
+        const stream = item.stream_url || item.streamUrl || media.getAttribute('src') || '';
+        if (stream){
+          media.src = stream;
+        }
+        media.load?.();
+        media.play?.().catch(() => {});
+      };
+
+      el('drawerCopy').onclick = async () => {
+        const u = toAbsoluteUrl(item.stream_url);
+        const ok = await copyTextWithFallback(u);
+        if (ok){
+          toast('good','Copied', 'Stream URL copied to clipboard');
+        }else{
+          toast('warn','Clipboard', 'Copy failed — please copy manually.');
+        }
+      };
+
+      el('drawerTagToggle').onclick = () => {
+        const panel = el('drawerTagPanel');
+        panel?.classList.toggle('open');
+        if (panel?.classList.contains('open')){
+          el('drawerTagInput')?.focus();
+        }
+      };
+
+      el('drawerSendOBS').onclick = async () => {
+        const assetUrl = toAbsoluteUrl(item.stream_url);
+        if (!assetUrl){
+          toast('warn','OBS', 'No stream URL available for this asset.');
+          return;
+        }
+
+        const btn = el('drawerSendOBS');
+        const prevText = btn.textContent;
+        btn.textContent = '📡 Sending…';
+        btn.disabled = true;
+
+        try{
+          const fit = el('obsFitMode')?.value || 'cover';
+          const slot = parseInt(el('obsSlotSelect')?.value || '1', 10) || 1;
+          const ensureExclusiveScene = !!el('obsExclusiveToggle')?.checked;
+          await obsReplaceAssetMediaUrl({
+            obsHost: '192.168.0.187',
+            sceneName: 'ASSET_MEDIA',
+            inputName: 'ASSET_MEDIA',
+            fit,
+            ensureExclusiveScene,
+            muted: false,
+            slot,
+            assetUrl,
+          });
+          toast('good','OBS', 'Browser source updated.');
+          btn.textContent = '✅ Sent';
+          setTimeout(() => {
+            btn.textContent = prevText;
+          }, 900);
+        }catch(e){
+          console.error('[OBS] push failed:', e);
+          toast('bad','OBS', e.message || 'OBS push failed.');
+          btn.textContent = prevText;
+        }finally{
+          btn.disabled = false;
+        }
+      };
+
+      el('drawerTagAdd').onclick = () => {
+        const tags = parseTagInput(el('drawerTagInput').value);
+        applyTagsToPaths([item.relative_path], tags, []);
+        el('drawerTagInput').value = '';
+        updateTagButtons();
+      };
+      el('drawerTagRemove').onclick = () => {
+        const tags = parseTagInput(el('drawerTagInput').value);
+        applyTagsToPaths([item.relative_path], [], tags);
+        el('drawerTagInput').value = '';
+        updateTagButtons();
+      };
+
+      // open
+      el('drawerTagPanel').classList.toggle('is-hidden', !item);
+      loadDrawerTags(item);
+      setInspectorOpen(true);
+      updateSelectionUI();
+    }
+
+    function closeDrawer(){
+      setInspectorOpen(false);
+    }
+
+    // -------------------------
+    // Events / bindings
+    // -------------------------
+    el('refreshBtn').addEventListener('click', async () => {
+      await loadSources();
+      await loadProjects();
+      if (state.activeProject){
+        await loadMedia();
+      }else{
+        await loadAllMedia();
+      }
+      toast('good','Refresh','Reloaded projects + media');
+    });
+
+    el('brandTitle').addEventListener('click', (event) => {
+      event.stopPropagation();
+      setSidebarOpen(!ui.sidebarOpen);
+    });
+    el('sidebarBackdrop').addEventListener('click', () => setSidebarOpen(false));
+    el('drawerBackdrop').addEventListener('click', closeDrawer);
+
+    const actionsToggle = el('actionsToggle');
+    const actionsPanel = el('actionsPanel');
+    const uiPortal = (() => {
+      let host = el('ui-portal');
+      if (!host){
+        host = document.createElement('div');
+        host.id = 'ui-portal';
+        document.body.appendChild(host);
+      }
+      return host;
+    })();
+    if (actionsPanel && actionsPanel.parentElement !== uiPortal) uiPortal.appendChild(actionsPanel);
+
+    const positionActionsPanel = () => {
+      if (!actionsToggle || !actionsPanel) return;
+      const rect = actionsToggle.getBoundingClientRect();
+      const panelWidth = Math.min(520, Math.max(280, window.innerWidth * 0.92));
+      const right = Math.max(12, window.innerWidth - rect.right);
+      const top = Math.min(window.innerHeight - 16, rect.bottom + 8);
+      actionsPanel.style.top = `${top}px`;
+      actionsPanel.style.right = `${right}px`;
+      actionsPanel.style.width = `${panelWidth}px`;
+      actionsPanel.style.maxWidth = '92vw';
+      if (FX_DEBUG){
+        const transformedAncestor = (() => {
+          let node = actionsPanel.parentElement;
+          while (node){
+            const transform = getComputedStyle(node).transform;
+            if (transform && transform !== 'none') return node.id || node.className || node.tagName;
+            node = node.parentElement;
+          }
+          return null;
+        })();
+        console.debug('[actions-panel]', { zIndex: getComputedStyle(actionsPanel).zIndex, transformedAncestor });
+      }
+    };
+
+    const toggleActions = (open) => {
+      if (!actionsPanel) return;
+      if (open){
+        if (actionsPanel.parentElement !== uiPortal) uiPortal.appendChild(actionsPanel);
+        positionActionsPanel();
+      }
+      actionsPanel.classList.toggle('open', open);
+      actionsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      setFxSuspend(open || ui.inspectorOpen);
+    };
+    actionsToggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const isOpen = actionsPanel.classList.contains('open');
+      toggleActions(!isOpen);
+    });
+    window.addEventListener('resize', () => {
+      if (actionsPanel.classList.contains('open')) positionActionsPanel();
+    });
+    document.addEventListener('click', (event) => {
+      if (!actionsPanel.classList.contains('open')) return;
+      if (actionsPanel.contains(event.target) || actionsToggle.contains(event.target)) return;
+      toggleActions(false);
+    });
+
+    el('viewGrid').addEventListener('click', () => setView('grid'));
+    el('viewList').addEventListener('click', () => setView('list'));
+
+    el('q').addEventListener('input', (e) => {
+      state.q = e.target.value || '';
+      renderMedia();
+      updateTopCounts();
+    });
+
+    const typeDropdown = el('typeFilterDropdown');
+    if (typeDropdown){
+      const typeMenu = typeDropdown.querySelector('.dropdown-menu');
+      if (typeMenu){
+        typeMenu.addEventListener('click', (event) => {
+          const button = event.target.closest('button[data-value]');
+          if (!button || button.disabled) return;
+          setFilterState({ type: button.dataset.value });
+          typeDropdown.removeAttribute('open');
+        });
+      }
+    }
+    el('sortFilter').addEventListener('change', (e) => {
+      setFilterState({ sort: e.target.value });
+    });
+    const sortDropdown = el('sortFilterDropdown');
+    if (sortDropdown){
+      const sortMenu = sortDropdown.querySelector('.dropdown-menu');
+      if (sortMenu){
+        sortMenu.addEventListener('click', (event) => {
+          const button = event.target.closest('button[data-value]');
+          if (!button || button.disabled) return;
+          const select = el('sortFilter');
+          if (select){
+            select.value = button.dataset.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          sortDropdown.removeAttribute('open');
+        });
+      }
+    }
+    el('toggleSelectedOnly').addEventListener('click', () => {
+      setFilterState({ selectedOnly: !state.filters.selectedOnly });
+    });
+    el('toggleUntaggedOnly').addEventListener('click', () => {
+      const target = el('toggleUntaggedOnly');
+      if (target && target.disabled) return;
+      setFilterState({ untaggedOnly: !state.filters.untaggedOnly });
+    });
+
+    el('batchTagInput').addEventListener('input', updateTagButtons);
+    el('drawerTagInput').addEventListener('input', updateTagButtons);
+
+    el('batchTagAdd').addEventListener('click', () => {
+      const tags = parseTagInput(el('batchTagInput').value);
+      applyTagsToPaths(selectedRelativePathsForAction(), tags, []);
+      el('batchTagInput').value = '';
+      updateTagButtons();
+    });
+    el('batchTagRemove').addEventListener('click', () => {
+      const tags = parseTagInput(el('batchTagInput').value);
+      applyTagsToPaths(selectedRelativePathsForAction(), [], tags);
+      el('batchTagInput').value = '';
+      updateTagButtons();
+    });
+
+    // Upload
+    el('uploadBtn').addEventListener('click', uploadActive);
+    el('pickUploadBtn').addEventListener('click', () => el('uploadFile').click());
+
+    const contentArea = document.querySelector('.content');
+    if (contentArea){
+      contentArea.addEventListener('dragover', (event) => {
+        if (event.dataTransfer?.types?.includes('Files')){
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+          setDragActive(true);
+        }
+      });
+      contentArea.addEventListener('dragleave', () => setDragActive(false));
+      contentArea.addEventListener('drop', (event) => {
+        if (!event.dataTransfer?.files?.length) return;
+        event.preventDefault();
+        setDragActive(false);
+        uploadFiles(Array.from(event.dataTransfer.files));
+      });
+    }
+
+    // Resolve
+    el('sendResolveBtn').addEventListener('click', sendToResolve);
+
+    // Clear selection
+    el('clearSelBtn').addEventListener('click', clearSelection);
+    const clearSelBtnTop = el('clearSelBtnTop');
+    if (clearSelBtnTop) clearSelBtnTop.addEventListener('click', clearSelection);
+    el('deleteSelBtn').addEventListener('click', () => deletePaths(selectedRelativePathsForAction()));
+
+    // Selection bar actions
+    el('selTagToggle').addEventListener('click', () => toggleSelectPanel('selTagPanel'));
+    el('selMoveToggle').addEventListener('click', () => {
+      renderMoveTargets();
+      toggleSelectPanel('selMovePanel');
+    });
+    el('selCopyUrls').addEventListener('click', copySelectedUrls);
+    el('selCompose').addEventListener('click', composeSelectedVideos);
+    el('btnProgramMonitor').addEventListener('click', sendSelectedToProgramMonitor);
+    el('btnFluxGallery')?.addEventListener('click', sendSelectedToFluxGallery);
+    el('selTagInput').addEventListener('input', updateTagButtons);
+    el('selTagAdd').addEventListener('click', () => {
+      const tags = parseTagInput(el('selTagInput').value);
+      applyTagsToPaths(selectedRelativePathsForAction(), tags, []);
+      el('selTagInput').value = '';
+      updateTagButtons();
+    });
+    el('selTagRemove').addEventListener('click', () => {
+      const tags = parseTagInput(el('selTagInput').value);
+      applyTagsToPaths(selectedRelativePathsForAction(), [], tags);
+      el('selTagInput').value = '';
+      updateTagButtons();
+    });
+
+    el('selMoveSubmit').addEventListener('click', async () => {
+      const select = el('selMoveTarget');
+      const value = select?.value || '';
+      if (!value){
+        toast('warn','Move','Select a target project');
+        return;
+      }
+      let target;
+      try{
+        target = JSON.parse(value);
+      }catch{
+        toast('warn','Move','Select a target project');
+        return;
+      }
+      await moveMedia(selectedRelativePathsForAction(), target);
+      setSelectPanel('selMovePanel', false);
+    });
+
+    // Drawer close
+    el('drawerClose').addEventListener('click', closeDrawer);
+    el('drawerDelete').addEventListener('click', () => {
+      if (!state.focused) return;
+      deletePaths([state.focused.relative_path]);
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape'){
+        if (ui.inspectorOpen){
+          closeDrawer();
+          e.preventDefault();
+          return;
+        }
+        if (ui.sidebarOpen){
+          setSidebarOpen(false);
+          e.preventDefault();
+          return;
+        }
+        closeContextMenu();
+      }
+      // cheap "cmd+k" focus
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){
+        e.preventDefault();
+        el('q').focus();
+      }
+    });
+
+    // Resolve hint updates
+    function syncResolveHint(){
+      const c = state.selected.size;
+      const groups = selectedProjectGroups();
+      el('resolveHint').textContent = c
+        ? (groups.length > 1 ? `${c} item(s) queued across ${groups.length} projects.` : `${c} item(s) queued.`)
+        : 'Select clips to enable.';
+    }
+    const _origUpdateSelectionUI = updateSelectionUI;
+    updateSelectionUI = function(){
+      _origUpdateSelectionUI();
+      syncResolveHint();
+    };
+
+
+    
+    function wireBackgroundImpulse(){
+      const canvas = el('bgImpulseCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d', { alpha: true });
+      if (!ctx) return;
+      let width = 0;
+      let height = 0;
+      let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const impulses = [];
+      const IMPULSE_MS = 220;
+      const resize = () => {
+        dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        width = Math.max(1, window.innerWidth || 1);
+        height = Math.max(1, window.innerHeight || 1);
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      };
+      resize();
+      window.addEventListener('resize', resize);
+      const pushImpulse = (event) => {
+        const x = Number(event.clientX || width * 0.5);
+        const y = Number(event.clientY || height * 0.5);
+        impulses.push({ x, y, t: performance.now() });
+      };
+      document.addEventListener('pointerdown', pushImpulse, { passive: true });
+      const loop = () => {
+        const now = performance.now();
+        while (impulses.length && (now - impulses[0].t) > IMPULSE_MS) impulses.shift();
+        ctx.clearRect(0, 0, width, height);
+        impulses.forEach((impulse) => {
+          const age = now - impulse.t;
+          const progress = Math.max(0, Math.min(1, age / IMPULSE_MS));
+          const ringRadius = 12 + (Math.max(width, height) * 0.2 * progress);
+          const alpha = (1 - progress) * 0.13;
+          const coreAlpha = (1 - progress) * 0.08;
+          const grad = ctx.createRadialGradient(impulse.x, impulse.y, Math.max(2, ringRadius * 0.3), impulse.x, impulse.y, ringRadius);
+          grad.addColorStop(0, `rgba(74,240,192,${coreAlpha})`);
+          grad.addColorStop(0.55, `rgba(74,240,192,${alpha})`);
+          grad.addColorStop(1, 'rgba(74,240,192,0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(impulse.x, impulse.y, ringRadius, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    }
+
+
+    function wireSelectionDelegation(){
+      const MOVE_THRESHOLD = 12;
+      const pointers = new Map();
+      const handlePointerDown = (event) => {
+        const input = event.target.closest('input[type="checkbox"][data-select-key]');
+        if (!input) return;
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, moved: false, t: Date.now(), input });
+      };
+      const handlePointerMove = (event) => {
+        const rec = pointers.get(event.pointerId);
+        if (!rec) return;
+        const dx = event.clientX - rec.x;
+        const dy = event.clientY - rec.y;
+        if ((dx * dx + dy * dy) > MOVE_THRESHOLD * MOVE_THRESHOLD) rec.moved = true;
+      };
+      const handlePointerUp = (event) => {
+        const rec = pointers.get(event.pointerId);
+        if (!rec) return;
+        if (rec.moved && rec.input?.isConnected) rec.input.dataset.fxSuppressToggle = '1';
+        pointers.delete(event.pointerId);
+      };
+      const handleChange = (event) => {
+        const input = event.target.closest('input[type="checkbox"][data-select-key]');
+        if (!input) return;
+        if (input.dataset.fxSuppressToggle === '1'){
+          delete input.dataset.fxSuppressToggle;
+          input.checked = !input.checked;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        const key = input.dataset.selectKey || '';
+        const item = selectionItemByKey(key);
+        if (!item) return;
+        toggleSelected(item, { domNode: input });
+        event.stopPropagation();
+      };
+      ['mediaGrid','mediaList'].forEach((id) => {
+        const root = el(id);
+        if (!root || root.dataset.selectionDelegated === '1') return;
+        root.dataset.selectionDelegated = '1';
+        root.addEventListener('pointerdown', handlePointerDown, true);
+        root.addEventListener('pointermove', handlePointerMove, true);
+        root.addEventListener('pointerup', handlePointerUp, true);
+        root.addEventListener('pointercancel', handlePointerUp, true);
+        root.addEventListener('change', handleChange, true);
+        root.addEventListener('click', (event) => {
+          if (event.target.closest('input[type="checkbox"][data-select-key]')) event.stopPropagation();
+        }, true);
+      });
+    }
+
+    // Boot
+    document.addEventListener('DOMContentLoaded', async () => {
+      wireTopbarIntent();
+      wireDropdownIntents();
+      wireProjectDragAssist();
+      wireSelectionDelegation();
+      wireBackgroundImpulse();
+      ensureToastHost();
+      document.addEventListener('pointerdown', (event) => {
+        const menu = el('contextMenu');
+        if (!menu?.classList.contains('open')) return;
+        if (menu.contains(event.target)) return;
+        closeContextMenu();
+      });
+      loadFilterPrefs();
+      loadOrientationCache();
+      reconcileFilters();
+      syncSidebarMode();
+      window.matchMedia('(max-width: 860px)').addEventListener('change', () => {
+        syncSidebarMode();
+      });
+      toast('good','Boot','Loading sources + projects…');
+      await loadSources();
+      await loadProjects();
+      if (!state.activeProject){
+        await loadAllMedia();
+      }
+      setView('grid');
+      updateTopCounts();
+      updateSelectionUI();
+    });
+  </script>
+  <div id="ui-portal" aria-hidden="false"></div>
+  <div id="contextMenu" class="context-menu" role="menu" aria-hidden="true"></div>
+</body>
+</html>
