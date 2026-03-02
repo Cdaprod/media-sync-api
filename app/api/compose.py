@@ -631,14 +631,15 @@ async def compose_upload(
     incremental = run_id is not None and idx is not None and total is not None and len(files) == 1
 
     logger.info(
-        "compose_upload_received",
-        extra={
-            "project": name,
-            "source": active_source.name,
-            "file_count": len(files),
-            "filenames": [f.filename for f in files],
-            "incremental": incremental,
-        },
+        "compose_upload_received project=%s source=%s incremental=%s file_count=%s filenames=%s run_id=%s idx=%s total=%s",
+        name,
+        active_source.name,
+        incremental,
+        len(files),
+        [f.filename for f in files],
+        run_id,
+        idx,
+        total,
     )
 
     if not incremental:
