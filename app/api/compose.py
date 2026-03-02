@@ -483,6 +483,26 @@ def _compiled_name(base_name: str, seq: int) -> str:
     return f"{stem}-{seq:04d}.mp4"
 
 
+def _resolve_output_name(project: Path, output_name: str | None) -> str:
+    """Return a server-managed, unique mp4 filename (always suffixed).
+
+    - output_name in {"", "auto", "compiled.mp4"} -> base "compiled.mp4"
+    - otherwise -> sanitized provided base
+    - always append -{seq:04d}.mp4
+    """
+    normalized = (output_name or "").strip().lower()
+
+    if normalized in {"", "auto", "compiled.mp4"}:
+        base = "compiled.mp4"
+    else:
+        base = _safe_filename_or_400(output_name, default="compiled.mp4")
+        if not base.lower().endswith(".mp4"):
+            base = f"{base}.mp4"
+
+    seq = _next_compiled_sequence(project)
+    return _compiled_name(base, seq)
+
+
 @router.post("/{project_name}/compose")
 async def compose_existing(
     project_name: str,
@@ -492,13 +512,18 @@ async def compose_existing(
 ):
     """Compose one output from existing indexed project media paths.
 
+    Naming: ALWAYS server-managed incremental (no manual naming).
+    - payload.output_name is treated as an optional *base label* only.
+    - output filename is always suffixed like: <stem>-0001.mp4, <stem>-0002.mp4, ...
+
     Example:
         curl -X POST http://localhost:8787/api/projects/demo/compose -H 'Content-Type: application/json' \
-          -d '{"inputs":["ingest/originals/a.mp4","ingest/originals/b.mp4"],"output_name":"cut.mp4"}'
+          -d '{"inputs":["ingest/originals/a.mp4","ingest/originals/b.mp4"],"output_name":"compiled.mp4"}'
     """
 
     _validate_compose_environment()
     name, active_source, project = _resolve_project(project_name, source)
+
     indexed_paths = _indexed_path_set(project)
     normalized_inputs = [value.replace("\\", "/").lstrip("/") for value in payload.inputs]
     missing_from_index = [value for value in normalized_inputs if value not in indexed_paths]
@@ -519,22 +544,34 @@ async def compose_existing(
 
     target_dir = _resolve_within_project(project, payload.target_dir.strip() or "exports", require_exists=False)
     target_dir.mkdir(parents=True, exist_ok=True)
-    output_name = _safe_filename_or_400(payload.output_name, default="compiled.mp4")
-    if not output_name.lower().endswith(".mp4"):
-        output_name = f"{output_name}.mp4"
-    output_abs = _resolve_within_project(project, f"{target_dir.relative_to(project).as_posix()}/{output_name}", require_exists=False)
-    if output_abs.exists() and not payload.allow_overwrite:
+
+    # ALWAYS server-managed incremental output name
+    final_name = _resolve_output_name(project, payload.output_name)
+
+    output_abs = _resolve_within_project(
+        project,
+        f"{target_dir.relative_to(project).as_posix()}/{final_name}",
+        require_exists=False,
+    )
+
+    # With incremental naming, collisions should be extremely rare; keep guard for safety.
+    if output_abs.exists():
         raise HTTPException(
             status_code=409,
-            detail="Output already exists. Set allow_overwrite=true or provide a unique output_name.",
+            detail="Output already exists (unexpected with incremental naming). Try again.",
         )
-    if output_abs.exists() and payload.allow_overwrite:
-        _prepare_overwrite(project, output_abs.relative_to(project).as_posix())
 
-    mode_used = _concat_files(inputs, output_abs, payload.mode, allow_overwrite=payload.allow_overwrite)
+    # Ignore allow_overwrite for compose_existing in incremental naming mode.
+    mode_used = _concat_files(inputs, output_abs, payload.mode, allow_overwrite=False)
+
     logger.info(
         "compose_existing_complete",
-        extra={"project": name, "source": active_source.name, "output": output_abs.relative_to(project).as_posix(), "mode": mode_used},
+        extra={
+            "project": name,
+            "source": active_source.name,
+            "output": output_abs.relative_to(project).as_posix(),
+            "mode": mode_used,
+        },
     )
     return _register_output(
         project=project,
@@ -555,25 +592,29 @@ async def compose_upload(
     output_name: str = Query(default="compiled.mp4"),
     target_dir: str = Query(default="exports"),
     mode: Literal["auto", "copy", "encode"] = Query(default="auto"),
-    allow_overwrite: bool = Query(default=False),
 ):
     """Upload many clips and return one composed artifact.
 
-    Supports TWO flows:
+    ALWAYS server-managed incremental naming (no manual naming).
+    - `output_name` is treated only as an optional *base label* (default "compiled.mp4").
+      Final output is always `<stem>-NNNN.mp4`.
+    - Incremental flow is designed for iOS Shortcuts: one POST per clip.
+
+    TWO flows:
     1) Legacy: a single POST with multiple `files=...` parts -> compose immediately
     2) Incremental: one POST per clip with headers:
          - X-Compose-Time  : run/session key (string)
          - X-Compose-Index : clip index (Shortcuts Repeat Index; usually 1-based)
          - X-Compose-Count : total clips in run
-       -> stage each clip, and when last clip arrives compose immediately.
+       -> stage each clip; when last clip arrives, compose immediately.
 
-    Example (legacy):
-        curl -X POST 'http://localhost:8787/api/projects/demo/compose/upload?output_name=final.mp4' \
-          -F 'files=@/path/a.mp4' -F 'files=@/path/b.mp4'
+    Notes:
+    - `allow_overwrite` is intentionally removed: outputs are always unique.
     """
 
     _validate_compose_environment()
     name, active_source, project = _resolve_project(project_name, source)
+
     if not files:
         raise HTTPException(status_code=400, detail="files must include at least one upload")
 
@@ -599,6 +640,7 @@ async def compose_upload(
             for index, upload in enumerate(files):
                 safe_name = safe_filename(upload.filename or f"clip-{index}.mp4")
                 target = temp_job_dir / f"{index:04d}_{safe_name}"
+
                 written = 0
                 with target.open("wb") as handle:
                     while True:
@@ -609,27 +651,34 @@ async def compose_upload(
                         if written > max_bytes:
                             raise HTTPException(status_code=413, detail="Upload exceeds configured limit")
                         handle.write(chunk)
+
                 temp_inputs.append(target)
 
-            resolved_target_dir = _resolve_within_project(project, target_dir.strip() or "exports", require_exists=False)
+            resolved_target_dir = _resolve_within_project(
+                project,
+                target_dir.strip() or "exports",
+                require_exists=False,
+            )
             resolved_target_dir.mkdir(parents=True, exist_ok=True)
-            final_name = _safe_filename_or_400(output_name, default="compiled.mp4")
-            if not final_name.lower().endswith(".mp4"):
-                final_name = f"{final_name}.mp4"
+
+            # ALWAYS server-managed incremental output name
+            final_name = _resolve_output_name(project, output_name)
+
             output_abs = _resolve_within_project(
                 project,
                 f"{resolved_target_dir.relative_to(project).as_posix()}/{final_name}",
                 require_exists=False,
             )
-            if output_abs.exists() and not allow_overwrite:
+
+            # With incremental naming, collisions should be extremely rare; keep guard for safety.
+            if output_abs.exists():
                 raise HTTPException(
                     status_code=409,
-                    detail="Output already exists. Set allow_overwrite=true or provide a unique output_name.",
+                    detail="Output already exists (unexpected with incremental naming). Try again.",
                 )
-            if output_abs.exists() and allow_overwrite:
-                _prepare_overwrite(project, output_abs.relative_to(project).as_posix())
 
-            mode_used = _concat_files(temp_inputs, output_abs, mode, allow_overwrite=allow_overwrite)
+            mode_used = _concat_files(temp_inputs, output_abs, mode, allow_overwrite=False)
+
             response = _register_output(
                 project=project,
                 project_name=name,
@@ -638,6 +687,7 @@ async def compose_upload(
                 request=request,
                 mode_used=mode_used,
             )
+
             logger.info(
                 "compose_upload_complete",
                 extra={"project": name, "source": active_source.name, "output": response.get("path"), "mode": mode_used},
@@ -650,10 +700,10 @@ async def compose_upload(
     # Incremental: one clip per POST
     # -------------------------
 
-    # Shortcuts Repeat Index is typically 1-based; normalize safely.
     if total <= 0:
         raise HTTPException(status_code=400, detail="Invalid X-Compose-Count (must be > 0)")
 
+    # Shortcuts Repeat Index is typically 1-based; normalize safely.
     if 1 <= idx <= total:
         idx0 = idx - 1
     else:
@@ -737,10 +787,8 @@ async def compose_upload(
     resolved_target_dir = _resolve_within_project(project, target_dir.strip() or "exports", require_exists=False)
     resolved_target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Server-managed unique name. (Ignore allow_overwrite in incremental mode.)
-    seq = _next_compiled_sequence(project)
-    base = _safe_filename_or_400(output_name, default="compiled.mp4")
-    final_name = _compiled_name(base, seq)
+    # ALWAYS server-managed incremental output name
+    final_name = _resolve_output_name(project, output_name)
 
     output_abs = _resolve_within_project(
         project,
