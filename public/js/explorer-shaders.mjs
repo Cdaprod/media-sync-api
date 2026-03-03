@@ -555,6 +555,7 @@ export class AssetFX {
     this.renderSampledCount = 0;
     this.renderCandidatesCount = 0;
     this.droppedByCapCount = 0;
+    this.prefetchViewportY = 1.5;
 
     this.prefersReducedMotion = typeof window !== 'undefined'
       ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
@@ -581,16 +582,16 @@ export class AssetFX {
     this._attachedCardSelector = '.asset';
     this._boundScheduleReplay = (event) => {
       this._recordScrollMotion(event);
-      this._markLayoutDirty();
+      this._markLayoutDirty('grid:scroll');
     };
-    this._boundWindowResize = () => this._markLayoutDirty();
-    this._boundContainerResize = () => this._markLayoutDirty();
+    this._boundWindowResize = () => this._markLayoutDirty('window:resize');
+    this._boundContainerResize = () => this._markLayoutDirty('container:resize');
     this._tapGuardCleanup = null;
     this._resizeObserver = null;
     this.sampleHoldMs = SAMPLE_STICK_MS;
     this.sampledCardsUntil = new WeakMap();
     this.debugOverlay = null;
-    this._boundVisualViewportChange = () => this._markLayoutDirty();
+    this._boundVisualViewportChange = () => this._markLayoutDirty('visualViewport:change');
 
     this._ensureSharedStyles();
     if (typeof window !== 'undefined') window.__assetfx_instance = this;
@@ -630,9 +631,14 @@ export class AssetFX {
     this.selectPulse += (this.selectionGlowTarget - this.selectPulse) * t;
   }
 
-  _markLayoutDirty() {
-    if (!this.layoutDirty) this.cardRectCache = new WeakMap();
+  _markLayoutDirty(reason = 'unspecified') {
     this.layoutDirty = true;
+    this.cardRectCache = new WeakMap();
+    this._lastCanvasRect = null;
+    if (window.__assetfx_dbg) {
+      window.__assetfx_dbg.layoutInvalidations = (window.__assetfx_dbg.layoutInvalidations || 0) + 1;
+      window.__assetfx_dbg.lastInvalidationReason = reason;
+    }
     this._scheduleReplaySweep();
   }
 
@@ -1079,9 +1085,12 @@ export class AssetFX {
     const tag = (mediaEl.tagName || '').toUpperCase();
     if (tag === 'IMG') {
       const thumbState = String(mediaEl.dataset?.thumbState || '').trim().toLowerCase();
-      const hasSrc = !!((mediaEl.currentSrc || mediaEl.getAttribute('src') || '').trim());
+      const src = (mediaEl.currentSrc || mediaEl.getAttribute('src') || '').trim();
+      const thumbFallback = String(mediaEl.dataset?.thumbFallback || '').trim();
+      const hasThumbUrl = String(mediaEl.dataset?.thumbUrl || '').trim().length > 0;
       if (thumbState && thumbState !== 'loaded') return false;
-      return hasSrc && mediaEl.complete && Number(mediaEl.naturalWidth || 0) > 0;
+      if (hasThumbUrl && thumbFallback && src === thumbFallback) return false;
+      return !!src && mediaEl.complete && Number(mediaEl.naturalWidth || 0) > 0;
     }
     if (tag === 'VIDEO') return Number(mediaEl.readyState || 0) >= 2;
     if (tag === 'AUDIO') return Number(mediaEl.readyState || 0) >= 1;
@@ -1205,6 +1214,7 @@ export class AssetFX {
     }
 
     this.fallbackSweepEnabled = false;
+    const overscanY = Math.max(64, Math.round((rootEl?.clientHeight || 0) * this.prefetchViewportY));
     this.visibilityObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         const card = entry.target;
@@ -1221,7 +1231,11 @@ export class AssetFX {
           this._setCardInView(card, false);
         }
       }
-    }, { root: rootEl, threshold: [0.35, 0.65] });
+    }, {
+      root: rootEl,
+      threshold: [0.2, 0.35, 0.65],
+      rootMargin: `${overscanY}px 0px ${overscanY}px 0px`,
+    });
 
     this.trackedCards.forEach((card) => this.visibilityObserver.observe(card));
   }
@@ -1279,12 +1293,23 @@ export class AssetFX {
     });
   }
 
+  _expandedRootRect(rootRect) {
+    const extraY = Math.max(0, Number(rootRect?.height || 0) * this.prefetchViewportY);
+    return {
+      top: Number(rootRect?.top || 0) - extraY,
+      bottom: Number(rootRect?.bottom || 0) + extraY,
+      left: Number(rootRect?.left || 0),
+      right: Number(rootRect?.right || 0),
+    };
+  }
+
   _replaySweep() {
     this._pruneDisconnected();
     if (!this.container || !this.trackedCards.size) return;
     this.layoutDirty = true;
     this.cardRectCache = new WeakMap();
     const rootRect = this.container.getBoundingClientRect();
+    const expandedRect = this._expandedRootRect(rootRect);
     const minOverlap = Math.max(18, rootRect.height * 0.1);
     this.trackedCards.forEach((card) => {
       if (!card?.isConnected) {
@@ -1292,7 +1317,7 @@ export class AssetFX {
         return;
       }
       const rect = card.getBoundingClientRect();
-      const overlap = Math.min(rect.bottom, rootRect.bottom) - Math.max(rect.top, rootRect.top);
+      const overlap = Math.min(rect.bottom, expandedRect.bottom) - Math.max(rect.top, expandedRect.top);
       const visible = this.noVirtualization ? true : overlap > minOverlap;
       if (visible) {
         const entered = this._setCardInView(card, true);

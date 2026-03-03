@@ -217,6 +217,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.readyInViewNotPlayedCount = 0;' in shader_module
     assert 'this.renderSampledCount = 0;' in shader_module
     assert 'this.droppedByCapCount = 0;' in shader_module
+    assert 'this.prefetchViewportY = 1.5;' in shader_module
     assert "if (typeof ResizeObserver !== 'undefined') {" in shader_module
     assert 'this.readyFadeMs = 240;' in shader_module
     assert 'this.entryMs = 260;' in shader_module
@@ -226,6 +227,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
     assert "if (card.dataset.fxReady !== '1') return;" in shader_module
     assert 'if (!this._isRenderableMediaReady(card)) return;' in shader_module
+    assert 'if (hasThumbUrl && thumbFallback && src === thumbFallback) return false;' in shader_module
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
@@ -235,6 +237,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
     assert 'const visibleOrder = [...renderCandidates].sort((a, b) => ((a[1] - b[1]) || (a[0] - b[0])));' in shader_module
+    assert 'this._lastCanvasRect = null;' in shader_module
+    assert 'window.__assetfx_dbg.lastInvalidationReason = reason;' in shader_module
     assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert 'const RECT_INSET_PX = 4;' in shader_module
@@ -248,6 +252,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'x1 = Math.max(0, Math.min(width, x1));' in shader_module
     assert "window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });" in shader_module
     assert "window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });" in shader_module
+    assert 'rootMargin: `${overscanY}px 0px ${overscanY}px 0px`,' in shader_module
     assert "const debugOverlay = debugCanvases.shift() || createNode('canvas', 'fx-debug-overlay');" in shader_module
     assert "debugOverlay.dataset.assetfx = 'debug';" in shader_module
     assert '_renderDebugRects(cards, width, height);' in shader_module

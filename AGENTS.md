@@ -1205,3 +1205,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - AssetFX `_render()` now skips candidates failing renderable-media readiness even if `fxReady`/`fxInView` flags are set from earlier lifecycle stages.
 - Added runtime regression `test_explorer_fx_debug_rects_change_after_scroll` to ensure debug rect exports update after scroll movement instead of staying frozen.
 - Extended static shader assertions to enforce `_isRenderableMediaReady(...)` usage and image thumb-state readiness guardrails.
+
+### Latest Implementation Notes (2026-03-03, geometry freshness + overscan tracking follow-up)
+- Hardened layout invalidation with reason-aware `_markLayoutDirty(reason)` so scroll/viewport/resize events always reset `cardRectCache`, clear `_lastCanvasRect`, and increment debug counters (`layoutInvalidations`, `lastInvalidationReason`) for runtime inspection.
+- Added vertical overscan tracking (`prefetchViewportY = 1.5`) to replay/observer visibility calculations (`_expandedRootRect`, IntersectionObserver `rootMargin`) so fast scrolling keeps near-viewport cards in FX tracking instead of dropping to stale rect state.
+- Tightened image readiness gating to skip fallback posters when a real thumb URL exists (`src === data-thumb-fallback`) so placeholder tiles no longer produce debug FX rects.
+- Added runtime regression `test_explorer_fx_layout_invalidation_ticks_on_scroll` and expanded static shader assertions for overscan, invalidation telemetry, and fallback-readiness guards.

@@ -323,6 +323,35 @@ def test_explorer_fx_scroll_replay_has_no_runtime_reference_errors(page):
 
 
 
+
+
+
+def test_explorer_fx_layout_invalidation_ticks_on_scroll(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1200)
+
+    before = page.evaluate("""() => ({
+      count: Number(window.__assetfx_dbg?.layoutInvalidations || 0),
+      reason: String(window.__assetfx_dbg?.lastInvalidationReason || ''),
+    })""")
+
+    page.evaluate("""() => {
+      const root = document.getElementById('mediaGridRoot');
+      if (!root) return;
+      root.scrollTop += Math.max(180, Math.round(root.clientHeight * 0.35));
+      root.dispatchEvent(new Event('scroll'));
+    }""")
+    page.wait_for_timeout(300)
+
+    after = page.evaluate("""() => ({
+      count: Number(window.__assetfx_dbg?.layoutInvalidations || 0),
+      reason: String(window.__assetfx_dbg?.lastInvalidationReason || ''),
+    })""")
+
+    assert after["count"] > before["count"], f"layout invalidation counter did not increase: before={before} after={after}"
+    assert after["reason"] != "", f"last invalidation reason missing: {after}"
+
+
 def test_explorer_fx_debug_rects_change_after_scroll(page):
     page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
     page.wait_for_timeout(1400)
