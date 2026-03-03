@@ -1177,3 +1177,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Raised `.app` stacking context (`z-index: 2`) and hardened `#mediaGridRoot` stacking (`position: relative; z-index: 1; isolation: isolate`) in `public/explorer.html` to keep card/grid content explicitly above fixed FX surfaces on iPhone Safari.
 - Expanded `?layoutdebug=1` diagnostics to report `canvasZIndex`, `gridRootZIndex`, `canvasRect`, `canvasHeightPx`, and `gridScrollHeight` for fast validation of viewport-vs-scroll compositing issues.
 - Updated explorer static tests to assert the stacking/z-index and layoutdebug telemetry contracts.
+
+### Latest Implementation Notes (2026-03-03, runtime Playwright explorer FX regression suite)
+- Added a new opt-in runtime E2E suite at `tests/e2e/test_explorer_assetfx_runtime.py` (gated by `RUN_PLAYWRIGHT_E2E=1`) covering overlay hit-test occlusion, FX debug-rect alignment vs DOM card rects, visible-card tracking bounds, and thumbnail state stability after scroll roundtrips.
+- Exported debug rectangle telemetry from `AssetFX._renderDebugRects(...)` via `window.__assetfx_dbg.lastRects` / `FX_GLOBAL.__assetfx_dbg_last_rects` when `fxdebug` is enabled, and clear the export when debug rendering is disabled.
+- Extended existing static explorer shader assertions to enforce presence of the new debug-rect export hooks.

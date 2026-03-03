@@ -184,6 +184,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
     assert 'window.__assetfx_dbg = {' in shader_module
     assert 'get calls() { return [...__DBG_GL_CONTEXT_CALLS]; }' in shader_module
+    assert 'FX_GLOBAL.__assetfx_dbg_last_rects = [];' in shader_module
+    assert 'if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;' in shader_module
     assert "markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });" in shader_module
     assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
     assert 'window.__assetfx_audit = () =>' in shader_module

@@ -1267,6 +1267,8 @@ export class AssetFX {
         this._setCardInView(card, false);
       }
     });
+    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;
+    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;
   }
 
   _showVisibleHint(cardEl) {
@@ -1630,6 +1632,8 @@ export class AssetFX {
   _renderDebugRects(cards, width, height) {
     if (!this.debugOverlay) return;
     if (!this.fxDebug) {
+      FX_GLOBAL.__assetfx_dbg_last_rects = [];
+      if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = [];
       const ctx = this.debugOverlay.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width || 0, this.debugOverlay.height || 0);
       return;
@@ -1645,11 +1649,19 @@ export class AssetFX {
     ctx.strokeStyle = 'rgba(60, 200, 255, 0.9)';
     ctx.strokeRect(0.5, 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
     ctx.strokeStyle = 'rgba(120, 255, 170, 0.95)';
+    const debugRects = [];
     cards.forEach((row, idx) => {
       const x = row[0];
       const y = row[1];
       const w = Math.max(1, row[2] - row[0]);
       const h = Math.max(1, row[3] - row[1]);
+      const card = row[9] || null;
+      const key = card?.dataset?.assetId
+        || card?.dataset?.selectKey
+        || card?.dataset?.sha256
+        || card?.dataset?.relative
+        || String(idx);
+      debugRects.push({ key, x1: row[0], y1: row[1], x2: row[2], y2: row[3] });
       ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, w - 1), Math.max(1, h - 1));
       if (idx < 24) {
         ctx.fillStyle = 'rgba(10, 16, 32, 0.72)';
@@ -1659,6 +1671,8 @@ export class AssetFX {
         ctx.fillText(String(idx + 1), x + 4, y + 11);
       }
     });
+    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;
+    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;
   }
 
   _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, sticky = false, alwaysOn = true } = {}) {
