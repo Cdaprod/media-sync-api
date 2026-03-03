@@ -454,3 +454,15 @@ def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():
     assert 'document.body.prepend(canvas)' in shader_module
     assert "params.get('novirt') === '1' || params.get('keep') === '1'" in shader_module
     assert 'if (this.noVirtualization && !visible) return false;' in shader_module
+
+
+def test_explorer_thumb_cache_sticky_loaded_contract_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'const thumbStateCache = new Map();' in html
+    assert "function thumbStateKey(item, selectKey = '', thumbKey = ''){" in html
+    assert 'const cachedThumbState = getThumbCachedState(thumbStateKeyValue);' in html
+    assert "if (job.target?.dataset && job.target.dataset.thumbState !== 'loaded') job.target.dataset.thumbState = 'loading';" in html
+    assert "setThumbCachedState(job.stateKey, 'loaded', job.url);" in html
+    assert 'data-thumb-state-key="${escapeHtml(thumbStateKeyValue)}"' in html
+    assert 'img.src = ""' not in html
+    assert "removeAttribute('src')" not in html

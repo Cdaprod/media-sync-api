@@ -1158,3 +1158,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Re-anchored AssetFX overlay/debug canvases as viewport-fixed body overlays (`position: fixed; inset: 0; width/height: 100vw/100vh`) and updated render-space math to use viewport coordinates for full-scroll coverage.
 - Added URL-controlled no-virtualization mode (`?novirt=1` or `?keep=1`) in AssetFX to keep cards/thumb states stable by bypassing offscreen in/out transitions and treating tracked cards as in-view during replay sweeps.
 - Updated explorer static tests to assert `.sel-ui`-scoped toggles, fixed-overlay contracts, and novirt wiring symbols.
+
+### Latest Implementation Notes (2026-03-03, sticky thumbnail cache follow-up for scroll stability)
+- Added a persistent explorer thumbnail state cache (`thumbStateCache`) keyed by selection/thumb identity so once a thumbnail reaches `loaded`, subsequent renders rehydrate from cache immediately instead of returning to a pending/loading visual state.
+- Updated staged thumbnail queue loading to consult cached states first (`loaded`/`error`) and to avoid setting `data-thumb-state="loading"` when a target is already marked `loaded`.
+- Added `data-thumb-state-key` attributes to grid/list thumbnail nodes and wired `setThumbCachedState(...)` updates on successful and failed loads to keep card visuals stable across scroll and rerender cycles.
+- Added static regression assertions to enforce sticky-cache symbols and guard against src-clearing regressions.

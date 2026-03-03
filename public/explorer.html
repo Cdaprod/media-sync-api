@@ -2039,6 +2039,22 @@
       return [source, project, rel, sha].filter(Boolean).join('|');
     }
 
+    const thumbStateCache = new Map(); // state key -> { state: 'loaded'|'error', src: string }
+
+    function thumbStateKey(item, selectKey = '', thumbKey = ''){
+      return selectKey || thumbKey || thumbCacheKey(item) || item?.relative_path || '';
+    }
+
+    function setThumbCachedState(key, state, src = ''){
+      if (!key || !state) return;
+      thumbStateCache.set(key, { state, src: src || '' });
+    }
+
+    function getThumbCachedState(key){
+      if (!key) return null;
+      return thumbStateCache.get(key) || null;
+    }
+
     function normalizeThumbUrl(rawUrl){
       if (!rawUrl) return null;
       if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')){
@@ -2086,6 +2102,7 @@
         target,
         url: target.dataset.thumbUrl,
         fallback: target.dataset.thumbFallback,
+        stateKey: target.dataset.thumbStateKey || '',
       })).filter(job => job.url);
       if (!jobs.length) return Promise.resolve();
       let active = 0;
@@ -2103,14 +2120,37 @@
             if (!job?.url){
               continue;
             }
+            const cached = getThumbCachedState(job.stateKey);
+            if (cached?.state === 'loaded' && cached.src){
+              enqueueThumbApply(() => {
+                if (!job.target?.isConnected) return;
+                job.target.src = cached.src;
+                job.target.dataset.thumbState = 'loaded';
+                if (job.target.complete){
+                  updateCardOrientation(job.target);
+                }else{
+                  job.target.addEventListener('load', () => updateCardOrientation(job.target), { once: true });
+                }
+              });
+              continue;
+            }
+            if (cached?.state === 'error'){
+              enqueueThumbApply(() => {
+                if (!job.target?.isConnected) return;
+                if (job.fallback) job.target.src = job.fallback;
+                job.target.dataset.thumbState = 'error';
+              });
+              continue;
+            }
             active += 1;
             const loader = new Image();
-            if (job.target?.dataset) job.target.dataset.thumbState = 'loading';
+            if (job.target?.dataset && job.target.dataset.thumbState !== 'loaded') job.target.dataset.thumbState = 'loading';
             loader.onload = () => {
               enqueueThumbApply(() => {
                 if (!job.target?.isConnected) return;
                 job.target.src = job.url;
                 job.target.dataset.thumbState = 'loaded';
+                setThumbCachedState(job.stateKey, 'loaded', job.url);
                 if (job.target.complete){
                   updateCardOrientation(job.target);
                 }else{
@@ -2131,6 +2171,7 @@
                 job.target.src = job.fallback;
               }
               job.target.dataset.thumbState = 'error';
+              setThumbCachedState(job.stateKey, 'error', job.fallback || '');
               active -= 1;
               if (index >= jobs.length && active === 0 && !resolved){
                 resolved = true;
@@ -3548,13 +3589,19 @@
         // - it.thumb_url (image/jpg) for videos/images
         // Otherwise we can still show the actual stream_url for images (not always great for big video files).
         const thumbKey = thumbCacheKey(it);
+        const selectKey = selectionKey(it);
+        const thumbStateKeyValue = thumbStateKey(it, selectKey, thumbKey);
+        const cachedThumbState = getThumbCachedState(thumbStateKeyValue);
         const cachedOrient = getCachedOrientation(thumbKey || it.relative_path || '');
         const itemOrient = inferOrientationFromItem(it);
         const orient = itemOrient || cachedOrient || 'square';
         const orientLocked = Boolean(itemOrient || cachedOrient);
         const fallbackThumb = buildThumbFallback(kind);
         const thumbUrl = normalizeThumbUrl(it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null));
-        const safeThumbUrl = fallbackThumb;
+        const safeThumbUrl = (cachedThumbState?.state === 'loaded' && cachedThumbState.src)
+          ? cachedThumbState.src
+          : (thumbUrl || fallbackThumb);
+        const initialThumbState = cachedThumbState?.state || 'pending';
 
         // ---- grid card
         const card = document.createElement('div');
@@ -3574,14 +3621,13 @@
         card.dataset.orient = orient;
         card.dataset.orientLocked = orientLocked ? 'true' : 'false';
         card.dataset.thumbKey = thumbKey || '';
-        const selectKey = selectionKey(it);
         card.dataset.selectKey = selectKey;
 
         card.innerHTML = `
           <div class="thumb">
             <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="high"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
-              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
+              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state-key="${escapeHtml(thumbStateKeyValue)}" data-thumb-state="${escapeHtml(initialThumbState)}" />
             <div class="scrim"></div>
             <div class="play-btn" aria-hidden="true"><div class="play-btn-inner">▶</div></div>
             <div class="preview-pill" aria-hidden="true">preview</div>
@@ -3634,7 +3680,7 @@
           <div class="mini">
             <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="high"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
-              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
+              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state-key="${escapeHtml(thumbStateKeyValue)}" data-thumb-state="${escapeHtml(initialThumbState)}" />
           </div>
           <div class="info">
             <div class="t">${escapeHtml(title)}</div>
