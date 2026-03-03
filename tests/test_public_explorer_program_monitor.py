@@ -217,6 +217,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.readyFadeMs = 240;' in shader_module
     assert 'this.entryMs = 260;' in shader_module
     assert 'this._pruneDisconnected();' in shader_module
+    assert "    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;\n    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;\n  }\n\n  _showVisibleHint(cardEl) {" not in shader_module
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
     assert "if (card.dataset.fxReady !== '1') return;" in shader_module

@@ -287,6 +287,36 @@ def test_explorer_fx_center_hit_never_lands_on_canvas_or_sanitized_overlay(page)
     assert hit["asset"] is True, f"center hit not inside asset: {hit}"
 
 
+
+
+def test_explorer_fx_scroll_replay_has_no_runtime_reference_errors(page):
+    errors = []
+
+    def on_page_error(exc):
+        errors.append(str(exc))
+
+    page.on("pageerror", on_page_error)
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1500)
+
+    page.evaluate("""() => {
+      const root = document.getElementById('mediaGridRoot');
+      if (!root) return;
+      for (let i = 0; i < 8; i += 1) {
+        root.scrollTop += Math.max(220, Math.round(root.clientHeight * 0.45));
+        root.dispatchEvent(new Event('scroll'));
+      }
+      for (let i = 0; i < 8; i += 1) {
+        root.scrollTop -= Math.max(220, Math.round(root.clientHeight * 0.45));
+        root.dispatchEvent(new Event('scroll'));
+      }
+    }""")
+    page.wait_for_timeout(900)
+
+    ref_errors = [msg for msg in errors if 'ReferenceError' in msg or 'debugRects' in msg]
+    assert not ref_errors, f"runtime errors during replay sweep: {ref_errors}"
+
+
 def test_explorer_fx_only_tracks_visible_cards(page):
     page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
     page.wait_for_timeout(1400)

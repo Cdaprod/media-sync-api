@@ -1267,8 +1267,6 @@ export class AssetFX {
         this._setCardInView(card, false);
       }
     });
-    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;
-    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;
   }
 
   _showVisibleHint(cardEl) {

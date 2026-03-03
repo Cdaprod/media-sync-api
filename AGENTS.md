@@ -1188,3 +1188,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added runtime guards for Safari-style `html > div[style*="all: initial"]` overlay interceptors to ensure any injected wrapper is pointer-inert (and effectively hidden when large).
 - Added FX badge health assertions so settled runs require visible sampled cards (`S`/`K`) while preventing pending (`P`) states from dominating after settle.
 - Added a stricter center hit-test assertion that rejects canvas/sanitized overlays and requires hit targets to resolve inside `.asset` cards.
+
+### Latest Implementation Notes (2026-03-03, replay-sweep runtime error fix for stale FX boxes)
+- Removed an unintended `_replaySweep()` tail assignment to `debugRects` in `public/js/explorer-shaders.mjs` that could throw `ReferenceError` during scroll replay and leave FX in stale/misaligned states under heavy scrolling.
+- Added runtime Playwright coverage (`test_explorer_fx_scroll_replay_has_no_runtime_reference_errors`) to scroll down/up and fail if `pageerror` captures `ReferenceError`/`debugRects` faults during replay sweeps.
+- Updated static explorer shader assertions to guard against reintroducing the stray `FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;` replay-sweep assignment.
