@@ -1164,3 +1164,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated staged thumbnail queue loading to consult cached states first (`loaded`/`error`) and to avoid setting `data-thumb-state="loading"` when a target is already marked `loaded`.
 - Added `data-thumb-state-key` attributes to grid/list thumbnail nodes and wired `setThumbCachedState(...)` updates on successful and failed loads to keep card visuals stable across scroll and rerender cycles.
 - Added static regression assertions to enforce sticky-cache symbols and guard against src-clearing regressions.
+
+### Latest Implementation Notes (2026-03-03, overlay hit-test sanitizer + layoutdebug diagnostics)
+- Added defensive overlay sanitization in `public/explorer.html` for rogue `html > div[style*="all: initial"]` nodes: marks them with `data-overlay-sanitized="1"`, forces `pointer-events: none`, and applies fixed/inset/z-index defaults to prevent full-page hit-test interception.
+- Added a short-lived boot-time `MutationObserver` (4s) to re-apply sanitizer behavior if overlays are injected during early startup.
+- Expanded `?layoutdebug=1` output to include overlay sanitizer count plus center `elementFromPoint(...)` diagnostics (`hitTag`, `hitId`, `hitClass`, `hitPath`) to accelerate iPhone Safari troubleshooting.
+- Added CSS safety guards so `.fx-shared-overlay`, `.fx-debug-overlay`, and sanitized overlays always remain non-interactive (`pointer-events: none !important`).
+- Updated static explorer tests to assert overlay sanitizer hooks and layoutdebug diagnostics.

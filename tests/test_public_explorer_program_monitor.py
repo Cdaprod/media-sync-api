@@ -369,6 +369,12 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'state.focused = null;' in html
     assert "const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';" in html
     assert 'function logLayoutDebug()' in html
+    assert 'function sanitizeRootOverlayInterceptors()' in html
+    assert 'html > div[style*="all: initial"]' in html
+    assert 'overlaySanitizedCount: offenders.length' in html
+    assert "hitPath: path.join(' > ')," in html
+    assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
+    assert "setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);" in html
     assert "setFxSuspend(open || ui.inspectorOpen);" in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
     assert '.grid{' in html and 'grid-auto-flow: row;' in html
@@ -466,3 +472,11 @@ def test_explorer_thumb_cache_sticky_loaded_contract_present():
     assert 'data-thumb-state-key="${escapeHtml(thumbStateKeyValue)}"' in html
     assert 'img.src = ""' not in html
     assert "removeAttribute('src')" not in html
+
+
+def test_explorer_overlay_sanitizer_inert_contract_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '.fx-shared-overlay,' in html
+    assert '[data-overlay-sanitized="1"]{' in html
+    assert "node.style.pointerEvents = 'none';" in html
+    assert "node.dataset.overlaySanitized = '1';" in html

@@ -652,6 +652,11 @@
     #mediaGridRoot > .fx-debug-overlay{
       z-index: calc(var(--z-fx) + 1);
     }
+    .fx-shared-overlay,
+    .fx-debug-overlay,
+    [data-overlay-sanitized="1"]{
+      pointer-events: none !important;
+    }
 
     /* Project chips */
     .chips{
@@ -4585,8 +4590,32 @@
       });
     }
 
+    function sanitizeRootOverlayInterceptors(){
+      const offenders = Array.from(document.querySelectorAll('html > div[style*="all: initial"]'));
+      offenders.forEach((node, index) => {
+        node.dataset.overlaySanitized = '1';
+        node.style.pointerEvents = 'none';
+        if (!node.style.position) node.style.position = 'fixed';
+        if (!node.style.inset) node.style.inset = '0';
+        if (!node.style.zIndex) node.style.zIndex = '0';
+        if (!node.id) node.id = `overlay-sanitized-${index + 1}`;
+      });
+      return offenders;
+    }
+
     function logLayoutDebug(){
       if (!LAYOUT_DEBUG) return;
+      const offenders = sanitizeRootOverlayInterceptors();
+      const hit = document.elementFromPoint(window.innerWidth * 0.5, window.innerHeight * 0.5);
+      const path = [];
+      let node = hit;
+      for (let i = 0; node && i < 8; i += 1){
+        let part = String(node.tagName || '').toLowerCase();
+        if (node.id) part += `#${node.id}`;
+        else if (typeof node.className === 'string' && node.className.trim()) part += `.${node.className.trim().split(/\s+/).slice(0, 2).join('.')}`;
+        path.push(part);
+        node = node.parentElement;
+      }
       const grid = el('mediaGrid');
       const gridRoot = el('mediaGridRoot');
       const content = document.querySelector('.content');
@@ -4605,6 +4634,11 @@
         rootFlexWrap: rs.flexWrap,
         rootWidth: rs.width,
         contentWidth: cs?.width || null,
+        overlaySanitizedCount: offenders.length,
+        hitTag: hit?.tagName || null,
+        hitId: hit?.id || null,
+        hitClass: (typeof hit?.className === 'string' ? hit.className : null),
+        hitPath: path.join(' > '),
       });
     }
 
@@ -4623,6 +4657,12 @@
 
     // Boot
     document.addEventListener('DOMContentLoaded', async () => {
+      sanitizeRootOverlayInterceptors();
+      const overlaySanitizerObserver = new MutationObserver(() => {
+        sanitizeRootOverlayInterceptors();
+      });
+      overlaySanitizerObserver.observe(document.documentElement, { childList: true });
+      setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);
       wireTopbarIntent();
       wireDropdownIntents();
       wireProjectDragAssist();
