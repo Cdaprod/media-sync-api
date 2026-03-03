@@ -1199,3 +1199,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated card→FX rect mapping to subtract `canvasRect.left/top` before DPR scaling, ensuring shader/debug rectangles stay aligned with DOM card bounds when viewport origins shift.
 - Expanded runtime E2E coverage with viewport-size sanity (`test_explorer_fx_overlay_canvas_matches_viewport_not_tiny`) and post-scroll-churn alignment checks (`test_explorer_fx_debug_rects_stay_aligned_after_scroll_churn`).
 - Extended static shader contract assertions to enforce stable viewport helper presence and canvas-origin rect-mapping math.
+
+### Latest Implementation Notes (2026-03-03, stale-debug rect suppression for unloaded cards)
+- Added `_isRenderableMediaReady(cardEl)` in `public/js/explorer-shaders.mjs` so render candidates and debug badge readiness require a connected, actually ready media element (loaded image or ready video/audio), preventing FX rects from persisting on unloaded placeholder cards.
+- AssetFX `_render()` now skips candidates failing renderable-media readiness even if `fxReady`/`fxInView` flags are set from earlier lifecycle stages.
+- Added runtime regression `test_explorer_fx_debug_rects_change_after_scroll` to ensure debug rect exports update after scroll movement instead of staying frozen.
+- Extended static shader assertions to enforce `_isRenderableMediaReady(...)` usage and image thumb-state readiness guardrails.

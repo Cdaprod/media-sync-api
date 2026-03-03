@@ -1071,6 +1071,23 @@ export class AssetFX {
     return !this.prefersReducedMotion && !this.liteFx;
   }
 
+  _isRenderableMediaReady(cardEl) {
+    if (!cardEl?.isConnected) return false;
+    const mediaEl = cardEl.__fxThumb || cardEl.querySelector('img.asset-thumb,video,audio');
+    if (!mediaEl?.isConnected) return false;
+
+    const tag = (mediaEl.tagName || '').toUpperCase();
+    if (tag === 'IMG') {
+      const thumbState = String(mediaEl.dataset?.thumbState || '').trim().toLowerCase();
+      const hasSrc = !!((mediaEl.currentSrc || mediaEl.getAttribute('src') || '').trim());
+      if (thumbState && thumbState !== 'loaded') return false;
+      return hasSrc && mediaEl.complete && Number(mediaEl.naturalWidth || 0) > 0;
+    }
+    if (tag === 'VIDEO') return Number(mediaEl.readyState || 0) >= 2;
+    if (tag === 'AUDIO') return Number(mediaEl.readyState || 0) >= 1;
+    return false;
+  }
+
   _enqueueDissolve(cardEl, imgEl, duration) {
     if (!cardEl || !imgEl || this.prefersReducedMotion) return;
     this._pruneDisconnected();
@@ -1421,6 +1438,7 @@ export class AssetFX {
       if (!card?.isConnected) return;
       if (card.dataset.fxInView !== '1') return;
       if (card.dataset.fxReady !== '1') return;
+      if (!this._isRenderableMediaReady(card)) return;
       let cr = this.cardRectCache.get(card);
       if (!cr || this.layoutDirty) {
         cr = card.getBoundingClientRect();
@@ -1572,7 +1590,7 @@ export class AssetFX {
     if (this.fxDebug) {
       this.visibleCards.forEach((card) => {
         if (!card?.isConnected) return;
-        const ready = card.dataset.fxReady === '1';
+        const ready = (card.dataset.fxReady === '1') && this._isRenderableMediaReady(card);
         const inView = card.dataset.fxInView === '1';
         const sampled = sampledCards.has(card);
         const pending = ready && inView && !sampled;

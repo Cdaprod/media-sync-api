@@ -320,6 +320,28 @@ def test_explorer_fx_scroll_replay_has_no_runtime_reference_errors(page):
 
 
 
+
+
+
+def test_explorer_fx_debug_rects_change_after_scroll(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1400)
+
+    before = page.evaluate("""() => JSON.stringify(window.__assetfx_dbg?.lastRects || [])""")
+
+    page.evaluate("""() => {
+      const root = document.getElementById('mediaGridRoot');
+      if (!root) return;
+      const max = root.scrollHeight - root.clientHeight;
+      root.scrollTop = Math.floor(max * 0.6);
+      root.dispatchEvent(new Event('scroll'));
+    }""")
+    page.wait_for_timeout(500)
+
+    after = page.evaluate("""() => JSON.stringify(window.__assetfx_dbg?.lastRects || [])""")
+    assert before != after, "debug rects did not change after scroll; mapping/cache may be stuck"
+
+
 def test_explorer_fx_overlay_canvas_matches_viewport_not_tiny(page):
     page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1&layoutdebug=1", wait_until="domcontentloaded")
     page.wait_for_timeout(1400)

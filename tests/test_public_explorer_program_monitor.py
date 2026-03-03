@@ -210,6 +210,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'function getStableViewportSize() {' in shader_module
     assert 'const vv = window.visualViewport;' in shader_module
     assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
+    assert '  _isRenderableMediaReady(cardEl) {' in shader_module
+    assert "if (thumbState && thumbState !== 'loaded') return false;" in shader_module
     assert 'this.layoutDirty = true;' in shader_module
     assert 'this.cardRectCache = new WeakMap();' in shader_module
     assert 'this.readyInViewNotPlayedCount = 0;' in shader_module
@@ -223,6 +225,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
     assert "if (card.dataset.fxReady !== '1') return;" in shader_module
+    assert 'if (!this._isRenderableMediaReady(card)) return;' in shader_module
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
