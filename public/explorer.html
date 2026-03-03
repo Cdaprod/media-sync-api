@@ -101,7 +101,7 @@
       pointer-events: none;
       opacity: 0.4;
     }
-    .app{ position: relative; z-index: 1; }
+    .app{ position: relative; z-index: 2; }
 
     #ui-portal{
       position: fixed;
@@ -636,6 +636,9 @@
     #mediaGridRoot{
       width: 100%;
       min-width: 0;
+      position: relative;
+      z-index: 1;
+      isolation: isolate;
     }
 
     #mediaGridRoot > .fx-shared-overlay,
@@ -4623,6 +4626,9 @@
       const gs = getComputedStyle(grid);
       const rs = getComputedStyle(gridRoot);
       const cs = content ? getComputedStyle(content) : null;
+      const fxCanvas = document.querySelector('canvas[data-assetfx="overlay"]');
+      const fxCanvasStyle = fxCanvas ? getComputedStyle(fxCanvas) : null;
+      const fxCanvasRect = fxCanvas ? fxCanvas.getBoundingClientRect() : null;
       console.debug('[layoutdebug]', {
         gridDisplay: gs.display,
         gridAutoFlow: gs.gridAutoFlow,
@@ -4639,6 +4645,16 @@
         hitId: hit?.id || null,
         hitClass: (typeof hit?.className === 'string' ? hit.className : null),
         hitPath: path.join(' > '),
+        canvasZIndex: fxCanvasStyle?.zIndex || null,
+        gridRootZIndex: rs.zIndex,
+        canvasRect: fxCanvasRect ? {
+          top: fxCanvasRect.top,
+          left: fxCanvasRect.left,
+          width: fxCanvasRect.width,
+          height: fxCanvasRect.height,
+        } : null,
+        canvasHeightPx: fxCanvas?.height || null,
+        gridScrollHeight: gridRoot.scrollHeight,
       });
     }
 

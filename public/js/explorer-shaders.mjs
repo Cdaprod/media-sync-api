@@ -684,7 +684,7 @@ export class AssetFX {
       width: '100vw',
       height: '100vh',
       pointerEvents: 'none',
-      zIndex: '2',
+      zIndex: '0',
       opacity: '0.9',
     });
     if (!canvas.isConnected || canvas.parentElement !== document.body) document.body.prepend(canvas);
@@ -700,7 +700,7 @@ export class AssetFX {
       width: '100vw',
       height: '100vh',
       pointerEvents: 'none',
-      zIndex: '3',
+      zIndex: '0',
       opacity: this.fxDebug ? '1' : '0',
       display: this.fxDebug ? 'block' : 'none',
     });

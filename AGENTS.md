@@ -1171,3 +1171,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Expanded `?layoutdebug=1` output to include overlay sanitizer count plus center `elementFromPoint(...)` diagnostics (`hitTag`, `hitId`, `hitClass`, `hitPath`) to accelerate iPhone Safari troubleshooting.
 - Added CSS safety guards so `.fx-shared-overlay`, `.fx-debug-overlay`, and sanitized overlays always remain non-interactive (`pointer-events: none !important`).
 - Updated static explorer tests to assert overlay sanitizer hooks and layoutdebug diagnostics.
+
+### Latest Implementation Notes (2026-03-03, FX stacking order correction for Safari scroll occlusion)
+- Lowered AssetFX overlay/debug canvas inline z-index to `0` in `public/js/explorer-shaders.mjs` so viewport-fixed FX layers remain behind explorer content instead of occluding cards during deep scroll.
+- Raised `.app` stacking context (`z-index: 2`) and hardened `#mediaGridRoot` stacking (`position: relative; z-index: 1; isolation: isolate`) in `public/explorer.html` to keep card/grid content explicitly above fixed FX surfaces on iPhone Safari.
+- Expanded `?layoutdebug=1` diagnostics to report `canvasZIndex`, `gridRootZIndex`, `canvasRect`, `canvasHeightPx`, and `gridScrollHeight` for fast validation of viewport-vs-scroll compositing issues.
+- Updated explorer static tests to assert the stacking/z-index and layoutdebug telemetry contracts.

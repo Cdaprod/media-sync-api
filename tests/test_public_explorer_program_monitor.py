@@ -373,6 +373,12 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'html > div[style*="all: initial"]' in html
     assert 'overlaySanitizedCount: offenders.length' in html
     assert "hitPath: path.join(' > ')," in html
+    assert 'canvasZIndex: fxCanvasStyle?.zIndex || null,' in html
+    assert 'gridRootZIndex: rs.zIndex,' in html
+    assert 'canvasHeightPx: fxCanvas?.height || null,' in html
+    assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
+    assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
+    assert '.app{ position: relative; z-index: 2; }' in html
     assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
     assert "setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);" in html
     assert "setFxSuspend(open || ui.inspectorOpen);" in html
@@ -457,6 +463,7 @@ def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():
     assert "inset: '0'" in shader_module
     assert "width: '100vw'" in shader_module
     assert "height: '100vh'" in shader_module
+    assert "zIndex: '0'" in shader_module
     assert 'document.body.prepend(canvas)' in shader_module
     assert "params.get('novirt') === '1' || params.get('keep') === '1'" in shader_module
     assert 'if (this.noVirtualization && !visible) return false;' in shader_module
