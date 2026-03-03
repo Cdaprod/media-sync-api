@@ -70,7 +70,7 @@ def test_explorer_grid_responsive_rules_and_orientation_hooks():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert '--grid-col-width' in html
     assert '--grid-gap' in html
-    assert 'column-width: var(--grid-col-width)' in html
+    assert 'grid-template-columns: repeat(auto-fill, minmax(var(--grid-col-width), 1fr));' in html
     assert 'dataset.kind' in html
     assert 'dataset.orient' in html
     assert 'updateCardOrientation' in html
@@ -148,8 +148,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "cardFX.attachGrid(gridRoot, '.asset');" in html
     assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
     assert 'cardFX.pulse(selectedCard);' in html
-    assert 'loading="eager" decoding="async" fetchpriority="low"' in html
-    assert 'const THUMB_APPLY_PER_FRAME = 4;' in html
+    assert 'loading="eager" decoding="async" fetchpriority="high"' in html
+    assert 'const THUMB_APPLY_PER_FRAME = 48;' in html
     assert 'function enqueueThumbApply(task)' in html
     assert 'requestAnimationFrame(flushThumbApplyQueue);' in html
     assert 'loading="lazy"' not in html
@@ -363,8 +363,16 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
     assert 'if (ui.inspectorOpen) {' in html
     assert 'state.focused = null;' in html
+    assert "const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';" in html
+    assert 'function logLayoutDebug()' in html
     assert "setFxSuspend(open || ui.inspectorOpen);" in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
+    assert '.grid{' in html and 'grid-auto-flow: row;' in html
+    assert '.grid{' in html and 'grid-template-columns: repeat(auto-fill, minmax(var(--grid-col-width), 1fr));' in html
+    assert 'column-width: var(--grid-col-width);' not in html
+    assert 'column-count:' not in html
+    assert 'grid-auto-flow: column' not in html
+    assert 'min-width: 0;' in html
 
 @pytest.mark.skipif(os.environ.get("RUN_PLAYWRIGHT_E2E") != "1", reason="set RUN_PLAYWRIGHT_E2E=1 to run browser assertion")
 def test_explorer_assetfx_context_singleton_runtime_with_playwright():

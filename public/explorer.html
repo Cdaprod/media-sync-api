@@ -460,6 +460,7 @@
     .main{
       flex: 1;
       min-height: 0;
+      min-width: 0;
       display:flex;
       max-width: none;
       width: 100%;
@@ -507,6 +508,7 @@
 
     .content{
       flex:1;
+      min-width: 0;
       border: none;
       border-radius: 0;
       background: transparent;
@@ -623,12 +625,18 @@
     .content .scroll{
       overflow: auto;
       flex: 1;
+      min-width: 0;
       position: relative;
       z-index: var(--z-grid);
     }
     .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
     .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
     .scroll::-webkit-scrollbar-track{ background: rgba(255,255,255,0.04); }
+
+    #mediaGridRoot{
+      width: 100%;
+      min-width: 0;
+    }
 
     #mediaGridRoot > .fx-shared-overlay,
     #mediaGridRoot > .fx-debug-overlay{
@@ -787,9 +795,13 @@
     /* Grid/List */
     .grid{
       padding: 4px;
-      column-width: var(--grid-col-width);
-      column-gap: var(--grid-gap);
-      column-fill: balance;
+      width: 100%;
+      display: grid;
+      grid-auto-flow: row;
+      grid-template-columns: repeat(auto-fill, minmax(var(--grid-col-width), 1fr));
+      gap: var(--grid-gap);
+      align-items: start;
+      justify-items: stretch;
     }
     .list{
       padding: 10px 12px;
@@ -799,10 +811,9 @@
     }
 
     .asset{
-      display: inline-block;
+      display: block;
       width: 100%;
-      break-inside: avoid;
-      margin-bottom: var(--grid-gap);
+      min-width: 0;
       border: 1px solid var(--asset-border);
       background: rgba(16,18,28,0.88);
       border-radius: var(--asset-radius);
@@ -1725,6 +1736,7 @@
     const API = ''; // same-origin; keep '' for container-served index.html
     const el = (id) => document.getElementById(id);
     const FX_DEBUG = new URLSearchParams(window.location.search).get('fxdebug') === '1';
+    const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';
 
     if (FX_DEBUG) {
       const proto = HTMLCanvasElement.prototype;
@@ -2018,7 +2030,7 @@
       return rawUrl;
     }
 
-    const THUMB_APPLY_PER_FRAME = 4;
+    const THUMB_APPLY_PER_FRAME = 48;
     let thumbApplyScheduled = false;
     const thumbApplyQueue = [];
 
@@ -3538,7 +3550,7 @@
 
         card.innerHTML = `
           <div class="thumb">
-            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="high"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
               data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
             <div class="scrim"></div>
@@ -3589,7 +3601,7 @@
         row.dataset.selectKey = selectKey;
         row.innerHTML = `
           <div class="mini">
-            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="low"
+            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="high"
               ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
               data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state="pending" />
           </div>
@@ -3609,7 +3621,10 @@
       syncSelectionOrderBadges();
       const activeContainer = state.view === 'grid' ? g : l;
       const thumbTargets = Array.from(activeContainer.querySelectorAll('img.asset-thumb[data-thumb-url]'));
-      void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => setContentLoading(false));
+      void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => {
+        setContentLoading(false);
+        logLayoutDebug();
+      });
     }
 
     // -------------------------
@@ -4482,6 +4497,29 @@
       });
     }
 
+    function logLayoutDebug(){
+      if (!LAYOUT_DEBUG) return;
+      const grid = el('mediaGrid');
+      const gridRoot = el('mediaGridRoot');
+      const content = document.querySelector('.content');
+      if (!grid || !gridRoot) return;
+      const gs = getComputedStyle(grid);
+      const rs = getComputedStyle(gridRoot);
+      const cs = content ? getComputedStyle(content) : null;
+      console.debug('[layoutdebug]', {
+        gridDisplay: gs.display,
+        gridAutoFlow: gs.gridAutoFlow,
+        gridTemplateColumns: gs.gridTemplateColumns,
+        gridColumns: gs.columns,
+        gridColumnCount: gs.columnCount,
+        rootDisplay: rs.display,
+        rootFlexDirection: rs.flexDirection,
+        rootFlexWrap: rs.flexWrap,
+        rootWidth: rs.width,
+        contentWidth: cs?.width || null,
+      });
+    }
+
     // Boot
     document.addEventListener('DOMContentLoaded', async () => {
       wireTopbarIntent();
@@ -4508,6 +4546,7 @@
       setView('grid');
       updateTopCounts();
       updateSelectionUI();
+      logLayoutDebug();
     });
   </script>
   <div id="ui-portal" aria-hidden="false"></div>

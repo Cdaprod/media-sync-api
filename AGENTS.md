@@ -1137,3 +1137,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Adjusted inspector UX so tapping an asset while the drawer is open now closes the drawer first (instead of immediately re-opening preview focus), and `closeDrawer()` clears focused inspector state.
 - Re-ran focused explorer static coverage after these changes (`19 passed, 1 skipped`).
 - Follow-up hotfix: restored explicit `_cacheUniforms()` definition in `AssetFX` after integrating mask uniforms so cached uniform locations are populated before draw calls.
+
+### Latest Implementation Notes (2026-03-03, explorer grid row-flow regression fix)
+- Replaced masonry-style `.grid` columns layout (`column-width`/`break-inside`) with explicit row-first CSS grid (`grid-auto-flow: row`, `grid-template-columns: repeat(auto-fill, minmax(var(--grid-col-width), 1fr)))`) so assets flow left-to-right and wrap predictably on desktop + iPhone Safari.
+- Hardened main viewport sizing with additional `min-width: 0` guards on `.main`, `.content`, and `.content .scroll`, plus `#mediaGridRoot` width/min-width constraints to prevent narrow-column collapse when drawer/topbar states change.
+- Added optional `?layoutdebug=1` console diagnostics (`logLayoutDebug`) to print computed grid/root/content layout properties for field troubleshooting.
+- Increased staged thumb apply budget (`THUMB_APPLY_PER_FRAME = 48`) and switched card thumb fetch priority to `high` while preserving existing loading overlay flow.
+- Updated static explorer assertions to enforce row-flow layout contracts and verify the new layout debug symbol.
