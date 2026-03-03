@@ -30,6 +30,28 @@ def _iou(a, b):
     return inter_area / union if union > 0 else 0.0
 
 
+def _pt_in_rect(px, py, rect, pad=0.0):
+    return (
+        (px >= (rect["x"] - pad))
+        and (py >= (rect["y"] - pad))
+        and (px <= (rect["x"] + rect["width"] + pad))
+        and (py <= (rect["y"] + rect["height"] + pad))
+    )
+
+
+def _rect_from_lastrect_entry(entry):
+    x1 = float(entry.get("x1", 0.0))
+    y1 = float(entry.get("y1", 0.0))
+    x2 = float(entry.get("x2", x1))
+    y2 = float(entry.get("y2", y1))
+    return {
+        "x": x1,
+        "y": y1,
+        "width": max(0.0, x2 - x1),
+        "height": max(0.0, y2 - y1),
+    }
+
+
 @pytest.fixture(scope="session")
 def playwright():
     return pytest.importorskip("playwright.sync_api")
@@ -104,6 +126,165 @@ def test_explorer_fx_debug_rects_align_with_dom_cards(page):
       if best_iou < 0.55:
         failures.append((c["key"], best_iou, c["rect"]))
     assert not failures, f"debug rect misalignment: {failures[:3]}"
+
+
+def test_explorer_fx_debug_rects_centerpoint_alignment_space_agnostic(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1600)
+
+    payload = page.evaluate(
+        """() => {
+      const dpr = window.devicePixelRatio || 1;
+      const W = innerWidth;
+      const H = innerHeight;
+      const cards = [...document.querySelectorAll('.asset')].slice(0, 12).map((el, idx) => {
+        const r = el.getBoundingClientRect();
+        const key = el.dataset.assetId || el.dataset.selectKey || el.dataset.sha256 || String(idx);
+        return { key, rect: { x:r.left, y:r.top, width:r.width, height:r.height } };
+      });
+      const rects = (window.__assetfx_dbg?.lastRects || []).map((it) => ({
+        key: it.key || null, x1: it.x1, y1: it.y1, x2: it.x2, y2: it.y2
+      }));
+      return { dpr, W, H, cards, rects };
+    }"""
+    )
+
+    assert payload and payload["cards"], "no cards found"
+    assert payload["rects"] and len(payload["rects"]) > 0, "no debug rects found"
+
+    dpr = float(payload["dpr"] or 1.0)
+    viewport_width = float(payload["W"])
+    viewport_height = float(payload["H"])
+
+    max_x2 = max(float(r.get("x2") or 0.0) for r in payload["rects"])
+    max_y2 = max(float(r.get("y2") or 0.0) for r in payload["rects"])
+    debug_is_dpr_space = (max_x2 > (viewport_width * 1.25)) or (max_y2 > (viewport_height * 1.25))
+    scale = (1.0 / dpr) if debug_is_dpr_space and dpr > 0 else 1.0
+
+    debug_rects_css = []
+    for item in payload["rects"]:
+        rect = _rect_from_lastrect_entry(item)
+        debug_rects_css.append(
+            {
+                "x": rect["x"] * scale,
+                "y": rect["y"] * scale,
+                "width": rect["width"] * scale,
+                "height": rect["height"] * scale,
+                "key": item.get("key"),
+            }
+        )
+
+    failures = []
+    tolerance = 8.0
+    for card in payload["cards"][:8]:
+        card_rect = card["rect"]
+        center_x = float(card_rect["x"] + (card_rect["width"] / 2.0))
+        center_y = float(card_rect["y"] + (card_rect["height"] / 2.0))
+        if not any(_pt_in_rect(center_x, center_y, rect, pad=tolerance) for rect in debug_rects_css):
+            failures.append(
+                {
+                    "key": card["key"],
+                    "center": (center_x, center_y),
+                    "card": card_rect,
+                    "debug_space": "dpr_px" if debug_is_dpr_space else "css_px",
+                    "dpr": dpr,
+                }
+            )
+
+    assert not failures, f"center-point debug rect misalignment (first 2): {failures[:2]}"
+
+
+def test_explorer_overlay_interceptors_are_inert(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1600)
+
+    offenders = page.evaluate(
+        """() => {
+      const nodes = [...document.querySelectorAll('html > div[style*="all: initial"]')];
+      return nodes.map((n) => {
+        const r = n.getBoundingClientRect();
+        const cs = getComputedStyle(n);
+        return {
+          exists: true,
+          w: r.width,
+          h: r.height,
+          left: r.left,
+          top: r.top,
+          pointerEvents: cs.pointerEvents,
+          position: cs.position,
+          zIndex: cs.zIndex,
+          opacity: cs.opacity,
+          style: n.getAttribute('style') || '',
+          sanitized: n.dataset.overlaySanitized || null,
+        };
+      });
+    }"""
+    )
+
+    if not offenders:
+        return
+
+    for offender in offenders:
+        assert offender["pointerEvents"] == "none", f"overlay interceptor not inert: {offender}"
+        if offender["w"] > 200 and offender["h"] > 200:
+            assert offender["opacity"] in ("0", "0.0") or offender["sanitized"] == "1", (
+                f"large interceptor present: {offender}"
+            )
+
+
+def test_explorer_fx_badge_state_distribution_is_healthy(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(2000)
+
+    badges = page.evaluate(
+        """() => {
+      const list = [...document.querySelectorAll('.asset .fx-debug-badge')].slice(0, 18);
+      return list.map((badge) => (badge.textContent || '').trim()).filter(Boolean);
+    }"""
+    )
+
+    assert badges is not None, "badge query failed"
+    assert len(badges) >= 6, f"not enough badges found (got {len(badges)}): {badges}"
+
+    sampled = [badge for badge in badges if badge.endswith("S") or badge.endswith("K")]
+    pending = [badge for badge in badges if badge.endswith("P")]
+    visible = [badge for badge in badges if len(badge) >= 3 and badge[2] == "V"]
+
+    assert len(visible) >= 3, f"too few visible badges: {badges}"
+    assert len(sampled) >= 1, f"no sampled badges (S/K) after settle: {badges}"
+    assert len(pending) <= 8, f"too many pending badges after settle: pending={len(pending)} badges={badges}"
+
+
+def test_explorer_fx_center_hit_never_lands_on_canvas_or_sanitized_overlay(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1600)
+
+    hit = page.evaluate(
+        """() => {
+      const x = innerWidth / 2;
+      const y = innerHeight / 2;
+      const el = document.elementFromPoint(x, y);
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      const rootAllInitial = el.matches?.('html > div[style*="all: initial"]') || false;
+      return {
+        tag: el.tagName,
+        cls: el.className || null,
+        style: el.getAttribute('style') || null,
+        pointerEvents: cs.pointerEvents,
+        isCanvas: el.tagName === 'CANVAS',
+        isAllInitialRoot: rootAllInitial,
+        isSanitized: el.dataset?.overlaySanitized || null,
+        asset: !!el.closest?.('.asset'),
+      };
+    }"""
+    )
+
+    assert hit is not None
+    assert hit["isCanvas"] is False, f"center hit landed on canvas: {hit}"
+    assert hit["isAllInitialRoot"] is False, f"center hit landed on all:initial wrapper: {hit}"
+    assert hit["isSanitized"] != "1", f"center hit landed on sanitized overlay node: {hit}"
+    assert hit["asset"] is True, f"center hit not inside asset: {hit}"
 
 
 def test_explorer_fx_only_tracks_visible_cards(page):

@@ -1182,3 +1182,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added a new opt-in runtime E2E suite at `tests/e2e/test_explorer_assetfx_runtime.py` (gated by `RUN_PLAYWRIGHT_E2E=1`) covering overlay hit-test occlusion, FX debug-rect alignment vs DOM card rects, visible-card tracking bounds, and thumbnail state stability after scroll roundtrips.
 - Exported debug rectangle telemetry from `AssetFX._renderDebugRects(...)` via `window.__assetfx_dbg.lastRects` / `FX_GLOBAL.__assetfx_dbg_last_rects` when `fxdebug` is enabled, and clear the export when debug rendering is disabled.
 - Extended existing static explorer shader assertions to enforce presence of the new debug-rect export hooks.
+
+### Latest Implementation Notes (2026-03-03, runtime FX diagnostics hardening follow-up)
+- Expanded `tests/e2e/test_explorer_assetfx_runtime.py` with space-agnostic debug-rect centerpoint alignment checks that normalize CSS-vs-DPR telemetry before asserting card/FX rect containment.
+- Added runtime guards for Safari-style `html > div[style*="all: initial"]` overlay interceptors to ensure any injected wrapper is pointer-inert (and effectively hidden when large).
+- Added FX badge health assertions so settled runs require visible sampled cards (`S`/`K`) while preventing pending (`P`) states from dominating after settle.
+- Added a stricter center hit-test assertion that rejects canvas/sanitized overlays and requires hit targets to resolve inside `.asset` cards.
