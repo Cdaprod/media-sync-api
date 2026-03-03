@@ -1211,3 +1211,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added vertical overscan tracking (`prefetchViewportY = 1.5`) to replay/observer visibility calculations (`_expandedRootRect`, IntersectionObserver `rootMargin`) so fast scrolling keeps near-viewport cards in FX tracking instead of dropping to stale rect state.
 - Tightened image readiness gating to skip fallback posters when a real thumb URL exists (`src === data-thumb-fallback`) so placeholder tiles no longer produce debug FX rects.
 - Added runtime regression `test_explorer_fx_layout_invalidation_ticks_on_scroll` and expanded static shader assertions for overscan, invalidation telemetry, and fallback-readiness guards.
+
+### Latest Implementation Notes (2026-03-03, TDD freshness semantics for debug-rect snapshots)
+- Added `_publishDebugRects(...)` to centralize debug-rect exports so every frame overwrites `lastRects`, increments `lastRectsFrame`, and records `lastRectsT` instead of leaving stale snapshots.
+- `_render()` now reuses `_lastCanvasRect` only between stable frames and forces a fresh `getBoundingClientRect()` sample whenever layout is dirty, reducing scroll-churn drift.
+- Runtime E2E suite now validates scroll-driven debug frame advancement (`lastRectsFrame`) and verifies rect exports clear after forcing cards out-of-view (`test_explorer_fx_debug_rects_clear_when_cards_marked_out_of_view`).
+- Replaced the old viewport-only visibility cap assertion with a bounded-and-responsive tracking assertion that allows overscan while still guarding against leaks.

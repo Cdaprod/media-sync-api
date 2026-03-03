@@ -451,30 +451,59 @@ def test_explorer_fx_debug_rects_stay_aligned_after_scroll_churn(page):
     assert not failures, f"debug rect misalignment after scroll churn: {failures[:3]}"
 
 
-def test_explorer_fx_only_tracks_visible_cards(page):
+def test_explorer_fx_tracking_is_bounded_and_updates_after_scroll(page):
     page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
     page.wait_for_timeout(1400)
 
+    before = page.evaluate("""() => ({
+      frame: window.__assetfx_dbg?.lastRectsFrame ?? null,
+      visible: window.__assetfx_instance?.visibleCards?.size ?? null,
+      pending: window.__assetfx_instance?.pendingDissolves?.length ?? null,
+      active: window.__assetfx_instance?.activeDissolves?.size ?? null,
+    })""")
+
     page.evaluate("""() => {
       const root = document.getElementById('mediaGridRoot');
-      root.scrollTop = root.scrollHeight;
+      root.scrollTop = Math.min(root.scrollHeight, root.scrollTop + 1400);
       root.dispatchEvent(new Event('scroll'));
     }""")
     page.wait_for_timeout(600)
 
-    stats = page.evaluate("""() => ({
+    after = page.evaluate("""() => ({
+      frame: window.__assetfx_dbg?.lastRectsFrame ?? null,
       visible: window.__assetfx_instance?.visibleCards?.size ?? null,
-      tracked: window.__assetfx_instance?.trackedCards?.size ?? null,
       pending: window.__assetfx_instance?.pendingDissolves?.length ?? null,
       active: window.__assetfx_instance?.activeDissolves?.size ?? null,
-      dropped: window.__assetfx_instance?.droppedByCapCount ?? null,
     })""")
-    assert stats["visible"] is not None
-    assert stats["pending"] is not None
-    assert stats["active"] is not None
-    assert stats["pending"] <= 60
-    assert stats["active"] <= 6
-    assert stats["visible"] <= 60, f"visibleCards too large: {stats}"
+
+    assert before["visible"] is not None
+    assert after["visible"] is not None
+    assert after["pending"] <= 60
+    assert after["active"] <= 6
+    assert after["visible"] <= 140, f"visibleCards too large (leak): {after}"
+    assert after["frame"] is not None
+    assert after["frame"] != before["frame"], f"lastRectsFrame did not advance: before={before} after={after}"
+
+
+def test_explorer_fx_debug_rects_clear_when_cards_marked_out_of_view(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1400)
+
+    count_before = page.evaluate("""() => (window.__assetfx_dbg?.lastRects || []).length""")
+    assert count_before > 0
+
+    count_after = page.evaluate("""() => {
+      document.querySelectorAll('.asset').forEach((card) => {
+        card.dataset.fxInView = '0';
+      });
+      window.__assetfx_instance?._markLayoutDirty?.('test:force-out-of-view');
+      return -1;
+    }""")
+    _ = count_after
+    page.wait_for_timeout(400)
+
+    count_after = page.evaluate("""() => (window.__assetfx_dbg?.lastRects || []).length""")
+    assert count_after == 0, f"debug rects did not clear after out-of-view invalidation: before={count_before} after={count_after}"
 
 
 def test_explorer_thumbnails_do_not_regress_after_scroll_roundtrip(page):

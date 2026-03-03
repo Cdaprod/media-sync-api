@@ -205,6 +205,7 @@ let __DBG_GL_CONTEXTS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_contexts || 0);
 let __DBG_RENDERERS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_renderers || 0);
 const __DBG_GL_CONTEXT_CALLS = FX_GLOBAL.__assetfx_dbg_context_calls || [];
 let __DBG_PREVENTED_SECOND_CONTEXT = Number(FX_GLOBAL.__assetfx_dbg_prevented_second_context || 0);
+FX_GLOBAL.__assetfx_dbg_last_rects = [];
 const MAX_PARALLEL_DECODES = 3;
 let ACTIVE_DECODES = 0;
 const DECODE_QUEUE = [];
@@ -302,6 +303,11 @@ if (typeof window !== 'undefined') {
     get stickyRetainedCount() { return FX_GLOBAL.__assetfx_instance?.stickyRetainedCount || 0; },
     get entryPendingCount() { return FX_GLOBAL.__assetfx_instance?.entryPendingCount || 0; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
+    lastRects: [],
+    lastRectsFrame: 0,
+    lastRectsT: 0,
+    layoutInvalidations: 0,
+    lastInvalidationReason: '',
   };
   window.__assetfx_audit = () => {
     const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
@@ -1440,7 +1446,9 @@ export class AssetFX {
       return;
     }
     const dpr = window.devicePixelRatio || 1;
-    const canvasRect = this.overlay.getBoundingClientRect();
+    let canvasRect = this._lastCanvasRect || this.overlay.getBoundingClientRect();
+    if (!this._lastCanvasRect || this.layoutDirty) canvasRect = this.overlay.getBoundingClientRect();
+    this._lastCanvasRect = canvasRect;
     const viewport = getStableViewportSize();
     const width = Math.max(1, Math.round((viewport.width || canvasRect.width || 1) * dpr));
     const height = Math.max(1, Math.round((viewport.height || canvasRect.height || 1) * dpr));
@@ -1692,11 +1700,20 @@ export class AssetFX {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
+  _publishDebugRects(debugRects) {
+    const safeRects = Array.isArray(debugRects) ? debugRects : [];
+    FX_GLOBAL.__assetfx_dbg_last_rects = safeRects;
+    if (window.__assetfx_dbg) {
+      window.__assetfx_dbg.lastRects = safeRects;
+      window.__assetfx_dbg.lastRectsFrame = Number(window.__assetfx_dbg.lastRectsFrame || 0) + 1;
+      window.__assetfx_dbg.lastRectsT = performance.now();
+    }
+  }
+
   _renderDebugRects(cards, width, height) {
     if (!this.debugOverlay) return;
     if (!this.fxDebug) {
-      FX_GLOBAL.__assetfx_dbg_last_rects = [];
-      if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = [];
+      this._publishDebugRects([]);
       const ctx = this.debugOverlay.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width || 0, this.debugOverlay.height || 0);
       return;
@@ -1734,8 +1751,7 @@ export class AssetFX {
         ctx.fillText(String(idx + 1), x + 4, y + 11);
       }
     });
-    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;
-    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;
+    this._publishDebugRects(debugRects);
   }
 
   _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, sticky = false, alwaysOn = true } = {}) {

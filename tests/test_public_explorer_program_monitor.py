@@ -185,7 +185,9 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'window.__assetfx_dbg = {' in shader_module
     assert 'get calls() { return [...__DBG_GL_CONTEXT_CALLS]; }' in shader_module
     assert 'FX_GLOBAL.__assetfx_dbg_last_rects = [];' in shader_module
-    assert 'if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;' in shader_module
+    assert '  _publishDebugRects(debugRects) {' in shader_module
+    assert 'window.__assetfx_dbg.lastRects = safeRects;' in shader_module
+    assert 'window.__assetfx_dbg.lastRectsFrame = Number(window.__assetfx_dbg.lastRectsFrame || 0) + 1;' in shader_module
     assert "markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });" in shader_module
     assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
     assert 'window.__assetfx_audit = () =>' in shader_module
@@ -246,7 +248,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'let y1 = (cr.top - canvasRect.top) * dpr;' in shader_module
     assert "if (this.container.dataset.fxSuspend === '1') {" in shader_module
     assert 'this.gl.clear(this.gl.COLOR_BUFFER_BIT);' in shader_module
-    assert 'const canvasRect = this.overlay.getBoundingClientRect();' in shader_module
+    assert 'let canvasRect = this._lastCanvasRect || this.overlay.getBoundingClientRect();' in shader_module
     assert 'let x2 = (cr.right - canvasRect.left) * dpr;' in shader_module
     assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
     assert 'x1 = Math.max(0, Math.min(width, x1));' in shader_module
