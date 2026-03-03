@@ -74,6 +74,7 @@ const IMPULSE_STRENGTH = 0.70;
 const IMPULSE_LIFETIME = 1800;
 const HOVER_RADIUS = 28;
 const HOVER_STRENGTH = 0.38;
+const STATE_EVICT_AFTER_MS = 20000;
 
 export class MaskField {
   constructor(gridRoot, assetSel = '.asset') {
@@ -310,12 +311,18 @@ if (typeof window !== 'undefined') {
     get samplingFrozen() { return FX_GLOBAL.__assetfx_instance?.samplingFrozen === true; },
     get stickyRetainedCount() { return FX_GLOBAL.__assetfx_instance?.stickyRetainedCount || 0; },
     get entryPendingCount() { return FX_GLOBAL.__assetfx_instance?.entryPendingCount || 0; },
+    get stateSize() { return FX_GLOBAL.__assetfx_instance?.stateByKey?.size || 0; },
+    get attachedRootId() { return FX_GLOBAL.__assetfx_instance?._attachedGridRoot?.dataset?.assetfxRootId || null; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
     lastRects: [],
     lastRectsFrame: 0,
     lastRectsT: 0,
     layoutInvalidations: 0,
     lastInvalidationReason: '',
+    canvasRect: null,
+    dpr: 1,
+    vvOffset: { ox: 0, oy: 0 },
+    rootScrollTop: 0,
   };
   window.__assetfx_audit = () => {
     const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
@@ -570,6 +577,11 @@ export class AssetFX {
     this.renderCandidatesCount = 0;
     this.droppedByCapCount = 0;
     this.prefetchViewportY = 1.5;
+    this.stateByKey = new Map();
+    this.keyByEl = new WeakMap();
+    this._stateGeneration = 0;
+    this._debugRenderTick = 0;
+    this.evictAfterMs = Math.max(500, Number(new URLSearchParams(window.location.search).get('fxevictms') || STATE_EVICT_AFTER_MS));
 
     this.prefersReducedMotion = typeof window !== 'undefined'
       ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
@@ -606,6 +618,8 @@ export class AssetFX {
     this.sampledCardsUntil = new WeakMap();
     this.debugOverlay = null;
     this._boundVisualViewportChange = () => this._markLayoutDirty('visualViewport:change');
+    this._boundInvalidationRoot = null;
+    this._invalidationsBound = false;
 
     this._ensureSharedStyles();
     if (typeof window !== 'undefined') window.__assetfx_instance = this;
@@ -643,6 +657,92 @@ export class AssetFX {
     const dt = this._lastFrameAt > 0 ? Math.max(0, nowPerf - this._lastFrameAt) : 16;
     const t = Math.min(1, dt / easeMs);
     this.selectPulse += (this.selectionGlowTarget - this.selectPulse) * t;
+  }
+
+  _getCardKey(cardEl) {
+    if (!cardEl) return '';
+    const existing = this.keyByEl.get(cardEl);
+    if (existing) return existing;
+    const key = String(
+      cardEl.dataset.assetId
+      || cardEl.dataset.sha256
+      || cardEl.dataset.selectKey
+      || cardEl.dataset.relative
+      || `assetfx-key-${++this._stateGeneration}`
+    );
+    this.keyByEl.set(cardEl, key);
+    return key;
+  }
+
+  _getCardState(cardEl, create = true) {
+    const key = this._getCardKey(cardEl);
+    if (!key) return null;
+    let state = this.stateByKey.get(key);
+    if (!state && create) {
+      state = {
+        key,
+        enterAt: 0,
+        readyAt: 0,
+        lastSeenAt: 0,
+        lastRect: null,
+        inView: false,
+        nearView: false,
+        thumbLoaded: false,
+        renderable: false,
+        sampledUntil: 0,
+        entryPlayed: false,
+        exitPlayedAt: 0,
+        generation: 1,
+        selected: false,
+        pending: false,
+        active: false,
+        el: cardEl,
+      };
+      this.stateByKey.set(key, state);
+    }
+    if (state && cardEl && state.el !== cardEl) {
+      state.el = cardEl;
+      state.generation = Number(state.generation || 0) + 1;
+    }
+    return state;
+  }
+
+  _bindInvalidations() {
+    const gridRoot = this._attachedGridRoot;
+    if (!gridRoot) return;
+    if (this._invalidationsBound && this._boundInvalidationRoot === gridRoot) return;
+    if (this._invalidationsBound) this._unbindInvalidations();
+    gridRoot.addEventListener('scroll', this._boundScheduleReplay, { passive: true });
+    gridRoot.addEventListener('touchmove', this._boundScheduleReplay, { passive: true });
+    window.addEventListener('resize', this._boundWindowResize, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });
+      window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });
+    }
+    this._boundInvalidationRoot = gridRoot;
+    this._invalidationsBound = true;
+  }
+
+  _unbindInvalidations() {
+    const gridRoot = this._boundInvalidationRoot;
+    if (!gridRoot) return;
+    gridRoot.removeEventListener('scroll', this._boundScheduleReplay);
+    gridRoot.removeEventListener('touchmove', this._boundScheduleReplay);
+    window.removeEventListener('resize', this._boundWindowResize);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this._boundVisualViewportChange);
+      window.visualViewport.removeEventListener('scroll', this._boundVisualViewportChange);
+    }
+    this._boundInvalidationRoot = null;
+    this._invalidationsBound = false;
+  }
+
+  _evictState(nowPerf = performance.now()) {
+    this.stateByKey.forEach((state, key) => {
+      const age = Math.max(0, nowPerf - Number(state.lastSeenAt || 0));
+      const pinned = state.selected || state.pending || state.active;
+      if (!state.nearView && !pinned && age > this.evictAfterMs) this.stateByKey.delete(key);
+    });
   }
 
   _markLayoutDirty(reason = 'unspecified') {
@@ -896,6 +996,8 @@ export class AssetFX {
     this.boundGrids = new WeakSet();
     this.pointerState.clear();
     this.pendingDissolves = [];
+    this.stateByKey.clear();
+    this.keyByEl = new WeakMap();
   }
 
   attachGrid(gridRoot, cardSelector = '.asset') {
@@ -913,16 +1015,10 @@ export class AssetFX {
       setGlobalContextOwner({ rootEl: gridRoot, canvasEl: this.overlay, stack: owner.stack });
     }
 
-    gridRoot.addEventListener('scroll', this._boundScheduleReplay, { passive: true });
-    gridRoot.addEventListener('touchmove', this._boundScheduleReplay, { passive: true });
-    window.addEventListener('resize', this._boundWindowResize, { passive: true });
+    this._bindInvalidations();
     if (typeof ResizeObserver !== 'undefined') {
       this._resizeObserver = new ResizeObserver(this._boundContainerResize);
       this._resizeObserver.observe(gridRoot);
-    }
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });
-      window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });
     }
 
     this._tapGuardCleanup = this._wireTapGuard(gridRoot, cardSelector);
@@ -934,16 +1030,10 @@ export class AssetFX {
   detachGrid() {
     const gridRoot = this._attachedGridRoot;
     if (!gridRoot) return;
-    gridRoot.removeEventListener('scroll', this._boundScheduleReplay);
-    gridRoot.removeEventListener('touchmove', this._boundScheduleReplay);
-    window.removeEventListener('resize', this._boundWindowResize);
+    this._unbindInvalidations();
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
-    }
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', this._boundVisualViewportChange);
-      window.visualViewport.removeEventListener('scroll', this._boundVisualViewportChange);
     }
     if (typeof this._tapGuardCleanup === 'function') this._tapGuardCleanup();
     if (this._maskField) { this._maskField.destroy(); this._maskField = null; }
@@ -968,6 +1058,11 @@ export class AssetFX {
   trackViewport(cardEl, imgEl = null) {
     if (!cardEl) return;
     if (imgEl) cardEl.__fxThumb = imgEl;
+    const state = this._getCardState(cardEl, true);
+    if (state) {
+      state.lastSeenAt = performance.now();
+      state.selected = cardEl.classList.contains('is-selected');
+    }
     this.trackedCards.add(cardEl);
     if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
     if (this.visibilityObserver) this.visibilityObserver.observe(cardEl);
@@ -991,6 +1086,13 @@ export class AssetFX {
       cardEl.dataset.fxReady = '1';
       cardEl.dataset.ready = '1';
       cardEl.dataset.fxReadyAt = String(performance.now());
+      const state = this._getCardState(cardEl, true);
+      if (state) {
+        state.readyAt = performance.now();
+        state.thumbLoaded = true;
+        state.renderable = true;
+        state.lastSeenAt = performance.now();
+      }
       if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
       this._markLayoutDirty();
       this._ensureEntryPending(cardEl, mediaEl, this.entryMs);
@@ -1001,6 +1103,12 @@ export class AssetFX {
       cardEl.dataset.fxReady = '0';
       cardEl.dataset.ready = '0';
       this.visibleCards.delete(cardEl);
+      const state = this._getCardState(cardEl, true);
+      if (state) {
+        state.thumbLoaded = false;
+        state.renderable = false;
+        state.lastSeenAt = performance.now();
+      }
     };
 
     const onImgLoad = () => { void markReady(); };
@@ -1093,8 +1201,12 @@ export class AssetFX {
 
   _isRenderableMediaReady(cardEl) {
     if (!cardEl?.isConnected) return false;
+    const state = this._getCardState(cardEl, true);
     const mediaEl = cardEl.__fxThumb || cardEl.querySelector('img.asset-thumb,video,audio');
-    if (!mediaEl?.isConnected) return false;
+    if (!mediaEl?.isConnected) {
+      if (state) state.renderable = false;
+      return false;
+    }
 
     const tag = (mediaEl.tagName || '').toUpperCase();
     if (tag === 'IMG') {
@@ -1102,12 +1214,35 @@ export class AssetFX {
       const src = (mediaEl.currentSrc || mediaEl.getAttribute('src') || '').trim();
       const thumbFallback = String(mediaEl.dataset?.thumbFallback || '').trim();
       const hasThumbUrl = String(mediaEl.dataset?.thumbUrl || '').trim().length > 0;
-      if (thumbState && thumbState !== 'loaded') return false;
-      if (hasThumbUrl && thumbFallback && src === thumbFallback) return false;
-      return !!src && mediaEl.complete && Number(mediaEl.naturalWidth || 0) > 0;
+      const ready = !(thumbState && thumbState !== 'loaded')
+        && !(hasThumbUrl && thumbFallback && src === thumbFallback)
+        && !!src && mediaEl.complete && Number(mediaEl.naturalWidth || 0) > 0;
+      if (state) {
+        state.thumbLoaded = ready;
+        state.renderable = ready;
+        state.lastSeenAt = performance.now();
+      }
+      return ready;
     }
-    if (tag === 'VIDEO') return Number(mediaEl.readyState || 0) >= 2;
-    if (tag === 'AUDIO') return Number(mediaEl.readyState || 0) >= 1;
+    if (tag === 'VIDEO') {
+      const ready = Number(mediaEl.readyState || 0) >= 2;
+      if (state) {
+        state.thumbLoaded = ready;
+        state.renderable = ready;
+        state.lastSeenAt = performance.now();
+      }
+      return ready;
+    }
+    if (tag === 'AUDIO') {
+      const ready = Number(mediaEl.readyState || 0) >= 1;
+      if (state) {
+        state.thumbLoaded = ready;
+        state.renderable = ready;
+        state.lastSeenAt = performance.now();
+      }
+      return ready;
+    }
+    if (state) state.renderable = false;
     return false;
   }
 
@@ -1169,6 +1304,14 @@ export class AssetFX {
     const next = visible ? '1' : '0';
     if (card.dataset.fxInView === next) return false;
     card.dataset.fxInView = next;
+    const state = this._getCardState(card, true);
+    if (state) {
+      state.inView = visible;
+      state.nearView = visible || state.nearView;
+      state.lastSeenAt = performance.now();
+      if (visible && !state.enterAt) state.enterAt = performance.now();
+      state.selected = card.classList.contains('is-selected');
+    }
     if (visible && card.dataset.fxReady === '1') {
       this.visibleCards.add(card);
       const mediaEl = card.__fxThumb || card.querySelector('img.asset-thumb,video,audio');
@@ -1178,6 +1321,7 @@ export class AssetFX {
       if (card.dataset.fxReady === '1' && !this.noVirtualization) this._playExit(card);
       this.visibleCards.delete(card);
       this.sampledCardsUntil.delete(card);
+      if (state) state.sampledUntil = 0;
       card.dataset.fxEntryPending = '0';
       this.pendingDissolves = this.pendingDissolves.filter((entry) => entry.cardEl !== card);
     }
@@ -1199,7 +1343,15 @@ export class AssetFX {
 
   _pruneDisconnected() {
     this.trackedCards.forEach((card) => {
-      if (!card?.isConnected) this.trackedCards.delete(card);
+      if (!card?.isConnected) {
+        const state = this._getCardState(card, false);
+        if (state) {
+          state.nearView = false;
+          state.inView = false;
+          state.renderable = false;
+        }
+        this.trackedCards.delete(card);
+      }
     });
     this.visibleCards.forEach((card) => {
       if (!card?.isConnected) this.visibleCards.delete(card);
@@ -1233,6 +1385,11 @@ export class AssetFX {
       for (const entry of entries) {
         const card = entry.target;
         if (!card?.isConnected) continue;
+        const state = this._getCardState(card, true);
+        if (state) {
+          state.nearView = entry.isIntersecting;
+          state.lastSeenAt = performance.now();
+        }
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
         if (!img) continue;
         if (entry.isIntersecting && entry.intersectionRatio > 0.35) {
@@ -1332,7 +1489,14 @@ export class AssetFX {
       }
       const rect = card.getBoundingClientRect();
       const overlap = Math.min(rect.bottom, expandedRect.bottom) - Math.max(rect.top, expandedRect.top);
+      const nearView = this.noVirtualization ? true : overlap > 0;
       const visible = this.noVirtualization ? true : overlap > minOverlap;
+      const state = this._getCardState(card, true);
+      if (state) {
+        state.nearView = nearView;
+        state.inView = visible;
+        state.lastSeenAt = performance.now();
+      }
       if (visible) {
         const entered = this._setCardInView(card, true);
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
@@ -1364,6 +1528,8 @@ export class AssetFX {
     const last = this.lastExitedAt.get(cardEl) || 0;
     if (now - last < Math.max(420, this.cooldownMs * 0.6)) return;
     this.lastExitedAt.set(cardEl, now);
+    const state = this._getCardState(cardEl, true);
+    if (state) state.exitPlayedAt = now;
     ensureRelative(cardEl);
     const veil = createNode('div', 'fx-exit-veil');
     veil.style.animationDuration = `${Math.max(180, duration)}ms`;
@@ -1475,9 +1641,15 @@ export class AssetFX {
     if (this.layoutDirty) this.cardRectCache = new WeakMap();
     const cx = width * 0.5;
     const cy = height * 0.5;
-    this.visibleCards.forEach((card) => {
+    this.trackedCards.forEach((card) => {
       if (!card?.isConnected) return;
-      if (card.dataset.fxInView !== '1') return;
+      const state = this._getCardState(card, true);
+      if (!state) return;
+      state.selected = card.classList.contains('is-selected');
+      state.pending = card.dataset.fxEntryPending === '1';
+      state.active = this.activeDissolves.has(card);
+      state.lastSeenAt = performance.now();
+      if (!state.nearView && card.dataset.fxInView !== '1') return;
       if (card.dataset.fxReady !== '1') return;
       if (!this._isRenderableMediaReady(card)) return;
       let cr = this.cardRectCache.get(card);
@@ -1499,6 +1671,7 @@ export class AssetFX {
       x2 = Math.max(0, Math.min(width, x2));
       y2 = Math.max(0, Math.min(height, y2));
       if (x2 <= x1 || y2 <= y1) return;
+      state.lastRect = { x1, y1, x2, y2 };
       const typeCode = 0;
       const selected = card.classList.contains('is-selected') ? 1 : 0;
       const readyAt = Number(card.dataset.fxReadyAt || 0);
@@ -1590,6 +1763,8 @@ export class AssetFX {
       const stickUntil = this.sampledCardsUntil.get(card) || 0;
       if (stickUntil > nowPerf) this.stickyRetainedCount += 1;
       this.sampledCardsUntil.set(card, nowPerf + SAMPLE_STICK_MS);
+      const state = this._getCardState(card, true);
+      if (state) state.sampledUntil = nowPerf + SAMPLE_STICK_MS;
       if (this.fxDebug) {
         const sticky = stickUntil > nowPerf;
         this._renderDebugBadge(card, { sampled: true, sticky, pending: false, inView: true, ready: true, alwaysOn: ALWAYS_ON_PASS_ENABLED });
@@ -1606,6 +1781,8 @@ export class AssetFX {
       sampledCards.add(card);
       this.renderPixelsNow += Math.max(1, (row[2] - row[0]) * (row[3] - row[1]));
       this.sampledCardsUntil.set(card, nowPerf + SAMPLE_STICK_MS);
+      const state = this._getCardState(card, true);
+      if (state) state.sampledUntil = nowPerf + SAMPLE_STICK_MS;
     });
 
     // finalize pending entry once sampling decision settles (sampled or 2 raf cycles)
@@ -1630,10 +1807,11 @@ export class AssetFX {
     });
 
     if (this.fxDebug) {
-      this.visibleCards.forEach((card) => {
+      this.trackedCards.forEach((card) => {
         if (!card?.isConnected) return;
-        const ready = (card.dataset.fxReady === '1') && this._isRenderableMediaReady(card);
-        const inView = card.dataset.fxInView === '1';
+        const state = this._getCardState(card, true);
+        const ready = !!state?.renderable;
+        const inView = !!state?.inView;
         const sampled = sampledCards.has(card);
         const pending = ready && inView && !sampled;
         const sticky = sampled && ((this.sampledCardsUntil.get(card) || 0) > (nowPerf + SAMPLE_STICK_MS - 16));
@@ -1644,6 +1822,7 @@ export class AssetFX {
     this.droppedByCapCount = Math.max(0, totalCandidates - cards.length);
     this._updateSelectionGlow(nowPerf, selectedVisibleCards.length);
     this.layoutDirty = false;
+    this._evictState(nowPerf);
     this._renderDebugRects(cards, width, height);
 
     const gl = this.gl;
@@ -1709,20 +1888,33 @@ export class AssetFX {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  _publishDebugRects(debugRects) {
+  _publishDebugRects(debugRects, meta = {}) {
     const safeRects = Array.isArray(debugRects) ? debugRects : [];
     FX_GLOBAL.__assetfx_dbg_last_rects = safeRects;
     if (window.__assetfx_dbg) {
       window.__assetfx_dbg.lastRects = safeRects;
       window.__assetfx_dbg.lastRectsFrame = Number(window.__assetfx_dbg.lastRectsFrame || 0) + 1;
       window.__assetfx_dbg.lastRectsT = performance.now();
+      window.__assetfx_dbg.stateSize = this.stateByKey.size;
+      window.__assetfx_dbg.attachedRootId = this._attachedGridRoot?.dataset?.assetfxRootId || null;
+      window.__assetfx_dbg.canvasRect = meta.canvasRect || null;
+      window.__assetfx_dbg.dpr = Number(meta.dpr || window.devicePixelRatio || 1);
+      window.__assetfx_dbg.vvOffset = meta.vvOffset || { ox: 0, oy: 0 };
+      window.__assetfx_dbg.rootScrollTop = Number(meta.rootScrollTop || this._attachedGridRoot?.scrollTop || 0);
     }
   }
 
   _renderDebugRects(cards, width, height) {
     if (!this.debugOverlay) return;
     if (!this.fxDebug) {
-      this._publishDebugRects([]);
+      this._publishDebugRects([], {
+        canvasRect: this._lastCanvasRect ? {
+          left: this._lastCanvasRect.left,
+          top: this._lastCanvasRect.top,
+          width: this._lastCanvasRect.width,
+          height: this._lastCanvasRect.height,
+        } : null,
+      });
       const ctx = this.debugOverlay.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width || 0, this.debugOverlay.height || 0);
       return;
@@ -1760,7 +1952,18 @@ export class AssetFX {
         ctx.fillText(String(idx + 1), x + 4, y + 11);
       }
     });
-    this._publishDebugRects(debugRects);
+    const vv = getViewportOffsets();
+    this._publishDebugRects(debugRects, {
+      canvasRect: this._lastCanvasRect ? {
+        left: this._lastCanvasRect.left,
+        top: this._lastCanvasRect.top,
+        width: this._lastCanvasRect.width,
+        height: this._lastCanvasRect.height,
+      } : null,
+      dpr: window.devicePixelRatio || 1,
+      vvOffset: { ox: vv.x, oy: vv.y },
+      rootScrollTop: Number(this._attachedGridRoot?.scrollTop || 0),
+    });
   }
 
   _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, sticky = false, alwaysOn = true } = {}) {

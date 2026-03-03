@@ -60,7 +60,10 @@ def playwright():
 @pytest.fixture()
 def page(playwright):
     with playwright.sync_playwright() as p:
-        browser = p.chromium.launch()
+        try:
+            browser = p.chromium.launch()
+        except Exception as exc:
+            pytest.skip(f"playwright browser unavailable: {exc}")
         page = browser.new_page(viewport={"width": 980, "height": 740})
         try:
             yield page
@@ -504,6 +507,37 @@ def test_explorer_fx_debug_rects_clear_when_cards_marked_out_of_view(page):
 
     count_after = page.evaluate("""() => (window.__assetfx_dbg?.lastRects || []).length""")
     assert count_after == 0, f"debug rects did not clear after out-of-view invalidation: before={count_before} after={count_after}"
+
+
+def test_explorer_fx_state_map_is_bounded_after_scroll_and_eviction(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1&fxevictms=2000", wait_until="domcontentloaded")
+    page.wait_for_timeout(1200)
+
+    page.evaluate("""() => {
+      const root = document.getElementById('mediaGridRoot');
+      if (!root) return;
+      const max = Math.max(0, root.scrollHeight - root.clientHeight);
+      for (let i = 0; i < 12; i += 1) {
+        root.scrollTop = Math.floor((i % 2 === 0 ? max : 0));
+        root.dispatchEvent(new Event('scroll'));
+      }
+    }""")
+    page.wait_for_timeout(600)
+    page.wait_for_timeout(2600)
+
+    stats = page.evaluate("""() => ({
+      stateSize: Number(window.__assetfx_dbg?.stateSize || 0),
+      pending: Number(window.__assetfx_instance?.pendingDissolves?.length || 0),
+      active: Number(window.__assetfx_instance?.activeDissolves?.size || 0),
+      visible: Number(window.__assetfx_instance?.visibleCards?.size || 0),
+      frame: Number(window.__assetfx_dbg?.lastRectsFrame || 0),
+    })""")
+
+    assert stats["pending"] <= 60
+    assert stats["active"] <= 6
+    assert stats["visible"] <= 140
+    assert stats["frame"] > 0
+    assert stats["stateSize"] <= 400, f"state map unbounded: {stats}"
 
 
 def test_explorer_thumbnails_do_not_regress_after_scroll_roundtrip(page):

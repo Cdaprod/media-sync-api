@@ -185,7 +185,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'window.__assetfx_dbg = {' in shader_module
     assert 'get calls() { return [...__DBG_GL_CONTEXT_CALLS]; }' in shader_module
     assert 'FX_GLOBAL.__assetfx_dbg_last_rects = [];' in shader_module
-    assert '  _publishDebugRects(debugRects) {' in shader_module
+    assert '  _publishDebugRects(debugRects, meta = {}) {' in shader_module
     assert 'window.__assetfx_dbg.lastRects = safeRects;' in shader_module
     assert 'window.__assetfx_dbg.lastRectsFrame = Number(window.__assetfx_dbg.lastRectsFrame || 0) + 1;' in shader_module
     assert "markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });" in shader_module
@@ -214,7 +214,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'function getViewportOffsets() {' in shader_module
     assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
     assert '  _isRenderableMediaReady(cardEl) {' in shader_module
-    assert "if (thumbState && thumbState !== 'loaded') return false;" in shader_module
+    assert "const ready = !(thumbState && thumbState !== 'loaded')" in shader_module
     assert 'this.layoutDirty = true;' in shader_module
     assert 'this.cardRectCache = new WeakMap();' in shader_module
     assert 'this.readyInViewNotPlayedCount = 0;' in shader_module
@@ -230,7 +230,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
     assert "if (card.dataset.fxReady !== '1') return;" in shader_module
     assert 'if (!this._isRenderableMediaReady(card)) return;' in shader_module
-    assert 'if (hasThumbUrl && thumbFallback && src === thumbFallback) return false;' in shader_module
+    assert '&& !(hasThumbUrl && thumbFallback && src === thumbFallback)' in shader_module
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
@@ -242,6 +242,12 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'const visibleOrder = [...renderCandidates].sort((a, b) => ((a[1] - b[1]) || (a[0] - b[0])));' in shader_module
     assert 'this._lastCanvasRect = null;' in shader_module
     assert 'window.__assetfx_dbg.lastInvalidationReason = reason;' in shader_module
+    assert 'this.stateByKey = new Map();' in shader_module
+    assert 'this.keyByEl = new WeakMap();' in shader_module
+    assert '  _bindInvalidations() {' in shader_module
+    assert '  _evictState(nowPerf = performance.now()) {' in shader_module
+    assert 'window.__assetfx_dbg.stateSize = this.stateByKey.size;' in shader_module
+    assert 'window.__assetfx_dbg.canvasRect = meta.canvasRect || null;' in shader_module
     assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert 'const RECT_INSET_PX = 4;' in shader_module
@@ -257,10 +263,12 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'x1 = Math.max(0, Math.min(width, x1));' in shader_module
     assert "window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });" in shader_module
     assert "window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });" in shader_module
+    assert 'this._bindInvalidations();' in shader_module
     assert 'rootMargin: `${overscanY}px 0px ${overscanY}px 0px`,' in shader_module
     assert "const debugOverlay = debugCanvases.shift() || createNode('canvas', 'fx-debug-overlay');" in shader_module
     assert "debugOverlay.dataset.assetfx = 'debug';" in shader_module
     assert '_renderDebugRects(cards, width, height);' in shader_module
+    assert 'this._publishDebugRects([], {' in shader_module
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
     assert 'const ALWAYS_ON_PASS_ENABLED = true;' in shader_module
     assert 'const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;' in shader_module
@@ -415,7 +423,10 @@ def test_explorer_asset_css_visual_animation_is_minimized():
 def test_explorer_assetfx_context_singleton_runtime_with_playwright():
     playwright = pytest.importorskip("playwright.sync_api")
     with playwright.sync_playwright() as p:
-        browser = p.chromium.launch()
+        try:
+            browser = p.chromium.launch()
+        except Exception as exc:
+            pytest.skip(f"playwright browser unavailable: {exc}")
         page = browser.new_page()
         try:
             page.goto("http://127.0.0.1:8787/public/explorer.html", wait_until="domcontentloaded")
