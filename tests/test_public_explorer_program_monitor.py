@@ -148,6 +148,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "cardFX.attachGrid(gridRoot, '.asset');" in html
     assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
     assert 'cardFX.pulse(selectedCard);' in html
+    assert 'data-no-preview="1"' in html
     assert 'loading="eager" decoding="async" fetchpriority="high"' in html
     assert 'const THUMB_APPLY_PER_FRAME = 48;' in html
     assert 'function enqueueThumbApply(task)' in html
@@ -359,6 +360,9 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'if (host.parentElement !== document.body) document.body.appendChild(host);' in html
     assert '#ui-portal .actions-panel{' in html and 'pointer-events: auto;' in html
     assert 'function setFxSuspend(suspend)' in html
+    assert 'function inNoPreviewZone(target)' in html
+    assert "if (inNoPreviewZone(event.target)) return;" in html
+    assert "target.closest('[data-no-preview]')" in html
     assert 'async function refreshExplorerData({ toastOnSuccess = true } = {})' in html
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
     assert 'if (ui.inspectorOpen) {' in html
@@ -422,7 +426,7 @@ def test_explorer_card_shell_skin_and_bg_impulse_present():
 
 def test_explorer_selection_order_badge_wiring_present():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
-    assert '<span class="sel-order" aria-hidden="true"></span>' in html
+    assert '<span class="sel-order" data-no-preview="1" aria-hidden="true"></span>' in html
     assert 'function selectionOrderIndexMap()' in html
     assert 'function syncSelectionOrderBadges()' in html
     assert "badge.textContent = order ? String(Math.min(order, 99)) : '';" in html

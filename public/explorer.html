@@ -856,6 +856,17 @@
       width: 100%; height: 100%;
       object-fit: cover;
       display:block;
+      opacity: 0;
+      transition: opacity 180ms var(--ease-settle), filter 180ms var(--ease-settle);
+      filter: saturate(0.9);
+    }
+    .asset-thumb[data-thumb-state="loaded"]{
+      opacity: 1;
+      filter: saturate(1);
+    }
+    .asset-thumb[data-thumb-state="error"]{
+      opacity: 0.95;
+      filter: grayscale(0.06);
     }
     .thumb .fallback{
       font-size: 12px;
@@ -1796,6 +1807,11 @@
       dragTarget: null,
     };
 
+
+    function inNoPreviewZone(target){
+      return !!(target && target.closest && target.closest('[data-no-preview]'));
+    }
+
     const cardFX = window.__assetfx_instance instanceof AssetFX
       ? window.__assetfx_instance
       : (window.__assetfx_instance = new AssetFX());
@@ -2080,6 +2096,7 @@
             }
             active += 1;
             const loader = new Image();
+            if (job.target?.dataset) job.target.dataset.thumbState = 'loading';
             loader.onload = () => {
               enqueueThumbApply(() => {
                 if (!job.target?.isConnected) return;
@@ -2647,6 +2664,7 @@
 
       target.addEventListener('pointerdown', (event) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if (inNoPreviewZone(event.target)) return;
         if (event.target.closest('input, button, a, summary')) return;
         pointerId = event.pointerId;
         startX = event.clientX;
@@ -2668,6 +2686,7 @@
 
       target.addEventListener('pointermove', (event) => {
         if (pointerId !== event.pointerId) return;
+        if (inNoPreviewZone(event.target)) return;
         const dx = event.clientX - startX;
         const dy = event.clientY - startY;
         if (!moved && (dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD){
@@ -2724,6 +2743,7 @@
       });
 
       target.addEventListener('contextmenu', (event) => {
+        if (inNoPreviewZone(event.target)) return;
         event.preventDefault();
         const key = selectionKey(item);
         const selected = key ? selectedItems() : [];
@@ -3561,9 +3581,9 @@
                 <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
               </div>
               <div class="asset-ol-tr">
-                <div class="selector" title="Select">
+                <div class="selector" title="Select" data-no-preview="1">
                   <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
-                  <span class="sel-order" aria-hidden="true"></span>
+                  <span class="sel-order" data-no-preview="1" aria-hidden="true"></span>
                 </div>
               </div>
               <div class="asset-ol-bl">
@@ -4492,6 +4512,16 @@
         root.addEventListener('pointercancel', handlePointerUp, true);
         root.addEventListener('change', handleChange, true);
         root.addEventListener('click', (event) => {
+          const selector = event.target.closest('.selector[data-no-preview="1"]');
+          if (selector){
+            const input = selector.querySelector('input[type="checkbox"][data-select-key]');
+            if (input && !input.disabled && event.target !== input){
+              input.checked = !input.checked;
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            event.stopPropagation();
+            return;
+          }
           if (event.target.closest('input[type="checkbox"][data-select-key]')) event.stopPropagation();
         }, true);
       });
@@ -4519,6 +4549,19 @@
         contentWidth: cs?.width || null,
       });
     }
+
+    document.addEventListener('pointerdown', (event) => {
+      if (!inNoPreviewZone(event.target)) return;
+      event.stopPropagation();
+    }, true);
+    document.addEventListener('click', (event) => {
+      if (!inNoPreviewZone(event.target)) return;
+      event.stopPropagation();
+    }, true);
+    document.addEventListener('touchstart', (event) => {
+      if (!inNoPreviewZone(event.target)) return;
+      event.stopPropagation();
+    }, { capture: true, passive: true });
 
     // Boot
     document.addEventListener('DOMContentLoaded', async () => {

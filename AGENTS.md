@@ -1144,3 +1144,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added optional `?layoutdebug=1` console diagnostics (`logLayoutDebug`) to print computed grid/root/content layout properties for field troubleshooting.
 - Increased staged thumb apply budget (`THUMB_APPLY_PER_FRAME = 48`) and switched card thumb fetch priority to `high` while preserving existing loading overlay flow.
 - Updated static explorer assertions to enforce row-flow layout contracts and verify the new layout debug symbol.
+
+### Latest Implementation Notes (2026-03-03, checkbox no-preview hotfix + thumb readiness polish)
+- Added `[data-no-preview="1"]` contracts to selection controls and capture-phase pointer/click/touch guards so tapping checkbox/order badges no longer triggers card preview open handlers.
+- Updated delegated selection click handling so tapping the selector shell/order badge toggles the associated checkbox and dispatches change, preserving ordered badge updates without preview side effects.
+- Added explicit `inNoPreviewZone(...)` guards inside asset pointer/context handlers as a second safety layer for iPhone Safari event propagation quirks.
+- Improved thumbnail readiness perception by setting thumb state to `loading` during prefetch and adding CSS fade/filter transitions keyed to `data-thumb-state` (`loaded`/`error`) while keeping staged apply + loading overlay flow.
+- Re-ran focused explorer static checks after the hotfix (`19 passed, 1 skipped`).
