@@ -52,6 +52,14 @@ function getStableViewportSize() {
   };
 }
 
+function getViewportOffsets() {
+  const vv = window.visualViewport;
+  return {
+    x: Number(vv?.offsetLeft || 0),
+    y: Number(vv?.offsetTop || 0),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MaskField
 // Builds a per-frame heatmap texture from layout data (not pixels).
@@ -1376,7 +1384,7 @@ export class AssetFX {
       this._frameCounter += 1;
       const deviceMemory = Number(window.navigator?.deviceMemory || 0);
       const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
-      const lowTierFrameSkip = ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;
+      const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;
       if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();
       this.raf = requestAnimationFrame(tick);
       if (this.container && RENDERERS.has(this.container)) {
@@ -1477,10 +1485,11 @@ export class AssetFX {
         cr = card.getBoundingClientRect();
         this.cardRectCache.set(card, cr);
       }
-      let x1 = (cr.left - canvasRect.left) * dpr;
-      let y1 = (cr.top - canvasRect.top) * dpr;
-      let x2 = (cr.right - canvasRect.left) * dpr;
-      let y2 = (cr.bottom - canvasRect.top) * dpr;
+      const viewportOffsets = getViewportOffsets();
+      let x1 = (cr.left - canvasRect.left - viewportOffsets.x) * dpr;
+      let y1 = (cr.top - canvasRect.top - viewportOffsets.y) * dpr;
+      let x2 = (cr.right - canvasRect.left - viewportOffsets.x) * dpr;
+      let y2 = (cr.bottom - canvasRect.top - viewportOffsets.y) * dpr;
       x1 += RECT_INSET_PX * dpr;
       y1 += RECT_INSET_PX * dpr;
       x2 -= RECT_INSET_PX * dpr;

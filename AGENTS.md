@@ -1217,3 +1217,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - `_render()` now reuses `_lastCanvasRect` only between stable frames and forces a fresh `getBoundingClientRect()` sample whenever layout is dirty, reducing scroll-churn drift.
 - Runtime E2E suite now validates scroll-driven debug frame advancement (`lastRectsFrame`) and verifies rect exports clear after forcing cards out-of-view (`test_explorer_fx_debug_rects_clear_when_cards_marked_out_of_view`).
 - Replaced the old viewport-only visibility cap assertion with a bounded-and-responsive tracking assertion that allows overscan while still guarding against leaks.
+
+### Latest Implementation Notes (2026-03-03, iPhone fast-scroll debug rect freshness + viewport-offset follow-up)
+- Updated `public/js/explorer-shaders.mjs` with `getViewportOffsets()` (from `window.visualViewport.offsetLeft/offsetTop`) and applied those offsets in card→FX rect mapping before DPR scaling, reducing Safari/iPhone toolbar/viewport-origin drift in debug/render alignment.
+- Adjusted the low-tier fast-scroll frame-skip gate so throttling is disabled when `fxdebug` is active (`lowTierFrameSkip` now requires `!this.fxDebug`), ensuring debug rectangles continue to publish fresh frame-by-frame telemetry during rapid scrolling.
+- Refreshed static explorer shader assertions in `tests/test_public_explorer_program_monitor.py` to enforce the new viewport-offset helper and fxdebug-aware frame-skip contract.

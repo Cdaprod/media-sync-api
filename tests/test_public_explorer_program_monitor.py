@@ -211,6 +211,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'const DECODE_QUEUE = [];' in shader_module
     assert 'function getStableViewportSize() {' in shader_module
     assert 'const vv = window.visualViewport;' in shader_module
+    assert 'function getViewportOffsets() {' in shader_module
     assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
     assert '  _isRenderableMediaReady(cardEl) {' in shader_module
     assert "if (thumbState && thumbState !== 'loaded') return false;" in shader_module
@@ -244,12 +245,14 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert 'const RECT_INSET_PX = 4;' in shader_module
-    assert 'let x1 = (cr.left - canvasRect.left) * dpr;' in shader_module
-    assert 'let y1 = (cr.top - canvasRect.top) * dpr;' in shader_module
+    assert 'const viewportOffsets = getViewportOffsets();' in shader_module
+    assert 'let x1 = (cr.left - canvasRect.left - viewportOffsets.x) * dpr;' in shader_module
+    assert 'let y1 = (cr.top - canvasRect.top - viewportOffsets.y) * dpr;' in shader_module
     assert "if (this.container.dataset.fxSuspend === '1') {" in shader_module
     assert 'this.gl.clear(this.gl.COLOR_BUFFER_BIT);' in shader_module
     assert 'let canvasRect = this._lastCanvasRect || this.overlay.getBoundingClientRect();' in shader_module
-    assert 'let x2 = (cr.right - canvasRect.left) * dpr;' in shader_module
+    assert 'let x2 = (cr.right - canvasRect.left - viewportOffsets.x) * dpr;' in shader_module
+    assert 'let y2 = (cr.bottom - canvasRect.top - viewportOffsets.y) * dpr;' in shader_module
     assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
     assert 'x1 = Math.max(0, Math.min(width, x1));' in shader_module
     assert "window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });" in shader_module
@@ -261,6 +264,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
     assert 'const ALWAYS_ON_PASS_ENABLED = true;' in shader_module
     assert 'const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;' in shader_module
+    assert 'const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
     assert 'this.maxRenderPixelsLowTier = 1450000;' in shader_module
     assert 'this.maxRenderPixelsHighTier = 2400000;' in shader_module
     assert 'const pixelBudget = Math.min(pixelBudgetCap, pixelBudgetDynamic);' in shader_module
@@ -284,7 +288,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.scrollVelocityEma = (this.scrollVelocityEma * 0.82) + (v * 0.18);' in shader_module
     assert 'this.motionDamp = 1.0 - smoothstep(0.2, 1.2, vDecayed);' in shader_module
     assert 'this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);' in shader_module
-    assert 'const lowTierFrameSkip = ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
+    assert 'const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
     assert 'if (this.scrollVelocityEma > 0.35 || this.motionDamp < 0.8) return;' in shader_module
     assert 'if (Math.random() > 0.35) return;' in shader_module
     assert 'if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();' in shader_module
