@@ -222,7 +222,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
     assert "position: 'absolute'" in shader_module
-    assert "if (!canvas.isConnected || canvas.parentElement !== container) container.prepend(canvas);" in shader_module
+    assert "if (!canvas.isConnected || canvas.parentElement !== document.body) document.body.prepend(canvas);" in shader_module
     assert 'const tileParamData = new Uint8Array(MAX_RECTS * 4);' in shader_module
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
@@ -233,7 +233,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "if (this.container.dataset.fxSuspend === '1') {" in shader_module
     assert 'this.gl.clear(this.gl.COLOR_BUFFER_BIT);' in shader_module
     assert 'const canvasRect = this.overlay.getBoundingClientRect();' in shader_module
-    assert 'let x1 = (cr.left - canvasRect.left) * dpr;' in shader_module
+    assert 'let x1 = cr.left * dpr;' in shader_module
     assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
     assert 'x1 = Math.max(0, Math.min(width, x1));' in shader_module
     assert "window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });" in shader_module
@@ -304,7 +304,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'gl.uniform1f(U.u_selected, selectedVisibleCards.length > 0 ? 1 : 0);' in shader_module
     assert 'gl.uniform1f(U.u_select_pulse, this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));' in shader_module
     assert 'this.lastExitedAt = new WeakMap();' in shader_module
-    assert "if (card.dataset.fxReady === '1') this._playExit(card);" in shader_module
+    assert "if (card.dataset.fxReady === '1' && !this.noVirtualization) this._playExit(card);" in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
     assert '.fx-debug-badge {' in shader_module
     assert "badge.textContent = `${alwaysOn ? 'A' : '-'}${ready ? 'R' : '-'}${inView ? 'V' : '-'}${sampled ? (sticky ? 'K' : 'S') : (pending ? 'P' : '-')}`;" in shader_module
@@ -362,7 +362,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'function setFxSuspend(suspend)' in html
     assert 'function inNoPreviewZone(target)' in html
     assert "if (inNoPreviewZone(event.target)) return;" in html
-    assert "target.closest('[data-no-preview]')" in html
+    assert "target.closest('[data-no-preview], .sel-ui')" in html
     assert 'async function refreshExplorerData({ toastOnSuccess = true } = {})' in html
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
     assert 'if (ui.inspectorOpen) {' in html
@@ -436,3 +436,21 @@ def test_explorer_selection_order_badge_wiring_present():
     assert '<div id="ui-portal" aria-hidden="false"></div>' in html
     assert "if (actionsPanel && actionsPanel.parentElement !== uiPortal) uiPortal.appendChild(actionsPanel);" in html
     assert "console.debug('[actions-panel]', { zIndex: getComputedStyle(actionsPanel).zIndex, transformedAncestor });" in html
+
+
+def test_explorer_selection_click_is_scoped_to_sel_ui_only():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'class="selector sel-ui"' in html
+    assert "const selUi = event.target.closest('.sel-ui[data-no-preview=\"1\"]');" in html
+    assert "if (!event.target.closest('.sel-shell, .sel-order, input[type=\"checkbox\"][data-select-key]')) return;" in html
+
+
+def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert "position: 'fixed'" in shader_module
+    assert "inset: '0'" in shader_module
+    assert "width: '100vw'" in shader_module
+    assert "height: '100vh'" in shader_module
+    assert 'document.body.prepend(canvas)' in shader_module
+    assert "params.get('novirt') === '1' || params.get('keep') === '1'" in shader_module
+    assert 'if (this.noVirtualization && !visible) return false;' in shader_module

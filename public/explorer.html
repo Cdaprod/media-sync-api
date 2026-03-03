@@ -1005,20 +1005,29 @@
     .badge.kind-doc{ background: rgba(124,58,237,0.28); border-color: rgba(124,58,237,0.5); color: #ccb4ff; }
 
     .selector{
-      width: 20px;
-      height: 20px;
       border-radius: 4px;
       border: 1.5px solid rgba(255,255,255,0.25);
       background: rgba(0,0,0,0.4);
-      display:flex;
+      display:inline-flex;
       align-items:center;
       justify-content:center;
+      width: auto;
+      height: auto;
+      padding: 1px;
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       transition: border-color 0.2s ease, background 0.2s ease;
       position: relative;
       overflow: hidden;
+    }
+    .sel-shell{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width: 18px;
+      height: 18px;
       position: relative;
+      pointer-events: auto;
     }
     .selector:hover{ border-color: var(--asset-accent); }
     .selector input{
@@ -1809,7 +1818,7 @@
 
 
     function inNoPreviewZone(target){
-      return !!(target && target.closest && target.closest('[data-no-preview]'));
+      return !!(target && target.closest && target.closest('[data-no-preview], .sel-ui'));
     }
 
     const cardFX = window.__assetfx_instance instanceof AssetFX
@@ -3581,9 +3590,11 @@
                 <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
               </div>
               <div class="asset-ol-tr">
-                <div class="selector" title="Select" data-no-preview="1">
-                  <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
-                  <span class="sel-order" data-no-preview="1" aria-hidden="true"></span>
+                <div class="selector sel-ui" title="Select" data-no-preview="1">
+                  <span class="sel-shell" data-no-preview="1">
+                    <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+                    <span class="sel-order" data-no-preview="1" aria-hidden="true"></span>
+                  </span>
                 </div>
               </div>
               <div class="asset-ol-bl">
@@ -4512,9 +4523,10 @@
         root.addEventListener('pointercancel', handlePointerUp, true);
         root.addEventListener('change', handleChange, true);
         root.addEventListener('click', (event) => {
-          const selector = event.target.closest('.selector[data-no-preview="1"]');
-          if (selector){
-            const input = selector.querySelector('input[type="checkbox"][data-select-key]');
+          const selUi = event.target.closest('.sel-ui[data-no-preview="1"]');
+          if (selUi){
+            if (!event.target.closest('.sel-shell, .sel-order, input[type="checkbox"][data-select-key]')) return;
+            const input = selUi.querySelector('input[type="checkbox"][data-select-key]');
             if (input && !input.disabled && event.target !== input){
               input.checked = !input.checked;
               input.dispatchEvent(new Event('change', { bubbles: true }));

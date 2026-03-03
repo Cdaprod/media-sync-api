@@ -544,6 +544,12 @@ export class AssetFX {
     this.fxDebug = typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('fxdebug') === '1'
       : false;
+    this.noVirtualization = typeof window !== 'undefined'
+      ? (() => {
+          const params = new URLSearchParams(window.location.search);
+          return params.get('novirt') === '1' || params.get('keep') === '1';
+        })()
+      : false;
 
     this.visibilityObserver = null;
     this.scrollReplayScheduled = false;
@@ -636,9 +642,8 @@ export class AssetFX {
     if (owner?.canvasEl?.isConnected && owner?.rootEl?.isConnected) {
       const ownerShared = this._getRenderer(owner.rootEl);
       if (ownerShared) {
-        if (owner.canvasEl.parentElement !== container) {
-          ensureRelative(container);
-          container.appendChild(owner.canvasEl);
+        if (owner.canvasEl.parentElement !== document.body) {
+          document.body.appendChild(owner.canvasEl);
         }
         this.container = container;
         this.overlay = owner.canvasEl;
@@ -674,15 +679,15 @@ export class AssetFX {
     canvas.classList.add('fx-shared-overlay');
     canvas.dataset.assetfx = 'overlay';
     Object.assign(canvas.style, {
-      position: 'absolute',
+      position: 'fixed',
       inset: '0',
-      width: '100%',
-      height: '100%',
+      width: '100vw',
+      height: '100vh',
       pointerEvents: 'none',
-      zIndex: '1',
+      zIndex: '2',
       opacity: '0.9',
     });
-    if (!canvas.isConnected || canvas.parentElement !== container) container.prepend(canvas);
+    if (!canvas.isConnected || canvas.parentElement !== document.body) document.body.prepend(canvas);
 
     const debugCanvases = Array.from(document.querySelectorAll('canvas[data-assetfx="debug"]'));
     const debugOverlay = debugCanvases.shift() || createNode('canvas', 'fx-debug-overlay');
@@ -690,16 +695,16 @@ export class AssetFX {
     debugOverlay.classList.add('fx-debug-overlay');
     debugOverlay.dataset.assetfx = 'debug';
     Object.assign(debugOverlay.style, {
-      position: 'absolute',
+      position: 'fixed',
       inset: '0',
-      width: '100%',
-      height: '100%',
+      width: '100vw',
+      height: '100vh',
       pointerEvents: 'none',
-      zIndex: '2',
+      zIndex: '3',
       opacity: this.fxDebug ? '1' : '0',
       display: this.fxDebug ? 'block' : 'none',
     });
-    if (!debugOverlay.isConnected || debugOverlay.parentElement !== container) container.prepend(debugOverlay);
+    if (!debugOverlay.isConnected || debugOverlay.parentElement !== document.body) document.body.prepend(debugOverlay);
 
     this.overlay = canvas;
     this.debugOverlay = debugOverlay;
@@ -1099,6 +1104,7 @@ export class AssetFX {
   }
 
   _setCardInView(card, visible) {
+    if (this.noVirtualization && !visible) return false;
     const next = visible ? '1' : '0';
     if (card.dataset.fxInView === next) return false;
     card.dataset.fxInView = next;
@@ -1108,7 +1114,7 @@ export class AssetFX {
       if (mediaEl) this._ensureEntryPending(card, mediaEl, this.entryMs);
     }
     else {
-      if (card.dataset.fxReady === '1') this._playExit(card);
+      if (card.dataset.fxReady === '1' && !this.noVirtualization) this._playExit(card);
       this.visibleCards.delete(card);
       this.sampledCardsUntil.delete(card);
       card.dataset.fxEntryPending = '0';
@@ -1149,6 +1155,11 @@ export class AssetFX {
     if (this.visibilityObserver) {
       this.visibilityObserver.disconnect();
       this.visibilityObserver = null;
+    }
+    if (this.noVirtualization) {
+      this.fallbackSweepEnabled = true;
+      this.trackedCards.forEach((card) => this._setCardInView(card, true));
+      return;
     }
     if (!('IntersectionObserver' in window)) {
       this.fallbackSweepEnabled = true;
@@ -1244,7 +1255,7 @@ export class AssetFX {
       }
       const rect = card.getBoundingClientRect();
       const overlap = Math.min(rect.bottom, rootRect.bottom) - Math.max(rect.top, rootRect.top);
-      const visible = overlap > minOverlap;
+      const visible = this.noVirtualization ? true : overlap > minOverlap;
       if (visible) {
         const entered = this._setCardInView(card, true);
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
@@ -1367,8 +1378,8 @@ export class AssetFX {
     }
     const dpr = window.devicePixelRatio || 1;
     const canvasRect = this.overlay.getBoundingClientRect();
-    const width = Math.max(1, Math.round(canvasRect.width * dpr));
-    const height = Math.max(1, Math.round(canvasRect.height * dpr));
+    const width = Math.max(1, Math.round((window.innerWidth || canvasRect.width || 1) * dpr));
+    const height = Math.max(1, Math.round((window.innerHeight || canvasRect.height || 1) * dpr));
     if (this.overlay.width !== width || this.overlay.height !== height) {
       this.overlay.width = width;
       this.overlay.height = height;
@@ -1393,10 +1404,10 @@ export class AssetFX {
         cr = card.getBoundingClientRect();
         this.cardRectCache.set(card, cr);
       }
-      let x1 = (cr.left - canvasRect.left) * dpr;
-      let y1 = (cr.top - canvasRect.top) * dpr;
-      let x2 = (cr.right - canvasRect.left) * dpr;
-      let y2 = (cr.bottom - canvasRect.top) * dpr;
+      let x1 = cr.left * dpr;
+      let y1 = cr.top * dpr;
+      let x2 = cr.right * dpr;
+      let y2 = cr.bottom * dpr;
       x1 += RECT_INSET_PX * dpr;
       y1 += RECT_INSET_PX * dpr;
       x2 -= RECT_INSET_PX * dpr;

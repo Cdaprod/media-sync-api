@@ -1151,3 +1151,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added explicit `inNoPreviewZone(...)` guards inside asset pointer/context handlers as a second safety layer for iPhone Safari event propagation quirks.
 - Improved thumbnail readiness perception by setting thumb state to `loading` during prefetch and adding CSS fade/filter transitions keyed to `data-thumb-state` (`loaded`/`error`) while keeping staged apply + loading overlay flow.
 - Re-ran focused explorer static checks after the hotfix (`19 passed, 1 skipped`).
+
+### Latest Implementation Notes (2026-03-03, selection hit-target + fixed overlay + novirt follow-up)
+- Tightened explorer selection hit-targets to explicit `.sel-ui`/`.sel-shell` controls so card-body taps no longer toggle selection; delegated click handling now exits unless the tap originates inside selection UI affordances.
+- Extended no-preview guards to treat `.sel-ui` as non-preview zones while preserving explicit checkbox/order-badge selection behavior and existing propagation safety stops.
+- Re-anchored AssetFX overlay/debug canvases as viewport-fixed body overlays (`position: fixed; inset: 0; width/height: 100vw/100vh`) and updated render-space math to use viewport coordinates for full-scroll coverage.
+- Added URL-controlled no-virtualization mode (`?novirt=1` or `?keep=1`) in AssetFX to keep cards/thumb states stable by bypassing offscreen in/out transitions and treating tracked cards as in-view during replay sweeps.
+- Updated explorer static tests to assert `.sel-ui`-scoped toggles, fixed-overlay contracts, and novirt wiring symbols.
