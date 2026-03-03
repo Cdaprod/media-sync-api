@@ -317,6 +317,89 @@ def test_explorer_fx_scroll_replay_has_no_runtime_reference_errors(page):
     assert not ref_errors, f"runtime errors during replay sweep: {ref_errors}"
 
 
+
+
+
+def test_explorer_fx_overlay_canvas_matches_viewport_not_tiny(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1&layoutdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1400)
+
+    info = page.evaluate("""() => {
+      const dpr = window.devicePixelRatio || 1;
+      const vv = window.visualViewport;
+      const vw = vv?.width ?? document.documentElement.clientWidth ?? window.innerWidth;
+      const vh = vv?.height ?? document.documentElement.clientHeight ?? window.innerHeight;
+
+      const fx = document.querySelector('canvas[data-assetfx="overlay"]');
+      const fxh = fx ? fx.height : null;
+      const fxw = fx ? fx.width : null;
+
+      return {
+        dpr,
+        vw,
+        vh,
+        canvasW: fxw,
+        canvasH: fxh,
+        expectedW: Math.round(vw * dpr),
+        expectedH: Math.round(vh * dpr),
+      };
+    }""")
+
+    assert info["canvasH"] is not None, f"no overlay canvas: {info}"
+    assert info["canvasH"] >= 600, f"overlay canvas height suspiciously tiny: {info}"
+
+    delta_h = abs(info["canvasH"] - info["expectedH"])
+    delta_w = abs(info["canvasW"] - info["expectedW"])
+    assert delta_h <= max(220, int(info["expectedH"] * 0.15)), f"overlay canvas height far from viewport: {info}"
+    assert delta_w <= max(220, int(info["expectedW"] * 0.15)), f"overlay canvas width far from viewport: {info}"
+
+
+def test_explorer_fx_debug_rects_stay_aligned_after_scroll_churn(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1500)
+
+    page.evaluate("""() => {
+      const root = document.getElementById('mediaGridRoot');
+      if (!root) return;
+      const max = root.scrollHeight - root.clientHeight;
+      const steps = [0, max, Math.floor(max * 0.25), Math.floor(max * 0.75), 0, max, 0];
+      for (const y of steps) {
+        root.scrollTop = y;
+        root.dispatchEvent(new Event('scroll'));
+      }
+    }""")
+    page.wait_for_timeout(900)
+
+    cards = page.evaluate("""() => {
+      const list = [...document.querySelectorAll('.asset')].slice(0, 12);
+      return list.map((el, idx) => {
+        const r = el.getBoundingClientRect();
+        const key = el.dataset.assetId || el.dataset.selectKey || el.dataset.sha256 || String(idx);
+        return { key, rect: { x:r.left, y:r.top, width:r.width, height:r.height } };
+      });
+    }""")
+    assert cards and len(cards) >= 4
+
+    debug_rects = page.evaluate("""() => {
+      const r = window.__assetfx_dbg?.lastRects || [];
+      return r.map(it => ({
+        key: it.key || null,
+        rect: { x: it.x1, y: it.y1, width: (it.x2 - it.x1), height: (it.y2 - it.y1) },
+      }));
+    }""")
+    assert isinstance(debug_rects, list)
+    assert len(debug_rects) > 0, "no debug rects recorded after scroll churn"
+
+    failures = []
+    for card in cards[:8]:
+        best_iou = 0.0
+        for debug_rect in debug_rects:
+            best_iou = max(best_iou, _iou(card["rect"], debug_rect["rect"]))
+        if best_iou < 0.55:
+            failures.append((card["key"], best_iou, card["rect"]))
+    assert not failures, f"debug rect misalignment after scroll churn: {failures[:3]}"
+
+
 def test_explorer_fx_only_tracks_visible_cards(page):
     page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
     page.wait_for_timeout(1400)

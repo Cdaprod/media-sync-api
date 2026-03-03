@@ -207,6 +207,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'await imgEl.decode();' in shader_module
     assert 'const MAX_PARALLEL_DECODES = 3;' in shader_module
     assert 'const DECODE_QUEUE = [];' in shader_module
+    assert 'function getStableViewportSize() {' in shader_module
+    assert 'const vv = window.visualViewport;' in shader_module
     assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
     assert 'this.layoutDirty = true;' in shader_module
     assert 'this.cardRectCache = new WeakMap();' in shader_module
@@ -233,10 +235,12 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert 'const RECT_INSET_PX = 4;' in shader_module
+    assert 'let x1 = (cr.left - canvasRect.left) * dpr;' in shader_module
+    assert 'let y1 = (cr.top - canvasRect.top) * dpr;' in shader_module
     assert "if (this.container.dataset.fxSuspend === '1') {" in shader_module
     assert 'this.gl.clear(this.gl.COLOR_BUFFER_BIT);' in shader_module
     assert 'const canvasRect = this.overlay.getBoundingClientRect();' in shader_module
-    assert 'let x1 = cr.left * dpr;' in shader_module
+    assert 'let x2 = (cr.right - canvasRect.left) * dpr;' in shader_module
     assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
     assert 'x1 = Math.max(0, Math.min(width, x1));' in shader_module
     assert "window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });" in shader_module

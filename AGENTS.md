@@ -1193,3 +1193,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Removed an unintended `_replaySweep()` tail assignment to `debugRects` in `public/js/explorer-shaders.mjs` that could throw `ReferenceError` during scroll replay and leave FX in stale/misaligned states under heavy scrolling.
 - Added runtime Playwright coverage (`test_explorer_fx_scroll_replay_has_no_runtime_reference_errors`) to scroll down/up and fail if `pageerror` captures `ReferenceError`/`debugRects` faults during replay sweeps.
 - Updated static explorer shader assertions to guard against reintroducing the stray `FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;` replay-sweep assignment.
+
+### Latest Implementation Notes (2026-03-03, iPhone viewport-stability follow-up for FX canvas sizing)
+- Added `getStableViewportSize()` in `public/js/explorer-shaders.mjs` so overlay sizing now prefers `visualViewport` with client/inner fallbacks and avoids transient tiny-height canvas allocations during iPhone Safari URL-bar/viewport shifts.
+- Updated card→FX rect mapping to subtract `canvasRect.left/top` before DPR scaling, ensuring shader/debug rectangles stay aligned with DOM card bounds when viewport origins shift.
+- Expanded runtime E2E coverage with viewport-size sanity (`test_explorer_fx_overlay_canvas_matches_viewport_not_tiny`) and post-scroll-churn alignment checks (`test_explorer_fx_debug_rects_stay_aligned_after_scroll_churn`).
+- Extended static shader contract assertions to enforce stable viewport helper presence and canvas-origin rect-mapping math.

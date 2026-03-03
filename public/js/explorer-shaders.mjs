@@ -31,6 +31,27 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
+
+function getStableViewportSize() {
+  const vv = window.visualViewport;
+  const doc = document.documentElement;
+  const vvW = Number(vv?.width || 0);
+  const vvH = Number(vv?.height || 0);
+  const docW = Number(doc?.clientWidth || 0);
+  const docH = Number(doc?.clientHeight || 0);
+  const winW = Number(window.innerWidth || 0);
+  const winH = Number(window.innerHeight || 0);
+
+  const fallbackW = Math.max(0, docW, winW);
+  const fallbackH = Math.max(0, docH, winH);
+  const width = (vvW > 0 && vvW >= (fallbackW * 0.6)) ? vvW : fallbackW;
+  const height = (vvH > 0 && vvH >= (fallbackH * 0.6)) ? vvH : fallbackH;
+  return {
+    width: Math.max(1, width || 1),
+    height: Math.max(1, height || 1),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MaskField
 // Builds a per-frame heatmap texture from layout data (not pixels).
@@ -1378,8 +1399,9 @@ export class AssetFX {
     }
     const dpr = window.devicePixelRatio || 1;
     const canvasRect = this.overlay.getBoundingClientRect();
-    const width = Math.max(1, Math.round((window.innerWidth || canvasRect.width || 1) * dpr));
-    const height = Math.max(1, Math.round((window.innerHeight || canvasRect.height || 1) * dpr));
+    const viewport = getStableViewportSize();
+    const width = Math.max(1, Math.round((viewport.width || canvasRect.width || 1) * dpr));
+    const height = Math.max(1, Math.round((viewport.height || canvasRect.height || 1) * dpr));
     if (this.overlay.width !== width || this.overlay.height !== height) {
       this.overlay.width = width;
       this.overlay.height = height;
@@ -1404,10 +1426,10 @@ export class AssetFX {
         cr = card.getBoundingClientRect();
         this.cardRectCache.set(card, cr);
       }
-      let x1 = cr.left * dpr;
-      let y1 = cr.top * dpr;
-      let x2 = cr.right * dpr;
-      let y2 = cr.bottom * dpr;
+      let x1 = (cr.left - canvasRect.left) * dpr;
+      let y1 = (cr.top - canvasRect.top) * dpr;
+      let x2 = (cr.right - canvasRect.left) * dpr;
+      let y2 = (cr.bottom - canvasRect.top) * dpr;
       x1 += RECT_INSET_PX * dpr;
       y1 += RECT_INSET_PX * dpr;
       x2 -= RECT_INSET_PX * dpr;
