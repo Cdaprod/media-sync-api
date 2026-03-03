@@ -31,6 +31,134 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MaskField
+// Builds a per-frame heatmap texture from layout data (not pixels).
+// Independent of DOM virtualization — rebuilt from live getBoundingClientRect().
+// Pointer events feed persistent impulses via alpha decay.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MASK_SIZE = 512;
+const MASK_DECAY_ALPHA = 0.07;
+const IMPULSE_RADIUS = 48;
+const IMPULSE_STRENGTH = 0.70;
+const IMPULSE_LIFETIME = 1800;
+const HOVER_RADIUS = 28;
+const HOVER_STRENGTH = 0.38;
+
+export class MaskField {
+  constructor(gridRoot, assetSel = '.asset') {
+    this._root = gridRoot;
+    this._sel = assetSel;
+    this._canvas = document.createElement('canvas');
+    this._canvas.width = MASK_SIZE;
+    this._canvas.height = MASK_SIZE;
+    this._canvas.className = 'fx-mask-canvas';
+    Object.assign(this._canvas.style, { display: 'none', position: 'absolute', top: '0', left: '0', pointerEvents: 'none' });
+    this._root.appendChild(this._canvas);
+    this._ctx = this._canvas.getContext('2d', { willReadFrequently: false });
+    this._impulses = [];
+    this._hoverNx = -1;
+    this._hoverNy = -1;
+    this._rafId = null;
+    this._dirty = true;
+
+    this._onMove = (e) => {
+      const r = this._root.getBoundingClientRect();
+      this._hoverNx = (e.clientX - r.left) / Math.max(1, r.width);
+      this._hoverNy = (e.clientY - r.top) / Math.max(1, r.height);
+      this._dirty = true;
+    };
+    this._onLeave = () => { this._hoverNx = -1; this._hoverNy = -1; };
+    this._onDown = (e) => {
+      const r = this._root.getBoundingClientRect();
+      const nx = (e.clientX - r.left) / Math.max(1, r.width);
+      const ny = (e.clientY - r.top) / Math.max(1, r.height);
+      this._impulses.push({ nx, ny, strength: IMPULSE_STRENGTH, radius: IMPULSE_RADIUS, born: performance.now() });
+      this._dirty = true;
+    };
+
+    this._root.addEventListener('pointermove', this._onMove, { passive: true });
+    this._root.addEventListener('pointerleave', this._onLeave, { passive: true });
+    this._root.addEventListener('pointerdown', this._onDown, { passive: true });
+    this._tick();
+  }
+
+  pulseCard(cardEl) {
+    if (!cardEl) return;
+    const rr = this._root.getBoundingClientRect();
+    const cr = cardEl.getBoundingClientRect();
+    const nx = (cr.left + cr.width * 0.5 - rr.left) / Math.max(1, rr.width);
+    const ny = (cr.top + cr.height * 0.5 - rr.top) / Math.max(1, rr.height);
+    this._impulses.push({ nx, ny, strength: 0.92, radius: 58, born: performance.now() });
+    this._dirty = true;
+  }
+
+  get canvas() { return this._canvas; }
+
+  destroy() {
+    if (this._rafId) cancelAnimationFrame(this._rafId);
+    this._root.removeEventListener('pointermove', this._onMove);
+    this._root.removeEventListener('pointerleave', this._onLeave);
+    this._root.removeEventListener('pointerdown', this._onDown);
+    this._canvas.remove();
+  }
+
+  _tick() {
+    this._rafId = requestAnimationFrame(() => {
+      if (this._dirty) { this._rebuild(); this._dirty = false; }
+      this._dirty = (this._hoverNx >= 0) || this._impulses.length > 0;
+      this._tick();
+    });
+  }
+
+  _rebuild() {
+    const ctx = this._ctx;
+    const W = MASK_SIZE;
+    const H = MASK_SIZE;
+    const now = performance.now();
+    ctx.fillStyle = `rgba(0,0,0,${MASK_DECAY_ALPHA})`;
+    ctx.fillRect(0, 0, W, H);
+
+    const rr = this._root.getBoundingClientRect();
+    if (rr.width > 0 && rr.height > 0) {
+      this._root.querySelectorAll(this._sel).forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const x = ((r.left - rr.left) / rr.width) * W;
+        const y = ((r.top - rr.top) / rr.height) * H;
+        const w = (r.width / rr.width) * W;
+        const h = (r.height / rr.height) * H;
+        if (w > 0 && h > 0) {
+          ctx.fillStyle = 'rgba(255,255,255,0.055)';
+          ctx.fillRect(x, y, w, h);
+        }
+      });
+    }
+
+    if (this._hoverNx >= 0) this._blob(this._hoverNx * W, this._hoverNy * H, HOVER_RADIUS, HOVER_STRENGTH, '74,240,192');
+
+    this._impulses = this._impulses.filter((imp) => {
+      const age = now - imp.born;
+      if (age > IMPULSE_LIFETIME) return false;
+      const t = age / IMPULSE_LIFETIME;
+      this._blob(imp.nx * W, imp.ny * H, imp.radius * (1 + t * 1.8), imp.strength * (1 - t * t), '124,200,255');
+      return true;
+    });
+  }
+
+  _blob(cx, cy, radius, alpha, rgb) {
+    const r = Math.max(1, radius);
+    const g = this._ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, `rgba(${rgb},${alpha})`);
+    g.addColorStop(0.5, `rgba(${rgb},${alpha * 0.5})`);
+    g.addColorStop(1, `rgba(${rgb},0)`);
+    this._ctx.fillStyle = g;
+    this._ctx.beginPath();
+    this._ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    this._ctx.fill();
+  }
+}
+
 const VERT = `
 attribute vec2 a_pos;
 varying vec2 v_uv;
@@ -230,6 +358,8 @@ uniform float u_motion_damp;
 uniform float u_scroll_fast;
 uniform float u_selected;
 uniform float u_select_pulse;
+uniform sampler2D u_mask;
+uniform float u_mask_enabled;
 
 vec4 sampleParams(int idx) {
   float x = (float(idx) + 0.5) / float(${MAX_RECTS});
@@ -284,6 +414,12 @@ void main(){
     color += material * ready;
     alpha += cardAlpha;
   }
+
+  vec4 maskTex = texture2D(u_mask, vec2(v_uv.x, 1.0 - v_uv.y));
+  float maskV = (maskTex.r + maskTex.g + maskTex.b) / 3.0;
+  float gate = smoothstep(0.06, 0.85, maskV);
+  color += vec3(0.03, 0.11, 0.16) * maskV * (0.22 + 0.28 * (1.0 - u_scroll_fast));
+  alpha += gate * 0.05 * u_mask_enabled;
 
   alpha = clamp(alpha, 0.0, 0.54);
   gl_FragColor = vec4(color, alpha);
@@ -347,6 +483,11 @@ export class AssetFX {
     this.quad = null;
     this.tileParamTexture = null;
     this.raf = 0;
+
+    this._maskField = null;
+    this._maskTexture = null;
+    this._maskAllocated = false;
+    this._u = null;
     this.start = performance.now();
 
     this.boundGrids = new WeakSet();
@@ -483,6 +624,9 @@ export class AssetFX {
       this.program = shared.program;
       this.quad = shared.quad;
       this.tileParamTexture = shared.tileParamTexture;
+      this._maskTexture = shared.maskTexture || null;
+      this._maskAllocated = shared.maskAllocated === true;
+      this._u = shared.uCache || this._u;
       this.debugOverlay = shared.debugOverlay || null;
       this.raf = shared.raf;
       return;
@@ -502,6 +646,9 @@ export class AssetFX {
         this.program = ownerShared.program;
         this.quad = ownerShared.quad;
         this.tileParamTexture = ownerShared.tileParamTexture;
+        this._maskTexture = ownerShared.maskTexture || null;
+        this._maskAllocated = ownerShared.maskAllocated === true;
+        this._u = ownerShared.uCache || this._u;
         this.debugOverlay = ownerShared.debugOverlay || null;
         this.raf = ownerShared.raf;
         RENDERERS.set(container, ownerShared);
@@ -578,7 +725,15 @@ export class AssetFX {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     try {
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      if ('UNPACK_COLORSPACE_CONVERSION_WEBGL' in gl) gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    } catch {}
+
+    try {
       this.program = createProgram(gl, VERT, FRAG);
+      this._cacheUniforms();
       this.quad = createQuad(gl);
       this.tileParamTexture = gl.createTexture();
       if (this.tileParamTexture) {
@@ -588,10 +743,21 @@ export class AssetFX {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       }
+      this._maskTexture = gl.createTexture();
+      if (this._maskTexture) {
+        gl.bindTexture(gl.TEXTURE_2D, this._maskTexture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      }
+      this._maskAllocated = false;
     } catch {
       this.program = null;
       this.quad = null;
       this.tileParamTexture = null;
+      this._maskTexture = null;
+      this._maskAllocated = false;
       this._saveRenderer(container);
       return;
     }
@@ -603,12 +769,15 @@ export class AssetFX {
       this.program = null;
       this.quad = null;
       this.tileParamTexture = null;
+      this._maskTexture = null;
+      this._maskAllocated = false;
     });
 
     canvas.addEventListener('webglcontextrestored', () => {
       if (!this.gl) return;
       try {
         this.program = createProgram(this.gl, VERT, FRAG);
+        this._cacheUniforms();
         this.quad = createQuad(this.gl);
         this.tileParamTexture = this.gl.createTexture();
         if (this.tileParamTexture) {
@@ -618,10 +787,21 @@ export class AssetFX {
           this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
           this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
         }
+        this._maskTexture = this.gl.createTexture();
+        if (this._maskTexture) {
+          this.gl.bindTexture(this.gl.TEXTURE_2D, this._maskTexture);
+          this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+          this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+          this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+          this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+        }
+        this._maskAllocated = false;
       } catch {
         this.program = null;
         this.quad = null;
         this.tileParamTexture = null;
+        this._maskTexture = null;
+        this._maskAllocated = false;
       }
       this._saveRenderer(container);
       this._startLoop();
@@ -644,6 +824,9 @@ export class AssetFX {
     this.program = null;
     this.quad = null;
     this.tileParamTexture = null;
+    this._maskTexture = null;
+    this._maskAllocated = false;
+    if (this._maskField) { this._maskField.destroy(); this._maskField = null; }
     if (this.container && RENDERERS.has(this.container)) RENDERERS.delete(this.container);
   }
 
@@ -697,6 +880,8 @@ export class AssetFX {
     }
 
     this._tapGuardCleanup = this._wireTapGuard(gridRoot, cardSelector);
+    if (this._maskField) this._maskField.destroy();
+    this._maskField = new MaskField(gridRoot, cardSelector);
     this._ensureObserver(gridRoot);
   }
 
@@ -715,6 +900,7 @@ export class AssetFX {
       window.visualViewport.removeEventListener('scroll', this._boundVisualViewportChange);
     }
     if (typeof this._tapGuardCleanup === 'function') this._tapGuardCleanup();
+    if (this._maskField) { this._maskField.destroy(); this._maskField = null; }
     this._tapGuardCleanup = null;
     if (this.visibilityObserver) {
       this.visibilityObserver.disconnect();
@@ -810,6 +996,7 @@ export class AssetFX {
     ring.style.animationDuration = `${Math.max(220, duration)}ms`;
     cardEl.appendChild(ring);
     setTimeout(() => ring.remove(), Math.max(220, duration) + 90);
+    this._maskField?.pulseCard(cardEl);
   }
 
   dissolve(cardEl, imgEl, { duration = this.entryMs, allowReplay = false } = {}) {
@@ -1138,9 +1325,31 @@ export class AssetFX {
       program: this.program,
       quad: this.quad,
       tileParamTexture: this.tileParamTexture,
+      maskTexture: this._maskTexture,
+      maskAllocated: this._maskAllocated,
+      uCache: this._u,
       debugOverlay: this.debugOverlay,
       raf: this.raf,
     });
+  }
+
+  _cacheUniforms() {
+    const gl = this.gl;
+    if (!gl || !this.program) return;
+    const loc = (name) => gl.getUniformLocation(this.program, name);
+    this._u = {
+      u_resolution: loc('u_resolution'),
+      u_time: loc('u_time'),
+      u_rect_count: loc('u_rect_count'),
+      u_rects: loc('u_rects'),
+      u_tile_params: loc('u_tile_params'),
+      u_motion_damp: loc('u_motion_damp'),
+      u_scroll_fast: loc('u_scroll_fast'),
+      u_selected: loc('u_selected'),
+      u_select_pulse: loc('u_select_pulse'),
+      u_mask: loc('u_mask'),
+      u_mask_enabled: loc('u_mask_enabled'),
+    };
   }
 
   _render() {
@@ -1367,19 +1576,42 @@ export class AssetFX {
       tileParamData[i * 4 + 3] = Math.max(0, Math.min(255, Math.round(row[7] * 255))); // ready in A
     });
 
-    gl.uniform2f(gl.getUniformLocation(this.program, 'u_resolution'), width, height);
-    gl.uniform1f(gl.getUniformLocation(this.program, 'u_time'), (performance.now() - this.start) * 0.001);
-    gl.uniform1i(gl.getUniformLocation(this.program, 'u_rect_count'), Math.min(cards.length, MAX_RECTS));
-    gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);
-    gl.uniform1f(gl.getUniformLocation(this.program, 'u_scroll_fast'), this.scrollFast);
-    gl.uniform1f(gl.getUniformLocation(this.program, 'u_selected'), selectedVisibleCards.length > 0 ? 1 : 0);
-    gl.uniform1f(gl.getUniformLocation(this.program, 'u_select_pulse'), this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));
-    gl.uniform4fv(gl.getUniformLocation(this.program, 'u_rects'), rectData);
+    const U = this._u;
+    if (!U) return;
+
+    gl.uniform2f(U.u_resolution, width, height);
+    gl.uniform1f(U.u_time, (performance.now() - this.start) * 0.001);
+    gl.uniform1i(U.u_rect_count, Math.min(cards.length, MAX_RECTS));
+    gl.uniform1f(U.u_motion_damp, this.motionDamp);
+    gl.uniform1f(U.u_scroll_fast, this.scrollFast);
+    gl.uniform1f(U.u_selected, selectedVisibleCards.length > 0 ? 1 : 0);
+    gl.uniform1f(U.u_select_pulse, this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));
+    gl.uniform4fv(U.u_rects, rectData);
     if (this.tileParamTexture) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.tileParamTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);
-      gl.uniform1i(gl.getUniformLocation(this.program, 'u_tile_params'), 0);
+      gl.uniform1i(U.u_tile_params, 0);
+    }
+
+    const hasMask = !!(this._maskField && this._maskTexture);
+    gl.uniform1f(U.u_mask_enabled, hasMask ? 1.0 : 0.0);
+    if (hasMask) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this._maskTexture);
+      if (!this._maskAllocated) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MASK_SIZE, MASK_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        this._maskAllocated = true;
+        this._saveRenderer(this.container);
+      }
+      try {
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      } catch {}
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this._maskField.canvas);
+      gl.uniform1i(U.u_mask, 1);
+    } else {
+      this._maskAllocated = false;
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }

@@ -1129,3 +1129,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added FX suspension wiring (`setFxSuspend`) so inspector/actions overlays temporarily clear+pause shader rendering while open, then resume when closed.
 - Added shader-level scroll calm uniform (`u_scroll_fast`) driven by decayed scroll velocity to reduce selection glare/entry intensity during fast scrolling while keeping baseline scanline texture.
 - Updated explorer static assertions and reran the focused monitor suite (`19 passed, 1 skipped`) after these fixes.
+
+### Latest Implementation Notes (2026-03-03, AssetFX maskfield integration + explorer boot/inspector fixes)
+- Integrated `MaskField` into `public/js/explorer-shaders.mjs` (hidden heatmap canvas + pointer impulses + hover decay) and wired it to shader uniforms (`u_mask`, `u_mask_enabled`) via a cached-uniform path and Texture1 uploads (`texSubImage2D`) for mask-driven modulation.
+- Hardened WebGL init/restoration with explicit pixel-store normalization and shared renderer persistence of mask texture/allocation + uniform cache state.
+- Updated explorer boot flow with a shared `refreshExplorerData()` helper so initial page load consistently performs the same source/project/media fetch sequence as the manual Refresh action.
+- Adjusted inspector UX so tapping an asset while the drawer is open now closes the drawer first (instead of immediately re-opening preview focus), and `closeDrawer()` clears focused inspector state.
+- Re-ran focused explorer static coverage after these changes (`19 passed, 1 skipped`).
+- Follow-up hotfix: restored explicit `_cacheUniforms()` definition in `AssetFX` after integrating mask uniforms so cached uniform locations are populated before draw calls.

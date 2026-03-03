@@ -254,6 +254,13 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'const sampledCards = new Set();' in shader_module
     assert 'uniform float u_motion_damp;' in shader_module
     assert 'uniform float u_scroll_fast;' in shader_module
+    assert 'export class MaskField {' in shader_module
+    assert 'uniform sampler2D u_mask;' in shader_module
+    assert 'uniform float u_mask_enabled;' in shader_module
+    assert 'this._maskField = null;' in shader_module
+    assert 'this._maskTexture = null;' in shader_module
+    assert 'this._cacheUniforms();' in shader_module
+    assert 'gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this._maskField.canvas);' in shader_module
     assert 'this._recordScrollMotion(event);' in shader_module
     assert 'this._updateMotionDamp();' in shader_module
     assert 'this.scrollVelocityEma = (this.scrollVelocityEma * 0.82) + (v * 0.18);' in shader_module
@@ -286,15 +293,15 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.sweepFilledCount = Math.max(0, cards.length - this.stickyRetainedCount);' in shader_module
     assert 'this.entryPendingCount += 1;' in shader_module
     assert '_renderDebugBadge(card, { ready, inView, sampled, pending, sticky, alwaysOn: ALWAYS_ON_PASS_ENABLED });' in shader_module
-    assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_motion_damp'), this.motionDamp);" in shader_module
-    assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_scroll_fast'), this.scrollFast);" in shader_module
+    assert 'gl.uniform1f(U.u_motion_damp, this.motionDamp);' in shader_module
+    assert 'gl.uniform1f(U.u_scroll_fast, this.scrollFast);' in shader_module
     assert "uniform float u_selected;" in shader_module
     assert "uniform float u_select_pulse;" in shader_module
     assert "float selectedEnergy = sel * (0.95 + (u_selected * 0.35) + (u_select_pulse * 0.75));" in shader_module
     assert "selectedVisibleCards.forEach((card) => {" in shader_module
     assert "if (sampledCards.has(card)) return;" in shader_module
-    assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_selected'), selectedVisibleCards.length > 0 ? 1 : 0);" in shader_module
-    assert "gl.uniform1f(gl.getUniformLocation(this.program, 'u_select_pulse'), this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));" in shader_module
+    assert 'gl.uniform1f(U.u_selected, selectedVisibleCards.length > 0 ? 1 : 0);' in shader_module
+    assert 'gl.uniform1f(U.u_select_pulse, this.selectPulse * (0.5 + 0.5 * Math.sin((nowPerf - this.start) * (Math.PI * 2 / 2500))));' in shader_module
     assert 'this.lastExitedAt = new WeakMap();' in shader_module
     assert "if (card.dataset.fxReady === '1') this._playExit(card);" in shader_module
     assert '_renderDebugBadge(cardEl' in shader_module
@@ -352,6 +359,10 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'if (host.parentElement !== document.body) document.body.appendChild(host);' in html
     assert '#ui-portal .actions-panel{' in html and 'pointer-events: auto;' in html
     assert 'function setFxSuspend(suspend)' in html
+    assert 'async function refreshExplorerData({ toastOnSuccess = true } = {})' in html
+    assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
+    assert 'if (ui.inspectorOpen) {' in html
+    assert 'state.focused = null;' in html
     assert "setFxSuspend(open || ui.inspectorOpen);" in html
     assert '.asset:hover{ transform: translateY(-1px) scale(1.005);' not in html
 

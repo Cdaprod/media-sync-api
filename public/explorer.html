@@ -2693,6 +2693,10 @@
           ui.dragTarget = null;
           return;
         }
+        if (ui.inspectorOpen) {
+          closeDrawer();
+          return;
+        }
         openDrawer(item);
       });
 
@@ -4107,20 +4111,22 @@
 
     function closeDrawer(){
       setInspectorOpen(false);
+      state.focused = null;
+      currentInspectorKey = '';
     }
 
     // -------------------------
     // Events / bindings
     // -------------------------
-    el('refreshBtn').addEventListener('click', async () => {
+    async function refreshExplorerData({ toastOnSuccess = true } = {}){
       await loadSources();
       await loadProjects();
-      if (state.activeProject){
-        await loadMedia();
-      }else{
-        await loadAllMedia();
-      }
-      toast('good','Refresh','Reloaded projects + media');
+      if (state.activeProject) await loadMedia();
+      else await loadAllMedia();
+      if (toastOnSuccess) toast('good','Refresh','Reloaded projects + media');
+    }
+    el('refreshBtn').addEventListener('click', async () => {
+      await refreshExplorerData({ toastOnSuccess: true });
     });
 
     el('brandTitle').addEventListener('click', (event) => {
@@ -4494,15 +4500,11 @@
       loadOrientationCache();
       reconcileFilters();
       syncSidebarMode();
-      window.matchMedia('(max-width: 860px)').addEventListener('change', () => {
-        syncSidebarMode();
-      });
+      const mq = window.matchMedia('(max-width: 860px)');
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', () => syncSidebarMode());
+      else if (typeof mq.addListener === 'function') mq.addListener(() => syncSidebarMode());
       toast('good','Boot','Loading sources + projects…');
-      await loadSources();
-      await loadProjects();
-      if (!state.activeProject){
-        await loadAllMedia();
-      }
+      await refreshExplorerData({ toastOnSuccess: false });
       setView('grid');
       updateTopCounts();
       updateSelectionUI();
