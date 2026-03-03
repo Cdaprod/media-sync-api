@@ -910,3 +910,275 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Reverted the `.topbar` flex-column override so the first-row controls (`.topbar-inner` search/actions layout) return to their original behavior.
 - Kept the second-row media header integration on `.topbar > .section-h` unchanged, including matching horizontal padding with the topbar row (`18px` desktop / `12px` mobile).
 - Retained combined topbar sizing tokens (`--topbar-height = --topbar-row-height + --topbar-subrow-height`) so fixed-offset/reveal spacing still covers both rows.
+
+### Latest Implementation Notes (2026-02-23, explorer shader asset effects wiring)
+- Added `public/js/explorer-shaders.mjs` exporting `AssetFX` with WebGL-driven card effects for hover/touch chromatic glow, video scanline overlay, selection pulse, and thumbnail dissolve.
+- Updated `public/explorer.html` to load the shader module as an ES module, instantiate `cardFX`, and wire effects at existing integration points: grid attach, thumbnail creation, video card append, and selection toggles.
+- Added a `cssEscape` helper in explorer UI code for safe data-attribute selector targeting when pulsing newly selected cards.
+- Extended `tests/test_public_explorer_program_monitor.py` with assertions that shader wiring and `AssetFX` export/methods are present.
+
+### Latest Implementation Notes (2026-02-23, iPhone-visible shader fallback tuning)
+- Refined `public/js/explorer-shaders.mjs` so asset effects remain visibly active on iPhone/Safari by combining WebGL where reliable (hover/dissolve) with explicit CSS-based fallbacks (scanline overlay, selection pulse, dissolve veil) when WebGL contexts are unavailable or constrained.
+- Strengthened focus treatment for pointer/touch with immediate transform/box-shadow/filter styling so users can perceive card emphasis even before/without shader compositing.
+- Added shared runtime keyframes (`fx-selection-pulse`, `fx-scanline-pan`) injected once by `AssetFX` and expanded static explorer tests to assert fallback effect hooks remain present.
+
+### Latest Implementation Notes (2026-02-23, viewport re-entry asset FX replay)
+- Added viewport re-entry effect replay support in `AssetFX` via `trackViewport()` + `IntersectionObserver`, so cards can show a brief visual hint again when scrolled back into view instead of only on initial load.
+- Explorer card rendering now calls `cardFX.trackViewport(card, cardThumb)` alongside dissolve wiring so each grid card registers once for visibility-triggered replays within the media grid scroll container.
+- Added a lightweight `fx-visible-hint` animation overlay with throttling (`fxLastVisibleAt`) to avoid excessive replays while still giving obvious feedback during iPhone scroll-back interactions.
+- Updated static explorer tests to assert viewport-tracking methods/keyframes and HTML wiring are present.
+
+### Latest Implementation Notes (2026-02-23, dissolve/scanline synchronization and replay fix)
+- Replaced per-call explorer wiring (`dissolve` + `trackViewport` + `addScanline`) with a single `cardFX.bindCardMedia(card, img, { kind })` integration point so thumbnail lifecycle, scanline setup, and replay behavior stay synchronized.
+- `AssetFX.dissolve` now supports replay-aware binding (`allowReplay`) and delegates to `_playDissolve`, letting dissolves run when thumbnails load/reload instead of only at first card render.
+- Added dissolve throttling (`fxDissolveAt`) and scanline boost coordination (`_boostScanline`) so dissolve and scanline effects are visible together rather than placeholders visually overpowering dissolve transitions.
+- Updated static explorer tests to validate the new binding API and replay/synchronization helper methods.
+
+### Latest Implementation Notes (2026-02-23, continuous scroll replay sweep)
+- Added a scroll-driven replay sweep in `AssetFX` (`_ensureScrollReplay` + `_scheduleScrollReplay` + `_runScrollReplaySweep`) so effects trigger continuously as assets move in/out of view during up/down scrolling, not only at initial load/intersection events.
+- `trackViewport` now stores cards in a tracked set, enabling lightweight visibility checks against the grid scroll container on each scheduled animation-frame sweep.
+- When a tracked card re-enters view with a loaded thumbnail, the sweep now replays dissolve (`_playDissolve`) and visible hint overlays immediately for steadier mobile feedback.
+- Expanded static explorer assertions to include the new continuous replay methods.
+
+### Latest Implementation Notes (2026-02-24, shared WebGL overlay + selection no-rerender)
+- Refactored `AssetFX` to a shared-overlay renderer model: one canvas/WebGL context per grid container (`init`) with a single RAF loop that renders visible card overlays from mapped DOM rects, eliminating per-card context churn.
+- Added WebGL lifecycle handling (`webglcontextlost` / `webglcontextrestored`) and CSS-only fallback overlays so effect behavior remains stable on constrained mobile browsers.
+- Explorer checkbox selection now uses a cheap DOM/state update path (`updateSelectionDomForKey` + delegated handlers) and no longer calls `renderMedia()` inside `toggleSelected`, preventing repeated “Preparing thumbnails…” flashes during selection.
+- Added pointer movement suppression for checkbox taps during scroll gestures to reduce accidental selections on mobile touch scroll.
+- Updated explorer static tests to assert shared renderer lifecycle methods and verify toggle selection does not trigger full rerender logic.
+
+### Latest Implementation Notes (2026-02-24, renderer singleton enforcement)
+- Added module-level renderer registry (`RENDERERS` WeakMap) so `AssetFX.init(container)` reuses an existing shared overlay/context per grid root instead of re-creating renderer state.
+- Added explicit renderer identity marker (`data-fx-renderer-id`) on the grid container for debugging/verification that rebinds keep the same shared renderer instance.
+- Added `_getRenderer` / `_saveRenderer` helpers and synchronized RAF handle updates in the shared render loop to keep singleton lifecycle stable across repeated init/bind calls.
+- Expanded static tests to assert singleton symbols/wiring are present and shared renderer teardown paths remain explicit.
+
+### Latest Implementation Notes (2026-02-24, stable FX root binding)
+- Explorer grid FX attachment now targets a stable scroll-root (`#mediaGridRoot` / `[data-fx-grid-root="1"]`) instead of the frequently re-rendered `#mediaGrid` node, preserving shared renderer identity across media refreshes.
+- Updated static explorer shader wiring assertions to reflect root-resolution + `attachGrid(gridRoot, '.asset')` integration.
+
+### Latest Implementation Notes (2026-02-24, WebGL singleton hardening + instrumentation)
+- Hardened `AssetFX` renderer lifecycle with explicit attach/detach idempotency (`_attachedGridRoot` guard + `detachGrid()` cleanup for observers/listeners/tap guards) to prevent repeated binding churn from spawning duplicate runtime hooks.
+- Added singleton instrumentation in `public/js/explorer-shaders.mjs`: renderer/context debug counters and `window.__assetfx_dbg` getters plus overlay marker `canvas[data-assetfx="overlay"]` to verify one shared overlay/context per grid root.
+- `init()` now reuses connected overlay canvases per root, removes duplicate overlay nodes if present, and updates shared renderer state before/after WebGL lifecycle events so `_playDissolve()` remains CSS-only with no per-card WebGL context creation.
+- Expanded static regression tests to assert debug export presence, attach idempotency guard, and `_playDissolve()` block exclusion of `getContext`/`createElement('canvas')`.
+
+### Latest Implementation Notes (2026-02-24, global singleton guard + getContext call tracing)
+- `AssetFX` now keeps renderer state in `window`-backed globals (`__assetfx_renderers`, sequence/debug counters) so singleton behavior survives module re-evaluation and remains one overlay/context per grid root.
+- Added `markContextCall()` instrumentation for each WebGL context creation attempt and exposed recent call metadata via `window.__assetfx_dbg.calls` for runtime tracing when diagnosing context explosion regressions.
+- Explorer now reuses a global `window.__assetfx_instance` singleton `AssetFX` instance to avoid duplicate renderer objects if the module script executes again.
+- Updated static explorer tests to assert global renderer-map wiring, context-call instrumentation markers, and singleton instance reuse wiring in `public/explorer.html`.
+
+### Latest Implementation Notes (2026-02-24, page-level context owner lock + runtime audit)
+- Added a page-level AssetFX WebGL owner lock (`window.__assetfx_global_context_owner`) so `init()` prevents a second context when attach/init is invoked against a different root; the existing global overlay/context is reattached and reused instead.
+- Added `window.__assetfx_audit()` to report overlay count, estimated active WebGL owner, context/render counters, and recent `getContext` call traces with root/canvas identifiers for fast console diagnosis.
+- Root/canvas identity is now explicit (`data-assetfx-root-id`, `data-assetfx-overlay-id`), and context-call tracing (`markContextCall`) records those IDs so repeated initialization paths can be pinpointed.
+- Static tests now assert owner-lock + audit wiring and include an opt-in Playwright runtime singleton assertion test (`RUN_PLAYWRIGHT_E2E=1`).
+
+### Latest Implementation Notes (2026-02-24, opacity-storm throttling + lite FX mode)
+- AssetFX dissolve replay now runs through a capped global queue (`maxActiveEffects = 6`) to prevent large scroll bursts from animating dozens of cards at once; replay requests enqueue and drain as active dissolves complete.
+- Removed per-thumbnail opacity writes from `_playDissolve`; dissolve now uses queued veil + transform-only entry emphasis (`.asset.fx-entry-active`) to reduce compositor pressure during scroll.
+- Added visibility/render workload limits (`visibleCards` tracking + `maxRenderCards` cap) so overlay RAF sampling targets a bounded visible subset instead of scanning all tracked cards each frame.
+- Added low-motion controls: respects `prefers-reduced-motion` and URL `?fx=lite` mode to suppress heavy replay hints/dissolve behavior while keeping base grid interactions intact.
+- Expanded static explorer tests to assert throttling/lite-mode symbols and ensure `_playDissolve` no longer performs image opacity style transitions.
+
+### Latest Implementation Notes (2026-02-24, queue hygiene + disconnected-card pruning)
+- Added `AssetFX._pruneDisconnected()` and call sites in both replay sweep and render loop so disconnected DOM nodes are removed from `trackedCards`, `visibleCards`, `activeDissolves`, and pending dissolve tasks.
+- Dissolve queue now has bounded overflow policy (`maxPendingDissolves = 60`); newer requests are preferred and stale/offscreen tasks are dropped, including immediate pending-task removal when cards leave viewport.
+- Dissolve finalize path now guarantees `activeDissolves` cleanup even on unexpected completion errors, preventing stuck active slots during long scroll sessions.
+- Expanded runtime diagnostics (`window.__assetfx_dbg` + `window.__assetfx_audit()`) with live queue/active/visible counters for leak/starvation inspection.
+- Updated static + gated Playwright tests to assert new queue hygiene symbols and runtime bounds (`pending <= 60`, `active <= 6`).
+
+### Latest Implementation Notes (2026-02-24, tile readiness-gated FX synchronization)
+- AssetFX card media binding now tracks per-tile readiness (`data-fx-ready` + `data-ready`) from image load/error events so overlay effects are deferred until thumbnails are actually decoded/ready.
+- Visible-card inclusion and dissolve queue enqueueing now require ready tiles, preventing shader passes from running over placeholder/unloaded cards during progressive media loading.
+- Added per-tile ready fade ramp (`fxReadyAt` + `readyFadeMs`) to smooth FX intensity as assets become ready, reducing apparent mismatch between DOM load timing and shader overlay timing.
+- Updated static tests to assert readiness-gating symbols and ready-fade calculations in the shader module.
+
+### Latest Implementation Notes (2026-02-24, tile-local material shader pass)
+- Replaced the prior global-style overlay blend with tile-local material shading in `public/js/explorer-shaders.mjs`: shader now consumes per-tile arrays (`u_type`, `u_sel`, `u_energy`, `u_ready`) and computes `tileUV` per rect for tile-anchored effects.
+- Added first-pass material presets driven by tile type and selection state (video scan/phosphor accents, audio shimmer accents, image vignette basis, and selection-glass highlight streak/fresnel) multiplied by ready fade.
+- Render packing now uploads explicit per-tile material parameters from DOM state (`kind`, `.is-selected`, boost-derived energy, readiness fade) instead of the previous single `u_video` scalar.
+- Updated static shader assertions to cover new material uniforms/tileUV anchoring and per-tile parameter packing symbols.
+
+### Latest Implementation Notes (2026-02-24, readiness ownership cleanup: decode-aware + single loader path)
+- Explorer card thumbs now use `loading="eager" decoding="async" fetchpriority="low"` in both grid/list markup to avoid mixing browser lazy-loading scheduling with the existing JS thumb queue (`loadThumbQueue`).
+- Card thumbs are initialized with `data-thumb-state="pending"` so load state ownership remains explicit in JS and consistent with the existing queue/error updates.
+- `AssetFX.bindCardMedia()` readiness marking is now decode-aware: `markReady` awaits `img.decode()` when available before setting `data-fx-ready`/`data-ready`, with safe fallback for Safari/cross-origin decode rejections.
+- Static tests now assert the eager+decode thumb attributes and decode-aware readiness path to lock the lifecycle separation between structure CSS and JS/FX readiness.
+
+### Latest Implementation Notes (2026-02-24, lifecycle split hardening: decode backpressure + geometry caching)
+- `AssetFX.bindCardMedia()` now accepts a generic `mediaEl` and unifies readiness semantics across image/video/audio tiles (`load+decode`, `loadeddata`, `loadedmetadata`) before setting `data-fx-ready`.
+- Added decode backpressure in `public/js/explorer-shaders.mjs` (`MAX_PARALLEL_DECODES = 3`) to limit concurrent `img.decode()` work and reduce iPhone/Safari decode spikes during large grid renders.
+- Added layout invalidation + rect caching (`layoutDirty`, `cardRectCache`) with `ResizeObserver`/scroll-triggered invalidation so tile rects are not recomputed from `getBoundingClientRect()` for every visible card on every RAF tick.
+- Removed CSS filter-driven per-tile appearance animation hooks on `.asset` / `.asset-thumb` (hover brightness + baked filter) so visual energy remains shader-owned rather than split across CSS and WebGL.
+- Updated static tests to assert decode backpressure, media-element readiness unification, and layout/resize invalidation symbols.
+
+### Latest Implementation Notes (2026-02-24, CSS motion ownership tightened for AssetFX)
+- Removed hover transform motion from `.asset:hover` in `public/explorer.html` so per-tile movement is no longer split between CSS hover transforms and shader-driven FX state.
+- `.asset` transitions now keep only border-color for hover affordance while geometric/energy motion remains owned by `AssetFX` animations.
+- Added a regression test asserting the hover transform is absent and border-only hover styling remains, to prevent reintroducing CSS-vs-shader motion contention.
+
+### Latest Implementation Notes (2026-02-24, GPU upload backpressure stage for thumbnail apply)
+- Added a thumbnail apply scheduler in `public/explorer.html` (`THUMB_APPLY_PER_FRAME = 4`) so decoded thumbs are committed to DOM in small requestAnimationFrame batches instead of all-at-once updates.
+- `loadThumbQueue()` now enqueues `src`/state/orientation apply work through `enqueueThumbApply()` + `flushThumbApplyQueue()`, reducing upload/layout spikes during large media lists.
+- Added regression assertions covering the new staged thumbnail apply symbols in `tests/test_public_explorer_program_monitor.py`.
+
+### Latest Implementation Notes (2026-02-24, tile parameter texture packing for shader locality)
+- AssetFX fragment shader now reads per-tile material state from a packed parameter texture (`u_tile_params`) instead of separate uniform arrays for type/selection/energy/readiness.
+- Render pass now packs tile params into a `Uint8Array` (RGBA: type, selected, energy, ready) and uploads as a 1D texture (`MAX_RECTS x 1`) each frame before drawing.
+- Shared renderer state now persists `tileParamTexture` across singleton reuse/restores, preserving the one-overlay/one-context architecture while reducing uniform churn.
+- Static tests were updated to assert packed tile-parameter texture symbols (`u_tile_params`, `tileParamTexture`, `Uint8Array`, `texImage2D` upload path).
+
+### Latest Implementation Notes (2026-02-24, deterministic entry catch-up + center-priority sampling)
+- Entry visuals are now unified through `_playEntry(...)`: every eligible tile runs the same top-to-bottom veil entry pass, with scanline boost applied only when `kind === 'video'`.
+- Ready-in-view catch-up added: when media flips ready in `bindCardMedia()`, `_maybePlayEntryOnReady()` now schedules a one-time entry for visible tiles that missed initial enqueue windows.
+- Overlay render sampling now prioritizes tiles nearest viewport center before applying `maxRenderCards`, reducing random-looking mixed FX in the same visible region.
+- Runtime diagnostics expanded (`readyInViewNotPlayedCount`, `renderSampledCount`, `droppedByCapCount`) and surfaced in `window.__assetfx_dbg`/`window.__assetfx_audit()`.
+- Static tests updated for unified entry hooks, center-priority sampling sort, and new audit counters.
+
+### Latest Implementation Notes (2026-02-24, fxdebug webgl call tracing + sampling hysteresis)
+- Added `?fxdebug=1` instrumentation in `public/explorer.html` that idempotently wraps `HTMLCanvasElement.prototype.getContext` and records WebGL context call stacks into `window.__webgl_ctx_calls` for on-device diagnostics.
+- Expanded `window.__assetfx_audit()` in `public/js/explorer-shaders.mjs` to report copy/paste-friendly sanity metrics (`contextsCreated`, `contextsPrevented`, `overlayCanvases`, `allCanvases`, `webglCanvases`, `attachedRootId`, plus queue/sampling counters).
+- Added `window.__assetfx_dump_canvases()` helper returning metadata for every canvas on the page to quickly locate non-AssetFX WebGL users.
+- Added sampled-set hysteresis (`sampleHoldMs`, `sampledCardsUntil`) to reduce cap thrash holes when `maxRenderCards` is enforced during scroll.
+- Added optional debug card badges (`RVPS`) in fxdebug mode to visualize per-tile ready/in-view/played/sampled state when validating entry behavior.
+
+
+### Latest Implementation Notes (2026-02-24, maintenance: handoff refresh)
+- Performed a no-code maintenance pass to refresh agent handoff continuity and confirm repository instructions are still aligned with the latest `fxdebug`/AssetFX diagnostics work.
+- Verified tree state before/after the refresh to keep future commits anchored to an explicit AGENTS.md update checkpoint.
+
+
+### Latest Implementation Notes (2026-02-24, AssetFX uniform pass + no lateral sweep)
+- Simplified AssetFX tile shading to a single shared material path for all asset kinds so cards no longer render different per-type effects.
+- Removed video-only scanline boost/state plumbing (`addScanline`, `_boostScanline`, `fxScanlineBoost`) and normalized per-card energy math to selection-only contribution.
+- Replaced the entry veil animation from left-to-right scale transforms with a vertical fade-only dissolve to eliminate the right/left sweep behavior.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` to match the new unified `_playEntry(...)` signature and constant tile type packing.
+
+
+### Latest Implementation Notes (2026-02-24, iOS Safari rect anchoring + gutter clamp diagnostics)
+- AssetFX render rects are now computed in overlay-canvas local space (`overlay.getBoundingClientRect()` basis), with a fixed inset (`RECT_INSET_PX = 4`) and per-rect clamp/invalid-drop to prevent shader bleed into card gutters.
+- Overlay ownership remains single-canvas but now includes an optional debug canvas (`data-assetfx="debug"`) layered above WebGL when `?fxdebug=1` for sampled-rect outline verification on device.
+- Layout invalidation is now more aggressive: scroll, resize observer, window resize, visualViewport resize/scroll, track/bind readiness updates all mark layout dirty and clear rect cache.
+- Runtime diagnostics now include `renderCandidatesCount` alongside sampled/dropped counters so cap behavior is easier to reason about during mobile troubleshooting.
+- Static tests were updated to assert overlay-local rect math symbols, inset/clamp hooks, visualViewport invalidation listeners, and debug overlay wiring.
+
+
+### Latest Implementation Notes (2026-02-24, viewport-leave exit FX pass)
+- AssetFX now applies an explicit per-card exit veil (`_playExit`) when ready tiles leave the in-view set, so scroll behavior emphasizes FX-out instead of only FX-in on enter.
+- Exit effects are cooldown-gated (`lastExitedAt`) for idempotence and to avoid rapid flicker during threshold jitter while scrolling.
+- Added `.fx-exit-veil` + `@keyframes fx-exit-veil` shared styles and reduced-motion disable wiring alongside existing FX overlays.
+- Static tests now assert the exit pathway symbols so future refactors preserve leave-behavior semantics.
+
+
+### Latest Implementation Notes (2026-02-24, adaptive premium sampling + always-on pass)
+- AssetFX shader now applies a subtle always-on global pass (low-amplitude vignette/grain/scanline) so all in-view tiles retain baseline FX presence even when premium tile sampling is capped.
+- Premium tile sampling remains center-priority but now uses an adaptive cap (`minRenderCards`, `maxRenderCardsLowTier`, `maxRenderCardsHighTier`, `maxRenderCardsAdaptive`) driven by visible candidate count + coarse device tier heuristics for iPhone stability.
+- Debug badges now include an always-on marker (`A`) and premium state (`S` sampled, `P` pending-not-sampled, `-` neither) to make cap behavior legible while validating mobile scroll behavior.
+- Entry timing was smoothed/tightened (`entryMs = 260`, `readyFadeMs = 240`) and premium energy multipliers were reduced for less flashy transitions.
+- Static tests were updated to assert the adaptive-cap/always-on symbols and the updated debug badge semantics.
+
+
+### Latest Implementation Notes (2026-02-24, temporal smoothing: scroll damping + adaptive cap stabilization)
+- AssetFX now tracks smoothed scroll velocity (`scrollVelocityEma`) and applies motion damping (`motionDamp`) so premium/entry intensity softens during fast flicks and settles smoothly when scroll velocity drops.
+- Added coarse FPS EMA (`fpsEma`) driven cap tuning to the existing center-priority sampling, with visible-count-aware adaptive cap sizing to keep viewport coverage high while still backing off under load.
+- Fragment shader now includes `u_motion_damp` to reduce scanline contrast during high-velocity scrolling; baseline always-on pass remains subtle and continuous.
+- Runtime diagnostics expanded with `scrollVelocityEma`, `motionDamp`, `fpsEma`, and `capNow` to make temporal behavior auditable in `__assetfx_dbg`/`__assetfx_audit()`.
+- Static tests were updated to assert scroll-damping symbols, motion-damp uniform wiring, and adaptive cap/FPS tuning hooks.
+
+
+### Latest Implementation Notes (2026-02-24, selection delegation drag suppression fix)
+- Fixed `wireSelectionDelegation()` pointer tracking in `public/explorer.html` to persist the active checkbox node (`input`) in `pointers` records.
+- This restores drag-suppression behavior in `handlePointerUp` (`rec.input.dataset.fxSuppressToggle = '1'`) so accidental checkbox toggles are blocked after pointer movement, including list-view flows outside the AssetFX tap guard.
+- Static tests now assert the pointer map payload includes `input` to prevent regressions in delegated selection handling.
+
+
+### Latest Implementation Notes (2026-02-24, premium coverage stabilization: sweep + stickiness + entry guarantee)
+- Added premium sampling hysteresis and stabilization constants (`SAMPLE_STICK_MS`, `SETTLE_DELAY_MS`, `FAST_SCROLL_THRESHOLD`) so sampled tiles persist briefly and sampling freezes during fast scroll / settle windows.
+- Replaced pure center-priority slicing with a deterministic viewport sweep (`sampleCursor`) plus sticky retention and frozen-set reuse to distribute premium coverage across all visible tiles over time instead of favoring only initial rows.
+- Added entry guarantee lifecycle (`_ensureEntryPending`, `fxEntryPending`, `fxEntryFrames`, `fxEntryPlayed`) so ready+visible tiles receive a one-time premium entry once sampling settles (sampled immediately or after two RAF frames).
+- Expanded runtime diagnostics with `sampleCursor`, `samplingFrozen`, `stickyRetainedCount`, `sweepFilledCount`, and `entryPendingCount`, and updated fxdebug badge semantics to include sticky sampled state (`K`).
+- Static tests were updated to assert sweep/hysteresis/entry-guarantee symbols and the updated debug badge output contract.
+
+- Follow-up cleanup: removed duplicate constructor re-initialization of `lastSampledCards`/`sampleCursor` so sweep state is defined once and easier to reason about.
+
+
+### Latest Implementation Notes (2026-02-26, prototype card skin + selection glow force-sampling)
+- Explorer card shell visuals were updated to align with the prototype language (subtle glass badges, compact checkbox treatment, scrim-backed metadata, play overlay + preview pill) while preserving existing DOM/data flow and selection wiring.
+- Added a fixed background impulse canvas that renders subtle tap ripples on pointerdown events so touch interactions feel responsive even when premium card sampling is capped/frozen.
+- AssetFX premium sampling now force-includes all visible selected cards (even over cap), keeps scroll-freeze/stickiness behavior, and drives shader-level selection glow via `u_selected` + `u_select_pulse` with eased ramp down on deselect.
+- Top bar hide/reveal transitions now include blur + mask-based material reveal while preserving existing pointer-event gating and intent-controller behavior.
+- Selection checkboxes now render order numbers in-place (`.sel-order`) while preserving existing checkbox hit target size; numeric text is intentionally darkened for readability against selected glow styling.
+- Selection order badge color now matches the selected asset glow accent for readability/consistency, selected card glow intensity was increased (CSS + shader energy tuning), and the bottom selection bar now includes a dedicated `✕ Clear` action while preserving the existing top actions clear control.
+- Fixed topbar/action menu stacking so actions/dropdowns render above the asset grid (`z-index` layering), and reduced AssetFX overlay cost by lowering adaptive premium caps plus softening baseline scanline/pulse intensity for smoother scroll behavior on iPhone-class devices.
+
+- Actions menu now uses a fixed `#ui-portal` host (body-level portal) for panel rendering so Safari stacking contexts from card/grid/FX layers cannot place it behind assets; open-state positioning now computes from the Actions trigger and includes optional `fxdebug` z-index/transform ancestry logging.
+
+- AssetFX efficiency tuning: added low/high-tier per-frame pixel budgets (`maxRenderPixelsLowTier`/`maxRenderPixelsHighTier`) to bound premium card coverage cost, plus low-tier fast-scroll frame skipping so overlay rendering runs at half-rate during high-velocity flicks while preserving selected-card force sampling.
+
+- Toast notifications now use a body-level fixed host (`ensureToastHost`) with very high z-index/isolation so they never render behind topbar/action UI, and AssetFX overlays were moved to viewport-fixed body canvases with `visualViewport` offset/size tracking so fxdebug coverage and ARVK sampling remain valid across full-page scroll ranges.
+- Reduced scroll-entry glare cost/intensity by gating visible-hint overlays during active scroll/motion and downscaling hint opacity/duration so scanlines remain while reflection bursts are less expensive and less visually aggressive.
+
+### Latest Implementation Notes (2026-02-27, maintenance: validation checkpoint)
+- Ran the focused explorer static coverage suite (`pytest -q tests/test_public_explorer_program_monitor.py`) after the latest AssetFX/toast layering work; result remained green (`19 passed, 1 skipped`).
+- Added this checkpoint entry to keep AGENTS handoff continuity explicit for the next agent per repo policy (update AGENTS.md on every commit).
+
+### Latest Implementation Notes (2026-02-27, explorer FX layering/alignment follow-up)
+- Re-anchored AssetFX overlay/debug canvases to the explorer scroll root (`[data-fx-grid-root="1"]`) with absolute in-root positioning and root-prepend attachment, replacing viewport-fixed body overlays to eliminate scroll drift and panel bleed-through.
+- Added FX suspension wiring (`setFxSuspend`) so inspector/actions overlays temporarily clear+pause shader rendering while open, then resume when closed.
+- Added shader-level scroll calm uniform (`u_scroll_fast`) driven by decayed scroll velocity to reduce selection glare/entry intensity during fast scrolling while keeping baseline scanline texture.
+- Updated explorer static assertions and reran the focused monitor suite (`19 passed, 1 skipped`) after these fixes.
+
+### Latest Implementation Notes (2026-03-03, AssetFX maskfield integration + explorer boot/inspector fixes)
+- Integrated `MaskField` into `public/js/explorer-shaders.mjs` (hidden heatmap canvas + pointer impulses + hover decay) and wired it to shader uniforms (`u_mask`, `u_mask_enabled`) via a cached-uniform path and Texture1 uploads (`texSubImage2D`) for mask-driven modulation.
+- Hardened WebGL init/restoration with explicit pixel-store normalization and shared renderer persistence of mask texture/allocation + uniform cache state.
+- Updated explorer boot flow with a shared `refreshExplorerData()` helper so initial page load consistently performs the same source/project/media fetch sequence as the manual Refresh action.
+- Adjusted inspector UX so tapping an asset while the drawer is open now closes the drawer first (instead of immediately re-opening preview focus), and `closeDrawer()` clears focused inspector state.
+- Re-ran focused explorer static coverage after these changes (`19 passed, 1 skipped`).
+- Follow-up hotfix: restored explicit `_cacheUniforms()` definition in `AssetFX` after integrating mask uniforms so cached uniform locations are populated before draw calls.
+
+### Latest Implementation Notes (2026-03-03, explorer grid row-flow regression fix)
+- Replaced masonry-style `.grid` columns layout (`column-width`/`break-inside`) with explicit row-first CSS grid (`grid-auto-flow: row`, `grid-template-columns: repeat(auto-fill, minmax(var(--grid-col-width), 1fr)))`) so assets flow left-to-right and wrap predictably on desktop + iPhone Safari.
+- Hardened main viewport sizing with additional `min-width: 0` guards on `.main`, `.content`, and `.content .scroll`, plus `#mediaGridRoot` width/min-width constraints to prevent narrow-column collapse when drawer/topbar states change.
+- Added optional `?layoutdebug=1` console diagnostics (`logLayoutDebug`) to print computed grid/root/content layout properties for field troubleshooting.
+- Increased staged thumb apply budget (`THUMB_APPLY_PER_FRAME = 48`) and switched card thumb fetch priority to `high` while preserving existing loading overlay flow.
+- Updated static explorer assertions to enforce row-flow layout contracts and verify the new layout debug symbol.
+
+### Latest Implementation Notes (2026-03-03, checkbox no-preview hotfix + thumb readiness polish)
+- Added `[data-no-preview="1"]` contracts to selection controls and capture-phase pointer/click/touch guards so tapping checkbox/order badges no longer triggers card preview open handlers.
+- Updated delegated selection click handling so tapping the selector shell/order badge toggles the associated checkbox and dispatches change, preserving ordered badge updates without preview side effects.
+- Added explicit `inNoPreviewZone(...)` guards inside asset pointer/context handlers as a second safety layer for iPhone Safari event propagation quirks.
+- Improved thumbnail readiness perception by setting thumb state to `loading` during prefetch and adding CSS fade/filter transitions keyed to `data-thumb-state` (`loaded`/`error`) while keeping staged apply + loading overlay flow.
+- Re-ran focused explorer static checks after the hotfix (`19 passed, 1 skipped`).
+
+### Latest Implementation Notes (2026-03-03, selection hit-target + fixed overlay + novirt follow-up)
+- Tightened explorer selection hit-targets to explicit `.sel-ui`/`.sel-shell` controls so card-body taps no longer toggle selection; delegated click handling now exits unless the tap originates inside selection UI affordances.
+- Extended no-preview guards to treat `.sel-ui` as non-preview zones while preserving explicit checkbox/order-badge selection behavior and existing propagation safety stops.
+- Re-anchored AssetFX overlay/debug canvases as viewport-fixed body overlays (`position: fixed; inset: 0; width/height: 100vw/100vh`) and updated render-space math to use viewport coordinates for full-scroll coverage.
+- Added URL-controlled no-virtualization mode (`?novirt=1` or `?keep=1`) in AssetFX to keep cards/thumb states stable by bypassing offscreen in/out transitions and treating tracked cards as in-view during replay sweeps.
+- Updated explorer static tests to assert `.sel-ui`-scoped toggles, fixed-overlay contracts, and novirt wiring symbols.
+
+### Latest Implementation Notes (2026-03-03, sticky thumbnail cache follow-up for scroll stability)
+- Added a persistent explorer thumbnail state cache (`thumbStateCache`) keyed by selection/thumb identity so once a thumbnail reaches `loaded`, subsequent renders rehydrate from cache immediately instead of returning to a pending/loading visual state.
+- Updated staged thumbnail queue loading to consult cached states first (`loaded`/`error`) and to avoid setting `data-thumb-state="loading"` when a target is already marked `loaded`.
+- Added `data-thumb-state-key` attributes to grid/list thumbnail nodes and wired `setThumbCachedState(...)` updates on successful and failed loads to keep card visuals stable across scroll and rerender cycles.
+- Added static regression assertions to enforce sticky-cache symbols and guard against src-clearing regressions.
+
+### Latest Implementation Notes (2026-03-03, overlay hit-test sanitizer + layoutdebug diagnostics)
+- Added defensive overlay sanitization in `public/explorer.html` for rogue `html > div[style*="all: initial"]` nodes: marks them with `data-overlay-sanitized="1"`, forces `pointer-events: none`, and applies fixed/inset/z-index defaults to prevent full-page hit-test interception.
+- Added a short-lived boot-time `MutationObserver` (4s) to re-apply sanitizer behavior if overlays are injected during early startup.
+- Expanded `?layoutdebug=1` output to include overlay sanitizer count plus center `elementFromPoint(...)` diagnostics (`hitTag`, `hitId`, `hitClass`, `hitPath`) to accelerate iPhone Safari troubleshooting.
+- Added CSS safety guards so `.fx-shared-overlay`, `.fx-debug-overlay`, and sanitized overlays always remain non-interactive (`pointer-events: none !important`).
+- Updated static explorer tests to assert overlay sanitizer hooks and layoutdebug diagnostics.
+
+### Latest Implementation Notes (2026-03-03, FX stacking order correction for Safari scroll occlusion)
+- Lowered AssetFX overlay/debug canvas inline z-index to `0` in `public/js/explorer-shaders.mjs` so viewport-fixed FX layers remain behind explorer content instead of occluding cards during deep scroll.
+- Raised `.app` stacking context (`z-index: 2`) and hardened `#mediaGridRoot` stacking (`position: relative; z-index: 1; isolation: isolate`) in `public/explorer.html` to keep card/grid content explicitly above fixed FX surfaces on iPhone Safari.
+- Expanded `?layoutdebug=1` diagnostics to report `canvasZIndex`, `gridRootZIndex`, `canvasRect`, `canvasHeightPx`, and `gridScrollHeight` for fast validation of viewport-vs-scroll compositing issues.
+- Updated explorer static tests to assert the stacking/z-index and layoutdebug telemetry contracts.
+
+### Latest Implementation Notes (2026-03-03, runtime Playwright explorer FX regression suite)
+- Added a new opt-in runtime E2E suite at `tests/e2e/test_explorer_assetfx_runtime.py` (gated by `RUN_PLAYWRIGHT_E2E=1`) covering overlay hit-test occlusion, FX debug-rect alignment vs DOM card rects, visible-card tracking bounds, and thumbnail state stability after scroll roundtrips.
+- Exported debug rectangle telemetry from `AssetFX._renderDebugRects(...)` via `window.__assetfx_dbg.lastRects` / `FX_GLOBAL.__assetfx_dbg_last_rects` when `fxdebug` is enabled, and clear the export when debug rendering is disabled.
+- Extended existing static explorer shader assertions to enforce presence of the new debug-rect export hooks.
