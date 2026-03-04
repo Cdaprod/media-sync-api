@@ -161,6 +161,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
     assert 'pulse(cardEl' in shader_module
     assert 'dissolve(cardEl, imgEl' in shader_module
+    assert "this.dissolveMode = (dissolveParam === '1' || dissolveParam === 'tile') ? 'tile' : 'scene';" in shader_module
+    assert "if (this.dissolveMode !== 'tile' && cardEl?.dataset?.fxForceDissolve !== '1') return;" in shader_module
+    assert "setDissolveMode(mode = 'scene')" in shader_module
     assert 'trackViewport(cardEl, imgEl = null)' in shader_module
     assert 'bindCardMedia(cardEl, mediaEl, { kind = \'' in shader_module
     assert '_playDissolve(cardEl, imgEl, duration, allowReplay)' in shader_module
@@ -185,7 +188,9 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'window.__assetfx_dbg = {' in shader_module
     assert 'get calls() { return [...__DBG_GL_CONTEXT_CALLS]; }' in shader_module
     assert 'FX_GLOBAL.__assetfx_dbg_last_rects = [];' in shader_module
-    assert 'if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;' in shader_module
+    assert '  _publishDebugRects(debugRects, meta = {}) {' in shader_module
+    assert 'window.__assetfx_dbg.lastRects = safeRects;' in shader_module
+    assert 'window.__assetfx_dbg.lastRectsFrame = Number(window.__assetfx_dbg.lastRectsFrame || 0) + 1;' in shader_module
     assert "markContextCall('AssetFX.init:webgl', { rootId, canvasId: canvas.dataset.assetfxOverlayId });" in shader_module
     assert 'if (this._attachedGridRoot === gridRoot) return;' in shader_module
     assert 'window.__assetfx_audit = () =>' in shader_module
@@ -207,19 +212,32 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'await imgEl.decode();' in shader_module
     assert 'const MAX_PARALLEL_DECODES = 3;' in shader_module
     assert 'const DECODE_QUEUE = [];' in shader_module
+    assert 'function getStableViewportSize() {' in shader_module
+    assert 'const vv = window.visualViewport;' in shader_module
+    assert 'function getViewportOffsets() {' in shader_module
+    assert 'function cloneRect(r) {' in shader_module
+    assert 'function cloneVV(vv) {' in shader_module
     assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
+    assert '  _isRenderableMediaReady(cardEl) {' in shader_module
+    assert "const thumbBlocked = !!(thumbState && thumbState !== 'loaded');" in shader_module
+    assert "this.renderableFallbackMs = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxfallbackms') || 680));" in shader_module
     assert 'this.layoutDirty = true;' in shader_module
     assert 'this.cardRectCache = new WeakMap();' in shader_module
     assert 'this.readyInViewNotPlayedCount = 0;' in shader_module
     assert 'this.renderSampledCount = 0;' in shader_module
     assert 'this.droppedByCapCount = 0;' in shader_module
+    assert 'this.prefetchViewportY = 1.5;' in shader_module
     assert "if (typeof ResizeObserver !== 'undefined') {" in shader_module
     assert 'this.readyFadeMs = 240;' in shader_module
     assert 'this.entryMs = 260;' in shader_module
     assert 'this._pruneDisconnected();' in shader_module
+    assert "    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;\n    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;\n  }\n\n  _showVisibleHint(cardEl) {" not in shader_module
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
-    assert "if (card.dataset.fxReady !== '1') return;" in shader_module
+    assert "if (card.dataset.fxReady !== '1') continue;" in shader_module
+    assert 'if (!this._isRenderableMediaReady(card)) continue;' in shader_module
+    assert 'const fallbackBlocked = !!(hasThumbUrl && thumbFallback && src === thumbFallback);' in shader_module
+    assert 'if (visibleLike && blockedFor >= this.renderableFallbackMs) ready = true;' in shader_module
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
@@ -229,23 +247,50 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, MAX_RECTS, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, tileParamData);" in shader_module
     assert 'vec2 tileUV = (px - r.xy)' in shader_module
     assert 'const visibleOrder = [...renderCandidates].sort((a, b) => ((a[1] - b[1]) || (a[0] - b[0])));' in shader_module
+    assert 'this._lastCanvasRect = null;' in shader_module
+    assert 'window.__assetfx_dbg.lastInvalidationReason = reason;' in shader_module
+    assert 'this.stateByKey = new Map();' in shader_module
+    assert 'this.nearViewCards = new Set();' in shader_module
+    assert "this.maxStateKeys = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxmaxstate') || STATE_MAX_KEYS));" in shader_module
+    assert "this.nearViewCardsMax = Math.max(24, Number(new URLSearchParams(window.location.search).get('fxnearmax') || NEAR_VIEW_MAX));" in shader_module
+    assert '  _getKeyEl(el) {' in shader_module
+    assert "return el.closest?.('.asset') || el;" in shader_module
+    assert 'this.keyByEl = new WeakMap();' in shader_module
+    assert 'thumbBlockedAt: 0,' in shader_module
+    assert '  _bindInvalidations() {' in shader_module
+    assert '  _evictState(nowPerf = performance.now()) {' in shader_module
+    assert 'window.__assetfx_dbg.stateSize = this.stateByKey.size;' in shader_module
+    assert 'window.__assetfx_dbg.lastRectsLen = safeRects.length;' in shader_module
+    assert 'window.__assetfx_dbg.nearViewCards = this.nearViewCards.size;' in shader_module
+    assert '  _capNearViewCards() {' in shader_module
+    assert 'window.__assetfx_dbg.canvasRect = meta.canvasRect || null;' in shader_module
     assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module
     assert 'const RECT_INSET_PX = 4;' in shader_module
+    assert 'let x1 = (cr.left - canvasRect.left) * dpr;' in shader_module
+    assert 'let y1 = (cr.top - canvasRect.top) * dpr;' in shader_module
     assert "if (this.container.dataset.fxSuspend === '1') {" in shader_module
     assert 'this.gl.clear(this.gl.COLOR_BUFFER_BIT);' in shader_module
-    assert 'const canvasRect = this.overlay.getBoundingClientRect();' in shader_module
-    assert 'let x1 = cr.left * dpr;' in shader_module
+    assert 'let canvasRect = this._lastCanvasRect || cloneRect(this.overlay.getBoundingClientRect());' in shader_module
+    assert 'let x2 = (cr.right - canvasRect.left) * dpr;' in shader_module
+    assert 'let y2 = (cr.bottom - canvasRect.top) * dpr;' in shader_module
     assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
     assert 'x1 = Math.max(0, Math.min(width, x1));' in shader_module
     assert "window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });" in shader_module
     assert "window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });" in shader_module
+    assert 'this._bindInvalidations();' in shader_module
+    assert 'rootMargin: `${overscanY}px 0px ${overscanY}px 0px`,' in shader_module
     assert "const debugOverlay = debugCanvases.shift() || createNode('canvas', 'fx-debug-overlay');" in shader_module
     assert "debugOverlay.dataset.assetfx = 'debug';" in shader_module
     assert '_renderDebugRects(cards, width, height);' in shader_module
+    assert 'this._publishDebugRects([], {' in shader_module
+    assert 'for (const card of this._iterCards(this.trackedCards)) {' in shader_module
+    assert 'state.inView = inViewNow;' in shader_module
+    assert 'state.nearView = nearViewNow;' in shader_module
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
     assert 'const ALWAYS_ON_PASS_ENABLED = true;' in shader_module
     assert 'const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;' in shader_module
+    assert 'const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
     assert 'this.maxRenderPixelsLowTier = 1450000;' in shader_module
     assert 'this.maxRenderPixelsHighTier = 2400000;' in shader_module
     assert 'const pixelBudget = Math.min(pixelBudgetCap, pixelBudgetDynamic);' in shader_module
@@ -269,10 +314,12 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this.scrollVelocityEma = (this.scrollVelocityEma * 0.82) + (v * 0.18);' in shader_module
     assert 'this.motionDamp = 1.0 - smoothstep(0.2, 1.2, vDecayed);' in shader_module
     assert 'this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);' in shader_module
-    assert 'const lowTierFrameSkip = ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
+    assert 'const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
     assert 'if (this.scrollVelocityEma > 0.35 || this.motionDamp < 0.8) return;' in shader_module
     assert 'if (Math.random() > 0.35) return;' in shader_module
-    assert 'if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();' in shader_module
+    assert 'if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) {' in shader_module
+    assert "this._setTickExit('EARLY_RETURN:THROTTLED');" in shader_module
+    assert 'window.__assetfx_dbg.lastException = String(e && (e.stack || e.message || e));' in shader_module
     assert 'const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));' in shader_module
     assert 'if (this.fpsEma > 55) adaptiveMaxRenderCards =' in shader_module
     assert 'const SAMPLE_STICK_MS = 420;' in shader_module
@@ -366,11 +413,17 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert "if (inNoPreviewZone(event.target)) return;" in html
     assert "target.closest('[data-no-preview], .sel-ui')" in html
     assert 'async function refreshExplorerData({ toastOnSuccess = true } = {})' in html
+    assert "<button id=\"viewFx\" class=\"active\" type=\"button\">FX</button>" in html
+    assert "if (typeof cardFX?.setDissolveMode === 'function') {" in html
+    assert "cardFX.setDissolveMode(nextView === 'fx' ? 'scene' : 'tile');" in html
+    assert "const activeContainer = (state.view === 'list') ? l : g;" in html
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
     assert 'if (ui.inspectorOpen) {' in html
     assert 'state.focused = null;' in html
     assert "const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';" in html
     assert 'function logLayoutDebug()' in html
+    assert 'function setNodeStyleSafe(node, prop, value)' in html
+    assert 'function setNodeDataSafe(node, key, value)' in html
     assert 'function sanitizeRootOverlayInterceptors()' in html
     assert 'html > div[style*="all: initial"]' in html
     assert 'overlaySanitizedCount: offenders.length' in html
@@ -380,6 +433,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'canvasHeightPx: fxCanvas?.height || null,' in html
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
+    assert '#mediaGridRoot.view-fx .asset[data-kind="video"]::before{' in html
     assert '.app{ position: relative; z-index: 2; }' in html
     assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
     assert "setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);" in html
@@ -396,7 +450,10 @@ def test_explorer_asset_css_visual_animation_is_minimized():
 def test_explorer_assetfx_context_singleton_runtime_with_playwright():
     playwright = pytest.importorskip("playwright.sync_api")
     with playwright.sync_playwright() as p:
-        browser = p.chromium.launch()
+        try:
+            browser = p.chromium.launch()
+        except Exception as exc:
+            pytest.skip(f"playwright browser unavailable: {exc}")
         page = browser.new_page()
         try:
             page.goto("http://127.0.0.1:8787/public/explorer.html", wait_until="domcontentloaded")
@@ -487,5 +544,5 @@ def test_explorer_overlay_sanitizer_inert_contract_present():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert '.fx-shared-overlay,' in html
     assert '[data-overlay-sanitized="1"]{' in html
-    assert "node.style.pointerEvents = 'none';" in html
-    assert "node.dataset.overlaySanitized = '1';" in html
+    assert "setNodeStyleSafe(node, 'pointerEvents', 'none');" in html
+    assert "setNodeDataSafe(node, 'overlaySanitized', '1');" in html

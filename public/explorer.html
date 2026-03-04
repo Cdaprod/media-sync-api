@@ -818,6 +818,40 @@
       gap: 8px;
     }
 
+    #mediaGridRoot.view-fx .grid{
+      gap: 0;
+      padding: 0;
+      background: radial-gradient(120% 120% at 10% 0%, rgba(44,64,120,0.26), rgba(8,10,20,0.92));
+    }
+    #mediaGridRoot.view-fx .asset{
+      border-radius: 0;
+      border-color: rgba(160,188,255,0.16);
+      background: linear-gradient(180deg, rgba(22,28,44,0.58), rgba(8,11,22,0.9));
+      box-shadow: inset 0 0 0 1px rgba(190,220,255,0.05);
+      transform: none !important;
+    }
+    #mediaGridRoot.view-fx .asset::before{
+      content: '';
+      position: absolute;
+      inset: -2px;
+      pointer-events: none;
+      border-radius: 0;
+      opacity: 0.82;
+      box-shadow: 0 0 18px rgba(110,140,255,0.32), 0 0 42px rgba(80,110,230,0.18);
+    }
+    #mediaGridRoot.view-fx .asset[data-kind="video"]::before{
+      box-shadow: 0 0 18px rgba(72,154,255,0.46), 0 0 46px rgba(72,124,255,0.26);
+    }
+    #mediaGridRoot.view-fx .asset[data-kind="image"]::before{
+      box-shadow: 0 0 18px rgba(168,102,255,0.46), 0 0 46px rgba(130,86,255,0.26);
+    }
+    #mediaGridRoot.view-fx .asset[data-kind="audio"]::before{
+      box-shadow: 0 0 18px rgba(255,206,84,0.44), 0 0 46px rgba(255,170,54,0.24);
+    }
+    #mediaGridRoot.view-fx .asset .scrim{
+      background: linear-gradient(to top, rgba(3,6,16,0.84) 4%, rgba(8,12,24,0.36) 44%, rgba(8,12,24,0.08) 75%);
+    }
+
     .asset{
       display: block;
       width: 100%;
@@ -1512,7 +1546,8 @@
           </div>
           <div id="actionsPanel" class="actions-panel" role="region" aria-label="Explorer actions">
             <div class="seg" aria-label="View mode">
-              <button id="viewGrid" class="active" type="button">Grid</button>
+              <button id="viewFx" class="active" type="button">FX</button>
+              <button id="viewGrid" type="button">Grid</button>
               <button id="viewList" type="button">List</button>
             </div>
 
@@ -1795,7 +1830,7 @@
       activeProject: null,   // {name, source, ...}
       media: [],             // items from /media
       mediaScope: 'project', // project|all
-      view: 'grid',          // grid|list
+      view: 'fx',            // fx|grid|list
       q: '',
       filters: {
         type: 'all',
@@ -3380,11 +3415,19 @@
     }
 
     function setView(view){
-      state.view = view;
-      el('viewGrid').classList.toggle('active', view === 'grid');
-      el('viewList').classList.toggle('active', view === 'list');
-      el('mediaGrid').style.display = (view === 'grid') ? '' : 'none';
-      el('mediaList').style.display = (view === 'list') ? '' : 'none';
+      const nextView = (view === 'fx' || view === 'grid' || view === 'list') ? view : 'fx';
+      state.view = nextView;
+      el('viewFx')?.classList.toggle('active', nextView === 'fx');
+      el('viewGrid').classList.toggle('active', nextView === 'grid');
+      el('viewList').classList.toggle('active', nextView === 'list');
+      const useGrid = nextView === 'fx' || nextView === 'grid';
+      el('mediaGrid').style.display = useGrid ? '' : 'none';
+      el('mediaList').style.display = nextView === 'list' ? '' : 'none';
+      const root = el('mediaGridRoot');
+      if (root) root.classList.toggle('view-fx', nextView === 'fx');
+      if (typeof cardFX?.setDissolveMode === 'function') {
+        cardFX.setDissolveMode(nextView === 'fx' ? 'scene' : 'tile');
+      }
       renderMedia();
     }
 
@@ -3704,7 +3747,7 @@
         l.appendChild(row);
       });
       syncSelectionOrderBadges();
-      const activeContainer = state.view === 'grid' ? g : l;
+      const activeContainer = (state.view === 'list') ? l : g;
       const thumbTargets = Array.from(activeContainer.querySelectorAll('img.asset-thumb[data-thumb-url]'));
       void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => {
         setContentLoading(false);
@@ -4297,6 +4340,7 @@
       toggleActions(false);
     });
 
+    el('viewFx')?.addEventListener('click', () => setView('fx'));
     el('viewGrid').addEventListener('click', () => setView('grid'));
     el('viewList').addEventListener('click', () => setView('list'));
 
@@ -4593,15 +4637,43 @@
       });
     }
 
+
+    function setNodeStyleSafe(node, prop, value){
+      if (!node || !node.style) return false;
+      try {
+        node.style[prop] = value;
+        return true;
+      } catch {
+        try {
+          node.style.setProperty(prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`), String(value));
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    }
+
+    function setNodeDataSafe(node, key, value){
+      if (!node) return false;
+      try {
+        node.dataset[key] = value;
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     function sanitizeRootOverlayInterceptors(){
       const offenders = Array.from(document.querySelectorAll('html > div[style*="all: initial"]'));
       offenders.forEach((node, index) => {
-        node.dataset.overlaySanitized = '1';
-        node.style.pointerEvents = 'none';
-        if (!node.style.position) node.style.position = 'fixed';
-        if (!node.style.inset) node.style.inset = '0';
-        if (!node.style.zIndex) node.style.zIndex = '0';
-        if (!node.id) node.id = `overlay-sanitized-${index + 1}`;
+        setNodeDataSafe(node, 'overlaySanitized', '1');
+        setNodeStyleSafe(node, 'pointerEvents', 'none');
+        if (!node?.style?.position) setNodeStyleSafe(node, 'position', 'fixed');
+        if (!node?.style?.inset) setNodeStyleSafe(node, 'inset', '0');
+        if (!node?.style?.zIndex) setNodeStyleSafe(node, 'zIndex', '0');
+        if (!node.id) {
+          try { node.id = `overlay-sanitized-${index + 1}`; } catch {}
+        }
       });
       return offenders;
     }
@@ -4685,6 +4757,7 @@
       wireSelectionDelegation();
       wireBackgroundImpulse();
       ensureToastHost();
+      setView(state.view);
       document.addEventListener('pointerdown', (event) => {
         const menu = el('contextMenu');
         if (!menu?.classList.contains('open')) return;

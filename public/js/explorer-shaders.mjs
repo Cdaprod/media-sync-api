@@ -31,6 +31,60 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
+
+function getStableViewportSize() {
+  const vv = window.visualViewport;
+  const doc = document.documentElement;
+  const vvW = Number(vv?.width || 0);
+  const vvH = Number(vv?.height || 0);
+  const docW = Number(doc?.clientWidth || 0);
+  const docH = Number(doc?.clientHeight || 0);
+  const winW = Number(window.innerWidth || 0);
+  const winH = Number(window.innerHeight || 0);
+
+  const fallbackW = Math.max(0, docW, winW);
+  const fallbackH = Math.max(0, docH, winH);
+  const width = (vvW > 0 && vvW >= (fallbackW * 0.6)) ? vvW : fallbackW;
+  const height = (vvH > 0 && vvH >= (fallbackH * 0.6)) ? vvH : fallbackH;
+  return {
+    width: Math.max(1, width || 1),
+    height: Math.max(1, height || 1),
+  };
+}
+
+function getViewportOffsets() {
+  const vv = window.visualViewport;
+  return {
+    x: Number(vv?.offsetLeft || 0),
+    y: Number(vv?.offsetTop || 0),
+  };
+}
+
+function cloneRect(r) {
+  if (!r) return null;
+  return {
+    left: Number(r.left || 0),
+    top: Number(r.top || 0),
+    right: Number(r.right || 0),
+    bottom: Number(r.bottom || 0),
+    width: Number(r.width || 0),
+    height: Number(r.height || 0),
+    x: Number(r.x || 0),
+    y: Number(r.y || 0),
+  };
+}
+
+function cloneVV(vv) {
+  if (!vv) return null;
+  return {
+    width: Number(vv.width || 0),
+    height: Number(vv.height || 0),
+    scale: Number(vv.scale || 1),
+    offsetLeft: Number(vv.offsetLeft || 0),
+    offsetTop: Number(vv.offsetTop || 0),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MaskField
 // Builds a per-frame heatmap texture from layout data (not pixels).
@@ -45,6 +99,9 @@ const IMPULSE_STRENGTH = 0.70;
 const IMPULSE_LIFETIME = 1800;
 const HOVER_RADIUS = 28;
 const HOVER_STRENGTH = 0.38;
+const STATE_EVICT_AFTER_MS = 300000;
+const STATE_MAX_KEYS = 1200;
+const NEAR_VIEW_MAX = 180;
 
 export class MaskField {
   constructor(gridRoot, assetSel = '.asset') {
@@ -64,14 +121,14 @@ export class MaskField {
     this._dirty = true;
 
     this._onMove = (e) => {
-      const r = this._root.getBoundingClientRect();
+      const r = cloneRect(this._root.getBoundingClientRect());
       this._hoverNx = (e.clientX - r.left) / Math.max(1, r.width);
       this._hoverNy = (e.clientY - r.top) / Math.max(1, r.height);
       this._dirty = true;
     };
     this._onLeave = () => { this._hoverNx = -1; this._hoverNy = -1; };
     this._onDown = (e) => {
-      const r = this._root.getBoundingClientRect();
+      const r = cloneRect(this._root.getBoundingClientRect());
       const nx = (e.clientX - r.left) / Math.max(1, r.width);
       const ny = (e.clientY - r.top) / Math.max(1, r.height);
       this._impulses.push({ nx, ny, strength: IMPULSE_STRENGTH, radius: IMPULSE_RADIUS, born: performance.now() });
@@ -86,8 +143,8 @@ export class MaskField {
 
   pulseCard(cardEl) {
     if (!cardEl) return;
-    const rr = this._root.getBoundingClientRect();
-    const cr = cardEl.getBoundingClientRect();
+    const rr = cloneRect(this._root.getBoundingClientRect());
+    const cr = cloneRect(cardEl.getBoundingClientRect());
     const nx = (cr.left + cr.width * 0.5 - rr.left) / Math.max(1, rr.width);
     const ny = (cr.top + cr.height * 0.5 - rr.top) / Math.max(1, rr.height);
     this._impulses.push({ nx, ny, strength: 0.92, radius: 58, born: performance.now() });
@@ -120,10 +177,10 @@ export class MaskField {
     ctx.fillStyle = `rgba(0,0,0,${MASK_DECAY_ALPHA})`;
     ctx.fillRect(0, 0, W, H);
 
-    const rr = this._root.getBoundingClientRect();
+    const rr = cloneRect(this._root.getBoundingClientRect());
     if (rr.width > 0 && rr.height > 0) {
       this._root.querySelectorAll(this._sel).forEach((el) => {
-        const r = el.getBoundingClientRect();
+        const r = cloneRect(el.getBoundingClientRect());
         const x = ((r.left - rr.left) / rr.width) * W;
         const y = ((r.top - rr.top) / rr.height) * H;
         const w = (r.width / rr.width) * W;
@@ -184,6 +241,7 @@ let __DBG_GL_CONTEXTS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_contexts || 0);
 let __DBG_RENDERERS_CREATED = Number(FX_GLOBAL.__assetfx_dbg_renderers || 0);
 const __DBG_GL_CONTEXT_CALLS = FX_GLOBAL.__assetfx_dbg_context_calls || [];
 let __DBG_PREVENTED_SECOND_CONTEXT = Number(FX_GLOBAL.__assetfx_dbg_prevented_second_context || 0);
+FX_GLOBAL.__assetfx_dbg_last_rects = [];
 const MAX_PARALLEL_DECODES = 3;
 let ACTIVE_DECODES = 0;
 const DECODE_QUEUE = [];
@@ -268,6 +326,7 @@ if (typeof window !== 'undefined') {
     get activeDissolves() { return FX_GLOBAL.__assetfx_instance?.activeDissolves?.size || 0; },
     get pendingDissolves() { return FX_GLOBAL.__assetfx_instance?.pendingDissolves?.length || 0; },
     get visibleCards() { return FX_GLOBAL.__assetfx_instance?.visibleCards?.size || 0; },
+    get nearViewCards() { return FX_GLOBAL.__assetfx_instance?.nearViewCards?.size || 0; },
     get readyInViewNotPlayedCount() { return FX_GLOBAL.__assetfx_instance?.readyInViewNotPlayedCount || 0; },
     get renderSampledCount() { return FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0; },
     get renderCandidatesCount() { return FX_GLOBAL.__assetfx_instance?.renderCandidatesCount || 0; },
@@ -280,7 +339,37 @@ if (typeof window !== 'undefined') {
     get samplingFrozen() { return FX_GLOBAL.__assetfx_instance?.samplingFrozen === true; },
     get stickyRetainedCount() { return FX_GLOBAL.__assetfx_instance?.stickyRetainedCount || 0; },
     get entryPendingCount() { return FX_GLOBAL.__assetfx_instance?.entryPendingCount || 0; },
+    get stateSize() { return FX_GLOBAL.__assetfx_instance?.stateByKey?.size || 0; },
+    get attachedRootId() { return FX_GLOBAL.__assetfx_instance?._attachedGridRoot?.dataset?.assetfxRootId || null; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
+    lastRects: [],
+    lastRectsLen: 0,
+    lastRectsFrame: 0,
+    lastRectsT: 0,
+    layoutInvalidations: 0,
+    lastInvalidationReason: '',
+    canvasRect: null,
+    dpr: 1,
+    vvOffset: { ox: 0, oy: 0 },
+    rootScrollTop: 0,
+    sampleMapA: null,
+    sampleMapC: null,
+    canvasTopPlusVvOy: null,
+    lastRectsReason: '',
+    lastEarlyReturnReason: '',
+    debugBanner: '',
+    tickFrame: 0,
+    tickExitReason: '',
+    candidatesBuilt: 0,
+    sampleWanted: 0,
+    sampleIssued: 0,
+    sampleDone: 0,
+    texturesAlive: 0,
+    mode: 'full',
+    dissolveMode: 'scene',
+    lastException: '',
+    lastExceptionT: 0,
+    vvState: null,
   };
   window.__assetfx_audit = () => {
     const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
@@ -304,6 +393,7 @@ if (typeof window !== 'undefined') {
       activeDissolves: FX_GLOBAL.__assetfx_instance?.activeDissolves?.size || 0,
       pendingDissolves: FX_GLOBAL.__assetfx_instance?.pendingDissolves?.length || 0,
       visibleCards: FX_GLOBAL.__assetfx_instance?.visibleCards?.size || 0,
+      nearViewCards: FX_GLOBAL.__assetfx_instance?.nearViewCards?.size || 0,
       readyInViewNotPlayedCount: FX_GLOBAL.__assetfx_instance?.readyInViewNotPlayedCount || 0,
       renderSampledCount: FX_GLOBAL.__assetfx_instance?.renderSampledCount || 0,
       renderCandidatesCount: FX_GLOBAL.__assetfx_instance?.renderCandidatesCount || 0,
@@ -493,6 +583,7 @@ export class AssetFX {
     this.boundGrids = new WeakSet();
     this.trackedCards = new Set();
     this.visibleCards = new Set();
+    this.nearViewCards = new Set();
     this.lastPlayedAt = new WeakMap();
     this.lastExitedAt = new WeakMap();
     this.cooldownMs = 1000;
@@ -534,6 +625,15 @@ export class AssetFX {
     this.renderSampledCount = 0;
     this.renderCandidatesCount = 0;
     this.droppedByCapCount = 0;
+    this.prefetchViewportY = 1.5;
+    this.stateByKey = new Map();
+    this.keyByEl = new WeakMap();
+    this._stateGeneration = 0;
+    this._debugRenderTick = 0;
+    this.evictAfterMs = Math.max(500, Number(new URLSearchParams(window.location.search).get('fxevictms') || STATE_EVICT_AFTER_MS));
+    this.maxStateKeys = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxmaxstate') || STATE_MAX_KEYS));
+    this.nearViewCardsMax = Math.max(24, Number(new URLSearchParams(window.location.search).get('fxnearmax') || NEAR_VIEW_MAX));
+    this.renderableFallbackMs = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxfallbackms') || 680));
 
     this.prefersReducedMotion = typeof window !== 'undefined'
       ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
@@ -550,6 +650,13 @@ export class AssetFX {
           return params.get('novirt') === '1' || params.get('keep') === '1';
         })()
       : false;
+    this.useIntersectionObserver = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('fxio') !== '0'
+      : true;
+    const dissolveParam = typeof window !== 'undefined'
+      ? String(new URLSearchParams(window.location.search).get('fxdissolve') || '').toLowerCase()
+      : '';
+    this.dissolveMode = (dissolveParam === '1' || dissolveParam === 'tile') ? 'tile' : 'scene';
 
     this.visibilityObserver = null;
     this.scrollReplayScheduled = false;
@@ -560,16 +667,24 @@ export class AssetFX {
     this._attachedCardSelector = '.asset';
     this._boundScheduleReplay = (event) => {
       this._recordScrollMotion(event);
-      this._markLayoutDirty();
+      this._markLayoutDirty('grid:scroll');
     };
-    this._boundWindowResize = () => this._markLayoutDirty();
-    this._boundContainerResize = () => this._markLayoutDirty();
+    this._boundWindowResize = () => this._markLayoutDirty('window:resize');
+    this._boundContainerResize = () => this._markLayoutDirty('container:resize');
     this._tapGuardCleanup = null;
     this._resizeObserver = null;
     this.sampleHoldMs = SAMPLE_STICK_MS;
     this.sampledCardsUntil = new WeakMap();
     this.debugOverlay = null;
-    this._boundVisualViewportChange = () => this._markLayoutDirty();
+    this.debugDomLayer = null;
+    this.debugBannerEl = null;
+    this._debugNoRectsStreak = 0;
+    this._debugLastFrameTs = 0;
+    this._debugLastReason = '';
+    this._domDiscoverCap = 220;
+    this._boundVisualViewportChange = () => this._markLayoutDirty('visualViewport:change');
+    this._boundInvalidationRoot = null;
+    this._invalidationsBound = false;
 
     this._ensureSharedStyles();
     if (typeof window !== 'undefined') window.__assetfx_instance = this;
@@ -609,9 +724,206 @@ export class AssetFX {
     this.selectPulse += (this.selectionGlowTarget - this.selectPulse) * t;
   }
 
-  _markLayoutDirty() {
-    if (!this.layoutDirty) this.cardRectCache = new WeakMap();
+  _getKeyEl(el) {
+    if (!el) return null;
+    if (el.classList?.contains('asset')) return el;
+    return el.closest?.('.asset') || el;
+  }
+
+  _getCardKey(cardEl) {
+    const keyEl = this._getKeyEl(cardEl);
+    if (!keyEl) return '';
+    const existing = this.keyByEl.get(keyEl) || this.keyByEl.get(cardEl);
+    if (existing) return existing;
+    const key = String(
+      keyEl.dataset.assetId
+      || keyEl.dataset.sha256
+      || keyEl.dataset.selectKey
+      || keyEl.dataset.relative
+      || `assetfx-key-${++this._stateGeneration}`
+    );
+    this.keyByEl.set(keyEl, key);
+    if (cardEl && cardEl !== keyEl) this.keyByEl.set(cardEl, key);
+    const mediaEl = keyEl.__fxThumb || keyEl.querySelector('img.asset-thumb,video,audio');
+    if (mediaEl) this.keyByEl.set(mediaEl, key);
+    return key;
+  }
+
+  _getCardState(cardEl, create = true) {
+    const keyEl = this._getKeyEl(cardEl);
+    const key = this._getCardKey(keyEl);
+    if (!key) return null;
+    let state = this.stateByKey.get(key);
+    if (!state && create) {
+      state = {
+        key,
+        enterAt: 0,
+        readyAt: 0,
+        lastSeenAt: 0,
+        lastRect: null,
+        inView: false,
+        nearView: false,
+        thumbLoaded: false,
+        renderable: false,
+        sampledUntil: 0,
+        entryPlayed: false,
+        exitPlayedAt: 0,
+        generation: 1,
+        selected: false,
+        pending: false,
+        active: false,
+        thumbBlockedAt: 0,
+        el: keyEl,
+      };
+      this.stateByKey.set(key, state);
+    }
+    if (state && keyEl && state.el !== keyEl) {
+      state.el = keyEl;
+      state.generation = Number(state.generation || 0) + 1;
+    }
+    if (cardEl && cardEl !== keyEl) this.keyByEl.set(cardEl, key);
+    return state;
+  }
+
+  _bindInvalidations() {
+    const gridRoot = this._attachedGridRoot;
+    if (!gridRoot) return;
+    if (this._invalidationsBound && this._boundInvalidationRoot === gridRoot) return;
+    if (this._invalidationsBound) this._unbindInvalidations();
+    gridRoot.addEventListener('scroll', this._boundScheduleReplay, { passive: true });
+    gridRoot.addEventListener('touchmove', this._boundScheduleReplay, { passive: true });
+    window.addEventListener('resize', this._boundWindowResize, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });
+      window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });
+    }
+    this._boundInvalidationRoot = gridRoot;
+    this._invalidationsBound = true;
+  }
+
+  _unbindInvalidations() {
+    const gridRoot = this._boundInvalidationRoot;
+    if (!gridRoot) return;
+    gridRoot.removeEventListener('scroll', this._boundScheduleReplay);
+    gridRoot.removeEventListener('touchmove', this._boundScheduleReplay);
+    window.removeEventListener('resize', this._boundWindowResize);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this._boundVisualViewportChange);
+      window.visualViewport.removeEventListener('scroll', this._boundVisualViewportChange);
+    }
+    this._boundInvalidationRoot = null;
+    this._invalidationsBound = false;
+  }
+
+  _evictState(nowPerf = performance.now()) {
+    const removable = [];
+    this.stateByKey.forEach((state, key) => {
+      const age = Math.max(0, nowPerf - Number(state.lastSeenAt || 0));
+      const pinned = state.selected || state.pending || state.active;
+      if (!state.nearView && !pinned && age > this.evictAfterMs) {
+        removable.push([key, age]);
+      }
+    });
+    removable.forEach(([key]) => this.stateByKey.delete(key));
+
+    if (this.stateByKey.size <= this.maxStateKeys) return;
+    const candidates = [];
+    this.stateByKey.forEach((state, key) => {
+      const pinned = state.selected || state.pending || state.active || state.inView || state.nearView;
+      if (pinned) return;
+      candidates.push([key, Number(state.lastSeenAt || 0)]);
+    });
+    candidates.sort((a, b) => a[1] - b[1]);
+    while (this.stateByKey.size > this.maxStateKeys && candidates.length) {
+      const [key] = candidates.shift();
+      this.stateByKey.delete(key);
+    }
+  }
+
+  _capNearViewCards() {
+    if (this.nearViewCards.size <= this.nearViewCardsMax) return;
+    const candidates = [];
+    this.nearViewCards.forEach((card) => {
+      const state = this._getCardState(card, false);
+      const seen = Number(state?.lastSeenAt || 0);
+      candidates.push([card, seen]);
+    });
+    candidates.sort((a, b) => a[1] - b[1]);
+    while (this.nearViewCards.size > this.nearViewCardsMax && candidates.length) {
+      const [card] = candidates.shift();
+      if (card?.dataset?.fxInView === '1') continue;
+      this.nearViewCards.delete(card);
+    }
+  }
+
+  _iterCards(collection) {
+    if (!collection) return [];
+    if (collection instanceof Map) return collection.values();
+    if (typeof collection.values === 'function') return collection.values();
+    return collection;
+  }
+
+  _discoverCardsFromDom(limit = this._domDiscoverCap) {
+    const root = this._attachedGridRoot || this.container;
+    if (!root || !this._attachedCardSelector) return;
+    const cards = root.querySelectorAll(this._attachedCardSelector);
+    let seen = 0;
+    cards.forEach((card) => {
+      if (seen >= limit) return;
+      if (!card?.isConnected) return;
+      this.trackedCards.add(card);
+      this._getCardState(card, true);
+      seen += 1;
+    });
+  }
+
+  _setTickExit(reason = '') {
+    const dbg = window.__assetfx_dbg;
+    if (!dbg) return;
+    dbg.tickExitReason = String(reason || '');
+  }
+
+  _setDebugReason(reason = '', extra = {}) {
+    const dbg = window.__assetfx_dbg;
+    if (!dbg) return;
+    const label = String(reason || '');
+    dbg.lastRectsReason = label;
+    if (label.startsWith('EARLY_RETURN')) dbg.lastEarlyReturnReason = label;
+    if (typeof extra.candidates === 'number') dbg.renderCandidatesCount = Number(extra.candidates);
+    this._debugLastReason = label;
+  }
+
+  _syncDebugBanner() {
+    if (!this.fxDebug) return;
+    if (!this.debugBannerEl) return;
+    const dbg = window.__assetfx_dbg || {};
+    const visible = Number(dbg.visibleCards || 0);
+    const hasRects = Number(dbg.lastRectsLen || 0) > 0;
+    const frameAt = Number(dbg.lastRectsT || 0);
+    const stalled = (performance.now() - frameAt) > 250;
+    const noRects = visible > 0 && !hasRects;
+    this._debugNoRectsStreak = noRects ? (this._debugNoRectsStreak + 1) : 0;
+    const show = this._debugNoRectsStreak > 3 || stalled;
+    if (!show) {
+      this.debugBannerEl.style.display = 'none';
+      if (dbg) dbg.debugBanner = '';
+      return;
+    }
+    const reason = String(dbg.lastRectsReason || this._debugLastReason || 'UNKNOWN');
+    const text = `FXDEBUG: no rects (attached=${this.container ? 1 : 0} gl=${this.gl ? 1 : 0} root=${this._attachedGridRoot ? 1 : 0} canvasRect=${dbg.canvasRect ? 1 : 0} candidates=${Number(dbg.renderCandidatesCount || 0)} earlyReturn=${reason.startsWith('EARLY_RETURN') ? 1 : 0} reason=${reason})`;
+    this.debugBannerEl.textContent = text;
+    this.debugBannerEl.style.display = 'block';
+    if (dbg) dbg.debugBanner = text;
+  }
+
+  _markLayoutDirty(reason = 'unspecified') {
     this.layoutDirty = true;
+    this.cardRectCache = new WeakMap();
+    this._lastCanvasRect = null;
+    if (window.__assetfx_dbg) {
+      window.__assetfx_dbg.layoutInvalidations = (window.__assetfx_dbg.layoutInvalidations || 0) + 1;
+      window.__assetfx_dbg.lastInvalidationReason = reason;
+    }
     this._scheduleReplaySweep();
   }
 
@@ -634,6 +946,8 @@ export class AssetFX {
       this._maskAllocated = shared.maskAllocated === true;
       this._u = shared.uCache || this._u;
       this.debugOverlay = shared.debugOverlay || null;
+      this.debugDomLayer = shared.debugDomLayer || this.debugDomLayer;
+      this.debugBannerEl = shared.debugBannerEl || this.debugBannerEl;
       this.raf = shared.raf;
       return;
     }
@@ -655,6 +969,8 @@ export class AssetFX {
         this._maskAllocated = ownerShared.maskAllocated === true;
         this._u = ownerShared.uCache || this._u;
         this.debugOverlay = ownerShared.debugOverlay || null;
+        this.debugDomLayer = ownerShared.debugDomLayer || this.debugDomLayer;
+        this.debugBannerEl = ownerShared.debugBannerEl || this.debugBannerEl;
         this.raf = ownerShared.raf;
         RENDERERS.set(container, ownerShared);
         setGlobalContextOwner({ rootEl: container, canvasEl: owner.canvasEl, stack: owner.stack });
@@ -706,8 +1022,48 @@ export class AssetFX {
     });
     if (!debugOverlay.isConnected || debugOverlay.parentElement !== document.body) document.body.prepend(debugOverlay);
 
+    const debugLayers = Array.from(document.querySelectorAll('div[data-assetfx="debug-layer"]'));
+    const debugDomLayer = debugLayers.shift() || createNode('div', 'fx-debug-dom-layer');
+    debugLayers.forEach((node) => node.remove());
+    debugDomLayer.classList.add('fx-debug-dom-layer');
+    debugDomLayer.dataset.assetfx = 'debug-layer';
+    Object.assign(debugDomLayer.style, {
+      position: 'fixed',
+      inset: '0',
+      pointerEvents: 'none',
+      zIndex: '9999',
+      display: this.fxDebug ? 'block' : 'none',
+    });
+    if (!debugDomLayer.isConnected || debugDomLayer.parentElement !== document.body) document.body.appendChild(debugDomLayer);
+
+    const debugBanners = Array.from(document.querySelectorAll('div[data-assetfx="debug-banner"]'));
+    const debugBanner = debugBanners.shift() || createNode('div', 'fx-debug-banner');
+    debugBanners.forEach((node) => node.remove());
+    debugBanner.dataset.assetfx = 'debug-banner';
+    Object.assign(debugBanner.style, {
+      position: 'fixed',
+      left: '8px',
+      right: '8px',
+      top: '8px',
+      zIndex: '10000',
+      font: '11px/1.3 monospace',
+      color: '#9ff3ff',
+      background: 'rgba(6, 16, 30, 0.82)',
+      border: '1px solid rgba(120, 255, 170, 0.45)',
+      borderRadius: '8px',
+      padding: '6px 8px',
+      display: 'none',
+      pointerEvents: 'none',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    });
+    if (!debugBanner.isConnected || debugBanner.parentElement !== document.body) document.body.appendChild(debugBanner);
+
     this.overlay = canvas;
     this.debugOverlay = debugOverlay;
+    this.debugDomLayer = debugDomLayer;
+    this.debugBannerEl = debugBanner;
     ensureOverlayId(canvas);
     container.dataset.fxRendererId = String(++RENDERER_SEQ);
     FX_GLOBAL.__assetfx_renderer_seq = RENDERER_SEQ;
@@ -823,8 +1179,12 @@ export class AssetFX {
     this.raf = 0;
     if (this.overlay) this.overlay.remove();
     if (this.debugOverlay) this.debugOverlay.remove();
+    if (this.debugDomLayer) this.debugDomLayer.remove();
+    if (this.debugBannerEl) this.debugBannerEl.remove();
     this.overlay = null;
     this.debugOverlay = null;
+    this.debugDomLayer = null;
+    this.debugBannerEl = null;
     this.gl = null;
     this.program = null;
     this.quad = null;
@@ -844,6 +1204,7 @@ export class AssetFX {
     }
     this.trackedCards.clear();
     this.visibleCards.clear();
+    this.nearViewCards.clear();
     this.activeDissolves.clear();
     this.pendingDissolves = [];
     this.readyInViewNotPlayedCount = 0;
@@ -855,6 +1216,8 @@ export class AssetFX {
     this.boundGrids = new WeakSet();
     this.pointerState.clear();
     this.pendingDissolves = [];
+    this.stateByKey.clear();
+    this.keyByEl = new WeakMap();
   }
 
   attachGrid(gridRoot, cardSelector = '.asset') {
@@ -872,16 +1235,10 @@ export class AssetFX {
       setGlobalContextOwner({ rootEl: gridRoot, canvasEl: this.overlay, stack: owner.stack });
     }
 
-    gridRoot.addEventListener('scroll', this._boundScheduleReplay, { passive: true });
-    gridRoot.addEventListener('touchmove', this._boundScheduleReplay, { passive: true });
-    window.addEventListener('resize', this._boundWindowResize, { passive: true });
+    this._bindInvalidations();
     if (typeof ResizeObserver !== 'undefined') {
       this._resizeObserver = new ResizeObserver(this._boundContainerResize);
       this._resizeObserver.observe(gridRoot);
-    }
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', this._boundVisualViewportChange, { passive: true });
-      window.visualViewport.addEventListener('scroll', this._boundVisualViewportChange, { passive: true });
     }
 
     this._tapGuardCleanup = this._wireTapGuard(gridRoot, cardSelector);
@@ -893,16 +1250,10 @@ export class AssetFX {
   detachGrid() {
     const gridRoot = this._attachedGridRoot;
     if (!gridRoot) return;
-    gridRoot.removeEventListener('scroll', this._boundScheduleReplay);
-    gridRoot.removeEventListener('touchmove', this._boundScheduleReplay);
-    window.removeEventListener('resize', this._boundWindowResize);
+    this._unbindInvalidations();
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
-    }
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', this._boundVisualViewportChange);
-      window.visualViewport.removeEventListener('scroll', this._boundVisualViewportChange);
     }
     if (typeof this._tapGuardCleanup === 'function') this._tapGuardCleanup();
     if (this._maskField) { this._maskField.destroy(); this._maskField = null; }
@@ -915,6 +1266,7 @@ export class AssetFX {
     this.layoutDirty = true;
     this.cardRectCache = new WeakMap();
     this.pendingDissolves = [];
+    this.nearViewCards.clear();
     if (!this.trackedCards.size) {
       cancelAnimationFrame(this.raf);
       this.raf = 0;
@@ -926,7 +1278,16 @@ export class AssetFX {
 
   trackViewport(cardEl, imgEl = null) {
     if (!cardEl) return;
-    if (imgEl) cardEl.__fxThumb = imgEl;
+    if (imgEl) {
+      cardEl.__fxThumb = imgEl;
+      const key = this._getCardKey(cardEl);
+      if (key) this.keyByEl.set(imgEl, key);
+    }
+    const state = this._getCardState(cardEl, true);
+    if (state) {
+      state.lastSeenAt = performance.now();
+      state.selected = cardEl.classList.contains('is-selected');
+    }
     this.trackedCards.add(cardEl);
     if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
     if (this.visibilityObserver) this.visibilityObserver.observe(cardEl);
@@ -935,6 +1296,8 @@ export class AssetFX {
 
   bindCardMedia(cardEl, mediaEl, { kind = '' } = {}) {
     if (!cardEl || !mediaEl) return;
+    const key = this._getCardKey(cardEl);
+    if (key) this.keyByEl.set(mediaEl, key);
     cardEl.dataset.fxKind = kind || '';
     cardEl.dataset.fxReady = '0';
     cardEl.dataset.ready = '0';
@@ -950,6 +1313,13 @@ export class AssetFX {
       cardEl.dataset.fxReady = '1';
       cardEl.dataset.ready = '1';
       cardEl.dataset.fxReadyAt = String(performance.now());
+      const state = this._getCardState(cardEl, true);
+      if (state) {
+        state.readyAt = performance.now();
+        state.thumbLoaded = true;
+        state.renderable = true;
+        state.lastSeenAt = performance.now();
+      }
       if (cardEl.dataset.fxInView === '1') this.visibleCards.add(cardEl);
       this._markLayoutDirty();
       this._ensureEntryPending(cardEl, mediaEl, this.entryMs);
@@ -960,6 +1330,12 @@ export class AssetFX {
       cardEl.dataset.fxReady = '0';
       cardEl.dataset.ready = '0';
       this.visibleCards.delete(cardEl);
+      const state = this._getCardState(cardEl, true);
+      if (state) {
+        state.thumbLoaded = false;
+        state.renderable = false;
+        state.lastSeenAt = performance.now();
+      }
     };
 
     const onImgLoad = () => { void markReady(); };
@@ -1050,8 +1426,71 @@ export class AssetFX {
     return !this.prefersReducedMotion && !this.liteFx;
   }
 
+  setDissolveMode(mode = 'scene') {
+    const next = String(mode || 'scene').toLowerCase();
+    this.dissolveMode = next === 'tile' ? 'tile' : 'scene';
+    if (window.__assetfx_dbg) window.__assetfx_dbg.dissolveMode = this.dissolveMode;
+  }
+
+  _isRenderableMediaReady(cardEl) {
+    if (!cardEl?.isConnected) return false;
+    const state = this._getCardState(cardEl, true);
+    const mediaEl = cardEl.__fxThumb || cardEl.querySelector('img.asset-thumb,video,audio');
+    if (!mediaEl?.isConnected) {
+      if (state) state.renderable = false;
+      return false;
+    }
+
+    const tag = (mediaEl.tagName || '').toUpperCase();
+    if (tag === 'IMG') {
+      const now = performance.now();
+      const thumbState = String(mediaEl.dataset?.thumbState || '').trim().toLowerCase();
+      const src = (mediaEl.currentSrc || mediaEl.getAttribute('src') || '').trim();
+      const thumbFallback = String(mediaEl.dataset?.thumbFallback || '').trim();
+      const hasThumbUrl = String(mediaEl.dataset?.thumbUrl || '').trim().length > 0;
+      const mediaReady = !!src && mediaEl.complete && Number(mediaEl.naturalWidth || 0) > 0;
+      const thumbBlocked = !!(thumbState && thumbState !== 'loaded');
+      const fallbackBlocked = !!(hasThumbUrl && thumbFallback && src === thumbFallback);
+      let ready = mediaReady && !thumbBlocked && !fallbackBlocked;
+      if (!ready && mediaReady && (thumbBlocked || fallbackBlocked)) {
+        if (state && !state.thumbBlockedAt) state.thumbBlockedAt = now;
+        const blockedFor = state ? (now - Number(state.thumbBlockedAt || now)) : 0;
+        const visibleLike = cardEl.dataset.fxInView === '1' || this.visibleCards.has(cardEl) || !!state?.nearView;
+        if (visibleLike && blockedFor >= this.renderableFallbackMs) ready = true;
+      }
+      if (state) {
+        state.thumbLoaded = ready;
+        state.renderable = ready;
+        state.lastSeenAt = now;
+        state.thumbBlockedAt = ready ? 0 : Number(state.thumbBlockedAt || now);
+      }
+      return ready;
+    }
+    if (tag === 'VIDEO') {
+      const ready = Number(mediaEl.readyState || 0) >= 2;
+      if (state) {
+        state.thumbLoaded = ready;
+        state.renderable = ready;
+        state.lastSeenAt = performance.now();
+      }
+      return ready;
+    }
+    if (tag === 'AUDIO') {
+      const ready = Number(mediaEl.readyState || 0) >= 1;
+      if (state) {
+        state.thumbLoaded = ready;
+        state.renderable = ready;
+        state.lastSeenAt = performance.now();
+      }
+      return ready;
+    }
+    if (state) state.renderable = false;
+    return false;
+  }
+
   _enqueueDissolve(cardEl, imgEl, duration) {
     if (!cardEl || !imgEl || this.prefersReducedMotion) return;
+    if (this.dissolveMode !== 'tile' && cardEl?.dataset?.fxForceDissolve !== '1') return;
     this._pruneDisconnected();
     if (cardEl.dataset.fxReady !== '1') return;
     if (!this.visibleCards.has(cardEl)) return;
@@ -1108,6 +1547,17 @@ export class AssetFX {
     const next = visible ? '1' : '0';
     if (card.dataset.fxInView === next) return false;
     card.dataset.fxInView = next;
+    const state = this._getCardState(card, true);
+    if (state) {
+      state.inView = visible;
+      state.nearView = visible || state.nearView;
+      state.lastSeenAt = performance.now();
+      if (visible && !state.enterAt) state.enterAt = performance.now();
+      state.selected = card.classList.contains('is-selected');
+    }
+    if (state?.nearView) this.nearViewCards.add(card);
+    else this.nearViewCards.delete(card);
+    this._capNearViewCards();
     if (visible && card.dataset.fxReady === '1') {
       this.visibleCards.add(card);
       const mediaEl = card.__fxThumb || card.querySelector('img.asset-thumb,video,audio');
@@ -1117,6 +1567,8 @@ export class AssetFX {
       if (card.dataset.fxReady === '1' && !this.noVirtualization) this._playExit(card);
       this.visibleCards.delete(card);
       this.sampledCardsUntil.delete(card);
+      if (state) state.sampledUntil = 0;
+      this.nearViewCards.delete(card);
       card.dataset.fxEntryPending = '0';
       this.pendingDissolves = this.pendingDissolves.filter((entry) => entry.cardEl !== card);
     }
@@ -1138,10 +1590,21 @@ export class AssetFX {
 
   _pruneDisconnected() {
     this.trackedCards.forEach((card) => {
-      if (!card?.isConnected) this.trackedCards.delete(card);
+      if (!card?.isConnected) {
+        const state = this._getCardState(card, false);
+        if (state) {
+          state.nearView = false;
+          state.inView = false;
+          state.renderable = false;
+        }
+        this.trackedCards.delete(card);
+      }
     });
     this.visibleCards.forEach((card) => {
       if (!card?.isConnected) this.visibleCards.delete(card);
+    });
+    this.nearViewCards.forEach((card) => {
+      if (!card?.isConnected) this.nearViewCards.delete(card);
     });
     this.activeDissolves.forEach((card) => {
       if (!card?.isConnected) this.activeDissolves.delete(card);
@@ -1161,16 +1624,25 @@ export class AssetFX {
       this.trackedCards.forEach((card) => this._setCardInView(card, true));
       return;
     }
-    if (!('IntersectionObserver' in window)) {
+    if (!this.useIntersectionObserver || !('IntersectionObserver' in window)) {
       this.fallbackSweepEnabled = true;
       return;
     }
 
     this.fallbackSweepEnabled = false;
+    const overscanY = Math.max(64, Math.round((rootEl?.clientHeight || 0) * this.prefetchViewportY));
     this.visibilityObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         const card = entry.target;
         if (!card?.isConnected) continue;
+        const state = this._getCardState(card, true);
+        if (state) {
+          state.nearView = entry.isIntersecting;
+          state.lastSeenAt = performance.now();
+          if (state.nearView) this.nearViewCards.add(card);
+          else this.nearViewCards.delete(card);
+          this._capNearViewCards();
+        }
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
         if (!img) continue;
         if (entry.isIntersecting && entry.intersectionRatio > 0.35) {
@@ -1183,7 +1655,11 @@ export class AssetFX {
           this._setCardInView(card, false);
         }
       }
-    }, { root: rootEl, threshold: [0.35, 0.65] });
+    }, {
+      root: rootEl,
+      threshold: [0.2, 0.35, 0.65],
+      rootMargin: `${overscanY}px 0px ${overscanY}px 0px`,
+    });
 
     this.trackedCards.forEach((card) => this.visibilityObserver.observe(card));
   }
@@ -1241,21 +1717,42 @@ export class AssetFX {
     });
   }
 
+  _expandedRootRect(rootRect) {
+    const extraY = Math.max(0, Number(rootRect?.height || 0) * this.prefetchViewportY);
+    return {
+      top: Number(rootRect?.top || 0) - extraY,
+      bottom: Number(rootRect?.bottom || 0) + extraY,
+      left: Number(rootRect?.left || 0),
+      right: Number(rootRect?.right || 0),
+    };
+  }
+
   _replaySweep() {
     this._pruneDisconnected();
     if (!this.container || !this.trackedCards.size) return;
     this.layoutDirty = true;
     this.cardRectCache = new WeakMap();
-    const rootRect = this.container.getBoundingClientRect();
+    const rootRect = cloneRect(this.container.getBoundingClientRect());
+    const expandedRect = this._expandedRootRect(rootRect);
     const minOverlap = Math.max(18, rootRect.height * 0.1);
     this.trackedCards.forEach((card) => {
       if (!card?.isConnected) {
         this.trackedCards.delete(card);
         return;
       }
-      const rect = card.getBoundingClientRect();
-      const overlap = Math.min(rect.bottom, rootRect.bottom) - Math.max(rect.top, rootRect.top);
+      const rect = cloneRect(card.getBoundingClientRect());
+      const overlap = Math.min(rect.bottom, expandedRect.bottom) - Math.max(rect.top, expandedRect.top);
+      const nearView = this.noVirtualization ? true : overlap > 0;
       const visible = this.noVirtualization ? true : overlap > minOverlap;
+      const state = this._getCardState(card, true);
+      if (state) {
+        state.nearView = nearView;
+        state.inView = visible;
+        state.lastSeenAt = performance.now();
+        if (state.nearView) this.nearViewCards.add(card);
+        else this.nearViewCards.delete(card);
+        this._capNearViewCards();
+      }
       if (visible) {
         const entered = this._setCardInView(card, true);
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
@@ -1267,8 +1764,6 @@ export class AssetFX {
         this._setCardInView(card, false);
       }
     });
-    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;
-    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;
   }
 
   _showVisibleHint(cardEl) {
@@ -1289,6 +1784,8 @@ export class AssetFX {
     const last = this.lastExitedAt.get(cardEl) || 0;
     if (now - last < Math.max(420, this.cooldownMs * 0.6)) return;
     this.lastExitedAt.set(cardEl, now);
+    const state = this._getCardState(cardEl, true);
+    if (state) state.exitPlayedAt = now;
     ensureRelative(cardEl);
     const veil = createNode('div', 'fx-exit-veil');
     veil.style.animationDuration = `${Math.max(180, duration)}ms`;
@@ -1299,22 +1796,38 @@ export class AssetFX {
   _startLoop() {
     if (this.raf || !this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
     const tick = () => {
-      const now = performance.now();
-      if (this._lastFrameAt > 0) {
-        const dt = Math.max(1, now - this._lastFrameAt);
-        const fps = 1000 / dt;
-        this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);
-      }
-      this._lastFrameAt = now;
-      this._frameCounter += 1;
-      const deviceMemory = Number(window.navigator?.deviceMemory || 0);
-      const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
-      const lowTierFrameSkip = ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;
-      if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();
-      this.raf = requestAnimationFrame(tick);
-      if (this.container && RENDERERS.has(this.container)) {
-        const shared = RENDERERS.get(this.container);
-        shared.raf = this.raf;
+      try {
+        if (window.__assetfx_dbg) {
+          window.__assetfx_dbg.tickFrame = Number(window.__assetfx_dbg.tickFrame || 0) + 1;
+        }
+        const now = performance.now();
+        if (this._lastFrameAt > 0) {
+          const dt = Math.max(1, now - this._lastFrameAt);
+          const fps = 1000 / dt;
+          this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);
+        }
+        this._lastFrameAt = now;
+        this._frameCounter += 1;
+        const deviceMemory = Number(window.navigator?.deviceMemory || 0);
+        const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
+        const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;
+        if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) {
+          this._setTickExit('RUN');
+          this._render();
+        } else {
+          this._setTickExit('EARLY_RETURN:THROTTLED');
+          this._publishDebugRects(window.__assetfx_dbg?.lastRects || [], { lastRectsReason: 'EARLY_RETURN:THROTTLED' });
+        }
+      } catch (e) {
+        window.__assetfx_dbg = window.__assetfx_dbg || {};
+        window.__assetfx_dbg.lastException = String(e && (e.stack || e.message || e));
+        window.__assetfx_dbg.lastExceptionT = performance.now();
+      } finally {
+        this.raf = requestAnimationFrame(tick);
+        if (this.container && RENDERERS.has(this.container)) {
+          const shared = RENDERERS.get(this.container);
+          shared.raf = this.raf;
+        }
       }
     };
     this.raf = requestAnimationFrame(tick);
@@ -1342,6 +1855,8 @@ export class AssetFX {
       maskAllocated: this._maskAllocated,
       uCache: this._u,
       debugOverlay: this.debugOverlay,
+      debugDomLayer: this.debugDomLayer,
+      debugBannerEl: this.debugBannerEl,
       raf: this.raf,
     });
   }
@@ -1367,7 +1882,14 @@ export class AssetFX {
 
   _render() {
     this._pruneDisconnected();
-    if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
+    this._discoverCardsFromDom();
+    if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) {
+      this._setDebugReason('EARLY_RETURN:NOT_ATTACHED');
+      this._setTickExit('EARLY_RETURN:NOT_ATTACHED');
+      this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:NOT_ATTACHED' });
+      this._syncDebugBanner();
+      return;
+    }
     if (this.container.dataset.fxSuspend === '1') {
       this.gl.viewport(0, 0, this.overlay.width || 1, this.overlay.height || 1);
       this.gl.clearColor(0, 0, 0, 0);
@@ -1376,12 +1898,27 @@ export class AssetFX {
         const ctx = this.debugOverlay.getContext('2d');
         if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width, this.debugOverlay.height);
       }
+      if (this.debugDomLayer) this.debugDomLayer.replaceChildren();
+      this._setDebugReason('EARLY_RETURN:DEBUG_DISABLED');
+      this._setTickExit('EARLY_RETURN:DEBUG_DISABLED');
+      this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:DEBUG_DISABLED' });
+      this._syncDebugBanner();
       return;
     }
     const dpr = window.devicePixelRatio || 1;
-    const canvasRect = this.overlay.getBoundingClientRect();
-    const width = Math.max(1, Math.round((window.innerWidth || canvasRect.width || 1) * dpr));
-    const height = Math.max(1, Math.round((window.innerHeight || canvasRect.height || 1) * dpr));
+    let canvasRect = this._lastCanvasRect || cloneRect(this.overlay.getBoundingClientRect());
+    if (!this._lastCanvasRect || this.layoutDirty) canvasRect = cloneRect(this.overlay.getBoundingClientRect());
+    this._lastCanvasRect = canvasRect;
+    if (!canvasRect || !Number.isFinite(canvasRect.width) || !Number.isFinite(canvasRect.height) || canvasRect.width <= 0 || canvasRect.height <= 0) {
+      this._setDebugReason('EARLY_RETURN:CANVAS_RECT_NULL');
+      this._setTickExit('EARLY_RETURN:CANVAS_RECT_NULL');
+      this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:CANVAS_RECT_NULL', canvasRect: null });
+      this._syncDebugBanner();
+      return;
+    }
+    const viewport = getStableViewportSize();
+    const width = Math.max(1, Math.round((viewport.width || canvasRect.width || 1) * dpr));
+    const height = Math.max(1, Math.round((viewport.height || canvasRect.height || 1) * dpr));
     if (this.overlay.width !== width || this.overlay.height !== height) {
       this.overlay.width = width;
       this.overlay.height = height;
@@ -1397,19 +1934,43 @@ export class AssetFX {
     if (this.layoutDirty) this.cardRectCache = new WeakMap();
     const cx = width * 0.5;
     const cy = height * 0.5;
-    this.visibleCards.forEach((card) => {
-      if (!card?.isConnected) return;
-      if (card.dataset.fxInView !== '1') return;
-      if (card.dataset.fxReady !== '1') return;
+    for (const card of this._iterCards(this.trackedCards)) {
+      if (!card?.isConnected) continue;
+      const state = this._getCardState(card, true);
+      if (!state) continue;
+      state.selected = card.classList.contains('is-selected');
+      state.pending = card.dataset.fxEntryPending === '1';
+      state.active = this.activeDissolves.has(card);
+      state.lastSeenAt = performance.now();
       let cr = this.cardRectCache.get(card);
       if (!cr || this.layoutDirty) {
-        cr = card.getBoundingClientRect();
+        cr = cloneRect(card.getBoundingClientRect());
         this.cardRectCache.set(card, cr);
       }
-      let x1 = cr.left * dpr;
-      let y1 = cr.top * dpr;
-      let x2 = cr.right * dpr;
-      let y2 = cr.bottom * dpr;
+      const inViewNow = cr.bottom >= canvasRect.top
+        && cr.top <= canvasRect.bottom
+        && cr.right >= canvasRect.left
+        && cr.left <= canvasRect.right;
+      const nearBandPx = Math.max(48, canvasRect.height * this.prefetchViewportY);
+      const nearViewNow = cr.bottom >= (canvasRect.top - nearBandPx)
+        && cr.top <= (canvasRect.bottom + nearBandPx)
+        && cr.right >= canvasRect.left
+        && cr.left <= canvasRect.right;
+      state.inView = inViewNow;
+      state.nearView = nearViewNow;
+      card.dataset.fxInView = inViewNow ? '1' : '0';
+      if (inViewNow) this.visibleCards.add(card);
+      else this.visibleCards.delete(card);
+      if (nearViewNow) this.nearViewCards.add(card);
+      else this.nearViewCards.delete(card);
+      this._capNearViewCards();
+      if (!nearViewNow) continue;
+      if (card.dataset.fxReady !== '1') continue;
+      if (!this._isRenderableMediaReady(card)) continue;
+      let x1 = (cr.left - canvasRect.left) * dpr;
+      let y1 = (cr.top - canvasRect.top) * dpr;
+      let x2 = (cr.right - canvasRect.left) * dpr;
+      let y2 = (cr.bottom - canvasRect.top) * dpr;
       x1 += RECT_INSET_PX * dpr;
       y1 += RECT_INSET_PX * dpr;
       x2 -= RECT_INSET_PX * dpr;
@@ -1418,7 +1979,8 @@ export class AssetFX {
       y1 = Math.max(0, Math.min(height, y1));
       x2 = Math.max(0, Math.min(width, x2));
       y2 = Math.max(0, Math.min(height, y2));
-      if (x2 <= x1 || y2 <= y1) return;
+      if (x2 <= x1 || y2 <= y1) continue;
+      state.lastRect = { x1, y1, x2, y2 };
       const typeCode = 0;
       const selected = card.classList.contains('is-selected') ? 1 : 0;
       const readyAt = Number(card.dataset.fxReadyAt || 0);
@@ -1432,12 +1994,20 @@ export class AssetFX {
       renderCandidates.push([x1, y1, x2, y2, typeCode, selected, energy, readyFade, dist2 + holdBoost, card]);
 
       const last = this.lastPlayedAt.get(card) || 0;
-      if (!this.activeDissolves.has(card) && (Date.now() - last >= this.cooldownMs)) {
+      if (inViewNow && !this.activeDissolves.has(card) && (Date.now() - last >= this.cooldownMs)) {
         this.readyInViewNotPlayedCount += 1;
       }
-    });
+    }
     const totalCandidates = renderCandidates.length;
     this.renderCandidatesCount = totalCandidates;
+    if (window.__assetfx_dbg) {
+      window.__assetfx_dbg.candidatesBuilt = totalCandidates;
+      window.__assetfx_dbg.sampleWanted = totalCandidates;
+      window.__assetfx_dbg.sampleIssued = 0;
+      window.__assetfx_dbg.sampleDone = 0;
+      window.__assetfx_dbg.texturesAlive = Number(!!this.tileParamTexture) + Number(!!this._maskTexture);
+      window.__assetfx_dbg.mode = this.gl ? 'full' : 'off';
+    }
     const deviceMemory = Number(window.navigator?.deviceMemory || 0);
     const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
     const lowTier = (deviceMemory > 0 && deviceMemory <= 4) || smallScreen;
@@ -1510,12 +2080,18 @@ export class AssetFX {
       const stickUntil = this.sampledCardsUntil.get(card) || 0;
       if (stickUntil > nowPerf) this.stickyRetainedCount += 1;
       this.sampledCardsUntil.set(card, nowPerf + SAMPLE_STICK_MS);
+      const state = this._getCardState(card, true);
+      if (state) state.sampledUntil = nowPerf + SAMPLE_STICK_MS;
       if (this.fxDebug) {
         const sticky = stickUntil > nowPerf;
         this._renderDebugBadge(card, { sampled: true, sticky, pending: false, inView: true, ready: true, alwaysOn: ALWAYS_ON_PASS_ENABLED });
       }
     });
     this.sweepFilledCount = Math.max(0, cards.length - this.stickyRetainedCount);
+    if (window.__assetfx_dbg) {
+      window.__assetfx_dbg.sampleIssued = selectedCards.length;
+      window.__assetfx_dbg.sampleDone = cards.length;
+    }
     this.lastSampledCards = [...sampledCards];
 
     selectedVisibleCards.forEach((card) => {
@@ -1526,6 +2102,8 @@ export class AssetFX {
       sampledCards.add(card);
       this.renderPixelsNow += Math.max(1, (row[2] - row[0]) * (row[3] - row[1]));
       this.sampledCardsUntil.set(card, nowPerf + SAMPLE_STICK_MS);
+      const state = this._getCardState(card, true);
+      if (state) state.sampledUntil = nowPerf + SAMPLE_STICK_MS;
     });
 
     // finalize pending entry once sampling decision settles (sampled or 2 raf cycles)
@@ -1550,10 +2128,11 @@ export class AssetFX {
     });
 
     if (this.fxDebug) {
-      this.visibleCards.forEach((card) => {
+      this.trackedCards.forEach((card) => {
         if (!card?.isConnected) return;
-        const ready = card.dataset.fxReady === '1';
-        const inView = card.dataset.fxInView === '1';
+        const state = this._getCardState(card, true);
+        const ready = !!state?.renderable;
+        const inView = !!state?.inView;
         const sampled = sampledCards.has(card);
         const pending = ready && inView && !sampled;
         const sticky = sampled && ((this.sampledCardsUntil.get(card) || 0) > (nowPerf + SAMPLE_STICK_MS - 16));
@@ -1564,6 +2143,7 @@ export class AssetFX {
     this.droppedByCapCount = Math.max(0, totalCandidates - cards.length);
     this._updateSelectionGlow(nowPerf, selectedVisibleCards.length);
     this.layoutDirty = false;
+    this._evictState(nowPerf);
     this._renderDebugRects(cards, width, height);
 
     const gl = this.gl;
@@ -1629,13 +2209,49 @@ export class AssetFX {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
+  _publishDebugRects(debugRects, meta = {}) {
+    const safeRects = Array.isArray(debugRects) ? debugRects : [];
+    FX_GLOBAL.__assetfx_dbg_last_rects = safeRects;
+    if (window.__assetfx_dbg) {
+      window.__assetfx_dbg.lastRects = safeRects;
+      window.__assetfx_dbg.lastRectsLen = safeRects.length;
+      window.__assetfx_dbg.lastRectsFrame = Number(window.__assetfx_dbg.lastRectsFrame || 0) + 1;
+      window.__assetfx_dbg.lastRectsT = performance.now();
+      window.__assetfx_dbg.stateSize = this.stateByKey.size;
+      window.__assetfx_dbg.attachedRootId = this._attachedGridRoot?.dataset?.assetfxRootId || null;
+      window.__assetfx_dbg.canvasRect = meta.canvasRect || null;
+      window.__assetfx_dbg.dpr = Number(meta.dpr || window.devicePixelRatio || 1);
+      window.__assetfx_dbg.vvOffset = meta.vvOffset || { ox: 0, oy: 0 };
+      window.__assetfx_dbg.vvState = meta.vvState || null;
+      window.__assetfx_dbg.rootScrollTop = Number(meta.rootScrollTop || this._attachedGridRoot?.scrollTop || 0);
+      window.__assetfx_dbg.visibleCards = this.visibleCards.size;
+      window.__assetfx_dbg.nearViewCards = this.nearViewCards.size;
+      window.__assetfx_dbg.sampleMapA = meta.sampleMapA || null;
+      window.__assetfx_dbg.sampleMapC = meta.sampleMapC || null;
+      window.__assetfx_dbg.canvasTopPlusVvOy = Number.isFinite(Number(meta.canvasTopPlusVvOy)) ? Number(meta.canvasTopPlusVvOy) : null;
+      window.__assetfx_dbg.dissolveMode = this.dissolveMode;
+      const reason = String(meta.lastRectsReason || (safeRects.length > 0 ? 'OK' : 'NO_CANDIDATES'));
+      window.__assetfx_dbg.lastRectsReason = reason;
+      if (reason.startsWith('EARLY_RETURN')) window.__assetfx_dbg.lastEarlyReturnReason = reason;
+    }
+    this._syncDebugBanner();
+  }
+
   _renderDebugRects(cards, width, height) {
     if (!this.debugOverlay) return;
     if (!this.fxDebug) {
-      FX_GLOBAL.__assetfx_dbg_last_rects = [];
-      if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = [];
+      this._publishDebugRects([], {
+        lastRectsReason: 'DEBUG_DISABLED',
+        canvasRect: this._lastCanvasRect ? {
+          left: this._lastCanvasRect.left,
+          top: this._lastCanvasRect.top,
+          width: this._lastCanvasRect.width,
+          height: this._lastCanvasRect.height,
+        } : null,
+      });
       const ctx = this.debugOverlay.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width || 0, this.debugOverlay.height || 0);
+      if (this.debugDomLayer) this.debugDomLayer.replaceChildren();
       return;
     }
     const ctx = this.debugOverlay.getContext('2d');
@@ -1671,8 +2287,57 @@ export class AssetFX {
         ctx.fillText(String(idx + 1), x + 4, y + 11);
       }
     });
-    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;
-    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;
+    const vvState = cloneVV(window.visualViewport);
+    const vv = getViewportOffsets();
+    const sample = cards.length ? cards[0] : null;
+    const sampleMapA = sample
+      ? { x: Number(sample[0] / (window.devicePixelRatio || 1)), y: Number(sample[1] / (window.devicePixelRatio || 1)) }
+      : null;
+    const sampleMapC = sample
+      ? { x: Number(sampleMapA?.x ?? 0) - vv.x, y: Number(sampleMapA?.y ?? 0) - vv.y }
+      : null;
+    const canvasTopPlusVvOy = this._lastCanvasRect ? Number(this._lastCanvasRect.top + vv.y) : null;
+    this._publishDebugRects(debugRects, {
+      lastRectsReason: debugRects.length > 0 ? 'OK' : 'NO_CANDIDATES',
+      canvasRect: this._lastCanvasRect ? {
+        left: this._lastCanvasRect.left,
+        top: this._lastCanvasRect.top,
+        width: this._lastCanvasRect.width,
+        height: this._lastCanvasRect.height,
+      } : null,
+      dpr: window.devicePixelRatio || 1,
+      vvOffset: { ox: vv.x, oy: vv.y },
+      vvState,
+      rootScrollTop: Number(this._attachedGridRoot?.scrollTop || 0),
+      sampleMapA,
+      sampleMapC,
+      canvasTopPlusVvOy,
+    });
+    if (this.debugDomLayer) {
+      this.debugDomLayer.replaceChildren();
+      const dpr = window.devicePixelRatio || 1;
+      debugRects.forEach((r) => {
+        const node = document.createElement('div');
+        node.className = 'fx-debug-dom-rect';
+        const x = r.x1 / dpr;
+        const y = r.y1 / dpr;
+        const w = Math.max(1, (r.x2 - r.x1) / dpr);
+        const h = Math.max(1, (r.y2 - r.y1) / dpr);
+        Object.assign(node.style, {
+          position: 'fixed',
+          left: `${x}px`,
+          top: `${y}px`,
+          width: `${w}px`,
+          height: `${h}px`,
+          border: '1px solid rgba(120, 255, 170, 0.95)',
+          borderRadius: '3px',
+          boxSizing: 'border-box',
+          pointerEvents: 'none',
+          zIndex: '9999',
+        });
+        this.debugDomLayer.appendChild(node);
+      });
+    }
   }
 
   _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, sticky = false, alwaysOn = true } = {}) {
