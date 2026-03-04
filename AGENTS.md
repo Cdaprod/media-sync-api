@@ -1288,3 +1288,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated view switching to keep grid active for `fx` and route AssetFX dissolve policy by mode (`scene` for FX, `tile` for classic grid/list) via `cardFX.setDissolveMode(...)`.
 - Added AssetFX dissolve policy controls in `public/js/explorer-shaders.mjs` (`dissolveMode`, `setDissolveMode`) and gated `_enqueueDissolve(...)` so per-tile wipe dissolves are no longer the default scroll-time behavior.
 - Extended static monitor assertions for FX-default controls, dissolve-policy wiring, and FX visual contract markers.
+
+### Latest Implementation Notes (2026-03-04, Hybrid TileFX renderer foundation)
+- Added a new `TileFXRenderer` in `public/js/explorer-shaders.mjs` that renders FX-mode tiles via WebGL from DOM-provided rects, with persistent type-colored glow material and selection boost.
+- Added internal `TextureCacheLRU` for FX tile textures (upload-once from ready thumbnail images, bounded by texture count/MB budget, with eviction telemetry) to reduce scroll churn flicker.
+- Added `window.__tilefx_dbg` runtime telemetry (`mode`, visible count, uploads/sec, cache size/evictions, draw calls, frame timing, fail reason) and fail-safe fallback signaling.
+- Updated `public/explorer.html` to instantiate TileFX, provide DOM tile scan source (`collectTileFxTiles` overscan scan), add dedicated `tilefxCanvas`, and keep FX mode as default while preserving existing grid/list behavior.
+- View switching now routes both dissolve policy and renderer mode: FX stays scene-level dissolve, while grid/list can use tile dissolves; FX mode suspends legacy per-asset overlay path to avoid double-render contention.
+- Updated static monitor assertions to cover TileFX import/wiring, tilefx canvas presence, and TileFX renderer contract markers.

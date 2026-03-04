@@ -1789,8 +1789,10 @@
   <script src="js/obs-websocket.js"></script>
   <script src="js/obs-push.js"></script>
   <script type="module" src="js/program_monitor_handoff.js"></script>
+    <canvas id="tilefxCanvas" data-tilefx="1" aria-hidden="true"></canvas>
+
   <script type="module">
-    import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';
+    import { AssetFX, ExplorerShaders, TileFXRenderer } from './js/explorer-shaders.mjs';
 
     void ExplorerShaders;
     // -------------------------
@@ -1867,6 +1869,46 @@
     const cardFX = window.__assetfx_instance instanceof AssetFX
       ? window.__assetfx_instance
       : (window.__assetfx_instance = new AssetFX());
+
+    const tileFX = new TileFXRenderer({
+      canvas: el('tilefxCanvas'),
+      onFail: (reason) => {
+        console.warn('TileFX fallback to grid:', reason);
+        if (state.view === 'fx') {
+          toast('warn', 'FX fallback', 'WebGL unavailable; switched to Grid mode.');
+          setView('grid');
+        }
+      },
+    });
+
+    function collectTileFxTiles(){
+      const root = el('mediaGridRoot');
+      const grid = el('mediaGrid');
+      if (!root || !grid || state.view !== 'fx') return [];
+      const rootRect = root.getBoundingClientRect();
+      const overscan = 120;
+      const cards = Array.from(grid.querySelectorAll('.asset'));
+      const tiles = [];
+      for (const card of cards) {
+        if (!card?.isConnected) continue;
+        const r = card.getBoundingClientRect();
+        if (r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan)) continue;
+        if (r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan)) continue;
+        const key = card.dataset.sha256 || card.dataset.selectKey || card.dataset.relative || card.dataset.streamUrl || '';
+        const thumbEl = card.querySelector('img.asset-thumb');
+        tiles.push({
+          key,
+          type: card.dataset.kind || '',
+          selected: card.classList.contains('is-selected'),
+          rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+          thumbEl,
+        });
+        if (tiles.length >= 260) break;
+      }
+      return tiles;
+    }
+
+    tileFX.setTileSource(collectTileFxTiles);
 
     const itemsByPath = new Map();
 
@@ -3425,9 +3467,13 @@
       el('mediaList').style.display = nextView === 'list' ? '' : 'none';
       const root = el('mediaGridRoot');
       if (root) root.classList.toggle('view-fx', nextView === 'fx');
+      const tileCanvas = el('tilefxCanvas');
+      tileCanvas?.classList.toggle('is-on', nextView === 'fx');
       if (typeof cardFX?.setDissolveMode === 'function') {
         cardFX.setDissolveMode(nextView === 'fx' ? 'scene' : 'tile');
       }
+      tileFX.setMode(nextView);
+      setFxSuspend(nextView === 'fx' || ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
       renderMedia();
     }
 
@@ -3750,6 +3796,7 @@
       const activeContainer = (state.view === 'list') ? l : g;
       const thumbTargets = Array.from(activeContainer.querySelectorAll('img.asset-thumb[data-thumb-url]'));
       void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => {
+        tileFX.updateTiles(collectTileFxTiles());
         setContentLoading(false);
         logLayoutDebug();
       });
@@ -4343,6 +4390,14 @@
     el('viewFx')?.addEventListener('click', () => setView('fx'));
     el('viewGrid').addEventListener('click', () => setView('grid'));
     el('viewList').addEventListener('click', () => setView('list'));
+    el('mediaGridRoot')?.addEventListener('scroll', () => {
+      if (state.view !== 'fx') return;
+      tileFX.updateTiles(collectTileFxTiles());
+    }, { passive: true });
+    window.addEventListener('resize', () => {
+      if (state.view !== 'fx') return;
+      tileFX.updateTiles(collectTileFxTiles());
+    }, { passive: true });
 
     el('q').addEventListener('input', (e) => {
       state.q = e.target.value || '';

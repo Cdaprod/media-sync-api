@@ -142,7 +142,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
 
-    assert "import { AssetFX, ExplorerShaders } from './js/explorer-shaders.mjs';" in html
+    assert "import { AssetFX, ExplorerShaders, TileFXRenderer } from './js/explorer-shaders.mjs';" in html
     assert 'window.__assetfx_instance instanceof AssetFX' in html
     assert "const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root=\"1\"]') || g;" in html
     assert "cardFX.attachGrid(gridRoot, '.asset');" in html
@@ -155,8 +155,14 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'requestAnimationFrame(flushThumbApplyQueue);' in html
     assert 'loading="lazy"' not in html
     assert "const FX_DEBUG = new URLSearchParams(window.location.search).get('fxdebug') === '1';" in html
+    assert '<canvas id="tilefxCanvas" data-tilefx="1" aria-hidden="true"></canvas>' in html
+    assert 'const tileFX = new TileFXRenderer({' in html
+    assert 'tileFX.setTileSource(collectTileFxTiles);' in html
     assert 'window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];' in html
 
+    assert 'export class TileFXRenderer' in shader_module
+    assert 'class TextureCacheLRU {' in shader_module
+    assert 'window.__tilefx_dbg = {' in shader_module
     assert 'export class AssetFX' in shader_module
     assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
     assert 'pulse(cardEl' in shader_module
