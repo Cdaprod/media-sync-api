@@ -568,6 +568,34 @@ def test_explorer_fx_ios_viewport_offset_mapping_stays_in_canvas_space(page):
         assert abs(float(payload["sampleMapA"].get("y") or 0.0) - float(payload["sampleMapC"].get("y") or 0.0)) > 20.0, payload
 
 
+def test_explorer_fx_wrapper_and_media_share_same_key_and_nearview_is_initialized(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1500)
+
+    payload = page.evaluate("""() => {
+      const fx = window.__assetfx_instance;
+      const card = document.querySelector('.asset');
+      const media = card?.querySelector('img.asset-thumb,video,audio') || null;
+      if (!fx || !card) return null;
+      const kAsset = fx._getCardKey?.(card) || null;
+      const kMedia = media ? (fx._getCardKey?.(media) || null) : null;
+      const nearSize = (fx.nearViewCards && typeof fx.nearViewCards.size === 'number') ? fx.nearViewCards.size : null;
+      return {
+        kAsset,
+        kMedia,
+        nearSize,
+        visible: fx.visibleCards?.size ?? null,
+        rectLen: (window.__assetfx_dbg?.lastRects || []).length,
+      };
+    }""")
+
+    assert payload is not None
+    assert payload["nearSize"] is not None, payload
+    assert payload["kAsset"], payload
+    if payload["kMedia"]:
+        assert payload["kMedia"] == payload["kAsset"], payload
+
+
 def test_explorer_thumbnails_do_not_regress_after_scroll_roundtrip(page):
     page.goto("http://127.0.0.1:8787/public/explorer.html", wait_until="domcontentloaded")
     page.wait_for_timeout(1600)

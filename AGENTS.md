@@ -1236,3 +1236,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Kept visualViewport offsets for diagnostics only and expanded debug telemetry with `sampleMapA`, `sampleMapC`, and `canvasTopPlusVvOy` so runtime checks can detect accidental reintroduction of toolbar offset double-application.
 - Added Playwright regression `test_explorer_fx_ios_viewport_offset_mapping_stays_in_canvas_space` to validate viewport-space mapping behavior and iOS-style `canvasTop + vv.oy ≈ 0` sanity when visual viewport offsets are present.
 - Updated static shader contract assertions to match viewport-space mapping lines and the additional debug telemetry exports.
+
+### Latest Implementation Notes (2026-03-04, wrapper-key canonicalization + near-view set integrity follow-up)
+- Canonicalized AssetFX key resolution to wrapper cards via `_getKeyEl(el)` so `_getCardKey(...)` always resolves through `.asset` containers and mirrors the same key onto associated media elements, preventing wrapper/img key divergence (`assetfx-key-*` fallbacks on imgs).
+- Added explicit `nearViewCards` Set lifecycle in `public/js/explorer-shaders.mjs` (constructor/init/cleanup/prune updates) so near-view tracking is always initialized and exported as a numeric size for runtime diagnostics.
+- Hardened render-loop candidate enumeration with `_iterCards(...)` and updated per-card visibility updates to compute `inView`/`nearView` directly from `card.getBoundingClientRect()` against the current `canvasRect` (plus overscan band), keeping visibility logic in one viewport-space coordinate system.
+- Added runtime Playwright regression `test_explorer_fx_wrapper_and_media_share_same_key_and_nearview_is_initialized` to assert wrapper/media key identity and that `nearViewCards.size` is present.
+- Updated static shader assertions to cover `_getKeyEl(...)`, `nearViewCards` initialization, and render-loop inView/nearView updates.

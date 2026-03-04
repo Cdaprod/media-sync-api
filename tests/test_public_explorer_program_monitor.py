@@ -228,8 +228,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "    FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;\n    if (window.__assetfx_dbg) window.__assetfx_dbg.lastRects = debugRects;\n  }\n\n  _showVisibleHint(cardEl) {" not in shader_module
     assert "new URLSearchParams(window.location.search).get('fx') === 'lite'" in shader_module
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
-    assert "if (card.dataset.fxReady !== '1') return;" in shader_module
-    assert 'if (!this._isRenderableMediaReady(card)) return;' in shader_module
+    assert "if (card.dataset.fxReady !== '1') continue;" in shader_module
+    assert 'if (!this._isRenderableMediaReady(card)) continue;' in shader_module
     assert '&& !(hasThumbUrl && thumbFallback && src === thumbFallback)' in shader_module
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
@@ -243,6 +243,9 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'this._lastCanvasRect = null;' in shader_module
     assert 'window.__assetfx_dbg.lastInvalidationReason = reason;' in shader_module
     assert 'this.stateByKey = new Map();' in shader_module
+    assert 'this.nearViewCards = new Set();' in shader_module
+    assert '  _getKeyEl(el) {' in shader_module
+    assert "return el.closest?.('.asset') || el;" in shader_module
     assert 'this.keyByEl = new WeakMap();' in shader_module
     assert '  _bindInvalidations() {' in shader_module
     assert '  _evictState(nowPerf = performance.now()) {' in shader_module
@@ -268,6 +271,9 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "debugOverlay.dataset.assetfx = 'debug';" in shader_module
     assert '_renderDebugRects(cards, width, height);' in shader_module
     assert 'this._publishDebugRects([], {' in shader_module
+    assert 'for (const card of this._iterCards(this.trackedCards)) {' in shader_module
+    assert 'state.inView = inViewNow;' in shader_module
+    assert 'state.nearView = nearViewNow;' in shader_module
     assert 'this.renderCandidatesCount = totalCandidates;' in shader_module
     assert 'const ALWAYS_ON_PASS_ENABLED = true;' in shader_module
     assert 'const dynamicCap = lowTier ? this.maxRenderCardsLowTier : this.maxRenderCardsHighTier;' in shader_module
