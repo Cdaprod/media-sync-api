@@ -244,12 +244,17 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'window.__assetfx_dbg.lastInvalidationReason = reason;' in shader_module
     assert 'this.stateByKey = new Map();' in shader_module
     assert 'this.nearViewCards = new Set();' in shader_module
+    assert "this.maxStateKeys = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxmaxstate') || STATE_MAX_KEYS));" in shader_module
+    assert "this.nearViewCardsMax = Math.max(24, Number(new URLSearchParams(window.location.search).get('fxnearmax') || NEAR_VIEW_MAX));" in shader_module
     assert '  _getKeyEl(el) {' in shader_module
     assert "return el.closest?.('.asset') || el;" in shader_module
     assert 'this.keyByEl = new WeakMap();' in shader_module
     assert '  _bindInvalidations() {' in shader_module
     assert '  _evictState(nowPerf = performance.now()) {' in shader_module
     assert 'window.__assetfx_dbg.stateSize = this.stateByKey.size;' in shader_module
+    assert 'window.__assetfx_dbg.lastRectsLen = safeRects.length;' in shader_module
+    assert 'window.__assetfx_dbg.nearViewCards = this.nearViewCards.size;' in shader_module
+    assert '  _capNearViewCards() {' in shader_module
     assert 'window.__assetfx_dbg.canvasRect = meta.canvasRect || null;' in shader_module
     assert 'this.sampleHoldMs = SAMPLE_STICK_MS;' in shader_module
     assert 'this.sampledCardsUntil = new WeakMap();' in shader_module

@@ -1243,3 +1243,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Hardened render-loop candidate enumeration with `_iterCards(...)` and updated per-card visibility updates to compute `inView`/`nearView` directly from `card.getBoundingClientRect()` against the current `canvasRect` (plus overscan band), keeping visibility logic in one viewport-space coordinate system.
 - Added runtime Playwright regression `test_explorer_fx_wrapper_and_media_share_same_key_and_nearview_is_initialized` to assert wrapper/media key identity and that `nearViewCards.size` is present.
 - Updated static shader assertions to cover `_getKeyEl(...)`, `nearViewCards` initialization, and render-loop inView/nearView updates.
+
+### Latest Implementation Notes (2026-03-04, system-contract hardening for churn, bounded state, and fetch diagnostics)
+- Hardened AssetFX state retention policy in `public/js/explorer-shaders.mjs`: default stale-state TTL increased to `300000ms` with bounded LRU cap (`maxStateKeys`, default `1200`, override `fxmaxstate`) so FX state remains persistent under scroll churn without unbounded growth.
+- Added bounded near-view policy (`nearViewCardsMax`, default `180`, override `fxnearmax`) with `_capNearViewCards()` to keep overscan tracking numerically stable and leak-resistant.
+- Expanded debug snapshot exports with `lastRectsLen`, `visibleCards`, and `nearViewCards` counters so runtime probes can directly verify rect freshness and tracking set health.
+- Added Playwright regression coverage for churn invariants (`test_explorer_fx_churn_invariants_hold_across_cycles`) and thumbnail resource fetch pressure (`test_explorer_thumbnail_resource_fetches_do_not_spike_after_roundtrip`) to separate FX-state persistence from thumbnail decode/network behavior.
+- Updated static shader contract assertions to lock in the new bounded-state and near-view cap contracts.

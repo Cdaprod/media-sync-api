@@ -74,7 +74,9 @@ const IMPULSE_STRENGTH = 0.70;
 const IMPULSE_LIFETIME = 1800;
 const HOVER_RADIUS = 28;
 const HOVER_STRENGTH = 0.38;
-const STATE_EVICT_AFTER_MS = 20000;
+const STATE_EVICT_AFTER_MS = 300000;
+const STATE_MAX_KEYS = 1200;
+const NEAR_VIEW_MAX = 180;
 
 export class MaskField {
   constructor(gridRoot, assetSel = '.asset') {
@@ -316,6 +318,7 @@ if (typeof window !== 'undefined') {
     get attachedRootId() { return FX_GLOBAL.__assetfx_instance?._attachedGridRoot?.dataset?.assetfxRootId || null; },
     get calls() { return [...__DBG_GL_CONTEXT_CALLS]; },
     lastRects: [],
+    lastRectsLen: 0,
     lastRectsFrame: 0,
     lastRectsT: 0,
     layoutInvalidations: 0,
@@ -588,6 +591,8 @@ export class AssetFX {
     this._stateGeneration = 0;
     this._debugRenderTick = 0;
     this.evictAfterMs = Math.max(500, Number(new URLSearchParams(window.location.search).get('fxevictms') || STATE_EVICT_AFTER_MS));
+    this.maxStateKeys = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxmaxstate') || STATE_MAX_KEYS));
+    this.nearViewCardsMax = Math.max(24, Number(new URLSearchParams(window.location.search).get('fxnearmax') || NEAR_VIEW_MAX));
 
     this.prefersReducedMotion = typeof window !== 'undefined'
       ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
@@ -756,11 +761,44 @@ export class AssetFX {
   }
 
   _evictState(nowPerf = performance.now()) {
+    const removable = [];
     this.stateByKey.forEach((state, key) => {
       const age = Math.max(0, nowPerf - Number(state.lastSeenAt || 0));
       const pinned = state.selected || state.pending || state.active;
-      if (!state.nearView && !pinned && age > this.evictAfterMs) this.stateByKey.delete(key);
+      if (!state.nearView && !pinned && age > this.evictAfterMs) {
+        removable.push([key, age]);
+      }
     });
+    removable.forEach(([key]) => this.stateByKey.delete(key));
+
+    if (this.stateByKey.size <= this.maxStateKeys) return;
+    const candidates = [];
+    this.stateByKey.forEach((state, key) => {
+      const pinned = state.selected || state.pending || state.active || state.inView || state.nearView;
+      if (pinned) return;
+      candidates.push([key, Number(state.lastSeenAt || 0)]);
+    });
+    candidates.sort((a, b) => a[1] - b[1]);
+    while (this.stateByKey.size > this.maxStateKeys && candidates.length) {
+      const [key] = candidates.shift();
+      this.stateByKey.delete(key);
+    }
+  }
+
+  _capNearViewCards() {
+    if (this.nearViewCards.size <= this.nearViewCardsMax) return;
+    const candidates = [];
+    this.nearViewCards.forEach((card) => {
+      const state = this._getCardState(card, false);
+      const seen = Number(state?.lastSeenAt || 0);
+      candidates.push([card, seen]);
+    });
+    candidates.sort((a, b) => a[1] - b[1]);
+    while (this.nearViewCards.size > this.nearViewCardsMax && candidates.length) {
+      const [card] = candidates.shift();
+      if (card?.dataset?.fxInView === '1') continue;
+      this.nearViewCards.delete(card);
+    }
   }
 
   _iterCards(collection) {
@@ -1347,6 +1385,7 @@ export class AssetFX {
     }
     if (state?.nearView) this.nearViewCards.add(card);
     else this.nearViewCards.delete(card);
+    this._capNearViewCards();
     if (visible && card.dataset.fxReady === '1') {
       this.visibleCards.add(card);
       const mediaEl = card.__fxThumb || card.querySelector('img.asset-thumb,video,audio');
@@ -1430,6 +1469,7 @@ export class AssetFX {
           state.lastSeenAt = performance.now();
           if (state.nearView) this.nearViewCards.add(card);
           else this.nearViewCards.delete(card);
+          this._capNearViewCards();
         }
         const img = card.__fxThumb || card.querySelector('img.asset-thumb');
         if (!img) continue;
@@ -1539,6 +1579,7 @@ export class AssetFX {
         state.lastSeenAt = performance.now();
         if (state.nearView) this.nearViewCards.add(card);
         else this.nearViewCards.delete(card);
+        this._capNearViewCards();
       }
       if (visible) {
         const entered = this._setCardInView(card, true);
@@ -1713,6 +1754,7 @@ export class AssetFX {
       else this.visibleCards.delete(card);
       if (nearViewNow) this.nearViewCards.add(card);
       else this.nearViewCards.delete(card);
+      this._capNearViewCards();
       if (!nearViewNow) continue;
       if (card.dataset.fxReady !== '1') continue;
       if (!this._isRenderableMediaReady(card)) continue;
@@ -1951,6 +1993,7 @@ export class AssetFX {
     FX_GLOBAL.__assetfx_dbg_last_rects = safeRects;
     if (window.__assetfx_dbg) {
       window.__assetfx_dbg.lastRects = safeRects;
+      window.__assetfx_dbg.lastRectsLen = safeRects.length;
       window.__assetfx_dbg.lastRectsFrame = Number(window.__assetfx_dbg.lastRectsFrame || 0) + 1;
       window.__assetfx_dbg.lastRectsT = performance.now();
       window.__assetfx_dbg.stateSize = this.stateByKey.size;
@@ -1959,6 +2002,8 @@ export class AssetFX {
       window.__assetfx_dbg.dpr = Number(meta.dpr || window.devicePixelRatio || 1);
       window.__assetfx_dbg.vvOffset = meta.vvOffset || { ox: 0, oy: 0 };
       window.__assetfx_dbg.rootScrollTop = Number(meta.rootScrollTop || this._attachedGridRoot?.scrollTop || 0);
+      window.__assetfx_dbg.visibleCards = this.visibleCards.size;
+      window.__assetfx_dbg.nearViewCards = this.nearViewCards.size;
       window.__assetfx_dbg.sampleMapA = meta.sampleMapA || null;
       window.__assetfx_dbg.sampleMapC = meta.sampleMapC || null;
       window.__assetfx_dbg.canvasTopPlusVvOy = Number.isFinite(Number(meta.canvasTopPlusVvOy)) ? Number(meta.canvasTopPlusVvOy) : null;

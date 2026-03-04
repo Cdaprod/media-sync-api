@@ -596,6 +596,93 @@ def test_explorer_fx_wrapper_and_media_share_same_key_and_nearview_is_initialize
         assert payload["kMedia"] == payload["kAsset"], payload
 
 
+def test_explorer_fx_churn_invariants_hold_across_cycles(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1&fxnearmax=180&fxmaxstate=1200", wait_until="domcontentloaded")
+    page.wait_for_timeout(1400)
+
+    before = page.evaluate("""() => ({
+      frame: Number(window.__assetfx_dbg?.lastRectsFrame || 0),
+      stateSize: Number(window.__assetfx_dbg?.stateSize || 0),
+    })""")
+
+    stats = page.evaluate("""() => {
+      const root = document.getElementById('mediaGridRoot');
+      const out = [];
+      if (!root) return out;
+      const step = Math.max(320, Math.round(root.clientHeight * 3));
+      for (let i = 0; i < 3; i += 1) {
+        root.scrollTop = Math.min(root.scrollHeight, root.scrollTop + step);
+        root.dispatchEvent(new Event('scroll'));
+        root.scrollTop = Math.max(0, root.scrollTop - step);
+        root.dispatchEvent(new Event('scroll'));
+        out.push({
+          frame: Number(window.__assetfx_dbg?.lastRectsFrame || 0),
+          visible: Number(window.__assetfx_instance?.visibleCards?.size || 0),
+          near: Number(window.__assetfx_instance?.nearViewCards?.size || 0),
+          pending: Number(window.__assetfx_instance?.pendingDissolves?.length || 0),
+          active: Number(window.__assetfx_instance?.activeDissolves?.size || 0),
+          stateSize: Number(window.__assetfx_dbg?.stateSize || 0),
+        });
+      }
+      return out;
+    }""")
+    page.wait_for_timeout(800)
+
+    after = page.evaluate("""() => ({
+      frame: Number(window.__assetfx_dbg?.lastRectsFrame || 0),
+      stateSize: Number(window.__assetfx_dbg?.stateSize || 0),
+    })""")
+
+    assert after["frame"] > before["frame"], f"frame did not advance: before={before} after={after}"
+    assert isinstance(stats, list) and len(stats) == 3
+    for item in stats:
+      assert item["pending"] <= 60, item
+      assert item["active"] <= 6, item
+      assert item["visible"] <= 140, item
+      assert item["near"] <= 180, item
+      assert item["near"] >= 0, item
+      assert item["stateSize"] <= 1200, item
+    assert after["stateSize"] >= max(1, int(before["stateSize"] * 0.2)), f"state unexpectedly collapsed: before={before} after={after}"
+
+
+def test_explorer_thumbnail_resource_fetches_do_not_spike_after_roundtrip(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html", wait_until="domcontentloaded")
+    page.wait_for_timeout(1600)
+
+    counts = page.evaluate("""() => {
+      const root = document.getElementById('mediaGridRoot');
+      const thumbCount = () => performance.getEntriesByType('resource')
+        .filter((e) => String(e.name || '').includes('/thumbnails/')).length;
+      const before = thumbCount();
+      if (root) {
+        root.scrollTop = root.scrollHeight;
+        root.dispatchEvent(new Event('scroll'));
+      }
+      return { before };
+    }""")
+    page.wait_for_timeout(1200)
+    page.evaluate("""() => {
+      const root = document.getElementById('mediaGridRoot');
+      if (!root) return;
+      root.scrollTop = 0;
+      root.dispatchEvent(new Event('scroll'));
+    }""")
+    page.wait_for_timeout(1200)
+
+    after = page.evaluate("""() => {
+      const entries = performance.getEntriesByType('resource')
+        .filter((e) => String(e.name || '').includes('/thumbnails/'));
+      return {
+        total: entries.length,
+        transferBytes: entries.reduce((acc, e) => acc + Number(e.transferSize || 0), 0),
+      };
+    }""")
+
+    assert after["total"] >= counts["before"]
+    # allow some churn, but guard against runaway refetch loops
+    assert (after["total"] - counts["before"]) <= 40, {"before": counts, "after": after}
+
+
 def test_explorer_thumbnails_do_not_regress_after_scroll_roundtrip(page):
     page.goto("http://127.0.0.1:8787/public/explorer.html", wait_until="domcontentloaded")
     page.wait_for_timeout(1600)
