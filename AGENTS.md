@@ -1263,3 +1263,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `_discoverCardsFromDom(limit)` and invoked it in `_render()` so tracked cards are continuously repopulated from the attached grid/card selector when IO events are delayed/dropped under churn.
 - Added `_setTickExit(...)` and wired early-return/throttle paths to publish deterministic per-frame exit reasons into debug state.
 - Updated static monitor assertions in `tests/test_public_explorer_program_monitor.py` to track the throttled branch shape and tick-exit instrumentation contract.
+
+### Latest Implementation Notes (2026-03-04, readonly-rect hardening + tick exception survivability)
+- Hardened `public/js/explorer-shaders.mjs` against WebKit readonly-property traps by introducing `cloneRect(...)` and migrating layout/mask/render geometry reads to cloned plain objects before math/caching.
+- Added `cloneVV(...)` and exported `vvState` telemetry through `window.__assetfx_dbg` so visualViewport diagnostics remain explicit without mutating browser-owned viewport structs.
+- Wrapped the AssetFX RAF tick body in try/catch/finally; runtime exceptions are now recorded as `lastException`/`lastExceptionT` while scheduling continues so debug telemetry and frame loop survivability are preserved under transient errors.
+- Updated static shader monitor assertions to enforce the clone-helper contract and tick exception reporting path.

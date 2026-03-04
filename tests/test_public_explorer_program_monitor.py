@@ -212,6 +212,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'function getStableViewportSize() {' in shader_module
     assert 'const vv = window.visualViewport;' in shader_module
     assert 'function getViewportOffsets() {' in shader_module
+    assert 'function cloneRect(r) {' in shader_module
+    assert 'function cloneVV(vv) {' in shader_module
     assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
     assert '  _isRenderableMediaReady(cardEl) {' in shader_module
     assert "const ready = !(thumbState && thumbState !== 'loaded')" in shader_module
@@ -263,7 +265,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'let y1 = (cr.top - canvasRect.top) * dpr;' in shader_module
     assert "if (this.container.dataset.fxSuspend === '1') {" in shader_module
     assert 'this.gl.clear(this.gl.COLOR_BUFFER_BIT);' in shader_module
-    assert 'let canvasRect = this._lastCanvasRect || this.overlay.getBoundingClientRect();' in shader_module
+    assert 'let canvasRect = this._lastCanvasRect || cloneRect(this.overlay.getBoundingClientRect());' in shader_module
     assert 'let x2 = (cr.right - canvasRect.left) * dpr;' in shader_module
     assert 'let y2 = (cr.bottom - canvasRect.top) * dpr;' in shader_module
     assert 'x1 += RECT_INSET_PX * dpr;' in shader_module
@@ -311,6 +313,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'if (Math.random() > 0.35) return;' in shader_module
     assert 'if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) {' in shader_module
     assert "this._setTickExit('EARLY_RETURN:THROTTLED');" in shader_module
+    assert 'window.__assetfx_dbg.lastException = String(e && (e.stack || e.message || e));' in shader_module
     assert 'const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));' in shader_module
     assert 'if (this.fpsEma > 55) adaptiveMaxRenderCards =' in shader_module
     assert 'const SAMPLE_STICK_MS = 420;' in shader_module

@@ -60,6 +60,31 @@ function getViewportOffsets() {
   };
 }
 
+function cloneRect(r) {
+  if (!r) return null;
+  return {
+    left: Number(r.left || 0),
+    top: Number(r.top || 0),
+    right: Number(r.right || 0),
+    bottom: Number(r.bottom || 0),
+    width: Number(r.width || 0),
+    height: Number(r.height || 0),
+    x: Number(r.x || 0),
+    y: Number(r.y || 0),
+  };
+}
+
+function cloneVV(vv) {
+  if (!vv) return null;
+  return {
+    width: Number(vv.width || 0),
+    height: Number(vv.height || 0),
+    scale: Number(vv.scale || 1),
+    offsetLeft: Number(vv.offsetLeft || 0),
+    offsetTop: Number(vv.offsetTop || 0),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MaskField
 // Builds a per-frame heatmap texture from layout data (not pixels).
@@ -96,14 +121,14 @@ export class MaskField {
     this._dirty = true;
 
     this._onMove = (e) => {
-      const r = this._root.getBoundingClientRect();
+      const r = cloneRect(this._root.getBoundingClientRect());
       this._hoverNx = (e.clientX - r.left) / Math.max(1, r.width);
       this._hoverNy = (e.clientY - r.top) / Math.max(1, r.height);
       this._dirty = true;
     };
     this._onLeave = () => { this._hoverNx = -1; this._hoverNy = -1; };
     this._onDown = (e) => {
-      const r = this._root.getBoundingClientRect();
+      const r = cloneRect(this._root.getBoundingClientRect());
       const nx = (e.clientX - r.left) / Math.max(1, r.width);
       const ny = (e.clientY - r.top) / Math.max(1, r.height);
       this._impulses.push({ nx, ny, strength: IMPULSE_STRENGTH, radius: IMPULSE_RADIUS, born: performance.now() });
@@ -118,8 +143,8 @@ export class MaskField {
 
   pulseCard(cardEl) {
     if (!cardEl) return;
-    const rr = this._root.getBoundingClientRect();
-    const cr = cardEl.getBoundingClientRect();
+    const rr = cloneRect(this._root.getBoundingClientRect());
+    const cr = cloneRect(cardEl.getBoundingClientRect());
     const nx = (cr.left + cr.width * 0.5 - rr.left) / Math.max(1, rr.width);
     const ny = (cr.top + cr.height * 0.5 - rr.top) / Math.max(1, rr.height);
     this._impulses.push({ nx, ny, strength: 0.92, radius: 58, born: performance.now() });
@@ -152,10 +177,10 @@ export class MaskField {
     ctx.fillStyle = `rgba(0,0,0,${MASK_DECAY_ALPHA})`;
     ctx.fillRect(0, 0, W, H);
 
-    const rr = this._root.getBoundingClientRect();
+    const rr = cloneRect(this._root.getBoundingClientRect());
     if (rr.width > 0 && rr.height > 0) {
       this._root.querySelectorAll(this._sel).forEach((el) => {
-        const r = el.getBoundingClientRect();
+        const r = cloneRect(el.getBoundingClientRect());
         const x = ((r.left - rr.left) / rr.width) * W;
         const y = ((r.top - rr.top) / rr.height) * H;
         const w = (r.width / rr.width) * W;
@@ -341,6 +366,9 @@ if (typeof window !== 'undefined') {
     sampleDone: 0,
     texturesAlive: 0,
     mode: 'full',
+    lastException: '',
+    lastExceptionT: 0,
+    vvState: null,
   };
   window.__assetfx_audit = () => {
     const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
@@ -1681,7 +1709,7 @@ export class AssetFX {
     if (!this.container || !this.trackedCards.size) return;
     this.layoutDirty = true;
     this.cardRectCache = new WeakMap();
-    const rootRect = this.container.getBoundingClientRect();
+    const rootRect = cloneRect(this.container.getBoundingClientRect());
     const expandedRect = this._expandedRootRect(rootRect);
     const minOverlap = Math.max(18, rootRect.height * 0.1);
     this.trackedCards.forEach((card) => {
@@ -1689,7 +1717,7 @@ export class AssetFX {
         this.trackedCards.delete(card);
         return;
       }
-      const rect = card.getBoundingClientRect();
+      const rect = cloneRect(card.getBoundingClientRect());
       const overlap = Math.min(rect.bottom, expandedRect.bottom) - Math.max(rect.top, expandedRect.top);
       const nearView = this.noVirtualization ? true : overlap > 0;
       const visible = this.noVirtualization ? true : overlap > minOverlap;
@@ -1745,31 +1773,38 @@ export class AssetFX {
   _startLoop() {
     if (this.raf || !this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
     const tick = () => {
-      if (window.__assetfx_dbg) {
-        window.__assetfx_dbg.tickFrame = Number(window.__assetfx_dbg.tickFrame || 0) + 1;
-      }
-      const now = performance.now();
-      if (this._lastFrameAt > 0) {
-        const dt = Math.max(1, now - this._lastFrameAt);
-        const fps = 1000 / dt;
-        this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);
-      }
-      this._lastFrameAt = now;
-      this._frameCounter += 1;
-      const deviceMemory = Number(window.navigator?.deviceMemory || 0);
-      const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
-      const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;
-      if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) {
-        this._setTickExit('RUN');
-        this._render();
-      } else {
-        this._setTickExit('EARLY_RETURN:THROTTLED');
-        this._publishDebugRects(window.__assetfx_dbg?.lastRects || [], { lastRectsReason: 'EARLY_RETURN:THROTTLED' });
-      }
-      this.raf = requestAnimationFrame(tick);
-      if (this.container && RENDERERS.has(this.container)) {
-        const shared = RENDERERS.get(this.container);
-        shared.raf = this.raf;
+      try {
+        if (window.__assetfx_dbg) {
+          window.__assetfx_dbg.tickFrame = Number(window.__assetfx_dbg.tickFrame || 0) + 1;
+        }
+        const now = performance.now();
+        if (this._lastFrameAt > 0) {
+          const dt = Math.max(1, now - this._lastFrameAt);
+          const fps = 1000 / dt;
+          this.fpsEma = (this.fpsEma * 0.9) + (fps * 0.1);
+        }
+        this._lastFrameAt = now;
+        this._frameCounter += 1;
+        const deviceMemory = Number(window.navigator?.deviceMemory || 0);
+        const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
+        const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;
+        if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) {
+          this._setTickExit('RUN');
+          this._render();
+        } else {
+          this._setTickExit('EARLY_RETURN:THROTTLED');
+          this._publishDebugRects(window.__assetfx_dbg?.lastRects || [], { lastRectsReason: 'EARLY_RETURN:THROTTLED' });
+        }
+      } catch (e) {
+        window.__assetfx_dbg = window.__assetfx_dbg || {};
+        window.__assetfx_dbg.lastException = String(e && (e.stack || e.message || e));
+        window.__assetfx_dbg.lastExceptionT = performance.now();
+      } finally {
+        this.raf = requestAnimationFrame(tick);
+        if (this.container && RENDERERS.has(this.container)) {
+          const shared = RENDERERS.get(this.container);
+          shared.raf = this.raf;
+        }
       }
     };
     this.raf = requestAnimationFrame(tick);
@@ -1848,8 +1883,8 @@ export class AssetFX {
       return;
     }
     const dpr = window.devicePixelRatio || 1;
-    let canvasRect = this._lastCanvasRect || this.overlay.getBoundingClientRect();
-    if (!this._lastCanvasRect || this.layoutDirty) canvasRect = this.overlay.getBoundingClientRect();
+    let canvasRect = this._lastCanvasRect || cloneRect(this.overlay.getBoundingClientRect());
+    if (!this._lastCanvasRect || this.layoutDirty) canvasRect = cloneRect(this.overlay.getBoundingClientRect());
     this._lastCanvasRect = canvasRect;
     if (!canvasRect || !Number.isFinite(canvasRect.width) || !Number.isFinite(canvasRect.height) || canvasRect.width <= 0 || canvasRect.height <= 0) {
       this._setDebugReason('EARLY_RETURN:CANVAS_RECT_NULL');
@@ -1886,7 +1921,7 @@ export class AssetFX {
       state.lastSeenAt = performance.now();
       let cr = this.cardRectCache.get(card);
       if (!cr || this.layoutDirty) {
-        cr = card.getBoundingClientRect();
+        cr = cloneRect(card.getBoundingClientRect());
         this.cardRectCache.set(card, cr);
       }
       const inViewNow = cr.bottom >= canvasRect.top
@@ -2164,6 +2199,7 @@ export class AssetFX {
       window.__assetfx_dbg.canvasRect = meta.canvasRect || null;
       window.__assetfx_dbg.dpr = Number(meta.dpr || window.devicePixelRatio || 1);
       window.__assetfx_dbg.vvOffset = meta.vvOffset || { ox: 0, oy: 0 };
+      window.__assetfx_dbg.vvState = meta.vvState || null;
       window.__assetfx_dbg.rootScrollTop = Number(meta.rootScrollTop || this._attachedGridRoot?.scrollTop || 0);
       window.__assetfx_dbg.visibleCards = this.visibleCards.size;
       window.__assetfx_dbg.nearViewCards = this.nearViewCards.size;
@@ -2227,6 +2263,7 @@ export class AssetFX {
         ctx.fillText(String(idx + 1), x + 4, y + 11);
       }
     });
+    const vvState = cloneVV(window.visualViewport);
     const vv = getViewportOffsets();
     const sample = cards.length ? cards[0] : null;
     const sampleMapA = sample
@@ -2246,6 +2283,7 @@ export class AssetFX {
       } : null,
       dpr: window.devicePixelRatio || 1,
       vvOffset: { ox: vv.x, oy: vv.y },
+      vvState,
       rootScrollTop: Number(this._attachedGridRoot?.scrollTop || 0),
       sampleMapA,
       sampleMapC,
