@@ -4593,15 +4593,43 @@
       });
     }
 
+
+    function setNodeStyleSafe(node, prop, value){
+      if (!node || !node.style) return false;
+      try {
+        node.style[prop] = value;
+        return true;
+      } catch {
+        try {
+          node.style.setProperty(prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`), String(value));
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    }
+
+    function setNodeDataSafe(node, key, value){
+      if (!node) return false;
+      try {
+        node.dataset[key] = value;
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     function sanitizeRootOverlayInterceptors(){
       const offenders = Array.from(document.querySelectorAll('html > div[style*="all: initial"]'));
       offenders.forEach((node, index) => {
-        node.dataset.overlaySanitized = '1';
-        node.style.pointerEvents = 'none';
-        if (!node.style.position) node.style.position = 'fixed';
-        if (!node.style.inset) node.style.inset = '0';
-        if (!node.style.zIndex) node.style.zIndex = '0';
-        if (!node.id) node.id = `overlay-sanitized-${index + 1}`;
+        setNodeDataSafe(node, 'overlaySanitized', '1');
+        setNodeStyleSafe(node, 'pointerEvents', 'none');
+        if (!node?.style?.position) setNodeStyleSafe(node, 'position', 'fixed');
+        if (!node?.style?.inset) setNodeStyleSafe(node, 'inset', '0');
+        if (!node?.style?.zIndex) setNodeStyleSafe(node, 'zIndex', '0');
+        if (!node.id) {
+          try { node.id = `overlay-sanitized-${index + 1}`; } catch {}
+        }
       });
       return offenders;
     }
