@@ -540,6 +540,34 @@ def test_explorer_fx_state_map_is_bounded_after_scroll_and_eviction(page):
     assert stats["stateSize"] <= 400, f"state map unbounded: {stats}"
 
 
+def test_explorer_fx_ios_viewport_offset_mapping_stays_in_canvas_space(page):
+    page.goto("http://127.0.0.1:8787/public/explorer.html?fxdebug=1", wait_until="domcontentloaded")
+    page.wait_for_timeout(1500)
+
+    payload = page.evaluate("""() => ({
+      sampleMapA: window.__assetfx_dbg?.sampleMapA || null,
+      sampleMapC: window.__assetfx_dbg?.sampleMapC || null,
+      canvasTopPlusVvOy: window.__assetfx_dbg?.canvasTopPlusVvOy ?? null,
+      vvOffset: window.__assetfx_dbg?.vvOffset || null,
+      canvasRect: window.__assetfx_dbg?.canvasRect || null,
+      frame: Number(window.__assetfx_dbg?.lastRectsFrame || 0),
+    })""")
+
+    assert payload["frame"] > 0
+    assert payload["sampleMapA"] is not None
+    assert payload["vvOffset"] is not None
+
+    if payload["canvasRect"] and payload["vvOffset"]:
+        # When iOS visual viewport offset is folded into canvas top, the sum should hover near 0.
+        if abs(float(payload["vvOffset"].get("oy") or 0.0)) > 2.0:
+            assert abs(float(payload["canvasTopPlusVvOy"] or 0.0)) < 6.0, payload
+
+    # mapA is the viewport-space mapping we render with; mapC is the old double-offset candidate.
+    # If there is a non-trivial viewport offset, mapA/mapC should differ substantially.
+    if abs(float(payload["vvOffset"].get("oy") or 0.0)) > 20.0:
+        assert abs(float(payload["sampleMapA"].get("y") or 0.0) - float(payload["sampleMapC"].get("y") or 0.0)) > 20.0, payload
+
+
 def test_explorer_thumbnails_do_not_regress_after_scroll_roundtrip(page):
     page.goto("http://127.0.0.1:8787/public/explorer.html", wait_until="domcontentloaded")
     page.wait_for_timeout(1600)

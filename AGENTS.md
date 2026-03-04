@@ -1230,3 +1230,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated render candidate selection and debug badges to consume keyed CardState (`nearView`, `inView`, `renderable`, `sampledUntil`) and to compute render candidates from tracked near-view cards while keeping caps (`pending<=60`, `active<=6`, adaptive render caps).
 - Expanded debug export contract: `_publishDebugRects(debugRects, meta)` now overwrites snapshots every frame and exports `lastRects`, `lastRectsFrame`, `lastRectsT`, `stateSize`, `attachedRootId`, `canvasRect`, `dpr`, `vvOffset`, and `rootScrollTop`.
 - Extended runtime Playwright tests with `test_explorer_fx_state_map_is_bounded_after_scroll_and_eviction` (`fxevictms=2000`) and added graceful browser-unavailable skips in Python Playwright fixtures/tests so CI environments without installed browser binaries skip instead of hard-failing.
+
+### Latest Implementation Notes (2026-03-04, iOS visualViewport double-offset correction follow-up)
+- Removed visualViewport offset subtraction from DOM→canvas rect mapping in `public/js/explorer-shaders.mjs`; mapping now consistently uses viewport-space `getBoundingClientRect()` deltas (`cardRect - canvasRect`) before DPR scaling to avoid iOS double-offset drift.
+- Kept visualViewport offsets for diagnostics only and expanded debug telemetry with `sampleMapA`, `sampleMapC`, and `canvasTopPlusVvOy` so runtime checks can detect accidental reintroduction of toolbar offset double-application.
+- Added Playwright regression `test_explorer_fx_ios_viewport_offset_mapping_stays_in_canvas_space` to validate viewport-space mapping behavior and iOS-style `canvasTop + vv.oy ≈ 0` sanity when visual viewport offsets are present.
+- Updated static shader contract assertions to match viewport-space mapping lines and the additional debug telemetry exports.

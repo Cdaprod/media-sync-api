@@ -323,6 +323,9 @@ if (typeof window !== 'undefined') {
     dpr: 1,
     vvOffset: { ox: 0, oy: 0 },
     rootScrollTop: 0,
+    sampleMapA: null,
+    sampleMapC: null,
+    canvasTopPlusVvOy: null,
   };
   window.__assetfx_audit = () => {
     const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
@@ -1657,11 +1660,10 @@ export class AssetFX {
         cr = card.getBoundingClientRect();
         this.cardRectCache.set(card, cr);
       }
-      const viewportOffsets = getViewportOffsets();
-      let x1 = (cr.left - canvasRect.left - viewportOffsets.x) * dpr;
-      let y1 = (cr.top - canvasRect.top - viewportOffsets.y) * dpr;
-      let x2 = (cr.right - canvasRect.left - viewportOffsets.x) * dpr;
-      let y2 = (cr.bottom - canvasRect.top - viewportOffsets.y) * dpr;
+      let x1 = (cr.left - canvasRect.left) * dpr;
+      let y1 = (cr.top - canvasRect.top) * dpr;
+      let x2 = (cr.right - canvasRect.left) * dpr;
+      let y2 = (cr.bottom - canvasRect.top) * dpr;
       x1 += RECT_INSET_PX * dpr;
       y1 += RECT_INSET_PX * dpr;
       x2 -= RECT_INSET_PX * dpr;
@@ -1901,6 +1903,9 @@ export class AssetFX {
       window.__assetfx_dbg.dpr = Number(meta.dpr || window.devicePixelRatio || 1);
       window.__assetfx_dbg.vvOffset = meta.vvOffset || { ox: 0, oy: 0 };
       window.__assetfx_dbg.rootScrollTop = Number(meta.rootScrollTop || this._attachedGridRoot?.scrollTop || 0);
+      window.__assetfx_dbg.sampleMapA = meta.sampleMapA || null;
+      window.__assetfx_dbg.sampleMapC = meta.sampleMapC || null;
+      window.__assetfx_dbg.canvasTopPlusVvOy = Number.isFinite(Number(meta.canvasTopPlusVvOy)) ? Number(meta.canvasTopPlusVvOy) : null;
     }
   }
 
@@ -1953,6 +1958,14 @@ export class AssetFX {
       }
     });
     const vv = getViewportOffsets();
+    const sample = cards.length ? cards[0] : null;
+    const sampleMapA = sample
+      ? { x: Number(sample[0] / (window.devicePixelRatio || 1)), y: Number(sample[1] / (window.devicePixelRatio || 1)) }
+      : null;
+    const sampleMapC = sample
+      ? { x: Number(sampleMapA?.x ?? 0) - vv.x, y: Number(sampleMapA?.y ?? 0) - vv.y }
+      : null;
+    const canvasTopPlusVvOy = this._lastCanvasRect ? Number(this._lastCanvasRect.top + vv.y) : null;
     this._publishDebugRects(debugRects, {
       canvasRect: this._lastCanvasRect ? {
         left: this._lastCanvasRect.left,
@@ -1963,6 +1976,9 @@ export class AssetFX {
       dpr: window.devicePixelRatio || 1,
       vvOffset: { ox: vv.x, oy: vv.y },
       rootScrollTop: Number(this._attachedGridRoot?.scrollTop || 0),
+      sampleMapA,
+      sampleMapC,
+      canvasTopPlusVvOy,
     });
   }
 
