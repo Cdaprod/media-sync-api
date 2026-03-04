@@ -415,6 +415,8 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'state.focused = null;' in html
     assert "const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';" in html
     assert 'function logLayoutDebug()' in html
+    assert 'function setNodeStyleSafe(node, prop, value)' in html
+    assert 'function setNodeDataSafe(node, key, value)' in html
     assert 'function sanitizeRootOverlayInterceptors()' in html
     assert 'html > div[style*="all: initial"]' in html
     assert 'overlaySanitizedCount: offenders.length' in html
@@ -534,5 +536,5 @@ def test_explorer_overlay_sanitizer_inert_contract_present():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert '.fx-shared-overlay,' in html
     assert '[data-overlay-sanitized="1"]{' in html
-    assert "node.style.pointerEvents = 'none';" in html
-    assert "node.dataset.overlaySanitized = '1';" in html
+    assert "setNodeStyleSafe(node, 'pointerEvents', 'none');" in html
+    assert "setNodeDataSafe(node, 'overlaySanitized', '1');" in html

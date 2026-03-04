@@ -1275,3 +1275,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Extended keyed card state with `thumbBlockedAt` and updated `_isRenderableMediaReady(...)` to track blocked duration (`thumbState`/fallback source) and unblock sampling once the grace window elapses.
 - This prevents prolonged `A-V-` starvation on iOS/slow thumbnail extraction paths and restores pending→sampled progression required for entry dissolve playback.
 - Updated static shader monitor assertions to enforce the fallback-promotion contract (`fxfallbackms`, blocked-state fields, and promotion condition).
+
+### Latest Implementation Notes (2026-03-04, layoutdebug overlay sanitizer readonly-guard)
+- Hardened `public/explorer.html` overlay sanitizer for iOS/WebKit by introducing guarded helpers `setNodeStyleSafe(...)` and `setNodeDataSafe(...)` and routing sanitizer writes through them.
+- `sanitizeRootOverlayInterceptors()` now avoids direct brittle assignments to possibly readonly/interceptor-backed style/dataset properties and falls back safely without throwing.
+- This addresses runtime `TypeError: Attempted to assign to readonly property` faults observed during `layoutdebug=1` runs while preserving inert overlay behavior.
+- Updated static monitor assertions to require the new safe-setter contract in explorer HTML.
