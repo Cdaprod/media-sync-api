@@ -1182,3 +1182,117 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added a new opt-in runtime E2E suite at `tests/e2e/test_explorer_assetfx_runtime.py` (gated by `RUN_PLAYWRIGHT_E2E=1`) covering overlay hit-test occlusion, FX debug-rect alignment vs DOM card rects, visible-card tracking bounds, and thumbnail state stability after scroll roundtrips.
 - Exported debug rectangle telemetry from `AssetFX._renderDebugRects(...)` via `window.__assetfx_dbg.lastRects` / `FX_GLOBAL.__assetfx_dbg_last_rects` when `fxdebug` is enabled, and clear the export when debug rendering is disabled.
 - Extended existing static explorer shader assertions to enforce presence of the new debug-rect export hooks.
+
+### Latest Implementation Notes (2026-03-03, runtime FX diagnostics hardening follow-up)
+- Expanded `tests/e2e/test_explorer_assetfx_runtime.py` with space-agnostic debug-rect centerpoint alignment checks that normalize CSS-vs-DPR telemetry before asserting card/FX rect containment.
+- Added runtime guards for Safari-style `html > div[style*="all: initial"]` overlay interceptors to ensure any injected wrapper is pointer-inert (and effectively hidden when large).
+- Added FX badge health assertions so settled runs require visible sampled cards (`S`/`K`) while preventing pending (`P`) states from dominating after settle.
+- Added a stricter center hit-test assertion that rejects canvas/sanitized overlays and requires hit targets to resolve inside `.asset` cards.
+
+### Latest Implementation Notes (2026-03-03, replay-sweep runtime error fix for stale FX boxes)
+- Removed an unintended `_replaySweep()` tail assignment to `debugRects` in `public/js/explorer-shaders.mjs` that could throw `ReferenceError` during scroll replay and leave FX in stale/misaligned states under heavy scrolling.
+- Added runtime Playwright coverage (`test_explorer_fx_scroll_replay_has_no_runtime_reference_errors`) to scroll down/up and fail if `pageerror` captures `ReferenceError`/`debugRects` faults during replay sweeps.
+- Updated static explorer shader assertions to guard against reintroducing the stray `FX_GLOBAL.__assetfx_dbg_last_rects = debugRects;` replay-sweep assignment.
+
+### Latest Implementation Notes (2026-03-03, iPhone viewport-stability follow-up for FX canvas sizing)
+- Added `getStableViewportSize()` in `public/js/explorer-shaders.mjs` so overlay sizing now prefers `visualViewport` with client/inner fallbacks and avoids transient tiny-height canvas allocations during iPhone Safari URL-bar/viewport shifts.
+- Updated card→FX rect mapping to subtract `canvasRect.left/top` before DPR scaling, ensuring shader/debug rectangles stay aligned with DOM card bounds when viewport origins shift.
+- Expanded runtime E2E coverage with viewport-size sanity (`test_explorer_fx_overlay_canvas_matches_viewport_not_tiny`) and post-scroll-churn alignment checks (`test_explorer_fx_debug_rects_stay_aligned_after_scroll_churn`).
+- Extended static shader contract assertions to enforce stable viewport helper presence and canvas-origin rect-mapping math.
+
+### Latest Implementation Notes (2026-03-03, stale-debug rect suppression for unloaded cards)
+- Added `_isRenderableMediaReady(cardEl)` in `public/js/explorer-shaders.mjs` so render candidates and debug badge readiness require a connected, actually ready media element (loaded image or ready video/audio), preventing FX rects from persisting on unloaded placeholder cards.
+- AssetFX `_render()` now skips candidates failing renderable-media readiness even if `fxReady`/`fxInView` flags are set from earlier lifecycle stages.
+- Added runtime regression `test_explorer_fx_debug_rects_change_after_scroll` to ensure debug rect exports update after scroll movement instead of staying frozen.
+- Extended static shader assertions to enforce `_isRenderableMediaReady(...)` usage and image thumb-state readiness guardrails.
+
+### Latest Implementation Notes (2026-03-03, geometry freshness + overscan tracking follow-up)
+- Hardened layout invalidation with reason-aware `_markLayoutDirty(reason)` so scroll/viewport/resize events always reset `cardRectCache`, clear `_lastCanvasRect`, and increment debug counters (`layoutInvalidations`, `lastInvalidationReason`) for runtime inspection.
+- Added vertical overscan tracking (`prefetchViewportY = 1.5`) to replay/observer visibility calculations (`_expandedRootRect`, IntersectionObserver `rootMargin`) so fast scrolling keeps near-viewport cards in FX tracking instead of dropping to stale rect state.
+- Tightened image readiness gating to skip fallback posters when a real thumb URL exists (`src === data-thumb-fallback`) so placeholder tiles no longer produce debug FX rects.
+- Added runtime regression `test_explorer_fx_layout_invalidation_ticks_on_scroll` and expanded static shader assertions for overscan, invalidation telemetry, and fallback-readiness guards.
+
+### Latest Implementation Notes (2026-03-03, TDD freshness semantics for debug-rect snapshots)
+- Added `_publishDebugRects(...)` to centralize debug-rect exports so every frame overwrites `lastRects`, increments `lastRectsFrame`, and records `lastRectsT` instead of leaving stale snapshots.
+- `_render()` now reuses `_lastCanvasRect` only between stable frames and forces a fresh `getBoundingClientRect()` sample whenever layout is dirty, reducing scroll-churn drift.
+- Runtime E2E suite now validates scroll-driven debug frame advancement (`lastRectsFrame`) and verifies rect exports clear after forcing cards out-of-view (`test_explorer_fx_debug_rects_clear_when_cards_marked_out_of_view`).
+- Replaced the old viewport-only visibility cap assertion with a bounded-and-responsive tracking assertion that allows overscan while still guarding against leaks.
+
+### Latest Implementation Notes (2026-03-03, iPhone fast-scroll debug rect freshness + viewport-offset follow-up)
+- Updated `public/js/explorer-shaders.mjs` with `getViewportOffsets()` (from `window.visualViewport.offsetLeft/offsetTop`) and applied those offsets in card→FX rect mapping before DPR scaling, reducing Safari/iPhone toolbar/viewport-origin drift in debug/render alignment.
+- Adjusted the low-tier fast-scroll frame-skip gate so throttling is disabled when `fxdebug` is active (`lowTierFrameSkip` now requires `!this.fxDebug`), ensuring debug rectangles continue to publish fresh frame-by-frame telemetry during rapid scrolling.
+- Refreshed static explorer shader assertions in `tests/test_public_explorer_program_monitor.py` to enforce the new viewport-offset helper and fxdebug-aware frame-skip contract.
+
+### Latest Implementation Notes (2026-03-03, AssetFX keyed-state + debug-freshness hardening follow-up)
+- Added stable per-asset keyed runtime state in `public/js/explorer-shaders.mjs` (`stateByKey`, `keyByEl`, `_getCardKey`, `_getCardState`) so FX readiness/in-view/sampled truth survives DOM recycling and no longer relies on element-only weak state.
+- Implemented bounded state retention with `_evictState(nowPerf)` and query-param override `fxevictms` (default `20000ms`) so off-band cards are evicted when not near view/selected/pending/active.
+- Added `_bindInvalidations()`/`_unbindInvalidations()` and wired scroll, touchmove, window resize, and visualViewport resize/scroll invalidation through `_markLayoutDirty(...)` to force rect/canvas refresh during iOS viewport shifts.
+- Updated render candidate selection and debug badges to consume keyed CardState (`nearView`, `inView`, `renderable`, `sampledUntil`) and to compute render candidates from tracked near-view cards while keeping caps (`pending<=60`, `active<=6`, adaptive render caps).
+- Expanded debug export contract: `_publishDebugRects(debugRects, meta)` now overwrites snapshots every frame and exports `lastRects`, `lastRectsFrame`, `lastRectsT`, `stateSize`, `attachedRootId`, `canvasRect`, `dpr`, `vvOffset`, and `rootScrollTop`.
+- Extended runtime Playwright tests with `test_explorer_fx_state_map_is_bounded_after_scroll_and_eviction` (`fxevictms=2000`) and added graceful browser-unavailable skips in Python Playwright fixtures/tests so CI environments without installed browser binaries skip instead of hard-failing.
+
+### Latest Implementation Notes (2026-03-04, iOS visualViewport double-offset correction follow-up)
+- Removed visualViewport offset subtraction from DOM→canvas rect mapping in `public/js/explorer-shaders.mjs`; mapping now consistently uses viewport-space `getBoundingClientRect()` deltas (`cardRect - canvasRect`) before DPR scaling to avoid iOS double-offset drift.
+- Kept visualViewport offsets for diagnostics only and expanded debug telemetry with `sampleMapA`, `sampleMapC`, and `canvasTopPlusVvOy` so runtime checks can detect accidental reintroduction of toolbar offset double-application.
+- Added Playwright regression `test_explorer_fx_ios_viewport_offset_mapping_stays_in_canvas_space` to validate viewport-space mapping behavior and iOS-style `canvasTop + vv.oy ≈ 0` sanity when visual viewport offsets are present.
+- Updated static shader contract assertions to match viewport-space mapping lines and the additional debug telemetry exports.
+
+### Latest Implementation Notes (2026-03-04, wrapper-key canonicalization + near-view set integrity follow-up)
+- Canonicalized AssetFX key resolution to wrapper cards via `_getKeyEl(el)` so `_getCardKey(...)` always resolves through `.asset` containers and mirrors the same key onto associated media elements, preventing wrapper/img key divergence (`assetfx-key-*` fallbacks on imgs).
+- Added explicit `nearViewCards` Set lifecycle in `public/js/explorer-shaders.mjs` (constructor/init/cleanup/prune updates) so near-view tracking is always initialized and exported as a numeric size for runtime diagnostics.
+- Hardened render-loop candidate enumeration with `_iterCards(...)` and updated per-card visibility updates to compute `inView`/`nearView` directly from `card.getBoundingClientRect()` against the current `canvasRect` (plus overscan band), keeping visibility logic in one viewport-space coordinate system.
+- Added runtime Playwright regression `test_explorer_fx_wrapper_and_media_share_same_key_and_nearview_is_initialized` to assert wrapper/media key identity and that `nearViewCards.size` is present.
+- Updated static shader assertions to cover `_getKeyEl(...)`, `nearViewCards` initialization, and render-loop inView/nearView updates.
+
+### Latest Implementation Notes (2026-03-04, system-contract hardening for churn, bounded state, and fetch diagnostics)
+- Hardened AssetFX state retention policy in `public/js/explorer-shaders.mjs`: default stale-state TTL increased to `300000ms` with bounded LRU cap (`maxStateKeys`, default `1200`, override `fxmaxstate`) so FX state remains persistent under scroll churn without unbounded growth.
+- Added bounded near-view policy (`nearViewCardsMax`, default `180`, override `fxnearmax`) with `_capNearViewCards()` to keep overscan tracking numerically stable and leak-resistant.
+- Expanded debug snapshot exports with `lastRectsLen`, `visibleCards`, and `nearViewCards` counters so runtime probes can directly verify rect freshness and tracking set health.
+- Added Playwright regression coverage for churn invariants (`test_explorer_fx_churn_invariants_hold_across_cycles`) and thumbnail resource fetch pressure (`test_explorer_thumbnail_resource_fetches_do_not_spike_after_roundtrip`) to separate FX-state persistence from thumbnail decode/network behavior.
+- Updated static shader contract assertions to lock in the new bounded-state and near-view cap contracts.
+
+### Latest Implementation Notes (2026-03-04, fxdebug reason banner + DOM overlay rect renderer)
+- Added explicit fxdebug failure-reason telemetry in `public/js/explorer-shaders.mjs` via `lastRectsReason` / `lastEarlyReturnReason` and early-return publishing (`EARLY_RETURN:*`) so missing-rect states report deterministic causes instead of silently stalling.
+- Added a DOM-based debug rectangle layer (`div[data-assetfx="debug-layer"]`) that renders per-rect fixed-position outlines from exported rect snapshots when `fxdebug=1`, decoupling debug-rect visibility from WebGL draw-path failures.
+- Added an fxdebug reason banner (`div[data-assetfx="debug-banner"]`) that appears when visible cards exist but no debug rects persist for multiple frames or frame timestamps stall, showing attachment/canvas/candidate/early-return diagnostics.
+- `_publishDebugRects(...)` now updates `lastRectsLen`, `visibleCards`, `nearViewCards`, and reason fields every frame (including empty snapshots), and drives banner synchronization so frame freshness failures are immediately visible on-device.
+
+### Latest Implementation Notes (2026-03-04, tick survivability telemetry + IO-independent card discovery)
+- Added render-loop survivability telemetry in `public/js/explorer-shaders.mjs` via `window.__assetfx_dbg` counters (`tickFrame`, `tickExitReason`, `candidatesBuilt`, `sampleWanted`, `sampleIssued`, `sampleDone`, `texturesAlive`, `mode`) so stalls can be diagnosed as throttling vs attachment/rect failures.
+- Added URL switch `fxio=0` to disable IntersectionObserver hinting while preserving fallback tracking behavior, enabling direct isolation of IO callback health from the core render pipeline.
+- Added `_discoverCardsFromDom(limit)` and invoked it in `_render()` so tracked cards are continuously repopulated from the attached grid/card selector when IO events are delayed/dropped under churn.
+- Added `_setTickExit(...)` and wired early-return/throttle paths to publish deterministic per-frame exit reasons into debug state.
+- Updated static monitor assertions in `tests/test_public_explorer_program_monitor.py` to track the throttled branch shape and tick-exit instrumentation contract.
+
+### Latest Implementation Notes (2026-03-04, readonly-rect hardening + tick exception survivability)
+- Hardened `public/js/explorer-shaders.mjs` against WebKit readonly-property traps by introducing `cloneRect(...)` and migrating layout/mask/render geometry reads to cloned plain objects before math/caching.
+- Added `cloneVV(...)` and exported `vvState` telemetry through `window.__assetfx_dbg` so visualViewport diagnostics remain explicit without mutating browser-owned viewport structs.
+- Wrapped the AssetFX RAF tick body in try/catch/finally; runtime exceptions are now recorded as `lastException`/`lastExceptionT` while scheduling continues so debug telemetry and frame loop survivability are preserved under transient errors.
+- Updated static shader monitor assertions to enforce the clone-helper contract and tick exception reporting path.
+
+### Latest Implementation Notes (2026-03-04, fallback renderability promotion for FX sampling/dissolve)
+- Added `renderableFallbackMs` (`fxfallbackms` query override, default `680ms`) in `public/js/explorer-shaders.mjs` so cards with loaded fallback imagery are eventually promoted to renderable when in/near view even if thumbnail state remains non-`loaded`.
+- Extended keyed card state with `thumbBlockedAt` and updated `_isRenderableMediaReady(...)` to track blocked duration (`thumbState`/fallback source) and unblock sampling once the grace window elapses.
+- This prevents prolonged `A-V-` starvation on iOS/slow thumbnail extraction paths and restores pending→sampled progression required for entry dissolve playback.
+- Updated static shader monitor assertions to enforce the fallback-promotion contract (`fxfallbackms`, blocked-state fields, and promotion condition).
+
+### Latest Implementation Notes (2026-03-04, layoutdebug overlay sanitizer readonly-guard)
+- Hardened `public/explorer.html` overlay sanitizer for iOS/WebKit by introducing guarded helpers `setNodeStyleSafe(...)` and `setNodeDataSafe(...)` and routing sanitizer writes through them.
+- `sanitizeRootOverlayInterceptors()` now avoids direct brittle assignments to possibly readonly/interceptor-backed style/dataset properties and falls back safely without throwing.
+- This addresses runtime `TypeError: Attempted to assign to readonly property` faults observed during `layoutdebug=1` runs while preserving inert overlay behavior.
+- Updated static monitor assertions to require the new safe-setter contract in explorer HTML.
+
+### Latest Implementation Notes (2026-03-04, FX-default view + scene-only dissolve demotion)
+- Updated `public/explorer.html` view controls to support `fx|grid|list` with **FX as default** on load; FX mode uses the existing DOM grid as interaction/layout source while applying persistent glass/glow styling tuned by media kind.
+- Added FX-mode styling (`#mediaGridRoot.view-fx ...`) to provide persistent blue/purple/yellow type glows and contiguous grid presentation (no hover-lift dependence) as a visual preview direction for shader-led explorer UX.
+- Updated view switching to keep grid active for `fx` and route AssetFX dissolve policy by mode (`scene` for FX, `tile` for classic grid/list) via `cardFX.setDissolveMode(...)`.
+- Added AssetFX dissolve policy controls in `public/js/explorer-shaders.mjs` (`dissolveMode`, `setDissolveMode`) and gated `_enqueueDissolve(...)` so per-tile wipe dissolves are no longer the default scroll-time behavior.
+- Extended static monitor assertions for FX-default controls, dissolve-policy wiring, and FX visual contract markers.
+
+### Latest Implementation Notes (2026-03-04, Hybrid TileFX renderer foundation)
+- Added a new `TileFXRenderer` in `public/js/explorer-shaders.mjs` that renders FX-mode tiles via WebGL from DOM-provided rects, with persistent type-colored glow material and selection boost.
+- Added internal `TextureCacheLRU` for FX tile textures (upload-once from ready thumbnail images, bounded by texture count/MB budget, with eviction telemetry) to reduce scroll churn flicker.
+- Added `window.__tilefx_dbg` runtime telemetry (`mode`, visible count, uploads/sec, cache size/evictions, draw calls, frame timing, fail reason) and fail-safe fallback signaling.
+- Updated `public/explorer.html` to instantiate TileFX, provide DOM tile scan source (`collectTileFxTiles` overscan scan), add dedicated `tilefxCanvas`, and keep FX mode as default while preserving existing grid/list behavior.
+- View switching now routes both dissolve policy and renderer mode: FX stays scene-level dissolve, while grid/list can use tile dissolves; FX mode suspends legacy per-asset overlay path to avoid double-render contention.
+- Updated static monitor assertions to cover TileFX import/wiring, tilefx canvas presence, and TileFX renderer contract markers.
