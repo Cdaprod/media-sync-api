@@ -632,6 +632,7 @@ export class AssetFX {
     this.evictAfterMs = Math.max(500, Number(new URLSearchParams(window.location.search).get('fxevictms') || STATE_EVICT_AFTER_MS));
     this.maxStateKeys = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxmaxstate') || STATE_MAX_KEYS));
     this.nearViewCardsMax = Math.max(24, Number(new URLSearchParams(window.location.search).get('fxnearmax') || NEAR_VIEW_MAX));
+    this.renderableFallbackMs = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxfallbackms') || 680));
 
     this.prefersReducedMotion = typeof window !== 'undefined'
       ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
@@ -766,6 +767,7 @@ export class AssetFX {
         selected: false,
         pending: false,
         active: false,
+        thumbBlockedAt: 0,
         el: keyEl,
       };
       this.stateByKey.set(key, state);
@@ -1430,17 +1432,26 @@ export class AssetFX {
 
     const tag = (mediaEl.tagName || '').toUpperCase();
     if (tag === 'IMG') {
+      const now = performance.now();
       const thumbState = String(mediaEl.dataset?.thumbState || '').trim().toLowerCase();
       const src = (mediaEl.currentSrc || mediaEl.getAttribute('src') || '').trim();
       const thumbFallback = String(mediaEl.dataset?.thumbFallback || '').trim();
       const hasThumbUrl = String(mediaEl.dataset?.thumbUrl || '').trim().length > 0;
-      const ready = !(thumbState && thumbState !== 'loaded')
-        && !(hasThumbUrl && thumbFallback && src === thumbFallback)
-        && !!src && mediaEl.complete && Number(mediaEl.naturalWidth || 0) > 0;
+      const mediaReady = !!src && mediaEl.complete && Number(mediaEl.naturalWidth || 0) > 0;
+      const thumbBlocked = !!(thumbState && thumbState !== 'loaded');
+      const fallbackBlocked = !!(hasThumbUrl && thumbFallback && src === thumbFallback);
+      let ready = mediaReady && !thumbBlocked && !fallbackBlocked;
+      if (!ready && mediaReady && (thumbBlocked || fallbackBlocked)) {
+        if (state && !state.thumbBlockedAt) state.thumbBlockedAt = now;
+        const blockedFor = state ? (now - Number(state.thumbBlockedAt || now)) : 0;
+        const visibleLike = cardEl.dataset.fxInView === '1' || this.visibleCards.has(cardEl) || !!state?.nearView;
+        if (visibleLike && blockedFor >= this.renderableFallbackMs) ready = true;
+      }
       if (state) {
         state.thumbLoaded = ready;
         state.renderable = ready;
-        state.lastSeenAt = performance.now();
+        state.lastSeenAt = now;
+        state.thumbBlockedAt = ready ? 0 : Number(state.thumbBlockedAt || now);
       }
       return ready;
     }

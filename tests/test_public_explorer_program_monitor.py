@@ -216,7 +216,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'function cloneVV(vv) {' in shader_module
     assert 'function decodeImageWithBackpressure(imgEl)' in shader_module
     assert '  _isRenderableMediaReady(cardEl) {' in shader_module
-    assert "const ready = !(thumbState && thumbState !== 'loaded')" in shader_module
+    assert "const thumbBlocked = !!(thumbState && thumbState !== 'loaded');" in shader_module
+    assert "this.renderableFallbackMs = Math.max(120, Number(new URLSearchParams(window.location.search).get('fxfallbackms') || 680));" in shader_module
     assert 'this.layoutDirty = true;' in shader_module
     assert 'this.cardRectCache = new WeakMap();' in shader_module
     assert 'this.readyInViewNotPlayedCount = 0;' in shader_module
@@ -232,7 +233,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert "window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true" in shader_module
     assert "if (card.dataset.fxReady !== '1') continue;" in shader_module
     assert 'if (!this._isRenderableMediaReady(card)) continue;' in shader_module
-    assert '&& !(hasThumbUrl && thumbFallback && src === thumbFallback)' in shader_module
+    assert 'const fallbackBlocked = !!(hasThumbUrl && thumbFallback && src === thumbFallback);' in shader_module
+    assert 'if (visibleLike && blockedFor >= this.renderableFallbackMs) ready = true;' in shader_module
     assert "const readyFade = readyAt > 0 ? Math.min(1, (performance.now() - readyAt) / this.readyFadeMs) : 1;" in shader_module
     assert 'uniform sampler2D u_tile_params;' in shader_module
     assert 'this.tileParamTexture = gl.createTexture();' in shader_module
@@ -251,6 +253,7 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert '  _getKeyEl(el) {' in shader_module
     assert "return el.closest?.('.asset') || el;" in shader_module
     assert 'this.keyByEl = new WeakMap();' in shader_module
+    assert 'thumbBlockedAt: 0,' in shader_module
     assert '  _bindInvalidations() {' in shader_module
     assert '  _evictState(nowPerf = performance.now()) {' in shader_module
     assert 'window.__assetfx_dbg.stateSize = this.stateByKey.size;' in shader_module

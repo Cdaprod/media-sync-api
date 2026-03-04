@@ -1269,3 +1269,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `cloneVV(...)` and exported `vvState` telemetry through `window.__assetfx_dbg` so visualViewport diagnostics remain explicit without mutating browser-owned viewport structs.
 - Wrapped the AssetFX RAF tick body in try/catch/finally; runtime exceptions are now recorded as `lastException`/`lastExceptionT` while scheduling continues so debug telemetry and frame loop survivability are preserved under transient errors.
 - Updated static shader monitor assertions to enforce the clone-helper contract and tick exception reporting path.
+
+### Latest Implementation Notes (2026-03-04, fallback renderability promotion for FX sampling/dissolve)
+- Added `renderableFallbackMs` (`fxfallbackms` query override, default `680ms`) in `public/js/explorer-shaders.mjs` so cards with loaded fallback imagery are eventually promoted to renderable when in/near view even if thumbnail state remains non-`loaded`.
+- Extended keyed card state with `thumbBlockedAt` and updated `_isRenderableMediaReady(...)` to track blocked duration (`thumbState`/fallback source) and unblock sampling once the grace window elapses.
+- This prevents prolonged `A-V-` starvation on iOS/slow thumbnail extraction paths and restores pending→sampled progression required for entry dissolve playback.
+- Updated static shader monitor assertions to enforce the fallback-promotion contract (`fxfallbackms`, blocked-state fields, and promotion condition).
