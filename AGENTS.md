@@ -1250,3 +1250,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Expanded debug snapshot exports with `lastRectsLen`, `visibleCards`, and `nearViewCards` counters so runtime probes can directly verify rect freshness and tracking set health.
 - Added Playwright regression coverage for churn invariants (`test_explorer_fx_churn_invariants_hold_across_cycles`) and thumbnail resource fetch pressure (`test_explorer_thumbnail_resource_fetches_do_not_spike_after_roundtrip`) to separate FX-state persistence from thumbnail decode/network behavior.
 - Updated static shader contract assertions to lock in the new bounded-state and near-view cap contracts.
+
+### Latest Implementation Notes (2026-03-04, fxdebug reason banner + DOM overlay rect renderer)
+- Added explicit fxdebug failure-reason telemetry in `public/js/explorer-shaders.mjs` via `lastRectsReason` / `lastEarlyReturnReason` and early-return publishing (`EARLY_RETURN:*`) so missing-rect states report deterministic causes instead of silently stalling.
+- Added a DOM-based debug rectangle layer (`div[data-assetfx="debug-layer"]`) that renders per-rect fixed-position outlines from exported rect snapshots when `fxdebug=1`, decoupling debug-rect visibility from WebGL draw-path failures.
+- Added an fxdebug reason banner (`div[data-assetfx="debug-banner"]`) that appears when visible cards exist but no debug rects persist for multiple frames or frame timestamps stall, showing attachment/canvas/candidate/early-return diagnostics.
+- `_publishDebugRects(...)` now updates `lastRectsLen`, `visibleCards`, `nearViewCards`, and reason fields every frame (including empty snapshots), and drives banner synchronization so frame freshness failures are immediately visible on-device.

@@ -330,6 +330,9 @@ if (typeof window !== 'undefined') {
     sampleMapA: null,
     sampleMapC: null,
     canvasTopPlusVvOy: null,
+    lastRectsReason: '',
+    lastEarlyReturnReason: '',
+    debugBanner: '',
   };
   window.__assetfx_audit = () => {
     const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
@@ -628,6 +631,11 @@ export class AssetFX {
     this.sampleHoldMs = SAMPLE_STICK_MS;
     this.sampledCardsUntil = new WeakMap();
     this.debugOverlay = null;
+    this.debugDomLayer = null;
+    this.debugBannerEl = null;
+    this._debugNoRectsStreak = 0;
+    this._debugLastFrameTs = 0;
+    this._debugLastReason = '';
     this._boundVisualViewportChange = () => this._markLayoutDirty('visualViewport:change');
     this._boundInvalidationRoot = null;
     this._invalidationsBound = false;
@@ -808,6 +816,39 @@ export class AssetFX {
     return collection;
   }
 
+  _setDebugReason(reason = '', extra = {}) {
+    const dbg = window.__assetfx_dbg;
+    if (!dbg) return;
+    const label = String(reason || '');
+    dbg.lastRectsReason = label;
+    if (label.startsWith('EARLY_RETURN')) dbg.lastEarlyReturnReason = label;
+    if (typeof extra.candidates === 'number') dbg.renderCandidatesCount = Number(extra.candidates);
+    this._debugLastReason = label;
+  }
+
+  _syncDebugBanner() {
+    if (!this.fxDebug) return;
+    if (!this.debugBannerEl) return;
+    const dbg = window.__assetfx_dbg || {};
+    const visible = Number(dbg.visibleCards || 0);
+    const hasRects = Number(dbg.lastRectsLen || 0) > 0;
+    const frameAt = Number(dbg.lastRectsT || 0);
+    const stalled = (performance.now() - frameAt) > 250;
+    const noRects = visible > 0 && !hasRects;
+    this._debugNoRectsStreak = noRects ? (this._debugNoRectsStreak + 1) : 0;
+    const show = this._debugNoRectsStreak > 3 || stalled;
+    if (!show) {
+      this.debugBannerEl.style.display = 'none';
+      if (dbg) dbg.debugBanner = '';
+      return;
+    }
+    const reason = String(dbg.lastRectsReason || this._debugLastReason || 'UNKNOWN');
+    const text = `FXDEBUG: no rects (attached=${this.container ? 1 : 0} gl=${this.gl ? 1 : 0} root=${this._attachedGridRoot ? 1 : 0} canvasRect=${dbg.canvasRect ? 1 : 0} candidates=${Number(dbg.renderCandidatesCount || 0)} earlyReturn=${reason.startsWith('EARLY_RETURN') ? 1 : 0} reason=${reason})`;
+    this.debugBannerEl.textContent = text;
+    this.debugBannerEl.style.display = 'block';
+    if (dbg) dbg.debugBanner = text;
+  }
+
   _markLayoutDirty(reason = 'unspecified') {
     this.layoutDirty = true;
     this.cardRectCache = new WeakMap();
@@ -838,6 +879,8 @@ export class AssetFX {
       this._maskAllocated = shared.maskAllocated === true;
       this._u = shared.uCache || this._u;
       this.debugOverlay = shared.debugOverlay || null;
+      this.debugDomLayer = shared.debugDomLayer || this.debugDomLayer;
+      this.debugBannerEl = shared.debugBannerEl || this.debugBannerEl;
       this.raf = shared.raf;
       return;
     }
@@ -859,6 +902,8 @@ export class AssetFX {
         this._maskAllocated = ownerShared.maskAllocated === true;
         this._u = ownerShared.uCache || this._u;
         this.debugOverlay = ownerShared.debugOverlay || null;
+        this.debugDomLayer = ownerShared.debugDomLayer || this.debugDomLayer;
+        this.debugBannerEl = ownerShared.debugBannerEl || this.debugBannerEl;
         this.raf = ownerShared.raf;
         RENDERERS.set(container, ownerShared);
         setGlobalContextOwner({ rootEl: container, canvasEl: owner.canvasEl, stack: owner.stack });
@@ -910,8 +955,48 @@ export class AssetFX {
     });
     if (!debugOverlay.isConnected || debugOverlay.parentElement !== document.body) document.body.prepend(debugOverlay);
 
+    const debugLayers = Array.from(document.querySelectorAll('div[data-assetfx="debug-layer"]'));
+    const debugDomLayer = debugLayers.shift() || createNode('div', 'fx-debug-dom-layer');
+    debugLayers.forEach((node) => node.remove());
+    debugDomLayer.classList.add('fx-debug-dom-layer');
+    debugDomLayer.dataset.assetfx = 'debug-layer';
+    Object.assign(debugDomLayer.style, {
+      position: 'fixed',
+      inset: '0',
+      pointerEvents: 'none',
+      zIndex: '9999',
+      display: this.fxDebug ? 'block' : 'none',
+    });
+    if (!debugDomLayer.isConnected || debugDomLayer.parentElement !== document.body) document.body.appendChild(debugDomLayer);
+
+    const debugBanners = Array.from(document.querySelectorAll('div[data-assetfx="debug-banner"]'));
+    const debugBanner = debugBanners.shift() || createNode('div', 'fx-debug-banner');
+    debugBanners.forEach((node) => node.remove());
+    debugBanner.dataset.assetfx = 'debug-banner';
+    Object.assign(debugBanner.style, {
+      position: 'fixed',
+      left: '8px',
+      right: '8px',
+      top: '8px',
+      zIndex: '10000',
+      font: '11px/1.3 monospace',
+      color: '#9ff3ff',
+      background: 'rgba(6, 16, 30, 0.82)',
+      border: '1px solid rgba(120, 255, 170, 0.45)',
+      borderRadius: '8px',
+      padding: '6px 8px',
+      display: 'none',
+      pointerEvents: 'none',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    });
+    if (!debugBanner.isConnected || debugBanner.parentElement !== document.body) document.body.appendChild(debugBanner);
+
     this.overlay = canvas;
     this.debugOverlay = debugOverlay;
+    this.debugDomLayer = debugDomLayer;
+    this.debugBannerEl = debugBanner;
     ensureOverlayId(canvas);
     container.dataset.fxRendererId = String(++RENDERER_SEQ);
     FX_GLOBAL.__assetfx_renderer_seq = RENDERER_SEQ;
@@ -1027,8 +1112,12 @@ export class AssetFX {
     this.raf = 0;
     if (this.overlay) this.overlay.remove();
     if (this.debugOverlay) this.debugOverlay.remove();
+    if (this.debugDomLayer) this.debugDomLayer.remove();
+    if (this.debugBannerEl) this.debugBannerEl.remove();
     this.overlay = null;
     this.debugOverlay = null;
+    this.debugDomLayer = null;
+    this.debugBannerEl = null;
     this.gl = null;
     this.program = null;
     this.quad = null;
@@ -1667,6 +1756,8 @@ export class AssetFX {
       maskAllocated: this._maskAllocated,
       uCache: this._u,
       debugOverlay: this.debugOverlay,
+      debugDomLayer: this.debugDomLayer,
+      debugBannerEl: this.debugBannerEl,
       raf: this.raf,
     });
   }
@@ -1692,7 +1783,12 @@ export class AssetFX {
 
   _render() {
     this._pruneDisconnected();
-    if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
+    if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) {
+      this._setDebugReason('EARLY_RETURN:NOT_ATTACHED');
+      this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:NOT_ATTACHED' });
+      this._syncDebugBanner();
+      return;
+    }
     if (this.container.dataset.fxSuspend === '1') {
       this.gl.viewport(0, 0, this.overlay.width || 1, this.overlay.height || 1);
       this.gl.clearColor(0, 0, 0, 0);
@@ -1701,12 +1797,22 @@ export class AssetFX {
         const ctx = this.debugOverlay.getContext('2d');
         if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width, this.debugOverlay.height);
       }
+      if (this.debugDomLayer) this.debugDomLayer.replaceChildren();
+      this._setDebugReason('EARLY_RETURN:DEBUG_DISABLED');
+      this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:DEBUG_DISABLED' });
+      this._syncDebugBanner();
       return;
     }
     const dpr = window.devicePixelRatio || 1;
     let canvasRect = this._lastCanvasRect || this.overlay.getBoundingClientRect();
     if (!this._lastCanvasRect || this.layoutDirty) canvasRect = this.overlay.getBoundingClientRect();
     this._lastCanvasRect = canvasRect;
+    if (!canvasRect || !Number.isFinite(canvasRect.width) || !Number.isFinite(canvasRect.height) || canvasRect.width <= 0 || canvasRect.height <= 0) {
+      this._setDebugReason('EARLY_RETURN:CANVAS_RECT_NULL');
+      this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:CANVAS_RECT_NULL', canvasRect: null });
+      this._syncDebugBanner();
+      return;
+    }
     const viewport = getStableViewportSize();
     const width = Math.max(1, Math.round((viewport.width || canvasRect.width || 1) * dpr));
     const height = Math.max(1, Math.round((viewport.height || canvasRect.height || 1) * dpr));
@@ -2007,13 +2113,18 @@ export class AssetFX {
       window.__assetfx_dbg.sampleMapA = meta.sampleMapA || null;
       window.__assetfx_dbg.sampleMapC = meta.sampleMapC || null;
       window.__assetfx_dbg.canvasTopPlusVvOy = Number.isFinite(Number(meta.canvasTopPlusVvOy)) ? Number(meta.canvasTopPlusVvOy) : null;
+      const reason = String(meta.lastRectsReason || (safeRects.length > 0 ? 'OK' : 'NO_CANDIDATES'));
+      window.__assetfx_dbg.lastRectsReason = reason;
+      if (reason.startsWith('EARLY_RETURN')) window.__assetfx_dbg.lastEarlyReturnReason = reason;
     }
+    this._syncDebugBanner();
   }
 
   _renderDebugRects(cards, width, height) {
     if (!this.debugOverlay) return;
     if (!this.fxDebug) {
       this._publishDebugRects([], {
+        lastRectsReason: 'DEBUG_DISABLED',
         canvasRect: this._lastCanvasRect ? {
           left: this._lastCanvasRect.left,
           top: this._lastCanvasRect.top,
@@ -2023,6 +2134,7 @@ export class AssetFX {
       });
       const ctx = this.debugOverlay.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, this.debugOverlay.width || 0, this.debugOverlay.height || 0);
+      if (this.debugDomLayer) this.debugDomLayer.replaceChildren();
       return;
     }
     const ctx = this.debugOverlay.getContext('2d');
@@ -2068,6 +2180,7 @@ export class AssetFX {
       : null;
     const canvasTopPlusVvOy = this._lastCanvasRect ? Number(this._lastCanvasRect.top + vv.y) : null;
     this._publishDebugRects(debugRects, {
+      lastRectsReason: debugRects.length > 0 ? 'OK' : 'NO_CANDIDATES',
       canvasRect: this._lastCanvasRect ? {
         left: this._lastCanvasRect.left,
         top: this._lastCanvasRect.top,
@@ -2081,6 +2194,31 @@ export class AssetFX {
       sampleMapC,
       canvasTopPlusVvOy,
     });
+    if (this.debugDomLayer) {
+      this.debugDomLayer.replaceChildren();
+      const dpr = window.devicePixelRatio || 1;
+      debugRects.forEach((r) => {
+        const node = document.createElement('div');
+        node.className = 'fx-debug-dom-rect';
+        const x = r.x1 / dpr;
+        const y = r.y1 / dpr;
+        const w = Math.max(1, (r.x2 - r.x1) / dpr);
+        const h = Math.max(1, (r.y2 - r.y1) / dpr);
+        Object.assign(node.style, {
+          position: 'fixed',
+          left: `${x}px`,
+          top: `${y}px`,
+          width: `${w}px`,
+          height: `${h}px`,
+          border: '1px solid rgba(120, 255, 170, 0.95)',
+          borderRadius: '3px',
+          boxSizing: 'border-box',
+          pointerEvents: 'none',
+          zIndex: '9999',
+        });
+        this.debugDomLayer.appendChild(node);
+      });
+    }
   }
 
   _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, sticky = false, alwaysOn = true } = {}) {
