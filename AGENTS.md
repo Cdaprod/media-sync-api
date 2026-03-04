@@ -1256,3 +1256,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added a DOM-based debug rectangle layer (`div[data-assetfx="debug-layer"]`) that renders per-rect fixed-position outlines from exported rect snapshots when `fxdebug=1`, decoupling debug-rect visibility from WebGL draw-path failures.
 - Added an fxdebug reason banner (`div[data-assetfx="debug-banner"]`) that appears when visible cards exist but no debug rects persist for multiple frames or frame timestamps stall, showing attachment/canvas/candidate/early-return diagnostics.
 - `_publishDebugRects(...)` now updates `lastRectsLen`, `visibleCards`, `nearViewCards`, and reason fields every frame (including empty snapshots), and drives banner synchronization so frame freshness failures are immediately visible on-device.
+
+### Latest Implementation Notes (2026-03-04, tick survivability telemetry + IO-independent card discovery)
+- Added render-loop survivability telemetry in `public/js/explorer-shaders.mjs` via `window.__assetfx_dbg` counters (`tickFrame`, `tickExitReason`, `candidatesBuilt`, `sampleWanted`, `sampleIssued`, `sampleDone`, `texturesAlive`, `mode`) so stalls can be diagnosed as throttling vs attachment/rect failures.
+- Added URL switch `fxio=0` to disable IntersectionObserver hinting while preserving fallback tracking behavior, enabling direct isolation of IO callback health from the core render pipeline.
+- Added `_discoverCardsFromDom(limit)` and invoked it in `_render()` so tracked cards are continuously repopulated from the attached grid/card selector when IO events are delayed/dropped under churn.
+- Added `_setTickExit(...)` and wired early-return/throttle paths to publish deterministic per-frame exit reasons into debug state.
+- Updated static monitor assertions in `tests/test_public_explorer_program_monitor.py` to track the throttled branch shape and tick-exit instrumentation contract.

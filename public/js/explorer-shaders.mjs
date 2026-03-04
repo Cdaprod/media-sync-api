@@ -333,6 +333,14 @@ if (typeof window !== 'undefined') {
     lastRectsReason: '',
     lastEarlyReturnReason: '',
     debugBanner: '',
+    tickFrame: 0,
+    tickExitReason: '',
+    candidatesBuilt: 0,
+    sampleWanted: 0,
+    sampleIssued: 0,
+    sampleDone: 0,
+    texturesAlive: 0,
+    mode: 'full',
   };
   window.__assetfx_audit = () => {
     const overlays = Array.from(document.querySelectorAll('canvas[data-assetfx="overlay"]'));
@@ -612,6 +620,9 @@ export class AssetFX {
           return params.get('novirt') === '1' || params.get('keep') === '1';
         })()
       : false;
+    this.useIntersectionObserver = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('fxio') !== '0'
+      : true;
 
     this.visibilityObserver = null;
     this.scrollReplayScheduled = false;
@@ -636,6 +647,7 @@ export class AssetFX {
     this._debugNoRectsStreak = 0;
     this._debugLastFrameTs = 0;
     this._debugLastReason = '';
+    this._domDiscoverCap = 220;
     this._boundVisualViewportChange = () => this._markLayoutDirty('visualViewport:change');
     this._boundInvalidationRoot = null;
     this._invalidationsBound = false;
@@ -814,6 +826,26 @@ export class AssetFX {
     if (collection instanceof Map) return collection.values();
     if (typeof collection.values === 'function') return collection.values();
     return collection;
+  }
+
+  _discoverCardsFromDom(limit = this._domDiscoverCap) {
+    const root = this._attachedGridRoot || this.container;
+    if (!root || !this._attachedCardSelector) return;
+    const cards = root.querySelectorAll(this._attachedCardSelector);
+    let seen = 0;
+    cards.forEach((card) => {
+      if (seen >= limit) return;
+      if (!card?.isConnected) return;
+      this.trackedCards.add(card);
+      this._getCardState(card, true);
+      seen += 1;
+    });
+  }
+
+  _setTickExit(reason = '') {
+    const dbg = window.__assetfx_dbg;
+    if (!dbg) return;
+    dbg.tickExitReason = String(reason || '');
   }
 
   _setDebugReason(reason = '', extra = {}) {
@@ -1541,7 +1573,7 @@ export class AssetFX {
       this.trackedCards.forEach((card) => this._setCardInView(card, true));
       return;
     }
-    if (!('IntersectionObserver' in window)) {
+    if (!this.useIntersectionObserver || !('IntersectionObserver' in window)) {
       this.fallbackSweepEnabled = true;
       return;
     }
@@ -1713,6 +1745,9 @@ export class AssetFX {
   _startLoop() {
     if (this.raf || !this.gl || !this.program || !this.quad || !this.overlay || !this.container) return;
     const tick = () => {
+      if (window.__assetfx_dbg) {
+        window.__assetfx_dbg.tickFrame = Number(window.__assetfx_dbg.tickFrame || 0) + 1;
+      }
       const now = performance.now();
       if (this._lastFrameAt > 0) {
         const dt = Math.max(1, now - this._lastFrameAt);
@@ -1724,7 +1759,13 @@ export class AssetFX {
       const deviceMemory = Number(window.navigator?.deviceMemory || 0);
       const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
       const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;
-      if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();
+      if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) {
+        this._setTickExit('RUN');
+        this._render();
+      } else {
+        this._setTickExit('EARLY_RETURN:THROTTLED');
+        this._publishDebugRects(window.__assetfx_dbg?.lastRects || [], { lastRectsReason: 'EARLY_RETURN:THROTTLED' });
+      }
       this.raf = requestAnimationFrame(tick);
       if (this.container && RENDERERS.has(this.container)) {
         const shared = RENDERERS.get(this.container);
@@ -1783,8 +1824,10 @@ export class AssetFX {
 
   _render() {
     this._pruneDisconnected();
+    this._discoverCardsFromDom();
     if (!this.gl || !this.program || !this.quad || !this.overlay || !this.container) {
       this._setDebugReason('EARLY_RETURN:NOT_ATTACHED');
+      this._setTickExit('EARLY_RETURN:NOT_ATTACHED');
       this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:NOT_ATTACHED' });
       this._syncDebugBanner();
       return;
@@ -1799,6 +1842,7 @@ export class AssetFX {
       }
       if (this.debugDomLayer) this.debugDomLayer.replaceChildren();
       this._setDebugReason('EARLY_RETURN:DEBUG_DISABLED');
+      this._setTickExit('EARLY_RETURN:DEBUG_DISABLED');
       this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:DEBUG_DISABLED' });
       this._syncDebugBanner();
       return;
@@ -1809,6 +1853,7 @@ export class AssetFX {
     this._lastCanvasRect = canvasRect;
     if (!canvasRect || !Number.isFinite(canvasRect.width) || !Number.isFinite(canvasRect.height) || canvasRect.width <= 0 || canvasRect.height <= 0) {
       this._setDebugReason('EARLY_RETURN:CANVAS_RECT_NULL');
+      this._setTickExit('EARLY_RETURN:CANVAS_RECT_NULL');
       this._publishDebugRects([], { lastRectsReason: 'EARLY_RETURN:CANVAS_RECT_NULL', canvasRect: null });
       this._syncDebugBanner();
       return;
@@ -1897,6 +1942,14 @@ export class AssetFX {
     }
     const totalCandidates = renderCandidates.length;
     this.renderCandidatesCount = totalCandidates;
+    if (window.__assetfx_dbg) {
+      window.__assetfx_dbg.candidatesBuilt = totalCandidates;
+      window.__assetfx_dbg.sampleWanted = totalCandidates;
+      window.__assetfx_dbg.sampleIssued = 0;
+      window.__assetfx_dbg.sampleDone = 0;
+      window.__assetfx_dbg.texturesAlive = Number(!!this.tileParamTexture) + Number(!!this._maskTexture);
+      window.__assetfx_dbg.mode = this.gl ? 'full' : 'off';
+    }
     const deviceMemory = Number(window.navigator?.deviceMemory || 0);
     const smallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
     const lowTier = (deviceMemory > 0 && deviceMemory <= 4) || smallScreen;
@@ -1977,6 +2030,10 @@ export class AssetFX {
       }
     });
     this.sweepFilledCount = Math.max(0, cards.length - this.stickyRetainedCount);
+    if (window.__assetfx_dbg) {
+      window.__assetfx_dbg.sampleIssued = selectedCards.length;
+      window.__assetfx_dbg.sampleDone = cards.length;
+    }
     this.lastSampledCards = [...sampledCards];
 
     selectedVisibleCards.forEach((card) => {

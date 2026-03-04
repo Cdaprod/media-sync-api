@@ -309,7 +309,8 @@ def test_explorer_asset_fx_debug_and_attach_idempotency_present():
     assert 'const lowTierFrameSkip = !this.fxDebug && ((deviceMemory > 0 && deviceMemory <= 4) || smallScreen) && this.scrollVelocityEma > 0.85;' in shader_module
     assert 'if (this.scrollVelocityEma > 0.35 || this.motionDamp < 0.8) return;' in shader_module
     assert 'if (Math.random() > 0.35) return;' in shader_module
-    assert 'if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) this._render();' in shader_module
+    assert 'if (!lowTierFrameSkip || (this._frameCounter % 2) === 0) {' in shader_module
+    assert "this._setTickExit('EARLY_RETURN:THROTTLED');" in shader_module
     assert 'const visibleDrivenCap = Math.min(MAX_RECTS, Math.max(this.minRenderCards, totalCandidates + 4));' in shader_module
     assert 'if (this.fpsEma > 55) adaptiveMaxRenderCards =' in shader_module
     assert 'const SAMPLE_STICK_MS = 420;' in shader_module
