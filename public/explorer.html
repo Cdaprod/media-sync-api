@@ -826,8 +826,8 @@
     #mediaGridRoot.view-fx .asset{
       border-radius: 0;
       border-color: rgba(160,188,255,0.16);
-      background: linear-gradient(180deg, rgba(22,28,44,0.58), rgba(8,11,22,0.9));
-      box-shadow: inset 0 0 0 1px rgba(190,220,255,0.05);
+      background: transparent;
+      box-shadow: none;
       transform: none !important;
     }
     #mediaGridRoot.view-fx .asset::before{
@@ -850,6 +850,42 @@
     }
     #mediaGridRoot.view-fx .asset .scrim{
       background: linear-gradient(to top, rgba(3,6,16,0.84) 4%, rgba(8,12,24,0.36) 44%, rgba(8,12,24,0.08) 75%);
+    }
+    #mediaGridRoot.view-fx .asset img.asset-thumb,
+    #mediaGridRoot.view-fx .asset .thumb{
+      opacity: 1;
+    }
+    #mediaGridRoot.view-fx .asset.tilefx-ready img.asset-thumb{
+      opacity: 0 !important;
+    }
+    #mediaGridRoot.view-fx .asset,
+    #mediaGridRoot.view-fx .asset::before,
+    #mediaGridRoot.view-fx .asset::after,
+    #mediaGridRoot.view-fx .asset .thumb,
+    #mediaGridRoot.view-fx .asset .asset-overlay,
+    #mediaGridRoot.view-fx .asset .scrim{
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    #tilefxHud{
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      z-index: 120;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(5,8,18,0.88);
+      font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #c6e2ff;
+      white-space: pre;
+      pointer-events: none;
+      min-width: 220px;
+    }
+    #tilefxHud.is-alert{
+      border-color: rgba(255,110,110,0.75);
+      color: #ffd0d0;
     }
 
     .asset{
@@ -1861,6 +1897,93 @@
       dragTarget: null,
     };
 
+    const tileFxDbg = window.__tilefx_dbg || (window.__tilefx_dbg = {});
+    tileFxDbg.domSwapOk = false;
+    tileFxDbg.scannedCount = 0;
+    tileFxDbg.culledCount = 0;
+    tileFxDbg.renderedCount = 0;
+    tileFxDbg.coverageRatio = 1;
+    tileFxDbg.failReason = '';
+    tileFxDbg.lastScanMs = 0;
+    tileFxDbg.scansPerSecond = 0;
+
+    const tileFxScanStats = {
+      scannedCount: 0,
+      culledCount: 0,
+      renderedCount: 0,
+      lastScanMs: 0,
+    };
+    let tileFxScanRuns = [];
+    let tileFxCollectPending = 0;
+
+    function ensureTileFxHud(){
+      let hud = document.getElementById('tilefxHud');
+      if (!hud) {
+        hud = document.createElement('div');
+        hud.id = 'tilefxHud';
+        hud.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(hud);
+      }
+      return hud;
+    }
+
+    function updateTileFxHud(){
+      const hud = ensureTileFxHud();
+      const scanned = Number(tileFxDbg.scannedCount || 0);
+      const rendered = Number(tileFxDbg.renderedCount || 0);
+      const ratio = scanned > 0 ? (rendered / scanned) : 1;
+      const failReason = String(tileFxDbg.failReason || '');
+      hud.classList.toggle('is-alert', !!failReason);
+      hud.textContent = [
+        `mode: ${state.view}`,
+        `domSwapOk: ${tileFxDbg.domSwapOk ? 'true' : 'false'}`,
+        `scanned/rendered: ${scanned}/${rendered} (${(ratio * 100).toFixed(1)}%)`,
+        `dpr: ${(tileFxDbg.dpr || 1).toFixed(2)} (cap ${(tileFxDbg.dprCap || 2).toFixed(2)})`,
+        `uploads/s: ${Number(tileFxDbg.uploadsThisSecond || 0)}`,
+        `cache: ${Number(tileFxDbg.texturesInCache || 0)} tex | evict ${Number(tileFxDbg.texturesEvicted || 0)} | reup ${Number(tileFxDbg.reuploadsTotal || 0)}`,
+        `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
+        `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
+        `fail: ${failReason || 'none'}`,
+      ].join('\n');
+    }
+
+    function verifyTileFxDomSwap(){
+      const sample = document.querySelector('#mediaGrid .asset');
+      if (!sample || state.view !== 'fx') {
+        tileFxDbg.domSwapOk = false;
+        return;
+      }
+      const style = getComputedStyle(sample);
+      const bg = String(style.backgroundImage || style.background || '').toLowerCase();
+      const shadow = String(style.boxShadow || '').toLowerCase();
+      const backdrop = String(style.backdropFilter || '').toLowerCase();
+      const bgOk = bg.includes('none') || bg.includes('transparent') || bg.includes('rgba(0, 0, 0, 0)');
+      const shadowOk = shadow.includes('none');
+      const backdropOk = backdrop.includes('none');
+      tileFxDbg.domSwapOk = Boolean(bgOk && shadowOk && backdropOk);
+      if (!tileFxDbg.domSwapOk) {
+        tileFxDbg.failReason = tileFxDbg.failReason || 'DOM_SWAP_INVALID';
+      } else if (tileFxDbg.failReason === 'DOM_SWAP_INVALID') {
+        tileFxDbg.failReason = '';
+      }
+    }
+
+    function scheduleTileFxCollect(reason = 'event'){
+      if (state.view !== 'fx') return;
+      if (tileFxCollectPending) return;
+      tileFxCollectPending = requestAnimationFrame(() => {
+        tileFxCollectPending = 0;
+        const tiles = collectTileFxTiles();
+        tileFX.updateTiles(tiles);
+        tileFxScanRuns.push(performance.now());
+        tileFxScanRuns = tileFxScanRuns.filter((t) => (performance.now() - t) <= 1000);
+        tileFxDbg.scansPerSecond = tileFxScanRuns.length;
+        tileFxDbg.lastInvalidationReason = reason;
+        verifyTileFxDomSwap();
+        updateTileFxHud();
+      });
+    }
+
 
     function inNoPreviewZone(target){
       return !!(target && target.closest && target.closest('[data-no-preview], .sel-ui'));
@@ -1882,6 +2005,7 @@
     });
 
     function collectTileFxTiles(){
+      const t0 = performance.now();
       const root = el('mediaGridRoot');
       const grid = el('mediaGrid');
       if (!root || !grid || state.view !== 'fx') return [];
@@ -1889,11 +2013,12 @@
       const overscan = 120;
       const cards = Array.from(grid.querySelectorAll('.asset'));
       const tiles = [];
+      let culled = 0;
       for (const card of cards) {
         if (!card?.isConnected) continue;
         const r = card.getBoundingClientRect();
-        if (r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan)) continue;
-        if (r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan)) continue;
+        if (r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan)) { culled += 1; continue; }
+        if (r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan)) { culled += 1; continue; }
         const key = card.dataset.sha256 || card.dataset.selectKey || card.dataset.relative || card.dataset.streamUrl || '';
         const thumbEl = card.querySelector('img.asset-thumb');
         tiles.push({
@@ -1902,8 +2027,29 @@
           selected: card.classList.contains('is-selected'),
           rect: { left: r.left, top: r.top, width: r.width, height: r.height },
           thumbEl,
+          onTextureReady: (ready) => {
+            card.classList.toggle('tilefx-ready', !!ready);
+          },
         });
         if (tiles.length >= 260) break;
+      }
+      tileFxScanStats.scannedCount = Math.max(0, cards.length - culled);
+      tileFxScanStats.culledCount = culled;
+      tileFxScanStats.renderedCount = tiles.length;
+      tileFxScanStats.lastScanMs = performance.now() - t0;
+      tileFxDbg.scannedCount = tileFxScanStats.scannedCount;
+      tileFxDbg.culledCount = tileFxScanStats.culledCount;
+      tileFxDbg.renderedCount = tileFxScanStats.renderedCount;
+      tileFxDbg.lastScanMs = tileFxScanStats.lastScanMs;
+      const minExpected = Math.min(tileFxScanStats.scannedCount, 260);
+      const coverageRatio = tileFxScanStats.scannedCount > 0
+        ? tileFxScanStats.renderedCount / tileFxScanStats.scannedCount
+        : 1;
+      tileFxDbg.coverageRatio = coverageRatio;
+      if (tileFxScanStats.renderedCount < minExpected && coverageRatio < 0.95) {
+        tileFxDbg.failReason = 'COVERAGE_LOW';
+      } else if (tileFxDbg.failReason === 'COVERAGE_LOW') {
+        tileFxDbg.failReason = '';
       }
       return tiles;
     }
@@ -3475,6 +3621,9 @@
       tileFX.setMode(nextView);
       setFxSuspend(nextView === 'fx' || ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
       renderMedia();
+      if (nextView === 'fx') {
+        scheduleTileFxCollect('view-change');
+      }
     }
 
     // -------------------------
@@ -3796,7 +3945,7 @@
       const activeContainer = (state.view === 'list') ? l : g;
       const thumbTargets = Array.from(activeContainer.querySelectorAll('img.asset-thumb[data-thumb-url]'));
       void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => {
-        tileFX.updateTiles(collectTileFxTiles());
+        scheduleTileFxCollect('render-media');
         setContentLoading(false);
         logLayoutDebug();
       });
@@ -4392,11 +4541,11 @@
     el('viewList').addEventListener('click', () => setView('list'));
     el('mediaGridRoot')?.addEventListener('scroll', () => {
       if (state.view !== 'fx') return;
-      tileFX.updateTiles(collectTileFxTiles());
+      scheduleTileFxCollect('scroll');
     }, { passive: true });
     window.addEventListener('resize', () => {
       if (state.view !== 'fx') return;
-      tileFX.updateTiles(collectTileFxTiles());
+      scheduleTileFxCollect('resize');
     }, { passive: true });
 
     el('q').addEventListener('input', (e) => {

@@ -1296,3 +1296,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated `public/explorer.html` to instantiate TileFX, provide DOM tile scan source (`collectTileFxTiles` overscan scan), add dedicated `tilefxCanvas`, and keep FX mode as default while preserving existing grid/list behavior.
 - View switching now routes both dissolve policy and renderer mode: FX stays scene-level dissolve, while grid/list can use tile dissolves; FX mode suspends legacy per-asset overlay path to avoid double-render contention.
 - Updated static monitor assertions to cover TileFX import/wiring, tilefx canvas presence, and TileFX renderer contract markers.
+
+### Latest Implementation Notes (2026-03-04, TileFX invariants + HUD + upload backpressure)
+- Hardened FX mode in `public/explorer.html` with explicit TileFX invariants and runtime telemetry wiring: DOM swap validation (`domSwapOk`), scan coverage metrics (`scannedCount`, `culledCount`, `renderedCount`, `coverageRatio`), throttled event-driven scan scheduling (`scheduleTileFxCollect`) and on-screen `#tilefxHud` diagnostics.
+- Updated FX CSS ownership so heavy DOM visuals are downgraded in `view-fx` (transparent/none backgrounds + shadows + backdrop filters), while thumbnails stay visible until texture readiness flips `tilefx-ready` to prevent premature blanking.
+- Added TileFX coverage fail signaling (`COVERAGE_LOW`) and HUD fail-state rendering to make scan mismatch regressions visible without devtools.
+- Enhanced `public/js/explorer-shaders.mjs` TileFX texture instrumentation with per-key upload counters (`totalReuploads`) and steady-state upload backpressure: uploads/sec budget, temporary upload pause, and adaptive DPR cap reduction/recovery (`dprCap`, `backpressureUntil`).
+- Removed per-frame DOM rescans from `TileFXRenderer` (`_refreshTileList` now passive), ensuring tile collection runs from UI invalidation events only (scroll/resize/render/view changes), not from every RAF tick.
+- Extended static contract assertions in `tests/test_public_explorer_program_monitor.py` to enforce new HUD/invariant hooks and TileFX upload/backpressure markers.

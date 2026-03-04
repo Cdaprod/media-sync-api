@@ -620,6 +620,7 @@ class TextureCacheLRU {
     this.map = new Map();
     this.totalBytes = 0;
     this.evictions = 0;
+    this.uploadCounts = new Map();
   }
 
   _estimateBytes(img) {
@@ -684,9 +685,18 @@ class TextureCacheLRU {
     const bytes = this._estimateBytes(img);
     const entry = { texture: tex, bytes, lastUsedAt: now };
     this.map.set(key, entry);
+    this.uploadCounts.set(key, Number(this.uploadCounts.get(key) || 0) + 1);
     this.totalBytes += bytes;
     this._evictIfNeeded();
     return { uploaded: true, entry };
+  }
+
+  totalReuploads() {
+    let total = 0;
+    this.uploadCounts.forEach((count) => {
+      if (count > 1) total += (count - 1);
+    });
+    return total;
   }
 
   destroy() {
@@ -713,6 +723,10 @@ export class TileFXRenderer {
     this._uploadsWindow = [];
     this._drawCalls = 0;
     this._lastFrameMs = 0;
+    this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 6));
+    this.uploadPauseMs = 250;
+    this.backpressureUntil = 0;
+    this.dprCap = 2;
     this.gl = null;
     this.program = null;
     this.quad = null;
@@ -727,9 +741,12 @@ export class TileFXRenderer {
         uploadsThisSecond: 0,
         texturesInCache: 0,
         texturesEvicted: 0,
+        reuploadsTotal: 0,
         drawCalls: 0,
         dpr: 1,
+        dprCap: 2,
         lastFrameMs: 0,
+        backpressureUntil: 0,
         failed: false,
         failReason: '',
       };
@@ -814,21 +831,13 @@ export class TileFXRenderer {
   }
 
   _refreshTileList(now) {
-    if (!this._tileSource) return;
-    if ((now - this._lastScanAt) < 50 && this.tiles.length) return;
-    this._lastScanAt = now;
-    try {
-      const nextTiles = this._tileSource();
-      this.tiles = Array.isArray(nextTiles) ? nextTiles : [];
-    } catch (e) {
-      this._setFailed(e?.message || 'TILE_SOURCE_FAILED');
-    }
+    void now;
   }
 
   _resize() {
     if (!this.canvas) return;
     const vv = getStableViewportSize();
-    const dpr = Math.min(2, Number(window.devicePixelRatio || 1));
+    const dpr = Math.min(this.dprCap, Number(window.devicePixelRatio || 1));
     const w = Math.max(1, Math.round(vv.width * dpr));
     const h = Math.max(1, Math.round(vv.height * dpr));
     if (this.canvas.width !== w || this.canvas.height !== h) {
@@ -837,7 +846,11 @@ export class TileFXRenderer {
     }
     this.canvas.style.width = `${Math.max(1, Math.round(vv.width))}px`;
     this.canvas.style.height = `${Math.max(1, Math.round(vv.height))}px`;
-    if (window.__tilefx_dbg) window.__tilefx_dbg.dpr = dpr;
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.dpr = dpr;
+      window.__tilefx_dbg.dprCap = this.dprCap;
+      window.__tilefx_dbg.backpressureUntil = this.backpressureUntil;
+    }
     return { dpr, width: w, height: h };
   }
 
@@ -877,7 +890,8 @@ export class TileFXRenderer {
       let hasTex = 0;
       const key = String(tile.key || '');
       const img = tile.thumbEl || null;
-      if (key && img && img.complete && Number(img.naturalWidth || 0) > 0) {
+      const canUpload = now >= this.backpressureUntil;
+      if (key && img && img.complete && Number(img.naturalWidth || 0) > 0 && canUpload) {
         const up = this.textureCache.upsertFromImage(key, img, now);
         if (up.uploaded) {
           uploads += 1;
@@ -891,12 +905,24 @@ export class TileFXRenderer {
         gl.uniform1i(this.u.u_tex, 0);
         hasTex = 1;
       }
+      if (typeof tile?.onTextureReady === 'function') {
+        try {
+          tile.onTextureReady(Boolean(entry?.texture));
+        } catch {}
+      }
       gl.uniform1f(this.u.u_has_tex, hasTex);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       drawCalls += 1;
     });
 
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
+    if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
+      this.backpressureUntil = now + this.uploadPauseMs;
+      this.dprCap = Math.max(1, this.dprCap - 0.2);
+    } else if (this.backpressureUntil && now >= this.backpressureUntil) {
+      this.backpressureUntil = 0;
+      this.dprCap = Math.min(2, this.dprCap + 0.05);
+    }
     this._drawCalls = drawCalls;
     if (window.__tilefx_dbg) {
       window.__tilefx_dbg.visibleCount = tiles.length;
@@ -904,8 +930,11 @@ export class TileFXRenderer {
       window.__tilefx_dbg.uploadsThisSecond = this._uploadsWindow.length;
       window.__tilefx_dbg.texturesInCache = this.textureCache?.map?.size || 0;
       window.__tilefx_dbg.texturesEvicted = this.textureCache?.evictions || 0;
+      window.__tilefx_dbg.reuploadsTotal = this.textureCache?.totalReuploads?.() || 0;
       window.__tilefx_dbg.drawCalls = drawCalls;
       window.__tilefx_dbg.lastFrameMs = this._lastFrameMs;
+      window.__tilefx_dbg.backpressureUntil = this.backpressureUntil;
+      window.__tilefx_dbg.dprCap = this.dprCap;
     }
   }
 

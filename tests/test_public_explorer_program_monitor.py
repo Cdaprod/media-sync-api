@@ -158,11 +158,24 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '<canvas id="tilefxCanvas" data-tilefx="1" aria-hidden="true"></canvas>' in html
     assert 'const tileFX = new TileFXRenderer({' in html
     assert 'tileFX.setTileSource(collectTileFxTiles);' in html
+    assert 'window.__tilefx_dbg' in html
+    assert 'domSwapOk' in html
+    assert 'function ensureTileFxHud()' in html
+    assert "hud.id = 'tilefxHud';" in html
+    assert "scheduleTileFxCollect('scroll')" in html
+    assert "scheduleTileFxCollect('resize')" in html
+    assert "scheduleTileFxCollect('render-media')" in html
+    assert "card.classList.toggle('tilefx-ready', !!ready);" in html
+    assert 'COVERAGE_LOW' in html
     assert 'window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];' in html
 
     assert 'export class TileFXRenderer' in shader_module
     assert 'class TextureCacheLRU {' in shader_module
     assert 'window.__tilefx_dbg = {' in shader_module
+    assert 'reuploadsTotal: 0,' in shader_module
+    assert 'uploadBudgetPerSecond' in shader_module
+    assert 'backpressureUntil' in shader_module
+    assert 'totalReuploads()' in shader_module
     assert 'export class AssetFX' in shader_module
     assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
     assert 'pulse(cardEl' in shader_module
