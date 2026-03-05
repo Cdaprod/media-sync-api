@@ -848,6 +848,10 @@
     body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] img.asset-thumb{
       opacity: 0 !important;
     }
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"]{
+      outline: 1px solid rgba(0,255,225,0.35);
+      outline-offset: -1px;
+    }
     #mediaGridRoot.view-fx .asset,
     #mediaGridRoot.view-fx .asset::before,
     #mediaGridRoot.view-fx .asset::after,
@@ -1922,6 +1926,8 @@
     let tileFxLastCollectAt = 0;
     const TILEFX_SCAN_MIN_INTERVAL_MS = 120;
     let tileFxCardSeq = 0;
+    const tileFxPrevKeyByCard = new Map();
+    let tileFxProbeRows = [];
 
     function ensureTileFxHud(){
       let hud = document.getElementById('tilefxHud');
@@ -1934,8 +1940,43 @@
       return hud;
     }
 
+    function ensureTileFxProbeButton(){
+      if (!FX_DEBUG) return null;
+      let btn = document.getElementById('tilefxProbeBtn');
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'tilefxProbeBtn';
+        btn.type = 'button';
+        btn.textContent = 'Probe FX';
+        Object.assign(btn.style, {
+          position: 'fixed',
+          right: '10px',
+          bottom: '150px',
+          zIndex: '121',
+          borderRadius: '8px',
+          border: '1px solid rgba(120,220,255,0.45)',
+          background: 'rgba(4,10,22,0.88)',
+          color: '#bfe8ff',
+          padding: '6px 10px',
+          font: '12px/1.2 var(--mono)',
+        });
+        btn.addEventListener('click', () => {
+          const rows = tileFxProbeRows.slice(0, 20).map((row) => ({
+            ...row,
+            state: tileFX.getTileState(row.key),
+          }));
+          console.info('[tilefx-probe]', { view: state.view, dbg: window.__tilefx_dbg, rows });
+          toast('ok', 'FX Probe', `Logged ${rows.length} visible tile rows to console.`);
+        });
+        document.body.appendChild(btn);
+      }
+      btn.style.display = state.view === 'fx' ? 'block' : 'none';
+      return btn;
+    }
+
     function updateTileFxHud(){
       const hud = ensureTileFxHud();
+      ensureTileFxProbeButton();
       const scanned = Number(tileFxDbg.scannedCount || 0);
       const rendered = Number(tileFxDbg.renderedCount || 0);
       const ratio = scanned > 0 ? (rendered / scanned) : 1;
@@ -1959,6 +2000,7 @@
         `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastFailReason || tileFxDbg.lastUploadError || 'none')}`,
         `swap: ready ${Number(tileFxDbg.readyTiles || 0)} / visible ${Number(tileFxDbg.tilesVisible || 0)} | upOk ${Number(tileFxDbg.uploadOk || 0)} | drawn ${Number(tileFxDbg.tilesDrawn || 0)}`,
         `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | evicted ${Number(tileFxDbg.evictedTiles || 0)}`,
+        `cache: ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(tileFxDbg.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB | evictReason ${String(tileFxDbg.evictReason || 'none')}`,
         `reject: nr ${Number(tileFxDbg.uploadReject?.notReady || 0)} | 0sz ${Number(tileFxDbg.uploadReject?.zeroSize || 0)} | taint ${Number(tileFxDbg.uploadReject?.tainted || 0)} | unk ${Number(tileFxDbg.uploadReject?.unknown || 0)}`,
         `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
         `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
@@ -2054,7 +2096,18 @@
         if (!card.dataset.fxCardId) card.dataset.fxCardId = `fx-card-${++tileFxCardSeq}`;
         const thumbImg = card.querySelector('img.asset-thumb');
         const stableThumbSrc = String(thumbImg?.currentSrc || thumbImg?.getAttribute('src') || '').trim();
-        const key = card.dataset.assetId || card.dataset.relative || card.dataset.path || stableThumbSrc || card.dataset.sha256 || card.dataset.selectKey || card.dataset.streamUrl || card.dataset.fxCardId || '';
+        const key = card.dataset.assetId || card.dataset.path || card.dataset.relative || stableThumbSrc || card.dataset.sha256 || card.dataset.selectKey || card.dataset.streamUrl || card.dataset.fxCardId || '';
+        const keySource = card.dataset.assetId ? 'assetId'
+          : card.dataset.path ? 'path'
+          : card.dataset.relative ? 'relative'
+          : stableThumbSrc ? 'thumbSrc'
+          : card.dataset.sha256 ? 'sha256'
+          : card.dataset.selectKey ? 'selectKey'
+          : card.dataset.streamUrl ? 'streamUrl'
+          : 'fallback';
+        const prevKey = tileFxPrevKeyByCard.get(card.dataset.fxCardId) || '';
+        const keyChanged = prevKey && prevKey !== key;
+        tileFxPrevKeyByCard.set(card.dataset.fxCardId, key);
         const thumbEl = card.querySelector('img.asset-thumb');
         const thumbWrap = card.querySelector('.thumb');
         const posterEl = card.querySelector('video[poster]');
@@ -2087,6 +2140,8 @@
           thumbEl,
           thumbKind,
           thumbSrc,
+          keySource,
+          keyChanged,
           onTextureReady: (ready) => {
             card.classList.toggle('tilefx-ready', !!ready);
             card.dataset.fxReady = ready ? '1' : '0';
@@ -2103,6 +2158,19 @@
         else thumbCounts.none += 1;
       }
       tileFxDbg.thumbs = thumbCounts;
+      tileFxProbeRows = tiles.slice(0, 20).map((tile) => {
+        const img = tile.thumbEl;
+        return {
+          key: String(tile.key || ''),
+          keySource: String(tile.keySource || 'unknown'),
+          keyChanged: tile.keyChanged === true,
+          state: String(tileFX.getTileState(tile.key)),
+          hasTexture: !!(tile.key && tileFX.hasTexture(tile.key)),
+          dataTex: String(tile.tileEl?.dataset?.tex || ''),
+          imgComplete: !!img?.complete,
+          naturalWidth: Number(img?.naturalWidth || 0),
+        };
+      });
       tileFxDbg.swappedTiles = cards.filter((card) => card?.dataset?.tex === '1').length;
       tileFxScanStats.scannedCount = cards.length;
       tileFxScanStats.culledCount = culled;

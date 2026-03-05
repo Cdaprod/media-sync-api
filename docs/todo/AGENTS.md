@@ -1,12 +1,11 @@
 # TODO — FX Mode Stabilization Checklist
 
-- [ ] Add an on-device probe button that logs first 20 visible tile keys + tile states (`DOM_ONLY/REQUESTED/UPLOADING/READY/EVICTED`) to quickly diagnose key thrash in iOS Safari.
-- [ ] Add a tiny atlas path experiment for low-memory devices to reduce texture bind churn when many tiles are READY at once.
-- [x] Implement TileFX per-tile ownership state machine (`DOM_ONLY/REQUESTED/UPLOADING/READY/EVICTED`) and gate DOM swap to `READY` only.
-- [x] Prevent premature DOM thumb hiding by restricting FX thumb hide CSS to `body.fx-mode .asset[data-tex="1"]`.
-- [x] Keep FX as renderer swap model: DOM card surface transparent in FX mode while metadata + interaction remain visible/tappable.
-- [x] Keep GL placeholder tile visible for non-ready tiles (no transparent holes) while uploads/decode progress.
-- [x] Enforce stable key priority in tile collection (`assetId/path/thumbSrc/...`) to reduce cache thrash.
-- [x] Add decode-once memoization (`decodedSrcSet`) to avoid repeated `img.decode()` churn for the same source.
-- [x] Extend TileFX HUD/debug with swap state counters and health fields (`stateCounts`, `readyTiles`, `pendingTiles`, `swapSetCalls`, `swapClearCalls`).
-- [x] Keep conservative FX pipeline budgets (`scan=120ms`, `maxUploadsPerFrame=1`, `maxUploadsPerSecond=8`) and scroll-idle upload gating.
+- [ ] Capture iPhone probe output (`Probe FX`) after scroll-stop and attach key/state logs to next handoff so we can confirm key stability under real Safari kinetic scroll.
+- [ ] Run optional `?tilefxAtlas=1` bind-churn experiment once baseline probe shows READY-state stability and low eviction churn.
+- [x] Add FX debug probe button in `fxdebug=1` mode that logs first 20 visible tiles (key, key source, state, hasTexture, data-tex, image readiness).
+- [x] Enforce key-derivation traceability (`assetId|path|relative|thumbSrc|...`) and key-change tracking per card across scans.
+- [x] Add “never evict visible” cache policy with minimum-age hysteresis for eviction candidates.
+- [x] Expose cache telemetry (`cacheBytes`, `cacheBudgetBytes`, `evictReason`) in TileFX HUD.
+- [x] Separate upload drain concerns from draw path (`_drainPendingUploads` called outside `_render`) and gate uploads by mode/enabled/visibility/scroll-idle.
+- [x] Improve shader thumbnail mapping with cover-style UV fitting + rounded-rect mask so READY tiles match DOM framing better.
+- [x] Keep FX renderer-swap contract: DOM thumbnail hide only on `data-tex="1"`, metadata/interactions remain visible.

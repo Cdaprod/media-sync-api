@@ -636,13 +636,21 @@ uniform float u_selected;
 uniform float u_time;
 uniform sampler2D u_tex;
 uniform float u_has_tex;
+uniform vec2 u_tex_size;
 
 void main(){
   vec2 px = vec2(v_uv.x * u_resolution.x, (1.0 - v_uv.y) * u_resolution.y);
   if (px.x < u_rect.x || px.y < u_rect.y || px.x > u_rect.z || px.y > u_rect.w) discard;
 
-  vec2 tileUV = (px - u_rect.xy) / max(u_rect.zw - u_rect.xy, vec2(1.0));
+  vec2 tileSizePx = max(u_rect.zw - u_rect.xy, vec2(1.0));
+  vec2 tileUV = (px - u_rect.xy) / tileSizePx;
   tileUV = clamp(tileUV, 0.0, 1.0);
+  vec2 tileCenterPx = (tileUV - 0.5) * tileSizePx;
+  float radius = min(tileSizePx.x, tileSizePx.y) * 0.09;
+  vec2 q = abs(tileCenterPx) - (tileSizePx * 0.5 - vec2(radius));
+  float sdf = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
+  float mask = 1.0 - smoothstep(0.0, 1.6, sdf);
+
   vec2 toEdge = min(tileUV, 1.0 - tileUV);
   float edge = min(toEdge.x, toEdge.y);
   float edgeBand = smoothstep(0.0, 0.12, edge);
@@ -653,14 +661,28 @@ void main(){
   vec3 glassBase = vec3(0.06, 0.09, 0.16) + vec3(0.04, 0.06, 0.10) * pulse * 0.45;
   vec3 glow = u_type_color * (0.18 + border * 0.65) * selectionBoost;
 
-  vec3 tex = vec3(0.0);
+  vec3 tex = vec3(0.12, 0.16, 0.24);
+  tex += vec3(0.02) * sin((tileUV.x * 61.0 + tileUV.y * 47.0 + u_time * 0.35));
   if (u_has_tex > 0.5) {
-    tex = texture2D(u_tex, vec2(tileUV.x, tileUV.y)).rgb;
+    vec2 texSize = max(u_tex_size, vec2(1.0));
+    float tileAspect = tileSizePx.x / tileSizePx.y;
+    float texAspect = texSize.x / texSize.y;
+    vec2 coverUV = tileUV;
+    if (texAspect > tileAspect) {
+      float sx = tileAspect / texAspect;
+      coverUV.x = (tileUV.x - 0.5) * sx + 0.5;
+    } else {
+      float sy = texAspect / tileAspect;
+      coverUV.y = (tileUV.y - 0.5) * sy + 0.5;
+    }
+    coverUV = clamp(coverUV, 0.0, 1.0);
+    tex = texture2D(u_tex, coverUV).rgb;
   }
-  vec3 mixed = mix(glassBase, tex, 0.72 * u_has_tex);
+  vec3 mixed = mix(glassBase, tex, 0.86 * u_has_tex);
   vec3 color = mixed + glow * (0.34 + border * 0.8) + u_type_color * (1.0 - edgeBand) * 0.08;
+  color *= mask;
 
-  float alpha = 0.20 + edgeBand * 0.18 + border * 0.16 + u_selected * 0.08;
+  float alpha = (0.22 + edgeBand * 0.18 + border * 0.16 + u_selected * 0.08) * mask;
   gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.94));
 }
 `;
@@ -673,7 +695,14 @@ class TextureCacheLRU {
     this.map = new Map();
     this.totalBytes = 0;
     this.evictions = 0;
+    this.lastEvictReason = 'none';
     this.uploadCounts = new Map();
+    this.visibleKeySet = new Set();
+    this.minEvictAgeMs = 1500;
+  }
+
+  setVisibleKeys(keys) {
+    this.visibleKeySet = keys instanceof Set ? new Set(keys) : new Set();
   }
 
   _estimateBytes(img) {
@@ -682,24 +711,32 @@ class TextureCacheLRU {
     return Math.max(4, w * h * 4);
   }
 
-  _evictIfNeeded() {
+  _evictIfNeeded(now = performance.now()) {
     if (!this.map.size) return;
+    this.lastEvictReason = 'none';
     while (this.map.size > this.maxTextures || this.totalBytes > this.maxBytes) {
       let oldestKey = '';
       let oldestAt = Infinity;
       this.map.forEach((entry, key) => {
+        if (this.visibleKeySet.has(key)) return;
+        const age = Math.max(0, now - Number(entry.lastUsedAt || 0));
+        if (age < this.minEvictAgeMs) return;
         if (entry.lastUsedAt < oldestAt) {
           oldestAt = entry.lastUsedAt;
           oldestKey = key;
         }
       });
-      if (!oldestKey) break;
+      if (!oldestKey) {
+        this.lastEvictReason = 'NO_ELIGIBLE_KEY';
+        break;
+      }
       const entry = this.map.get(oldestKey);
       if (!entry) break;
       try { this.gl.deleteTexture(entry.texture); } catch {}
       this.totalBytes = Math.max(0, this.totalBytes - Number(entry.bytes || 0));
       this.map.delete(oldestKey);
       this.evictions += 1;
+      this.lastEvictReason = 'OVER_BUDGET';
     }
   }
 
@@ -739,12 +776,14 @@ class TextureCacheLRU {
       gl.deleteTexture(tex);
       return { uploaded: false, entry: null, reason: 'TEX_IMAGE_FAILED' };
     }
+    const width = Number(img?.naturalWidth || img?.videoWidth || img?.width || 0) || 1;
+    const height = Number(img?.naturalHeight || img?.videoHeight || img?.height || 0) || 1;
     const bytes = this._estimateBytes(img);
-    const entry = { texture: tex, bytes, lastUsedAt: now };
+    const entry = { texture: tex, bytes, width, height, lastUsedAt: now };
     this.map.set(key, entry);
     this.uploadCounts.set(key, Number(this.uploadCounts.get(key) || 0) + 1);
     this.totalBytes += bytes;
-    this._evictIfNeeded();
+    this._evictIfNeeded(now);
     return { uploaded: true, entry };
   }
 
@@ -881,6 +920,7 @@ export class TileFXRenderer {
         u_time: gl.getUniformLocation(this.program, 'u_time'),
         u_tex: gl.getUniformLocation(this.program, 'u_tex'),
         u_has_tex: gl.getUniformLocation(this.program, 'u_has_tex'),
+        u_tex_size: gl.getUniformLocation(this.program, 'u_tex_size'),
       };
       this.textureCache = new TextureCacheLRU(gl, {
         maxTextures: Number(new URLSearchParams(window.location.search).get('fxtilecache') || 96),
@@ -922,6 +962,12 @@ export class TileFXRenderer {
       else counts.domOnly += 1;
     });
     return counts;
+  }
+
+  getTileState(key = '') {
+    const k = String(key || '');
+    if (!k) return TILE_STATE.DOM_ONLY;
+    return this.tileStateByKey.get(k) || TILE_STATE.DOM_ONLY;
   }
 
   setMode(mode = 'grid') {
@@ -1152,6 +1198,8 @@ export class TileFXRenderer {
 
   _drainPendingUploads(now) {
     if (!this.textureCache) return;
+    if (!this.enabled || this.mode !== 'fx') return;
+    if (document.visibilityState !== 'visible') return;
     if (this.isScrolling) return;
     if (now < this.backpressureUntil) return;
     if (this._uploadsWindow.length >= this.uploadBudgetPerSecond) return;
@@ -1261,7 +1309,12 @@ export class TileFXRenderer {
 
     let drawCalls = 0;
     const tiles = this.tiles || [];
-    this._drainPendingUploads(now);
+    const visibleKeySet = new Set();
+    tiles.forEach((tile) => {
+      const k = String(tile?.key || '');
+      if (k) visibleKeySet.add(k);
+    });
+    this.textureCache?.setVisibleKeys?.(visibleKeySet);
     tiles.forEach((tile) => {
       const rect = tile?.rect;
       if (!rect) return;
@@ -1296,6 +1349,7 @@ export class TileFXRenderer {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, entry.texture);
         gl.uniform1i(this.u.u_tex, 0);
+        gl.uniform2f(this.u.u_tex_size, Number(entry.width || 1), Number(entry.height || 1));
         hasTex = 1;
         this._setTileState(key, TILE_STATE.READY);
         if (tileEl && tileEl.dataset.tex !== '1') {
@@ -1309,6 +1363,7 @@ export class TileFXRenderer {
       } else if (tileEl && tileEl.dataset.tex !== 'pending') {
         tileEl.dataset.tex = '0';
       }
+      if (!hasTex) gl.uniform2f(this.u.u_tex_size, 1, 1);
       if (typeof tile?.onTextureReady === 'function') {
         try {
           tile.onTextureReady(Boolean(entry?.texture));
@@ -1344,6 +1399,9 @@ export class TileFXRenderer {
       window.__tilefx_dbg.lastFailReason = this._lastUploadError || '';
       window.__tilefx_dbg.uploadReject = { ...this._uploadReject };
       window.__tilefx_dbg.texturesInCache = this.textureCache?.map?.size || 0;
+      window.__tilefx_dbg.cacheBytes = this.textureCache?.totalBytes || 0;
+      window.__tilefx_dbg.cacheBudgetBytes = this.textureCache?.maxBytes || 0;
+      window.__tilefx_dbg.evictReason = this.textureCache?.lastEvictReason || 'none';
       window.__tilefx_dbg.texturesEvicted = this.textureCache?.evictions || 0;
       window.__tilefx_dbg.reuploadsTotal = this.textureCache?.totalReuploads?.() || 0;
       window.__tilefx_dbg.drawCalls = drawCalls;
@@ -1369,6 +1427,7 @@ export class TileFXRenderer {
     const loop = () => {
       const t0 = performance.now();
       try {
+        this._drainPendingUploads(t0);
         this._render(t0);
       } catch (e) {
         this._setFailed(e?.message || 'TILEFX_RENDER_FAILED');

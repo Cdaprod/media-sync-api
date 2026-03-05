@@ -1379,3 +1379,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Extended TileFX HUD/debug counters with swap/state-machine telemetry (`stateCounts`, `readyTiles`, `pendingTiles`, `swapSetCalls`, `swapClearCalls`) and kept conservative mobile budgets (`scan=120ms`, `uploads=1/frame, 8/sec`).
 - Refreshed `docs/todo/AGENTS.md` by prepending new carry-forward tasks and marking completed renderer-swap items as done.
 
+### Latest Implementation Notes (2026-03-06, key-stability probe + cache eviction hysteresis + shader cover mapping)
+- Added FX debug probe UX in `public/explorer.html` (`ensureTileFxProbeButton`) gated by `fxdebug=1`; one tap now logs the first 20 visible tiles with key source, key-change signal, tile state, texture presence, `data-tex`, and image readiness for on-device iOS diagnostics.
+- Hardened key derivation in `collectTileFxTiles()` with explicit source precedence (`assetId`, `path`, `relative`, `thumbSrc`, ...) and per-card key-change tracking to diagnose key thrash.
+- Updated `TextureCacheLRU` in `public/js/explorer-shaders.mjs` with `visibleKeySet`, minimum-age hysteresis, and no-visible-eviction behavior; cache telemetry now includes `cacheBytes`, `cacheBudgetBytes`, and `evictReason` in `window.__tilefx_dbg`/HUD.
+- Separated upload drain from draw logic: `_drainPendingUploads(...)` is now invoked outside `_render(...)` and additionally gated by `enabled`, `mode==='fx'`, `document.visibilityState==='visible'`, and scroll-idle rules.
+- Improved tile thumbnail rendering quality by adding cover-style UV mapping (`u_tex_size`) and rounded-rect masking in TileFX fragment shader so READY tiles better match DOM thumbnail framing while preserving glass treatment.
+- Refreshed `docs/todo/AGENTS.md` with new carry-forward tasks and marked completed key-stability/probe/cache/shader work items.
+

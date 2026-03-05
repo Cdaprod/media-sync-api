@@ -161,6 +161,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'window.__tilefx_dbg' in html
     assert 'domSwapOk' in html
     assert 'function ensureTileFxHud()' in html
+    assert 'function ensureTileFxProbeButton(){' in html
+    assert "btn.id = 'tilefxProbeBtn';" in html
     assert "hud.id = 'tilefxHud';" in html
     assert "scheduleTileFxCollect('scroll')" in html
     assert "scheduleTileFxCollect('resize')" in html
@@ -184,6 +186,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'decodedSrcSet = new Set();' in shader_module
     assert '_setTileState(key, TILE_STATE.READY);' in shader_module
     assert 'class TextureCacheLRU {' in shader_module
+    assert 'setVisibleKeys(keys) {' in shader_module
+    assert 'this.visibleKeySet = new Set();' in shader_module
     assert 'window.__tilefx_dbg = {' in shader_module
     assert 'rafRunning: false,' in shader_module
     assert 'tilesVisible: 0,' in shader_module
@@ -196,6 +200,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'has(key)' in shader_module
     assert '_queueTileImageUpload(tile, key)' in shader_module
     assert '_drainPendingUploads(now)' in shader_module
+    assert "document.visibilityState !== 'visible'" in shader_module
     assert 'texturesUploaded: 0,' in shader_module
     assert 'texturesPending: 0,' in shader_module
     assert 'uploadOk: 0,' in shader_module
