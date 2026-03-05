@@ -762,6 +762,7 @@ export class TileFXRenderer {
     this.canvas = canvas || null;
     this.onFail = typeof onFail === 'function' ? onFail : null;
     this.mode = 'grid';
+    this.enabled = false;
     this.raf = 0;
     this.failed = false;
     this.failReason = '';
@@ -783,6 +784,9 @@ export class TileFXRenderer {
     this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 6));
     this.uploadPauseMs = 250;
     this.backpressureUntil = 0;
+    this.isScrolling = false;
+    this.scrollIdleDelayMs = 140;
+    this._scrollIdleTimer = 0;
     this.dprCap = 2;
     this.gl = null;
     this.program = null;
@@ -809,6 +813,7 @@ export class TileFXRenderer {
         texturesInCache: 0,
         texturesEvicted: 0,
         reuploadsTotal: 0,
+        enabled: false,
         drawCalls: 0,
         dpr: 1,
         dprCap: 2,
@@ -826,7 +831,6 @@ export class TileFXRenderer {
     }
     this._initGL();
     this._bindContextGuards();
-    this._start();
   }
 
   _setFailed(reason = 'UNKNOWN') {
@@ -883,7 +887,49 @@ export class TileFXRenderer {
   setMode(mode = 'grid') {
     const next = String(mode || 'grid').toLowerCase();
     this.mode = (next === 'fx' || next === 'grid' || next === 'list') ? next : 'grid';
+    this.setEnabled(this.mode === 'fx');
     if (window.__tilefx_dbg) window.__tilefx_dbg.mode = this.mode;
+  }
+
+  setEnabled(enabled = false) {
+    this.enabled = enabled === true;
+    if (window.__tilefx_dbg) window.__tilefx_dbg.enabled = this.enabled;
+    if (!this.enabled) {
+      this.stop();
+      this.clear();
+      this._drawCalls = 0;
+      if (window.__tilefx_dbg) window.__tilefx_dbg.drawCalls = 0;
+    }
+  }
+
+  noteScroll() {
+    this.isScrolling = true;
+    if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
+    this._scrollIdleTimer = setTimeout(() => {
+      this.isScrolling = false;
+      this._scrollIdleTimer = 0;
+    }, this.scrollIdleDelayMs);
+  }
+
+  start() {
+    this.enabled = true;
+    this._start();
+    if (window.__tilefx_dbg) window.__tilefx_dbg.enabled = true;
+  }
+
+  stop() {
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
+    this._scrollIdleTimer = 0;
+  }
+
+  clear() {
+    const gl = this.gl;
+    if (!gl || !this.canvas) return;
+    gl.viewport(0, 0, this.canvas.width || 1, this.canvas.height || 1);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
   hasTexture(key = '') {
@@ -1050,6 +1096,7 @@ export class TileFXRenderer {
 
   _drainPendingUploads(now) {
     if (!this.textureCache) return;
+    if (this.isScrolling) return;
     if (now < this.backpressureUntil) return;
     this._pendingUploads.forEach((pending, key) => {
       if (!pending || pending.failed) {
@@ -1132,7 +1179,7 @@ export class TileFXRenderer {
   }
 
   _render(now) {
-    if (this.failed || !this.gl || this.mode !== 'fx') return;
+    if (this.failed || !this.gl || this.mode !== 'fx' || !this.enabled) return;
     this._refreshTileList(now);
     const dims = this._resize();
     if (!dims) return;
@@ -1241,8 +1288,9 @@ export class TileFXRenderer {
   }
 
   destroy() {
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
+    this.stop();
+    if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
+    this._scrollIdleTimer = 0;
     this._pendingUploads.forEach((pending) => {
       try { pending?.img?.removeEventListener('load', pending?.onLoad); } catch {}
       try { pending?.img?.removeEventListener('error', pending?.onError); } catch {}

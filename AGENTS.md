@@ -1357,3 +1357,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Standardized FX DPR behavior at cap `2.0` for overlay/tile/background canvas resizing to avoid mixed-DPR seams; retained upload backpressure but removed adaptive DPR cap drift.
 - Updated explorer static assertions in `tests/test_public_explorer_program_monitor.py` for the new viewport-height contract and resize helper hooks.
 
+### Latest Implementation Notes (2026-03-06, FX mode lifecycle hard-disable + perf triage)
+- Reworked explorer view switching in `public/explorer.html` so TileFX is an exclusive mode: `window.__explorer_view` and `window.__tilefx_enabled` are now the source of truth, FX canvas visibility is toggled explicitly, and non-FX modes call `tileFX.stop()`, `tileFX.clear()`, and `tileFX.updateTiles([])`.
+- Added TileFX runtime lifecycle APIs in `public/js/explorer-shaders.mjs` (`setEnabled`, `start`, `stop`, `clear`, `noteScroll`) and enforced render short-circuiting when FX is disabled; upload draining now pauses during active scroll windows to reduce stutter.
+- Simplified `#mediaGridRoot.view-fx` styling in `public/explorer.html` to avoid dimmed/smooshed cards while preserving thumbnail-only swap behavior (`data-tex`) and metadata/selection visibility.
+- Changed default explorer startup view to Grid (`state.view='grid'`) as a temporary safety lever while FX mode remains opt-in.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` and added task tracking in `docs/todo/AGENTS.md` with checkbox completion state.
+

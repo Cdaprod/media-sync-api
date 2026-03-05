@@ -456,7 +456,13 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'async function refreshExplorerData({ toastOnSuccess = true } = {})' in html
     assert "<button id=\"viewFx\" class=\"active\" type=\"button\">FX</button>" in html
     assert "if (typeof cardFX?.setDissolveMode === 'function') {" in html
-    assert "cardFX.setDissolveMode(nextView === 'fx' ? 'scene' : 'tile');" in html
+    assert "cardFX.setDissolveMode('tile');" in html
+    assert 'window.__tilefx_enabled = fxEnabled;' in html
+    assert 'window.__explorer_view = nextView;' in html
+    assert 'tileFX.setEnabled(fxEnabled);' in html
+    assert 'tileFX.stop();' in html
+    assert 'tileFX.clear();' in html
+    assert 'tileFX.noteScroll();' in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
     assert 'if (ui.inspectorOpen) {' in html
@@ -474,7 +480,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'canvasHeightPx: fxCanvas?.height || null,' in html
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
-    assert '#mediaGridRoot.view-fx .asset[data-kind="video"]::before{' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,' in html
     assert '.app{ position: relative; z-index: 2; }' in html
     assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
     assert "setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);" in html
