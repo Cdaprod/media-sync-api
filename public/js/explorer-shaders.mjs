@@ -781,12 +781,14 @@ export class TileFXRenderer {
     this._pendingReady = 0;
     this._pendingWaitLoad = 0;
     this._srcMissing = 0;
-    this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 6));
+    this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 8));
+    this.maxUploadsPerFrame = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploadsframe') || 1));
     this.uploadPauseMs = 250;
     this.backpressureUntil = 0;
     this.isScrolling = false;
     this.scrollIdleDelayMs = 140;
     this._scrollIdleTimer = 0;
+    this._lastScrollAt = 0;
     this.dprCap = 2;
     this.gl = null;
     this.program = null;
@@ -814,6 +816,12 @@ export class TileFXRenderer {
         texturesEvicted: 0,
         reuploadsTotal: 0,
         enabled: false,
+        rafRunning: false,
+        scrolling: false,
+        scrollIdleMs: 0,
+        tilesVisible: 0,
+        tilesFed: 0,
+        tilesDrawn: 0,
         drawCalls: 0,
         dpr: 1,
         dprCap: 2,
@@ -904,10 +912,13 @@ export class TileFXRenderer {
 
   noteScroll() {
     this.isScrolling = true;
+    this._lastScrollAt = performance.now();
+    if (window.__tilefx_dbg) window.__tilefx_dbg.scrolling = true;
     if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
     this._scrollIdleTimer = setTimeout(() => {
       this.isScrolling = false;
       this._scrollIdleTimer = 0;
+      if (window.__tilefx_dbg) window.__tilefx_dbg.scrolling = false;
     }, this.scrollIdleDelayMs);
   }
 
@@ -922,6 +933,7 @@ export class TileFXRenderer {
     this.raf = 0;
     if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
     this._scrollIdleTimer = 0;
+    if (window.__tilefx_dbg) window.__tilefx_dbg.rafRunning = false;
   }
 
   clear() {
@@ -940,6 +952,7 @@ export class TileFXRenderer {
 
   updateTiles(tileList) {
     this.tiles = Array.isArray(tileList) ? tileList : [];
+    if (window.__tilefx_dbg) window.__tilefx_dbg.tilesFed = this.tiles.length;
   }
 
   _typeColor(type = '') {
@@ -1068,9 +1081,7 @@ export class TileFXRenderer {
           pending.failed = true;
           pending.lastError = String(error?.message || 'IMG_PREP_FAIL');
           this._lastUploadError = pending.lastError;
-        if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
           if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
-      if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
           if (pending.lastError.includes('ZERO_SIZE')) this._recordUploadReject('zeroSize');
           else this._recordUploadReject('notReady');
         });
@@ -1088,7 +1099,6 @@ export class TileFXRenderer {
         pending.lastError = String(error?.message || 'URL_PREP_FAIL');
         this._lastUploadError = pending.lastError;
         if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
-      if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
         if (pending.lastError.includes('ZERO_SIZE')) this._recordUploadReject('zeroSize');
         else this._recordUploadReject('unknown');
       });
@@ -1098,15 +1108,19 @@ export class TileFXRenderer {
     if (!this.textureCache) return;
     if (this.isScrolling) return;
     if (now < this.backpressureUntil) return;
-    this._pendingUploads.forEach((pending, key) => {
+    if (this._uploadsWindow.length >= this.uploadBudgetPerSecond) return;
+
+    let uploadsThisFrame = 0;
+    for (const [key, pending] of Array.from(this._pendingUploads.entries())) {
+      if (uploadsThisFrame >= this.maxUploadsPerFrame) break;
       if (!pending || pending.failed) {
         this._pendingUploads.delete(key);
-        return;
+        continue;
       }
-      if (!pending.ready || !pending.source) return;
+      if (!pending.ready || !pending.source) continue;
       if (this.textureCache.has(key)) {
         this._pendingUploads.delete(key);
-        return;
+        continue;
       }
       let uploadSource = pending.source;
       try {
@@ -1114,6 +1128,7 @@ export class TileFXRenderer {
           uploadSource = createImageBitmap(uploadSource);
         }
       } catch {}
+      uploadsThisFrame += 1;
       Promise.resolve(uploadSource).then((resolvedSource) => {
         if (!resolvedSource) {
           this._lastUploadError = 'UPLOAD_SOURCE_MISSING';
@@ -1147,8 +1162,9 @@ export class TileFXRenderer {
         else this._recordUploadReject('unknown');
         this._pendingUploads.delete(key);
       });
-    });
+    }
   }
+
 
   _resize() {
     if (!this.canvas) return;
@@ -1242,6 +1258,7 @@ export class TileFXRenderer {
     this._drawCalls = drawCalls;
     if (window.__tilefx_dbg) {
       window.__tilefx_dbg.visibleCount = tiles.length;
+      window.__tilefx_dbg.tilesVisible = tiles.length;
       window.__tilefx_dbg.overscanCount = tiles.length;
       window.__tilefx_dbg.uploadsThisSecond = this._uploadsWindow.length;
       window.__tilefx_dbg.texturesUploaded = this._texturesUploaded;
@@ -1259,6 +1276,10 @@ export class TileFXRenderer {
       window.__tilefx_dbg.texturesEvicted = this.textureCache?.evictions || 0;
       window.__tilefx_dbg.reuploadsTotal = this.textureCache?.totalReuploads?.() || 0;
       window.__tilefx_dbg.drawCalls = drawCalls;
+      window.__tilefx_dbg.tilesDrawn = drawCalls;
+      window.__tilefx_dbg.rafRunning = this.raf > 0;
+      window.__tilefx_dbg.scrolling = this.isScrolling;
+      window.__tilefx_dbg.scrollIdleMs = this.isScrolling ? 0 : Math.max(0, now - Number(this._lastScrollAt || 0));
       window.__tilefx_dbg.lastFrameMs = this._lastFrameMs;
       window.__tilefx_dbg.backpressureUntil = this.backpressureUntil;
       window.__tilefx_dbg.dprCap = this.dprCap;
@@ -1281,6 +1302,15 @@ export class TileFXRenderer {
         this._lastFrameMs = performance.now() - t0;
         this._adaptDprFromFrameMs(this._lastFrameMs);
         this._frame += 1;
+        if (window.__tilefx_dbg) {
+          window.__tilefx_dbg.rafRunning = this.raf > 0;
+          if (this.mode !== 'fx' && Number(window.__tilefx_dbg.drawCalls || 0) > 0) {
+            console.error('TileFX invariant: drawCalls > 0 while mode != fx');
+            this.stop();
+            this.clear();
+            window.__tilefx_dbg.drawCalls = 0;
+          }
+        }
         this.raf = requestAnimationFrame(loop);
       }
     };

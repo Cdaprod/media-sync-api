@@ -1364,3 +1364,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Changed default explorer startup view to Grid (`state.view='grid'`) as a temporary safety lever while FX mode remains opt-in.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` and added task tracking in `docs/todo/AGENTS.md` with checkbox completion state.
 
+### Latest Implementation Notes (2026-03-06, FX renderer pipeline hardening + health invariants)
+- Tightened TileFX pipeline limits in `public/explorer.html` + `public/js/explorer-shaders.mjs`: scan throttle raised to `TILEFX_SCAN_MIN_INTERVAL_MS=120` (~8.3/s), upload budget defaults set to `maxUploadsPerFrame=1` and `maxUploadsPerSecond=8`, and uploads remain deferred during active scroll idle windows.
+- Extended `window.__tilefx_dbg` health telemetry with lifecycle/runtime fields (`rafRunning`, `tilesVisible`, `tilesFed`, `tilesDrawn`, `scrolling`, `scrollIdleMs`) and surfaced these in `#tilefxHud` for mobile diagnostics.
+- Added fatal non-FX draw invariant handling in both shader/runtime loop and explorer HUD path: if draw calls are observed while mode is not FX, renderer force-stops and clears.
+- Cleaned TileFX upload error bookkeeping in `_queueTileImageUpload(...)` to remove duplicated fail-reason writes introduced during prior patch churn.
+- Updated `docs/todo/AGENTS.md` by prepending new carry-forward unchecked tasks and marking completed FX lifecycle/pipeline items as done.
+

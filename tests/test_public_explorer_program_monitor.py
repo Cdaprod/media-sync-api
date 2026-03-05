@@ -181,6 +181,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'export class TileFXRenderer' in shader_module
     assert 'class TextureCacheLRU {' in shader_module
     assert 'window.__tilefx_dbg = {' in shader_module
+    assert 'rafRunning: false,' in shader_module
+    assert 'tilesVisible: 0,' in shader_module
+    assert 'tilesFed: 0,' in shader_module
+    assert 'tilesDrawn: 0,' in shader_module
     assert 'reuploadsTotal: 0,' in shader_module
     assert 'uploadBudgetPerSecond' in shader_module
     assert 'backpressureUntil' in shader_module
@@ -463,6 +467,9 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'tileFX.stop();' in html
     assert 'tileFX.clear();' in html
     assert 'tileFX.noteScroll();' in html
+    assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html
+    assert "`mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`" in html
+    assert "console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');" in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
     assert 'if (ui.inspectorOpen) {' in html
