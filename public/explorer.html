@@ -1906,6 +1906,8 @@
     tileFxDbg.failReason = '';
     tileFxDbg.lastScanMs = 0;
     tileFxDbg.scansPerSecond = 0;
+    tileFxDbg.texturesUploaded = Number(tileFxDbg.texturesUploaded || 0);
+    tileFxDbg.texturesPending = Number(tileFxDbg.texturesPending || 0);
 
     const tileFxScanStats = {
       scannedCount: 0,
@@ -1940,7 +1942,7 @@
         `scanned/rendered: ${scanned}/${rendered} (${(ratio * 100).toFixed(1)}%)`,
         `dpr: ${(tileFxDbg.dpr || 1).toFixed(2)} (cap ${(tileFxDbg.dprCap || 2).toFixed(2)})`,
         `uploads/s: ${Number(tileFxDbg.uploadsThisSecond || 0)}`,
-        `cache: ${Number(tileFxDbg.texturesInCache || 0)} tex | evict ${Number(tileFxDbg.texturesEvicted || 0)} | reup ${Number(tileFxDbg.reuploadsTotal || 0)}`,
+        `tex: up ${Number(tileFxDbg.texturesUploaded || 0)} | pending ${Number(tileFxDbg.texturesPending || 0)} | cache ${Number(tileFxDbg.texturesInCache || 0)} | evict ${Number(tileFxDbg.texturesEvicted || 0)} | reup ${Number(tileFxDbg.reuploadsTotal || 0)}`,
         `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
         `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
         `fail: ${failReason || 'none'}`,
@@ -2010,7 +2012,7 @@
       const grid = el('mediaGrid');
       if (!root || !grid || state.view !== 'fx') return [];
       const rootRect = root.getBoundingClientRect();
-      const overscan = 120;
+      const overscan = 300;
       const cards = Array.from(grid.querySelectorAll('.asset'));
       const tiles = [];
       let culled = 0;
@@ -2033,7 +2035,7 @@
         });
         if (tiles.length >= 260) break;
       }
-      tileFxScanStats.scannedCount = Math.max(0, cards.length - culled);
+      tileFxScanStats.scannedCount = cards.length;
       tileFxScanStats.culledCount = culled;
       tileFxScanStats.renderedCount = tiles.length;
       tileFxScanStats.lastScanMs = performance.now() - t0;
@@ -2041,9 +2043,10 @@
       tileFxDbg.culledCount = tileFxScanStats.culledCount;
       tileFxDbg.renderedCount = tileFxScanStats.renderedCount;
       tileFxDbg.lastScanMs = tileFxScanStats.lastScanMs;
-      const minExpected = Math.min(tileFxScanStats.scannedCount, 260);
-      const coverageRatio = tileFxScanStats.scannedCount > 0
-        ? tileFxScanStats.renderedCount / tileFxScanStats.scannedCount
+      const visibleExpected = Math.max(0, tileFxScanStats.scannedCount - tileFxScanStats.culledCount);
+      const minExpected = Math.min(visibleExpected, 260);
+      const coverageRatio = visibleExpected > 0
+        ? tileFxScanStats.renderedCount / visibleExpected
         : 1;
       tileFxDbg.coverageRatio = coverageRatio;
       if (tileFxScanStats.renderedCount < minExpected && coverageRatio < 0.95) {

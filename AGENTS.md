@@ -1304,3 +1304,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Enhanced `public/js/explorer-shaders.mjs` TileFX texture instrumentation with per-key upload counters (`totalReuploads`) and steady-state upload backpressure: uploads/sec budget, temporary upload pause, and adaptive DPR cap reduction/recovery (`dprCap`, `backpressureUntil`).
 - Removed per-frame DOM rescans from `TileFXRenderer` (`_refreshTileList` now passive), ensuring tile collection runs from UI invalidation events only (scroll/resize/render/view changes), not from every RAF tick.
 - Extended static contract assertions in `tests/test_public_explorer_program_monitor.py` to enforce new HUD/invariant hooks and TileFX upload/backpressure markers.
+
+### Latest Implementation Notes (2026-03-04, TileFX texture-source readiness + culling overscan correction)
+- Fixed TileFX texture pipeline in `public/js/explorer-shaders.mjs` so DOM thumbnails are treated as texture sources regardless of visibility: tiles now queue pending uploads for non-ready images, promote on `load`/`error`, and drain uploads once ready instead of relying only on immediate `img.complete` checks.
+- Added cache/pipeline guards (`TextureCacheLRU.has(key)`, pending upload map, per-key dedupe) to avoid duplicate upload churn; texture readiness now toggles `tilefx-ready` only after a cache-backed texture exists.
+- Expanded TileFX debug counters with `texturesUploaded` and `texturesPending` and exposed them in `public/explorer.html` HUD output for direct runtime confirmation of upload activity.
+- Increased FX tile scan overscan in `collectTileFxTiles()` to reduce scroll-gap blank bands and switched coverage denominator to visible-expected tiles (`scanned - culled`) for more accurate culling diagnostics.
+- Added frame-time adaptive DPR shaping in TileFX (`>18ms` lowers cap, `<10ms` slowly raises cap) to improve Safari/mobile smoothness under load.
+- Updated static explorer assertions in `tests/test_public_explorer_program_monitor.py` for the new texture-pending/upload and queueing contract.

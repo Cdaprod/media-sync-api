@@ -650,6 +650,10 @@ class TextureCacheLRU {
     }
   }
 
+  has(key) {
+    return this.map.has(key);
+  }
+
   get(key, now = performance.now()) {
     const entry = this.map.get(key);
     if (!entry) return null;
@@ -723,6 +727,8 @@ export class TileFXRenderer {
     this._uploadsWindow = [];
     this._drawCalls = 0;
     this._lastFrameMs = 0;
+    this._pendingUploads = new Map();
+    this._texturesUploaded = 0;
     this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 6));
     this.uploadPauseMs = 250;
     this.backpressureUntil = 0;
@@ -739,6 +745,8 @@ export class TileFXRenderer {
         visibleCount: 0,
         overscanCount: 0,
         uploadsThisSecond: 0,
+        texturesUploaded: 0,
+        texturesPending: 0,
         texturesInCache: 0,
         texturesEvicted: 0,
         reuploadsTotal: 0,
@@ -834,6 +842,57 @@ export class TileFXRenderer {
     void now;
   }
 
+  _queueTileImageUpload(tile, key, img) {
+    if (!key || !img || !this.textureCache) return;
+    if (this.textureCache.has(key)) return;
+    const existing = this._pendingUploads.get(key);
+    if (existing) return;
+    const attachToken = Symbol(key);
+    const onReady = () => {
+      const pending = this._pendingUploads.get(key);
+      if (!pending || pending.token !== attachToken) return;
+      this._pendingUploads.delete(key);
+      if (this.textureCache.has(key)) return;
+      if (!img.isConnected && !(img.complete && Number(img.naturalWidth || 0) > 0)) return;
+      pending.ready = true;
+      this._pendingUploads.set(key, pending);
+    };
+    const pending = { token: attachToken, img, ready: false, onLoad: onReady, onError: onReady };
+    this._pendingUploads.set(key, pending);
+    if (img.complete && Number(img.naturalWidth || 0) > 0) {
+      pending.ready = true;
+      this._pendingUploads.set(key, pending);
+      return;
+    }
+    try {
+      img.addEventListener('load', onReady, { once: true, passive: true });
+      img.addEventListener('error', onReady, { once: true, passive: true });
+    } catch {
+      pending.ready = true;
+      this._pendingUploads.set(key, pending);
+    }
+  }
+
+  _drainPendingUploads(now) {
+    if (!this.textureCache) return;
+    if (now < this.backpressureUntil) return;
+    this._pendingUploads.forEach((pending, key) => {
+      if (!pending?.ready) return;
+      if (this.textureCache.has(key)) {
+        this._pendingUploads.delete(key);
+        return;
+      }
+      const img = pending.img;
+      if (!img || !img.complete || Number(img.naturalWidth || 0) <= 0) return;
+      const up = this.textureCache.upsertFromImage(key, img, now);
+      if (up.uploaded) {
+        this._uploadsWindow.push(now);
+        this._texturesUploaded += 1;
+      }
+      this._pendingUploads.delete(key);
+    });
+  }
+
   _resize() {
     if (!this.canvas) return;
     const vv = getStableViewportSize();
@@ -870,8 +929,8 @@ export class TileFXRenderer {
     gl.uniform1f(this.u.u_time, now * 0.001);
 
     let drawCalls = 0;
-    let uploads = 0;
     const tiles = this.tiles || [];
+    this._drainPendingUploads(now);
     tiles.forEach((tile) => {
       const rect = tile?.rect;
       if (!rect) return;
@@ -890,12 +949,18 @@ export class TileFXRenderer {
       let hasTex = 0;
       const key = String(tile.key || '');
       const img = tile.thumbEl || null;
-      const canUpload = now >= this.backpressureUntil;
-      if (key && img && img.complete && Number(img.naturalWidth || 0) > 0 && canUpload) {
-        const up = this.textureCache.upsertFromImage(key, img, now);
-        if (up.uploaded) {
-          uploads += 1;
-          this._uploadsWindow.push(now);
+      if (key && img) {
+        const canUpload = now >= this.backpressureUntil;
+        if (!this.textureCache.has(key)) {
+          if (canUpload && img.complete && Number(img.naturalWidth || 0) > 0) {
+            const up = this.textureCache.upsertFromImage(key, img, now);
+            if (up.uploaded) {
+              this._uploadsWindow.push(now);
+              this._texturesUploaded += 1;
+            }
+          } else {
+            this._queueTileImageUpload(tile, key, img);
+          }
         }
       }
       const entry = key ? this.textureCache.get(key, now) : null;
@@ -928,6 +993,8 @@ export class TileFXRenderer {
       window.__tilefx_dbg.visibleCount = tiles.length;
       window.__tilefx_dbg.overscanCount = tiles.length;
       window.__tilefx_dbg.uploadsThisSecond = this._uploadsWindow.length;
+      window.__tilefx_dbg.texturesUploaded = this._texturesUploaded;
+      window.__tilefx_dbg.texturesPending = this._pendingUploads.size;
       window.__tilefx_dbg.texturesInCache = this.textureCache?.map?.size || 0;
       window.__tilefx_dbg.texturesEvicted = this.textureCache?.evictions || 0;
       window.__tilefx_dbg.reuploadsTotal = this.textureCache?.totalReuploads?.() || 0;
@@ -935,6 +1002,18 @@ export class TileFXRenderer {
       window.__tilefx_dbg.lastFrameMs = this._lastFrameMs;
       window.__tilefx_dbg.backpressureUntil = this.backpressureUntil;
       window.__tilefx_dbg.dprCap = this.dprCap;
+    }
+  }
+
+  _adaptDprFromFrameMs(frameMs) {
+    const ms = Number(frameMs || 0);
+    if (!Number.isFinite(ms) || ms <= 0) return;
+    if (ms > 18) {
+      this.dprCap = Math.max(1, this.dprCap - 0.08);
+      return;
+    }
+    if (ms < 10) {
+      this.dprCap = Math.min(2, this.dprCap + 0.02);
     }
   }
 
@@ -948,6 +1027,7 @@ export class TileFXRenderer {
         this._setFailed(e?.message || 'TILEFX_RENDER_FAILED');
       } finally {
         this._lastFrameMs = performance.now() - t0;
+        this._adaptDprFromFrameMs(this._lastFrameMs);
         this._frame += 1;
         this.raf = requestAnimationFrame(loop);
       }
@@ -958,6 +1038,11 @@ export class TileFXRenderer {
   destroy() {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
+    this._pendingUploads.forEach((pending) => {
+      try { pending?.img?.removeEventListener('load', pending?.onLoad); } catch {}
+      try { pending?.img?.removeEventListener('error', pending?.onError); } catch {}
+    });
+    this._pendingUploads.clear();
     this.textureCache?.destroy();
     this.textureCache = null;
   }
