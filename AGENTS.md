@@ -1321,3 +1321,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated `public/js/explorer-shaders.mjs` TileFX upload pipeline to resolve sources beyond inline `<img>`: URL-backed sources are now loaded/decode-gated, pending uploads are tracked, and uploads use cache guards plus `createImageBitmap` fallback paths when available.
 - Expanded TileFX debug telemetry with `uploadOk`, `uploadFail`, and `lastUploadError`, and retained `texturesPending`/cache stats for runtime verification.
 - Refreshed static explorer assertions in `tests/test_public_explorer_program_monitor.py` for the new FX readiness and telemetry contracts.
+
+### Latest Implementation Notes (2026-03-05, in-view thumbnail vanish fix + stable FX texture readiness)
+- Fixed FX blanking regression where tiles could hide DOM thumbs without persistent texture backing by introducing `TileFXRenderer.hasTexture(key)` and applying `data-fx-ready`/`.tilefx-ready` from renderer cache state during every tile collection pass.
+- `collectTileFxTiles()` now guarantees a stable fallback key (`data-fx-card-id`) when media IDs are missing, preventing keyless tiles from bypassing upload and readiness logic.
+- Tile source selection now prioritizes thumbnail URL metadata (`data-thumb-url`) for image-backed tiles so upload preparation no longer depends solely on DOM image completion/visibility timing.
+- Hardened TileFX upload diagnostics: `uploadOk`, `uploadFail`, `lastUploadError`, and categorized reject counters now include `upsertFromImage` failure reasons (e.g., texture upload rejection) rather than silently dropping failed uploads.
+- Upload drain path now records and exposes failed texture insert attempts so mobile Safari/WebGL edge cases are visible in HUD telemetry instead of appearing as zero-activity states.

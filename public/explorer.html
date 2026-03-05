@@ -1924,6 +1924,7 @@
     let tileFxCollectTimeout = 0;
     let tileFxLastCollectAt = 0;
     const TILEFX_SCAN_MIN_INTERVAL_MS = 90;
+    let tileFxCardSeq = 0;
 
     function ensureTileFxHud(){
       let hud = document.getElementById('tilefxHud');
@@ -1951,6 +1952,7 @@
         `uploads/s: ${Number(tileFxDbg.uploadsThisSecond || 0)}`,
         `tex: up ${Number(tileFxDbg.texturesUploaded || 0)} | pending ${Number(tileFxDbg.texturesPending || 0)} | cache ${Number(tileFxDbg.texturesInCache || 0)} | evict ${Number(tileFxDbg.texturesEvicted || 0)} | reup ${Number(tileFxDbg.reuploadsTotal || 0)}`,
         `thumbs: img ${Number(tileFxDbg.thumbs?.img || 0)} | css ${Number(tileFxDbg.thumbs?.cssbg || 0)} | poster ${Number(tileFxDbg.thumbs?.poster || 0)} | none ${Number(tileFxDbg.thumbs?.none || 0)}`,
+        `upload: ok ${Number(tileFxDbg.uploadOk || 0)} | fail ${Number(tileFxDbg.uploadFail || 0)} | err ${String(tileFxDbg.lastUploadError || 'none')}`,
         `reject: nr ${Number(tileFxDbg.uploadReject?.notReady || 0)} | 0sz ${Number(tileFxDbg.uploadReject?.zeroSize || 0)} | taint ${Number(tileFxDbg.uploadReject?.tainted || 0)} | unk ${Number(tileFxDbg.uploadReject?.unknown || 0)}`,
         `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
         `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
@@ -2043,7 +2045,8 @@
         const r = card.getBoundingClientRect();
         if (r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan)) { culled += 1; continue; }
         if (r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan)) { culled += 1; continue; }
-        const key = card.dataset.sha256 || card.dataset.selectKey || card.dataset.relative || card.dataset.streamUrl || '';
+        if (!card.dataset.fxCardId) card.dataset.fxCardId = `fx-card-${++tileFxCardSeq}`;
+        const key = card.dataset.sha256 || card.dataset.selectKey || card.dataset.relative || card.dataset.streamUrl || card.dataset.fxCardId || '';
         const thumbEl = card.querySelector('img.asset-thumb');
         const thumbWrap = card.querySelector('.thumb');
         const posterEl = card.querySelector('video[poster]');
@@ -2051,7 +2054,7 @@
         let thumbSrc = '';
         if (thumbEl && thumbEl.getAttribute('src')) {
           thumbKind = 'img';
-          thumbSrc = thumbEl.currentSrc || thumbEl.getAttribute('src') || '';
+          thumbSrc = thumbEl.dataset.thumbUrl || thumbEl.currentSrc || thumbEl.getAttribute('src') || '';
         } else if (posterEl && posterEl.getAttribute('poster')) {
           thumbKind = 'videoPoster';
           thumbSrc = posterEl.getAttribute('poster') || '';
@@ -2063,6 +2066,10 @@
             thumbSrc = match[2];
           }
         }
+        const textureReady = !!(key && tileFX.hasTexture(key));
+        card.dataset.fxReady = textureReady ? '1' : '0';
+        card.classList.toggle('tilefx-ready', textureReady);
+
         tiles.push({
           key,
           type: card.dataset.kind || '',

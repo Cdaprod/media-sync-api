@@ -662,15 +662,15 @@ class TextureCacheLRU {
   }
 
   upsertFromImage(key, img, now = performance.now()) {
-    if (!key || !img) return { uploaded: false, entry: null };
+    if (!key || !img) return { uploaded: false, entry: null, reason: 'MISSING_SOURCE' };
     const gl = this.gl;
     const existing = this.map.get(key);
     if (existing) {
       existing.lastUsedAt = now;
-      return { uploaded: false, entry: existing };
+      return { uploaded: false, entry: existing, reason: 'ALREADY_CACHED' };
     }
     const tex = gl.createTexture();
-    if (!tex) return { uploaded: false, entry: null };
+    if (!tex) return { uploaded: false, entry: null, reason: 'TEXTURE_ALLOC_FAILED' };
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -684,7 +684,7 @@ class TextureCacheLRU {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
     } catch {
       gl.deleteTexture(tex);
-      return { uploaded: false, entry: null };
+      return { uploaded: false, entry: null, reason: 'TEX_IMAGE_FAILED' };
     }
     const bytes = this._estimateBytes(img);
     const entry = { texture: tex, bytes, lastUsedAt: now };
@@ -832,6 +832,12 @@ export class TileFXRenderer {
     if (window.__tilefx_dbg) window.__tilefx_dbg.mode = this.mode;
   }
 
+  hasTexture(key = '') {
+    const k = String(key || '');
+    if (!k || !this.textureCache) return false;
+    return this.textureCache.has(k);
+  }
+
   updateTiles(tileList) {
     this.tiles = Array.isArray(tileList) ? tileList : [];
   }
@@ -862,7 +868,8 @@ export class TileFXRenderer {
   _resolveTileSource(tile) {
     const img = tile?.thumbEl || null;
     if (img) {
-      return { kind: 'img', source: img, url: img.currentSrc || img.getAttribute('src') || '' };
+      const thumbUrl = String(img.dataset?.thumbUrl || '').trim();
+      return { kind: 'img', source: img, url: thumbUrl || img.currentSrc || img.getAttribute('src') || '' };
     }
     const kind = String(tile?.thumbKind || '').toLowerCase();
     const thumbSrc = String(tile?.thumbSrc || '').trim();
@@ -942,7 +949,12 @@ export class TileFXRenderer {
     }
 
     if (resolved.kind === 'img') {
-      pending.promise = this._prepareImageForUpload(resolved.source)
+      const imgEl = resolved.source;
+      const canUseElement = !!(imgEl && imgEl.complete && Number(imgEl.naturalWidth || 0) > 0);
+      const prepPromise = canUseElement
+        ? this._prepareImageForUpload(imgEl)
+        : (resolved.url ? this._queueUrlImage(resolved.url) : this._prepareImageForUpload(imgEl));
+      pending.promise = prepPromise
         .then((prepared) => {
           pending.source = prepared;
           pending.ready = true;
@@ -1001,9 +1013,15 @@ export class TileFXRenderer {
         if (up.uploaded) {
           this._uploadsWindow.push(now);
           this._texturesUploaded += 1;
+          this._pendingUploads.delete(key);
+        } else {
+          this._lastUploadError = String(up.reason || 'UPLOAD_REJECTED');
+          if (this._lastUploadError.includes('TEX_IMAGE')) this._recordUploadReject('tainted');
+          else if (this._lastUploadError.includes('MISSING') || this._lastUploadError.includes('ZERO')) this._recordUploadReject('zeroSize');
+          else this._recordUploadReject('unknown');
+          this._pendingUploads.delete(key);
         }
         try { resolvedSource.close?.(); } catch {}
-        this._pendingUploads.delete(key);
       }).catch((error) => {
         const msg = String(error?.message || 'UPLOAD_SOURCE_FAIL');
         this._lastUploadError = msg;
