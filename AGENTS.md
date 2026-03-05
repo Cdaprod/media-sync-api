@@ -1402,3 +1402,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Removed strict upload starvation gate by allowing `_drainPendingUploads(...)` during scrolling unless cache pressure is high (>=90% budget), keeping visibility/mode/enabled checks intact.
 - Added upload pipeline counters (`uploadsQueued`, `uploadsAttempted`, `uploadsSucceeded`, `uploadsFailed`) and surfaced them to `window.__tilefx_dbg` + HUD for on-device verification that texture uploads are actually progressing.
 - Updated `tests/test_public_explorer_program_monitor.py` static assertions for the new FX lifecycle hooks, cache-pressure upload gate, and upload counters.
+
+### Latest Implementation Notes (2026-03-06, FX swap-surface coverage + texture-cap stabilization)
+- Updated FX-mode swap CSS in `public/explorer.html` to hide the real thumbnail surface variants (`.thumb`, `img`, `picture`, `video`, thumb utility classes, `[data-thumb]`, and inline background-image holders) only when `data-tex="1"`, while preserving metadata/selection overlays.
+- Added a temporary swap sanity signal (`body.fx-mode.fx-swap-sanity`) that outlines swapped tiles for 10 seconds after entering FX mode to verify renderer ownership without devtools.
+- Introduced a TileFX upload size contract in `public/js/explorer-shaders.mjs` via `resizeImageForGL(...)`; textures are downscaled before `texImage2D` using runtime knob `?tilefxMaxTex=...` with defaults `320` on coarse pointers and `512` on desktop pointers.
+- Updated `TextureCacheLRU` byte accounting to use uploaded (resized) dimensions and added average texture-size telemetry so HUD/probe now report `maxTex` and `avgTex` alongside cache bytes/budget.
+- Reduced churn by adding dynamic scan pacing (`120ms` while scrolling, `1000ms` idle heartbeat) and idled upload drain short-circuit when READY coverage already exceeds visible tiles plus configurable margin (`tilefxIdleReadyMargin`).
+- Extended static assertions in `tests/test_public_explorer_program_monitor.py` for swap-coverage CSS, texture-cap wiring, resize helper presence, and new maxTex telemetry strings.

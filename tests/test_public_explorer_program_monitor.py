@@ -210,6 +210,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'uploadsAttempted: 0,' in shader_module
     assert 'uploadsSucceeded: 0,' in shader_module
     assert 'uploadsFailed: 0,' in shader_module
+    assert 'resizeImageForGL(img, maxEdge = 320)' in shader_module
+    assert "new URLSearchParams(window.location.search).get('tilefxMaxTex')" in shader_module
+    assert 'this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 320 : 512));' in shader_module
+    assert 'averageTextureSize() {' in shader_module
     assert 'pendingWaitLoad: 0,' in shader_module
     assert 'pendingReady: 0,' in shader_module
     assert 'srcMissing: 0,' in shader_module
@@ -502,6 +506,14 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
     assert '#mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] img,' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] picture,' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] video,' in html
+    assert 'body.fx-mode.fx-swap-sanity #mediaGridRoot.view-fx .asset[data-tex="1"]{' in html
+    assert 'armTileFxSwapSanity()' in html
+    assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html
+    assert "scheduleTileFxCollect('idle-heartbeat')" in html
+    assert 'maxTex ${Number(tileFxDbg.maxTexEdge || 0)}' in html
     assert '.app{ position: relative; z-index: 2; }' in html
     assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
     assert "setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);" in html

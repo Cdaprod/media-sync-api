@@ -844,12 +844,20 @@
     body.fx-mode #mediaGridRoot.view-fx .asset .thumb{
       opacity: 1;
     }
+    /* FX renderer-swap: only hide the DOM thumbnail layer when TileFX owns it */
     body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] img.asset-thumb{
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] img,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] picture,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] video,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumbImg,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumbVideo,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] [data-thumb],
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] [style*="background-image"]{
       opacity: 0 !important;
+      visibility: hidden !important;
     }
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"]{
-      outline: 1px solid rgba(0,255,225,0.35);
+    body.fx-mode.fx-swap-sanity #mediaGridRoot.view-fx .asset[data-tex="1"]{
+      outline: 1px solid rgba(140,255,120,0.95);
       outline-offset: -1px;
     }
     #mediaGridRoot.view-fx .asset,
@@ -1925,10 +1933,12 @@
     let tileFxCollectTimeout = 0;
     let tileFxLastCollectAt = 0;
     const TILEFX_SCAN_MIN_INTERVAL_MS = 120;
+    const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;
     let tileFxCardSeq = 0;
     const tileFxPrevKeyByCard = new Map();
     let tileFxProbeRows = [];
     let tileFxAutoProbeTimer = 0;
+    let tileFxSwapSanityTimer = 0;
     const AUTO_FX_PROBE = new URLSearchParams(window.location.search).get('fxprobe') === '1';
 
     function ensureTileFxHud(){
@@ -1996,6 +2006,9 @@
         cacheBytes: Number(tileFxDbg.cacheBytes || 0),
         cacheBudgetBytes: Number(tileFxDbg.cacheBudgetBytes || 0),
         evictReason: String(tileFxDbg.evictReason || 'none'),
+        maxTexEdge: Number(tileFxDbg.maxTexEdge || 0),
+        avgTexWidth: Number(tileFxDbg.avgTexWidth || 0),
+        avgTexHeight: Number(tileFxDbg.avgTexHeight || 0),
       };
       return rows;
     }
@@ -2024,6 +2037,7 @@
           `swapSet: ${Number(probe.swapSetCalls || 0)}`,
           `swapClear: ${Number(probe.swapClearCalls || 0)}`,
           `cache: ${(Number(probe.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(probe.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB`,
+          `maxTex: ${Number(probe.maxTexEdge || 0)} | avgTex: ${Number(probe.avgTexWidth || 0)}x${Number(probe.avgTexHeight || 0)}`,
           `evictReason: ${String(probe.evictReason || 'none')}`,
         ];
         rows.slice(0, 10).forEach((row, idx) => {
@@ -2046,7 +2060,7 @@
         `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastFailReason || tileFxDbg.lastUploadError || 'none')}`,
         `swap: ready ${Number(tileFxDbg.readyTiles || 0)} / visible ${Number(tileFxDbg.tilesVisible || 0)} | upOk ${Number(tileFxDbg.uploadOk || 0)} | drawn ${Number(tileFxDbg.tilesDrawn || 0)}`,
         `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | evicted ${Number(tileFxDbg.evictedTiles || 0)}`,
-        `cache: ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(tileFxDbg.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB | evictReason ${String(tileFxDbg.evictReason || 'none')}`,
+        `cache: ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(tileFxDbg.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB | evictReason ${String(tileFxDbg.evictReason || 'none')} | maxTex ${Number(tileFxDbg.maxTexEdge || 0)} | avgTex ${Number(tileFxDbg.avgTexWidth || 0)}x${Number(tileFxDbg.avgTexHeight || 0)}`,
         `reject: nr ${Number(tileFxDbg.uploadReject?.notReady || 0)} | 0sz ${Number(tileFxDbg.uploadReject?.zeroSize || 0)} | taint ${Number(tileFxDbg.uploadReject?.tainted || 0)} | unk ${Number(tileFxDbg.uploadReject?.unknown || 0)}`,
         `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
         `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
@@ -2078,7 +2092,8 @@
     function scheduleTileFxCollect(reason = 'event'){
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
       const now = performance.now();
-      const waitMs = Math.max(0, TILEFX_SCAN_MIN_INTERVAL_MS - (now - tileFxLastCollectAt));
+      const minInterval = tileFxDbg.scrolling ? TILEFX_SCAN_MIN_INTERVAL_MS : TILEFX_SCAN_IDLE_INTERVAL_MS;
+      const waitMs = Math.max(0, minInterval - (now - tileFxLastCollectAt));
       const runCollect = () => {
         tileFxCollectPending = 0;
         tileFxLastCollectAt = performance.now();
@@ -3799,6 +3814,15 @@
       tileCanvas.style.pointerEvents = 'none';
     }
 
+    function armTileFxSwapSanity(){
+      if (tileFxSwapSanityTimer) clearTimeout(tileFxSwapSanityTimer);
+      document.body.classList.add('fx-swap-sanity');
+      tileFxSwapSanityTimer = setTimeout(() => {
+        tileFxSwapSanityTimer = 0;
+        document.body.classList.remove('fx-swap-sanity');
+      }, 10000);
+    }
+
     function setView(view){
       const nextView = (view === 'fx' || view === 'grid' || view === 'list') ? view : 'grid';
       const fxEnabled = nextView === 'fx';
@@ -3814,6 +3838,7 @@
       const root = el('mediaGridRoot');
       if (root) root.classList.toggle('view-fx', fxEnabled);
       document.body.classList.toggle('fx-mode', fxEnabled);
+      if (!fxEnabled) document.body.classList.remove('fx-swap-sanity');
       applyTileFxCanvasState(fxEnabled);
 
       if (typeof cardFX?.setDissolveMode === 'function') {
@@ -3822,10 +3847,13 @@
       setFxSuspend(ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
       tileFX.setMode(nextView);
       if (!fxEnabled) {
+        if (tileFxSwapSanityTimer) clearTimeout(tileFxSwapSanityTimer);
+        tileFxSwapSanityTimer = 0;
         tileFX.disable();
         tileFX.updateTiles([]);
       } else {
         tileFX.enable();
+        armTileFxSwapSanity();
       }
       renderMedia();
       if (fxEnabled) {
@@ -4735,6 +4763,12 @@
       const isOpen = actionsPanel.classList.contains('open');
       toggleActions(!isOpen);
     });
+    setInterval(() => {
+      if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+      if (tileFxDbg.scrolling) return;
+      scheduleTileFxCollect('idle-heartbeat');
+    }, TILEFX_SCAN_IDLE_INTERVAL_MS);
+
     window.addEventListener('resize', () => {
       if (actionsPanel.classList.contains('open')) positionActionsPanel();
     });

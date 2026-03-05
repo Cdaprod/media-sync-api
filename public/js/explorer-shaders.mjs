@@ -198,6 +198,7 @@ export class MaskField {
 
   get canvas() { return this._canvas; }
 
+
   destroy() {
     if (this._rafId) cancelAnimationFrame(this._rafId);
     this._root.removeEventListener('pointermove', this._onMove);
@@ -629,6 +630,9 @@ if (typeof window !== 'undefined') {
     cacheBytes: 0,
     cacheBudgetBytes: 0,
     evictReason: null,
+    maxTexEdge: 0,
+    avgTexWidth: 0,
+    avgTexHeight: 0,
   };
 }
 
@@ -693,17 +697,38 @@ void main(){
     coverUV = clamp(coverUV, 0.0, 1.0);
     tex = texture2D(u_tex, coverUV).rgb;
   }
-  vec3 mixed = mix(glassBase, tex, 0.86 * u_has_tex);
-  vec3 color = mixed + glow * (0.34 + border * 0.8) + u_type_color * (1.0 - edgeBand) * 0.08;
+  vec3 mixed = mix(glassBase, tex, 0.94 * u_has_tex);
+  vec3 color = mixed + glow * (0.20 + border * 0.45) + u_type_color * (1.0 - edgeBand) * 0.05;
   color *= mask;
 
-  float alpha = (0.22 + edgeBand * 0.18 + border * 0.16 + u_selected * 0.08) * mask;
-  gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.94));
+  float alphaBase = mix(0.86, 1.0, u_has_tex);
+  float alpha = alphaBase * mask;
+  gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0));
 }
 `;
 
+function resizeImageForGL(img, maxEdge = 320){
+  const w = Number(img?.naturalWidth || img?.videoWidth || img?.width || 0);
+  const h = Number(img?.naturalHeight || img?.videoHeight || img?.height || 0);
+  if (!w || !h) return { img, w, h, resized: false };
+  const safeMaxEdge = Math.max(64, Number(maxEdge || 320));
+  const scale = Math.min(1, safeMaxEdge / Math.max(w, h));
+  if (scale >= 1) return { img, w, h, resized: false };
+  const rw = Math.max(1, Math.round(w * scale));
+  const rh = Math.max(1, Math.round(h * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = rw;
+  canvas.height = rh;
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  if (!ctx) return { img, w, h, resized: false };
+  ctx.imageSmoothingEnabled = true;
+  try { ctx.imageSmoothingQuality = 'high'; } catch {}
+  ctx.drawImage(img, 0, 0, rw, rh);
+  return { img: canvas, w: rw, h: rh, resized: true };
+}
+
 class TextureCacheLRU {
-  constructor(gl, { maxTextures = 96, maxBytes = 128 * 1024 * 1024 } = {}) {
+  constructor(gl, { maxTextures = 96, maxBytes = 128 * 1024 * 1024, maxTexEdge = 320 } = {}) {
     this.gl = gl;
     this.maxTextures = Math.max(12, Number(maxTextures || 96));
     this.maxBytes = Math.max(8 * 1024 * 1024, Number(maxBytes || (128 * 1024 * 1024)));
@@ -714,15 +739,16 @@ class TextureCacheLRU {
     this.uploadCounts = new Map();
     this.visibleKeySet = new Set();
     this.minEvictAgeMs = 1500;
+    this.maxTexEdge = Math.max(64, Number(maxTexEdge || 320));
   }
 
   setVisibleKeys(keys) {
     this.visibleKeySet = keys instanceof Set ? new Set(keys) : new Set();
   }
 
-  _estimateBytes(img) {
-    const w = Number(img?.naturalWidth || img?.videoWidth || img?.width || 0);
-    const h = Number(img?.naturalHeight || img?.videoHeight || img?.height || 0);
+  _estimateBytes(width = 0, height = 0) {
+    const w = Math.max(1, Number(width || 0));
+    const h = Math.max(1, Number(height || 0));
     return Math.max(4, w * h * 4);
   }
 
@@ -785,15 +811,17 @@ class TextureCacheLRU {
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     } catch {}
+    const resized = resizeImageForGL(img, this.maxTexEdge);
+    const uploadSource = resized?.img || img;
+    const width = Number(resized?.w || uploadSource?.naturalWidth || uploadSource?.videoWidth || uploadSource?.width || 0) || 1;
+    const height = Number(resized?.h || uploadSource?.naturalHeight || uploadSource?.videoHeight || uploadSource?.height || 0) || 1;
     try {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, uploadSource);
     } catch {
       gl.deleteTexture(tex);
       return { uploaded: false, entry: null, reason: 'TEX_IMAGE_FAILED' };
     }
-    const width = Number(img?.naturalWidth || img?.videoWidth || img?.width || 0) || 1;
-    const height = Number(img?.naturalHeight || img?.videoHeight || img?.height || 0) || 1;
-    const bytes = this._estimateBytes(img);
+    const bytes = this._estimateBytes(width, height);
     const entry = { texture: tex, bytes, width, height, lastUsedAt: now };
     this.map.set(key, entry);
     this.uploadCounts.set(key, Number(this.uploadCounts.get(key) || 0) + 1);
@@ -808,6 +836,20 @@ class TextureCacheLRU {
       if (count > 1) total += (count - 1);
     });
     return total;
+  }
+
+  averageTextureSize() {
+    if (!this.map.size) return { width: 0, height: 0 };
+    let w = 0;
+    let h = 0;
+    this.map.forEach((entry) => {
+      w += Number(entry?.width || 0);
+      h += Number(entry?.height || 0);
+    });
+    return {
+      width: Math.round(w / this.map.size),
+      height: Math.round(h / this.map.size),
+    };
   }
 
   destroy() {
@@ -849,6 +891,10 @@ export class TileFXRenderer {
     this._pendingReady = 0;
     this._pendingWaitLoad = 0;
     this._srcMissing = 0;
+    const coarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+    const maxTexParam = Number(new URLSearchParams(window.location.search).get('tilefxMaxTex') || 0);
+    this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 320 : 512));
+    this.idleUploadOverscan = Math.max(0, Number(new URLSearchParams(window.location.search).get('tilefxIdleReadyMargin') || 6));
     this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 8));
     this.maxUploadsPerFrame = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploadsframe') || 1));
     this.uploadPauseMs = 250;
@@ -877,6 +923,9 @@ export class TileFXRenderer {
         uploadsAttempted: 0,
         uploadsSucceeded: 0,
         uploadsFailed: 0,
+        maxTexEdge: 0,
+        avgTexWidth: 0,
+        avgTexHeight: 0,
         pendingReady: 0,
         pendingWaitLoad: 0,
         srcMissing: 0,
@@ -948,6 +997,7 @@ export class TileFXRenderer {
       this.textureCache = new TextureCacheLRU(gl, {
         maxTextures: Number(new URLSearchParams(window.location.search).get('fxtilecache') || 96),
         maxBytes: Number(new URLSearchParams(window.location.search).get('fxtilecachemb') || 128) * 1024 * 1024,
+        maxTexEdge: this.maxTexEdge,
       });
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -1231,6 +1281,9 @@ export class TileFXRenderer {
     const cacheBudget = Math.max(1, Number(this.textureCache?.maxBytes || 0));
     const cachePressure = (Number(this.textureCache?.totalBytes || 0) / cacheBudget) >= 0.9;
     if (this.isScrolling && cachePressure) return;
+    const readyCount = Number(this._stateCounts().ready || 0);
+    const visibleTarget = Number(this.tiles?.length || 0) + this.idleUploadOverscan;
+    if (!this.isScrolling && readyCount >= visibleTarget) return;
     if (now < this.backpressureUntil) return;
     if (this._uploadsWindow.length >= this.uploadBudgetPerSecond) return;
 
@@ -1428,6 +1481,10 @@ export class TileFXRenderer {
       window.__tilefx_dbg.uploadsAttempted = this._uploadsAttempted;
       window.__tilefx_dbg.uploadsSucceeded = this._uploadsSucceeded;
       window.__tilefx_dbg.uploadsFailed = this._uploadsFailed;
+      const avgTex = this.textureCache?.averageTextureSize?.() || { width: 0, height: 0 };
+      window.__tilefx_dbg.maxTexEdge = Number(this.maxTexEdge || 0);
+      window.__tilefx_dbg.avgTexWidth = Number(avgTex.width || 0);
+      window.__tilefx_dbg.avgTexHeight = Number(avgTex.height || 0);
       window.__tilefx_dbg.pendingReady = this._pendingReady;
       window.__tilefx_dbg.pendingWaitLoad = this._pendingWaitLoad;
       window.__tilefx_dbg.srcMissing = this._srcMissing;
