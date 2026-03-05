@@ -562,11 +562,29 @@ def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():
     assert "position: 'fixed'" in shader_module
     assert "inset: '0'" in shader_module
     assert "width: '100vw'" in shader_module
-    assert "height: '100vh'" in shader_module
+    assert "height: 'calc(var(--vvh, 1vh) * 100)'" in shader_module
+    assert 'function _vvHeight() {' in shader_module
+    assert 'function setVisualVhVar() {' in shader_module
+    assert 'function resizeCanvasToCss(canvas, dprCap = 2) {' in shader_module
+    assert 'function resizeAllFxCanvases({ dprCap = 2, tilefxRenderer = null, assetfxRenderer = null } = {}) {' in shader_module
+    assert "vv.addEventListener('scroll', () => resizeAllFxCanvases({ dprCap: 2 }), { passive: true });" in shader_module
+    assert 'tilefxRenderer.setResolution?.(tilefxCanvas.width, tilefxCanvas.height, tilefxSize.dpr);' in shader_module
+    assert 'assetfxRenderer.setResolution?.(sharedCanvas.width, sharedCanvas.height, sharedSize.dpr);' in shader_module
     assert "zIndex: '0'" in shader_module
     assert 'document.body.prepend(canvas)' in shader_module
     assert "params.get('novirt') === '1' || params.get('keep') === '1'" in shader_module
     assert 'if (this.noVirtualization && !visible) return false;' in shader_module
+
+
+def test_explorer_fx_canvas_css_contract_uses_visual_viewport_var():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '--vvh: 1vh;' in html
+    assert 'canvas.fx-debug-overlay,' in html
+    assert '#bgImpulseCanvas,' in html
+    assert '#tilefxCanvas{' in html
+    assert 'position: fixed !important;' in html
+    assert 'width: 100vw !important;' in html
+    assert 'height: calc(var(--vvh) * 100) !important;' in html
 
 
 def test_explorer_thumb_cache_sticky_loaded_contract_present():

@@ -1349,3 +1349,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Confirmed the AGENTS handoff requirement remains active: every commit must include an AGENTS.md update entry for the next agent.
 - No additional feature toggles or telemetry fields were introduced in this checkpoint.
 
+
+### Latest Implementation Notes (2026-03-06, unified FX visual-viewport canvas contract)
+- Unified FX canvas viewport contract across static explorer overlays (`fx-debug-overlay`, `fx-shared-overlay`, `#bgImpulseCanvas`, `#tilefxCanvas`) using fixed positioning, `100vw`, and `height: calc(var(--vvh) * 100)` with `!important` guards in `public/explorer.html` to prevent static/partial-width regressions.
+- Added visual-viewport-driven sizing helpers in `public/js/explorer-shaders.mjs` (`_vvHeight`, `setVisualVhVar`, `resizeCanvasToCss`, `resizeAllFxCanvases`) and bound updates to `visualViewport.resize`, `visualViewport.scroll`, and `window.resize` so iOS toolbar transitions keep all FX canvases in sync.
+- Wired GL resize hygiene by exposing `setResolution(...)` on both `TileFXRenderer` and `AssetFX`, calling `gl.viewport(...)` and refreshing resolution uniforms after canvas backing-size updates.
+- Standardized FX DPR behavior at cap `2.0` for overlay/tile/background canvas resizing to avoid mixed-DPR seams; retained upload backpressure but removed adaptive DPR cap drift.
+- Updated explorer static assertions in `tests/test_public_explorer_program_monitor.py` for the new viewport-height contract and resize helper hooks.
+

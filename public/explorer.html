@@ -33,6 +33,7 @@
       --topbar-subrow-height: 38px;
       --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
       --topbar-offset: var(--topbar-height);
+      --vvh: 1vh;
       --z-fx: 10;
       --z-grid: 20;
       --z-topbar: 5000;
@@ -93,14 +94,25 @@
     }
 
     .bg-impulse-canvas{
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 0;
-      pointer-events: none;
       opacity: 0.4;
     }
+
+    canvas.fx-debug-overlay,
+    canvas.fx-shared-overlay,
+    #bgImpulseCanvas,
+    #tilefxCanvas{
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: calc(var(--vvh) * 100) !important;
+      display: block !important;
+      pointer-events: none !important;
+    }
+
+    #bgImpulseCanvas{ z-index: 0; }
+    #tilefxCanvas{ z-index: 1; }
+    canvas.fx-shared-overlay{ z-index: 2; }
+    canvas.fx-debug-overlay{ z-index: 3; }
     .app{ position: relative; z-index: 2; }
 
     #ui-portal{
@@ -643,10 +655,6 @@
 
     #mediaGridRoot > .fx-shared-overlay,
     #mediaGridRoot > .fx-debug-overlay{
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
       pointer-events: none;
     }
     #mediaGridRoot > .fx-shared-overlay{
@@ -4811,16 +4819,19 @@
       const IMPULSE_MS = 220;
       const resize = () => {
         dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-        width = Math.max(1, window.innerWidth || 1);
-        height = Math.max(1, window.innerHeight || 1);
+        const rect = canvas.getBoundingClientRect();
+        width = Math.max(1, rect.width || window.innerWidth || 1);
+        height = Math.max(1, rect.height || window.innerHeight || 1);
         canvas.width = Math.round(width * dpr);
         canvas.height = Math.round(height * dpr);
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       };
       resize();
       window.addEventListener('resize', resize);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resize, { passive: true });
+        window.visualViewport.addEventListener('scroll', resize, { passive: true });
+      }
       const pushImpulse = (event) => {
         const x = Number(event.clientX || width * 0.5);
         const y = Number(event.clientY || height * 0.5);

@@ -31,21 +31,66 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
+function _vvHeight() {
+  const vv = window.visualViewport;
+  return (vv && Number(vv.height) > 0) ? Number(vv.height) : Number(window.innerHeight || 1);
+}
+
+function setVisualVhVar() {
+  const h = Math.max(1, _vvHeight());
+  document.documentElement.style.setProperty('--vvh', `${h * 0.01}px`);
+}
+
+function resizeCanvasToCss(canvas, dprCap = 2) {
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const cssW = Math.max(1, Number(rect.width || 0));
+  const cssH = Math.max(1, Number(rect.height || 0));
+  const dpr = Math.min(Math.max(1, Number(dprCap || 2)), Number(window.devicePixelRatio || 1));
+  const pxW = Math.max(1, Math.round(cssW * dpr));
+  const pxH = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== pxW) canvas.width = pxW;
+  if (canvas.height !== pxH) canvas.height = pxH;
+  return { dpr, cssW, cssH, pxW, pxH };
+}
+
+function resizeAllFxCanvases({ dprCap = 2, tilefxRenderer = null, assetfxRenderer = null } = {}) {
+  setVisualVhVar();
+  const debugCanvas = document.querySelector('canvas.fx-debug-overlay');
+  const sharedCanvas = document.querySelector('canvas.fx-shared-overlay');
+  const bgCanvas = document.querySelector('#bgImpulseCanvas');
+  const tilefxCanvas = document.querySelector('#tilefxCanvas');
+
+  const debugSize = resizeCanvasToCss(debugCanvas, dprCap);
+  const sharedSize = resizeCanvasToCss(sharedCanvas, dprCap);
+  const bgSize = resizeCanvasToCss(bgCanvas, dprCap);
+  const tilefxSize = resizeCanvasToCss(tilefxCanvas, dprCap);
+
+  if (tilefxRenderer && tilefxSize && tilefxCanvas) {
+    tilefxRenderer.setResolution?.(tilefxCanvas.width, tilefxCanvas.height, tilefxSize.dpr);
+  }
+  if (assetfxRenderer && sharedSize && sharedCanvas) {
+    assetfxRenderer.setResolution?.(sharedCanvas.width, sharedCanvas.height, sharedSize.dpr);
+  }
+  return { debugSize, sharedSize, bgSize, tilefxSize };
+}
+
+if (typeof window !== 'undefined') {
+  const vv = window.visualViewport;
+  if (vv) {
+    vv.addEventListener('resize', () => resizeAllFxCanvases({ dprCap: 2 }), { passive: true });
+    vv.addEventListener('scroll', () => resizeAllFxCanvases({ dprCap: 2 }), { passive: true });
+  }
+  window.addEventListener('resize', () => resizeAllFxCanvases({ dprCap: 2 }), { passive: true });
+  setVisualVhVar();
+  setTimeout(() => resizeAllFxCanvases({ dprCap: 2 }), 0);
+}
+
 
 function getStableViewportSize() {
   const vv = window.visualViewport;
-  const doc = document.documentElement;
-  const vvW = Number(vv?.width || 0);
-  const vvH = Number(vv?.height || 0);
-  const docW = Number(doc?.clientWidth || 0);
-  const docH = Number(doc?.clientHeight || 0);
-  const winW = Number(window.innerWidth || 0);
-  const winH = Number(window.innerHeight || 0);
-
-  const fallbackW = Math.max(0, docW, winW);
-  const fallbackH = Math.max(0, docH, winH);
-  const width = (vvW > 0 && vvW >= (fallbackW * 0.6)) ? vvW : fallbackW;
-  const height = (vvH > 0 && vvH >= (fallbackH * 0.6)) ? vvH : fallbackH;
+  const width = Number(vv?.width || window.innerWidth || document.documentElement?.clientWidth || 1);
+  const height = _vvHeight();
   return {
     width: Math.max(1, width || 1),
     height: Math.max(1, height || 1),
@@ -1060,22 +1105,30 @@ export class TileFXRenderer {
 
   _resize() {
     if (!this.canvas) return;
-    const vv = getStableViewportSize();
-    const dpr = Math.min(this.dprCap, Number(window.devicePixelRatio || 1));
-    const w = Math.max(1, Math.round(vv.width * dpr));
-    const h = Math.max(1, Math.round(vv.height * dpr));
-    if (this.canvas.width !== w || this.canvas.height !== h) {
-      this.canvas.width = w;
-      this.canvas.height = h;
-    }
-    this.canvas.style.width = `${Math.max(1, Math.round(vv.width))}px`;
-    this.canvas.style.height = `${Math.max(1, Math.round(vv.height))}px`;
+    const sizes = resizeAllFxCanvases({ dprCap: this.dprCap, tilefxRenderer: this });
+    const tileSize = sizes.tilefxSize;
+    if (!tileSize) return;
+    const w = Math.max(1, this.canvas.width || tileSize.pxW);
+    const h = Math.max(1, this.canvas.height || tileSize.pxH);
     if (window.__tilefx_dbg) {
-      window.__tilefx_dbg.dpr = dpr;
+      window.__tilefx_dbg.dpr = tileSize.dpr;
       window.__tilefx_dbg.dprCap = this.dprCap;
       window.__tilefx_dbg.backpressureUntil = this.backpressureUntil;
     }
-    return { dpr, width: w, height: h };
+    return { dpr: tileSize.dpr, width: w, height: h };
+  }
+
+  setResolution(width, height, dpr = 1) {
+    const gl = this.gl;
+    if (!gl || !this.canvas) return;
+    const w = Math.max(1, Math.round(Number(width || this.canvas.width || 1)));
+    const h = Math.max(1, Math.round(Number(height || this.canvas.height || 1)));
+    gl.viewport(0, 0, w, h);
+    if (this.program && this.u?.u_resolution) {
+      gl.useProgram(this.program);
+      gl.uniform2f(this.u.u_resolution, w, h);
+    }
+    if (window.__tilefx_dbg) window.__tilefx_dbg.dpr = Number(dpr || window.devicePixelRatio || 1);
   }
 
   _render(now) {
@@ -1136,10 +1189,8 @@ export class TileFXRenderer {
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
     if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
       this.backpressureUntil = now + this.uploadPauseMs;
-      this.dprCap = Math.max(1, this.dprCap - 0.2);
     } else if (this.backpressureUntil && now >= this.backpressureUntil) {
       this.backpressureUntil = 0;
-      this.dprCap = Math.min(2, this.dprCap + 0.05);
     }
     this._drawCalls = drawCalls;
     if (window.__tilefx_dbg) {
@@ -1168,15 +1219,7 @@ export class TileFXRenderer {
   }
 
   _adaptDprFromFrameMs(frameMs) {
-    const ms = Number(frameMs || 0);
-    if (!Number.isFinite(ms) || ms <= 0) return;
-    if (ms > 18) {
-      this.dprCap = Math.max(1, this.dprCap - 0.08);
-      return;
-    }
-    if (ms < 10) {
-      this.dprCap = Math.min(2, this.dprCap + 0.02);
-    }
+    this.dprCap = 2;
   }
 
   _start() {
@@ -1315,7 +1358,10 @@ export class AssetFX {
       this._recordScrollMotion(event);
       this._markLayoutDirty('grid:scroll');
     };
-    this._boundWindowResize = () => this._markLayoutDirty('window:resize');
+    this._boundWindowResize = () => {
+      resizeAllFxCanvases({ dprCap: 2, assetfxRenderer: this });
+      this._markLayoutDirty('window:resize');
+    };
     this._boundContainerResize = () => this._markLayoutDirty('container:resize');
     this._tapGuardCleanup = null;
     this._resizeObserver = null;
@@ -1328,7 +1374,10 @@ export class AssetFX {
     this._debugLastFrameTs = 0;
     this._debugLastReason = '';
     this._domDiscoverCap = 220;
-    this._boundVisualViewportChange = () => this._markLayoutDirty('visualViewport:change');
+    this._boundVisualViewportChange = () => {
+      resizeAllFxCanvases({ dprCap: 2, assetfxRenderer: this });
+      this._markLayoutDirty('visualViewport:change');
+    };
     this._boundInvalidationRoot = null;
     this._invalidationsBound = false;
 
@@ -1644,7 +1693,7 @@ export class AssetFX {
       position: 'fixed',
       inset: '0',
       width: '100vw',
-      height: '100vh',
+      height: 'calc(var(--vvh, 1vh) * 100)',
       pointerEvents: 'none',
       zIndex: '0',
       opacity: '0.9',
@@ -1660,7 +1709,7 @@ export class AssetFX {
       position: 'fixed',
       inset: '0',
       width: '100vw',
-      height: '100vh',
+      height: 'calc(var(--vvh, 1vh) * 100)',
       pointerEvents: 'none',
       zIndex: '0',
       opacity: this.fxDebug ? '1' : '0',
@@ -1882,6 +1931,7 @@ export class AssetFX {
     }
 
     this._bindInvalidations();
+    resizeAllFxCanvases({ dprCap: 2, assetfxRenderer: this });
     if (typeof ResizeObserver !== 'undefined') {
       this._resizeObserver = new ResizeObserver(this._boundContainerResize);
       this._resizeObserver.observe(gridRoot);
@@ -2551,7 +2601,7 @@ export class AssetFX {
       this._syncDebugBanner();
       return;
     }
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     let canvasRect = this._lastCanvasRect || cloneRect(this.overlay.getBoundingClientRect());
     if (!this._lastCanvasRect || this.layoutDirty) canvasRect = cloneRect(this.overlay.getBoundingClientRect());
     this._lastCanvasRect = canvasRect;
@@ -2986,6 +3036,18 @@ export class AssetFX {
     }
   }
 
+  setResolution(width, height) {
+    const gl = this.gl;
+    if (!gl || !this.overlay) return;
+    const w = Math.max(1, Math.round(Number(width || this.overlay.width || 1)));
+    const h = Math.max(1, Math.round(Number(height || this.overlay.height || 1)));
+    gl.viewport(0, 0, w, h);
+    if (this.program && this._u?.u_resolution) {
+      gl.useProgram(this.program);
+      gl.uniform2f(this._u.u_resolution, w, h);
+    }
+  }
+
   _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, sticky = false, alwaysOn = true } = {}) {
     if (!this.fxDebug || !cardEl) return;
     let badge = cardEl.querySelector('.fx-debug-badge');
@@ -3047,8 +3109,10 @@ export class AssetFX {
         animation: fx-visible-hint 200ms ease-out forwards;
       }
       .fx-debug-overlay {
-        position: absolute;
+        position: fixed;
         inset: 0;
+        width: 100vw;
+        height: calc(var(--vvh, 1vh) * 100);
         pointer-events: none;
         z-index: 4;
       }
