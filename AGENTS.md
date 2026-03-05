@@ -1387,3 +1387,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Improved tile thumbnail rendering quality by adding cover-style UV mapping (`u_tex_size`) and rounded-rect masking in TileFX fragment shader so READY tiles better match DOM thumbnail framing while preserving glass treatment.
 - Refreshed `docs/todo/AGENTS.md` with new carry-forward tasks and marked completed key-stability/probe/cache/shader work items.
 
+
+### Latest Implementation Notes (2026-03-06, FX probe snapshot freeze + auto-capture)
+- Initialized a persistent `window.__tilefx_probe` structure in `public/js/explorer-shaders.mjs` so probe data exists before explorer HUD updates and survives view toggles.
+- Added `captureTileFxProbeSnapshot(reason)` in `public/explorer.html` and routed the FX Probe button through it, storing timestamped visible-tile rows plus readiness/swap/cache counters for deterministic diagnostics.
+- Extended probe rows with `thumbSrc` metadata and normalized scalar typing (`String/Number/Boolean`) to keep console payloads stable across Safari and Chromium.
+- Updated TileFX HUD rendering to freeze into an `FX PROBE SNAPSHOT` block whenever probe data is present, including summary counters and the first 10 captured rows.
+- Added optional `?fxprobe=1` auto-capture after scroll idle in FX mode to support repeatable mobile repro captures without manual tapping.

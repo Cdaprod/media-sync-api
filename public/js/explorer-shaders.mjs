@@ -617,6 +617,21 @@ const TILE_STATE = Object.freeze({
   EVICTED: 'EVICTED',
 });
 
+if (typeof window !== 'undefined') {
+  window.__tilefx_probe = window.__tilefx_probe || {
+    timestamp: 0,
+    visibleTiles: [],
+    stateCounts: {},
+    readyTiles: 0,
+    pendingTiles: 0,
+    swapSetCalls: 0,
+    swapClearCalls: 0,
+    cacheBytes: 0,
+    cacheBudgetBytes: 0,
+    evictReason: null,
+  };
+}
+
 const TILEFX_VERT = `
 attribute vec2 a_pos;
 varying vec2 v_uv;

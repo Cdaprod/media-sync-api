@@ -1928,6 +1928,8 @@
     let tileFxCardSeq = 0;
     const tileFxPrevKeyByCard = new Map();
     let tileFxProbeRows = [];
+    let tileFxAutoProbeTimer = 0;
+    const AUTO_FX_PROBE = new URLSearchParams(window.location.search).get('fxprobe') === '1';
 
     function ensureTileFxHud(){
       let hud = document.getElementById('tilefxHud');
@@ -1961,10 +1963,7 @@
           font: '12px/1.2 var(--mono)',
         });
         btn.addEventListener('click', () => {
-          const rows = tileFxProbeRows.slice(0, 20).map((row) => ({
-            ...row,
-            state: tileFX.getTileState(row.key),
-          }));
+          const rows = captureTileFxProbeSnapshot('manual');
           console.info('[tilefx-probe]', { view: state.view, dbg: window.__tilefx_dbg, rows });
           toast('ok', 'FX Probe', `Logged ${rows.length} visible tile rows to console.`);
         });
@@ -1972,6 +1971,33 @@
       }
       btn.style.display = state.view === 'fx' ? 'block' : 'none';
       return btn;
+    }
+
+    function captureTileFxProbeSnapshot(reason = 'manual'){
+      const rows = tileFxProbeRows.slice(0, 20).map((row) => ({
+        key: String(row.key || ''),
+        keySource: String(row.keySource || 'unknown'),
+        state: String(tileFX.getTileState(row.key)),
+        hasTexture: !!row.hasTexture,
+        dataTex: String(row.dataTex || ''),
+        imgComplete: !!row.imgComplete,
+        imgWidth: Number(row.naturalWidth || 0),
+        thumbSrc: String(row.thumbSrc || ''),
+      }));
+      window.__tilefx_probe = {
+        timestamp: Date.now(),
+        reason,
+        visibleTiles: rows,
+        stateCounts: { ...(tileFxDbg.stateCounts || {}) },
+        readyTiles: Number(tileFxDbg.readyTiles || 0),
+        pendingTiles: Number(tileFxDbg.pendingTiles || 0),
+        swapSetCalls: Number(tileFxDbg.swapSetCalls || 0),
+        swapClearCalls: Number(tileFxDbg.swapClearCalls || 0),
+        cacheBytes: Number(tileFxDbg.cacheBytes || 0),
+        cacheBudgetBytes: Number(tileFxDbg.cacheBudgetBytes || 0),
+        evictReason: String(tileFxDbg.evictReason || 'none'),
+      };
+      return rows;
     }
 
     function updateTileFxHud(){
@@ -1986,6 +2012,26 @@
         tileFX.stop();
         tileFX.clear();
         tileFxDbg.drawCalls = 0;
+      }
+      const probe = window.__tilefx_probe || null;
+      if (probe && Number(probe.timestamp || 0) > 0) {
+        const rows = Array.isArray(probe.visibleTiles) ? probe.visibleTiles : [];
+        const lines = [
+          `FX PROBE SNAPSHOT ${new Date(Number(probe.timestamp || Date.now())).toISOString()}`,
+          `reason: ${String(probe.reason || 'manual')}`,
+          `ready/visible: ${Number(probe.readyTiles || 0)} / ${Number(tileFxDbg.tilesVisible || 0)}`,
+          `pending: ${Number(probe.pendingTiles || 0)}`,
+          `swapSet: ${Number(probe.swapSetCalls || 0)}`,
+          `swapClear: ${Number(probe.swapClearCalls || 0)}`,
+          `cache: ${(Number(probe.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(probe.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB`,
+          `evictReason: ${String(probe.evictReason || 'none')}`,
+        ];
+        rows.slice(0, 10).forEach((row, idx) => {
+          lines.push(`${idx} ${row.state} ${row.keySource} ${String(row.key || '').split('/').pop() || row.key} tex=${row.dataTex}`);
+        });
+        hud.classList.toggle('is-alert', false);
+        hud.textContent = lines.join('\n');
+        return;
       }
       hud.classList.toggle('is-alert', !!failReason);
       hud.textContent = [
@@ -2169,6 +2215,7 @@
           dataTex: String(tile.tileEl?.dataset?.tex || ''),
           imgComplete: !!img?.complete,
           naturalWidth: Number(img?.naturalWidth || 0),
+          thumbSrc: String(img?.currentSrc || img?.getAttribute('src') || ''),
         };
       });
       tileFxDbg.swappedTiles = cards.filter((card) => card?.dataset?.tex === '1').length;
@@ -4705,6 +4752,15 @@
       tileFX.noteScroll();
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
       scheduleTileFxCollect('scroll');
+      if (AUTO_FX_PROBE) {
+        if (tileFxAutoProbeTimer) clearTimeout(tileFxAutoProbeTimer);
+        tileFxAutoProbeTimer = setTimeout(() => {
+          tileFxAutoProbeTimer = 0;
+          if (tileFxDbg.scrolling) return;
+          captureTileFxProbeSnapshot('auto-scroll-idle');
+          updateTileFxHud();
+        }, 260);
+      }
     }, { passive: true });
     window.addEventListener('resize', () => {
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
