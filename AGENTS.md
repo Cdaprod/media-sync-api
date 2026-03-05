@@ -1336,3 +1336,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `data-tex` per-tile swap marker in the FX collect loop and CSS readiness gating so DOM thumbnail visibility follows real cache-backed readiness state every scan.
 - Extended scan-time card priming to set both `data-fx-ready` and `data-tex` from `tileFX.hasTexture(key)` using stable fallback keys (`fx-card-*`) to avoid stale hide states.
 - Updated static explorer assertions for the new upload-state telemetry and `data-tex` swap contract.
+
+### Latest Implementation Notes (2026-03-05, single-view FX ownership + swap conflict reduction)
+- Removed FX thumbnail hide coupling to `data-fx-ready` CSS so DOM visibility is now controlled by TileFX-owned swap markers (`data-tex` / `.tilefx-ready`), reducing dual-renderer conflicts where non-TileFX readiness flags could blank cards.
+- Added swap lifecycle HUD counters in `public/explorer.html` (`swappedTiles`, `evictedTiles`) and surfaced them in `#tilefxHud` to track in-view texture ownership transitions.
+- Extended tile priming in `collectTileFxTiles()` to record eviction transitions (`data-tex: 1 -> 0`) and update swap counts each scan, while preserving stable fallback keys and viewport-space rect mapping.
+- Added `lastFailReason` telemetry in `public/js/explorer-shaders.mjs` and synchronized it with upload failure paths so HUD diagnostics report the latest meaningful upload rejection reason.
+- Updated static monitor assertions to match the refined FX swap contract and telemetry labels.

@@ -760,6 +760,7 @@ export class TileFXRenderer {
         uploadOk: 0,
         uploadFail: 0,
         lastUploadError: '',
+        lastFailReason: '',
         texturesInCache: 0,
         texturesEvicted: 0,
         reuploadsTotal: 0,
@@ -954,6 +955,7 @@ export class TileFXRenderer {
       pending.failed = true;
       pending.lastError = 'NO_SOURCE';
       this._lastUploadError = pending.lastError;
+      if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
       this._recordUploadReject('unknown');
       return;
     }
@@ -975,6 +977,9 @@ export class TileFXRenderer {
           pending.failed = true;
           pending.lastError = String(error?.message || 'IMG_PREP_FAIL');
           this._lastUploadError = pending.lastError;
+        if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+          if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+      if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
           if (pending.lastError.includes('ZERO_SIZE')) this._recordUploadReject('zeroSize');
           else this._recordUploadReject('notReady');
         });
@@ -991,6 +996,8 @@ export class TileFXRenderer {
         pending.failed = true;
         pending.lastError = String(error?.message || 'URL_PREP_FAIL');
         this._lastUploadError = pending.lastError;
+        if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+      if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
         if (pending.lastError.includes('ZERO_SIZE')) this._recordUploadReject('zeroSize');
         else this._recordUploadReject('unknown');
       });
@@ -1018,6 +1025,7 @@ export class TileFXRenderer {
       Promise.resolve(uploadSource).then((resolvedSource) => {
         if (!resolvedSource) {
           this._lastUploadError = 'UPLOAD_SOURCE_MISSING';
+          if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
           this._recordUploadReject('unknown');
           this._pendingUploads.delete(key);
           return;
@@ -1032,6 +1040,7 @@ export class TileFXRenderer {
           this._pendingUploads.delete(key);
         } else {
           this._lastUploadError = String(up.reason || 'UPLOAD_REJECTED');
+          if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
           if (this._lastUploadError.includes('TEX_IMAGE')) this._recordUploadReject('tainted');
           else if (this._lastUploadError.includes('MISSING') || this._lastUploadError.includes('ZERO')) this._recordUploadReject('zeroSize');
           else this._recordUploadReject('unknown');
@@ -1041,6 +1050,7 @@ export class TileFXRenderer {
       }).catch((error) => {
         const msg = String(error?.message || 'UPLOAD_SOURCE_FAIL');
         this._lastUploadError = msg;
+        if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
         if (msg.toLowerCase().includes('security') || msg.toLowerCase().includes('taint')) this._recordUploadReject('tainted');
         else this._recordUploadReject('unknown');
         this._pendingUploads.delete(key);
@@ -1145,6 +1155,7 @@ export class TileFXRenderer {
       window.__tilefx_dbg.uploadOk = this._texturesUploaded;
       window.__tilefx_dbg.uploadFail = Number(this._uploadReject.notReady || 0) + Number(this._uploadReject.zeroSize || 0) + Number(this._uploadReject.tainted || 0) + Number(this._uploadReject.unknown || 0);
       window.__tilefx_dbg.lastUploadError = this._lastUploadError || '';
+      window.__tilefx_dbg.lastFailReason = this._lastUploadError || '';
       window.__tilefx_dbg.uploadReject = { ...this._uploadReject };
       window.__tilefx_dbg.texturesInCache = this.textureCache?.map?.size || 0;
       window.__tilefx_dbg.texturesEvicted = this.textureCache?.evictions || 0;

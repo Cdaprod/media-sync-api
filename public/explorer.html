@@ -856,8 +856,6 @@
       opacity: 1;
     }
     #mediaGridRoot.view-fx .asset.tilefx-ready img.asset-thumb,
-    #mediaGridRoot.view-fx .asset[data-fx-ready="1"] img.asset-thumb,
-    #mediaGridRoot.view-fx .asset[data-fx-ready="1"] .thumb,
     #mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,
     #mediaGridRoot.view-fx .asset[data-tex="1"] img.asset-thumb{
       opacity: 0 !important;
@@ -1918,6 +1916,8 @@
     tileFxDbg.pendingWaitLoad = Number(tileFxDbg.pendingWaitLoad || 0);
     tileFxDbg.pendingReady = Number(tileFxDbg.pendingReady || 0);
     tileFxDbg.srcMissing = Number(tileFxDbg.srcMissing || 0);
+    tileFxDbg.swappedTiles = Number(tileFxDbg.swappedTiles || 0);
+    tileFxDbg.evictedTiles = Number(tileFxDbg.evictedTiles || 0);
 
     const tileFxScanStats = {
       scannedCount: 0,
@@ -1959,7 +1959,8 @@
         `tex: up ${Number(tileFxDbg.texturesUploaded || 0)} | pending ${Number(tileFxDbg.texturesPending || 0)} | cache ${Number(tileFxDbg.texturesInCache || 0)} | evict ${Number(tileFxDbg.texturesEvicted || 0)} | reup ${Number(tileFxDbg.reuploadsTotal || 0)}`,
         `thumbs: img ${Number(tileFxDbg.thumbs?.img || 0)} | css ${Number(tileFxDbg.thumbs?.cssbg || 0)} | poster ${Number(tileFxDbg.thumbs?.poster || 0)} | none ${Number(tileFxDbg.thumbs?.none || 0)}`,
         `upload: try ${Number(tileFxDbg.uploadAttempt || 0)} | ok ${Number(tileFxDbg.uploadOk || 0)} | fail ${Number(tileFxDbg.uploadFail || 0)}`,
-        `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastUploadError || 'none')}`,
+        `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastFailReason || tileFxDbg.lastUploadError || 'none')}`,
+        `swap: on ${Number(tileFxDbg.swappedTiles || 0)} | evicted ${Number(tileFxDbg.evictedTiles || 0)}`,
         `reject: nr ${Number(tileFxDbg.uploadReject?.notReady || 0)} | 0sz ${Number(tileFxDbg.uploadReject?.zeroSize || 0)} | taint ${Number(tileFxDbg.uploadReject?.tainted || 0)} | unk ${Number(tileFxDbg.uploadReject?.unknown || 0)}`,
         `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
         `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
@@ -2074,6 +2075,8 @@
           }
         }
         const textureReady = !!(key && tileFX.hasTexture(key));
+        const wasTex = card.dataset.tex === '1';
+        if (wasTex && !textureReady) tileFxDbg.evictedTiles = Number(tileFxDbg.evictedTiles || 0) + 1;
         card.dataset.fxReady = textureReady ? '1' : '0';
         card.dataset.tex = textureReady ? '1' : '0';
         card.classList.toggle('tilefx-ready', textureReady);
@@ -2102,6 +2105,7 @@
         else thumbCounts.none += 1;
       }
       tileFxDbg.thumbs = thumbCounts;
+      tileFxDbg.swappedTiles = cards.filter((card) => card?.dataset?.tex === '1').length;
       tileFxScanStats.scannedCount = cards.length;
       tileFxScanStats.culledCount = culled;
       tileFxScanStats.renderedCount = tiles.length;
