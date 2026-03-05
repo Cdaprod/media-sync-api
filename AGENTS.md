@@ -1442,3 +1442,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Implemented per-frame rect refresh for fed tiles (`tileEl.getBoundingClientRect()`) to remove stale cached layout coordinates during scroll/viewport animation transitions.
 - Added `?tilefxDebugRects=1` truth-overlay outlines driven by the same mapped rects used for GL draws to verify alignment on-device.
 - Changed TileFX debug-state initialization to merge existing `window.__tilefx_dbg` instead of replacing it, reducing HUD/probe stale-instance mismatches.
+
+### Latest Implementation Notes (2026-03-06, TileFX disable-guard + swap persistence pass)
+- Guarded `destroyTileFX(...)` in `public/explorer.html` so FX renderer teardown is blocked while `state.view === 'fx'` unless explicitly forced; non-FX view transitions now pass explicit teardown reasons for log traceability.
+- Added FX viewport-event handling in explorer (`visualViewport.resize|scroll`) as collect-only signals (`visual-viewport-live` + debounced `visual-viewport`) with no mode-exit side effects.
+- Added disable instrumentation in `TileFXRenderer.disable(reason)` (`[tilefx] DISABLE` + stack) to reveal any accidental shutdown path that flips `enabled/raf` during runtime.
+- Added swapped-tile tracking (`_swappedTileRefs`) and `_restoreUntrackedSwaps(...)` so tiles leaving the active fed set are unswapped/restored, preventing hidden-thumb persistence after offscreen scroll.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for guarded destroy signature/callsite and new TileFX disable + swap-restore symbols.

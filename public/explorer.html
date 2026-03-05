@@ -3880,7 +3880,12 @@
       }, 10000);
     }
 
-    function destroyTileFX(){
+    function destroyTileFX(reason = 'manual', { force = false } = {}){
+      if (!force && state.view === 'fx') {
+        console.warn('[tilefx] destroyTileFX blocked while FX view active', { reason });
+        return;
+      }
+      console.warn('[tilefx] destroyTileFX', { reason });
       if (tileFxSwapSanityTimer) clearTimeout(tileFxSwapSanityTimer);
       tileFxSwapSanityTimer = 0;
       tileFX.teardownForModeExit({ removeCanvas: false });
@@ -3913,7 +3918,7 @@
       setFxSuspend(ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
       tileFX.setMode(nextView);
       if (!fxEnabled) {
-        destroyTileFX();
+        destroyTileFX('setView:non-fx');
       } else {
         tileFX.enable();
         armTileFxSwapSanity();
@@ -4862,6 +4867,26 @@
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
       scheduleTileFxCollect('resize');
     }, { passive: true });
+    const scheduleTileFxCollectViewportDebounced = (() => {
+      let timer = 0;
+      return () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          timer = 0;
+          if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+          scheduleTileFxCollect('visual-viewport');
+        }, 160);
+      };
+    })();
+    if (window.visualViewport) {
+      const onVisualViewportEvent = () => {
+        if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+        scheduleTileFxCollect('visual-viewport-live');
+        scheduleTileFxCollectViewportDebounced();
+      };
+      window.visualViewport.addEventListener('resize', onVisualViewportEvent, { passive: true });
+      window.visualViewport.addEventListener('scroll', onVisualViewportEvent, { passive: true });
+    }
 
     el('q').addEventListener('input', (e) => {
       state.q = e.target.value || '';

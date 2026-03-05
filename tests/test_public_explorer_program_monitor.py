@@ -209,6 +209,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_drainPendingUploads(now)' in shader_module
     assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
     assert 'applyDomSwap(tile, swapped = false) {' in shader_module
+    assert "disable(reason = '')" in shader_module
+    assert "console.warn('[tilefx] DISABLE'" in shader_module
+    assert '_restoreUntrackedSwaps(activeTileEls);' in shader_module
     assert 'const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length' in shader_module
     assert "tileEl.classList.toggle('fx-swapped', !!swapped);" in shader_module
     assert "document.body?.classList?.contains('fx-mode')" in shader_module
@@ -493,12 +496,12 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert "cardFX.setDissolveMode('tile');" in html
     assert 'window.__tilefx_enabled = fxEnabled;' in html
     assert 'window.__explorer_view = nextView;' in html
-    assert 'destroyTileFX();' in html
+    assert "destroyTileFX('setView:non-fx');" in html
     assert 'tileFX.enable();' in html
     assert 'window.tileFX = tileFX;' in html
     assert 'window.destroyTileFX = destroyTileFX;' in html
     assert 'window.setViewMode = setView;' in html
-    assert 'function destroyTileFX(){' in html
+    assert "function destroyTileFX(reason = 'manual', { force = false } = {}){" in html
     assert 'tileFX.teardownForModeExit({ removeCanvas: false });' in html
     assert 'tileFX.noteScroll();' in html
     assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html

@@ -941,6 +941,7 @@ export class TileFXRenderer {
     this.textureCache = null;
     this._domSwapStyleState = new WeakMap();
     this._domSwapBgState = new WeakMap();
+    this._swappedTileRefs = new Map();
     this._debugRectLayer = null;
     this._debugRectPool = [];
     this.debugRectsEnabled = new URLSearchParams(window.location.search).get('tilefxDebugRects') === '1';
@@ -1097,7 +1098,10 @@ export class TileFXRenderer {
     this.setEnabled(true);
   }
 
-  disable() {
+  disable(reason = '') {
+    try {
+      console.warn('[tilefx] DISABLE', String(reason || 'unspecified'), new Error().stack);
+    } catch {}
     this.setEnabled(false);
     this.clear();
     this._drawCalls = 0;
@@ -1105,7 +1109,7 @@ export class TileFXRenderer {
   }
 
   teardownForModeExit({ removeCanvas = false } = {}) {
-    this.disable();
+    this.disable('teardownForModeExit');
     (this.tiles || []).forEach((tile) => this.applyDomSwap(tile, false));
     this.tiles = [];
     this.tileStateByKey.clear();
@@ -1113,6 +1117,7 @@ export class TileFXRenderer {
     this._uploadsWindow = [];
     this._domSwapStyleState = new WeakMap();
     this._domSwapBgState = new WeakMap();
+    this._swappedTileRefs = new Map();
     this._debugRectLayer = null;
     this._debugRectPool = [];
     this.debugRectsEnabled = new URLSearchParams(window.location.search).get('tilefxDebugRects') === '1';
@@ -1181,6 +1186,8 @@ export class TileFXRenderer {
     if (!tileEl) return;
     tileEl.dataset.tex = swapped ? '1' : '0';
     tileEl.classList.toggle('fx-swapped', !!swapped);
+    if (swapped) this._swappedTileRefs.set(tileEl, tile);
+    else this._swappedTileRefs.delete(tileEl);
     if (!paintEls.length) return;
     for (const paintEl of paintEls) {
       if (!paintEl) continue;
@@ -1312,6 +1319,19 @@ export class TileFXRenderer {
       node.style.width = `${Math.max(1, r.width)}px`;
       node.style.height = `${Math.max(1, r.height)}px`;
     });
+  }
+
+  _restoreUntrackedSwaps(activeTileEls = new Set()) {
+    if (!this._swappedTileRefs.size) return;
+    const active = activeTileEls instanceof Set ? activeTileEls : new Set();
+    for (const [tileEl, tile] of Array.from(this._swappedTileRefs.entries())) {
+      if (!tileEl || !tileEl.isConnected) {
+        this._swappedTileRefs.delete(tileEl);
+        continue;
+      }
+      if (active.has(tileEl)) continue;
+      this.applyDomSwap(tile, false);
+    }
   }
 
   _recordUploadReject(reason = 'unknown') {
@@ -1598,9 +1618,11 @@ export class TileFXRenderer {
     const tiles = this.tiles || [];
     const visibleKeySet = new Set();
     const debugRects = [];
+    const activeTileEls = new Set();
     tiles.forEach((tile) => {
       const k = String(tile?.key || '');
       if (k) visibleKeySet.add(k);
+      if (tile?.tileEl) activeTileEls.add(tile.tileEl);
     });
     this.textureCache?.setVisibleKeys?.(visibleKeySet);
     tiles.forEach((tile) => {
@@ -1671,6 +1693,7 @@ export class TileFXRenderer {
     });
 
     this._renderDebugRects(debugRects);
+    this._restoreUntrackedSwaps(activeTileEls);
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
     if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
       this.backpressureUntil = now + this.uploadPauseMs;
