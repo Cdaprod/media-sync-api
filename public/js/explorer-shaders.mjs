@@ -893,7 +893,7 @@ export class TileFXRenderer {
     this._srcMissing = 0;
     const coarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
     const maxTexParam = Number(new URLSearchParams(window.location.search).get('tilefxMaxTex') || 0);
-    this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 320 : 512));
+    this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));
     this.idleUploadOverscan = Math.max(0, Number(new URLSearchParams(window.location.search).get('tilefxIdleReadyMargin') || 6));
     this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 8));
     this.maxUploadsPerFrame = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploadsframe') || 1));
@@ -909,6 +909,8 @@ export class TileFXRenderer {
     this.quad = null;
     this.u = null;
     this.textureCache = null;
+    this._domSwapStyleState = new WeakMap();
+    this._domSwapBgState = new WeakMap();
 
     if (typeof window !== 'undefined') {
       window.__tilefx_dbg = {
@@ -1069,10 +1071,13 @@ export class TileFXRenderer {
 
   teardownForModeExit({ removeCanvas = false } = {}) {
     this.disable();
+    (this.tiles || []).forEach((tile) => this.applyDomSwap(tile, false));
     this.tiles = [];
     this.tileStateByKey.clear();
     this._pendingUploads.clear();
     this._uploadsWindow = [];
+    this._domSwapStyleState = new WeakMap();
+    this._domSwapBgState = new WeakMap();
     this._lastScrollAt = 0;
     this.isScrolling = false;
     if (this.textureCache) {
@@ -1126,6 +1131,39 @@ export class TileFXRenderer {
     gl.viewport(0, 0, this.canvas.width || 1, this.canvas.height || 1);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  applyDomSwap(tile, swapped = false) {
+    const tileEl = tile?.tileEl || null;
+    const thumbSurfaceEl = tile?.thumbSurfaceEl || tile?.thumbEl || null;
+    const thumbBgEl = tile?.thumbBgEl || null;
+    if (!tileEl) return;
+    tileEl.dataset.tex = swapped ? '1' : '0';
+    if (!thumbSurfaceEl) return;
+    const prior = this._domSwapStyleState.get(thumbSurfaceEl) || {
+      opacity: thumbSurfaceEl.style.opacity || '',
+      visibility: thumbSurfaceEl.style.visibility || '',
+    };
+    if (!this._domSwapStyleState.has(thumbSurfaceEl)) this._domSwapStyleState.set(thumbSurfaceEl, prior);
+    if (swapped) {
+      thumbSurfaceEl.style.opacity = '0';
+      thumbSurfaceEl.style.visibility = 'hidden';
+      const bgNode = thumbBgEl || thumbSurfaceEl;
+      const computedBg = String(getComputedStyle(bgNode).backgroundImage || '').trim();
+      if (computedBg && computedBg !== 'none') {
+        if (!this._domSwapBgState.has(bgNode)) this._domSwapBgState.set(bgNode, bgNode.style.backgroundImage || '');
+        bgNode.style.backgroundImage = 'none';
+      }
+      return;
+    }
+    thumbSurfaceEl.style.opacity = prior.opacity;
+    thumbSurfaceEl.style.visibility = prior.visibility;
+    const bgNode = thumbBgEl || thumbSurfaceEl;
+    if (this._domSwapBgState.has(bgNode)) {
+      const priorBg = this._domSwapBgState.get(bgNode);
+      bgNode.style.backgroundImage = priorBg || '';
+      this._domSwapBgState.delete(bgNode);
+    }
   }
 
   hasTexture(key = '') {
@@ -1461,13 +1499,14 @@ export class TileFXRenderer {
         if (priorState === TILE_STATE.READY) {
           this._setTileState(key, TILE_STATE.EVICTED);
           if (tileEl?.dataset?.tex === '1') {
-            tileEl.dataset.tex = '0';
+            this.applyDomSwap(tile, false);
             if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
           }
         }
         this._queueTileImageUpload(tile, key);
       }
       const entry = key ? this.textureCache.get(key, now) : null;
+      let shouldSwapSet = false;
       if (entry?.texture) {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, entry.texture);
@@ -1475,16 +1514,13 @@ export class TileFXRenderer {
         gl.uniform2f(this.u.u_tex_size, Number(entry.width || 1), Number(entry.height || 1));
         hasTex = 1;
         this._setTileState(key, TILE_STATE.READY);
-        if (tileEl && tileEl.dataset.tex !== '1') {
-          tileEl.dataset.tex = '1';
-          if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
-        }
+        shouldSwapSet = Boolean(tileEl && tileEl.dataset.tex !== '1');
       } else if (tileEl && tileEl.dataset.tex === '1') {
-        tileEl.dataset.tex = '0';
+        this.applyDomSwap(tile, false);
         if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
         this._setTileState(key, TILE_STATE.DOM_ONLY);
       } else if (tileEl && tileEl.dataset.tex !== 'pending') {
-        tileEl.dataset.tex = '0';
+        this.applyDomSwap(tile, false);
       }
       if (!hasTex) gl.uniform2f(this.u.u_tex_size, 1, 1);
       if (typeof tile?.onTextureReady === 'function') {
@@ -1494,6 +1530,10 @@ export class TileFXRenderer {
       }
       gl.uniform1f(this.u.u_has_tex, hasTex);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (shouldSwapSet) {
+        this.applyDomSwap(tile, true);
+        if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+      }
       drawCalls += 1;
     });
 
@@ -1532,7 +1572,10 @@ export class TileFXRenderer {
       window.__tilefx_dbg.texturesInCache = this.textureCache?.map?.size || 0;
       window.__tilefx_dbg.cacheBytes = this.textureCache?.totalBytes || 0;
       window.__tilefx_dbg.cacheBudgetBytes = this.textureCache?.maxBytes || 0;
-      window.__tilefx_dbg.evictReason = this.textureCache?.lastEvictReason || 'none';
+      const cacheBytes = Number(this.textureCache?.totalBytes || 0);
+      const cacheBudgetBytes = Number(this.textureCache?.maxBytes || 0);
+      const rawEvictReason = String(this.textureCache?.lastEvictReason || 'none');
+      window.__tilefx_dbg.evictReason = (cacheBudgetBytes > 0 && cacheBytes < (cacheBudgetBytes * 0.85)) ? 'none' : rawEvictReason;
       window.__tilefx_dbg.texturesEvicted = this.textureCache?.evictions || 0;
       window.__tilefx_dbg.reuploadsTotal = this.textureCache?.totalReuploads?.() || 0;
       window.__tilefx_dbg.drawCalls = drawCalls;

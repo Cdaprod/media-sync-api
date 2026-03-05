@@ -2176,20 +2176,35 @@
         const thumbEl = card.querySelector('img.asset-thumb');
         const thumbWrap = card.querySelector('.thumb');
         const posterEl = card.querySelector('video[poster]');
+        const pictureEl = card.querySelector('picture');
         let thumbKind = 'none';
         let thumbSrc = '';
+        let thumbSurfaceEl = null;
+        let thumbBgEl = null;
         if (thumbEl && thumbEl.getAttribute('src')) {
           thumbKind = 'img';
           thumbSrc = thumbEl.dataset.thumbUrl || thumbEl.currentSrc || thumbEl.getAttribute('src') || '';
+          thumbSurfaceEl = thumbEl;
         } else if (posterEl && posterEl.getAttribute('poster')) {
           thumbKind = 'videoPoster';
           thumbSrc = posterEl.getAttribute('poster') || '';
-        } else if (thumbWrap) {
+          thumbSurfaceEl = posterEl;
+        } else if (pictureEl) {
+          const picImg = pictureEl.querySelector('img');
+          if (picImg && picImg.getAttribute('src')) {
+            thumbKind = 'picture';
+            thumbSrc = picImg.currentSrc || picImg.getAttribute('src') || '';
+            thumbSurfaceEl = pictureEl;
+          }
+        }
+        if (!thumbSurfaceEl && thumbWrap) {
           const cssBg = getComputedStyle(thumbWrap).backgroundImage || '';
-          const match = cssBg.match(/url\((['"]?)(.*?)\1\)/i);
+          const match = cssBg.match(/url\((['"]?)(.*?)\)/i);
           if (match?.[2]) {
             thumbKind = 'cssbg';
             thumbSrc = match[2];
+            thumbSurfaceEl = thumbWrap;
+            thumbBgEl = thumbWrap;
           }
         }
         card.dataset.fxReady = card.dataset.fxReady || '0';
@@ -2203,6 +2218,8 @@
           tileEl: card,
           rect: { left: r.left, top: r.top, width: r.width, height: r.height },
           thumbEl,
+          thumbSurfaceEl,
+          thumbBgEl,
           thumbKind,
           thumbSrc,
           keySource,
@@ -5195,6 +5212,15 @@
         } : null,
         canvasHeightPx: fxCanvas?.height || null,
         gridScrollHeight: gridRoot.scrollHeight,
+        tileFxCanvasTransformedAncestor: (() => {
+          let node = fxCanvas?.parentElement || null;
+          while (node){
+            const transform = getComputedStyle(node).transform;
+            if (transform && transform !== 'none') return node.id || node.className || node.tagName;
+            node = node.parentElement;
+          }
+          return null;
+        })(),
       });
     }
 

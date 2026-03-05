@@ -201,6 +201,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_queueTileImageUpload(tile, key)' in shader_module
     assert '_drainPendingUploads(now)' in shader_module
     assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
+    assert 'applyDomSwap(tile, swapped = false) {' in shader_module
+    assert 'const thumbSurfaceEl = tile?.thumbSurfaceEl || tile?.thumbEl || null;' in shader_module
     assert "document.body?.classList?.contains('fx-mode')" in shader_module
     assert "document.visibilityState !== 'visible'" in shader_module
     assert 'if (this.isScrolling && cachePressure) return;' in shader_module
@@ -214,7 +216,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'uploadsFailed: 0,' in shader_module
     assert 'resizeImageForGL(img, maxEdge = 320)' in shader_module
     assert "new URLSearchParams(window.location.search).get('tilefxMaxTex')" in shader_module
-    assert 'this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 320 : 512));' in shader_module
+    assert 'this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));' in shader_module
     assert 'averageTextureSize() {' in shader_module
     assert 'pendingWaitLoad: 0,' in shader_module
     assert 'pendingReady: 0,' in shader_module
@@ -510,6 +512,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'gridRootZIndex: rs.zIndex,' in html
     assert 'canvasHeightPx: fxCanvas?.height || null,' in html
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
+    assert 'tileFxCanvasTransformedAncestor:' in html
     assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
     assert '#mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,' in html
     assert 'body:not(.fx-mode) #tilefxCanvas{ display: none !important; opacity: 0 !important; }' in html

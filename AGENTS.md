@@ -1418,3 +1418,12 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Hardened RAF loop guard so frame scheduling exits unless `enabled`, `mode==='fx'`, and `document.body` currently has `.fx-mode`, preventing ghost draw loops behind Grid/List.
 - Added CSS safety rule `body:not(.fx-mode) #tilefxCanvas { display:none !important; opacity:0 !important; }` so stale FX canvas visibility cannot leak across modes even if JS ordering regresses.
 - Updated static explorer assertions for new lifecycle hooks, teardown wiring, and non-FX canvas visibility contract.
+
+### Latest Implementation Notes (2026-03-06, direct thumb-surface swap ownership + telemetry cleanup)
+- Updated `collectTileFxTiles()` in `public/explorer.html` to capture explicit thumbnail ownership pointers (`thumbSurfaceEl`, `thumbBgEl`) in addition to `thumbEl/thumbKind/thumbSrc`, removing reliance on broad CSS-guessing for swap control.
+- Added TileFX canvas compositor diagnostics in explorer layout debug output (`tileFxCanvasTransformedAncestor`) to spot transformed-ancestor stacking issues behind “underlayer” artifacts.
+- Implemented `TileFXRenderer.applyDomSwap(tile, swapped)` in `public/js/explorer-shaders.mjs` so swap visibility is applied directly to the actual thumb surface via inline styles (opacity/visibility and background-image restore handling), and restored on non-ready/evicted paths.
+- Changed READY swap timing so DOM ownership flips only after a successful GL draw call in `_render(...)`, preventing pre-draw flashes when textures are bound but not yet rasterized.
+- Raised default coarse-pointer texture cap to `512` (`tilefxMaxTex` override retained; desktop default now `640`) for improved iPhone sharpness while preserving capped uploads.
+- Adjusted HUD eviction telemetry to avoid sticky `OVER_BUDGET` reporting by emitting `evictReason='none'` when cache bytes are comfortably below budget.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for new thumb-surface fields, direct swap API, transformed-ancestor debug output, and updated default texture-cap expression.
