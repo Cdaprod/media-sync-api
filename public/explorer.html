@@ -826,13 +826,26 @@
       gap: 8px;
     }
 
-    #mediaGridRoot.view-fx .asset img.asset-thumb,
-    #mediaGridRoot.view-fx .asset .thumb{
+    body.fx-mode #mediaGridRoot.view-fx .asset{
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    body.fx-mode #mediaGridRoot.view-fx .asset .asset-overlay{
+      background: transparent !important;
+    }
+    body.fx-mode #mediaGridRoot.view-fx .asset .asset-ol-bottom,
+    body.fx-mode #mediaGridRoot.view-fx .asset .asset-ol-top,
+    body.fx-mode #mediaGridRoot.view-fx .asset .asset-ol-bl{
+      z-index: 5;
+      pointer-events: auto;
+    }
+    body.fx-mode #mediaGridRoot.view-fx .asset img.asset-thumb,
+    body.fx-mode #mediaGridRoot.view-fx .asset .thumb{
       opacity: 1;
     }
-    #mediaGridRoot.view-fx .asset.tilefx-ready img.asset-thumb,
-    #mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,
-    #mediaGridRoot.view-fx .asset[data-tex="1"] img.asset-thumb{
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] img.asset-thumb{
       opacity: 0 !important;
     }
     #mediaGridRoot.view-fx .asset,
@@ -1944,7 +1957,8 @@
         `thumbs: img ${Number(tileFxDbg.thumbs?.img || 0)} | css ${Number(tileFxDbg.thumbs?.cssbg || 0)} | poster ${Number(tileFxDbg.thumbs?.poster || 0)} | none ${Number(tileFxDbg.thumbs?.none || 0)}`,
         `upload: try ${Number(tileFxDbg.uploadAttempt || 0)} | ok ${Number(tileFxDbg.uploadOk || 0)} | fail ${Number(tileFxDbg.uploadFail || 0)}`,
         `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastFailReason || tileFxDbg.lastUploadError || 'none')}`,
-        `swap: on ${Number(tileFxDbg.swappedTiles || 0)} | evicted ${Number(tileFxDbg.evictedTiles || 0)}`,
+        `swap: ready ${Number(tileFxDbg.readyTiles || 0)} / visible ${Number(tileFxDbg.tilesVisible || 0)} | upOk ${Number(tileFxDbg.uploadOk || 0)} | drawn ${Number(tileFxDbg.tilesDrawn || 0)}`,
+        `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | evicted ${Number(tileFxDbg.evictedTiles || 0)}`,
         `reject: nr ${Number(tileFxDbg.uploadReject?.notReady || 0)} | 0sz ${Number(tileFxDbg.uploadReject?.zeroSize || 0)} | taint ${Number(tileFxDbg.uploadReject?.tainted || 0)} | unk ${Number(tileFxDbg.uploadReject?.unknown || 0)}`,
         `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
         `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
@@ -2038,7 +2052,9 @@
         if (r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan)) { culled += 1; continue; }
         if (r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan)) { culled += 1; continue; }
         if (!card.dataset.fxCardId) card.dataset.fxCardId = `fx-card-${++tileFxCardSeq}`;
-        const key = card.dataset.sha256 || card.dataset.selectKey || card.dataset.relative || card.dataset.streamUrl || card.dataset.fxCardId || '';
+        const thumbImg = card.querySelector('img.asset-thumb');
+        const stableThumbSrc = String(thumbImg?.currentSrc || thumbImg?.getAttribute('src') || '').trim();
+        const key = card.dataset.assetId || card.dataset.relative || card.dataset.path || stableThumbSrc || card.dataset.sha256 || card.dataset.selectKey || card.dataset.streamUrl || card.dataset.fxCardId || '';
         const thumbEl = card.querySelector('img.asset-thumb');
         const thumbWrap = card.querySelector('.thumb');
         const posterEl = card.querySelector('video[poster]');
@@ -2058,17 +2074,15 @@
             thumbSrc = match[2];
           }
         }
-        const textureReady = !!(key && tileFX.hasTexture(key));
-        const wasTex = card.dataset.tex === '1';
-        if (wasTex && !textureReady) tileFxDbg.evictedTiles = Number(tileFxDbg.evictedTiles || 0) + 1;
-        card.dataset.fxReady = textureReady ? '1' : '0';
-        card.dataset.tex = textureReady ? '1' : '0';
-        card.classList.toggle('tilefx-ready', textureReady);
+        card.dataset.fxReady = card.dataset.fxReady || '0';
+        if (card.dataset.tex !== '1' && card.dataset.tex !== 'pending') card.dataset.tex = '0';
+        card.classList.toggle('tilefx-ready', card.dataset.tex === '1');
 
         tiles.push({
           key,
           type: card.dataset.kind || '',
           selected: card.classList.contains('is-selected'),
+          tileEl: card,
           rect: { left: r.left, top: r.top, width: r.width, height: r.height },
           thumbEl,
           thumbKind,
@@ -2076,7 +2090,7 @@
           onTextureReady: (ready) => {
             card.classList.toggle('tilefx-ready', !!ready);
             card.dataset.fxReady = ready ? '1' : '0';
-            card.dataset.tex = ready ? '1' : '0';
+            if (!ready && card.dataset.tex !== 'pending') card.dataset.tex = '0';
           },
         });
         if (tiles.length >= 260) break;

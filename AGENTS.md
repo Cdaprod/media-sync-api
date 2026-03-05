@@ -1371,3 +1371,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Cleaned TileFX upload error bookkeeping in `_queueTileImageUpload(...)` to remove duplicated fail-reason writes introduced during prior patch churn.
 - Updated `docs/todo/AGENTS.md` by prepending new carry-forward unchecked tasks and marking completed FX lifecycle/pipeline items as done.
 
+### Latest Implementation Notes (2026-03-06, FX renderer-swap state machine + deterministic thumb ownership)
+- Added a strict TileFX per-key state model in `public/js/explorer-shaders.mjs` (`DOM_ONLY`, `REQUESTED`, `UPLOADING`, `READY`, `EVICTED`) and now only commit DOM thumbnail swap (`data-tex="1"`) once a texture is actually bound/drawn in the render pass.
+- Updated FX-mode CSS in `public/explorer.html` so only per-tile swapped thumbs are hidden (`body.fx-mode .asset[data-tex="1"]`), while card metadata/selection overlays remain visible and card surfaces are visually transparent for true WebGL tile ownership.
+- Tightened tile key stability in `collectTileFxTiles()` by preferring durable asset/path/thumb identifiers over volatile fallbacks; tile entries now pass `tileEl` into TileFX for renderer-owned swap transitions.
+- Added decode memoization (`decodedSrcSet`) in TileFX image preparation to avoid repeated `img.decode()` churn for identical sources during scroll/collect cycles.
+- Extended TileFX HUD/debug counters with swap/state-machine telemetry (`stateCounts`, `readyTiles`, `pendingTiles`, `swapSetCalls`, `swapClearCalls`) and kept conservative mobile budgets (`scan=120ms`, `uploads=1/frame, 8/sec`).
+- Refreshed `docs/todo/AGENTS.md` by prepending new carry-forward tasks and marking completed renderer-swap items as done.
+

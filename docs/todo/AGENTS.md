@@ -1,13 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
-- [ ] Add a lightweight runtime probe that snapshots FX/non-FX canvas states (`display`, `pos`, `drawCalls`) directly to HUD for one-tap mobile verification.
-- [ ] Consider adding `requestIdleCallback` upload promotion fallback for iOS where scroll-idle timers can jitter on kinetic scroll.
-- [x] Make FX mode exclusive (`window.__tilefx_enabled`) and wire view lifecycle to start/stop/clear TileFX.
-- [x] Hard-disable TileFX canvas in non-FX modes (`display:none`, transparent clear, no draw loop).
-- [x] Remove aggressive FX-only visual downgrade styles that dim/smoosh cards and hide metadata context.
-- [x] Keep metadata overlays/selection UI visible in FX while only swapping thumbnail layer via `data-tex`.
-- [x] Gate TileFX upload drain while scrolling (`noteScroll` idle window) to reduce stutter.
-- [x] Enforce conservative FX pipeline budgets (`TILEFX_SCAN_MIN_INTERVAL_MS=120`, `maxUploadsPerFrame=1`, `maxUploadsPerSecond=8`).
-- [x] Add FX health invariants to HUD/debug (`enabled`, `rafRunning`, `tilesFed/drawn`, `scrolling`, `scrollIdleMs`, non-FX draw-call guard).
-- [x] Default explorer startup view to Grid while FX tuning continues.
-- [x] Update static regression tests for new FX lifecycle and view-mode invariants.
+- [ ] Add an on-device probe button that logs first 20 visible tile keys + tile states (`DOM_ONLY/REQUESTED/UPLOADING/READY/EVICTED`) to quickly diagnose key thrash in iOS Safari.
+- [ ] Add a tiny atlas path experiment for low-memory devices to reduce texture bind churn when many tiles are READY at once.
+- [x] Implement TileFX per-tile ownership state machine (`DOM_ONLY/REQUESTED/UPLOADING/READY/EVICTED`) and gate DOM swap to `READY` only.
+- [x] Prevent premature DOM thumb hiding by restricting FX thumb hide CSS to `body.fx-mode .asset[data-tex="1"]`.
+- [x] Keep FX as renderer swap model: DOM card surface transparent in FX mode while metadata + interaction remain visible/tappable.
+- [x] Keep GL placeholder tile visible for non-ready tiles (no transparent holes) while uploads/decode progress.
+- [x] Enforce stable key priority in tile collection (`assetId/path/thumbSrc/...`) to reduce cache thrash.
+- [x] Add decode-once memoization (`decodedSrcSet`) to avoid repeated `img.decode()` churn for the same source.
+- [x] Extend TileFX HUD/debug with swap state counters and health fields (`stateCounts`, `readyTiles`, `pendingTiles`, `swapSetCalls`, `swapClearCalls`).
+- [x] Keep conservative FX pipeline budgets (`scan=120ms`, `maxUploadsPerFrame=1`, `maxUploadsPerSecond=8`) and scroll-idle upload gating.

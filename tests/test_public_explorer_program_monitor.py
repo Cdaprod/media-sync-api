@@ -172,13 +172,17 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'thumbs: img' in html
     assert 'reject: nr' in html
     assert "card.dataset.fxReady = ready ? '1' : '0';" in html
-    assert 'swap: on' in html
+    assert 'swap: ready' in html
     assert 'data-tex="1"' in html
     assert 'upload: try' in html
     assert 'pending: wait' in html
     assert 'window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];' in html
 
     assert 'export class TileFXRenderer' in shader_module
+    assert 'const TILE_STATE = Object.freeze({' in shader_module
+    assert 'tileStateByKey = new Map();' in shader_module
+    assert 'decodedSrcSet = new Set();' in shader_module
+    assert '_setTileState(key, TILE_STATE.READY);' in shader_module
     assert 'class TextureCacheLRU {' in shader_module
     assert 'window.__tilefx_dbg = {' in shader_module
     assert 'rafRunning: false,' in shader_module
