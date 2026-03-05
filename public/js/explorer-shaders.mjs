@@ -31,21 +31,66 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
+function _vvHeight() {
+  const vv = window.visualViewport;
+  return (vv && Number(vv.height) > 0) ? Number(vv.height) : Number(window.innerHeight || 1);
+}
+
+function setVisualVhVar() {
+  const h = Math.max(1, _vvHeight());
+  document.documentElement.style.setProperty('--vvh', `${h * 0.01}px`);
+}
+
+function resizeCanvasToCss(canvas, dprCap = 2) {
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const cssW = Math.max(1, Number(rect.width || 0));
+  const cssH = Math.max(1, Number(rect.height || 0));
+  const dpr = Math.min(Math.max(1, Number(dprCap || 2)), Number(window.devicePixelRatio || 1));
+  const pxW = Math.max(1, Math.round(cssW * dpr));
+  const pxH = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== pxW) canvas.width = pxW;
+  if (canvas.height !== pxH) canvas.height = pxH;
+  return { dpr, cssW, cssH, pxW, pxH };
+}
+
+function resizeAllFxCanvases({ dprCap = 2, tilefxRenderer = null, assetfxRenderer = null } = {}) {
+  setVisualVhVar();
+  const debugCanvas = document.querySelector('canvas.fx-debug-overlay');
+  const sharedCanvas = document.querySelector('canvas.fx-shared-overlay');
+  const bgCanvas = document.querySelector('#bgImpulseCanvas');
+  const tilefxCanvas = document.querySelector('#tilefxCanvas');
+
+  const debugSize = resizeCanvasToCss(debugCanvas, dprCap);
+  const sharedSize = resizeCanvasToCss(sharedCanvas, dprCap);
+  const bgSize = resizeCanvasToCss(bgCanvas, dprCap);
+  const tilefxSize = resizeCanvasToCss(tilefxCanvas, dprCap);
+
+  if (tilefxRenderer && tilefxSize && tilefxCanvas) {
+    tilefxRenderer.setResolution?.(tilefxCanvas.width, tilefxCanvas.height, tilefxSize.dpr);
+  }
+  if (assetfxRenderer && sharedSize && sharedCanvas) {
+    assetfxRenderer.setResolution?.(sharedCanvas.width, sharedCanvas.height, sharedSize.dpr);
+  }
+  return { debugSize, sharedSize, bgSize, tilefxSize };
+}
+
+if (typeof window !== 'undefined') {
+  const vv = window.visualViewport;
+  if (vv) {
+    vv.addEventListener('resize', () => resizeAllFxCanvases({ dprCap: 2 }), { passive: true });
+    vv.addEventListener('scroll', () => resizeAllFxCanvases({ dprCap: 2 }), { passive: true });
+  }
+  window.addEventListener('resize', () => resizeAllFxCanvases({ dprCap: 2 }), { passive: true });
+  setVisualVhVar();
+  setTimeout(() => resizeAllFxCanvases({ dprCap: 2 }), 0);
+}
+
 
 function getStableViewportSize() {
   const vv = window.visualViewport;
-  const doc = document.documentElement;
-  const vvW = Number(vv?.width || 0);
-  const vvH = Number(vv?.height || 0);
-  const docW = Number(doc?.clientWidth || 0);
-  const docH = Number(doc?.clientHeight || 0);
-  const winW = Number(window.innerWidth || 0);
-  const winH = Number(window.innerHeight || 0);
-
-  const fallbackW = Math.max(0, docW, winW);
-  const fallbackH = Math.max(0, docH, winH);
-  const width = (vvW > 0 && vvW >= (fallbackW * 0.6)) ? vvW : fallbackW;
-  const height = (vvH > 0 && vvH >= (fallbackH * 0.6)) ? vvH : fallbackH;
+  const width = Number(vv?.width || window.innerWidth || document.documentElement?.clientWidth || 1);
+  const height = _vvHeight();
   return {
     width: Math.max(1, width || 1),
     height: Math.max(1, height || 1),
@@ -152,6 +197,7 @@ export class MaskField {
   }
 
   get canvas() { return this._canvas; }
+
 
   destroy() {
     if (this._rafId) cancelAnimationFrame(this._rafId);
@@ -564,6 +610,32 @@ function bindQuad(gl, program, buffer) {
 
 export class ExplorerShaders {}
 
+const TILE_STATE = Object.freeze({
+  DOM_ONLY: 'DOM_ONLY',
+  REQUESTED: 'REQUESTED',
+  UPLOADING: 'UPLOADING',
+  READY: 'READY',
+  EVICTED: 'EVICTED',
+});
+
+if (typeof window !== 'undefined') {
+  window.__tilefx_probe = window.__tilefx_probe || {
+    timestamp: 0,
+    visibleTiles: [],
+    stateCounts: {},
+    readyTiles: 0,
+    pendingTiles: 0,
+    swapSetCalls: 0,
+    swapClearCalls: 0,
+    cacheBytes: 0,
+    cacheBudgetBytes: 0,
+    evictReason: null,
+    maxTexEdge: 0,
+    avgTexWidth: 0,
+    avgTexHeight: 0,
+  };
+}
+
 const TILEFX_VERT = `
 attribute vec2 a_pos;
 varying vec2 v_uv;
@@ -583,13 +655,21 @@ uniform float u_selected;
 uniform float u_time;
 uniform sampler2D u_tex;
 uniform float u_has_tex;
+uniform vec2 u_tex_size;
 
 void main(){
   vec2 px = vec2(v_uv.x * u_resolution.x, (1.0 - v_uv.y) * u_resolution.y);
   if (px.x < u_rect.x || px.y < u_rect.y || px.x > u_rect.z || px.y > u_rect.w) discard;
 
-  vec2 tileUV = (px - u_rect.xy) / max(u_rect.zw - u_rect.xy, vec2(1.0));
+  vec2 tileSizePx = max(u_rect.zw - u_rect.xy, vec2(1.0));
+  vec2 tileUV = (px - u_rect.xy) / tileSizePx;
   tileUV = clamp(tileUV, 0.0, 1.0);
+  vec2 tileCenterPx = (tileUV - 0.5) * tileSizePx;
+  float radius = min(tileSizePx.x, tileSizePx.y) * 0.09;
+  vec2 q = abs(tileCenterPx) - (tileSizePx * 0.5 - vec2(radius));
+  float sdf = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
+  float mask = 1.0 - smoothstep(0.0, 1.6, sdf);
+
   vec2 toEdge = min(tileUV, 1.0 - tileUV);
   float edge = min(toEdge.x, toEdge.y);
   float edgeBand = smoothstep(0.0, 0.12, edge);
@@ -600,53 +680,109 @@ void main(){
   vec3 glassBase = vec3(0.06, 0.09, 0.16) + vec3(0.04, 0.06, 0.10) * pulse * 0.45;
   vec3 glow = u_type_color * (0.18 + border * 0.65) * selectionBoost;
 
-  vec3 tex = vec3(0.0);
+  vec3 tex = vec3(0.12, 0.16, 0.24);
+  tex += vec3(0.02) * sin((tileUV.x * 61.0 + tileUV.y * 47.0 + u_time * 0.35));
   if (u_has_tex > 0.5) {
-    tex = texture2D(u_tex, vec2(tileUV.x, tileUV.y)).rgb;
+    vec2 texSize = max(u_tex_size, vec2(1.0));
+    float tileAspect = tileSizePx.x / tileSizePx.y;
+    float texAspect = texSize.x / texSize.y;
+    vec2 coverUV = tileUV;
+    if (texAspect > tileAspect) {
+      float sx = tileAspect / texAspect;
+      coverUV.x = (tileUV.x - 0.5) * sx + 0.5;
+    } else {
+      float sy = texAspect / tileAspect;
+      coverUV.y = (tileUV.y - 0.5) * sy + 0.5;
+    }
+    coverUV = clamp(coverUV, 0.0, 1.0);
+    tex = texture2D(u_tex, coverUV).rgb;
   }
-  vec3 mixed = mix(glassBase, tex, 0.72 * u_has_tex);
-  vec3 color = mixed + glow * (0.34 + border * 0.8) + u_type_color * (1.0 - edgeBand) * 0.08;
+  vec3 mixed = mix(glassBase, tex, 0.94 * u_has_tex);
+  vec3 color = mixed + glow * (0.20 + border * 0.45) + u_type_color * (1.0 - edgeBand) * 0.05;
+  color *= mask;
 
-  float alpha = 0.20 + edgeBand * 0.18 + border * 0.16 + u_selected * 0.08;
-  gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.94));
+  float alphaBase = mix(0.86, 1.0, u_has_tex);
+  float alpha = alphaBase * mask;
+  gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0));
 }
 `;
 
+function resizeImageForGL(img, maxEdge = 320){
+  const w = Number(img?.naturalWidth || img?.videoWidth || img?.width || 0);
+  const h = Number(img?.naturalHeight || img?.videoHeight || img?.height || 0);
+  if (!w || !h) return { img, w, h, resized: false };
+  const safeMaxEdge = Math.max(64, Number(maxEdge || 320));
+  const scale = Math.min(1, safeMaxEdge / Math.max(w, h));
+  if (scale >= 1) return { img, w, h, resized: false };
+  const rw = Math.max(1, Math.round(w * scale));
+  const rh = Math.max(1, Math.round(h * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = rw;
+  canvas.height = rh;
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  if (!ctx) return { img, w, h, resized: false };
+  ctx.imageSmoothingEnabled = true;
+  try { ctx.imageSmoothingQuality = 'high'; } catch {}
+  ctx.drawImage(img, 0, 0, rw, rh);
+  return { img: canvas, w: rw, h: rh, resized: true };
+}
+
 class TextureCacheLRU {
-  constructor(gl, { maxTextures = 96, maxBytes = 128 * 1024 * 1024 } = {}) {
+  constructor(gl, { maxTextures = 96, maxBytes = 128 * 1024 * 1024, maxTexEdge = 320 } = {}) {
     this.gl = gl;
     this.maxTextures = Math.max(12, Number(maxTextures || 96));
     this.maxBytes = Math.max(8 * 1024 * 1024, Number(maxBytes || (128 * 1024 * 1024)));
     this.map = new Map();
     this.totalBytes = 0;
     this.evictions = 0;
+    this.lastEvictReason = 'none';
+    this.uploadCounts = new Map();
+    this.visibleKeySet = new Set();
+    this.minEvictAgeMs = 1500;
+    this.maxTexEdge = Math.max(64, Number(maxTexEdge || 320));
   }
 
-  _estimateBytes(img) {
-    const w = Number(img?.naturalWidth || img?.videoWidth || img?.width || 0);
-    const h = Number(img?.naturalHeight || img?.videoHeight || img?.height || 0);
+  setVisibleKeys(keys) {
+    this.visibleKeySet = keys instanceof Set ? new Set(keys) : new Set();
+  }
+
+  _estimateBytes(width = 0, height = 0) {
+    const w = Math.max(1, Number(width || 0));
+    const h = Math.max(1, Number(height || 0));
     return Math.max(4, w * h * 4);
   }
 
-  _evictIfNeeded() {
+  _evictIfNeeded(now = performance.now()) {
     if (!this.map.size) return;
+    this.lastEvictReason = 'none';
     while (this.map.size > this.maxTextures || this.totalBytes > this.maxBytes) {
       let oldestKey = '';
       let oldestAt = Infinity;
       this.map.forEach((entry, key) => {
+        if (this.visibleKeySet.has(key)) return;
+        const age = Math.max(0, now - Number(entry.lastUsedAt || 0));
+        if (age < this.minEvictAgeMs) return;
         if (entry.lastUsedAt < oldestAt) {
           oldestAt = entry.lastUsedAt;
           oldestKey = key;
         }
       });
-      if (!oldestKey) break;
+      if (!oldestKey) {
+        this.lastEvictReason = 'NO_ELIGIBLE_KEY';
+        break;
+      }
       const entry = this.map.get(oldestKey);
       if (!entry) break;
       try { this.gl.deleteTexture(entry.texture); } catch {}
       this.totalBytes = Math.max(0, this.totalBytes - Number(entry.bytes || 0));
       this.map.delete(oldestKey);
       this.evictions += 1;
+      this.lastEvictReason = 'OVER_BUDGET';
     }
+  }
+
+  has(key) {
+    return this.map.has(key);
   }
 
   get(key, now = performance.now()) {
@@ -657,15 +793,15 @@ class TextureCacheLRU {
   }
 
   upsertFromImage(key, img, now = performance.now()) {
-    if (!key || !img) return { uploaded: false, entry: null };
+    if (!key || !img) return { uploaded: false, entry: null, reason: 'MISSING_SOURCE' };
     const gl = this.gl;
     const existing = this.map.get(key);
     if (existing) {
       existing.lastUsedAt = now;
-      return { uploaded: false, entry: existing };
+      return { uploaded: false, entry: existing, reason: 'ALREADY_CACHED' };
     }
     const tex = gl.createTexture();
-    if (!tex) return { uploaded: false, entry: null };
+    if (!tex) return { uploaded: false, entry: null, reason: 'TEXTURE_ALLOC_FAILED' };
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -675,18 +811,45 @@ class TextureCacheLRU {
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     } catch {}
+    const resized = resizeImageForGL(img, this.maxTexEdge);
+    const uploadSource = resized?.img || img;
+    const width = Number(resized?.w || uploadSource?.naturalWidth || uploadSource?.videoWidth || uploadSource?.width || 0) || 1;
+    const height = Number(resized?.h || uploadSource?.naturalHeight || uploadSource?.videoHeight || uploadSource?.height || 0) || 1;
     try {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, uploadSource);
     } catch {
       gl.deleteTexture(tex);
-      return { uploaded: false, entry: null };
+      return { uploaded: false, entry: null, reason: 'TEX_IMAGE_FAILED' };
     }
-    const bytes = this._estimateBytes(img);
-    const entry = { texture: tex, bytes, lastUsedAt: now };
+    const bytes = this._estimateBytes(width, height);
+    const entry = { texture: tex, bytes, width, height, lastUsedAt: now };
     this.map.set(key, entry);
+    this.uploadCounts.set(key, Number(this.uploadCounts.get(key) || 0) + 1);
     this.totalBytes += bytes;
-    this._evictIfNeeded();
+    this._evictIfNeeded(now);
     return { uploaded: true, entry };
+  }
+
+  totalReuploads() {
+    let total = 0;
+    this.uploadCounts.forEach((count) => {
+      if (count > 1) total += (count - 1);
+    });
+    return total;
+  }
+
+  averageTextureSize() {
+    if (!this.map.size) return { width: 0, height: 0 };
+    let w = 0;
+    let h = 0;
+    this.map.forEach((entry) => {
+      w += Number(entry?.width || 0);
+      h += Number(entry?.height || 0);
+    });
+    return {
+      width: Math.round(w / this.map.size),
+      height: Math.round(h / this.map.size),
+    };
   }
 
   destroy() {
@@ -703,6 +866,7 @@ export class TileFXRenderer {
     this.canvas = canvas || null;
     this.onFail = typeof onFail === 'function' ? onFail : null;
     this.mode = 'grid';
+    this.enabled = false;
     this.raf = 0;
     this.failed = false;
     this.failReason = '';
@@ -713,6 +877,33 @@ export class TileFXRenderer {
     this._uploadsWindow = [];
     this._drawCalls = 0;
     this._lastFrameMs = 0;
+    this._pendingUploads = new Map();
+    this.tileStateByKey = new Map();
+    this.decodedSrcSet = new Set();
+    this._texturesUploaded = 0;
+    this._uploadReject = { notReady: 0, zeroSize: 0, tainted: 0, unknown: 0 };
+    this._lastUploadError = '';
+    this._uploadAttempt = 0;
+    this._uploadsQueued = 0;
+    this._uploadsAttempted = 0;
+    this._uploadsSucceeded = 0;
+    this._uploadsFailed = 0;
+    this._pendingReady = 0;
+    this._pendingWaitLoad = 0;
+    this._srcMissing = 0;
+    const coarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+    const maxTexParam = Number(new URLSearchParams(window.location.search).get('tilefxMaxTex') || 0);
+    this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 320 : 512));
+    this.idleUploadOverscan = Math.max(0, Number(new URLSearchParams(window.location.search).get('tilefxIdleReadyMargin') || 6));
+    this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 8));
+    this.maxUploadsPerFrame = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploadsframe') || 1));
+    this.uploadPauseMs = 250;
+    this.backpressureUntil = 0;
+    this.isScrolling = false;
+    this.scrollIdleDelayMs = 140;
+    this._scrollIdleTimer = 0;
+    this._lastScrollAt = 0;
+    this.dprCap = 2;
     this.gl = null;
     this.program = null;
     this.quad = null;
@@ -725,13 +916,46 @@ export class TileFXRenderer {
         visibleCount: 0,
         overscanCount: 0,
         uploadsThisSecond: 0,
+        texturesUploaded: 0,
+        texturesPending: 0,
+        uploadAttempt: 0,
+        uploadsQueued: 0,
+        uploadsAttempted: 0,
+        uploadsSucceeded: 0,
+        uploadsFailed: 0,
+        maxTexEdge: 0,
+        avgTexWidth: 0,
+        avgTexHeight: 0,
+        pendingReady: 0,
+        pendingWaitLoad: 0,
+        srcMissing: 0,
+        uploadOk: 0,
+        uploadFail: 0,
+        lastUploadError: '',
+        lastFailReason: '',
         texturesInCache: 0,
         texturesEvicted: 0,
+        reuploadsTotal: 0,
+        enabled: false,
+        rafRunning: false,
+        scrolling: false,
+        scrollIdleMs: 0,
+        tilesVisible: 0,
+        tilesFed: 0,
+        tilesDrawn: 0,
         drawCalls: 0,
         dpr: 1,
+        dprCap: 2,
         lastFrameMs: 0,
+        backpressureUntil: 0,
         failed: false,
         failReason: '',
+        uploadReject: { notReady: 0, zeroSize: 0, tainted: 0, unknown: 0 },
+        stateCounts: { domOnly: 0, requested: 0, uploading: 0, ready: 0, evicted: 0 },
+        readyTiles: 0,
+        pendingTiles: 0,
+        swapSetCalls: 0,
+        swapClearCalls: 0,
       };
     }
 
@@ -741,7 +965,6 @@ export class TileFXRenderer {
     }
     this._initGL();
     this._bindContextGuards();
-    this._start();
   }
 
   _setFailed(reason = 'UNKNOWN') {
@@ -769,10 +992,12 @@ export class TileFXRenderer {
         u_time: gl.getUniformLocation(this.program, 'u_time'),
         u_tex: gl.getUniformLocation(this.program, 'u_tex'),
         u_has_tex: gl.getUniformLocation(this.program, 'u_has_tex'),
+        u_tex_size: gl.getUniformLocation(this.program, 'u_tex_size'),
       };
       this.textureCache = new TextureCacheLRU(gl, {
         maxTextures: Number(new URLSearchParams(window.location.search).get('fxtilecache') || 96),
         maxBytes: Number(new URLSearchParams(window.location.search).get('fxtilecachemb') || 128) * 1024 * 1024,
+        maxTexEdge: this.maxTexEdge,
       });
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -795,14 +1020,123 @@ export class TileFXRenderer {
     this._tileSource = typeof fn === 'function' ? fn : null;
   }
 
+  _setTileState(key, state) {
+    if (!key) return;
+    this.tileStateByKey.set(key, state);
+  }
+
+  _stateCounts() {
+    const counts = { domOnly: 0, requested: 0, uploading: 0, ready: 0, evicted: 0 };
+    this.tileStateByKey.forEach((state) => {
+      if (state === TILE_STATE.READY) counts.ready += 1;
+      else if (state === TILE_STATE.REQUESTED) counts.requested += 1;
+      else if (state === TILE_STATE.UPLOADING) counts.uploading += 1;
+      else if (state === TILE_STATE.EVICTED) counts.evicted += 1;
+      else counts.domOnly += 1;
+    });
+    return counts;
+  }
+
+  getTileState(key = '') {
+    const k = String(key || '');
+    if (!k) return TILE_STATE.DOM_ONLY;
+    return this.tileStateByKey.get(k) || TILE_STATE.DOM_ONLY;
+  }
+
   setMode(mode = 'grid') {
     const next = String(mode || 'grid').toLowerCase();
     this.mode = (next === 'fx' || next === 'grid' || next === 'list') ? next : 'grid';
     if (window.__tilefx_dbg) window.__tilefx_dbg.mode = this.mode;
   }
 
+  setEnabled(enabled = false) {
+    this.enabled = enabled === true;
+    if (window.__tilefx_dbg) window.__tilefx_dbg.enabled = this.enabled;
+    if (this.enabled) this._start();
+    else this.stop();
+  }
+
+  enable() {
+    this.setEnabled(true);
+  }
+
+  disable() {
+    this.setEnabled(false);
+    this.clear();
+    this._drawCalls = 0;
+    if (window.__tilefx_dbg) window.__tilefx_dbg.drawCalls = 0;
+  }
+
+  teardownForModeExit({ removeCanvas = false } = {}) {
+    this.disable();
+    this.tiles = [];
+    this.tileStateByKey.clear();
+    this._pendingUploads.clear();
+    this._uploadsWindow = [];
+    this._lastScrollAt = 0;
+    this.isScrolling = false;
+    if (this.textureCache) {
+      this.textureCache.destroy();
+      this.textureCache = null;
+    }
+    if (removeCanvas && this.canvas?.parentNode) {
+      try { this.canvas.parentNode.removeChild(this.canvas); } catch {}
+      this.canvas = null;
+    }
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.tilesFed = 0;
+      window.__tilefx_dbg.tilesVisible = 0;
+      window.__tilefx_dbg.tilesDrawn = 0;
+      window.__tilefx_dbg.texturesPending = 0;
+      window.__tilefx_dbg.texturesInCache = 0;
+      window.__tilefx_dbg.cacheBytes = 0;
+      window.__tilefx_dbg.drawCalls = 0;
+      window.__tilefx_dbg.rafRunning = false;
+      window.__tilefx_dbg.enabled = false;
+    }
+  }
+
+  noteScroll() {
+    this.isScrolling = true;
+    this._lastScrollAt = performance.now();
+    if (window.__tilefx_dbg) window.__tilefx_dbg.scrolling = true;
+    if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
+    this._scrollIdleTimer = setTimeout(() => {
+      this.isScrolling = false;
+      this._scrollIdleTimer = 0;
+      if (window.__tilefx_dbg) window.__tilefx_dbg.scrolling = false;
+    }, this.scrollIdleDelayMs);
+  }
+
+  start() {
+    this.enable();
+  }
+
+  stop() {
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
+    this._scrollIdleTimer = 0;
+    if (window.__tilefx_dbg) window.__tilefx_dbg.rafRunning = false;
+  }
+
+  clear() {
+    const gl = this.gl;
+    if (!gl || !this.canvas) return;
+    gl.viewport(0, 0, this.canvas.width || 1, this.canvas.height || 1);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  hasTexture(key = '') {
+    const k = String(key || '');
+    if (!k || !this.textureCache) return false;
+    return this.textureCache.has(k);
+  }
+
   updateTiles(tileList) {
     this.tiles = Array.isArray(tileList) ? tileList : [];
+    if (window.__tilefx_dbg) window.__tilefx_dbg.tilesFed = this.tiles.length;
   }
 
   _typeColor(type = '') {
@@ -814,35 +1148,275 @@ export class TileFXRenderer {
   }
 
   _refreshTileList(now) {
-    if (!this._tileSource) return;
-    if ((now - this._lastScanAt) < 50 && this.tiles.length) return;
-    this._lastScanAt = now;
-    try {
-      const nextTiles = this._tileSource();
-      this.tiles = Array.isArray(nextTiles) ? nextTiles : [];
-    } catch (e) {
-      this._setFailed(e?.message || 'TILE_SOURCE_FAILED');
+    void now;
+  }
+
+  _recordUploadReject(reason = 'unknown') {
+    const key = String(reason || 'unknown');
+    const table = this._uploadReject;
+    if (!table) return;
+    if (!(key in table)) table.unknown = Number(table.unknown || 0) + 1;
+    else table[key] = Number(table[key] || 0) + 1;
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.uploadReject = { ...table };
     }
   }
+
+  _resolveTileSource(tile) {
+    const img = tile?.thumbEl || null;
+    if (img) {
+      const thumbUrl = String(img.dataset?.thumbUrl || '').trim();
+      return { kind: 'img', source: img, url: thumbUrl || img.currentSrc || img.getAttribute('src') || '' };
+    }
+    const kind = String(tile?.thumbKind || '').toLowerCase();
+    const thumbSrc = String(tile?.thumbSrc || '').trim();
+    if (!thumbSrc) return { kind: 'none', source: null, url: '' };
+    if (kind === 'cssbg') return { kind: 'cssbg', source: null, url: thumbSrc };
+    if (kind === 'videoposter' || kind === 'poster') return { kind: 'poster', source: null, url: thumbSrc };
+    return { kind: 'url', source: null, url: thumbSrc };
+  }
+
+  async _prepareImageForUpload(source) {
+    if (!source) throw new Error('SOURCE_MISSING');
+    if (source instanceof HTMLImageElement) {
+      if (!source.complete) {
+        await new Promise((resolve) => {
+          const done = () => resolve();
+          source.addEventListener('load', done, { once: true, passive: true });
+          source.addEventListener('error', done, { once: true, passive: true });
+        });
+      }
+      const srcKey = String(source.currentSrc || source.getAttribute('src') || '');
+      if (srcKey && this.decodedSrcSet.has(srcKey)) {
+        const w = Number(source.naturalWidth || 0);
+        const h = Number(source.naturalHeight || 0);
+        if (w <= 0 || h <= 0) throw new Error('ZERO_SIZE');
+        return source;
+      }
+      if (typeof source.decode === 'function') {
+        try { await source.decode(); } catch {}
+      }
+      const w = Number(source.naturalWidth || 0);
+      const h = Number(source.naturalHeight || 0);
+      if (w <= 0 || h <= 0) throw new Error('ZERO_SIZE');
+      if (srcKey) this.decodedSrcSet.add(srcKey);
+      return source;
+    }
+    throw new Error('UNSUPPORTED_SOURCE');
+  }
+
+  _queueUrlImage(url) {
+    return new Promise((resolve, reject) => {
+      let abs = '';
+      try {
+        abs = new URL(url, window.location.href).toString();
+      } catch {
+        reject(new Error('BAD_URL'));
+        return;
+      }
+      const img = new Image();
+      img.decoding = 'async';
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        try {
+          const prepared = await this._prepareImageForUpload(img);
+          resolve(prepared);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      img.onerror = () => reject(new Error('URL_LOAD_FAIL'));
+      img.src = abs;
+    });
+  }
+
+  _queueTileImageUpload(tile, key) {
+    if (!key || !this.textureCache) return;
+    this._uploadAttempt += 1;
+    if (this.textureCache.has(key)) return;
+    if (this._pendingUploads.has(key)) return;
+    this._setTileState(key, TILE_STATE.REQUESTED);
+    const resolved = this._resolveTileSource(tile);
+    const pending = {
+      kind: resolved.kind,
+      ready: false,
+      failed: false,
+      source: null,
+      lastError: '',
+      promise: null,
+    };
+    this._pendingUploads.set(key, pending);
+    this._uploadsQueued += 1;
+
+    if (resolved.kind === 'none') {
+      this._srcMissing += 1;
+      pending.failed = true;
+      pending.lastError = 'NO_SOURCE';
+      this._lastUploadError = pending.lastError;
+      if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+      this._recordUploadReject('unknown');
+      this._setTileState(key, TILE_STATE.DOM_ONLY);
+      return;
+    }
+
+    if (resolved.kind === 'img') {
+      const imgEl = resolved.source;
+      const canUseElement = !!(imgEl && imgEl.complete && Number(imgEl.naturalWidth || 0) > 0);
+      if (!canUseElement) this._pendingWaitLoad += 1;
+      const prepPromise = canUseElement
+        ? this._prepareImageForUpload(imgEl)
+        : (resolved.url ? this._queueUrlImage(resolved.url) : this._prepareImageForUpload(imgEl));
+      pending.promise = prepPromise
+        .then((prepared) => {
+          pending.source = prepared;
+          pending.ready = true;
+          this._pendingReady += 1;
+          this._setTileState(key, TILE_STATE.UPLOADING);
+        })
+        .catch((error) => {
+          pending.failed = true;
+          pending.lastError = String(error?.message || 'IMG_PREP_FAIL');
+          this._lastUploadError = pending.lastError;
+          if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+          if (pending.lastError.includes('ZERO_SIZE')) this._recordUploadReject('zeroSize');
+          else this._recordUploadReject('notReady');
+          this._setTileState(key, TILE_STATE.DOM_ONLY);
+        });
+      return;
+    }
+
+    pending.promise = this._queueUrlImage(resolved.url)
+      .then((prepared) => {
+        pending.source = prepared;
+        pending.ready = true;
+        this._pendingReady += 1;
+        this._setTileState(key, TILE_STATE.UPLOADING);
+      })
+      .catch((error) => {
+        pending.failed = true;
+        pending.lastError = String(error?.message || 'URL_PREP_FAIL');
+        this._lastUploadError = pending.lastError;
+        if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+        if (pending.lastError.includes('ZERO_SIZE')) this._recordUploadReject('zeroSize');
+        else this._recordUploadReject('unknown');
+        this._setTileState(key, TILE_STATE.DOM_ONLY);
+      });
+  }
+
+  _drainPendingUploads(now) {
+    if (!this.textureCache && this.gl) {
+      this.textureCache = new TextureCacheLRU(this.gl, {
+        maxTextures: Number(new URLSearchParams(window.location.search).get('fxtilecache') || 96),
+        maxBytes: Number(new URLSearchParams(window.location.search).get('fxtilecachemb') || 128) * 1024 * 1024,
+        maxTexEdge: this.maxTexEdge,
+      });
+    }
+    if (!this.textureCache) return;
+    if (!this.enabled || this.mode !== 'fx') return;
+    if (document.visibilityState !== 'visible') return;
+    const cacheBudget = Math.max(1, Number(this.textureCache?.maxBytes || 0));
+    const cachePressure = (Number(this.textureCache?.totalBytes || 0) / cacheBudget) >= 0.9;
+    if (this.isScrolling && cachePressure) return;
+    const readyCount = Number(this._stateCounts().ready || 0);
+    const visibleTarget = Number(this.tiles?.length || 0) + this.idleUploadOverscan;
+    if (!this.isScrolling && readyCount >= visibleTarget) return;
+    if (now < this.backpressureUntil) return;
+    if (this._uploadsWindow.length >= this.uploadBudgetPerSecond) return;
+
+    let uploadsThisFrame = 0;
+    for (const [key, pending] of Array.from(this._pendingUploads.entries())) {
+      if (uploadsThisFrame >= this.maxUploadsPerFrame) break;
+      if (!pending || pending.failed) {
+        this._pendingUploads.delete(key);
+        continue;
+      }
+      if (!pending.ready || !pending.source) continue;
+      if (this.textureCache.has(key)) {
+        this._pendingUploads.delete(key);
+        continue;
+      }
+      let uploadSource = pending.source;
+      try {
+        if (typeof createImageBitmap === 'function' && uploadSource instanceof HTMLCanvasElement) {
+          uploadSource = createImageBitmap(uploadSource);
+        }
+      } catch {}
+      uploadsThisFrame += 1;
+      this._uploadsAttempted += 1;
+      Promise.resolve(uploadSource).then((resolvedSource) => {
+        if (!resolvedSource) {
+          this._lastUploadError = 'UPLOAD_SOURCE_MISSING';
+          if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+          this._recordUploadReject('unknown');
+          this._uploadsFailed += 1;
+          this._pendingUploads.delete(key);
+          this._setTileState(key, TILE_STATE.DOM_ONLY);
+          return;
+        }
+        let up = this.textureCache.upsertFromImage(key, resolvedSource, now);
+        if (!up.uploaded && String(up.reason || '').includes('TEX_IMAGE') && pending.source && pending.source !== resolvedSource) {
+          up = this.textureCache.upsertFromImage(key, pending.source, now);
+        }
+        if (up.uploaded) {
+          this._uploadsWindow.push(now);
+          this._texturesUploaded += 1;
+          this._uploadsSucceeded += 1;
+          this._setTileState(key, TILE_STATE.UPLOADING);
+          this._pendingUploads.delete(key);
+        } else {
+          this._lastUploadError = String(up.reason || 'UPLOAD_REJECTED');
+          if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+          if (this._lastUploadError.includes('TEX_IMAGE')) this._recordUploadReject('tainted');
+          else if (this._lastUploadError.includes('MISSING') || this._lastUploadError.includes('ZERO')) this._recordUploadReject('zeroSize');
+          else this._recordUploadReject('unknown');
+          this._uploadsFailed += 1;
+          this._pendingUploads.delete(key);
+          this._setTileState(key, TILE_STATE.DOM_ONLY);
+        }
+        try { resolvedSource.close?.(); } catch {}
+      }).catch((error) => {
+        const msg = String(error?.message || 'UPLOAD_SOURCE_FAIL');
+        this._lastUploadError = msg;
+        if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
+        if (msg.toLowerCase().includes('security') || msg.toLowerCase().includes('taint')) this._recordUploadReject('tainted');
+        else this._recordUploadReject('unknown');
+        this._pendingUploads.delete(key);
+        this._setTileState(key, TILE_STATE.DOM_ONLY);
+      });
+    }
+  }
+
 
   _resize() {
     if (!this.canvas) return;
-    const vv = getStableViewportSize();
-    const dpr = Math.min(2, Number(window.devicePixelRatio || 1));
-    const w = Math.max(1, Math.round(vv.width * dpr));
-    const h = Math.max(1, Math.round(vv.height * dpr));
-    if (this.canvas.width !== w || this.canvas.height !== h) {
-      this.canvas.width = w;
-      this.canvas.height = h;
+    const sizes = resizeAllFxCanvases({ dprCap: this.dprCap, tilefxRenderer: this });
+    const tileSize = sizes.tilefxSize;
+    if (!tileSize) return;
+    const w = Math.max(1, this.canvas.width || tileSize.pxW);
+    const h = Math.max(1, this.canvas.height || tileSize.pxH);
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.dpr = tileSize.dpr;
+      window.__tilefx_dbg.dprCap = this.dprCap;
+      window.__tilefx_dbg.backpressureUntil = this.backpressureUntil;
     }
-    this.canvas.style.width = `${Math.max(1, Math.round(vv.width))}px`;
-    this.canvas.style.height = `${Math.max(1, Math.round(vv.height))}px`;
-    if (window.__tilefx_dbg) window.__tilefx_dbg.dpr = dpr;
-    return { dpr, width: w, height: h };
+    return { dpr: tileSize.dpr, width: w, height: h };
+  }
+
+  setResolution(width, height, dpr = 1) {
+    const gl = this.gl;
+    if (!gl || !this.canvas) return;
+    const w = Math.max(1, Math.round(Number(width || this.canvas.width || 1)));
+    const h = Math.max(1, Math.round(Number(height || this.canvas.height || 1)));
+    gl.viewport(0, 0, w, h);
+    if (this.program && this.u?.u_resolution) {
+      gl.useProgram(this.program);
+      gl.uniform2f(this.u.u_resolution, w, h);
+    }
+    if (window.__tilefx_dbg) window.__tilefx_dbg.dpr = Number(dpr || window.devicePixelRatio || 1);
   }
 
   _render(now) {
-    if (this.failed || !this.gl || this.mode !== 'fx') return;
+    if (this.failed || !this.gl || this.mode !== 'fx' || !this.enabled) return;
     this._refreshTileList(now);
     const dims = this._resize();
     if (!dims) return;
@@ -857,8 +1431,13 @@ export class TileFXRenderer {
     gl.uniform1f(this.u.u_time, now * 0.001);
 
     let drawCalls = 0;
-    let uploads = 0;
     const tiles = this.tiles || [];
+    const visibleKeySet = new Set();
+    tiles.forEach((tile) => {
+      const k = String(tile?.key || '');
+      if (k) visibleKeySet.add(k);
+    });
+    this.textureCache?.setVisibleKeys?.(visibleKeySet);
     tiles.forEach((tile) => {
       const rect = tile?.rect;
       if (!rect) return;
@@ -876,20 +1455,42 @@ export class TileFXRenderer {
 
       let hasTex = 0;
       const key = String(tile.key || '');
-      const img = tile.thumbEl || null;
-      if (key && img && img.complete && Number(img.naturalWidth || 0) > 0) {
-        const up = this.textureCache.upsertFromImage(key, img, now);
-        if (up.uploaded) {
-          uploads += 1;
-          this._uploadsWindow.push(now);
+      const tileEl = tile?.tileEl || null;
+      const priorState = key ? (this.tileStateByKey.get(key) || TILE_STATE.DOM_ONLY) : TILE_STATE.DOM_ONLY;
+      if (key && !this.textureCache.has(key)) {
+        if (priorState === TILE_STATE.READY) {
+          this._setTileState(key, TILE_STATE.EVICTED);
+          if (tileEl?.dataset?.tex === '1') {
+            tileEl.dataset.tex = '0';
+            if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+          }
         }
+        this._queueTileImageUpload(tile, key);
       }
       const entry = key ? this.textureCache.get(key, now) : null;
       if (entry?.texture) {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, entry.texture);
         gl.uniform1i(this.u.u_tex, 0);
+        gl.uniform2f(this.u.u_tex_size, Number(entry.width || 1), Number(entry.height || 1));
         hasTex = 1;
+        this._setTileState(key, TILE_STATE.READY);
+        if (tileEl && tileEl.dataset.tex !== '1') {
+          tileEl.dataset.tex = '1';
+          if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+        }
+      } else if (tileEl && tileEl.dataset.tex === '1') {
+        tileEl.dataset.tex = '0';
+        if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+        this._setTileState(key, TILE_STATE.DOM_ONLY);
+      } else if (tileEl && tileEl.dataset.tex !== 'pending') {
+        tileEl.dataset.tex = '0';
+      }
+      if (!hasTex) gl.uniform2f(this.u.u_tex_size, 1, 1);
+      if (typeof tile?.onTextureReady === 'function') {
+        try {
+          tile.onTextureReady(Boolean(entry?.texture));
+        } catch {}
       }
       gl.uniform1f(this.u.u_has_tex, hasTex);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -897,38 +1498,104 @@ export class TileFXRenderer {
     });
 
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
+    if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
+      this.backpressureUntil = now + this.uploadPauseMs;
+    } else if (this.backpressureUntil && now >= this.backpressureUntil) {
+      this.backpressureUntil = 0;
+    }
     this._drawCalls = drawCalls;
     if (window.__tilefx_dbg) {
+      const stateCounts = this._stateCounts();
       window.__tilefx_dbg.visibleCount = tiles.length;
+      window.__tilefx_dbg.tilesVisible = tiles.length;
       window.__tilefx_dbg.overscanCount = tiles.length;
       window.__tilefx_dbg.uploadsThisSecond = this._uploadsWindow.length;
+      window.__tilefx_dbg.texturesUploaded = this._texturesUploaded;
+      window.__tilefx_dbg.texturesPending = this._pendingUploads.size;
+      window.__tilefx_dbg.uploadAttempt = this._uploadAttempt;
+      window.__tilefx_dbg.uploadsQueued = this._uploadsQueued;
+      window.__tilefx_dbg.uploadsAttempted = this._uploadsAttempted;
+      window.__tilefx_dbg.uploadsSucceeded = this._uploadsSucceeded;
+      window.__tilefx_dbg.uploadsFailed = this._uploadsFailed;
+      const avgTex = this.textureCache?.averageTextureSize?.() || { width: 0, height: 0 };
+      window.__tilefx_dbg.maxTexEdge = Number(this.maxTexEdge || 0);
+      window.__tilefx_dbg.avgTexWidth = Number(avgTex.width || 0);
+      window.__tilefx_dbg.avgTexHeight = Number(avgTex.height || 0);
+      window.__tilefx_dbg.pendingReady = this._pendingReady;
+      window.__tilefx_dbg.pendingWaitLoad = this._pendingWaitLoad;
+      window.__tilefx_dbg.srcMissing = this._srcMissing;
+      window.__tilefx_dbg.uploadOk = this._texturesUploaded;
+      window.__tilefx_dbg.uploadFail = Number(this._uploadReject.notReady || 0) + Number(this._uploadReject.zeroSize || 0) + Number(this._uploadReject.tainted || 0) + Number(this._uploadReject.unknown || 0);
+      window.__tilefx_dbg.lastUploadError = this._lastUploadError || '';
+      window.__tilefx_dbg.lastFailReason = this._lastUploadError || '';
+      window.__tilefx_dbg.uploadReject = { ...this._uploadReject };
       window.__tilefx_dbg.texturesInCache = this.textureCache?.map?.size || 0;
+      window.__tilefx_dbg.cacheBytes = this.textureCache?.totalBytes || 0;
+      window.__tilefx_dbg.cacheBudgetBytes = this.textureCache?.maxBytes || 0;
+      window.__tilefx_dbg.evictReason = this.textureCache?.lastEvictReason || 'none';
       window.__tilefx_dbg.texturesEvicted = this.textureCache?.evictions || 0;
+      window.__tilefx_dbg.reuploadsTotal = this.textureCache?.totalReuploads?.() || 0;
       window.__tilefx_dbg.drawCalls = drawCalls;
+      window.__tilefx_dbg.tilesDrawn = drawCalls;
+      window.__tilefx_dbg.stateCounts = stateCounts;
+      window.__tilefx_dbg.readyTiles = stateCounts.ready;
+      window.__tilefx_dbg.pendingTiles = stateCounts.requested + stateCounts.uploading;
+      window.__tilefx_dbg.rafRunning = this.raf > 0;
+      window.__tilefx_dbg.scrolling = this.isScrolling;
+      window.__tilefx_dbg.scrollIdleMs = this.isScrolling ? 0 : Math.max(0, now - Number(this._lastScrollAt || 0));
       window.__tilefx_dbg.lastFrameMs = this._lastFrameMs;
+      window.__tilefx_dbg.backpressureUntil = this.backpressureUntil;
+      window.__tilefx_dbg.dprCap = this.dprCap;
     }
+  }
+
+  _adaptDprFromFrameMs(frameMs) {
+    this.dprCap = 2;
   }
 
   _start() {
     if (this.raf) return;
     const loop = () => {
+      const fxModeActive = typeof document !== 'undefined' && document.body?.classList?.contains('fx-mode');
+      if (!this.enabled || this.mode !== 'fx' || !fxModeActive) {
+        this.stop();
+        return;
+      }
       const t0 = performance.now();
       try {
+        this._drainPendingUploads(t0);
         this._render(t0);
       } catch (e) {
         this._setFailed(e?.message || 'TILEFX_RENDER_FAILED');
       } finally {
         this._lastFrameMs = performance.now() - t0;
+        this._adaptDprFromFrameMs(this._lastFrameMs);
         this._frame += 1;
-        this.raf = requestAnimationFrame(loop);
+        if (window.__tilefx_dbg) {
+          window.__tilefx_dbg.rafRunning = this.raf > 0;
+          if (this.mode !== 'fx' && Number(window.__tilefx_dbg.drawCalls || 0) > 0) {
+            console.error('TileFX invariant: drawCalls > 0 while mode != fx');
+            this.stop();
+            this.clear();
+            window.__tilefx_dbg.drawCalls = 0;
+          }
+        }
+        if (this.enabled) this.raf = requestAnimationFrame(loop);
+        else this.raf = 0;
       }
     };
     this.raf = requestAnimationFrame(loop);
   }
 
   destroy() {
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
+    this.stop();
+    if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
+    this._scrollIdleTimer = 0;
+    this._pendingUploads.forEach((pending) => {
+      try { pending?.img?.removeEventListener('load', pending?.onLoad); } catch {}
+      try { pending?.img?.removeEventListener('error', pending?.onError); } catch {}
+    });
+    this._pendingUploads.clear();
     this.textureCache?.destroy();
     this.textureCache = null;
   }
@@ -1039,7 +1706,10 @@ export class AssetFX {
       this._recordScrollMotion(event);
       this._markLayoutDirty('grid:scroll');
     };
-    this._boundWindowResize = () => this._markLayoutDirty('window:resize');
+    this._boundWindowResize = () => {
+      resizeAllFxCanvases({ dprCap: 2, assetfxRenderer: this });
+      this._markLayoutDirty('window:resize');
+    };
     this._boundContainerResize = () => this._markLayoutDirty('container:resize');
     this._tapGuardCleanup = null;
     this._resizeObserver = null;
@@ -1052,7 +1722,10 @@ export class AssetFX {
     this._debugLastFrameTs = 0;
     this._debugLastReason = '';
     this._domDiscoverCap = 220;
-    this._boundVisualViewportChange = () => this._markLayoutDirty('visualViewport:change');
+    this._boundVisualViewportChange = () => {
+      resizeAllFxCanvases({ dprCap: 2, assetfxRenderer: this });
+      this._markLayoutDirty('visualViewport:change');
+    };
     this._boundInvalidationRoot = null;
     this._invalidationsBound = false;
 
@@ -1368,7 +2041,7 @@ export class AssetFX {
       position: 'fixed',
       inset: '0',
       width: '100vw',
-      height: '100vh',
+      height: 'calc(var(--vvh, 1vh) * 100)',
       pointerEvents: 'none',
       zIndex: '0',
       opacity: '0.9',
@@ -1384,7 +2057,7 @@ export class AssetFX {
       position: 'fixed',
       inset: '0',
       width: '100vw',
-      height: '100vh',
+      height: 'calc(var(--vvh, 1vh) * 100)',
       pointerEvents: 'none',
       zIndex: '0',
       opacity: this.fxDebug ? '1' : '0',
@@ -1606,6 +2279,7 @@ export class AssetFX {
     }
 
     this._bindInvalidations();
+    resizeAllFxCanvases({ dprCap: 2, assetfxRenderer: this });
     if (typeof ResizeObserver !== 'undefined') {
       this._resizeObserver = new ResizeObserver(this._boundContainerResize);
       this._resizeObserver.observe(gridRoot);
@@ -2275,7 +2949,7 @@ export class AssetFX {
       this._syncDebugBanner();
       return;
     }
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     let canvasRect = this._lastCanvasRect || cloneRect(this.overlay.getBoundingClientRect());
     if (!this._lastCanvasRect || this.layoutDirty) canvasRect = cloneRect(this.overlay.getBoundingClientRect());
     this._lastCanvasRect = canvasRect;
@@ -2710,6 +3384,18 @@ export class AssetFX {
     }
   }
 
+  setResolution(width, height) {
+    const gl = this.gl;
+    if (!gl || !this.overlay) return;
+    const w = Math.max(1, Math.round(Number(width || this.overlay.width || 1)));
+    const h = Math.max(1, Math.round(Number(height || this.overlay.height || 1)));
+    gl.viewport(0, 0, w, h);
+    if (this.program && this._u?.u_resolution) {
+      gl.useProgram(this.program);
+      gl.uniform2f(this._u.u_resolution, w, h);
+    }
+  }
+
   _renderDebugBadge(cardEl, { ready = false, inView = false, sampled = false, pending = false, sticky = false, alwaysOn = true } = {}) {
     if (!this.fxDebug || !cardEl) return;
     let badge = cardEl.querySelector('.fx-debug-badge');
@@ -2771,8 +3457,10 @@ export class AssetFX {
         animation: fx-visible-hint 200ms ease-out forwards;
       }
       .fx-debug-overlay {
-        position: absolute;
+        position: fixed;
         inset: 0;
+        width: 100vw;
+        height: calc(var(--vvh, 1vh) * 100);
         pointer-events: none;
         z-index: 4;
       }

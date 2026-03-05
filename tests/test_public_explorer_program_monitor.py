@@ -158,11 +158,70 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '<canvas id="tilefxCanvas" data-tilefx="1" aria-hidden="true"></canvas>' in html
     assert 'const tileFX = new TileFXRenderer({' in html
     assert 'tileFX.setTileSource(collectTileFxTiles);' in html
+    assert 'window.__tilefx_dbg' in html
+    assert 'domSwapOk' in html
+    assert 'function ensureTileFxHud()' in html
+    assert 'function ensureTileFxProbeButton(){' in html
+    assert "btn.id = 'tilefxProbeBtn';" in html
+    assert "hud.id = 'tilefxHud';" in html
+    assert "scheduleTileFxCollect('scroll')" in html
+    assert "scheduleTileFxCollect('resize')" in html
+    assert "scheduleTileFxCollect('render-media')" in html
+    assert "card.classList.toggle('tilefx-ready', !!ready);" in html
+    assert 'COVERAGE_LOW' in html
+    assert 'texturesUploaded' in html
+    assert 'texturesPending' in html
+    assert 'thumbs: img' in html
+    assert 'reject: nr' in html
+    assert "card.dataset.fxReady = ready ? '1' : '0';" in html
+    assert 'swap: ready' in html
+    assert 'data-tex="1"' in html
+    assert 'upload: queued' in html
+    assert 'pending: wait' in html
     assert 'window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];' in html
 
     assert 'export class TileFXRenderer' in shader_module
+    assert 'const TILE_STATE = Object.freeze({' in shader_module
+    assert 'tileStateByKey = new Map();' in shader_module
+    assert 'decodedSrcSet = new Set();' in shader_module
+    assert '_setTileState(key, TILE_STATE.READY);' in shader_module
     assert 'class TextureCacheLRU {' in shader_module
+    assert 'setVisibleKeys(keys) {' in shader_module
+    assert 'this.visibleKeySet = new Set();' in shader_module
     assert 'window.__tilefx_dbg = {' in shader_module
+    assert 'rafRunning: false,' in shader_module
+    assert 'tilesVisible: 0,' in shader_module
+    assert 'tilesFed: 0,' in shader_module
+    assert 'tilesDrawn: 0,' in shader_module
+    assert 'reuploadsTotal: 0,' in shader_module
+    assert 'uploadBudgetPerSecond' in shader_module
+    assert 'backpressureUntil' in shader_module
+    assert 'totalReuploads()' in shader_module
+    assert 'has(key)' in shader_module
+    assert '_queueTileImageUpload(tile, key)' in shader_module
+    assert '_drainPendingUploads(now)' in shader_module
+    assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
+    assert "document.body?.classList?.contains('fx-mode')" in shader_module
+    assert "document.visibilityState !== 'visible'" in shader_module
+    assert 'if (this.isScrolling && cachePressure) return;' in shader_module
+    assert 'texturesUploaded: 0,' in shader_module
+    assert 'texturesPending: 0,' in shader_module
+    assert 'uploadOk: 0,' in shader_module
+    assert 'uploadAttempt: 0,' in shader_module
+    assert 'uploadsQueued: 0,' in shader_module
+    assert 'uploadsAttempted: 0,' in shader_module
+    assert 'uploadsSucceeded: 0,' in shader_module
+    assert 'uploadsFailed: 0,' in shader_module
+    assert 'resizeImageForGL(img, maxEdge = 320)' in shader_module
+    assert "new URLSearchParams(window.location.search).get('tilefxMaxTex')" in shader_module
+    assert 'this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 320 : 512));' in shader_module
+    assert 'averageTextureSize() {' in shader_module
+    assert 'pendingWaitLoad: 0,' in shader_module
+    assert 'pendingReady: 0,' in shader_module
+    assert 'srcMissing: 0,' in shader_module
+    assert 'uploadFail: 0,' in shader_module
+    assert 'lastUploadError' in shader_module
+    assert 'lastFailReason' in shader_module
     assert 'export class AssetFX' in shader_module
     assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
     assert 'pulse(cardEl' in shader_module
@@ -421,7 +480,20 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'async function refreshExplorerData({ toastOnSuccess = true } = {})' in html
     assert "<button id=\"viewFx\" class=\"active\" type=\"button\">FX</button>" in html
     assert "if (typeof cardFX?.setDissolveMode === 'function') {" in html
-    assert "cardFX.setDissolveMode(nextView === 'fx' ? 'scene' : 'tile');" in html
+    assert "cardFX.setDissolveMode('tile');" in html
+    assert 'window.__tilefx_enabled = fxEnabled;' in html
+    assert 'window.__explorer_view = nextView;' in html
+    assert 'destroyTileFX();' in html
+    assert 'tileFX.enable();' in html
+    assert 'window.tileFX = tileFX;' in html
+    assert 'window.destroyTileFX = destroyTileFX;' in html
+    assert 'window.setViewMode = setView;' in html
+    assert 'function destroyTileFX(){' in html
+    assert 'tileFX.teardownForModeExit({ removeCanvas: false });' in html
+    assert 'tileFX.noteScroll();' in html
+    assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html
+    assert "`mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`" in html
+    assert "console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');" in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
     assert 'if (ui.inspectorOpen) {' in html
@@ -439,7 +511,16 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'canvasHeightPx: fxCanvas?.height || null,' in html
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
-    assert '#mediaGridRoot.view-fx .asset[data-kind="video"]::before{' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,' in html
+    assert 'body:not(.fx-mode) #tilefxCanvas{ display: none !important; opacity: 0 !important; }' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] img,' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] picture,' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] video,' in html
+    assert 'body.fx-mode.fx-swap-sanity #mediaGridRoot.view-fx .asset[data-tex="1"]{' in html
+    assert 'armTileFxSwapSanity()' in html
+    assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html
+    assert "scheduleTileFxCollect('idle-heartbeat')" in html
+    assert 'maxTex ${Number(tileFxDbg.maxTexEdge || 0)}' in html
     assert '.app{ position: relative; z-index: 2; }' in html
     assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
     assert "setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);" in html
@@ -527,11 +608,29 @@ def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():
     assert "position: 'fixed'" in shader_module
     assert "inset: '0'" in shader_module
     assert "width: '100vw'" in shader_module
-    assert "height: '100vh'" in shader_module
+    assert "height: 'calc(var(--vvh, 1vh) * 100)'" in shader_module
+    assert 'function _vvHeight() {' in shader_module
+    assert 'function setVisualVhVar() {' in shader_module
+    assert 'function resizeCanvasToCss(canvas, dprCap = 2) {' in shader_module
+    assert 'function resizeAllFxCanvases({ dprCap = 2, tilefxRenderer = null, assetfxRenderer = null } = {}) {' in shader_module
+    assert "vv.addEventListener('scroll', () => resizeAllFxCanvases({ dprCap: 2 }), { passive: true });" in shader_module
+    assert 'tilefxRenderer.setResolution?.(tilefxCanvas.width, tilefxCanvas.height, tilefxSize.dpr);' in shader_module
+    assert 'assetfxRenderer.setResolution?.(sharedCanvas.width, sharedCanvas.height, sharedSize.dpr);' in shader_module
     assert "zIndex: '0'" in shader_module
     assert 'document.body.prepend(canvas)' in shader_module
     assert "params.get('novirt') === '1' || params.get('keep') === '1'" in shader_module
     assert 'if (this.noVirtualization && !visible) return false;' in shader_module
+
+
+def test_explorer_fx_canvas_css_contract_uses_visual_viewport_var():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '--vvh: 1vh;' in html
+    assert 'canvas.fx-debug-overlay,' in html
+    assert '#bgImpulseCanvas,' in html
+    assert '#tilefxCanvas{' in html
+    assert 'position: fixed !important;' in html
+    assert 'width: 100vw !important;' in html
+    assert 'height: calc(var(--vvh) * 100) !important;' in html
 
 
 def test_explorer_thumb_cache_sticky_loaded_contract_present():

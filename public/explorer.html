@@ -33,6 +33,7 @@
       --topbar-subrow-height: 38px;
       --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
       --topbar-offset: var(--topbar-height);
+      --vvh: 1vh;
       --z-fx: 10;
       --z-grid: 20;
       --z-topbar: 5000;
@@ -93,14 +94,26 @@
     }
 
     .bg-impulse-canvas{
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 0;
-      pointer-events: none;
       opacity: 0.4;
     }
+
+    canvas.fx-debug-overlay,
+    canvas.fx-shared-overlay,
+    #bgImpulseCanvas,
+    #tilefxCanvas{
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: calc(var(--vvh) * 100) !important;
+      display: block !important;
+      pointer-events: none !important;
+    }
+
+    #bgImpulseCanvas{ z-index: 0; }
+    #tilefxCanvas{ z-index: 1; }
+    body:not(.fx-mode) #tilefxCanvas{ display: none !important; opacity: 0 !important; }
+    canvas.fx-shared-overlay{ z-index: 2; }
+    canvas.fx-debug-overlay{ z-index: 3; }
     .app{ position: relative; z-index: 2; }
 
     #ui-portal{
@@ -643,10 +656,6 @@
 
     #mediaGridRoot > .fx-shared-overlay,
     #mediaGridRoot > .fx-debug-overlay{
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
       pointer-events: none;
     }
     #mediaGridRoot > .fx-shared-overlay{
@@ -818,38 +827,68 @@
       gap: 8px;
     }
 
-    #mediaGridRoot.view-fx .grid{
-      gap: 0;
-      padding: 0;
-      background: radial-gradient(120% 120% at 10% 0%, rgba(44,64,120,0.26), rgba(8,10,20,0.92));
+    body.fx-mode #mediaGridRoot.view-fx .asset{
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
     }
-    #mediaGridRoot.view-fx .asset{
-      border-radius: 0;
-      border-color: rgba(160,188,255,0.16);
-      background: linear-gradient(180deg, rgba(22,28,44,0.58), rgba(8,11,22,0.9));
-      box-shadow: inset 0 0 0 1px rgba(190,220,255,0.05);
-      transform: none !important;
+    body.fx-mode #mediaGridRoot.view-fx .asset .asset-overlay{
+      background: transparent !important;
     }
-    #mediaGridRoot.view-fx .asset::before{
-      content: '';
-      position: absolute;
-      inset: -2px;
-      pointer-events: none;
-      border-radius: 0;
-      opacity: 0.82;
-      box-shadow: 0 0 18px rgba(110,140,255,0.32), 0 0 42px rgba(80,110,230,0.18);
+    body.fx-mode #mediaGridRoot.view-fx .asset .asset-ol-bottom,
+    body.fx-mode #mediaGridRoot.view-fx .asset .asset-ol-top,
+    body.fx-mode #mediaGridRoot.view-fx .asset .asset-ol-bl{
+      z-index: 5;
+      pointer-events: auto;
     }
-    #mediaGridRoot.view-fx .asset[data-kind="video"]::before{
-      box-shadow: 0 0 18px rgba(72,154,255,0.46), 0 0 46px rgba(72,124,255,0.26);
+    body.fx-mode #mediaGridRoot.view-fx .asset img.asset-thumb,
+    body.fx-mode #mediaGridRoot.view-fx .asset .thumb{
+      opacity: 1;
     }
-    #mediaGridRoot.view-fx .asset[data-kind="image"]::before{
-      box-shadow: 0 0 18px rgba(168,102,255,0.46), 0 0 46px rgba(130,86,255,0.26);
+    /* FX renderer-swap: only hide the DOM thumbnail layer when TileFX owns it */
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] img,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] picture,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] video,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumbImg,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumbVideo,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] [data-thumb],
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] [style*="background-image"]{
+      opacity: 0 !important;
+      visibility: hidden !important;
     }
-    #mediaGridRoot.view-fx .asset[data-kind="audio"]::before{
-      box-shadow: 0 0 18px rgba(255,206,84,0.44), 0 0 46px rgba(255,170,54,0.24);
+    body.fx-mode.fx-swap-sanity #mediaGridRoot.view-fx .asset[data-tex="1"]{
+      outline: 1px solid rgba(140,255,120,0.95);
+      outline-offset: -1px;
     }
+    #mediaGridRoot.view-fx .asset,
+    #mediaGridRoot.view-fx .asset::before,
+    #mediaGridRoot.view-fx .asset::after,
+    #mediaGridRoot.view-fx .asset .thumb,
+    #mediaGridRoot.view-fx .asset .asset-overlay,
     #mediaGridRoot.view-fx .asset .scrim{
-      background: linear-gradient(to top, rgba(3,6,16,0.84) 4%, rgba(8,12,24,0.36) 44%, rgba(8,12,24,0.08) 75%);
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    #tilefxHud{
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      z-index: 120;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(5,8,18,0.88);
+      font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #c6e2ff;
+      white-space: pre;
+      pointer-events: none;
+      min-width: 220px;
+    }
+    #tilefxHud.is-alert{
+      border-color: rgba(255,110,110,0.75);
+      color: #ffd0d0;
     }
 
     .asset{
@@ -1832,7 +1871,7 @@
       activeProject: null,   // {name, source, ...}
       media: [],             // items from /media
       mediaScope: 'project', // project|all
-      view: 'fx',            // fx|grid|list
+      view: 'grid',          // fx|grid|list
       q: '',
       filters: {
         type: 'all',
@@ -1850,6 +1889,9 @@
       },
     };
 
+    window.__explorer_view = state.view;
+    window.__tilefx_enabled = false;
+
     const ui = {
       sidebarOpen: false,
       inspectorOpen: false,
@@ -1860,6 +1902,223 @@
       dragPointerId: null,
       dragTarget: null,
     };
+
+    const tileFxDbg = window.__tilefx_dbg || (window.__tilefx_dbg = {});
+    tileFxDbg.domSwapOk = false;
+    tileFxDbg.scannedCount = 0;
+    tileFxDbg.culledCount = 0;
+    tileFxDbg.renderedCount = 0;
+    tileFxDbg.coverageRatio = 1;
+    tileFxDbg.failReason = '';
+    tileFxDbg.lastScanMs = 0;
+    tileFxDbg.scansPerSecond = 0;
+    tileFxDbg.texturesUploaded = Number(tileFxDbg.texturesUploaded || 0);
+    tileFxDbg.texturesPending = Number(tileFxDbg.texturesPending || 0);
+    tileFxDbg.thumbs = tileFxDbg.thumbs || { img: 0, cssbg: 0, poster: 0, none: 0 };
+    tileFxDbg.uploadReject = tileFxDbg.uploadReject || { notReady: 0, zeroSize: 0, tainted: 0, unknown: 0 };
+    tileFxDbg.uploadAttempt = Number(tileFxDbg.uploadAttempt || 0);
+    tileFxDbg.pendingWaitLoad = Number(tileFxDbg.pendingWaitLoad || 0);
+    tileFxDbg.pendingReady = Number(tileFxDbg.pendingReady || 0);
+    tileFxDbg.srcMissing = Number(tileFxDbg.srcMissing || 0);
+    tileFxDbg.swappedTiles = Number(tileFxDbg.swappedTiles || 0);
+    tileFxDbg.evictedTiles = Number(tileFxDbg.evictedTiles || 0);
+
+    const tileFxScanStats = {
+      scannedCount: 0,
+      culledCount: 0,
+      renderedCount: 0,
+      lastScanMs: 0,
+    };
+    let tileFxScanRuns = [];
+    let tileFxCollectPending = 0;
+    let tileFxCollectTimeout = 0;
+    let tileFxLastCollectAt = 0;
+    const TILEFX_SCAN_MIN_INTERVAL_MS = 120;
+    const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;
+    let tileFxCardSeq = 0;
+    const tileFxPrevKeyByCard = new Map();
+    let tileFxProbeRows = [];
+    let tileFxAutoProbeTimer = 0;
+    let tileFxSwapSanityTimer = 0;
+    const AUTO_FX_PROBE = new URLSearchParams(window.location.search).get('fxprobe') === '1';
+
+    function ensureTileFxHud(){
+      let hud = document.getElementById('tilefxHud');
+      if (!hud) {
+        hud = document.createElement('div');
+        hud.id = 'tilefxHud';
+        hud.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(hud);
+      }
+      return hud;
+    }
+
+    function ensureTileFxProbeButton(){
+      if (!FX_DEBUG) return null;
+      let btn = document.getElementById('tilefxProbeBtn');
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'tilefxProbeBtn';
+        btn.type = 'button';
+        btn.textContent = 'Probe FX';
+        Object.assign(btn.style, {
+          position: 'fixed',
+          right: '10px',
+          bottom: '150px',
+          zIndex: '121',
+          borderRadius: '8px',
+          border: '1px solid rgba(120,220,255,0.45)',
+          background: 'rgba(4,10,22,0.88)',
+          color: '#bfe8ff',
+          padding: '6px 10px',
+          font: '12px/1.2 var(--mono)',
+        });
+        btn.addEventListener('click', () => {
+          const rows = captureTileFxProbeSnapshot('manual');
+          console.info('[tilefx-probe]', { view: state.view, dbg: window.__tilefx_dbg, rows });
+          toast('ok', 'FX Probe', `Logged ${rows.length} visible tile rows to console.`);
+        });
+        document.body.appendChild(btn);
+      }
+      btn.style.display = state.view === 'fx' ? 'block' : 'none';
+      return btn;
+    }
+
+    function captureTileFxProbeSnapshot(reason = 'manual'){
+      const rows = tileFxProbeRows.slice(0, 20).map((row) => ({
+        key: String(row.key || ''),
+        keySource: String(row.keySource || 'unknown'),
+        state: String(tileFX.getTileState(row.key)),
+        hasTexture: !!row.hasTexture,
+        dataTex: String(row.dataTex || ''),
+        imgComplete: !!row.imgComplete,
+        imgWidth: Number(row.naturalWidth || 0),
+        thumbSrc: String(row.thumbSrc || ''),
+      }));
+      window.__tilefx_probe = {
+        timestamp: Date.now(),
+        reason,
+        visibleTiles: rows,
+        stateCounts: { ...(tileFxDbg.stateCounts || {}) },
+        readyTiles: Number(tileFxDbg.readyTiles || 0),
+        pendingTiles: Number(tileFxDbg.pendingTiles || 0),
+        swapSetCalls: Number(tileFxDbg.swapSetCalls || 0),
+        swapClearCalls: Number(tileFxDbg.swapClearCalls || 0),
+        cacheBytes: Number(tileFxDbg.cacheBytes || 0),
+        cacheBudgetBytes: Number(tileFxDbg.cacheBudgetBytes || 0),
+        evictReason: String(tileFxDbg.evictReason || 'none'),
+        maxTexEdge: Number(tileFxDbg.maxTexEdge || 0),
+        avgTexWidth: Number(tileFxDbg.avgTexWidth || 0),
+        avgTexHeight: Number(tileFxDbg.avgTexHeight || 0),
+      };
+      return rows;
+    }
+
+    function updateTileFxHud(){
+      const hud = ensureTileFxHud();
+      ensureTileFxProbeButton();
+      const scanned = Number(tileFxDbg.scannedCount || 0);
+      const rendered = Number(tileFxDbg.renderedCount || 0);
+      const ratio = scanned > 0 ? (rendered / scanned) : 1;
+      const failReason = String(tileFxDbg.failReason || '');
+      if (state.view !== 'fx' && Number(tileFxDbg.drawCalls || 0) > 0) {
+        console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');
+        tileFX.stop();
+        tileFX.clear();
+        tileFxDbg.drawCalls = 0;
+      }
+      const probe = window.__tilefx_probe || null;
+      if (probe && Number(probe.timestamp || 0) > 0) {
+        const rows = Array.isArray(probe.visibleTiles) ? probe.visibleTiles : [];
+        const lines = [
+          `FX PROBE SNAPSHOT ${new Date(Number(probe.timestamp || Date.now())).toISOString()}`,
+          `reason: ${String(probe.reason || 'manual')}`,
+          `ready/visible: ${Number(probe.readyTiles || 0)} / ${Number(tileFxDbg.tilesVisible || 0)}`,
+          `pending: ${Number(probe.pendingTiles || 0)}`,
+          `swapSet: ${Number(probe.swapSetCalls || 0)}`,
+          `swapClear: ${Number(probe.swapClearCalls || 0)}`,
+          `cache: ${(Number(probe.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(probe.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB`,
+          `maxTex: ${Number(probe.maxTexEdge || 0)} | avgTex: ${Number(probe.avgTexWidth || 0)}x${Number(probe.avgTexHeight || 0)}`,
+          `evictReason: ${String(probe.evictReason || 'none')}`,
+        ];
+        rows.slice(0, 10).forEach((row, idx) => {
+          lines.push(`${idx} ${row.state} ${row.keySource} ${String(row.key || '').split('/').pop() || row.key} tex=${row.dataTex}`);
+        });
+        hud.classList.toggle('is-alert', false);
+        hud.textContent = lines.join('\n');
+        return;
+      }
+      hud.classList.toggle('is-alert', !!failReason);
+      hud.textContent = [
+        `mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`,
+        `domSwapOk: ${tileFxDbg.domSwapOk ? 'true' : 'false'} | scrolling: ${tileFxDbg.scrolling ? '1' : '0'} | idleMs: ${Math.round(Number(tileFxDbg.scrollIdleMs || 0))}`,
+        `scanned/rendered: ${scanned}/${rendered} (${(ratio * 100).toFixed(1)}%) | fed/drawn: ${Number(tileFxDbg.tilesFed || 0)}/${Number(tileFxDbg.tilesDrawn || 0)}`,
+        `dpr: ${(tileFxDbg.dpr || 1).toFixed(2)} (cap ${(tileFxDbg.dprCap || 2).toFixed(2)})`,
+        `uploads/s: ${Number(tileFxDbg.uploadsThisSecond || 0)}`,
+        `tex: up ${Number(tileFxDbg.texturesUploaded || 0)} | pending ${Number(tileFxDbg.texturesPending || 0)} | cache ${Number(tileFxDbg.texturesInCache || 0)} | evict ${Number(tileFxDbg.texturesEvicted || 0)} | reup ${Number(tileFxDbg.reuploadsTotal || 0)}`,
+        `thumbs: img ${Number(tileFxDbg.thumbs?.img || 0)} | css ${Number(tileFxDbg.thumbs?.cssbg || 0)} | poster ${Number(tileFxDbg.thumbs?.poster || 0)} | none ${Number(tileFxDbg.thumbs?.none || 0)}`,
+        `upload: queued ${Number(tileFxDbg.uploadsQueued || 0)} | try ${Number(tileFxDbg.uploadsAttempted || tileFxDbg.uploadAttempt || 0)} | ok ${Number(tileFxDbg.uploadsSucceeded || tileFxDbg.uploadOk || 0)} | fail ${Number(tileFxDbg.uploadsFailed || tileFxDbg.uploadFail || 0)}`,
+        `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastFailReason || tileFxDbg.lastUploadError || 'none')}`,
+        `swap: ready ${Number(tileFxDbg.readyTiles || 0)} / visible ${Number(tileFxDbg.tilesVisible || 0)} | upOk ${Number(tileFxDbg.uploadOk || 0)} | drawn ${Number(tileFxDbg.tilesDrawn || 0)}`,
+        `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | evicted ${Number(tileFxDbg.evictedTiles || 0)}`,
+        `cache: ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(tileFxDbg.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB | evictReason ${String(tileFxDbg.evictReason || 'none')} | maxTex ${Number(tileFxDbg.maxTexEdge || 0)} | avgTex ${Number(tileFxDbg.avgTexWidth || 0)}x${Number(tileFxDbg.avgTexHeight || 0)}`,
+        `reject: nr ${Number(tileFxDbg.uploadReject?.notReady || 0)} | 0sz ${Number(tileFxDbg.uploadReject?.zeroSize || 0)} | taint ${Number(tileFxDbg.uploadReject?.tainted || 0)} | unk ${Number(tileFxDbg.uploadReject?.unknown || 0)}`,
+        `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
+        `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
+        `fail: ${failReason || 'none'}`,
+      ].join('\n');
+    }
+
+    function verifyTileFxDomSwap(){
+      const sample = document.querySelector('#mediaGrid .asset');
+      if (!sample || state.view !== 'fx') {
+        tileFxDbg.domSwapOk = false;
+        return;
+      }
+      const style = getComputedStyle(sample);
+      const bg = String(style.backgroundImage || style.background || '').toLowerCase();
+      const shadow = String(style.boxShadow || '').toLowerCase();
+      const backdrop = String(style.backdropFilter || '').toLowerCase();
+      const bgOk = bg.includes('none') || bg.includes('transparent') || bg.includes('rgba(0, 0, 0, 0)');
+      const shadowOk = shadow.includes('none');
+      const backdropOk = backdrop.includes('none');
+      tileFxDbg.domSwapOk = Boolean(bgOk && shadowOk && backdropOk);
+      if (!tileFxDbg.domSwapOk) {
+        tileFxDbg.failReason = tileFxDbg.failReason || 'DOM_SWAP_INVALID';
+      } else if (tileFxDbg.failReason === 'DOM_SWAP_INVALID') {
+        tileFxDbg.failReason = '';
+      }
+    }
+
+    function scheduleTileFxCollect(reason = 'event'){
+      if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+      const now = performance.now();
+      const minInterval = tileFxDbg.scrolling ? TILEFX_SCAN_MIN_INTERVAL_MS : TILEFX_SCAN_IDLE_INTERVAL_MS;
+      const waitMs = Math.max(0, minInterval - (now - tileFxLastCollectAt));
+      const runCollect = () => {
+        tileFxCollectPending = 0;
+        tileFxLastCollectAt = performance.now();
+        const tiles = collectTileFxTiles();
+        tileFX.updateTiles(tiles);
+        tileFxScanRuns.push(performance.now());
+        tileFxScanRuns = tileFxScanRuns.filter((t) => (performance.now() - t) <= 1000);
+        tileFxDbg.scansPerSecond = tileFxScanRuns.length;
+        tileFxDbg.lastInvalidationReason = reason;
+        verifyTileFxDomSwap();
+        updateTileFxHud();
+      };
+      if (waitMs > 0) {
+        if (tileFxCollectTimeout) return;
+        tileFxCollectTimeout = setTimeout(() => {
+          tileFxCollectTimeout = 0;
+          if (tileFxCollectPending) return;
+          tileFxCollectPending = requestAnimationFrame(runCollect);
+        }, waitMs);
+        return;
+      }
+      if (tileFxCollectPending) return;
+      tileFxCollectPending = requestAnimationFrame(runCollect);
+    }
 
 
     function inNoPreviewZone(target){
@@ -1880,30 +2139,123 @@
         }
       },
     });
+    window.tileFX = tileFX;
+    window.destroyTileFX = destroyTileFX;
+    window.setViewMode = setView;
 
     function collectTileFxTiles(){
+      const t0 = performance.now();
       const root = el('mediaGridRoot');
       const grid = el('mediaGrid');
       if (!root || !grid || state.view !== 'fx') return [];
       const rootRect = root.getBoundingClientRect();
-      const overscan = 120;
+      const overscan = 300;
       const cards = Array.from(grid.querySelectorAll('.asset'));
       const tiles = [];
+      let culled = 0;
       for (const card of cards) {
         if (!card?.isConnected) continue;
         const r = card.getBoundingClientRect();
-        if (r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan)) continue;
-        if (r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan)) continue;
-        const key = card.dataset.sha256 || card.dataset.selectKey || card.dataset.relative || card.dataset.streamUrl || '';
+        if (r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan)) { culled += 1; continue; }
+        if (r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan)) { culled += 1; continue; }
+        if (!card.dataset.fxCardId) card.dataset.fxCardId = `fx-card-${++tileFxCardSeq}`;
+        const thumbImg = card.querySelector('img.asset-thumb');
+        const stableThumbSrc = String(thumbImg?.currentSrc || thumbImg?.getAttribute('src') || '').trim();
+        const key = card.dataset.assetId || card.dataset.path || card.dataset.relative || stableThumbSrc || card.dataset.sha256 || card.dataset.selectKey || card.dataset.streamUrl || card.dataset.fxCardId || '';
+        const keySource = card.dataset.assetId ? 'assetId'
+          : card.dataset.path ? 'path'
+          : card.dataset.relative ? 'relative'
+          : stableThumbSrc ? 'thumbSrc'
+          : card.dataset.sha256 ? 'sha256'
+          : card.dataset.selectKey ? 'selectKey'
+          : card.dataset.streamUrl ? 'streamUrl'
+          : 'fallback';
+        const prevKey = tileFxPrevKeyByCard.get(card.dataset.fxCardId) || '';
+        const keyChanged = prevKey && prevKey !== key;
+        tileFxPrevKeyByCard.set(card.dataset.fxCardId, key);
         const thumbEl = card.querySelector('img.asset-thumb');
+        const thumbWrap = card.querySelector('.thumb');
+        const posterEl = card.querySelector('video[poster]');
+        let thumbKind = 'none';
+        let thumbSrc = '';
+        if (thumbEl && thumbEl.getAttribute('src')) {
+          thumbKind = 'img';
+          thumbSrc = thumbEl.dataset.thumbUrl || thumbEl.currentSrc || thumbEl.getAttribute('src') || '';
+        } else if (posterEl && posterEl.getAttribute('poster')) {
+          thumbKind = 'videoPoster';
+          thumbSrc = posterEl.getAttribute('poster') || '';
+        } else if (thumbWrap) {
+          const cssBg = getComputedStyle(thumbWrap).backgroundImage || '';
+          const match = cssBg.match(/url\((['"]?)(.*?)\1\)/i);
+          if (match?.[2]) {
+            thumbKind = 'cssbg';
+            thumbSrc = match[2];
+          }
+        }
+        card.dataset.fxReady = card.dataset.fxReady || '0';
+        if (card.dataset.tex !== '1' && card.dataset.tex !== 'pending') card.dataset.tex = '0';
+        card.classList.toggle('tilefx-ready', card.dataset.tex === '1');
+
         tiles.push({
           key,
           type: card.dataset.kind || '',
           selected: card.classList.contains('is-selected'),
+          tileEl: card,
           rect: { left: r.left, top: r.top, width: r.width, height: r.height },
           thumbEl,
+          thumbKind,
+          thumbSrc,
+          keySource,
+          keyChanged,
+          onTextureReady: (ready) => {
+            card.classList.toggle('tilefx-ready', !!ready);
+            card.dataset.fxReady = ready ? '1' : '0';
+            if (!ready && card.dataset.tex !== 'pending') card.dataset.tex = '0';
+          },
         });
         if (tiles.length >= 260) break;
+      }
+      const thumbCounts = { img: 0, cssbg: 0, poster: 0, none: 0 };
+      for (const tile of tiles) {
+        if (tile.thumbKind === 'img') thumbCounts.img += 1;
+        else if (tile.thumbKind === 'cssbg') thumbCounts.cssbg += 1;
+        else if (tile.thumbKind === 'videoPoster') thumbCounts.poster += 1;
+        else thumbCounts.none += 1;
+      }
+      tileFxDbg.thumbs = thumbCounts;
+      tileFxProbeRows = tiles.slice(0, 20).map((tile) => {
+        const img = tile.thumbEl;
+        return {
+          key: String(tile.key || ''),
+          keySource: String(tile.keySource || 'unknown'),
+          keyChanged: tile.keyChanged === true,
+          state: String(tileFX.getTileState(tile.key)),
+          hasTexture: !!(tile.key && tileFX.hasTexture(tile.key)),
+          dataTex: String(tile.tileEl?.dataset?.tex || ''),
+          imgComplete: !!img?.complete,
+          naturalWidth: Number(img?.naturalWidth || 0),
+          thumbSrc: String(img?.currentSrc || img?.getAttribute('src') || ''),
+        };
+      });
+      tileFxDbg.swappedTiles = cards.filter((card) => card?.dataset?.tex === '1').length;
+      tileFxScanStats.scannedCount = cards.length;
+      tileFxScanStats.culledCount = culled;
+      tileFxScanStats.renderedCount = tiles.length;
+      tileFxScanStats.lastScanMs = performance.now() - t0;
+      tileFxDbg.scannedCount = tileFxScanStats.scannedCount;
+      tileFxDbg.culledCount = tileFxScanStats.culledCount;
+      tileFxDbg.renderedCount = tileFxScanStats.renderedCount;
+      tileFxDbg.lastScanMs = tileFxScanStats.lastScanMs;
+      const visibleExpected = Math.max(0, tileFxScanStats.scannedCount - tileFxScanStats.culledCount);
+      const minExpected = Math.min(visibleExpected, 260);
+      const coverageRatio = visibleExpected > 0
+        ? tileFxScanStats.renderedCount / visibleExpected
+        : 1;
+      tileFxDbg.coverageRatio = coverageRatio;
+      if (tileFxScanStats.renderedCount < minExpected && coverageRatio < 0.95) {
+        tileFxDbg.failReason = 'COVERAGE_LOW';
+      } else if (tileFxDbg.failReason === 'COVERAGE_LOW') {
+        tileFxDbg.failReason = '';
       }
       return tiles;
     }
@@ -3456,25 +3808,67 @@
       sb.style.pointerEvents = '';
     }
 
+    function applyTileFxCanvasState(enabled){
+      const tileCanvas = el('tilefxCanvas');
+      if (!tileCanvas) return;
+      tileCanvas.classList.toggle('is-on', !!enabled);
+      tileCanvas.style.display = enabled ? 'block' : 'none';
+      tileCanvas.style.opacity = enabled ? '1' : '0';
+      tileCanvas.style.pointerEvents = 'none';
+    }
+
+    function armTileFxSwapSanity(){
+      if (tileFxSwapSanityTimer) clearTimeout(tileFxSwapSanityTimer);
+      document.body.classList.add('fx-swap-sanity');
+      tileFxSwapSanityTimer = setTimeout(() => {
+        tileFxSwapSanityTimer = 0;
+        document.body.classList.remove('fx-swap-sanity');
+      }, 10000);
+    }
+
+    function destroyTileFX(){
+      if (tileFxSwapSanityTimer) clearTimeout(tileFxSwapSanityTimer);
+      tileFxSwapSanityTimer = 0;
+      tileFX.teardownForModeExit({ removeCanvas: false });
+      tileFX.updateTiles([]);
+      applyTileFxCanvasState(false);
+      window.__tilefx_enabled = false;
+    }
+
     function setView(view){
-      const nextView = (view === 'fx' || view === 'grid' || view === 'list') ? view : 'fx';
+      const nextView = (view === 'fx' || view === 'grid' || view === 'list') ? view : 'grid';
+      const fxEnabled = nextView === 'fx';
       state.view = nextView;
-      el('viewFx')?.classList.toggle('active', nextView === 'fx');
+      window.__explorer_view = nextView;
+      window.__tilefx_enabled = fxEnabled;
+      el('viewFx')?.classList.toggle('active', fxEnabled);
       el('viewGrid').classList.toggle('active', nextView === 'grid');
       el('viewList').classList.toggle('active', nextView === 'list');
-      const useGrid = nextView === 'fx' || nextView === 'grid';
+      const useGrid = fxEnabled || nextView === 'grid';
       el('mediaGrid').style.display = useGrid ? '' : 'none';
       el('mediaList').style.display = nextView === 'list' ? '' : 'none';
       const root = el('mediaGridRoot');
-      if (root) root.classList.toggle('view-fx', nextView === 'fx');
-      const tileCanvas = el('tilefxCanvas');
-      tileCanvas?.classList.toggle('is-on', nextView === 'fx');
+      if (root) root.classList.toggle('view-fx', fxEnabled);
+      document.body.classList.toggle('fx-mode', fxEnabled);
+      if (!fxEnabled) document.body.classList.remove('fx-swap-sanity');
+      applyTileFxCanvasState(fxEnabled);
+
       if (typeof cardFX?.setDissolveMode === 'function') {
-        cardFX.setDissolveMode(nextView === 'fx' ? 'scene' : 'tile');
+        cardFX.setDissolveMode('tile');
       }
+      setFxSuspend(ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
       tileFX.setMode(nextView);
-      setFxSuspend(nextView === 'fx' || ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
+      if (!fxEnabled) {
+        destroyTileFX();
+      } else {
+        tileFX.enable();
+        armTileFxSwapSanity();
+      }
       renderMedia();
+      if (fxEnabled) {
+        scheduleTileFxCollect('view-change');
+      }
+      updateTileFxHud();
     }
 
     // -------------------------
@@ -3796,7 +4190,7 @@
       const activeContainer = (state.view === 'list') ? l : g;
       const thumbTargets = Array.from(activeContainer.querySelectorAll('img.asset-thumb[data-thumb-url]'));
       void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => {
-        tileFX.updateTiles(collectTileFxTiles());
+        scheduleTileFxCollect('render-media');
         setContentLoading(false);
         logLayoutDebug();
       });
@@ -4378,6 +4772,12 @@
       const isOpen = actionsPanel.classList.contains('open');
       toggleActions(!isOpen);
     });
+    setInterval(() => {
+      if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+      if (tileFxDbg.scrolling) return;
+      scheduleTileFxCollect('idle-heartbeat');
+    }, TILEFX_SCAN_IDLE_INTERVAL_MS);
+
     window.addEventListener('resize', () => {
       if (actionsPanel.classList.contains('open')) positionActionsPanel();
     });
@@ -4391,12 +4791,22 @@
     el('viewGrid').addEventListener('click', () => setView('grid'));
     el('viewList').addEventListener('click', () => setView('list'));
     el('mediaGridRoot')?.addEventListener('scroll', () => {
-      if (state.view !== 'fx') return;
-      tileFX.updateTiles(collectTileFxTiles());
+      tileFX.noteScroll();
+      if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+      scheduleTileFxCollect('scroll');
+      if (AUTO_FX_PROBE) {
+        if (tileFxAutoProbeTimer) clearTimeout(tileFxAutoProbeTimer);
+        tileFxAutoProbeTimer = setTimeout(() => {
+          tileFxAutoProbeTimer = 0;
+          if (tileFxDbg.scrolling) return;
+          captureTileFxProbeSnapshot('auto-scroll-idle');
+          updateTileFxHud();
+        }, 260);
+      }
     }, { passive: true });
     window.addEventListener('resize', () => {
-      if (state.view !== 'fx') return;
-      tileFX.updateTiles(collectTileFxTiles());
+      if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+      scheduleTileFxCollect('resize');
     }, { passive: true });
 
     el('q').addEventListener('input', (e) => {
@@ -4588,16 +4998,19 @@
       const IMPULSE_MS = 220;
       const resize = () => {
         dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-        width = Math.max(1, window.innerWidth || 1);
-        height = Math.max(1, window.innerHeight || 1);
+        const rect = canvas.getBoundingClientRect();
+        width = Math.max(1, rect.width || window.innerWidth || 1);
+        height = Math.max(1, rect.height || window.innerHeight || 1);
         canvas.width = Math.round(width * dpr);
         canvas.height = Math.round(height * dpr);
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       };
       resize();
       window.addEventListener('resize', resize);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resize, { passive: true });
+        window.visualViewport.addEventListener('scroll', resize, { passive: true });
+      }
       const pushImpulse = (event) => {
         const x = Number(event.clientX || width * 0.5);
         const y = Number(event.clientY || height * 0.5);

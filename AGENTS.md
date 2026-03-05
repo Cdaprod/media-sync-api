@@ -1296,3 +1296,125 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated `public/explorer.html` to instantiate TileFX, provide DOM tile scan source (`collectTileFxTiles` overscan scan), add dedicated `tilefxCanvas`, and keep FX mode as default while preserving existing grid/list behavior.
 - View switching now routes both dissolve policy and renderer mode: FX stays scene-level dissolve, while grid/list can use tile dissolves; FX mode suspends legacy per-asset overlay path to avoid double-render contention.
 - Updated static monitor assertions to cover TileFX import/wiring, tilefx canvas presence, and TileFX renderer contract markers.
+
+### Latest Implementation Notes (2026-03-04, TileFX invariants + HUD + upload backpressure)
+- Hardened FX mode in `public/explorer.html` with explicit TileFX invariants and runtime telemetry wiring: DOM swap validation (`domSwapOk`), scan coverage metrics (`scannedCount`, `culledCount`, `renderedCount`, `coverageRatio`), throttled event-driven scan scheduling (`scheduleTileFxCollect`) and on-screen `#tilefxHud` diagnostics.
+- Updated FX CSS ownership so heavy DOM visuals are downgraded in `view-fx` (transparent/none backgrounds + shadows + backdrop filters), while thumbnails stay visible until texture readiness flips `tilefx-ready` to prevent premature blanking.
+- Added TileFX coverage fail signaling (`COVERAGE_LOW`) and HUD fail-state rendering to make scan mismatch regressions visible without devtools.
+- Enhanced `public/js/explorer-shaders.mjs` TileFX texture instrumentation with per-key upload counters (`totalReuploads`) and steady-state upload backpressure: uploads/sec budget, temporary upload pause, and adaptive DPR cap reduction/recovery (`dprCap`, `backpressureUntil`).
+- Removed per-frame DOM rescans from `TileFXRenderer` (`_refreshTileList` now passive), ensuring tile collection runs from UI invalidation events only (scroll/resize/render/view changes), not from every RAF tick.
+- Extended static contract assertions in `tests/test_public_explorer_program_monitor.py` to enforce new HUD/invariant hooks and TileFX upload/backpressure markers.
+
+### Latest Implementation Notes (2026-03-04, TileFX texture-source readiness + culling overscan correction)
+- Fixed TileFX texture pipeline in `public/js/explorer-shaders.mjs` so DOM thumbnails are treated as texture sources regardless of visibility: tiles now queue pending uploads for non-ready images, promote on `load`/`error`, and drain uploads once ready instead of relying only on immediate `img.complete` checks.
+- Added cache/pipeline guards (`TextureCacheLRU.has(key)`, pending upload map, per-key dedupe) to avoid duplicate upload churn; texture readiness now toggles `tilefx-ready` only after a cache-backed texture exists.
+- Expanded TileFX debug counters with `texturesUploaded` and `texturesPending` and exposed them in `public/explorer.html` HUD output for direct runtime confirmation of upload activity.
+- Increased FX tile scan overscan in `collectTileFxTiles()` to reduce scroll-gap blank bands and switched coverage denominator to visible-expected tiles (`scanned - culled`) for more accurate culling diagnostics.
+- Added frame-time adaptive DPR shaping in TileFX (`>18ms` lowers cap, `<10ms` slowly raises cap) to improve Safari/mobile smoothness under load.
+- Updated static explorer assertions in `tests/test_public_explorer_program_monitor.py` for the new texture-pending/upload and queueing contract.
+
+### Latest Implementation Notes (2026-03-05, TileFX source-discovery + per-tile readiness handshake)
+- Updated `public/explorer.html` TileFX collection to classify thumbnail sources per tile (`img`, CSS background image, `video[poster]`, or `none`) and pass `thumbKind`/`thumbSrc` metadata into the TileFX renderer.
+- Added explicit per-tile readiness handoff by writing `data-fx-ready="1|0"` alongside `.tilefx-ready`, and updated FX CSS so DOM thumbnail layers hide only when a tile is texture-ready.
+- Added TileFX HUD counters for source discovery and upload-reject diagnostics (`thumbs.*`, `uploadReject.*`) so iOS/Safari blank-tile cases are visible without devtools.
+- Added scan-rate throttling in `scheduleTileFxCollect()` (`TILEFX_SCAN_MIN_INTERVAL_MS=90`) to reduce scan churn during rapid scroll while keeping render loop independent.
+- Updated `public/js/explorer-shaders.mjs` TileFX upload pipeline to resolve sources beyond inline `<img>`: URL-backed sources are now loaded/decode-gated, pending uploads are tracked, and uploads use cache guards plus `createImageBitmap` fallback paths when available.
+- Expanded TileFX debug telemetry with `uploadOk`, `uploadFail`, and `lastUploadError`, and retained `texturesPending`/cache stats for runtime verification.
+- Refreshed static explorer assertions in `tests/test_public_explorer_program_monitor.py` for the new FX readiness and telemetry contracts.
+
+### Latest Implementation Notes (2026-03-05, in-view thumbnail vanish fix + stable FX texture readiness)
+- Fixed FX blanking regression where tiles could hide DOM thumbs without persistent texture backing by introducing `TileFXRenderer.hasTexture(key)` and applying `data-fx-ready`/`.tilefx-ready` from renderer cache state during every tile collection pass.
+- `collectTileFxTiles()` now guarantees a stable fallback key (`data-fx-card-id`) when media IDs are missing, preventing keyless tiles from bypassing upload and readiness logic.
+- Tile source selection now prioritizes thumbnail URL metadata (`data-thumb-url`) for image-backed tiles so upload preparation no longer depends solely on DOM image completion/visibility timing.
+- Hardened TileFX upload diagnostics: `uploadOk`, `uploadFail`, `lastUploadError`, and categorized reject counters now include `upsertFromImage` failure reasons (e.g., texture upload rejection) rather than silently dropping failed uploads.
+- Upload drain path now records and exposes failed texture insert attempts so mobile Safari/WebGL edge cases are visible in HUD telemetry instead of appearing as zero-activity states.
+
+### Latest Implementation Notes (2026-03-05, explicit TileFX upload state-machine telemetry)
+- Added explicit TileFX upload state-machine counters in `public/js/explorer-shaders.mjs`: `uploadAttempt`, `pendingWaitLoad`, `pendingReady`, and `srcMissing`, alongside existing `uploadOk/uploadFail/lastUploadError` so stalled upload pipelines are diagnosable on-device.
+- Hardened cache insertion fallback in `_drainPendingUploads(...)`: when `createImageBitmap`-backed uploads fail (`TEX_IMAGE_FAILED`), renderer retries texture upload using the original image source before declaring failure.
+- Updated `public/explorer.html` HUD to show upload attempts/pending state and missing-source counts, not just final upload totals.
+- Added `data-tex` per-tile swap marker in the FX collect loop and CSS readiness gating so DOM thumbnail visibility follows real cache-backed readiness state every scan.
+- Extended scan-time card priming to set both `data-fx-ready` and `data-tex` from `tileFX.hasTexture(key)` using stable fallback keys (`fx-card-*`) to avoid stale hide states.
+- Updated static explorer assertions for the new upload-state telemetry and `data-tex` swap contract.
+
+### Latest Implementation Notes (2026-03-05, single-view FX ownership + swap conflict reduction)
+- Removed FX thumbnail hide coupling to `data-fx-ready` CSS so DOM visibility is now controlled by TileFX-owned swap markers (`data-tex` / `.tilefx-ready`), reducing dual-renderer conflicts where non-TileFX readiness flags could blank cards.
+- Added swap lifecycle HUD counters in `public/explorer.html` (`swappedTiles`, `evictedTiles`) and surfaced them in `#tilefxHud` to track in-view texture ownership transitions.
+- Extended tile priming in `collectTileFxTiles()` to record eviction transitions (`data-tex: 1 -> 0`) and update swap counts each scan, while preserving stable fallback keys and viewport-space rect mapping.
+- Added `lastFailReason` telemetry in `public/js/explorer-shaders.mjs` and synchronized it with upload failure paths so HUD diagnostics report the latest meaningful upload rejection reason.
+- Updated static monitor assertions to match the refined FX swap contract and telemetry labels.
+
+### Latest Implementation Notes (2026-03-06, agent handoff hygiene)
+- Performed a branch hygiene pass with no API-contract changes; this commit is documentation-only and preserves runtime behavior.
+- Confirmed the AGENTS handoff requirement remains active: every commit must include an AGENTS.md update entry for the next agent.
+- No additional feature toggles or telemetry fields were introduced in this checkpoint.
+
+
+### Latest Implementation Notes (2026-03-06, unified FX visual-viewport canvas contract)
+- Unified FX canvas viewport contract across static explorer overlays (`fx-debug-overlay`, `fx-shared-overlay`, `#bgImpulseCanvas`, `#tilefxCanvas`) using fixed positioning, `100vw`, and `height: calc(var(--vvh) * 100)` with `!important` guards in `public/explorer.html` to prevent static/partial-width regressions.
+- Added visual-viewport-driven sizing helpers in `public/js/explorer-shaders.mjs` (`_vvHeight`, `setVisualVhVar`, `resizeCanvasToCss`, `resizeAllFxCanvases`) and bound updates to `visualViewport.resize`, `visualViewport.scroll`, and `window.resize` so iOS toolbar transitions keep all FX canvases in sync.
+- Wired GL resize hygiene by exposing `setResolution(...)` on both `TileFXRenderer` and `AssetFX`, calling `gl.viewport(...)` and refreshing resolution uniforms after canvas backing-size updates.
+- Standardized FX DPR behavior at cap `2.0` for overlay/tile/background canvas resizing to avoid mixed-DPR seams; retained upload backpressure but removed adaptive DPR cap drift.
+- Updated explorer static assertions in `tests/test_public_explorer_program_monitor.py` for the new viewport-height contract and resize helper hooks.
+
+### Latest Implementation Notes (2026-03-06, FX mode lifecycle hard-disable + perf triage)
+- Reworked explorer view switching in `public/explorer.html` so TileFX is an exclusive mode: `window.__explorer_view` and `window.__tilefx_enabled` are now the source of truth, FX canvas visibility is toggled explicitly, and non-FX modes call `tileFX.stop()`, `tileFX.clear()`, and `tileFX.updateTiles([])`.
+- Added TileFX runtime lifecycle APIs in `public/js/explorer-shaders.mjs` (`setEnabled`, `start`, `stop`, `clear`, `noteScroll`) and enforced render short-circuiting when FX is disabled; upload draining now pauses during active scroll windows to reduce stutter.
+- Simplified `#mediaGridRoot.view-fx` styling in `public/explorer.html` to avoid dimmed/smooshed cards while preserving thumbnail-only swap behavior (`data-tex`) and metadata/selection visibility.
+- Changed default explorer startup view to Grid (`state.view='grid'`) as a temporary safety lever while FX mode remains opt-in.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` and added task tracking in `docs/todo/AGENTS.md` with checkbox completion state.
+
+### Latest Implementation Notes (2026-03-06, FX renderer pipeline hardening + health invariants)
+- Tightened TileFX pipeline limits in `public/explorer.html` + `public/js/explorer-shaders.mjs`: scan throttle raised to `TILEFX_SCAN_MIN_INTERVAL_MS=120` (~8.3/s), upload budget defaults set to `maxUploadsPerFrame=1` and `maxUploadsPerSecond=8`, and uploads remain deferred during active scroll idle windows.
+- Extended `window.__tilefx_dbg` health telemetry with lifecycle/runtime fields (`rafRunning`, `tilesVisible`, `tilesFed`, `tilesDrawn`, `scrolling`, `scrollIdleMs`) and surfaced these in `#tilefxHud` for mobile diagnostics.
+- Added fatal non-FX draw invariant handling in both shader/runtime loop and explorer HUD path: if draw calls are observed while mode is not FX, renderer force-stops and clears.
+- Cleaned TileFX upload error bookkeeping in `_queueTileImageUpload(...)` to remove duplicated fail-reason writes introduced during prior patch churn.
+- Updated `docs/todo/AGENTS.md` by prepending new carry-forward unchecked tasks and marking completed FX lifecycle/pipeline items as done.
+
+### Latest Implementation Notes (2026-03-06, FX renderer-swap state machine + deterministic thumb ownership)
+- Added a strict TileFX per-key state model in `public/js/explorer-shaders.mjs` (`DOM_ONLY`, `REQUESTED`, `UPLOADING`, `READY`, `EVICTED`) and now only commit DOM thumbnail swap (`data-tex="1"`) once a texture is actually bound/drawn in the render pass.
+- Updated FX-mode CSS in `public/explorer.html` so only per-tile swapped thumbs are hidden (`body.fx-mode .asset[data-tex="1"]`), while card metadata/selection overlays remain visible and card surfaces are visually transparent for true WebGL tile ownership.
+- Tightened tile key stability in `collectTileFxTiles()` by preferring durable asset/path/thumb identifiers over volatile fallbacks; tile entries now pass `tileEl` into TileFX for renderer-owned swap transitions.
+- Added decode memoization (`decodedSrcSet`) in TileFX image preparation to avoid repeated `img.decode()` churn for identical sources during scroll/collect cycles.
+- Extended TileFX HUD/debug counters with swap/state-machine telemetry (`stateCounts`, `readyTiles`, `pendingTiles`, `swapSetCalls`, `swapClearCalls`) and kept conservative mobile budgets (`scan=120ms`, `uploads=1/frame, 8/sec`).
+- Refreshed `docs/todo/AGENTS.md` by prepending new carry-forward tasks and marking completed renderer-swap items as done.
+
+### Latest Implementation Notes (2026-03-06, key-stability probe + cache eviction hysteresis + shader cover mapping)
+- Added FX debug probe UX in `public/explorer.html` (`ensureTileFxProbeButton`) gated by `fxdebug=1`; one tap now logs the first 20 visible tiles with key source, key-change signal, tile state, texture presence, `data-tex`, and image readiness for on-device iOS diagnostics.
+- Hardened key derivation in `collectTileFxTiles()` with explicit source precedence (`assetId`, `path`, `relative`, `thumbSrc`, ...) and per-card key-change tracking to diagnose key thrash.
+- Updated `TextureCacheLRU` in `public/js/explorer-shaders.mjs` with `visibleKeySet`, minimum-age hysteresis, and no-visible-eviction behavior; cache telemetry now includes `cacheBytes`, `cacheBudgetBytes`, and `evictReason` in `window.__tilefx_dbg`/HUD.
+- Separated upload drain from draw logic: `_drainPendingUploads(...)` is now invoked outside `_render(...)` and additionally gated by `enabled`, `mode==='fx'`, `document.visibilityState==='visible'`, and scroll-idle rules.
+- Improved tile thumbnail rendering quality by adding cover-style UV mapping (`u_tex_size`) and rounded-rect masking in TileFX fragment shader so READY tiles better match DOM thumbnail framing while preserving glass treatment.
+- Refreshed `docs/todo/AGENTS.md` with new carry-forward tasks and marked completed key-stability/probe/cache/shader work items.
+
+
+### Latest Implementation Notes (2026-03-06, FX probe snapshot freeze + auto-capture)
+- Initialized a persistent `window.__tilefx_probe` structure in `public/js/explorer-shaders.mjs` so probe data exists before explorer HUD updates and survives view toggles.
+- Added `captureTileFxProbeSnapshot(reason)` in `public/explorer.html` and routed the FX Probe button through it, storing timestamped visible-tile rows plus readiness/swap/cache counters for deterministic diagnostics.
+- Extended probe rows with `thumbSrc` metadata and normalized scalar typing (`String/Number/Boolean`) to keep console payloads stable across Safari and Chromium.
+- Updated TileFX HUD rendering to freeze into an `FX PROBE SNAPSHOT` block whenever probe data is present, including summary counters and the first 10 captured rows.
+- Added optional `?fxprobe=1` auto-capture after scroll idle in FX mode to support repeatable mobile repro captures without manual tapping.
+
+### Latest Implementation Notes (2026-03-06, FX activation + upload starvation fix)
+- Updated `public/explorer.html` FX view switching to call explicit TileFX lifecycle methods (`tileFX.enable()` on FX entry, `tileFX.disable()` on exit), and exposed `window.tileFX` for direct runtime diagnostics.
+- Corrected FX suspend wiring in `setView(...)` to follow inspector/actions panel state rather than forcing suspend on every view change.
+- Hardened `TileFXRenderer` lifecycle in `public/js/explorer-shaders.mjs`: `setEnabled(true)` now starts RAF immediately, loop exits when disabled, and `enable()/disable()` wrappers provide deterministic toggle semantics.
+- Removed strict upload starvation gate by allowing `_drainPendingUploads(...)` during scrolling unless cache pressure is high (>=90% budget), keeping visibility/mode/enabled checks intact.
+- Added upload pipeline counters (`uploadsQueued`, `uploadsAttempted`, `uploadsSucceeded`, `uploadsFailed`) and surfaced them to `window.__tilefx_dbg` + HUD for on-device verification that texture uploads are actually progressing.
+- Updated `tests/test_public_explorer_program_monitor.py` static assertions for the new FX lifecycle hooks, cache-pressure upload gate, and upload counters.
+
+### Latest Implementation Notes (2026-03-06, FX swap-surface coverage + texture-cap stabilization)
+- Updated FX-mode swap CSS in `public/explorer.html` to hide the real thumbnail surface variants (`.thumb`, `img`, `picture`, `video`, thumb utility classes, `[data-thumb]`, and inline background-image holders) only when `data-tex="1"`, while preserving metadata/selection overlays.
+- Added a temporary swap sanity signal (`body.fx-mode.fx-swap-sanity`) that outlines swapped tiles for 10 seconds after entering FX mode to verify renderer ownership without devtools.
+- Introduced a TileFX upload size contract in `public/js/explorer-shaders.mjs` via `resizeImageForGL(...)`; textures are downscaled before `texImage2D` using runtime knob `?tilefxMaxTex=...` with defaults `320` on coarse pointers and `512` on desktop pointers.
+- Updated `TextureCacheLRU` byte accounting to use uploaded (resized) dimensions and added average texture-size telemetry so HUD/probe now report `maxTex` and `avgTex` alongside cache bytes/budget.
+- Reduced churn by adding dynamic scan pacing (`120ms` while scrolling, `1000ms` idle heartbeat) and idled upload drain short-circuit when READY coverage already exceeds visible tiles plus configurable margin (`tilefxIdleReadyMargin`).
+- Extended static assertions in `tests/test_public_explorer_program_monitor.py` for swap-coverage CSS, texture-cap wiring, resize helper presence, and new maxTex telemetry strings.
+
+### Latest Implementation Notes (2026-03-06, FX lifecycle isolation hard-stop)
+- Added explicit mode-exit lifecycle teardown for TileFX: `destroyTileFX()` in `public/explorer.html` now runs whenever leaving FX mode and funnels through renderer teardown + canvas-state reset.
+- Exposed runtime lifecycle controls `window.destroyTileFX` and `window.setViewMode` to simplify on-device mode-transition diagnostics.
+- Added `TileFXRenderer.teardownForModeExit({ removeCanvas = false })` in `public/js/explorer-shaders.mjs` to hard-reset renderer state (RAF stop, tile lists, pending uploads, cache textures, and key debug counters) without requiring full page reload.
+- Hardened RAF loop guard so frame scheduling exits unless `enabled`, `mode==='fx'`, and `document.body` currently has `.fx-mode`, preventing ghost draw loops behind Grid/List.
+- Added CSS safety rule `body:not(.fx-mode) #tilefxCanvas { display:none !important; opacity:0 !important; }` so stale FX canvas visibility cannot leak across modes even if JS ordering regresses.
+- Updated static explorer assertions for new lifecycle hooks, teardown wiring, and non-FX canvas visibility contract.
