@@ -1343,3 +1343,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Extended tile priming in `collectTileFxTiles()` to record eviction transitions (`data-tex: 1 -> 0`) and update swap counts each scan, while preserving stable fallback keys and viewport-space rect mapping.
 - Added `lastFailReason` telemetry in `public/js/explorer-shaders.mjs` and synchronized it with upload failure paths so HUD diagnostics report the latest meaningful upload rejection reason.
 - Updated static monitor assertions to match the refined FX swap contract and telemetry labels.
+
+### Latest Implementation Notes (2026-03-06, agent handoff hygiene)
+- Performed a branch hygiene pass with no API-contract changes; this commit is documentation-only and preserves runtime behavior.
+- Confirmed the AGENTS handoff requirement remains active: every commit must include an AGENTS.md update entry for the next agent.
+- No additional feature toggles or telemetry fields were introduced in this checkpoint.
+
