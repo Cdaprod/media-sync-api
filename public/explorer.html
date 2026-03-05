@@ -845,15 +845,9 @@
     body.fx-mode #mediaGridRoot.view-fx .asset .thumb{
       opacity: 1;
     }
-    /* FX renderer-swap: only hide the DOM thumbnail layer when TileFX owns it */
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] img,
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] picture,
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] video,
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumbImg,
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumbVideo,
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] [data-thumb],
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] [style*="background-image"]{
+    /* FX failsafe — direct swap logic owns painter visibility, this is an img-only backstop */
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumb > img.asset-thumb,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="1"] .thumb img.asset-thumb{
       opacity: 0 !important;
       visibility: hidden !important;
     }
@@ -2014,6 +2008,29 @@
       return rows;
     }
 
+
+    function debugLogTilePainters(tileRef = '.asset[data-tex="1"]'){
+      if (!FX_DEBUG) return [];
+      const tileEl = (typeof tileRef === 'string') ? document.querySelector(tileRef) : tileRef;
+      if (!tileEl) return [];
+      const candidates = Array.from(tileEl.querySelectorAll('.thumb img, .thumb video, .thumb picture, .thumb [data-thumb], .thumb [style*="background-image"], .thumb'));
+      const rows = candidates.map((el) => {
+        const cs = getComputedStyle(el);
+        return {
+          tag: el.tagName,
+          cls: String(el.className || ''),
+          opacity: cs.opacity,
+          visibility: cs.visibility,
+          bg: cs.backgroundImage,
+          hasPoster: el instanceof HTMLVideoElement ? String(el.getAttribute('poster') || '') : '',
+          connected: !!el.isConnected,
+        };
+      });
+      console.info('[tilefx-painters]', { tileTex: tileEl.dataset.tex || '', rows });
+      return rows;
+    }
+    window.debugLogTilePainters = debugLogTilePainters;
+
     function updateTileFxHud(){
       const hud = ensureTileFxHud();
       ensureTileFxProbeButton();
@@ -2181,32 +2198,51 @@
         let thumbSrc = '';
         let thumbSurfaceEl = null;
         let thumbBgEl = null;
+        const thumbPaintEls = [];
+        const addPaintEl = (node) => {
+          if (!node || thumbPaintEls.includes(node)) return;
+          thumbPaintEls.push(node);
+        };
         if (thumbEl && thumbEl.getAttribute('src')) {
           thumbKind = 'img';
           thumbSrc = thumbEl.dataset.thumbUrl || thumbEl.currentSrc || thumbEl.getAttribute('src') || '';
-          thumbSurfaceEl = thumbEl;
-        } else if (posterEl && posterEl.getAttribute('poster')) {
-          thumbKind = 'videoPoster';
-          thumbSrc = posterEl.getAttribute('poster') || '';
-          thumbSurfaceEl = posterEl;
-        } else if (pictureEl) {
+          thumbSurfaceEl = thumbWrap || thumbEl;
+          addPaintEl(thumbEl);
+        }
+        if (posterEl && posterEl.getAttribute('poster')) {
+          if (!thumbSrc) {
+            thumbKind = 'videoPoster';
+            thumbSrc = posterEl.getAttribute('poster') || '';
+          }
+          thumbSurfaceEl = thumbSurfaceEl || posterEl;
+          addPaintEl(posterEl);
+        }
+        if (pictureEl) {
           const picImg = pictureEl.querySelector('img');
           if (picImg && picImg.getAttribute('src')) {
-            thumbKind = 'picture';
-            thumbSrc = picImg.currentSrc || picImg.getAttribute('src') || '';
-            thumbSurfaceEl = pictureEl;
+            if (!thumbSrc) {
+              thumbKind = 'picture';
+              thumbSrc = picImg.currentSrc || picImg.getAttribute('src') || '';
+            }
+            thumbSurfaceEl = thumbSurfaceEl || pictureEl;
+            addPaintEl(pictureEl);
+            addPaintEl(picImg);
           }
         }
-        if (!thumbSurfaceEl && thumbWrap) {
-          const cssBg = getComputedStyle(thumbWrap).backgroundImage || '';
-          const match = cssBg.match(/url\((['"]?)(.*?)\)/i);
+        if (thumbWrap) {
+          const cssBg = String(getComputedStyle(thumbWrap).backgroundImage || '');
+          const match = cssBg.match(/url\((['"]?)(.*?)\1\)/i);
           if (match?.[2]) {
-            thumbKind = 'cssbg';
-            thumbSrc = match[2];
-            thumbSurfaceEl = thumbWrap;
+            if (!thumbSrc) {
+              thumbKind = 'cssbg';
+              thumbSrc = match[2];
+            }
+            thumbSurfaceEl = thumbSurfaceEl || thumbWrap;
             thumbBgEl = thumbWrap;
+            addPaintEl(thumbWrap);
           }
         }
+        if (!thumbSurfaceEl) thumbSurfaceEl = thumbWrap || thumbEl || posterEl || pictureEl || null;
         card.dataset.fxReady = card.dataset.fxReady || '0';
         if (card.dataset.tex !== '1' && card.dataset.tex !== 'pending') card.dataset.tex = '0';
         card.classList.toggle('tilefx-ready', card.dataset.tex === '1');
@@ -2220,6 +2256,7 @@
           thumbEl,
           thumbSurfaceEl,
           thumbBgEl,
+          thumbPaintEls,
           thumbKind,
           thumbSrc,
           keySource,

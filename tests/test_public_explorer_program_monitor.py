@@ -161,6 +161,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'window.__tilefx_dbg' in html
     assert 'domSwapOk' in html
     assert 'function ensureTileFxHud()' in html
+    assert 'window.debugLogTilePainters = debugLogTilePainters;' in html
     assert 'function ensureTileFxProbeButton(){' in html
     assert "btn.id = 'tilefxProbeBtn';" in html
     assert "hud.id = 'tilefxHud';" in html
@@ -202,7 +203,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_drainPendingUploads(now)' in shader_module
     assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
     assert 'applyDomSwap(tile, swapped = false) {' in shader_module
-    assert 'const thumbSurfaceEl = tile?.thumbSurfaceEl || tile?.thumbEl || null;' in shader_module
+    assert 'const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length' in shader_module
+    assert "tileEl.classList.toggle('fx-swapped', !!swapped);" in shader_module
     assert "document.body?.classList?.contains('fx-mode')" in shader_module
     assert "document.visibilityState !== 'visible'" in shader_module
     assert 'if (this.isScrolling && cachePressure) return;' in shader_module
@@ -514,11 +516,8 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert 'tileFxCanvasTransformedAncestor:' in html
     assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
-    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] .thumb,' in html
+    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] .thumb > img.asset-thumb,' in html
     assert 'body:not(.fx-mode) #tilefxCanvas{ display: none !important; opacity: 0 !important; }' in html
-    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] img,' in html
-    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] picture,' in html
-    assert '#mediaGridRoot.view-fx .asset[data-tex="1"] video,' in html
     assert 'body.fx-mode.fx-swap-sanity #mediaGridRoot.view-fx .asset[data-tex="1"]{' in html
     assert 'armTileFxSwapSanity()' in html
     assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html

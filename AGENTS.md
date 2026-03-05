@@ -1427,3 +1427,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Raised default coarse-pointer texture cap to `512` (`tilefxMaxTex` override retained; desktop default now `640`) for improved iPhone sharpness while preserving capped uploads.
 - Adjusted HUD eviction telemetry to avoid sticky `OVER_BUDGET` reporting by emitting `evictReason='none'` when cache bytes are comfortably below budget.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` for new thumb-surface fields, direct swap API, transformed-ancestor debug output, and updated default texture-cap expression.
+
+### Latest Implementation Notes (2026-03-06, multi-surface thumb painter ownership)
+- Reworked TileFX tile collection in `public/explorer.html` to emit explicit `thumbPaintEls` alongside `thumbSurfaceEl/thumbBgEl`, covering image/video/picture/background painter variants per asset card.
+- Added `window.debugLogTilePainters(...)` (FX debug helper) to inspect computed painter visibility/opacity/background state on swapped cards directly from mobile Safari console.
+- Updated `TileFXRenderer.applyDomSwap(...)` in `public/js/explorer-shaders.mjs` to operate on all painter nodes in `thumbPaintEls`, storing/restoring inline style state via WeakMaps and toggling `fx-swapped` class on the tile card.
+- Tightened swap correctness by applying DOM hide only after the corresponding GL draw call and restoring all painter nodes immediately on non-ready/evicted paths.
+- Narrowed CSS swap fallback to img-only (`.thumb > img.asset-thumb`) so JS ownership remains authoritative and metadata/overlay surfaces are not unintentionally hidden.
+- Fixed thumbnail background URL parsing regression in `collectTileFxTiles()` (`/url\((['"]?)(.*?)\1\)/i`) and kept transformed-ancestor layout diagnostics for `#tilefxCanvas` in the layout debug payload.

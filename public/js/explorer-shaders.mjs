@@ -1135,20 +1135,44 @@ export class TileFXRenderer {
 
   applyDomSwap(tile, swapped = false) {
     const tileEl = tile?.tileEl || null;
-    const thumbSurfaceEl = tile?.thumbSurfaceEl || tile?.thumbEl || null;
+    const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length
+      ? tile.thumbPaintEls
+      : [tile?.thumbSurfaceEl || tile?.thumbEl].filter(Boolean);
     const thumbBgEl = tile?.thumbBgEl || null;
     if (!tileEl) return;
     tileEl.dataset.tex = swapped ? '1' : '0';
-    if (!thumbSurfaceEl) return;
-    const prior = this._domSwapStyleState.get(thumbSurfaceEl) || {
-      opacity: thumbSurfaceEl.style.opacity || '',
-      visibility: thumbSurfaceEl.style.visibility || '',
-    };
-    if (!this._domSwapStyleState.has(thumbSurfaceEl)) this._domSwapStyleState.set(thumbSurfaceEl, prior);
+    tileEl.classList.toggle('fx-swapped', !!swapped);
+    if (!paintEls.length) return;
+    for (const paintEl of paintEls) {
+      if (!paintEl) continue;
+      const prior = this._domSwapStyleState.get(paintEl) || {
+        opacity: paintEl.style.opacity || '',
+        visibility: paintEl.style.visibility || '',
+        filter: paintEl.style.filter || '',
+        transform: paintEl.style.transform || '',
+        willChange: paintEl.style.willChange || '',
+        pointerEvents: paintEl.style.pointerEvents || '',
+      };
+      if (!this._domSwapStyleState.has(paintEl)) this._domSwapStyleState.set(paintEl, prior);
+      if (swapped) {
+        paintEl.style.opacity = '0';
+        paintEl.style.visibility = 'hidden';
+        paintEl.style.filter = 'none';
+        paintEl.style.transform = 'translateZ(0)';
+        paintEl.style.willChange = 'opacity';
+        paintEl.style.pointerEvents = 'none';
+      } else {
+        paintEl.style.opacity = prior.opacity;
+        paintEl.style.visibility = prior.visibility;
+        paintEl.style.filter = prior.filter;
+        paintEl.style.transform = prior.transform;
+        paintEl.style.willChange = prior.willChange;
+        paintEl.style.pointerEvents = prior.pointerEvents;
+      }
+    }
+    const bgNode = thumbBgEl || paintEls.find((el) => String(getComputedStyle(el).backgroundImage || '').trim() !== 'none') || null;
+    if (!bgNode) return;
     if (swapped) {
-      thumbSurfaceEl.style.opacity = '0';
-      thumbSurfaceEl.style.visibility = 'hidden';
-      const bgNode = thumbBgEl || thumbSurfaceEl;
       const computedBg = String(getComputedStyle(bgNode).backgroundImage || '').trim();
       if (computedBg && computedBg !== 'none') {
         if (!this._domSwapBgState.has(bgNode)) this._domSwapBgState.set(bgNode, bgNode.style.backgroundImage || '');
@@ -1156,15 +1180,13 @@ export class TileFXRenderer {
       }
       return;
     }
-    thumbSurfaceEl.style.opacity = prior.opacity;
-    thumbSurfaceEl.style.visibility = prior.visibility;
-    const bgNode = thumbBgEl || thumbSurfaceEl;
     if (this._domSwapBgState.has(bgNode)) {
       const priorBg = this._domSwapBgState.get(bgNode);
       bgNode.style.backgroundImage = priorBg || '';
       this._domSwapBgState.delete(bgNode);
     }
   }
+
 
   hasTexture(key = '') {
     const k = String(key || '');
