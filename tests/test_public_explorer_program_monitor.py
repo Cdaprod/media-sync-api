@@ -176,7 +176,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "card.dataset.fxReady = ready ? '1' : '0';" in html
     assert 'swap: ready' in html
     assert 'data-tex="1"' in html
-    assert 'upload: try' in html
+    assert 'upload: queued' in html
     assert 'pending: wait' in html
     assert 'window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];' in html
 
@@ -201,10 +201,15 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_queueTileImageUpload(tile, key)' in shader_module
     assert '_drainPendingUploads(now)' in shader_module
     assert "document.visibilityState !== 'visible'" in shader_module
+    assert 'if (this.isScrolling && cachePressure) return;' in shader_module
     assert 'texturesUploaded: 0,' in shader_module
     assert 'texturesPending: 0,' in shader_module
     assert 'uploadOk: 0,' in shader_module
     assert 'uploadAttempt: 0,' in shader_module
+    assert 'uploadsQueued: 0,' in shader_module
+    assert 'uploadsAttempted: 0,' in shader_module
+    assert 'uploadsSucceeded: 0,' in shader_module
+    assert 'uploadsFailed: 0,' in shader_module
     assert 'pendingWaitLoad: 0,' in shader_module
     assert 'pendingReady: 0,' in shader_module
     assert 'srcMissing: 0,' in shader_module
@@ -472,9 +477,9 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert "cardFX.setDissolveMode('tile');" in html
     assert 'window.__tilefx_enabled = fxEnabled;' in html
     assert 'window.__explorer_view = nextView;' in html
-    assert 'tileFX.setEnabled(fxEnabled);' in html
-    assert 'tileFX.stop();' in html
-    assert 'tileFX.clear();' in html
+    assert 'tileFX.disable();' in html
+    assert 'tileFX.enable();' in html
+    assert 'window.tileFX = tileFX;' in html
     assert 'tileFX.noteScroll();' in html
     assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html
     assert "`mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`" in html

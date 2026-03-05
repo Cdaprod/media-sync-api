@@ -1394,3 +1394,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Extended probe rows with `thumbSrc` metadata and normalized scalar typing (`String/Number/Boolean`) to keep console payloads stable across Safari and Chromium.
 - Updated TileFX HUD rendering to freeze into an `FX PROBE SNAPSHOT` block whenever probe data is present, including summary counters and the first 10 captured rows.
 - Added optional `?fxprobe=1` auto-capture after scroll idle in FX mode to support repeatable mobile repro captures without manual tapping.
+
+### Latest Implementation Notes (2026-03-06, FX activation + upload starvation fix)
+- Updated `public/explorer.html` FX view switching to call explicit TileFX lifecycle methods (`tileFX.enable()` on FX entry, `tileFX.disable()` on exit), and exposed `window.tileFX` for direct runtime diagnostics.
+- Corrected FX suspend wiring in `setView(...)` to follow inspector/actions panel state rather than forcing suspend on every view change.
+- Hardened `TileFXRenderer` lifecycle in `public/js/explorer-shaders.mjs`: `setEnabled(true)` now starts RAF immediately, loop exits when disabled, and `enable()/disable()` wrappers provide deterministic toggle semantics.
+- Removed strict upload starvation gate by allowing `_drainPendingUploads(...)` during scrolling unless cache pressure is high (>=90% budget), keeping visibility/mode/enabled checks intact.
+- Added upload pipeline counters (`uploadsQueued`, `uploadsAttempted`, `uploadsSucceeded`, `uploadsFailed`) and surfaced them to `window.__tilefx_dbg` + HUD for on-device verification that texture uploads are actually progressing.
+- Updated `tests/test_public_explorer_program_monitor.py` static assertions for the new FX lifecycle hooks, cache-pressure upload gate, and upload counters.

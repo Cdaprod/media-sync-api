@@ -842,6 +842,10 @@ export class TileFXRenderer {
     this._uploadReject = { notReady: 0, zeroSize: 0, tainted: 0, unknown: 0 };
     this._lastUploadError = '';
     this._uploadAttempt = 0;
+    this._uploadsQueued = 0;
+    this._uploadsAttempted = 0;
+    this._uploadsSucceeded = 0;
+    this._uploadsFailed = 0;
     this._pendingReady = 0;
     this._pendingWaitLoad = 0;
     this._srcMissing = 0;
@@ -869,6 +873,10 @@ export class TileFXRenderer {
         texturesUploaded: 0,
         texturesPending: 0,
         uploadAttempt: 0,
+        uploadsQueued: 0,
+        uploadsAttempted: 0,
+        uploadsSucceeded: 0,
+        uploadsFailed: 0,
         pendingReady: 0,
         pendingWaitLoad: 0,
         srcMissing: 0,
@@ -988,19 +996,25 @@ export class TileFXRenderer {
   setMode(mode = 'grid') {
     const next = String(mode || 'grid').toLowerCase();
     this.mode = (next === 'fx' || next === 'grid' || next === 'list') ? next : 'grid';
-    this.setEnabled(this.mode === 'fx');
     if (window.__tilefx_dbg) window.__tilefx_dbg.mode = this.mode;
   }
 
   setEnabled(enabled = false) {
     this.enabled = enabled === true;
     if (window.__tilefx_dbg) window.__tilefx_dbg.enabled = this.enabled;
-    if (!this.enabled) {
-      this.stop();
-      this.clear();
-      this._drawCalls = 0;
-      if (window.__tilefx_dbg) window.__tilefx_dbg.drawCalls = 0;
-    }
+    if (this.enabled) this._start();
+    else this.stop();
+  }
+
+  enable() {
+    this.setEnabled(true);
+  }
+
+  disable() {
+    this.setEnabled(false);
+    this.clear();
+    this._drawCalls = 0;
+    if (window.__tilefx_dbg) window.__tilefx_dbg.drawCalls = 0;
   }
 
   noteScroll() {
@@ -1016,9 +1030,7 @@ export class TileFXRenderer {
   }
 
   start() {
-    this.enabled = true;
-    this._start();
-    if (window.__tilefx_dbg) window.__tilefx_dbg.enabled = true;
+    this.enable();
   }
 
   stop() {
@@ -1155,6 +1167,7 @@ export class TileFXRenderer {
       promise: null,
     };
     this._pendingUploads.set(key, pending);
+    this._uploadsQueued += 1;
 
     if (resolved.kind === 'none') {
       this._srcMissing += 1;
@@ -1215,7 +1228,9 @@ export class TileFXRenderer {
     if (!this.textureCache) return;
     if (!this.enabled || this.mode !== 'fx') return;
     if (document.visibilityState !== 'visible') return;
-    if (this.isScrolling) return;
+    const cacheBudget = Math.max(1, Number(this.textureCache?.maxBytes || 0));
+    const cachePressure = (Number(this.textureCache?.totalBytes || 0) / cacheBudget) >= 0.9;
+    if (this.isScrolling && cachePressure) return;
     if (now < this.backpressureUntil) return;
     if (this._uploadsWindow.length >= this.uploadBudgetPerSecond) return;
 
@@ -1238,11 +1253,13 @@ export class TileFXRenderer {
         }
       } catch {}
       uploadsThisFrame += 1;
+      this._uploadsAttempted += 1;
       Promise.resolve(uploadSource).then((resolvedSource) => {
         if (!resolvedSource) {
           this._lastUploadError = 'UPLOAD_SOURCE_MISSING';
           if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
           this._recordUploadReject('unknown');
+          this._uploadsFailed += 1;
           this._pendingUploads.delete(key);
           this._setTileState(key, TILE_STATE.DOM_ONLY);
           return;
@@ -1254,6 +1271,7 @@ export class TileFXRenderer {
         if (up.uploaded) {
           this._uploadsWindow.push(now);
           this._texturesUploaded += 1;
+          this._uploadsSucceeded += 1;
           this._setTileState(key, TILE_STATE.UPLOADING);
           this._pendingUploads.delete(key);
         } else {
@@ -1262,6 +1280,7 @@ export class TileFXRenderer {
           if (this._lastUploadError.includes('TEX_IMAGE')) this._recordUploadReject('tainted');
           else if (this._lastUploadError.includes('MISSING') || this._lastUploadError.includes('ZERO')) this._recordUploadReject('zeroSize');
           else this._recordUploadReject('unknown');
+          this._uploadsFailed += 1;
           this._pendingUploads.delete(key);
           this._setTileState(key, TILE_STATE.DOM_ONLY);
         }
@@ -1405,6 +1424,10 @@ export class TileFXRenderer {
       window.__tilefx_dbg.texturesUploaded = this._texturesUploaded;
       window.__tilefx_dbg.texturesPending = this._pendingUploads.size;
       window.__tilefx_dbg.uploadAttempt = this._uploadAttempt;
+      window.__tilefx_dbg.uploadsQueued = this._uploadsQueued;
+      window.__tilefx_dbg.uploadsAttempted = this._uploadsAttempted;
+      window.__tilefx_dbg.uploadsSucceeded = this._uploadsSucceeded;
+      window.__tilefx_dbg.uploadsFailed = this._uploadsFailed;
       window.__tilefx_dbg.pendingReady = this._pendingReady;
       window.__tilefx_dbg.pendingWaitLoad = this._pendingWaitLoad;
       window.__tilefx_dbg.srcMissing = this._srcMissing;
@@ -1440,6 +1463,10 @@ export class TileFXRenderer {
   _start() {
     if (this.raf) return;
     const loop = () => {
+      if (!this.enabled) {
+        this.stop();
+        return;
+      }
       const t0 = performance.now();
       try {
         this._drainPendingUploads(t0);
@@ -1459,7 +1486,8 @@ export class TileFXRenderer {
             window.__tilefx_dbg.drawCalls = 0;
           }
         }
-        this.raf = requestAnimationFrame(loop);
+        if (this.enabled) this.raf = requestAnimationFrame(loop);
+        else this.raf = 0;
       }
     };
     this.raf = requestAnimationFrame(loop);

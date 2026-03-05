@@ -1,6 +1,10 @@
 # TODO — FX Mode Stabilization Checklist
 
-- [ ] Capture iPhone probe output (`Probe FX`) after scroll-stop and attach key/state logs to next handoff so we can confirm key stability under real Safari kinetic scroll.
+- [ ] Add lightweight runtime assertion that logs when `mode==='fx'` but `enabled===false` for >500ms after pressing the FX toggle on mobile Safari.
+- [ ] Capture a fresh iPhone `?fxdebug=1&fxprobe=1` screenshot set after this upload-gate fix and confirm HUD shows non-zero `uploadsQueued/uploadsAttempted/uploadsSucceeded`.
+- [x] Fix FX toggle activation path so entering FX calls `tileFX.enable()` and leaving FX calls `tileFX.disable()`.
+- [x] Remove upload starvation from strict scroll-idle gating by allowing uploads during scroll unless cache pressure is high.
+- [x] Expose explicit upload pipeline counters (`uploadsQueued`, `uploadsAttempted`, `uploadsSucceeded`, `uploadsFailed`) in TileFX debug state/HUD.
 - [ ] Run optional `?tilefxAtlas=1` bind-churn experiment once baseline probe shows READY-state stability and low eviction churn.
 - [x] Add FX debug probe button in `fxdebug=1` mode that logs first 20 visible tiles (key, key source, state, hasTexture, data-tex, image readiness).
 - [x] Enforce key-derivation traceability (`assetId|path|relative|thumbSrc|...`) and key-change tracking per card across scans.
