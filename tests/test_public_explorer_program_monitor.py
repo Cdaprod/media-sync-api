@@ -172,6 +172,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'thumbs: img' in html
     assert 'reject: nr' in html
     assert 'data-fx-ready="1"' in html
+    assert 'data-tex="1"' in html
+    assert 'upload: try' in html
+    assert 'pending: wait' in html
     assert 'window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];' in html
 
     assert 'export class TileFXRenderer' in shader_module
@@ -187,6 +190,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'texturesUploaded: 0,' in shader_module
     assert 'texturesPending: 0,' in shader_module
     assert 'uploadOk: 0,' in shader_module
+    assert 'uploadAttempt: 0,' in shader_module
+    assert 'pendingWaitLoad: 0,' in shader_module
+    assert 'pendingReady: 0,' in shader_module
+    assert 'srcMissing: 0,' in shader_module
     assert 'uploadFail: 0,' in shader_module
     assert 'lastUploadError' in shader_module
     assert 'export class AssetFX' in shader_module

@@ -1328,3 +1328,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Tile source selection now prioritizes thumbnail URL metadata (`data-thumb-url`) for image-backed tiles so upload preparation no longer depends solely on DOM image completion/visibility timing.
 - Hardened TileFX upload diagnostics: `uploadOk`, `uploadFail`, `lastUploadError`, and categorized reject counters now include `upsertFromImage` failure reasons (e.g., texture upload rejection) rather than silently dropping failed uploads.
 - Upload drain path now records and exposes failed texture insert attempts so mobile Safari/WebGL edge cases are visible in HUD telemetry instead of appearing as zero-activity states.
+
+### Latest Implementation Notes (2026-03-05, explicit TileFX upload state-machine telemetry)
+- Added explicit TileFX upload state-machine counters in `public/js/explorer-shaders.mjs`: `uploadAttempt`, `pendingWaitLoad`, `pendingReady`, and `srcMissing`, alongside existing `uploadOk/uploadFail/lastUploadError` so stalled upload pipelines are diagnosable on-device.
+- Hardened cache insertion fallback in `_drainPendingUploads(...)`: when `createImageBitmap`-backed uploads fail (`TEX_IMAGE_FAILED`), renderer retries texture upload using the original image source before declaring failure.
+- Updated `public/explorer.html` HUD to show upload attempts/pending state and missing-source counts, not just final upload totals.
+- Added `data-tex` per-tile swap marker in the FX collect loop and CSS readiness gating so DOM thumbnail visibility follows real cache-backed readiness state every scan.
+- Extended scan-time card priming to set both `data-fx-ready` and `data-tex` from `tileFX.hasTexture(key)` using stable fallback keys (`fx-card-*`) to avoid stale hide states.
+- Updated static explorer assertions for the new upload-state telemetry and `data-tex` swap contract.

@@ -731,6 +731,10 @@ export class TileFXRenderer {
     this._texturesUploaded = 0;
     this._uploadReject = { notReady: 0, zeroSize: 0, tainted: 0, unknown: 0 };
     this._lastUploadError = '';
+    this._uploadAttempt = 0;
+    this._pendingReady = 0;
+    this._pendingWaitLoad = 0;
+    this._srcMissing = 0;
     this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 6));
     this.uploadPauseMs = 250;
     this.backpressureUntil = 0;
@@ -749,6 +753,10 @@ export class TileFXRenderer {
         uploadsThisSecond: 0,
         texturesUploaded: 0,
         texturesPending: 0,
+        uploadAttempt: 0,
+        pendingReady: 0,
+        pendingWaitLoad: 0,
+        srcMissing: 0,
         uploadOk: 0,
         uploadFail: 0,
         lastUploadError: '',
@@ -927,6 +935,7 @@ export class TileFXRenderer {
 
   _queueTileImageUpload(tile, key) {
     if (!key || !this.textureCache) return;
+    this._uploadAttempt += 1;
     if (this.textureCache.has(key)) return;
     if (this._pendingUploads.has(key)) return;
     const resolved = this._resolveTileSource(tile);
@@ -941,6 +950,7 @@ export class TileFXRenderer {
     this._pendingUploads.set(key, pending);
 
     if (resolved.kind === 'none') {
+      this._srcMissing += 1;
       pending.failed = true;
       pending.lastError = 'NO_SOURCE';
       this._lastUploadError = pending.lastError;
@@ -951,6 +961,7 @@ export class TileFXRenderer {
     if (resolved.kind === 'img') {
       const imgEl = resolved.source;
       const canUseElement = !!(imgEl && imgEl.complete && Number(imgEl.naturalWidth || 0) > 0);
+      if (!canUseElement) this._pendingWaitLoad += 1;
       const prepPromise = canUseElement
         ? this._prepareImageForUpload(imgEl)
         : (resolved.url ? this._queueUrlImage(resolved.url) : this._prepareImageForUpload(imgEl));
@@ -958,6 +969,7 @@ export class TileFXRenderer {
         .then((prepared) => {
           pending.source = prepared;
           pending.ready = true;
+          this._pendingReady += 1;
         })
         .catch((error) => {
           pending.failed = true;
@@ -973,6 +985,7 @@ export class TileFXRenderer {
       .then((prepared) => {
         pending.source = prepared;
         pending.ready = true;
+        this._pendingReady += 1;
       })
       .catch((error) => {
         pending.failed = true;
@@ -1009,7 +1022,10 @@ export class TileFXRenderer {
           this._pendingUploads.delete(key);
           return;
         }
-        const up = this.textureCache.upsertFromImage(key, resolvedSource, now);
+        let up = this.textureCache.upsertFromImage(key, resolvedSource, now);
+        if (!up.uploaded && String(up.reason || '').includes('TEX_IMAGE') && pending.source && pending.source !== resolvedSource) {
+          up = this.textureCache.upsertFromImage(key, pending.source, now);
+        }
         if (up.uploaded) {
           this._uploadsWindow.push(now);
           this._texturesUploaded += 1;
@@ -1122,6 +1138,10 @@ export class TileFXRenderer {
       window.__tilefx_dbg.uploadsThisSecond = this._uploadsWindow.length;
       window.__tilefx_dbg.texturesUploaded = this._texturesUploaded;
       window.__tilefx_dbg.texturesPending = this._pendingUploads.size;
+      window.__tilefx_dbg.uploadAttempt = this._uploadAttempt;
+      window.__tilefx_dbg.pendingReady = this._pendingReady;
+      window.__tilefx_dbg.pendingWaitLoad = this._pendingWaitLoad;
+      window.__tilefx_dbg.srcMissing = this._srcMissing;
       window.__tilefx_dbg.uploadOk = this._texturesUploaded;
       window.__tilefx_dbg.uploadFail = Number(this._uploadReject.notReady || 0) + Number(this._uploadReject.zeroSize || 0) + Number(this._uploadReject.tainted || 0) + Number(this._uploadReject.unknown || 0);
       window.__tilefx_dbg.lastUploadError = this._lastUploadError || '';
