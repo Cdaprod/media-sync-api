@@ -190,6 +190,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'setVisibleKeys(keys) {' in shader_module
     assert 'this.visibleKeySet = new Set();' in shader_module
     assert 'window.__tilefx_dbg = {' in shader_module
+    assert 'const prevDbg = window.__tilefx_dbg || {};' in shader_module
+    assert '...prevDbg,' in shader_module
     assert 'rafRunning: false,' in shader_module
     assert 'tilesVisible: 0,' in shader_module
     assert 'tilesFed: 0,' in shader_module
@@ -200,6 +202,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'totalReuploads()' in shader_module
     assert 'has(key)' in shader_module
     assert '_queueTileImageUpload(tile, key)' in shader_module
+    assert 'getViewportMetrics()' in shader_module
+    assert 'resizeTileFxCanvasToViewport(canvas, dprCap = 2)' in shader_module
+    assert 'this.debugRectsEnabled = new URLSearchParams(window.location.search).get(\'tilefxDebugRects\') === \'1\';' in shader_module
+    assert '_renderDebugRects(debugRects = []) {' in shader_module
     assert '_drainPendingUploads(now)' in shader_module
     assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
     assert 'applyDomSwap(tile, swapped = false) {' in shader_module

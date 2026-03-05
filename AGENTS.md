@@ -1435,3 +1435,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Tightened swap correctness by applying DOM hide only after the corresponding GL draw call and restoring all painter nodes immediately on non-ready/evicted paths.
 - Narrowed CSS swap fallback to img-only (`.thumb > img.asset-thumb`) so JS ownership remains authoritative and metadata/overlay surfaces are not unintentionally hidden.
 - Fixed thumbnail background URL parsing regression in `collectTileFxTiles()` (`/url\((['"]?)(.*?)\1\)/i`) and kept transformed-ancestor layout diagnostics for `#tilefxCanvas` in the layout debug payload.
+
+### Latest Implementation Notes (2026-03-06, visual-viewport TileFX alignment fix)
+- Updated `public/js/explorer-shaders.mjs` TileFX canvas sizing to use visual-viewport metrics (`visualViewport.width/height`) and fixed-position style dimensions, with resize hooks already wired for `visualViewport.resize|scroll` and `window.resize`.
+- Reworked TileFX draw placement to subtract `visualViewport.offsetLeft/offsetTop` from live card rects before pixel mapping, preventing quad drift/misalignment during iOS URL bar collapse/expand.
+- Implemented per-frame rect refresh for fed tiles (`tileEl.getBoundingClientRect()`) to remove stale cached layout coordinates during scroll/viewport animation transitions.
+- Added `?tilefxDebugRects=1` truth-overlay outlines driven by the same mapped rects used for GL draws to verify alignment on-device.
+- Changed TileFX debug-state initialization to merge existing `window.__tilefx_dbg` instead of replacing it, reducing HUD/probe stale-instance mismatches.

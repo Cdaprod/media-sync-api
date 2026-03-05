@@ -64,7 +64,7 @@ function resizeAllFxCanvases({ dprCap = 2, tilefxRenderer = null, assetfxRendere
   const debugSize = resizeCanvasToCss(debugCanvas, dprCap);
   const sharedSize = resizeCanvasToCss(sharedCanvas, dprCap);
   const bgSize = resizeCanvasToCss(bgCanvas, dprCap);
-  const tilefxSize = resizeCanvasToCss(tilefxCanvas, dprCap);
+  const tilefxSize = resizeTileFxCanvasToViewport(tilefxCanvas, dprCap);
 
   if (tilefxRenderer && tilefxSize && tilefxCanvas) {
     tilefxRenderer.setResolution?.(tilefxCanvas.width, tilefxCanvas.height, tilefxSize.dpr);
@@ -95,6 +95,36 @@ function getStableViewportSize() {
     width: Math.max(1, width || 1),
     height: Math.max(1, height || 1),
   };
+}
+
+function getViewportMetrics() {
+  const size = getStableViewportSize();
+  const vv = window.visualViewport;
+  return {
+    width: size.width,
+    height: size.height,
+    offsetX: Number(vv?.offsetLeft || 0),
+    offsetY: Number(vv?.offsetTop || 0),
+    scale: Number(vv?.scale || 1),
+  };
+}
+
+function resizeTileFxCanvasToViewport(canvas, dprCap = 2) {
+  if (!canvas) return null;
+  const vp = getViewportMetrics();
+  const cssW = Math.max(1, Number(vp.width || 1));
+  const cssH = Math.max(1, Number(vp.height || 1));
+  const dpr = Math.min(Math.max(1, Number(dprCap || 2)), Number(window.devicePixelRatio || 1));
+  canvas.style.position = 'fixed';
+  canvas.style.left = '0';
+  canvas.style.top = '0';
+  canvas.style.width = `${cssW}px`;
+  canvas.style.height = `${cssH}px`;
+  const pxW = Math.max(1, Math.round(cssW * dpr));
+  const pxH = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== pxW) canvas.width = pxW;
+  if (canvas.height !== pxH) canvas.height = pxH;
+  return { dpr, cssW, cssH, pxW, pxH, viewport: vp };
 }
 
 function getViewportOffsets() {
@@ -911,9 +941,14 @@ export class TileFXRenderer {
     this.textureCache = null;
     this._domSwapStyleState = new WeakMap();
     this._domSwapBgState = new WeakMap();
+    this._debugRectLayer = null;
+    this._debugRectPool = [];
+    this.debugRectsEnabled = new URLSearchParams(window.location.search).get('tilefxDebugRects') === '1';
 
     if (typeof window !== 'undefined') {
+      const prevDbg = window.__tilefx_dbg || {};
       window.__tilefx_dbg = {
+        ...prevDbg,
         mode: 'grid',
         visibleCount: 0,
         overscanCount: 0,
@@ -1078,6 +1113,9 @@ export class TileFXRenderer {
     this._uploadsWindow = [];
     this._domSwapStyleState = new WeakMap();
     this._domSwapBgState = new WeakMap();
+    this._debugRectLayer = null;
+    this._debugRectPool = [];
+    this.debugRectsEnabled = new URLSearchParams(window.location.search).get('tilefxDebugRects') === '1';
     this._lastScrollAt = 0;
     this.isScrolling = false;
     if (this.textureCache) {
@@ -1122,6 +1160,7 @@ export class TileFXRenderer {
     this.raf = 0;
     if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
     this._scrollIdleTimer = 0;
+    this._clearDebugRects();
     if (window.__tilefx_dbg) window.__tilefx_dbg.rafRunning = false;
   }
 
@@ -1209,6 +1248,70 @@ export class TileFXRenderer {
 
   _refreshTileList(now) {
     void now;
+    if (!Array.isArray(this.tiles) || this.tiles.length === 0) return;
+    for (const tile of this.tiles) {
+      const tileEl = tile?.tileEl;
+      if (!tileEl || !tileEl.isConnected) continue;
+      const rect = tileEl.getBoundingClientRect();
+      tile.rect = {
+        left: Number(rect.left || 0),
+        top: Number(rect.top || 0),
+        width: Number(rect.width || 0),
+        height: Number(rect.height || 0),
+      };
+    }
+  }
+
+  _ensureDebugRectLayer() {
+    if (!this.debugRectsEnabled || !this.canvas) return null;
+    if (this._debugRectLayer?.isConnected) return this._debugRectLayer;
+    const layer = document.createElement('div');
+    layer.className = 'tilefx-debug-rect-layer';
+    Object.assign(layer.style, {
+      position: 'fixed',
+      inset: '0',
+      zIndex: '99995',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(layer);
+    this._debugRectLayer = layer;
+    return layer;
+  }
+
+  _clearDebugRects() {
+    if (this._debugRectLayer) this._debugRectLayer.style.display = 'none';
+  }
+
+  _renderDebugRects(debugRects = []) {
+    if (!this.debugRectsEnabled) return;
+    const layer = this._ensureDebugRectLayer();
+    if (!layer) return;
+    const rects = Array.isArray(debugRects) ? debugRects : [];
+    layer.style.display = rects.length ? 'block' : 'none';
+    while (this._debugRectPool.length < rects.length) {
+      const node = document.createElement('div');
+      Object.assign(node.style, {
+        position: 'fixed',
+        boxSizing: 'border-box',
+        border: '1px solid rgba(84, 214, 255, 0.95)',
+        boxShadow: 'inset 0 0 0 1px rgba(10, 20, 40, 0.8)',
+        pointerEvents: 'none',
+      });
+      this._debugRectPool.push(node);
+      layer.appendChild(node);
+    }
+    this._debugRectPool.forEach((node, idx) => {
+      const r = rects[idx];
+      if (!r) {
+        node.style.display = 'none';
+        return;
+      }
+      node.style.display = 'block';
+      node.style.left = `${r.left}px`;
+      node.style.top = `${r.top}px`;
+      node.style.width = `${Math.max(1, r.width)}px`;
+      node.style.height = `${Math.max(1, r.height)}px`;
+    });
   }
 
   _recordUploadReject(reason = 'unknown') {
@@ -1482,6 +1585,7 @@ export class TileFXRenderer {
     if (!dims) return;
     const gl = this.gl;
     const dpr = dims.dpr;
+    const vp = getViewportMetrics();
     gl.viewport(0, 0, dims.width, dims.height);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -1493,6 +1597,7 @@ export class TileFXRenderer {
     let drawCalls = 0;
     const tiles = this.tiles || [];
     const visibleKeySet = new Set();
+    const debugRects = [];
     tiles.forEach((tile) => {
       const k = String(tile?.key || '');
       if (k) visibleKeySet.add(k);
@@ -1501,12 +1606,18 @@ export class TileFXRenderer {
     tiles.forEach((tile) => {
       const rect = tile?.rect;
       if (!rect) return;
-      const x1 = Number(rect.left || 0) * dpr;
-      const y1 = Number(rect.top || 0) * dpr;
-      const x2 = Number((rect.left || 0) + (rect.width || 0)) * dpr;
-      const y2 = Number((rect.top || 0) + (rect.height || 0)) * dpr;
+      const localLeft = Number(rect.left || 0) - vp.offsetX;
+      const localTop = Number(rect.top || 0) - vp.offsetY;
+      const localRight = localLeft + Number(rect.width || 0);
+      const localBottom = localTop + Number(rect.height || 0);
+      const x1 = localLeft * dpr;
+      const y1 = localTop * dpr;
+      const x2 = localRight * dpr;
+      const y2 = localBottom * dpr;
       if (!Number.isFinite(x1 + y1 + x2 + y2)) return;
       if (x2 <= x1 || y2 <= y1) return;
+      if (localRight <= 0 || localBottom <= 0 || localLeft >= vp.width || localTop >= vp.height) return;
+      if (this.debugRectsEnabled) debugRects.push({ left: localLeft, top: localTop, width: localRight - localLeft, height: localBottom - localTop });
 
       const color = this._typeColor(tile.type);
       gl.uniform4f(this.u.u_rect, x1, y1, x2, y2);
@@ -1559,6 +1670,7 @@ export class TileFXRenderer {
       drawCalls += 1;
     });
 
+    this._renderDebugRects(debugRects);
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
     if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
       this.backpressureUntil = now + this.uploadPauseMs;
@@ -1603,6 +1715,13 @@ export class TileFXRenderer {
       window.__tilefx_dbg.drawCalls = drawCalls;
       window.__tilefx_dbg.tilesDrawn = drawCalls;
       window.__tilefx_dbg.stateCounts = stateCounts;
+      window.__tilefx_dbg.viewport = {
+        width: Number(vp.width || 0),
+        height: Number(vp.height || 0),
+        offsetX: Number(vp.offsetX || 0),
+        offsetY: Number(vp.offsetY || 0),
+        scale: Number(vp.scale || 1),
+      };
       window.__tilefx_dbg.readyTiles = stateCounts.ready;
       window.__tilefx_dbg.pendingTiles = stateCounts.requested + stateCounts.uploading;
       window.__tilefx_dbg.rafRunning = this.raf > 0;
