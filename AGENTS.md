@@ -1312,3 +1312,12 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Increased FX tile scan overscan in `collectTileFxTiles()` to reduce scroll-gap blank bands and switched coverage denominator to visible-expected tiles (`scanned - culled`) for more accurate culling diagnostics.
 - Added frame-time adaptive DPR shaping in TileFX (`>18ms` lowers cap, `<10ms` slowly raises cap) to improve Safari/mobile smoothness under load.
 - Updated static explorer assertions in `tests/test_public_explorer_program_monitor.py` for the new texture-pending/upload and queueing contract.
+
+### Latest Implementation Notes (2026-03-05, TileFX source-discovery + per-tile readiness handshake)
+- Updated `public/explorer.html` TileFX collection to classify thumbnail sources per tile (`img`, CSS background image, `video[poster]`, or `none`) and pass `thumbKind`/`thumbSrc` metadata into the TileFX renderer.
+- Added explicit per-tile readiness handoff by writing `data-fx-ready="1|0"` alongside `.tilefx-ready`, and updated FX CSS so DOM thumbnail layers hide only when a tile is texture-ready.
+- Added TileFX HUD counters for source discovery and upload-reject diagnostics (`thumbs.*`, `uploadReject.*`) so iOS/Safari blank-tile cases are visible without devtools.
+- Added scan-rate throttling in `scheduleTileFxCollect()` (`TILEFX_SCAN_MIN_INTERVAL_MS=90`) to reduce scan churn during rapid scroll while keeping render loop independent.
+- Updated `public/js/explorer-shaders.mjs` TileFX upload pipeline to resolve sources beyond inline `<img>`: URL-backed sources are now loaded/decode-gated, pending uploads are tracked, and uploads use cache guards plus `createImageBitmap` fallback paths when available.
+- Expanded TileFX debug telemetry with `uploadOk`, `uploadFail`, and `lastUploadError`, and retained `texturesPending`/cache stats for runtime verification.
+- Refreshed static explorer assertions in `tests/test_public_explorer_program_monitor.py` for the new FX readiness and telemetry contracts.

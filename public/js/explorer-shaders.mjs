@@ -729,6 +729,8 @@ export class TileFXRenderer {
     this._lastFrameMs = 0;
     this._pendingUploads = new Map();
     this._texturesUploaded = 0;
+    this._uploadReject = { notReady: 0, zeroSize: 0, tainted: 0, unknown: 0 };
+    this._lastUploadError = '';
     this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 6));
     this.uploadPauseMs = 250;
     this.backpressureUntil = 0;
@@ -747,6 +749,9 @@ export class TileFXRenderer {
         uploadsThisSecond: 0,
         texturesUploaded: 0,
         texturesPending: 0,
+        uploadOk: 0,
+        uploadFail: 0,
+        lastUploadError: '',
         texturesInCache: 0,
         texturesEvicted: 0,
         reuploadsTotal: 0,
@@ -757,6 +762,7 @@ export class TileFXRenderer {
         backpressureUntil: 0,
         failed: false,
         failReason: '',
+        uploadReject: { notReady: 0, zeroSize: 0, tainted: 0, unknown: 0 },
       };
     }
 
@@ -842,54 +848,169 @@ export class TileFXRenderer {
     void now;
   }
 
-  _queueTileImageUpload(tile, key, img) {
-    if (!key || !img || !this.textureCache) return;
+  _recordUploadReject(reason = 'unknown') {
+    const key = String(reason || 'unknown');
+    const table = this._uploadReject;
+    if (!table) return;
+    if (!(key in table)) table.unknown = Number(table.unknown || 0) + 1;
+    else table[key] = Number(table[key] || 0) + 1;
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.uploadReject = { ...table };
+    }
+  }
+
+  _resolveTileSource(tile) {
+    const img = tile?.thumbEl || null;
+    if (img) {
+      return { kind: 'img', source: img, url: img.currentSrc || img.getAttribute('src') || '' };
+    }
+    const kind = String(tile?.thumbKind || '').toLowerCase();
+    const thumbSrc = String(tile?.thumbSrc || '').trim();
+    if (!thumbSrc) return { kind: 'none', source: null, url: '' };
+    if (kind === 'cssbg') return { kind: 'cssbg', source: null, url: thumbSrc };
+    if (kind === 'videoposter' || kind === 'poster') return { kind: 'poster', source: null, url: thumbSrc };
+    return { kind: 'url', source: null, url: thumbSrc };
+  }
+
+  async _prepareImageForUpload(source) {
+    if (!source) throw new Error('SOURCE_MISSING');
+    if (source instanceof HTMLImageElement) {
+      if (!source.complete) {
+        await new Promise((resolve) => {
+          const done = () => resolve();
+          source.addEventListener('load', done, { once: true, passive: true });
+          source.addEventListener('error', done, { once: true, passive: true });
+        });
+      }
+      if (typeof source.decode === 'function') {
+        try { await source.decode(); } catch {}
+      }
+      const w = Number(source.naturalWidth || 0);
+      const h = Number(source.naturalHeight || 0);
+      if (w <= 0 || h <= 0) throw new Error('ZERO_SIZE');
+      return source;
+    }
+    throw new Error('UNSUPPORTED_SOURCE');
+  }
+
+  _queueUrlImage(url) {
+    return new Promise((resolve, reject) => {
+      let abs = '';
+      try {
+        abs = new URL(url, window.location.href).toString();
+      } catch {
+        reject(new Error('BAD_URL'));
+        return;
+      }
+      const img = new Image();
+      img.decoding = 'async';
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        try {
+          const prepared = await this._prepareImageForUpload(img);
+          resolve(prepared);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      img.onerror = () => reject(new Error('URL_LOAD_FAIL'));
+      img.src = abs;
+    });
+  }
+
+  _queueTileImageUpload(tile, key) {
+    if (!key || !this.textureCache) return;
     if (this.textureCache.has(key)) return;
-    const existing = this._pendingUploads.get(key);
-    if (existing) return;
-    const attachToken = Symbol(key);
-    const onReady = () => {
-      const pending = this._pendingUploads.get(key);
-      if (!pending || pending.token !== attachToken) return;
-      this._pendingUploads.delete(key);
-      if (this.textureCache.has(key)) return;
-      if (!img.isConnected && !(img.complete && Number(img.naturalWidth || 0) > 0)) return;
-      pending.ready = true;
-      this._pendingUploads.set(key, pending);
+    if (this._pendingUploads.has(key)) return;
+    const resolved = this._resolveTileSource(tile);
+    const pending = {
+      kind: resolved.kind,
+      ready: false,
+      failed: false,
+      source: null,
+      lastError: '',
+      promise: null,
     };
-    const pending = { token: attachToken, img, ready: false, onLoad: onReady, onError: onReady };
     this._pendingUploads.set(key, pending);
-    if (img.complete && Number(img.naturalWidth || 0) > 0) {
-      pending.ready = true;
-      this._pendingUploads.set(key, pending);
+
+    if (resolved.kind === 'none') {
+      pending.failed = true;
+      pending.lastError = 'NO_SOURCE';
+      this._lastUploadError = pending.lastError;
+      this._recordUploadReject('unknown');
       return;
     }
-    try {
-      img.addEventListener('load', onReady, { once: true, passive: true });
-      img.addEventListener('error', onReady, { once: true, passive: true });
-    } catch {
-      pending.ready = true;
-      this._pendingUploads.set(key, pending);
+
+    if (resolved.kind === 'img') {
+      pending.promise = this._prepareImageForUpload(resolved.source)
+        .then((prepared) => {
+          pending.source = prepared;
+          pending.ready = true;
+        })
+        .catch((error) => {
+          pending.failed = true;
+          pending.lastError = String(error?.message || 'IMG_PREP_FAIL');
+          this._lastUploadError = pending.lastError;
+          if (pending.lastError.includes('ZERO_SIZE')) this._recordUploadReject('zeroSize');
+          else this._recordUploadReject('notReady');
+        });
+      return;
     }
+
+    pending.promise = this._queueUrlImage(resolved.url)
+      .then((prepared) => {
+        pending.source = prepared;
+        pending.ready = true;
+      })
+      .catch((error) => {
+        pending.failed = true;
+        pending.lastError = String(error?.message || 'URL_PREP_FAIL');
+        this._lastUploadError = pending.lastError;
+        if (pending.lastError.includes('ZERO_SIZE')) this._recordUploadReject('zeroSize');
+        else this._recordUploadReject('unknown');
+      });
   }
 
   _drainPendingUploads(now) {
     if (!this.textureCache) return;
     if (now < this.backpressureUntil) return;
     this._pendingUploads.forEach((pending, key) => {
-      if (!pending?.ready) return;
+      if (!pending || pending.failed) {
+        this._pendingUploads.delete(key);
+        return;
+      }
+      if (!pending.ready || !pending.source) return;
       if (this.textureCache.has(key)) {
         this._pendingUploads.delete(key);
         return;
       }
-      const img = pending.img;
-      if (!img || !img.complete || Number(img.naturalWidth || 0) <= 0) return;
-      const up = this.textureCache.upsertFromImage(key, img, now);
-      if (up.uploaded) {
-        this._uploadsWindow.push(now);
-        this._texturesUploaded += 1;
-      }
-      this._pendingUploads.delete(key);
+      let uploadSource = pending.source;
+      try {
+        if (typeof createImageBitmap === 'function' && uploadSource instanceof HTMLImageElement) {
+          uploadSource = createImageBitmap(uploadSource);
+        }
+      } catch {}
+      Promise.resolve(uploadSource).then((resolvedSource) => {
+        if (!resolvedSource) {
+          this._lastUploadError = 'UPLOAD_SOURCE_MISSING';
+          this._recordUploadReject('unknown');
+          this._pendingUploads.delete(key);
+          return;
+        }
+        const up = this.textureCache.upsertFromImage(key, resolvedSource, now);
+        if (up.uploaded) {
+          this._uploadsWindow.push(now);
+          this._texturesUploaded += 1;
+        }
+        try { resolvedSource.close?.(); } catch {}
+        this._pendingUploads.delete(key);
+      }).catch((error) => {
+        const msg = String(error?.message || 'UPLOAD_SOURCE_FAIL');
+        this._lastUploadError = msg;
+        if (msg.toLowerCase().includes('security') || msg.toLowerCase().includes('taint')) this._recordUploadReject('tainted');
+        else this._recordUploadReject('unknown');
+        this._pendingUploads.delete(key);
+      });
     });
   }
 
@@ -948,20 +1069,8 @@ export class TileFXRenderer {
 
       let hasTex = 0;
       const key = String(tile.key || '');
-      const img = tile.thumbEl || null;
-      if (key && img) {
-        const canUpload = now >= this.backpressureUntil;
-        if (!this.textureCache.has(key)) {
-          if (canUpload && img.complete && Number(img.naturalWidth || 0) > 0) {
-            const up = this.textureCache.upsertFromImage(key, img, now);
-            if (up.uploaded) {
-              this._uploadsWindow.push(now);
-              this._texturesUploaded += 1;
-            }
-          } else {
-            this._queueTileImageUpload(tile, key, img);
-          }
-        }
+      if (key && !this.textureCache.has(key)) {
+        this._queueTileImageUpload(tile, key);
       }
       const entry = key ? this.textureCache.get(key, now) : null;
       if (entry?.texture) {
@@ -995,6 +1104,10 @@ export class TileFXRenderer {
       window.__tilefx_dbg.uploadsThisSecond = this._uploadsWindow.length;
       window.__tilefx_dbg.texturesUploaded = this._texturesUploaded;
       window.__tilefx_dbg.texturesPending = this._pendingUploads.size;
+      window.__tilefx_dbg.uploadOk = this._texturesUploaded;
+      window.__tilefx_dbg.uploadFail = Number(this._uploadReject.notReady || 0) + Number(this._uploadReject.zeroSize || 0) + Number(this._uploadReject.tainted || 0) + Number(this._uploadReject.unknown || 0);
+      window.__tilefx_dbg.lastUploadError = this._lastUploadError || '';
+      window.__tilefx_dbg.uploadReject = { ...this._uploadReject };
       window.__tilefx_dbg.texturesInCache = this.textureCache?.map?.size || 0;
       window.__tilefx_dbg.texturesEvicted = this.textureCache?.evictions || 0;
       window.__tilefx_dbg.reuploadsTotal = this.textureCache?.totalReuploads?.() || 0;

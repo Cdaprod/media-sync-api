@@ -169,6 +169,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'COVERAGE_LOW' in html
     assert 'texturesUploaded' in html
     assert 'texturesPending' in html
+    assert 'thumbs: img' in html
+    assert 'reject: nr' in html
+    assert 'data-fx-ready="1"' in html
     assert 'window.__webgl_ctx_calls = window.__webgl_ctx_calls || [];' in html
 
     assert 'export class TileFXRenderer' in shader_module
@@ -179,10 +182,13 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'backpressureUntil' in shader_module
     assert 'totalReuploads()' in shader_module
     assert 'has(key)' in shader_module
-    assert '_queueTileImageUpload(tile, key, img)' in shader_module
+    assert '_queueTileImageUpload(tile, key)' in shader_module
     assert '_drainPendingUploads(now)' in shader_module
     assert 'texturesUploaded: 0,' in shader_module
     assert 'texturesPending: 0,' in shader_module
+    assert 'uploadOk: 0,' in shader_module
+    assert 'uploadFail: 0,' in shader_module
+    assert 'lastUploadError' in shader_module
     assert 'export class AssetFX' in shader_module
     assert "attachGrid(gridRoot, cardSelector = '.asset')" in shader_module
     assert 'pulse(cardEl' in shader_module
