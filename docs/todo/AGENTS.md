@@ -102,3 +102,9 @@
 - [x] Updated leak candidate scanning to inspect `.thumb-body` painters with the new DOM structure.
 - [ ] Validate on iPhone Safari that metadata remains visible while `data-tex="1"` tiles are FX-owned.
 - [ ] Capture one pasted `.asset` outerHTML sample from iPhone session after the split for handoff proof.
+
+## 2026-03-06 — FX lifecycle runtime-truth alignment (new)
+- [x] Aligned lifecycle/health verdict checks with live renderer truth (`tileFX.enabled`, scheduled RAF) to avoid false lifecycle-invariant output during startup transitions.
+- [x] Updated compact/expanded HUD runtime labels to report effective renderer status rather than debug-field lag alone.
+- [x] Kept lifecycle authority architecture unchanged and avoided new diagnostics/recovery additions.
+- [ ] Verify on physical iPhone that HUD now remains `mode: fx | enabled: 1 | raf: 1` during steady FX runtime after startup.

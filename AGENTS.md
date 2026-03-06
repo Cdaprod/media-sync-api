@@ -1556,3 +1556,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Moved `.asset-overlay`, badges/title/subtitle, selector UI, play button, and preview pill into `.asset-ui` so DOM metadata remains visible/stable while FX swaps thumbnail body ownership.
 - Updated tile painter collection to target `.thumb-body` surfaces (`img.asset-thumb`, body background, `.thumb-body .scrim`) and removed reliance on suppressing `.thumb` as a whole painter surface.
 - Updated painter leak candidate scanning to include `.thumb-body` so leak detection aligns with the new ownership boundary.
+
+### Latest Implementation Notes (2026-03-06, FX lifecycle runtime-truth alignment)
+- Updated lifecycle/health/HUD runtime checks in `public/explorer.html` to treat renderer state as active when either debug flags or live renderer fields indicate activity (`tileFxDbg.enabled || tileFX.enabled`, `tileFxDbg.rafRunning || tileFX.raf > 0`).
+- This removes false `lifecycle_invariant` states caused by debug-field lag while RAF is already scheduled/running and prevents misleading `enabled:0|raf:0` HUD output during valid FX startup.
+- Kept lifecycle authority path unchanged (`syncTileFxLifecycleToView(...)`) and did not add new proof/hud/recovery surfaces.
+- Updated static monitor expectations for the runtime-truth HUD strings in `tests/test_public_explorer_program_monitor.py`.

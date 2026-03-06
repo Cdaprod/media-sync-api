@@ -204,7 +204,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "proofPass: health === 'ok'" in html
     assert 'deadOverlayHidden' in html
     assert 'deadOverlayReason' in html
-    assert "renderer:${tileFxDbg.enabled ? 'enabled' : 'disabled'}" in html
+    assert "renderer:${runtimeEnabled ? 'enabled' : 'disabled'}" in html
     assert 'health:${healthVerdict}' in html
     assert 'visiblePainterLeakCount' in html
     assert "card.dataset.fxReady = ready ? '1' : '0';" in html
@@ -561,7 +561,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'tileFX.restoreAllDomSwaps?.();' in html
     assert 'tileFX.noteScroll();' in html
     assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html
-    assert "`mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`" in html
+    assert "`mode: ${state.view} | enabled: ${runtimeEnabled ? '1' : '0'} | raf: ${runtimeRafRunning ? '1' : '0'}`" in html
     assert "console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');" in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html

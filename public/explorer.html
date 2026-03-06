@@ -2171,7 +2171,9 @@
 
     function computeTileFxHealthVerdict(){
       if (state.view !== 'fx') return 'ok';
-      if (!tileFxDbg.enabled || !tileFxDbg.rafRunning) return 'lifecycle_invariant';
+      const runtimeEnabled = tileFxDbg.enabled === true || tileFX?.enabled === true;
+      const runtimeRafRunning = tileFxDbg.rafRunning === true || Number(tileFX?.raf || 0) > 0;
+      if (!runtimeEnabled || !runtimeRafRunning) return 'lifecycle_invariant';
       const visible = Number(tileFxDbg.tilesVisible || 0);
       const drawn = Number(tileFxDbg.tilesDrawn || 0);
       if (visible > 0 && drawn <= 0) return 'visible_not_drawn';
@@ -2383,7 +2385,9 @@
       const rendered = Number(tileFxDbg.renderedCount || 0);
       const ratio = scanned > 0 ? (rendered / scanned) : 1;
       const failReason = String(tileFxDbg.failReason || '');
-      const invariantWarn = (state.view === 'fx' && !tileFxDbg.enabled)
+      const runtimeEnabled = tileFxDbg.enabled === true || tileFX?.enabled === true;
+      const runtimeRafRunning = tileFxDbg.rafRunning === true || Number(tileFX?.raf || 0) > 0;
+      const invariantWarn = (state.view === 'fx' && (!runtimeEnabled || !runtimeRafRunning))
         || (state.view !== 'fx' && Number(tileFxDbg.drawCalls || 0) > 0);
       const compactHud = TILEFX_HUD_COMPACT_BY_DEFAULT && !FX_DEBUG;
       hud.classList.toggle('compact', compactHud);
@@ -2414,18 +2418,18 @@
       hud.classList.toggle('is-alert', !!invariantWarn);
       const healthVerdict = computeTileFxHealthVerdict();
       const lifecycleStable = state.view === 'fx'
-        ? (tileFxDbg.enabled === true && tileFxDbg.rafRunning === true && tileFxDbg.deadOverlayHidden !== true)
-        : (tileFxDbg.enabled !== true && tileFxDbg.rafRunning !== true && tileFxDbg.deadOverlayHidden !== false);
+        ? (runtimeEnabled && runtimeRafRunning && tileFxDbg.deadOverlayHidden !== true)
+        : (!runtimeEnabled && !runtimeRafRunning && tileFxDbg.deadOverlayHidden !== false);
       tileFxDbg.lifecycleStable = lifecycleStable;
       const compactRows = [
-        `view:${state.view} renderer:${tileFxDbg.enabled ? 'enabled' : 'disabled'} raf:${tileFxDbg.rafRunning ? 'running' : 'stopped'}`,
+        `view:${state.view} renderer:${runtimeEnabled ? 'enabled' : 'disabled'} raf:${runtimeRafRunning ? 'running' : 'stopped'}`,
         `visible/drawn ${Number(tileFxDbg.tilesVisible || 0)}/${Number(tileFxDbg.tilesDrawn || 0)} | ready/up ${Number(tileFxDbg.visibleReady || 0)}/${Number(tileFxDbg.visibleUploading || 0)}`,
         `swap set/clear ${Number(tileFxDbg.swapSetCalls || 0)}/${Number(tileFxDbg.swapClearCalls || 0)} | cache ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB`,
         `rectMismatch:${Number(tileFxDbg.rectMismatch || 0)} leak:${Number(tileFxDbg.visiblePainterLeakCount || 0)}`,
         `lifecycleStable:${lifecycleStable ? '1' : '0'} health:${healthVerdict}` ,
       ];
       const expandedRows = [
-        `mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`,
+        `mode: ${state.view} | enabled: ${runtimeEnabled ? '1' : '0'} | raf: ${runtimeRafRunning ? '1' : '0'}`,
         `domSwapOk: ${tileFxDbg.domSwapOk ? 'true' : 'false'} | scrolling: ${tileFxDbg.scrolling ? '1' : '0'} | idleMs: ${Math.round(Number(tileFxDbg.scrollIdleMs || 0))}`,
         `scanned/rendered: ${scanned}/${rendered} (${(ratio * 100).toFixed(1)}%) | fed/drawn: ${Number(tileFxDbg.tilesFed || 0)}/${Number(tileFxDbg.tilesDrawn || 0)}`,
         `visible: ready ${Number(tileFxDbg.visibleReady || 0)} | uploading ${Number(tileFxDbg.visibleUploading || 0)} | domOnly ${Number(tileFxDbg.visibleDomOnly || 0)} | swapped ${Number(tileFxDbg.visibleSwapped || 0)}`,
