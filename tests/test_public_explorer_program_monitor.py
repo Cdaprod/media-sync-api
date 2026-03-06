@@ -173,6 +173,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'window.exportTileFxProofSummary = exportTileFxProofSummary;' in html
     assert "function logTileFxProofSummary(reason = 'manual'){" in html
     assert 'window.logTileFxProofSummary = logTileFxProofSummary;' in html
+    assert 'window.logVisibleTileOwnership = logVisibleTileOwnership;' in html
     assert 'function computeTileFxHealthVerdict(){' in html
     assert "function assertTileFxViewLifecycle(reason = 'sync'){" in html
     assert "function containTileFxInvariantFailure(reason = 'lifecycle', details = {}){" in html
@@ -185,7 +186,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "card.classList.toggle('tilefx-ready', !!ready);" in html
     assert 'COVERAGE_LOW' in html
     assert 'visiblePromotedThisPass' in html
-    assert 'const maxPromoted = scrolling ? 10 : 42;' in html
+    assert 'const maxPromoted = scrolling ? (coarsePointer ? 6 : 9) : (coarsePointer ? 16 : 30);' in html
     assert 'visibleCards.forEach((tile) => addTile(tile));' in html
     assert 'texturesUploaded' in html
     assert 'texturesPending' in html
@@ -194,6 +195,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'rectMismatchVisibleCount' in html
     assert 'rectMismatchMaxPx' in html
     assert 'rectMismatchAvgPx' in html
+    assert 'lifecycleStable' in html
+    assert 'fedVisibleRatio' in html
+    assert 'visibleSwapReleaseBlocked' in html
+    assert 'offscreenSwapReleaseAllowed' in html
     assert 'visibleReadyButNotSwapped' in html
     assert 'visibleSwappedButNoTexture' in html
     assert "proofPass: health === 'ok'" in html
@@ -215,6 +220,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_getTileRectInVisualViewport(tileRect, viewportMetrics)' in shader_module
     assert '_cssRectToCanvasRect(localRect, dpr = 1)' in shader_module
     assert '_canReleaseSwap(tileEl, now = performance.now())' in shader_module
+    assert 'syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now())' in shader_module
+    assert 'getVisibleOwnershipRows(limit = 12)' in shader_module
     assert 'tileStateByKey = new Map();' in shader_module
     assert 'decodedSrcSet = new Set();' in shader_module
     assert '_setTileState(key, TILE_STATE.READY);' in shader_module
@@ -251,7 +258,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'lastIllegalDisable: null,' in shader_module
     assert "console.warn('[tilefx] rect mismatch'" in shader_module
     assert 'window.__tilefx_dbg.pendingCap = maxPending;' in shader_module
-    assert '_restoreUntrackedSwaps(activeTileEls, now);' in shader_module
+    assert '_restoreUntrackedSwaps(activeTileEls, now, visibleTileEls);' in shader_module
     assert 'const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length' in shader_module
     assert "tileEl.classList.toggle('fx-swapped', !!swapped);" in shader_module
     assert "document.body?.classList?.contains('fx-mode')" in shader_module

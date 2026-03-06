@@ -2398,29 +2398,33 @@
       }
       hud.classList.toggle('is-alert', !!invariantWarn);
       const healthVerdict = computeTileFxHealthVerdict();
+      const lifecycleStable = state.view === 'fx'
+        ? (tileFxDbg.enabled === true && tileFxDbg.rafRunning === true && tileFxDbg.deadOverlayHidden !== true)
+        : (tileFxDbg.enabled !== true && tileFxDbg.rafRunning !== true && tileFxDbg.deadOverlayHidden !== false);
+      tileFxDbg.lifecycleStable = lifecycleStable;
       const compactRows = [
         `view:${state.view} renderer:${tileFxDbg.enabled ? 'enabled' : 'disabled'} raf:${tileFxDbg.rafRunning ? 'running' : 'stopped'}`,
         `visible/drawn ${Number(tileFxDbg.tilesVisible || 0)}/${Number(tileFxDbg.tilesDrawn || 0)} | ready/up ${Number(tileFxDbg.visibleReady || 0)}/${Number(tileFxDbg.visibleUploading || 0)}`,
         `swap set/clear ${Number(tileFxDbg.swapSetCalls || 0)}/${Number(tileFxDbg.swapClearCalls || 0)} | cache ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB`,
         `rectMismatch:${Number(tileFxDbg.rectMismatch || 0)} leak:${Number(tileFxDbg.visiblePainterLeakCount || 0)}`,
-        `health:${healthVerdict}` ,
+        `lifecycleStable:${lifecycleStable ? '1' : '0'} health:${healthVerdict}` ,
       ];
       const expandedRows = [
         `mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`,
         `domSwapOk: ${tileFxDbg.domSwapOk ? 'true' : 'false'} | scrolling: ${tileFxDbg.scrolling ? '1' : '0'} | idleMs: ${Math.round(Number(tileFxDbg.scrollIdleMs || 0))}`,
         `scanned/rendered: ${scanned}/${rendered} (${(ratio * 100).toFixed(1)}%) | fed/drawn: ${Number(tileFxDbg.tilesFed || 0)}/${Number(tileFxDbg.tilesDrawn || 0)}`,
         `visible: ready ${Number(tileFxDbg.visibleReady || 0)} | uploading ${Number(tileFxDbg.visibleUploading || 0)} | domOnly ${Number(tileFxDbg.visibleDomOnly || 0)} | swapped ${Number(tileFxDbg.visibleSwapped || 0)}`,
-        `collect: overscan ${Number(tileFxDbg.collectOverscan || 0)} | maxFed ${Number(tileFxDbg.maxFed || 0)} | promoted ${Number(tileFxDbg.visiblePromotedThisPass || 0)}`,
+        `collect: overscan ${Number(tileFxDbg.collectOverscan || 0)} | maxFed ${Number(tileFxDbg.maxFed || 0)} | promoted ${Number(tileFxDbg.visiblePromotedThisPass || 0)} | fedVisibleRatio ${Number(tileFxDbg.fedVisibleRatio || 1).toFixed(3)}`,
         `dpr: ${(tileFxDbg.dpr || 1).toFixed(2)} (cap ${(tileFxDbg.dprCap || 2).toFixed(2)})`,
         `uploads/s: ${Number(tileFxDbg.uploadsThisSecond || 0)}`,
         `tex: up ${Number(tileFxDbg.texturesUploaded || 0)} | pending ${Number(tileFxDbg.texturesPending || 0)} | cache ${Number(tileFxDbg.texturesInCache || 0)} | evict ${Number(tileFxDbg.texturesEvicted || 0)} | reup ${Number(tileFxDbg.reuploadsTotal || 0)}`,
         `thumbs: img ${Number(tileFxDbg.thumbs?.img || 0)} | css ${Number(tileFxDbg.thumbs?.cssbg || 0)} | poster ${Number(tileFxDbg.thumbs?.poster || 0)} | none ${Number(tileFxDbg.thumbs?.none || 0)}`,
         `upload: queued ${Number(tileFxDbg.uploadsQueued || 0)} | try ${Number(tileFxDbg.uploadsAttempted || tileFxDbg.uploadAttempt || 0)} | ok ${Number(tileFxDbg.uploadsSucceeded || tileFxDbg.uploadOk || 0)} | fail ${Number(tileFxDbg.uploadsFailed || tileFxDbg.uploadFail || 0)}`,
         `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastFailReason || tileFxDbg.lastUploadError || 'none')}`,
-        `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | blocked ${Number(tileFxDbg.swapReleaseBlocked || 0)} | allowed ${Number(tileFxDbg.swapReleaseAllowed || 0)}`,
+        `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | blocked ${Number(tileFxDbg.swapReleaseBlocked || 0)} | allowed ${Number(tileFxDbg.swapReleaseAllowed || 0)} | visBlk ${Number(tileFxDbg.visibleSwapReleaseBlocked || 0)} | offOk ${Number(tileFxDbg.offscreenSwapReleaseAllowed || 0)}`,
         `cache: ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(tileFxDbg.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB | evictReason ${String(tileFxDbg.evictReason || 'none')} | maxTex ${Number(tileFxDbg.maxTexEdge || 0)} | avgTex ${Number(tileFxDbg.avgTexWidth || 0)}x${Number(tileFxDbg.avgTexHeight || 0)}`,
         `rectMismatch: ${Number(tileFxDbg.rectMismatch || 0)} | fail: ${invariantWarn ? 'LIFECYCLE_INVARIANT' : (failReason || 'none')}` ,
-        `health: ${healthVerdict}` ,
+        `lifecycleStable: ${lifecycleStable ? 'true' : 'false'} | health: ${healthVerdict}` ,
       ];
       hud.textContent = (compactHud ? compactRows : expandedRows).join('\n');
     }
@@ -2565,6 +2569,21 @@
     window.destroyTileFX = destroyTileFX;
     window.setViewMode = setView;
 
+    function logVisibleTileOwnership(limit = 12){
+      const rows = (typeof tileFX.getVisibleOwnershipRows === 'function')
+        ? tileFX.getVisibleOwnershipRows(limit)
+        : [];
+      const summary = {
+        timestamp: Date.now(),
+        view: String(state.view || 'grid'),
+        mode: String(tileFxDbg.mode || state.view || 'grid'),
+        rows,
+      };
+      console.info('[tilefx-visible-ownership]', summary);
+      return summary;
+    }
+    window.logVisibleTileOwnership = logVisibleTileOwnership;
+
     function collectTileFxTiles(){
       const t0 = performance.now();
       const root = el('mediaGridRoot');
@@ -2572,9 +2591,10 @@
       if (!root || !grid || state.view !== 'fx') return [];
       const rootRect = root.getBoundingClientRect();
       const scrolling = !!tileFxDbg.scrolling;
-      const overscan = scrolling ? 160 : 300;
-      const maxFed = scrolling ? 110 : 240;
-      const maxPromoted = scrolling ? 10 : 42;
+      const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+      const overscan = scrolling ? (coarsePointer ? 120 : 140) : (coarsePointer ? 220 : 280);
+      const maxFed = scrolling ? (coarsePointer ? 52 : 88) : (coarsePointer ? 96 : 168);
+      const maxPromoted = scrolling ? (coarsePointer ? 6 : 9) : (coarsePointer ? 16 : 30);
       const cards = Array.from(grid.querySelectorAll('.asset'));
       const visibleCards = [];
       const overscanCards = [];
@@ -2750,6 +2770,7 @@
       tileFxDbg.maxFed = maxFed;
       tileFxDbg.collectOverscan = overscan;
       tileFxDbg.visiblePromotedThisPass = visiblePromotedThisPass;
+      tileFxDbg.fedVisibleRatio = Number((visibleCards.length / Math.max(tiles.length, 1)).toFixed(3));
       tileFxScanStats.scannedCount = cards.length;
       tileFxScanStats.culledCount = culled;
       tileFxScanStats.renderedCount = tiles.length;

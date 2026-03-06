@@ -1521,3 +1521,12 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added explicit viewport contract comment and retained visualViewport handlers as resize/collect only (no lifecycle mutation).
 - Tightened renderer-side illegal disable telemetry in `public/js/explorer-shaders.mjs` by logging one stack-bearing console error per illegal-disable streak while still counting every blocked attempt (`illegalDisableBlocked`, `lastIllegalDisable`).
 - Updated static monitor tests for the new lifecycle helper signatures/containment helpers and for lifecycle-authority string checks.
+
+### Latest Implementation Notes (2026-03-06, visible ownership + scroll stability pass)
+- Added renderer ownership authority helpers in `public/js/explorer-shaders.mjs`: `syncVisibleTileOwnership(activeTiles, drawResults, now)` and `getVisibleOwnershipRows(limit)` so swap decisions are based on draw-truth (`wasDrawnThisPass`, valid rect, texture present) instead of cache presence alone.
+- Added stricter swap-release guards to prevent visible tile unswaps: `_restoreUntrackedSwaps(...)` now accepts visible-tile sets and blocks release for currently visible tiles; new telemetry tracks `visibleSwapReleaseBlocked` and `offscreenSwapReleaseAllowed`.
+- Kept lifecycle untouched in hot paths while tightening ownership behavior: post-draw ownership sync runs once per render commit and does not mutate lifecycle enable/disable/RAF state.
+- Tuned fed-set behavior in `collectTileFxTiles()` for coarse-pointer/mobile scroll stability with smaller scrolling caps (`collectOverscan`, `maxFed`, `maxPromoted`) and added `fedVisibleRatio` telemetry.
+- Added compact ownership probe `window.logVisibleTileOwnership(limit)` in `public/explorer.html` for on-device console truth checks of visible tile owner/state/draw/texture/data-tex fields.
+- Added HUD lifecycle stability line (`lifecycleStable`) and surfaced new ownership counters in expanded rows.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the new ownership helper APIs/telemetry and revised fed-set constants.

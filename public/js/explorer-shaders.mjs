@@ -957,6 +957,9 @@ export class TileFXRenderer {
     this._swapReleaseIdleMs = 260;
     this._swapReleaseBlocked = 0;
     this._swapReleaseAllowed = 0;
+    this._visibleSwapReleaseBlocked = 0;
+    this._offscreenSwapReleaseAllowed = 0;
+    this._lastOwnershipRows = [];
     this._swapLeakLoggedKeys = new Set();
     this._illegalDisableLogged = false;
     this._debugRectLayer = null;
@@ -1014,6 +1017,9 @@ export class TileFXRenderer {
         swapClearCalls: 0,
         swapReleaseBlocked: 0,
         swapReleaseAllowed: 0,
+        visibleSwapReleaseBlocked: 0,
+        offscreenSwapReleaseAllowed: 0,
+        fedVisibleRatio: 1,
         visibleReady: 0,
         visibleUploading: 0,
         visibleDomOnly: 0,
@@ -1406,6 +1412,81 @@ export class TileFXRenderer {
     if (this._debugRectLayer) this._debugRectLayer.style.display = 'none';
   }
 
+
+  _canReleaseVisibleSwap(drawMeta = null, now = performance.now()) {
+    if (!drawMeta?.tileEl) return this._canReleaseSwap(null, now);
+    if (drawMeta.visible) {
+      this._swapReleaseBlocked += 1;
+      this._visibleSwapReleaseBlocked += 1;
+      return false;
+    }
+    if (this.isScrolling) {
+      this._swapReleaseBlocked += 1;
+      return false;
+    }
+    if (!this._canReleaseSwap(drawMeta.tileEl, now)) {
+      this._swapReleaseBlocked += 1;
+      return false;
+    }
+    return true;
+  }
+
+  syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now()) {
+    const rows = [];
+    const active = Array.isArray(activeTiles) ? activeTiles : [];
+    active.forEach((tile) => {
+      const tileEl = tile?.tileEl || null;
+      if (!tileEl || !tileEl.isConnected) return;
+      const drawMeta = drawResults.get(tileEl) || {};
+      const swapState = this._getSwapState(tileEl);
+      const visible = drawMeta.visible === true;
+      const hasTexture = drawMeta.hasTexture === true;
+      const wasDrawnThisPass = drawMeta.wasDrawnThisPass === true;
+      const rectValid = drawMeta.rectValid === true;
+      const isSwapEligible = this.mode === 'fx' && this.enabled && hasTexture && wasDrawnThisPass && rectValid;
+      let owner = 'DOM';
+      let releaseBlocked = false;
+
+      if (isSwapEligible) {
+        owner = 'FX';
+        if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
+          this.applyDomSwap(tile, true, 'ownership:drawn-visible');
+          if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+        }
+      } else if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
+        const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
+        const canReleaseByIdle = idleFor >= this._swapReleaseIdleMs;
+        const canRelease = canReleaseByIdle && this._canReleaseVisibleSwap({ tileEl, visible }, now);
+        if (canRelease) {
+          this.applyDomSwap(tile, false, visible ? 'ownership:visible-dom' : 'ownership:offscreen-dom');
+          this._swapReleaseAllowed += 1;
+          this._offscreenSwapReleaseAllowed += 1;
+          if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+        } else {
+          releaseBlocked = true;
+        }
+      }
+
+      rows.push({
+        key: String(tile?.key || tileEl.dataset?.fxCardId || ''),
+        state: String(this.getTileState(String(tile?.key || ''))),
+        visible,
+        wasDrawnThisPass,
+        hasTexture,
+        dataTex: String(tileEl.dataset?.tex || '0'),
+        owner,
+        releaseBlocked,
+      });
+    });
+    this._lastOwnershipRows = rows;
+    return rows;
+  }
+
+  getVisibleOwnershipRows(limit = 12) {
+    const max = Math.max(1, Number(limit || 12));
+    return Array.isArray(this._lastOwnershipRows) ? this._lastOwnershipRows.slice(0, max) : [];
+  }
+
   _renderDebugRects(debugRects = []) {
     if (!this.debugRectsEnabled) return;
     const layer = this._ensureDebugRectLayer();
@@ -1447,9 +1528,10 @@ export class TileFXRenderer {
     });
   }
 
-  _restoreUntrackedSwaps(activeTileEls = new Set(), now = performance.now()) {
+  _restoreUntrackedSwaps(activeTileEls = new Set(), now = performance.now(), visibleTileEls = new Set()) {
     if (!this._swappedTileRefs.size) return;
     const active = activeTileEls instanceof Set ? activeTileEls : new Set();
+    const visible = visibleTileEls instanceof Set ? visibleTileEls : new Set();
     if (this.isScrolling) return;
     const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
     for (const [tileEl, tile] of Array.from(this._swappedTileRefs.entries())) {
@@ -1458,12 +1540,21 @@ export class TileFXRenderer {
         continue;
       }
       if (active.has(tileEl)) {
+        if (visible.has(tileEl)) {
+          this._swapReleaseBlocked += 1;
+          this._visibleSwapReleaseBlocked += 1;
+        }
         this._swapSeenFrameByTile.set(tileEl, { frame: this._frame, t: now });
         continue;
       }
       const seen = this._swapSeenFrameByTile.get(tileEl) || { frame: this._frame, t: now };
       const frameGap = Math.max(0, this._frame - Number(seen.frame || 0));
       const msGap = Math.max(0, now - Number(seen.t || now));
+      if (visible.has(tileEl)) {
+        this._swapReleaseBlocked += 1;
+        this._visibleSwapReleaseBlocked += 1;
+        continue;
+      }
       if (frameGap < this._swapReleaseDelayFrames && msGap < this._swapReleaseDelayMs) continue;
       if (idleFor < this._swapReleaseIdleMs || !this._canReleaseSwap(tileEl, now)) {
         this._swapReleaseBlocked += 1;
@@ -1767,10 +1858,14 @@ export class TileFXRenderer {
     gl.uniform1f(this.u.u_time, now * 0.001);
 
     let drawCalls = 0;
+    this._visibleSwapReleaseBlocked = 0;
+    this._offscreenSwapReleaseAllowed = 0;
     const tiles = this.tiles || [];
     const visibleKeySet = new Set();
     const debugRects = [];
     const activeTileEls = new Set();
+    const visibleTileEls = new Set();
+    const drawResults = new Map();
     tiles.forEach((tile) => {
       const k = String(tile?.key || '');
       if (k) visibleKeySet.add(k);
@@ -1790,9 +1885,23 @@ export class TileFXRenderer {
       const y1 = canvasRect.y1;
       const x2 = canvasRect.x2;
       const y2 = canvasRect.y2;
-      if (!Number.isFinite(x1 + y1 + x2 + y2)) return;
-      if (x2 <= x1 || y2 <= y1) return;
-      if (localRight <= 0 || localBottom <= 0 || localLeft >= vp.width || localTop >= vp.height) return;
+      const tileEl = tile?.tileEl || null;
+      const visible = !(localRight <= 0 || localBottom <= 0 || localLeft >= vp.width || localTop >= vp.height);
+      const rectValid = Number.isFinite(x1 + y1 + x2 + y2) && x2 > x1 && y2 > y1;
+      if (tileEl) {
+        drawResults.set(tileEl, {
+          tile,
+          tileEl,
+          key: String(tile?.key || ''),
+          visible,
+          rectValid,
+          hasTexture: false,
+          wasDrawnThisPass: false,
+        });
+      }
+      if (!rectValid) return;
+      if (!visible) return;
+      if (tileEl) visibleTileEls.add(tileEl);
       if (this.debugRectsEnabled) debugRects.push({ left: localLeft, top: localTop, width: localRight - localLeft, height: localBottom - localTop });
 
       const color = this._typeColor(tile.type);
@@ -1802,7 +1911,6 @@ export class TileFXRenderer {
 
       let hasTex = 0;
       const key = String(tile.key || '');
-      const tileEl = tile?.tileEl || null;
       const priorState = key ? (this.tileStateByKey.get(key) || TILE_STATE.DOM_ONLY) : TILE_STATE.DOM_ONLY;
       const swapState = this._getSwapState(tileEl);
       const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
@@ -1810,12 +1918,15 @@ export class TileFXRenderer {
       if (key && !this.textureCache.has(key)) {
         if (priorState === TILE_STATE.READY) {
           this._setTileState(key, TILE_STATE.EVICTED);
-          if (swapState === TILE_SWAP_STATE.FX_SWAPPED && idleFor >= this._swapReleaseIdleMs && this._canReleaseSwap(tileEl, now)) {
-            this.applyDomSwap(tile, false, 'evicted');
-            if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
-            this._swapReleaseAllowed += 1;
-          } else if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
-            this._swapReleaseBlocked += 1;
+          if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
+            const canReleaseByIdle = idleFor >= this._swapReleaseIdleMs;
+            const canRelease = canReleaseByIdle && this._canReleaseVisibleSwap({ tileEl, visible }, now);
+            if (canRelease) {
+              this.applyDomSwap(tile, false, 'evicted');
+              if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+              this._swapReleaseAllowed += 1;
+              this._offscreenSwapReleaseAllowed += 1;
+            }
           }
         }
         this._queueTileImageUpload(tile, key);
@@ -1830,16 +1941,10 @@ export class TileFXRenderer {
         hasTex = 1;
         this._setTileState(key, TILE_STATE.READY);
         shouldSwapSet = Boolean(tileEl && swapState !== TILE_SWAP_STATE.FX_SWAPPED);
-      } else if (tileEl && swapState === TILE_SWAP_STATE.FX_SWAPPED && !this.isScrolling && idleFor >= this._swapReleaseIdleMs && this._canReleaseSwap(tileEl, now)) {
-        this.applyDomSwap(tile, false, 'missing-texture');
-        if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
-        this._swapReleaseAllowed += 1;
+        if (tileEl && drawResults.has(tileEl)) drawResults.get(tileEl).hasTexture = true;
+      } else if (tileEl && swapState === TILE_SWAP_STATE.FX_SWAPPED) {
         this._setTileState(key, TILE_STATE.DOM_ONLY);
-      } else if (tileEl && swapState === TILE_SWAP_STATE.FX_SWAPPED && !this.isScrolling) {
-        this._swapReleaseBlocked += 1;
-      } else if (tileEl && swapState !== TILE_SWAP_STATE.DOM_VISIBLE && !this.isScrolling && idleFor >= this._swapReleaseIdleMs && this._canReleaseSwap(tileEl, now)) {
-        this.applyDomSwap(tile, false, 'fallback-dom-visible');
-        this._swapReleaseAllowed += 1;
+        if (drawResults.has(tileEl)) drawResults.get(tileEl).releaseBlocked = true;
       }
       if (!hasTex) gl.uniform2f(this.u.u_tex_size, 1, 1);
       if (typeof tile?.onTextureReady === 'function') {
@@ -1849,15 +1954,16 @@ export class TileFXRenderer {
       }
       gl.uniform1f(this.u.u_has_tex, hasTex);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      if (shouldSwapSet) {
-        this.applyDomSwap(tile, true, 'draw-ready');
-        if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+      if (tileEl && drawResults.has(tileEl)) drawResults.get(tileEl).wasDrawnThisPass = true;
+      if (shouldSwapSet && tileEl && drawResults.has(tileEl)) {
+        drawResults.get(tileEl).isSwapEligible = true;
       }
       drawCalls += 1;
     });
 
     this._renderDebugRects(debugRects);
-    this._restoreUntrackedSwaps(activeTileEls, now);
+    this.syncVisibleTileOwnership(tiles, drawResults, now);
+    this._restoreUntrackedSwaps(activeTileEls, now, visibleTileEls);
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
     if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
       this.backpressureUntil = now + this.uploadPauseMs;
@@ -1921,6 +2027,9 @@ export class TileFXRenderer {
       window.__tilefx_dbg.visibleSwapped = visibleSwapped;
       window.__tilefx_dbg.swapReleaseBlocked = this._swapReleaseBlocked;
       window.__tilefx_dbg.swapReleaseAllowed = this._swapReleaseAllowed;
+      window.__tilefx_dbg.visibleSwapReleaseBlocked = this._visibleSwapReleaseBlocked;
+      window.__tilefx_dbg.offscreenSwapReleaseAllowed = this._offscreenSwapReleaseAllowed;
+      window.__tilefx_dbg.fedVisibleRatio = Number((Number(tiles.length || 0) > 0 ? (Number(visibleTileEls.size || 0) / Number(tiles.length || 1)) : 1).toFixed(3));
       window.__tilefx_dbg.rafRunning = this.raf > 0;
       window.__tilefx_dbg.scrolling = this.isScrolling;
       window.__tilefx_dbg.scrollIdleMs = this.isScrolling ? 0 : Math.max(0, now - Number(this._lastScrollAt || 0));
