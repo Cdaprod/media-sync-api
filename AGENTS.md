@@ -1538,3 +1538,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Re-tuned visible-first feed constants in `collectTileFxTiles()` (`overscan`, `maxFed`, `maxPromoted`) and sorted overscan candidates by viewport distance so near-visible tiles warm first and distant gradual takeover is reduced.
 - Kept lifecycle and diagnostics surface unchanged for this pass; changes are renderer behavior + ownership/release policy only.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the tuned constants and updated untracked-swap call signature.
+
+### Latest Implementation Notes (2026-03-06, lifecycle bootstrap deadlock fix)
+- Fixed FX lifecycle bootstrap false-negative in `assertTileFxViewLifecycle(...)`: RAF is now considered healthy when a frame is scheduled (`tileFX.raf > 0`) even before `tileFxDbg.rafRunning` flips true on the first callback.
+- This prevents immediate containment fallback during valid startup, which was hiding the TileFX canvas and restoring DOM swaps before the first render loop tick.
+- Kept renderer architecture/features unchanged; this patch only corrects startup ordering so the existing scan→feed→upload→draw pipeline can proceed.

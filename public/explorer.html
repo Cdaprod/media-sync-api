@@ -2270,7 +2270,8 @@
         applyTileFxCanvasState(true);
         const fixedEnabled = !!tileFxDbg.enabled;
         const fixedRaf = !!tileFxDbg.rafRunning;
-        if (!fixedEnabled || !fixedRaf) {
+        const rafScheduled = Number(tileFX.raf || 0) > 0;
+        if (!fixedEnabled || (!fixedRaf && !rafScheduled)) {
           containTileFxInvariantFailure(`assert:${reason}`, { fxMode, fixedEnabled, fixedRaf });
           return false;
         }

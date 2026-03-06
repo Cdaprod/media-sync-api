@@ -80,3 +80,9 @@
 - [x] Kept lifecycle/proof/hud feature surface unchanged (behavior-only pass).
 - [ ] Validate on physical iPhone Safari that visible tiles no longer alternate DOM/FX at viewport edges after aggressive scroll-stop.
 - [ ] Capture and attach one `window.logVisibleTileOwnership(12)` output after aggressive scroll-stop.
+
+## 2026-03-06 — Lifecycle bootstrap deadlock fix (new)
+- [x] Fixed `assertTileFxViewLifecycle(...)` to accept scheduled RAF (`tileFX.raf > 0`) during startup before first-frame debug flags update.
+- [x] Removed false containment trigger that could hide canvas + restore swaps before first render tick.
+- [x] Kept behavior surface stable (no new diagnostics/proof/hud/watchdog additions).
+- [ ] Re-run physical iPhone Safari check to confirm FX startup no longer falls into immediate `LIFECYCLE_INVARIANT` on entry.
