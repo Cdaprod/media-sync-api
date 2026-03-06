@@ -5348,6 +5348,26 @@
           }
           return null;
         })(),
+        tileFxCanvasTransformChain: (() => {
+          const chain = [];
+          let node = fxCanvas?.parentElement || null;
+          while (node && chain.length < 8){
+            const csNode = getComputedStyle(node);
+            const transform = String(csNode.transform || 'none');
+            const filter = String(csNode.filter || 'none');
+            const backdrop = String(csNode.backdropFilter || 'none');
+            if (transform !== 'none' || filter !== 'none' || backdrop !== 'none') {
+              chain.push({
+                node: node.id || node.className || node.tagName,
+                transform,
+                filter,
+                backdrop,
+              });
+            }
+            node = node.parentElement;
+          }
+          return chain;
+        })(),
       });
     }
 

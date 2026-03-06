@@ -1,11 +1,10 @@
 # TODO — FX Mode Stabilization Checklist
 
-- [x] Prevent unintended TileFX shutdown during viewport/layout churn by guarding `destroyTileFX(...)` while FX view remains active and requiring explicit non-FX transition reasons.
-- [x] Add disable-call stack telemetry (`[tilefx] DISABLE`) so accidental renderer shutdown paths can be identified quickly from mobile Safari logs.
-- [x] Keep viewport event handling resize/collect-only in FX mode (no teardown), including lightweight visualViewport live collect + short debounce collect.
-- [x] Restore swapped DOM painters for cards that fall out of the active fed tile set so scroll-away tiles do not remain hidden/disappear when returning.
-- [x] Add optional per-tile debug toast in FX mode when a swapped card (`data-tex=1`) still reports any painter with computed visibility/opacity showing (gated by `?fxdebug=1&tilefxPainterToast=1`).
-- [x] Add FX runtime watchdog auto-recover path that re-enables TileFX when HUD/debug state indicates FX view is active but renderer/RAF became stale.
+- [x] Enforce authoritative per-tile FX swap states (`DOM_VISIBLE` / `FX_SWAPPED` / `RESTORING`) in `TileFXRenderer` using WeakMap state, with transition reasons logged in FX debug mode.
+- [x] Keep swapped painter suppression inline-style based across `thumbPaintEls` (opacity/visibility/background restore), with dataset values treated as reflected state only.
+- [x] Add swap restore hysteresis for tiles leaving the active fed set (frame/time delay) and skip transient unswaps while scrolling to prevent scroll-away disappearance.
+- [x] Keep viewport event handlers collect/resize-only and maintain watchdog-based recovery while FX view is active.
+- [x] Add debug rect mismatch detector (`>2px`) with one-time logging and extended layout diagnostics (`tileFxCanvasTransformChain`) for transformed/filter/backdrop ancestor chains.
 - [ ] Capture iPhone proof run showing HUD `mode: fx | enabled: 1 | raf: 1` remains stable during aggressive scroll + Safari chrome collapse/expand.
 - [ ] Capture iPhone proof run with `?fxdebug=1&fxprobe=1&tilefxDebugRects=1` and verify debug outlines stay locked to card borders while assets no longer vanish after offscreen travel.
 - [ ] Evaluate whether desktop default cap should stay `640` or be tuned to `768` after quality/perf profiling.

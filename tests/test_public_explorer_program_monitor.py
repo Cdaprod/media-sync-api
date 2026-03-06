@@ -186,6 +186,7 @@ def test_explorer_shader_asset_fx_wiring_present():
 
     assert 'export class TileFXRenderer' in shader_module
     assert 'const TILE_STATE = Object.freeze({' in shader_module
+    assert 'const TILE_SWAP_STATE = Object.freeze({' in shader_module
     assert 'tileStateByKey = new Map();' in shader_module
     assert 'decodedSrcSet = new Set();' in shader_module
     assert '_setTileState(key, TILE_STATE.READY);' in shader_module
@@ -209,12 +210,15 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'resizeTileFxCanvasToViewport(canvas, dprCap = 2)' in shader_module
     assert 'this.debugRectsEnabled = new URLSearchParams(window.location.search).get(\'tilefxDebugRects\') === \'1\';' in shader_module
     assert '_renderDebugRects(debugRects = []) {' in shader_module
+    assert '_getSwapState(tileEl)' in shader_module
+    assert "_setSwapState(tileEl, nextState = TILE_SWAP_STATE.DOM_VISIBLE, reason = '')" in shader_module
     assert '_drainPendingUploads(now)' in shader_module
     assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
-    assert 'applyDomSwap(tile, swapped = false) {' in shader_module
+    assert "applyDomSwap(tile, swapped = false, reason = '') {" in shader_module
     assert "disable(reason = '')" in shader_module
     assert "console.warn('[tilefx] DISABLE'" in shader_module
-    assert '_restoreUntrackedSwaps(activeTileEls);' in shader_module
+    assert "console.warn('[tilefx] rect mismatch'" in shader_module
+    assert '_restoreUntrackedSwaps(activeTileEls, now);' in shader_module
     assert 'const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length' in shader_module
     assert "tileEl.classList.toggle('fx-swapped', !!swapped);" in shader_module
     assert "document.body?.classList?.contains('fx-mode')" in shader_module
@@ -531,6 +535,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert "maybeRecoverTileFxRuntime('visual-viewport');" in html
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert 'tileFxCanvasTransformedAncestor:' in html
+    assert 'tileFxCanvasTransformChain:' in html
     assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
     assert '#mediaGridRoot.view-fx .asset[data-tex="1"] .thumb > img.asset-thumb,' in html
     assert 'body:not(.fx-mode) #tilefxCanvas{ display: none !important; opacity: 0 !important; }' in html

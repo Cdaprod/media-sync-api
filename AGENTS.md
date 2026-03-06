@@ -1462,3 +1462,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Recovery path now reasserts `tileFX.setMode('fx')`, `tileFX.enable()`, and schedules fresh tile collection with a reason tag for traceable diagnostics.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` for watchdog constants, helper function, and recovery callsites.
 - Updated `docs/todo/AGENTS.md` checklist to mark watchdog task complete and keep iPhone proof/perf profiling tasks open.
+
+### Latest Implementation Notes (2026-03-06, authoritative swap-state + hysteresis)
+- Upgraded `TileFXRenderer` swap ownership to an explicit WeakMap-backed swap state model (`TILE_SWAP_STATE.DOM_VISIBLE|FX_SWAPPED|RESTORING`) with reasoned transition breadcrumbs in `window.__tilefx_dbg.swapTransitions`.
+- Kept DOM thumbnail suppression authoritative through `applyDomSwap(...)` inline style control on `thumbPaintEls` and background-image restoration snapshots, with `data-tex` retained as reflected state only.
+- Added offscreen swap restore hysteresis in `_restoreUntrackedSwaps(activeTileEls, now)` (frame/time thresholds) and skip unswap churn during scrolling to prevent scroll-away disappear/reappear flashes.
+- Added tile debug-rect mismatch logging (`[tilefx] rect mismatch` when >2px) and expanded explorer layout diagnostics with `tileFxCanvasTransformChain` to surface transformed/filter/backdrop ancestor stacks.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` and refreshed `docs/todo/AGENTS.md` task checklist for the new authoritative swap-state contract.
