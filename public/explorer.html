@@ -1834,6 +1834,9 @@
     const API = ''; // same-origin; keep '' for container-served index.html
     const el = (id) => document.getElementById(id);
     const FX_DEBUG = new URLSearchParams(window.location.search).get('fxdebug') === '1';
+    const TILEFX_PAINTER_TOAST_DEBUG = new URLSearchParams(window.location.search).get('tilefxPainterToast') === '1';
+    let tileFxPainterToastTimer = 0;
+    const tileFxPainterToastSeen = new Set();
     const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';
 
     if (FX_DEBUG) {
@@ -2107,6 +2110,34 @@
       }
     }
 
+
+    function maybeToastTileFxPainterLeak(reason = 'scan'){
+      if (!FX_DEBUG || !TILEFX_PAINTER_TOAST_DEBUG) return;
+      if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+      const swappedTiles = Array.from(document.querySelectorAll('#mediaGrid .asset[data-tex="1"]')).slice(0, 6);
+      if (!swappedTiles.length) return;
+      for (const tileEl of swappedTiles){
+        const tileKey = String(tileEl.dataset.fxCardId || tileEl.dataset.relativePath || tileEl.dataset.path || tileEl.dataset.streamUrl || '');
+        if (tileKey && tileFxPainterToastSeen.has(tileKey)) continue;
+        const rows = debugLogTilePainters(tileEl);
+        const leaking = rows.filter((row) => {
+          const opacity = Number(row.opacity);
+          const visible = String(row.visibility || '').toLowerCase() !== 'hidden';
+          const hasBg = String(row.bg || '').toLowerCase() !== 'none';
+          return (Number.isFinite(opacity) ? opacity > 0.03 : true) && (visible || hasBg);
+        });
+        if (!leaking.length) continue;
+        if (tileKey) tileFxPainterToastSeen.add(tileKey);
+        if (tileFxPainterToastTimer) clearTimeout(tileFxPainterToastTimer);
+        tileFxPainterToastTimer = setTimeout(() => {
+          tileFxPainterToastTimer = 0;
+          const shortKey = tileKey ? tileKey.split('/').pop() : 'unknown';
+          toast('warn', 'FX painter leak', `${shortKey} visible painters=${leaking.length} (${reason})`);
+        }, 60);
+        break;
+      }
+    }
+
     function scheduleTileFxCollect(reason = 'event'){
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
       const now = performance.now();
@@ -2122,6 +2153,7 @@
         tileFxDbg.scansPerSecond = tileFxScanRuns.length;
         tileFxDbg.lastInvalidationReason = reason;
         verifyTileFxDomSwap();
+        maybeToastTileFxPainterLeak(reason);
         updateTileFxHud();
       };
       if (waitMs > 0) {

@@ -162,6 +162,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'domSwapOk' in html
     assert 'function ensureTileFxHud()' in html
     assert 'window.debugLogTilePainters = debugLogTilePainters;' in html
+    assert "const TILEFX_PAINTER_TOAST_DEBUG = new URLSearchParams(window.location.search).get('tilefxPainterToast') === '1';" in html
+    assert "function maybeToastTileFxPainterLeak(reason = 'scan'){" in html
+    assert "toast('warn', 'FX painter leak'" in html
     assert 'function ensureTileFxProbeButton(){' in html
     assert "btn.id = 'tilefxProbeBtn';" in html
     assert "hud.id = 'tilefxHud';" in html
@@ -529,6 +532,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'body:not(.fx-mode) #tilefxCanvas{ display: none !important; opacity: 0 !important; }' in html
     assert 'body.fx-mode.fx-swap-sanity #mediaGridRoot.view-fx .asset[data-tex="1"]{' in html
     assert 'armTileFxSwapSanity()' in html
+    assert 'maybeToastTileFxPainterLeak(reason);' in html
     assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html
     assert "scheduleTileFxCollect('idle-heartbeat')" in html
     assert 'maxTex ${Number(tileFxDbg.maxTexEdge || 0)}' in html

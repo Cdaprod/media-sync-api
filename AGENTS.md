@@ -1449,3 +1449,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added disable instrumentation in `TileFXRenderer.disable(reason)` (`[tilefx] DISABLE` + stack) to reveal any accidental shutdown path that flips `enabled/raf` during runtime.
 - Added swapped-tile tracking (`_swappedTileRefs`) and `_restoreUntrackedSwaps(...)` so tiles leaving the active fed set are unswapped/restored, preventing hidden-thumb persistence after offscreen scroll.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` for guarded destroy signature/callsite and new TileFX disable + swap-restore symbols.
+
+### Latest Implementation Notes (2026-03-06, FX painter-leak toast diagnostics)
+- Added optional swapped-painter leak toast diagnostics in `public/explorer.html` behind `?fxdebug=1&tilefxPainterToast=1`, emitting a warning toast when swapped cards still report visible thumb painter surfaces.
+- Hooked painter-leak checks into `scheduleTileFxCollect(...)` after DOM-swap verification so diagnostics run on the same scan cadence without affecting normal mode behavior.
+- Kept diagnostics deduplicated per tile key and throttled via a short timer to avoid toast spam during continuous scrolling.
+- Updated `docs/todo/AGENTS.md` and static assertions in `tests/test_public_explorer_program_monitor.py` for the new debug toast hook and query flag.
