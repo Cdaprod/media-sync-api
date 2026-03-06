@@ -904,6 +904,13 @@
       white-space: pre;
       pointer-events: none;
       min-width: 220px;
+      max-width: min(72vw, 440px);
+      opacity: 0.9;
+    }
+    #tilefxHud.compact{
+      opacity: 0.78;
+      min-width: 190px;
+      max-width: min(62vw, 320px);
     }
     #tilefxHud.is-alert{
       border-color: rgba(255,110,110,0.75);
@@ -1863,6 +1870,7 @@
     let tileFxPainterToastTimer = 0;
     const tileFxPainterToastSeen = new Set();
     const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';
+    const TILEFX_PROOF_MODE = new URLSearchParams(window.location.search).get('tilefxProof') === '1';
 
     if (FX_DEBUG) {
       const proto = HTMLCanvasElement.prototype;
@@ -1944,6 +1952,9 @@
     tileFxDbg.srcMissing = Number(tileFxDbg.srcMissing || 0);
     tileFxDbg.swappedTiles = Number(tileFxDbg.swappedTiles || 0);
     tileFxDbg.evictedTiles = Number(tileFxDbg.evictedTiles || 0);
+    tileFxDbg.rectMismatchRows = Array.isArray(tileFxDbg.rectMismatchRows) ? tileFxDbg.rectMismatchRows : [];
+    tileFxDbg.rectMismatch = Number(tileFxDbg.rectMismatch || 0);
+    tileFxDbg.firstLivenessFailure = tileFxDbg.firstLivenessFailure || null;
 
     const tileFxScanStats = {
       scannedCount: 0,
@@ -1963,6 +1974,7 @@
     let tileFxAutoProbeTimer = 0;
     let tileFxSwapSanityTimer = 0;
     const AUTO_FX_PROBE = new URLSearchParams(window.location.search).get('fxprobe') === '1';
+    const TILEFX_HUD_COMPACT_BY_DEFAULT = true;
 
     function ensureTileFxHud(){
       let hud = document.getElementById('tilefxHud');
@@ -2036,6 +2048,126 @@
       return rows;
     }
 
+    function readVisualViewportSnapshot(){
+      const vv = window.visualViewport;
+      return {
+        width: Number(vv?.width || window.innerWidth || 0),
+        height: Number(vv?.height || window.innerHeight || 0),
+        offsetTop: Number(vv?.offsetTop || 0),
+        offsetLeft: Number(vv?.offsetLeft || 0),
+      };
+    }
+
+    function countVisibleThumbPainters(tileEl){
+      if (!tileEl) return { count: 0, offenders: [] };
+      const candidates = Array.from(tileEl.querySelectorAll('.thumb img, .thumb video, .thumb picture, .thumb [data-thumb], .thumb [style*="background-image"], .thumb'));
+      const offenders = [];
+      for (const node of candidates) {
+        const cs = getComputedStyle(node);
+        const opacity = Number(cs.opacity || 1);
+        const visible = String(cs.visibility || '').toLowerCase() !== 'hidden';
+        const hasBg = String(cs.backgroundImage || '').toLowerCase() !== 'none';
+        if ((Number.isFinite(opacity) ? opacity > 0.03 : true) && (visible || hasBg)) {
+          offenders.push(`${node.tagName}.${String(node.className || '').trim() || 'na'}`);
+        }
+      }
+      return { count: offenders.length, offenders };
+    }
+
+    function captureTileFxProof(reason = 'manual'){
+      const vv = readVisualViewportSnapshot();
+      const rows = tileFxProbeRows.slice(0, 20).map((row) => ({
+        key: String(row.key || ''),
+        state: String(row.state || tileFX.getTileState(row.key)),
+        dataTex: String(row.dataTex || ''),
+        hasTexture: !!row.hasTexture,
+        imgComplete: !!row.imgComplete,
+        rect: {
+          x: Number(row.rect?.x || 0),
+          y: Number(row.rect?.y || 0),
+          w: Number(row.rect?.w || 0),
+          h: Number(row.rect?.h || 0),
+        },
+      }));
+      window.__tilefx_proof = {
+        timestamp: Date.now(),
+        reason,
+        view: String(state.view || 'grid'),
+        enabled: !!tileFxDbg.enabled,
+        rafRunning: !!tileFxDbg.rafRunning,
+        drawCalls: Number(tileFxDbg.drawCalls || 0),
+        tilesVisible: Number(tileFxDbg.tilesVisible || 0),
+        tilesDrawn: Number(tileFxDbg.tilesDrawn || 0),
+        readyTiles: Number(tileFxDbg.readyTiles || 0),
+        pendingTiles: Number(tileFxDbg.pendingTiles || 0),
+        swapSetCalls: Number(tileFxDbg.swapSetCalls || 0),
+        swapClearCalls: Number(tileFxDbg.swapClearCalls || 0),
+        texturesInCache: Number(tileFxDbg.texturesInCache || 0),
+        scrolling: !!tileFxDbg.scrolling,
+        scrollIdleMs: Number(tileFxDbg.scrollIdleMs || 0),
+        vv,
+        visibleTiles: rows,
+      };
+      return window.__tilefx_proof;
+    }
+    window.captureTileFxProof = captureTileFxProof;
+
+    function assertTileFxLiveness(reason = 'runtime-check'){
+      if (state.view !== 'fx') return;
+      const enabled = !!tileFxDbg.enabled;
+      const rafRunning = !!tileFxDbg.rafRunning;
+      if (enabled && rafRunning) return;
+      if (!tileFxDbg.firstLivenessFailure) {
+        tileFxDbg.firstLivenessFailure = {
+          reason,
+          enabled,
+          rafRunning,
+          drawCalls: Number(tileFxDbg.drawCalls || 0),
+          t: Date.now(),
+          stack: (() => { try { return new Error('tilefx-liveness').stack || ''; } catch { return ''; } })(),
+        };
+        console.error('[tilefx] liveness invariant failed', tileFxDbg.firstLivenessFailure);
+      }
+    }
+
+    function computeTileFxRectLockstep(tiles = []) {
+      if (state.view !== 'fx') {
+        tileFxDbg.rectMismatchRows = [];
+        tileFxDbg.rectMismatch = 0;
+        return;
+      }
+      const vp = {
+        offsetX: Number(window.visualViewport?.offsetLeft || 0),
+        offsetY: Number(window.visualViewport?.offsetTop || 0),
+      };
+      const mismatches = [];
+      for (const tile of tiles.slice(0, 40)) {
+        const tileEl = tile?.tileEl;
+        if (!tileEl || !tileEl.isConnected) continue;
+        const domRect = tileEl.getBoundingClientRect();
+        const fxRect = tileFX._getTileRectInVisualViewport?.(domRect, vp) || { left: domRect.left, top: domRect.top };
+        const overlayEl = tileEl.querySelector('.asset-overlay');
+        const overlayRect = overlayEl?.getBoundingClientRect?.() || domRect;
+        const delta = Math.max(
+          Math.abs(Number(fxRect.left || 0) - Number(domRect.left - vp.offsetX || 0)),
+          Math.abs(Number(fxRect.top || 0) - Number(domRect.top - vp.offsetY || 0)),
+          Math.abs(Number(overlayRect.left || 0) - Number(domRect.left || 0)),
+          Math.abs(Number(overlayRect.top || 0) - Number(domRect.top || 0)),
+        );
+        if (delta > 2) {
+          mismatches.push({
+            key: String(tile.key || tileEl.dataset.fxCardId || ''),
+            delta: Number(delta.toFixed(2)),
+            dom: { x: Number(domRect.left.toFixed(2)), y: Number(domRect.top.toFixed(2)) },
+            fx: { x: Number((fxRect.left || 0).toFixed(2)), y: Number((fxRect.top || 0).toFixed(2)) },
+            overlay: { x: Number(overlayRect.left.toFixed(2)), y: Number(overlayRect.top.toFixed(2)) },
+          });
+        }
+      }
+      tileFxDbg.rectMismatchRows = mismatches.slice(0, 10);
+      tileFxDbg.rectMismatch = tileFxDbg.rectMismatchRows.length;
+    }
+
 
     function debugLogTilePainters(tileRef = '.asset[data-tex="1"]'){
       if (!FX_DEBUG) return [];
@@ -2068,6 +2200,8 @@
       const failReason = String(tileFxDbg.failReason || '');
       const invariantWarn = (state.view === 'fx' && !tileFxDbg.enabled)
         || (state.view !== 'fx' && Number(tileFxDbg.drawCalls || 0) > 0);
+      const compactHud = TILEFX_HUD_COMPACT_BY_DEFAULT && !FX_DEBUG;
+      hud.classList.toggle('compact', compactHud);
       if (state.view !== 'fx' && Number(tileFxDbg.drawCalls || 0) > 0) {
         console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');
       }
@@ -2093,24 +2227,29 @@
         return;
       }
       hud.classList.toggle('is-alert', !!invariantWarn);
-      hud.textContent = [
+      const compactRows = [
+        `mode:${state.view} enabled:${tileFxDbg.enabled ? '1' : '0'} raf:${tileFxDbg.rafRunning ? '1' : '0'}`,
+        `visible/drawn ${Number(tileFxDbg.tilesVisible || 0)}/${Number(tileFxDbg.tilesDrawn || 0)} | ready/up ${Number(tileFxDbg.visibleReady || 0)}/${Number(tileFxDbg.visibleUploading || 0)}`,
+        `swap set/clear ${Number(tileFxDbg.swapSetCalls || 0)}/${Number(tileFxDbg.swapClearCalls || 0)} | cache ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB`,
+        `rectMismatch:${Number(tileFxDbg.rectMismatch || 0)} leak:${Number(tileFxDbg.visiblePainterLeakCount || 0)}`,
+      ];
+      const expandedRows = [
         `mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`,
         `domSwapOk: ${tileFxDbg.domSwapOk ? 'true' : 'false'} | scrolling: ${tileFxDbg.scrolling ? '1' : '0'} | idleMs: ${Math.round(Number(tileFxDbg.scrollIdleMs || 0))}`,
         `scanned/rendered: ${scanned}/${rendered} (${(ratio * 100).toFixed(1)}%) | fed/drawn: ${Number(tileFxDbg.tilesFed || 0)}/${Number(tileFxDbg.tilesDrawn || 0)}`,
+        `visible: ready ${Number(tileFxDbg.visibleReady || 0)} | uploading ${Number(tileFxDbg.visibleUploading || 0)} | domOnly ${Number(tileFxDbg.visibleDomOnly || 0)} | swapped ${Number(tileFxDbg.visibleSwapped || 0)}`,
+        `collect: overscan ${Number(tileFxDbg.collectOverscan || 0)} | maxFed ${Number(tileFxDbg.maxFed || 0)} | promoted ${Number(tileFxDbg.visiblePromotedThisPass || 0)}`,
         `dpr: ${(tileFxDbg.dpr || 1).toFixed(2)} (cap ${(tileFxDbg.dprCap || 2).toFixed(2)})`,
         `uploads/s: ${Number(tileFxDbg.uploadsThisSecond || 0)}`,
         `tex: up ${Number(tileFxDbg.texturesUploaded || 0)} | pending ${Number(tileFxDbg.texturesPending || 0)} | cache ${Number(tileFxDbg.texturesInCache || 0)} | evict ${Number(tileFxDbg.texturesEvicted || 0)} | reup ${Number(tileFxDbg.reuploadsTotal || 0)}`,
         `thumbs: img ${Number(tileFxDbg.thumbs?.img || 0)} | css ${Number(tileFxDbg.thumbs?.cssbg || 0)} | poster ${Number(tileFxDbg.thumbs?.poster || 0)} | none ${Number(tileFxDbg.thumbs?.none || 0)}`,
         `upload: queued ${Number(tileFxDbg.uploadsQueued || 0)} | try ${Number(tileFxDbg.uploadsAttempted || tileFxDbg.uploadAttempt || 0)} | ok ${Number(tileFxDbg.uploadsSucceeded || tileFxDbg.uploadOk || 0)} | fail ${Number(tileFxDbg.uploadsFailed || tileFxDbg.uploadFail || 0)}`,
         `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastFailReason || tileFxDbg.lastUploadError || 'none')}`,
-        `swap: ready ${Number(tileFxDbg.readyTiles || 0)} / visible ${Number(tileFxDbg.tilesVisible || 0)} | upOk ${Number(tileFxDbg.uploadOk || 0)} | drawn ${Number(tileFxDbg.tilesDrawn || 0)}`,
-        `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | evicted ${Number(tileFxDbg.evictedTiles || 0)}`,
+        `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | blocked ${Number(tileFxDbg.swapReleaseBlocked || 0)} | allowed ${Number(tileFxDbg.swapReleaseAllowed || 0)}`,
         `cache: ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(tileFxDbg.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB | evictReason ${String(tileFxDbg.evictReason || 'none')} | maxTex ${Number(tileFxDbg.maxTexEdge || 0)} | avgTex ${Number(tileFxDbg.avgTexWidth || 0)}x${Number(tileFxDbg.avgTexHeight || 0)}`,
-        `reject: nr ${Number(tileFxDbg.uploadReject?.notReady || 0)} | 0sz ${Number(tileFxDbg.uploadReject?.zeroSize || 0)} | taint ${Number(tileFxDbg.uploadReject?.tainted || 0)} | unk ${Number(tileFxDbg.uploadReject?.unknown || 0)}`,
-        `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
-        `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
-        `fail: ${invariantWarn ? 'LIFECYCLE_INVARIANT' : (failReason || 'none')}`,
-      ].join('\n');
+        `rectMismatch: ${Number(tileFxDbg.rectMismatch || 0)} | fail: ${invariantWarn ? 'LIFECYCLE_INVARIANT' : (failReason || 'none')}`,
+      ];
+      hud.textContent = (compactHud ? compactRows : expandedRows).join('\n');
     }
 
     function verifyTileFxDomSwap(){
@@ -2136,30 +2275,29 @@
 
 
     function maybeToastTileFxPainterLeak(reason = 'scan'){
-      if (!FX_DEBUG || !TILEFX_PAINTER_TOAST_DEBUG) return;
+      if (!FX_DEBUG) return;
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
       const swappedTiles = Array.from(document.querySelectorAll('#mediaGrid .asset[data-tex="1"]')).slice(0, 6);
       if (!swappedTiles.length) return;
+      const leakRows = [];
       for (const tileEl of swappedTiles){
         const tileKey = String(tileEl.dataset.fxCardId || tileEl.dataset.relativePath || tileEl.dataset.path || tileEl.dataset.streamUrl || '');
-        if (tileKey && tileFxPainterToastSeen.has(tileKey)) continue;
-        const rows = debugLogTilePainters(tileEl);
-        const leaking = rows.filter((row) => {
-          const opacity = Number(row.opacity);
-          const visible = String(row.visibility || '').toLowerCase() !== 'hidden';
-          const hasBg = String(row.bg || '').toLowerCase() !== 'none';
-          return (Number.isFinite(opacity) ? opacity > 0.03 : true) && (visible || hasBg);
-        });
+        const rows = countVisibleThumbPainters(tileEl);
+        const leaking = rows.offenders;
+        tileEl.dataset.visiblePainterLeakCount = String(leaking.length);
         if (!leaking.length) continue;
-        if (tileKey) tileFxPainterToastSeen.add(tileKey);
-        if (tileFxPainterToastTimer) clearTimeout(tileFxPainterToastTimer);
-        tileFxPainterToastTimer = setTimeout(() => {
-          tileFxPainterToastTimer = 0;
-          const shortKey = tileKey ? tileKey.split('/').pop() : 'unknown';
-          toast('warn', 'FX painter leak', `${shortKey} visible painters=${leaking.length} (${reason})`);
-        }, 60);
-        break;
+        leakRows.push({ key: tileKey || 'unknown', count: leaking.length, offenders: leaking.slice(0, 4) });
+        if (tileKey && !tileFxPainterToastSeen.has(tileKey)) {
+          tileFxPainterToastSeen.add(tileKey);
+          console.warn('[tilefx] swapped painter leak', { reason, key: tileKey, offenders: leaking.slice(0, 6) });
+          if (TILEFX_PAINTER_TOAST_DEBUG) {
+            const shortKey = tileKey ? tileKey.split('/').pop() : 'unknown';
+            toast('warn', 'FX painter leak', `${shortKey} visible painters=${leaking.length} (${reason})`);
+          }
+        }
       }
+      tileFxDbg.visiblePainterLeakCount = leakRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      tileFxDbg.painterLeakRows = leakRows.slice(0, 10);
     }
 
     function scheduleTileFxCollect(reason = 'event'){
@@ -2177,7 +2315,10 @@
         tileFxDbg.scansPerSecond = tileFxScanRuns.length;
         tileFxDbg.lastInvalidationReason = reason;
         verifyTileFxDomSwap();
+        computeTileFxRectLockstep(tiles);
         maybeToastTileFxPainterLeak(reason);
+        assertTileFxLiveness(`collect:${reason}`);
+        if (TILEFX_PROOF_MODE && !tileFxDbg.scrolling) captureTileFxProof(`collect:${reason}`);
         updateTileFxHud();
       };
       if (waitMs > 0) {
@@ -2259,16 +2400,15 @@
       if (!root || !grid || state.view !== 'fx') return [];
       const rootRect = root.getBoundingClientRect();
       const scrolling = !!tileFxDbg.scrolling;
-      const overscan = scrolling ? 180 : 320;
-      const maxFed = scrolling ? 140 : 240;
+      const overscan = scrolling ? 160 : 300;
+      const maxFed = scrolling ? 110 : 240;
+      const maxPromoted = scrolling ? 10 : 42;
       const cards = Array.from(grid.querySelectorAll('.asset'));
-      const tiles = [];
+      const visibleCards = [];
+      const overscanCards = [];
       let culled = 0;
-      for (const card of cards) {
-        if (!card?.isConnected) continue;
-        const r = card.getBoundingClientRect();
-        if (r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan)) { culled += 1; continue; }
-        if (r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan)) { culled += 1; continue; }
+
+      const createTileFromCard = (card, r) => {
         if (!card.dataset.fxCardId) card.dataset.fxCardId = `fx-card-${++tileFxCardSeq}`;
         const thumbImg = card.querySelector('img.asset-thumb');
         const stableThumbSrc = String(thumbImg?.currentSrc || thumbImg?.getAttribute('src') || '').trim();
@@ -2341,7 +2481,7 @@
         if (card.dataset.tex !== '1' && card.dataset.tex !== 'pending') card.dataset.tex = '0';
         card.classList.toggle('tilefx-ready', card.dataset.tex === '1');
 
-        tiles.push({
+        return {
           key,
           type: card.dataset.kind || '',
           selected: card.classList.contains('is-selected'),
@@ -2360,9 +2500,41 @@
             card.dataset.fxReady = ready ? '1' : '0';
             if (!ready && card.dataset.tex !== 'pending') card.dataset.tex = '0';
           },
-        });
-        if (tiles.length >= maxFed) break;
+        };
+      };
+
+      for (const card of cards) {
+        if (!card?.isConnected) continue;
+        const r = card.getBoundingClientRect();
+        const inOverscan = !(r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan) || r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan));
+        if (!inOverscan) {
+          culled += 1;
+          continue;
+        }
+        const inVisible = !(r.bottom < rootRect.top || r.top > rootRect.bottom || r.right < rootRect.left || r.left > rootRect.right);
+        const tile = createTileFromCard(card, r);
+        if (inVisible) visibleCards.push(tile);
+        else overscanCards.push(tile);
       }
+
+      const tiles = [];
+      const addTile = (tile) => {
+        if (!tile || tiles.length >= maxFed) return false;
+        tiles.push(tile);
+        return true;
+      };
+      visibleCards.forEach((tile) => addTile(tile));
+      let visiblePromotedThisPass = 0;
+      for (const tile of overscanCards) {
+        if (tiles.length >= maxFed) break;
+        const hasTexture = !!(tile.key && tileFX.hasTexture(tile.key));
+        const swapped = String(tile.tileEl?.dataset?.tex || '') === '1';
+        const isNewPromotion = !hasTexture && !swapped;
+        if (scrolling && isNewPromotion && visiblePromotedThisPass >= maxPromoted) continue;
+        if (isNewPromotion) visiblePromotedThisPass += 1;
+        addTile(tile);
+      }
+
       const thumbCounts = { img: 0, cssbg: 0, poster: 0, none: 0 };
       for (const tile of tiles) {
         if (tile.thumbKind === 'img') thumbCounts.img += 1;
@@ -2373,6 +2545,8 @@
       tileFxDbg.thumbs = thumbCounts;
       tileFxProbeRows = tiles.slice(0, 20).map((tile) => {
         const img = tile.thumbEl;
+        const leak = countVisibleThumbPainters(tile.tileEl);
+        tile.tileEl.dataset.visiblePainterLeakCount = String(leak.count || 0);
         return {
           key: String(tile.key || ''),
           keySource: String(tile.keySource || 'unknown'),
@@ -2383,11 +2557,19 @@
           imgComplete: !!img?.complete,
           naturalWidth: Number(img?.naturalWidth || 0),
           thumbSrc: String(img?.currentSrc || img?.getAttribute('src') || ''),
+          visiblePainterLeakCount: Number(leak.count || 0),
+          rect: {
+            x: Number(tile.rect?.left || 0),
+            y: Number(tile.rect?.top || 0),
+            w: Number(tile.rect?.width || 0),
+            h: Number(tile.rect?.height || 0),
+          },
         };
       });
       tileFxDbg.swappedTiles = cards.filter((card) => card?.dataset?.tex === '1').length;
       tileFxDbg.maxFed = maxFed;
       tileFxDbg.collectOverscan = overscan;
+      tileFxDbg.visiblePromotedThisPass = visiblePromotedThisPass;
       tileFxScanStats.scannedCount = cards.length;
       tileFxScanStats.culledCount = culled;
       tileFxScanStats.renderedCount = tiles.length;
@@ -3971,6 +4153,7 @@
     }
 
     function armTileFxSwapSanity(){
+      if (!FX_DEBUG) return;
       if (tileFxSwapSanityTimer) clearTimeout(tileFxSwapSanityTimer);
       document.body.classList.add('fx-swap-sanity');
       tileFxSwapSanityTimer = setTimeout(() => {
@@ -4018,11 +4201,13 @@
       tileFX.setMode(nextView);
       if (fxEnabled) {
         window.__tilefx_enabled = true;
+        tileFxDbg.firstLivenessFailure = null;
         tileFX.enable('setView:fx');
         tileFX.start();
         applyTileFxCanvasState(true);
         armTileFxSwapSanity();
         logTileFxLayerContract('setView:fx');
+        assertTileFxLiveness('setView:fx');
       } else {
         window.__tilefx_enabled = false;
         tileFX.disable('setView:non-fx');
@@ -4942,6 +5127,7 @@
     });
     setInterval(() => {
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+      assertTileFxLiveness('idle-heartbeat');
       if (tileFxDbg.scrolling) return;
       scheduleTileFxCollect('idle-heartbeat');
     }, TILEFX_SCAN_IDLE_INTERVAL_MS);
@@ -4962,12 +5148,13 @@
       tileFX.noteScroll();
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
       scheduleTileFxCollect('scroll');
-      if (AUTO_FX_PROBE) {
+      if (AUTO_FX_PROBE || TILEFX_PROOF_MODE) {
         if (tileFxAutoProbeTimer) clearTimeout(tileFxAutoProbeTimer);
         tileFxAutoProbeTimer = setTimeout(() => {
           tileFxAutoProbeTimer = 0;
           if (tileFxDbg.scrolling) return;
           captureTileFxProbeSnapshot('auto-scroll-idle');
+          if (TILEFX_PROOF_MODE) captureTileFxProof('auto-scroll-idle');
           updateTileFxHud();
         }, 260);
       }

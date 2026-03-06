@@ -166,6 +166,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "function maybeToastTileFxPainterLeak(reason = 'scan'){" in html
     assert "toast('warn', 'FX painter leak'" in html
     assert 'function ensureTileFxProbeButton(){' in html
+    assert "const TILEFX_PROOF_MODE = new URLSearchParams(window.location.search).get('tilefxProof') === '1';" in html
+    assert "function captureTileFxProof(reason = 'manual'){" in html
+    assert 'window.captureTileFxProof = captureTileFxProof;' in html
+    assert "function assertTileFxLiveness(reason = 'runtime-check'){" in html
     assert "btn.id = 'tilefxProbeBtn';" in html
     assert "hud.id = 'tilefxHud';" in html
     assert "scheduleTileFxCollect('scroll')" in html
@@ -173,12 +177,16 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "scheduleTileFxCollect('render-media')" in html
     assert "card.classList.toggle('tilefx-ready', !!ready);" in html
     assert 'COVERAGE_LOW' in html
+    assert 'visiblePromotedThisPass' in html
+    assert 'const maxPromoted = scrolling ? 10 : 42;' in html
+    assert 'visibleCards.forEach((tile) => addTile(tile));' in html
     assert 'texturesUploaded' in html
     assert 'texturesPending' in html
     assert 'thumbs: img' in html
-    assert 'reject: nr' in html
+    assert 'rectMismatch:' in html
+    assert 'visiblePainterLeakCount' in html
     assert "card.dataset.fxReady = ready ? '1' : '0';" in html
-    assert 'swap: ready' in html
+    assert 'swapOps: set' in html
     assert 'data-tex="1"' in html
     assert 'upload: queued' in html
     assert 'pending: wait' in html
@@ -551,7 +559,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'maybeToastTileFxPainterLeak(reason);' in html
     assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html
     assert "scheduleTileFxCollect('idle-heartbeat')" in html
-    assert "setInterval(() => {\n      if (state.view !== 'fx' || !window.__tilefx_enabled) return;\n      if (tileFxDbg.scrolling) return;\n      scheduleTileFxCollect('idle-heartbeat');" in html
+    assert "setInterval(() => {\n      if (state.view !== 'fx' || !window.__tilefx_enabled) return;\n      assertTileFxLiveness('idle-heartbeat');" in html
     assert 'maxTex ${Number(tileFxDbg.maxTexEdge || 0)}' in html
     assert '.app{ position: relative; z-index: 2; }' in html
     assert 'z-index: var(--z-tilefx-canvas);' in html

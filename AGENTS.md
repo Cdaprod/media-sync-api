@@ -1484,3 +1484,12 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `restoreAllDomSwaps(reason)` to `public/js/explorer-shaders.mjs` and reused it from teardown + non-FX transitions for deterministic DOM thumbnail restoration.
 - Added explicit layer-contract diagnostics (`logTileFxLayerContract`) and z-index tokens (`--z-bg-canvas`, `--z-tilefx-canvas`, `--z-hud`) so HUD/probe/toast layers stay above the TileFX plane while retaining pointer-event isolation.
 - HUD alert semantics now prioritize lifecycle invariants (`view===fx && !enabled` or `view!==fx && drawCalls>0`) to reduce misleading stale-failure noise during view switches.
+
+### Latest Implementation Notes (2026-03-06, FX final stabilization proof + visible-set health)
+- Added proof mode in `public/explorer.html` behind `?tilefxProof=1` with `window.captureTileFxProof(reason)` snapshots persisted at `window.__tilefx_proof` (view/liveness counters, visualViewport metrics, and top visible tile rows including rect/data-tex/texture state).
+- Added non-recovering FX liveness assertions (`assertTileFxLiveness`) that record the first failure to `window.__tilefx_dbg.firstLivenessFailure` and emit one high-signal error without automatic re-arm/teardown behavior.
+- Added lockstep rect mismatch probing (`computeTileFxRectLockstep`) to compare DOM tile rects, FX mapped rects, and metadata overlay anchors; mismatches >2px are stored in `window.__tilefx_dbg.rectMismatchRows` with HUD summary.
+- Updated fed-set collection in `collectTileFxTiles()` to deterministic visible-first ordering with bounded overscan promotions while scrolling (`visiblePromotedThisPass`) and retained adaptive `collectOverscan`/`maxFed` telemetry.
+- Added visible painter leak diagnostics and per-card `data-visiblePainterLeakCount`; swapped painter leaks now log once per tile in debug with optional toast only when `tilefxPainterToast=1`.
+- Added compact-by-default HUD mode for non-debug runs, plus visible health telemetry (`visibleReady`, `visibleUploading`, `visibleDomOnly`, `visibleSwapped`) and swap release counters (`swapReleaseBlocked`, `swapReleaseAllowed`).
+- Updated `TileFXRenderer` release gating with `_swapReleaseIdleMs` and idle checks so swap clears are blocked during transient churn, favoring stable visible ownership.
