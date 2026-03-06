@@ -1493,3 +1493,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added visible painter leak diagnostics and per-card `data-visiblePainterLeakCount`; swapped painter leaks now log once per tile in debug with optional toast only when `tilefxPainterToast=1`.
 - Added compact-by-default HUD mode for non-debug runs, plus visible health telemetry (`visibleReady`, `visibleUploading`, `visibleDomOnly`, `visibleSwapped`) and swap release counters (`swapReleaseBlocked`, `swapReleaseAllowed`).
 - Updated `TileFXRenderer` release gating with `_swapReleaseIdleMs` and idle checks so swap clears are blocked during transient churn, favoring stable visible ownership.
+
+### Latest Implementation Notes (2026-03-06, lifecycle invariant guard + proof summary export)
+- Added a hard disable guard in `public/js/explorer-shaders.mjs`: `TileFXRenderer.disable(reason, { allowInFxView = false })` now blocks illegal disable attempts while `window.__explorer_view === 'fx'`, logs stack traces, and records `illegalDisableBlocked`/`lastIllegalDisable` debug metadata.
+- Added `computeTileFxHealthVerdict()` and `window.exportTileFxProofSummary()` in `public/explorer.html` so physical iPhone runs can export a compact proof payload (liveness, visible-set health, swap counters, cache metrics, viewport metrics, and row-level ownership/mismatch snapshots).
+- Added a debug-only `Capture Proof` button (`fxdebug=1&tilefxProof=1`) that triggers proof capture plus summary export in one tap.
+- Added defensive dead-overlay behavior in `assertTileFxLiveness(...)`: first FX liveness failure now hides `#tilefxCanvas` to avoid stale glow overlays when renderer is disabled.
+- HUD compact/expanded output now includes renderer truth labels and health verdict lines (`health: ...`) to make lifecycle invariant failures explicit during runtime verification.

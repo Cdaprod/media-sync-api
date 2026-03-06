@@ -1019,6 +1019,8 @@ export class TileFXRenderer {
         visibleSwapped: 0,
         rectMismatch: 0,
         rectMismatchRows: [],
+        illegalDisableBlocked: 0,
+        lastIllegalDisable: null,
       };
     }
 
@@ -1123,16 +1125,28 @@ export class TileFXRenderer {
     this.setEnabled(true);
   }
 
-  disable(reason = '') {
+  disable(reason = '', { allowInFxView = false } = {}) {
+    const why = String(reason || 'unspecified');
     const stack = (() => {
       try { return new Error().stack || ''; } catch { return ''; }
     })();
+    const activeView = String((typeof window !== 'undefined' ? window.__explorer_view : '') || '');
+    if (!allowInFxView && activeView === 'fx') {
+      try {
+        console.error('[tilefx] illegal disable during FX view', { reason: why, stack });
+      } catch {}
+      if (window.__tilefx_dbg) {
+        window.__tilefx_dbg.illegalDisableBlocked = Number(window.__tilefx_dbg.illegalDisableBlocked || 0) + 1;
+        window.__tilefx_dbg.lastIllegalDisable = { reason: why, stack, t: Date.now() };
+      }
+      return false;
+    }
     try {
-      console.warn('[tilefx] DISABLE', String(reason || 'unspecified'), stack);
+      console.warn('[tilefx] DISABLE', why, stack);
     } catch {}
     if (window.__tilefx_dbg) {
       window.__tilefx_dbg.lastDisable = {
-        reason: String(reason || 'unspecified'),
+        reason: why,
         stack,
         t: Date.now(),
       };
@@ -1141,6 +1155,7 @@ export class TileFXRenderer {
     this.clear();
     this._drawCalls = 0;
     if (window.__tilefx_dbg) window.__tilefx_dbg.drawCalls = 0;
+    return true;
   }
 
   restoreAllDomSwaps(reason = 'restore:all') {

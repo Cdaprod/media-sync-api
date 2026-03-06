@@ -2015,6 +2015,34 @@
         document.body.appendChild(btn);
       }
       btn.style.display = state.view === 'fx' ? 'block' : 'none';
+      if (TILEFX_PROOF_MODE) {
+        let proofBtn = document.getElementById('tilefxProofBtn');
+        if (!proofBtn) {
+          proofBtn = document.createElement('button');
+          proofBtn.id = 'tilefxProofBtn';
+          proofBtn.type = 'button';
+          proofBtn.textContent = 'Capture Proof';
+          Object.assign(proofBtn.style, {
+            position: 'fixed',
+            right: '10px',
+            bottom: '186px',
+            zIndex: '9001',
+            borderRadius: '8px',
+            border: '1px solid rgba(140,255,200,0.45)',
+            background: 'rgba(4,18,16,0.88)',
+            color: '#ccffee',
+            padding: '6px 10px',
+            font: '12px/1.2 var(--mono)',
+          });
+          proofBtn.addEventListener('click', () => {
+            captureTileFxProof('manual-button');
+            exportTileFxProofSummary();
+            toast('ok', 'FX Proof', 'Captured proof summary to console.');
+          });
+          document.body.appendChild(proofBtn);
+        }
+        proofBtn.style.display = state.view === 'fx' ? 'block' : 'none';
+      }
       return btn;
     }
 
@@ -2112,6 +2140,76 @@
     }
     window.captureTileFxProof = captureTileFxProof;
 
+    function computeTileFxHealthVerdict(){
+      if (state.view !== 'fx') return 'ok';
+      if (!tileFxDbg.enabled || !tileFxDbg.rafRunning) return 'lifecycle_invariant';
+      const visible = Number(tileFxDbg.tilesVisible || 0);
+      const drawn = Number(tileFxDbg.tilesDrawn || 0);
+      if (visible > 0 && drawn <= 0) return 'visible_not_drawn';
+      if (Number(tileFxDbg.rectMismatch || 0) > 0) return 'rect_mismatch';
+      if (Number(tileFxDbg.visiblePainterLeakCount || 0) > 0) return 'dual_owner';
+      const visibleReady = Number(tileFxDbg.visibleReady || 0);
+      const visibleUploading = Number(tileFxDbg.visibleUploading || 0);
+      const visibleDomOnly = Number(tileFxDbg.visibleDomOnly || 0);
+      if (visible > 0 && visibleReady <= 0 && visibleUploading <= 0 && visibleDomOnly > 0) return 'unexpected_dom_only';
+      return 'ok';
+    }
+
+    function exportTileFxProofSummary(){
+      const proof = window.__tilefx_proof || {};
+      const summary = {
+        timestamp: Date.now(),
+        view: String(state.view || 'grid'),
+        enabled: !!tileFxDbg.enabled,
+        rafRunning: !!tileFxDbg.rafRunning,
+        mode: String(tileFxDbg.mode || state.view || 'grid'),
+        fail: String(tileFxDbg.failReason || 'none'),
+        health: computeTileFxHealthVerdict(),
+        firstLivenessFailure: tileFxDbg.firstLivenessFailure || null,
+        visibleCount: Number(tileFxDbg.visibleCount || 0),
+        tilesVisible: Number(tileFxDbg.tilesVisible || 0),
+        tilesDrawn: Number(tileFxDbg.tilesDrawn || 0),
+        visibleReady: Number(tileFxDbg.visibleReady || 0),
+        visibleUploading: Number(tileFxDbg.visibleUploading || 0),
+        visibleDomOnly: Number(tileFxDbg.visibleDomOnly || 0),
+        visibleSwapped: Number(tileFxDbg.visibleSwapped || 0),
+        rectMismatchCount: Number(tileFxDbg.rectMismatch || 0),
+        swapSetCalls: Number(tileFxDbg.swapSetCalls || 0),
+        swapClearCalls: Number(tileFxDbg.swapClearCalls || 0),
+        swapReleaseBlocked: Number(tileFxDbg.swapReleaseBlocked || 0),
+        swapReleaseAllowed: Number(tileFxDbg.swapReleaseAllowed || 0),
+        texturesInCache: Number(tileFxDbg.texturesInCache || 0),
+        texturesUploaded: Number(tileFxDbg.texturesUploaded || 0),
+        texturesEvicted: Number(tileFxDbg.texturesEvicted || 0),
+        uploadsQueued: Number(tileFxDbg.uploadsQueued || 0),
+        uploadsSucceeded: Number(tileFxDbg.uploadsSucceeded || 0),
+        uploadsFailed: Number(tileFxDbg.uploadsFailed || 0),
+        maxTexEdge: Number(tileFxDbg.maxTexEdge || 0),
+        avgTexWidth: Number(tileFxDbg.avgTexWidth || 0),
+        avgTexHeight: Number(tileFxDbg.avgTexHeight || 0),
+        cacheBytes: Number(tileFxDbg.cacheBytes || 0),
+        cacheBudgetBytes: Number(tileFxDbg.cacheBudgetBytes || 0),
+        visualViewport: readVisualViewportSnapshot(),
+        rows: (Array.isArray(proof.visibleTiles) ? proof.visibleTiles : []).slice(0, 10).map((row) => {
+          const key = String(row.key || '');
+          const mismatchRow = (Array.isArray(tileFxDbg.rectMismatchRows) ? tileFxDbg.rectMismatchRows : []).find((entry) => String(entry.key || '') === key) || null;
+          return {
+            key,
+            state: String(row.state || ''),
+            dataTex: String(row.dataTex || ''),
+            hasTexture: !!row.hasTexture,
+            visiblePainterLeakCount: Number(row.visiblePainterLeakCount || 0),
+            rectMismatchPx: Number(mismatchRow?.delta || 0),
+            domRect: mismatchRow?.dom || null,
+            fxRect: mismatchRow?.fx || null,
+          };
+        }),
+      };
+      console.log('[tilefx-proof-summary]', summary);
+      return summary;
+    }
+    window.exportTileFxProofSummary = exportTileFxProofSummary;
+
     function assertTileFxLiveness(reason = 'runtime-check'){
       if (state.view !== 'fx') return;
       const enabled = !!tileFxDbg.enabled;
@@ -2127,6 +2225,11 @@
           stack: (() => { try { return new Error('tilefx-liveness').stack || ''; } catch { return ''; } })(),
         };
         console.error('[tilefx] liveness invariant failed', tileFxDbg.firstLivenessFailure);
+        const fxCanvas = el('tilefxCanvas');
+        if (fxCanvas) {
+          fxCanvas.style.display = 'none';
+          fxCanvas.style.opacity = '0';
+        }
       }
     }
 
@@ -2227,11 +2330,13 @@
         return;
       }
       hud.classList.toggle('is-alert', !!invariantWarn);
+      const healthVerdict = computeTileFxHealthVerdict();
       const compactRows = [
-        `mode:${state.view} enabled:${tileFxDbg.enabled ? '1' : '0'} raf:${tileFxDbg.rafRunning ? '1' : '0'}`,
+        `view:${state.view} renderer:${tileFxDbg.enabled ? 'enabled' : 'disabled'} raf:${tileFxDbg.rafRunning ? 'running' : 'stopped'}`,
         `visible/drawn ${Number(tileFxDbg.tilesVisible || 0)}/${Number(tileFxDbg.tilesDrawn || 0)} | ready/up ${Number(tileFxDbg.visibleReady || 0)}/${Number(tileFxDbg.visibleUploading || 0)}`,
         `swap set/clear ${Number(tileFxDbg.swapSetCalls || 0)}/${Number(tileFxDbg.swapClearCalls || 0)} | cache ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB`,
         `rectMismatch:${Number(tileFxDbg.rectMismatch || 0)} leak:${Number(tileFxDbg.visiblePainterLeakCount || 0)}`,
+        `health:${healthVerdict}` ,
       ];
       const expandedRows = [
         `mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`,
@@ -2247,7 +2352,8 @@
         `pending: wait ${Number(tileFxDbg.pendingWaitLoad || 0)} | ready ${Number(tileFxDbg.pendingReady || 0)} | srcMissing ${Number(tileFxDbg.srcMissing || 0)} | err ${String(tileFxDbg.lastFailReason || tileFxDbg.lastUploadError || 'none')}`,
         `swapOps: set ${Number(tileFxDbg.swapSetCalls || 0)} | clear ${Number(tileFxDbg.swapClearCalls || 0)} | blocked ${Number(tileFxDbg.swapReleaseBlocked || 0)} | allowed ${Number(tileFxDbg.swapReleaseAllowed || 0)}`,
         `cache: ${(Number(tileFxDbg.cacheBytes || 0) / (1024 * 1024)).toFixed(1)}MB / ${(Number(tileFxDbg.cacheBudgetBytes || 0) / (1024 * 1024)).toFixed(1)}MB | evictReason ${String(tileFxDbg.evictReason || 'none')} | maxTex ${Number(tileFxDbg.maxTexEdge || 0)} | avgTex ${Number(tileFxDbg.avgTexWidth || 0)}x${Number(tileFxDbg.avgTexHeight || 0)}`,
-        `rectMismatch: ${Number(tileFxDbg.rectMismatch || 0)} | fail: ${invariantWarn ? 'LIFECYCLE_INVARIANT' : (failReason || 'none')}`,
+        `rectMismatch: ${Number(tileFxDbg.rectMismatch || 0)} | fail: ${invariantWarn ? 'LIFECYCLE_INVARIANT' : (failReason || 'none')}` ,
+        `health: ${healthVerdict}` ,
       ];
       hud.textContent = (compactHud ? compactRows : expandedRows).join('\n');
     }

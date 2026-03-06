@@ -169,8 +169,12 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "const TILEFX_PROOF_MODE = new URLSearchParams(window.location.search).get('tilefxProof') === '1';" in html
     assert "function captureTileFxProof(reason = 'manual'){" in html
     assert 'window.captureTileFxProof = captureTileFxProof;' in html
+    assert 'function exportTileFxProofSummary(){' in html
+    assert 'window.exportTileFxProofSummary = exportTileFxProofSummary;' in html
+    assert 'function computeTileFxHealthVerdict(){' in html
     assert "function assertTileFxLiveness(reason = 'runtime-check'){" in html
     assert "btn.id = 'tilefxProbeBtn';" in html
+    assert "proofBtn.textContent = 'Capture Proof';" in html
     assert "hud.id = 'tilefxHud';" in html
     assert "scheduleTileFxCollect('scroll')" in html
     assert "scheduleTileFxCollect('resize')" in html
@@ -184,6 +188,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'texturesPending' in html
     assert 'thumbs: img' in html
     assert 'rectMismatch:' in html
+    assert "renderer:${tileFxDbg.enabled ? 'enabled' : 'disabled'}" in html
+    assert 'health:${healthVerdict}' in html
     assert 'visiblePainterLeakCount' in html
     assert "card.dataset.fxReady = ready ? '1' : '0';" in html
     assert 'swapOps: set' in html
@@ -227,8 +233,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
     assert "restoreAllDomSwaps(reason = 'restore:all') {" in shader_module
     assert "applyDomSwap(tile, swapped = false, reason = '') {" in shader_module
-    assert "disable(reason = '')" in shader_module
+    assert "disable(reason = '', { allowInFxView = false } = {})" in shader_module
     assert "console.warn('[tilefx] DISABLE'" in shader_module
+    assert "console.error('[tilefx] illegal disable during FX view'" in shader_module
     assert "console.warn('[tilefx] rect mismatch'" in shader_module
     assert 'window.__tilefx_dbg.pendingCap = maxPending;' in shader_module
     assert '_restoreUntrackedSwaps(activeTileEls, now);' in shader_module
