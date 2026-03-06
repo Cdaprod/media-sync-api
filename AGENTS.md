@@ -1550,3 +1550,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Expanded `TileFXRenderer.applyDomSwap(...)` background suppression/restoration in `public/js/explorer-shaders.mjs` to snapshot/restore `backgroundImage/background/backgroundColor` per thumb paint node and aggressively neutralize `.thumb` surface paint while swapped.
 - Updated `TileFXRenderer.getVisibleOwnershipRows(limit)` fallback to return current fed tile ownership rows when no per-frame ownership rows are cached yet, so `window.logVisibleTileOwnership(...)` no longer returns an empty snapshot during active FX startup windows.
 - Added one FX-active guard log in `window.logVisibleTileOwnership(...)` when rows are unexpectedly empty while FX is enabled.
+
+### Latest Implementation Notes (2026-03-06, metadata-safe thumb/body split)
+- Refactored grid tile markup in `public/explorer.html` so `.thumb` now contains sibling layers: `.thumb-body` (thumbnail painters only) and `.asset-ui` (metadata + controls), preventing FX thumbnail suppression from hiding metadata.
+- Moved `.asset-overlay`, badges/title/subtitle, selector UI, play button, and preview pill into `.asset-ui` so DOM metadata remains visible/stable while FX swaps thumbnail body ownership.
+- Updated tile painter collection to target `.thumb-body` surfaces (`img.asset-thumb`, body background, `.thumb-body .scrim`) and removed reliance on suppressing `.thumb` as a whole painter surface.
+- Updated painter leak candidate scanning to include `.thumb-body` so leak detection aligns with the new ownership boundary.

@@ -947,6 +947,19 @@
       position: relative;
       overflow:hidden;
     }
+    .thumb-body,
+    .asset-ui{
+      position: absolute;
+      inset: 0;
+    }
+    .thumb-body{
+      overflow: hidden;
+      z-index: 0;
+    }
+    .asset-ui{
+      pointer-events: none;
+      z-index: 2;
+    }
     .asset[data-kind="image"] .thumb,
     .asset[data-kind="video"] .thumb{
       aspect-ratio: 1 / 1;
@@ -2092,7 +2105,7 @@
 
     function countVisibleThumbPainters(tileEl){
       if (!tileEl) return { count: 0, offenders: [] };
-      const candidates = Array.from(tileEl.querySelectorAll('.thumb img, .thumb video, .thumb picture, .thumb [data-thumb], .thumb [style*="background-image"], .thumb'));
+      const candidates = Array.from(tileEl.querySelectorAll('.thumb-body img, .thumb-body video, .thumb-body picture, .thumb-body [data-thumb], .thumb-body [style*="background-image"], .thumb-body, .thumb'));
       const offenders = [];
       for (const node of candidates) {
         const cs = getComputedStyle(node);
@@ -2623,6 +2636,7 @@
         tileFxPrevKeyByCard.set(card.dataset.fxCardId, key);
         const thumbEl = card.querySelector('img.asset-thumb');
         const thumbWrap = card.querySelector('.thumb');
+        const thumbBody = card.querySelector('.thumb-body');
         const posterEl = card.querySelector('video[poster]');
         const pictureEl = card.querySelector('picture');
         let thumbKind = 'none';
@@ -2637,9 +2651,8 @@
         if (thumbEl && thumbEl.getAttribute('src')) {
           thumbKind = 'img';
           thumbSrc = thumbEl.dataset.thumbUrl || thumbEl.currentSrc || thumbEl.getAttribute('src') || '';
-          thumbSurfaceEl = thumbWrap || thumbEl;
+          thumbSurfaceEl = thumbBody || thumbWrap || thumbEl;
           addPaintEl(thumbEl);
-          addPaintEl(thumbWrap);
         }
         if (posterEl && posterEl.getAttribute('poster')) {
           if (!thumbSrc) {
@@ -2669,14 +2682,14 @@
               thumbKind = 'cssbg';
               thumbSrc = match[2];
             }
-            thumbSurfaceEl = thumbSurfaceEl || thumbWrap;
-            thumbBgEl = thumbWrap;
-            addPaintEl(thumbWrap);
+            thumbSurfaceEl = thumbSurfaceEl || thumbBody || thumbWrap;
+            thumbBgEl = thumbBody || thumbWrap;
+            addPaintEl(thumbBody || thumbWrap);
           }
         }
-        const thumbScrim = card.querySelector('.thumb .scrim');
+        const thumbScrim = card.querySelector('.thumb-body .scrim');
         if (thumbScrim) addPaintEl(thumbScrim);
-        if (!thumbSurfaceEl) thumbSurfaceEl = thumbWrap || thumbEl || posterEl || pictureEl || null;
+        if (!thumbSurfaceEl) thumbSurfaceEl = thumbBody || thumbWrap || thumbEl || posterEl || pictureEl || null;
         card.dataset.fxReady = card.dataset.fxReady || '0';
         if (card.dataset.tex !== '1' && card.dataset.tex !== 'pending') card.dataset.tex = '0';
         card.classList.toggle('tilefx-ready', card.dataset.tex === '1');
@@ -4698,30 +4711,34 @@
 
         card.innerHTML = `
           <div class="thumb">
-            <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="high"
-              ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
-              data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state-key="${escapeHtml(thumbStateKeyValue)}" data-thumb-state="${escapeHtml(initialThumbState)}" />
-            <div class="scrim"></div>
-            <div class="play-btn" aria-hidden="true"><div class="play-btn-inner">▶</div></div>
-            <div class="preview-pill" aria-hidden="true">preview</div>
-            <div class="asset-overlay">
-              <div class="asset-ol-tl">
-                <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
-              </div>
-              <div class="asset-ol-tr">
-                <div class="selector sel-ui" title="Select" data-no-preview="1">
-                  <span class="sel-shell" data-no-preview="1">
-                    <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
-                    <span class="sel-order" data-no-preview="1" aria-hidden="true"></span>
-                  </span>
+            <div class="thumb-body">
+              <img class="asset-thumb" src="${escapeHtml(safeThumbUrl)}" alt="${escapeHtml(title)}" loading="eager" decoding="async" fetchpriority="high"
+                ${thumbUrl ? `data-thumb-url="${escapeHtml(thumbUrl)}"` : ''}
+                data-thumb-fallback="${escapeHtml(fallbackThumb)}" data-thumb-state-key="${escapeHtml(thumbStateKeyValue)}" data-thumb-state="${escapeHtml(initialThumbState)}" />
+              <div class="scrim"></div>
+            </div>
+            <div class="asset-ui">
+              <div class="play-btn" aria-hidden="true"><div class="play-btn-inner">▶</div></div>
+              <div class="preview-pill" aria-hidden="true">preview</div>
+              <div class="asset-overlay">
+                <div class="asset-ol-tl">
+                  <span class="badge ${kindBadgeClass(kind)}">${escapeHtml(kind)}</span>
                 </div>
-              </div>
-              <div class="asset-ol-bl">
-                <span class="badge">${escapeHtml(size)}</span>
-              </div>
-              <div class="asset-ol-bottom">
-                <div class="asset-title">${escapeHtml(title)}</div>
-                <div class="asset-subtitle">${escapeHtml(sub)}</div>
+                <div class="asset-ol-tr">
+                  <div class="selector sel-ui" title="Select" data-no-preview="1">
+                    <span class="sel-shell" data-no-preview="1">
+                      <input type="checkbox" data-select-key="${escapeHtml(selectKey)}" ${state.selected.has(selectKey) ? 'checked':''} aria-label="Select media" ${canSelect ? '' : 'disabled'} />
+                      <span class="sel-order" data-no-preview="1" aria-hidden="true"></span>
+                    </span>
+                  </div>
+                </div>
+                <div class="asset-ol-bl">
+                  <span class="badge">${escapeHtml(size)}</span>
+                </div>
+                <div class="asset-ol-bottom">
+                  <div class="asset-title">${escapeHtml(title)}</div>
+                  <div class="asset-subtitle">${escapeHtml(sub)}</div>
+                </div>
               </div>
             </div>
           </div>
