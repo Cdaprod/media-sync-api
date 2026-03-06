@@ -1122,9 +1122,21 @@ export class TileFXRenderer {
     if (window.__tilefx_dbg) window.__tilefx_dbg.drawCalls = 0;
   }
 
+  restoreAllDomSwaps(reason = 'restore:all') {
+    const swapped = Array.from(this._swappedTileRefs.entries());
+    swapped.forEach(([tileEl, tile]) => {
+      if (!tileEl || !tileEl.isConnected) {
+        this._swappedTileRefs.delete(tileEl);
+        return;
+      }
+      this.applyDomSwap(tile, false, reason);
+      this._swapSeenFrameByTile.delete(tileEl);
+    });
+  }
+
   teardownForModeExit({ removeCanvas = false } = {}) {
     this.disable('teardownForModeExit');
-    (this.tiles || []).forEach((tile) => this.applyDomSwap(tile, false));
+    this.restoreAllDomSwaps('restore:teardown');
     this.tiles = [];
     this.tileStateByKey.clear();
     this._pendingUploads.clear();

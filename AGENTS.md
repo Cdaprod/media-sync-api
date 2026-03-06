@@ -1477,3 +1477,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added swap minimum-hold gating (`_canReleaseSwap`, `_swapMinHoldMs`) on top of offscreen hysteresis to prevent edge-of-viewport swap thrash and transient DOM reappearance.
 - Added fed/pending pressure controls: adaptive overscan+fed cap in `collectTileFxTiles()` and pending-cap telemetry (`pendingCap`, `pendingClamped`) in TileFX upload queueing/drain.
 - Updated static assertions and TODO checklist for safemode CSS, rect helper APIs, pending cap telemetry, and FX mode safeties.
+
+### Latest Implementation Notes (2026-03-06, FX lifecycle single-owner stabilization)
+- Removed runtime watchdog auto-recovery in `public/explorer.html` (heartbeat + visualViewport recovery paths) so TileFX lifecycle changes now happen only through explicit `setView('fx'|'grid'|'list')` transitions.
+- FX view entry now explicitly enables/starts TileFX and shows the canvas; non-FX view entry disables/stops/clears TileFX, restores all DOM swaps, clears fed tiles, and hides the canvas.
+- Added `restoreAllDomSwaps(reason)` to `public/js/explorer-shaders.mjs` and reused it from teardown + non-FX transitions for deterministic DOM thumbnail restoration.
+- Added explicit layer-contract diagnostics (`logTileFxLayerContract`) and z-index tokens (`--z-bg-canvas`, `--z-tilefx-canvas`, `--z-hud`) so HUD/probe/toast layers stay above the TileFX plane while retaining pointer-event isolation.
+- HUD alert semantics now prioritize lifecycle invariants (`view===fx && !enabled` or `view!==fx && drawCalls>0`) to reduce misleading stale-failure noise during view switches.

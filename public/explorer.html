@@ -36,6 +36,9 @@
       --vvh: 1vh;
       --z-fx: 10;
       --z-grid: 20;
+      --z-bg-canvas: 5;
+      --z-tilefx-canvas: 40;
+      --z-hud: 9000;
       --z-topbar: 5000;
       --z-toast: 6000;
       --z-modal: 7000;
@@ -109,9 +112,9 @@
       pointer-events: none !important;
     }
 
-    #bgImpulseCanvas{ z-index: 0; }
+    #bgImpulseCanvas{ z-index: var(--z-bg-canvas); }
     #tilefxCanvas{
-      z-index: 3000;
+      z-index: var(--z-tilefx-canvas);
       contain: layout paint size !important;
       transform: none !important;
       filter: none !important;
@@ -891,7 +894,7 @@
       position: fixed;
       right: 10px;
       bottom: 10px;
-      z-index: 120;
+      z-index: var(--z-hud);
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.14);
@@ -1954,8 +1957,6 @@
     let tileFxLastCollectAt = 0;
     const TILEFX_SCAN_MIN_INTERVAL_MS = 120;
     const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;
-    const TILEFX_WATCHDOG_INTERVAL_MS = 900;
-    const TILEFX_WATCHDOG_STALE_MS = 1200;
     let tileFxCardSeq = 0;
     const tileFxPrevKeyByCard = new Map();
     let tileFxProbeRows = [];
@@ -1986,7 +1987,7 @@
           position: 'fixed',
           right: '10px',
           bottom: '150px',
-          zIndex: '121',
+          zIndex: '9001',
           borderRadius: '8px',
           border: '1px solid rgba(120,220,255,0.45)',
           background: 'rgba(4,10,22,0.88)',
@@ -2065,11 +2066,10 @@
       const rendered = Number(tileFxDbg.renderedCount || 0);
       const ratio = scanned > 0 ? (rendered / scanned) : 1;
       const failReason = String(tileFxDbg.failReason || '');
+      const invariantWarn = (state.view === 'fx' && !tileFxDbg.enabled)
+        || (state.view !== 'fx' && Number(tileFxDbg.drawCalls || 0) > 0);
       if (state.view !== 'fx' && Number(tileFxDbg.drawCalls || 0) > 0) {
         console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');
-        tileFX.stop();
-        tileFX.clear();
-        tileFxDbg.drawCalls = 0;
       }
       const probe = window.__tilefx_probe || null;
       if (probe && Number(probe.timestamp || 0) > 0) {
@@ -2092,7 +2092,7 @@
         hud.textContent = lines.join('\n');
         return;
       }
-      hud.classList.toggle('is-alert', !!failReason);
+      hud.classList.toggle('is-alert', !!invariantWarn);
       hud.textContent = [
         `mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`,
         `domSwapOk: ${tileFxDbg.domSwapOk ? 'true' : 'false'} | scrolling: ${tileFxDbg.scrolling ? '1' : '0'} | idleMs: ${Math.round(Number(tileFxDbg.scrollIdleMs || 0))}`,
@@ -2109,7 +2109,7 @@
         `reject: nr ${Number(tileFxDbg.uploadReject?.notReady || 0)} | 0sz ${Number(tileFxDbg.uploadReject?.zeroSize || 0)} | taint ${Number(tileFxDbg.uploadReject?.tainted || 0)} | unk ${Number(tileFxDbg.uploadReject?.unknown || 0)}`,
         `scan/frame: ${Number(tileFxDbg.lastScanMs || 0).toFixed(1)}ms / ${Number(tileFxDbg.lastFrameMs || 0).toFixed(1)}ms`,
         `scans/s: ${Number(tileFxDbg.scansPerSecond || 0).toFixed(2)}`,
-        `fail: ${failReason || 'none'}`,
+        `fail: ${invariantWarn ? 'LIFECYCLE_INVARIANT' : (failReason || 'none')}`,
       ].join('\n');
     }
 
@@ -2193,30 +2193,41 @@
       tileFxCollectPending = requestAnimationFrame(runCollect);
     }
 
-
-    function maybeRecoverTileFxRuntime(reason = 'watchdog'){
-      if (state.view !== 'fx' || !window.__tilefx_enabled) return false;
-      const enabled = !!tileFxDbg.enabled;
-      const raf = !!tileFxDbg.rafRunning;
-      const staleDraw = Number(tileFxDbg.drawCalls || 0) <= 0
-        && Number(tileFxDbg.lastFrameMs || 0) <= 0
-        && Number(tileFxDbg.scrollIdleMs || 0) > TILEFX_WATCHDOG_STALE_MS;
-      if (enabled && raf && !staleDraw) return false;
-      console.warn('[tilefx] runtime watchdog recover', {
-        reason,
-        enabled,
-        raf,
-        staleDraw,
-        drawCalls: Number(tileFxDbg.drawCalls || 0),
-        scrollIdleMs: Number(tileFxDbg.scrollIdleMs || 0),
-      });
-      tileFX.setMode('fx');
-      tileFX.enable();
-      scheduleTileFxCollect(`recover:${reason}`);
-      if (!tileFxDbg.scrolling) {
-        toast('warn', 'FX runtime recovered', `Re-armed TileFX (${reason}).`);
+    function logTileFxLayerContract(reason = 'runtime') {
+      if (!FX_DEBUG && !LAYOUT_DEBUG) return;
+      const canvas = el('tilefxCanvas');
+      const hud = document.getElementById('tilefxHud');
+      const toasts = el('toasts');
+      const panel = el('actionsPanel');
+      const canvasStyle = canvas ? getComputedStyle(canvas) : null;
+      const hudStyle = hud ? getComputedStyle(hud) : null;
+      const toastStyle = toasts ? getComputedStyle(toasts) : null;
+      const panelStyle = panel ? getComputedStyle(panel) : null;
+      const chain = [];
+      let node = canvas?.parentElement || null;
+      while (node) {
+        const cs = getComputedStyle(node);
+        const transform = cs.transform || 'none';
+        const filter = cs.filter || 'none';
+        const backdrop = cs.backdropFilter || cs.webkitBackdropFilter || 'none';
+        if (transform !== 'none' || filter !== 'none' || backdrop !== 'none') {
+          chain.push({
+            node: node.id || node.className || node.tagName,
+            transform,
+            filter,
+            backdrop,
+          });
+        }
+        node = node.parentElement;
       }
-      return true;
+      console.info('[tilefx] layer contract', {
+        reason,
+        canvasZ: canvasStyle?.zIndex || null,
+        hudZ: hudStyle?.zIndex || null,
+        toastsZ: toastStyle?.zIndex || null,
+        actionsPanelZ: panelStyle?.zIndex || null,
+        tilefxCanvasTransformChain: chain,
+      });
     }
 
     function inNoPreviewZone(target){
@@ -3974,9 +3985,9 @@
         return;
       }
       console.warn('[tilefx] destroyTileFX', { reason });
-      if (tileFxSwapSanityTimer) clearTimeout(tileFxSwapSanityTimer);
-      tileFxSwapSanityTimer = 0;
-      tileFX.teardownForModeExit({ removeCanvas: false });
+      tileFX.disable(`destroy:${reason}`);
+      tileFX.stop();
+      tileFX.restoreAllDomSwaps?.();
       tileFX.updateTiles([]);
       applyTileFxCanvasState(false);
       window.__tilefx_enabled = false;
@@ -3999,18 +4010,27 @@
       document.body.classList.toggle('fx-mode', fxEnabled);
       document.body.classList.toggle('fx-safemode', fxEnabled);
       if (!fxEnabled) document.body.classList.remove('fx-swap-sanity');
-      applyTileFxCanvasState(fxEnabled);
 
       if (typeof cardFX?.setDissolveMode === 'function') {
         cardFX.setDissolveMode('tile');
       }
       setFxSuspend(ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
       tileFX.setMode(nextView);
-      if (!fxEnabled) {
-        destroyTileFX('setView:non-fx');
-      } else {
-        tileFX.enable();
+      if (fxEnabled) {
+        window.__tilefx_enabled = true;
+        tileFX.enable('setView:fx');
+        tileFX.start();
+        applyTileFxCanvasState(true);
         armTileFxSwapSanity();
+        logTileFxLayerContract('setView:fx');
+      } else {
+        window.__tilefx_enabled = false;
+        tileFX.disable('setView:non-fx');
+        tileFX.stop();
+        tileFX.restoreAllDomSwaps?.();
+        tileFX.clear();
+        tileFX.updateTiles([]);
+        applyTileFxCanvasState(false);
       }
       renderMedia();
       if (fxEnabled) {
@@ -4926,11 +4946,6 @@
       scheduleTileFxCollect('idle-heartbeat');
     }, TILEFX_SCAN_IDLE_INTERVAL_MS);
 
-    setInterval(() => {
-      if (state.view !== 'fx' || !window.__tilefx_enabled) return;
-      maybeRecoverTileFxRuntime('heartbeat');
-    }, TILEFX_WATCHDOG_INTERVAL_MS);
-
     window.addEventListener('resize', () => {
       if (actionsPanel.classList.contains('open')) positionActionsPanel();
     });
@@ -4976,7 +4991,6 @@
       const onVisualViewportEvent = () => {
         if (state.view !== 'fx' || !window.__tilefx_enabled) return;
         scheduleTileFxCollect('visual-viewport-live');
-        maybeRecoverTileFxRuntime('visual-viewport');
         scheduleTileFxCollectViewportDebounced();
       };
       window.visualViewport.addEventListener('resize', onVisualViewportEvent, { passive: true });

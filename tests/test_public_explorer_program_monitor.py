@@ -217,6 +217,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "_setSwapState(tileEl, nextState = TILE_SWAP_STATE.DOM_VISIBLE, reason = '')" in shader_module
     assert '_drainPendingUploads(now)' in shader_module
     assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
+    assert "restoreAllDomSwaps(reason = 'restore:all') {" in shader_module
     assert "applyDomSwap(tile, swapped = false, reason = '') {" in shader_module
     assert "disable(reason = '')" in shader_module
     assert "console.warn('[tilefx] DISABLE'" in shader_module
@@ -498,7 +499,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'if (host.parentElement !== document.body) document.body.appendChild(host);' in html
     assert '#ui-portal .actions-panel{' in html and 'pointer-events: auto;' in html
     assert 'function setFxSuspend(suspend)' in html
-    assert "function maybeRecoverTileFxRuntime(reason = 'watchdog'){" in html
+    assert "function logTileFxLayerContract(reason = 'runtime') {" in html
     assert 'function inNoPreviewZone(target)' in html
     assert "if (inNoPreviewZone(event.target)) return;" in html
     assert "target.closest('[data-no-preview], .sel-ui')" in html
@@ -509,17 +510,16 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'window.__tilefx_enabled = fxEnabled;' in html
     assert "document.body.classList.toggle('fx-safemode', fxEnabled);" in html
     assert 'window.__explorer_view = nextView;' in html
-    assert "destroyTileFX('setView:non-fx');" in html
-    assert 'tileFX.enable();' in html
+    assert "tileFX.enable('setView:fx');" in html
+    assert 'tileFX.start();' in html
     assert 'window.tileFX = tileFX;' in html
     assert 'window.destroyTileFX = destroyTileFX;' in html
     assert 'window.setViewMode = setView;' in html
     assert "function destroyTileFX(reason = 'manual', { force = false } = {}){" in html
-    assert 'tileFX.teardownForModeExit({ removeCanvas: false });' in html
+    assert "tileFX.disable('setView:non-fx');" in html
+    assert 'tileFX.restoreAllDomSwaps?.();' in html
     assert 'tileFX.noteScroll();' in html
     assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html
-    assert 'const TILEFX_WATCHDOG_INTERVAL_MS = 900;' in html
-    assert 'const TILEFX_WATCHDOG_STALE_MS = 1200;' in html
     assert "`mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`" in html
     assert "console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');" in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
@@ -537,7 +537,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'canvasZIndex: fxCanvasStyle?.zIndex || null,' in html
     assert 'gridRootZIndex: rs.zIndex,' in html
     assert 'canvasHeightPx: fxCanvas?.height || null,' in html
-    assert "maybeRecoverTileFxRuntime('visual-viewport');" in html
+    assert "scheduleTileFxCollect('visual-viewport-live');" in html
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert 'tileFxCanvasTransformedAncestor:' in html
     assert 'tileFxCanvasTransformChain:' in html
@@ -551,9 +551,11 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'maybeToastTileFxPainterLeak(reason);' in html
     assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html
     assert "scheduleTileFxCollect('idle-heartbeat')" in html
-    assert "maybeRecoverTileFxRuntime('heartbeat');" in html
+    assert "setInterval(() => {\n      if (state.view !== 'fx' || !window.__tilefx_enabled) return;\n      if (tileFxDbg.scrolling) return;\n      scheduleTileFxCollect('idle-heartbeat');" in html
     assert 'maxTex ${Number(tileFxDbg.maxTexEdge || 0)}' in html
     assert '.app{ position: relative; z-index: 2; }' in html
+    assert 'z-index: var(--z-tilefx-canvas);' in html
+    assert 'z-index: var(--z-hud);' in html
     assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
     assert "setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);" in html
     assert "setFxSuspend(open || ui.inspectorOpen);" in html
