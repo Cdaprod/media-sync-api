@@ -174,7 +174,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "function logTileFxProofSummary(reason = 'manual'){" in html
     assert 'window.logTileFxProofSummary = logTileFxProofSummary;' in html
     assert 'function computeTileFxHealthVerdict(){' in html
-    assert "function assertTileFxLiveness(reason = 'runtime-check'){" in html
+    assert "function assertTileFxViewLifecycle(reason = 'sync'){" in html
+    assert "function containTileFxInvariantFailure(reason = 'lifecycle', details = {}){" in html
     assert "btn.id = 'tilefxProbeBtn';" in html
     assert "proofBtn.textContent = 'Capture Proof';" in html
     assert "hud.id = 'tilefxHud';" in html
@@ -534,17 +535,22 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert "<button id=\"viewFx\" class=\"active\" type=\"button\">FX</button>" in html
     assert "if (typeof cardFX?.setDissolveMode === 'function') {" in html
     assert "cardFX.setDissolveMode('tile');" in html
-    assert 'window.__tilefx_enabled = fxEnabled;' in html
+    assert 'window.__tilefx_enabled = fxMode;' in html
     assert "document.body.classList.toggle('fx-safemode', fxEnabled);" in html
     assert 'window.__explorer_view = nextView;' in html
-    assert "function syncTileFxLifecycleToView(reason = 'sync', { forceDisableInNonFx = false } = {}){" in html
-    assert "syncTileFxLifecycleToView('setView:fx');" in html
+    assert "function syncTileFxLifecycleToView(view = state.view, reason = 'sync', { forceDisableInNonFx = false } = {}){" in html
+    assert "syncTileFxLifecycleToView(nextView, 'setView:fx');" in html
     assert 'tileFX.start();' in html
     assert 'window.tileFX = tileFX;' in html
     assert 'window.destroyTileFX = destroyTileFX;' in html
     assert 'window.setViewMode = setView;' in html
     assert "function destroyTileFX(reason = 'manual', { force = false } = {}){" in html
-    assert "syncTileFxLifecycleToView('setView:non-fx');" in html
+    assert "syncTileFxLifecycleToView(nextView, 'setView:non-fx');" in html
+    assert "syncTileFxLifecycleToView(state.view, `destroy:${reason}`, { forceDisableInNonFx: true });" in html
+    assert html.count('tileFX.enable(') == 2
+    assert html.count('tileFX.disable(') == 2
+    assert html.count('tileFX.start();') == 2
+    assert html.count('tileFX.stop();') == 2
     assert 'tileFX.restoreAllDomSwaps?.();' in html
     assert 'tileFX.noteScroll();' in html
     assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html
@@ -579,7 +585,8 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'maybeToastTileFxPainterLeak(reason);' in html
     assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html
     assert "scheduleTileFxCollect('idle-heartbeat')" in html
-    assert "setInterval(() => {\n      if (state.view !== 'fx' || !window.__tilefx_enabled) return;\n      assertTileFxLiveness('idle-heartbeat');" in html
+    assert "setInterval(() => {\n      if (state.view !== 'fx' || !window.__tilefx_enabled) return;\n      if (tileFxDbg.scrolling) return;" in html
+    assert '// visualViewport handlers are resize/collect only; never mutate lifecycle state.' in html
     assert 'maxTex ${Number(tileFxDbg.maxTexEdge || 0)}' in html
     assert '.app{ position: relative; z-index: 2; }' in html
     assert 'z-index: var(--z-tilefx-canvas);' in html

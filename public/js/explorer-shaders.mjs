@@ -958,6 +958,7 @@ export class TileFXRenderer {
     this._swapReleaseBlocked = 0;
     this._swapReleaseAllowed = 0;
     this._swapLeakLoggedKeys = new Set();
+    this._illegalDisableLogged = false;
     this._debugRectLayer = null;
     this._debugRectPool = [];
     this._debugRectMismatchLogged = new Set();
@@ -1132,15 +1133,19 @@ export class TileFXRenderer {
     })();
     const activeView = String((typeof window !== 'undefined' ? window.__explorer_view : '') || '');
     if (!allowInFxView && activeView === 'fx') {
-      try {
-        console.error('[tilefx] illegal disable during FX view', { reason: why, stack });
-      } catch {}
+      if (!this._illegalDisableLogged) {
+        try {
+          console.error('[tilefx] illegal disable during FX view', { reason: why, stack });
+        } catch {}
+        this._illegalDisableLogged = true;
+      }
       if (window.__tilefx_dbg) {
         window.__tilefx_dbg.illegalDisableBlocked = Number(window.__tilefx_dbg.illegalDisableBlocked || 0) + 1;
         window.__tilefx_dbg.lastIllegalDisable = { reason: why, stack, t: Date.now() };
       }
       return false;
     }
+    this._illegalDisableLogged = false;
     try {
       console.warn('[tilefx] DISABLE', why, stack);
     } catch {}

@@ -1513,3 +1513,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Centralized FX lifecycle transitions in `public/explorer.html` via `syncTileFxLifecycleToView(...)` so both `setView(...)` and `destroyTileFX(...)` share a single authoritative enable/disable/start/stop/clear/restore path.
 - `destroyTileFX(...)` now syncs lifecycle by current view instead of directly disabling renderer state, preserving FX-view disable guard behavior while still allowing explicit non-FX teardown.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` to check for the lifecycle sync helper + setView callsites instead of the removed direct `tileFX.enable('setView:fx')` / `tileFX.disable('setView:non-fx')` strings.
+
+### Latest Implementation Notes (2026-03-06, lifecycle invariant lock pass)
+- Refactored `syncTileFxLifecycleToView(view, reason, opts)` in `public/explorer.html` to be the single authority for FX lifecycle mutation (enable/disable/start/stop/canvas show-hide/restore+clear paths), with `setView(...)` and `destroyTileFX(...)` both routed through that helper.
+- Added `assertTileFxViewLifecycle(reason)` to run immediately after lifecycle sync calls; it force-corrects mismatched runtime state and contains unrecoverable failures through `containTileFxInvariantFailure(...)` (hide canvas + restore DOM swaps + mark dead-overlay fields).
+- Removed runtime liveness assertions from collect/heartbeat cadence so lifecycle assertion is sync-only rather than per-frame/per-scroll noise.
+- Added explicit viewport contract comment and retained visualViewport handlers as resize/collect only (no lifecycle mutation).
+- Tightened renderer-side illegal disable telemetry in `public/js/explorer-shaders.mjs` by logging one stack-bearing console error per illegal-disable streak while still counting every blocked attempt (`illegalDisableBlocked`, `lastIllegalDisable`).
+- Updated static monitor tests for the new lifecycle helper signatures/containment helpers and for lifecycle-authority string checks.

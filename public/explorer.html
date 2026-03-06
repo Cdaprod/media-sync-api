@@ -2237,33 +2237,54 @@
     }
     window.exportTileFxProofSummary = exportTileFxProofSummary;
 
-    function assertTileFxLiveness(reason = 'runtime-check'){
-      if (state.view !== 'fx') return;
-      const enabled = !!tileFxDbg.enabled;
-      const rafRunning = !!tileFxDbg.rafRunning;
-      if (enabled && rafRunning) {
-        tileFxDbg.deadOverlayHidden = false;
-        tileFxDbg.deadOverlayReason = 'none';
-        return;
-      }
+    function containTileFxInvariantFailure(reason = 'lifecycle', details = {}){
       if (!tileFxDbg.firstLivenessFailure) {
         tileFxDbg.firstLivenessFailure = {
           reason,
-          enabled,
-          rafRunning,
+          enabled: !!tileFxDbg.enabled,
+          rafRunning: !!tileFxDbg.rafRunning,
           drawCalls: Number(tileFxDbg.drawCalls || 0),
           t: Date.now(),
-          stack: (() => { try { return new Error('tilefx-liveness').stack || ''; } catch { return ''; } })(),
+          details,
+          stack: (() => { try { return new Error('tilefx-lifecycle').stack || ''; } catch { return ''; } })(),
         };
-        console.error('[tilefx] liveness invariant failed', tileFxDbg.firstLivenessFailure);
-        const fxCanvas = el('tilefxCanvas');
-        if (fxCanvas) {
-          fxCanvas.style.display = 'none';
-          fxCanvas.style.opacity = '0';
-          tileFxDbg.deadOverlayHidden = true;
-          tileFxDbg.deadOverlayReason = String(reason || 'runtime-check');
-        }
+        console.error('[tilefx] lifecycle invariant failed', tileFxDbg.firstLivenessFailure);
       }
+      const fxCanvas = el('tilefxCanvas');
+      if (fxCanvas) {
+        fxCanvas.style.display = 'none';
+        fxCanvas.style.opacity = '0';
+      }
+      tileFX.restoreAllDomSwaps?.();
+      tileFxDbg.deadOverlayHidden = true;
+      tileFxDbg.deadOverlayReason = String(reason || 'lifecycle');
+    }
+
+    function assertTileFxViewLifecycle(reason = 'sync'){
+      const fxMode = String(window.__explorer_view || state.view || 'grid') === 'fx';
+      const enabled = !!tileFxDbg.enabled;
+      const rafRunning = !!tileFxDbg.rafRunning;
+      if (fxMode) {
+        if (!enabled) tileFX.enable(`assert:${reason}`);
+        if (!rafRunning) tileFX.start();
+        applyTileFxCanvasState(true);
+        const fixedEnabled = !!tileFxDbg.enabled;
+        const fixedRaf = !!tileFxDbg.rafRunning;
+        if (!fixedEnabled || !fixedRaf) {
+          containTileFxInvariantFailure(`assert:${reason}`, { fxMode, fixedEnabled, fixedRaf });
+          return false;
+        }
+        tileFxDbg.deadOverlayHidden = false;
+        tileFxDbg.deadOverlayReason = 'none';
+        return true;
+      }
+      if (enabled) tileFX.disable(`assert:${reason}`, { allowInFxView: true });
+      if (rafRunning) tileFX.stop();
+      tileFX.restoreAllDomSwaps?.();
+      tileFX.clear();
+      tileFX.updateTiles([]);
+      applyTileFxCanvasState(false);
+      return true;
     }
 
     function computeTileFxRectLockstep(tiles = []) {
@@ -2469,7 +2490,6 @@
         verifyTileFxDomSwap();
         computeTileFxRectLockstep(tiles);
         maybeToastTileFxPainterLeak(reason);
-        assertTileFxLiveness(`collect:${reason}`);
         if (TILEFX_PROOF_MODE && !tileFxDbg.scrolling) captureTileFxProof(`collect:${reason}`);
         updateTileFxHud();
       };
@@ -4328,29 +4348,31 @@
         return;
       }
       console.warn('[tilefx] destroyTileFX', { reason });
-      window.__explorer_view = state.view;
-      syncTileFxLifecycleToView(`destroy:${reason}`, { forceDisableInNonFx: true });
+      syncTileFxLifecycleToView(state.view, `destroy:${reason}`, { forceDisableInNonFx: true });
     }
 
-    function syncTileFxLifecycleToView(reason = 'sync', { forceDisableInNonFx = false } = {}){
-      const fxMode = String(window.__explorer_view || state.view || 'grid') === 'fx';
-      tileFX.setMode(fxMode ? 'fx' : state.view);
+    function syncTileFxLifecycleToView(view = state.view, reason = 'sync', { forceDisableInNonFx = false } = {}){
+      const targetView = (view === 'fx' || view === 'grid' || view === 'list') ? view : 'grid';
+      const fxMode = targetView === 'fx';
+      window.__explorer_view = targetView;
+      window.__tilefx_enabled = fxMode;
+      tileFX.setMode(fxMode ? 'fx' : targetView);
       if (fxMode) {
-        window.__tilefx_enabled = true;
         tileFxDbg.deadOverlayHidden = false;
         tileFxDbg.deadOverlayReason = 'none';
         tileFX.enable(`sync:${reason}`);
         tileFX.start();
         applyTileFxCanvasState(true);
-        return;
+        assertTileFxViewLifecycle(`sync:${reason}`);
+        return true;
       }
-      window.__tilefx_enabled = false;
       tileFX.disable(`sync:${reason}`, { allowInFxView: forceDisableInNonFx });
       tileFX.stop();
       tileFX.restoreAllDomSwaps?.();
       tileFX.clear();
       tileFX.updateTiles([]);
       applyTileFxCanvasState(false);
+      return assertTileFxViewLifecycle(`sync:${reason}`);
     }
 
     function setView(view){
@@ -4358,7 +4380,6 @@
       const fxEnabled = nextView === 'fx';
       state.view = nextView;
       window.__explorer_view = nextView;
-      window.__tilefx_enabled = fxEnabled;
       el('viewFx')?.classList.toggle('active', fxEnabled);
       el('viewGrid').classList.toggle('active', nextView === 'grid');
       el('viewList').classList.toggle('active', nextView === 'list');
@@ -4377,12 +4398,11 @@
       setFxSuspend(ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
       if (fxEnabled) {
         tileFxDbg.firstLivenessFailure = null;
-        syncTileFxLifecycleToView('setView:fx');
+        syncTileFxLifecycleToView(nextView, 'setView:fx');
         armTileFxSwapSanity();
         logTileFxLayerContract('setView:fx');
-        assertTileFxLiveness('setView:fx');
       } else {
-        syncTileFxLifecycleToView('setView:non-fx');
+        syncTileFxLifecycleToView(nextView, 'setView:non-fx');
       }
       renderMedia();
       if (fxEnabled) {
@@ -5294,7 +5314,6 @@
     });
     setInterval(() => {
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
-      assertTileFxLiveness('idle-heartbeat');
       if (tileFxDbg.scrolling) return;
       scheduleTileFxCollect('idle-heartbeat');
     }, TILEFX_SCAN_IDLE_INTERVAL_MS);
@@ -5342,6 +5361,7 @@
       };
     })();
     if (window.visualViewport) {
+      // visualViewport handlers are resize/collect only; never mutate lifecycle state.
       const onVisualViewportEvent = () => {
         if (state.view !== 'fx' || !window.__tilefx_enabled) return;
         scheduleTileFxCollect('visual-viewport-live');
