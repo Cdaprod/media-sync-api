@@ -4328,12 +4328,29 @@
         return;
       }
       console.warn('[tilefx] destroyTileFX', { reason });
-      tileFX.disable(`destroy:${reason}`);
+      window.__explorer_view = state.view;
+      syncTileFxLifecycleToView(`destroy:${reason}`, { forceDisableInNonFx: true });
+    }
+
+    function syncTileFxLifecycleToView(reason = 'sync', { forceDisableInNonFx = false } = {}){
+      const fxMode = String(window.__explorer_view || state.view || 'grid') === 'fx';
+      tileFX.setMode(fxMode ? 'fx' : state.view);
+      if (fxMode) {
+        window.__tilefx_enabled = true;
+        tileFxDbg.deadOverlayHidden = false;
+        tileFxDbg.deadOverlayReason = 'none';
+        tileFX.enable(`sync:${reason}`);
+        tileFX.start();
+        applyTileFxCanvasState(true);
+        return;
+      }
+      window.__tilefx_enabled = false;
+      tileFX.disable(`sync:${reason}`, { allowInFxView: forceDisableInNonFx });
       tileFX.stop();
       tileFX.restoreAllDomSwaps?.();
+      tileFX.clear();
       tileFX.updateTiles([]);
       applyTileFxCanvasState(false);
-      window.__tilefx_enabled = false;
     }
 
     function setView(view){
@@ -4358,26 +4375,14 @@
         cardFX.setDissolveMode('tile');
       }
       setFxSuspend(ui.inspectorOpen || el('actionsPanel')?.classList.contains('open'));
-      tileFX.setMode(nextView);
       if (fxEnabled) {
-        window.__tilefx_enabled = true;
         tileFxDbg.firstLivenessFailure = null;
-        tileFxDbg.deadOverlayHidden = false;
-        tileFxDbg.deadOverlayReason = 'none';
-        tileFX.enable('setView:fx');
-        tileFX.start();
-        applyTileFxCanvasState(true);
+        syncTileFxLifecycleToView('setView:fx');
         armTileFxSwapSanity();
         logTileFxLayerContract('setView:fx');
         assertTileFxLiveness('setView:fx');
       } else {
-        window.__tilefx_enabled = false;
-        tileFX.disable('setView:non-fx');
-        tileFX.stop();
-        tileFX.restoreAllDomSwaps?.();
-        tileFX.clear();
-        tileFX.updateTiles([]);
-        applyTileFxCanvasState(false);
+        syncTileFxLifecycleToView('setView:non-fx');
       }
       renderMedia();
       if (fxEnabled) {

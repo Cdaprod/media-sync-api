@@ -537,13 +537,14 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'window.__tilefx_enabled = fxEnabled;' in html
     assert "document.body.classList.toggle('fx-safemode', fxEnabled);" in html
     assert 'window.__explorer_view = nextView;' in html
-    assert "tileFX.enable('setView:fx');" in html
+    assert "function syncTileFxLifecycleToView(reason = 'sync', { forceDisableInNonFx = false } = {}){" in html
+    assert "syncTileFxLifecycleToView('setView:fx');" in html
     assert 'tileFX.start();' in html
     assert 'window.tileFX = tileFX;' in html
     assert 'window.destroyTileFX = destroyTileFX;' in html
     assert 'window.setViewMode = setView;' in html
     assert "function destroyTileFX(reason = 'manual', { force = false } = {}){" in html
-    assert "tileFX.disable('setView:non-fx');" in html
+    assert "syncTileFxLifecycleToView('setView:non-fx');" in html
     assert 'tileFX.restoreAllDomSwaps?.();' in html
     assert 'tileFX.noteScroll();' in html
     assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html

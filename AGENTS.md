@@ -1508,3 +1508,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - `computeTileFxRectLockstep()` now records per-axis mismatch components (`fxVsDomX/Y`, `overlayVsDomX/Y`) and aggregate mismatch statistics while preserving >2px mismatch capture semantics.
 - `assertTileFxLiveness(...)` now tracks dead-overlay state (`deadOverlayHidden`/`deadOverlayReason`) and resets those markers automatically when FX liveness is healthy again.
 - Added test assertions for the new proof helper/verdict fields and renderer illegal-disable telemetry in `tests/test_public_explorer_program_monitor.py`.
+
+### Latest Implementation Notes (2026-03-06, lifecycle sync authority follow-up)
+- Centralized FX lifecycle transitions in `public/explorer.html` via `syncTileFxLifecycleToView(...)` so both `setView(...)` and `destroyTileFX(...)` share a single authoritative enable/disable/start/stop/clear/restore path.
+- `destroyTileFX(...)` now syncs lifecycle by current view instead of directly disabling renderer state, preserving FX-view disable guard behavior while still allowing explicit non-FX teardown.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` to check for the lifecycle sync helper + setView callsites instead of the removed direct `tileFX.enable('setView:fx')` / `tileFX.disable('setView:non-fx')` strings.
