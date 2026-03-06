@@ -950,8 +950,11 @@ export class TileFXRenderer {
     this._swappedTileRefs = new Map();
     this._swapStateByTile = new WeakMap();
     this._swapSeenFrameByTile = new WeakMap();
+    this._swapStartedAtByTile = new WeakMap();
+    this._swapStartedAtByTile = new WeakMap();
     this._swapReleaseDelayFrames = 10;
     this._swapReleaseDelayMs = 260;
+    this._swapMinHoldMs = 320;
     this._debugRectLayer = null;
     this._debugRectPool = [];
     this._debugRectMismatchLogged = new Set();
@@ -1203,6 +1206,33 @@ export class TileFXRenderer {
     }
   }
 
+  _getTileRectInVisualViewport(tileRect, viewportMetrics) {
+    const vp = viewportMetrics || getViewportMetrics();
+    const rect = tileRect || { left: 0, top: 0, width: 0, height: 0 };
+    const left = Number(rect.left || 0) - Number(vp.offsetX || 0);
+    const top = Number(rect.top || 0) - Number(vp.offsetY || 0);
+    const width = Number(rect.width || 0);
+    const height = Number(rect.height || 0);
+    return { left, top, width, height, right: left + width, bottom: top + height };
+  }
+
+  _cssRectToCanvasRect(localRect, dpr = 1) {
+    const r = localRect || { left: 0, top: 0, right: 0, bottom: 0 };
+    return {
+      x1: Number(r.left || 0) * Number(dpr || 1),
+      y1: Number(r.top || 0) * Number(dpr || 1),
+      x2: Number(r.right || 0) * Number(dpr || 1),
+      y2: Number(r.bottom || 0) * Number(dpr || 1),
+    };
+  }
+
+  _canReleaseSwap(tileEl, now = performance.now()) {
+    if (!tileEl) return true;
+    const startedAt = Number(this._swapStartedAtByTile.get(tileEl) || 0);
+    if (!startedAt) return true;
+    return (now - startedAt) >= this._swapMinHoldMs;
+  }
+
   applyDomSwap(tile, swapped = false, reason = '') {
     const tileEl = tile?.tileEl || null;
     const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length
@@ -1214,9 +1244,11 @@ export class TileFXRenderer {
     tileEl.classList.toggle('fx-swapped', !!swapped);
     if (swapped) {
       this._swappedTileRefs.set(tileEl, tile);
+      this._swapStartedAtByTile.set(tileEl, performance.now());
       this._setSwapState(tileEl, TILE_SWAP_STATE.FX_SWAPPED, reason || 'swap:on');
     } else {
       this._swappedTileRefs.delete(tileEl);
+      this._swapStartedAtByTile.delete(tileEl);
       this._setSwapState(tileEl, TILE_SWAP_STATE.RESTORING, reason || 'swap:off');
     }
     if (!paintEls.length) return;
@@ -1379,6 +1411,7 @@ export class TileFXRenderer {
       const frameGap = Math.max(0, this._frame - Number(seen.frame || 0));
       const msGap = Math.max(0, now - Number(seen.t || now));
       if (frameGap < this._swapReleaseDelayFrames && msGap < this._swapReleaseDelayMs) continue;
+      if (!this._canReleaseSwap(tileEl, now)) continue;
       this.applyDomSwap(tile, false, 'restore:untracked');
       this._swapSeenFrameByTile.delete(tileEl);
     }
@@ -1466,6 +1499,15 @@ export class TileFXRenderer {
   _queueTileImageUpload(tile, key) {
     if (!key || !this.textureCache) return;
     this._uploadAttempt += 1;
+    const visibleCount = Math.max(1, Number(this.tiles?.length || 0));
+    const maxPending = Math.max(24, visibleCount * 2);
+    if (this._pendingUploads.size >= maxPending) {
+      if (window.__tilefx_dbg) {
+        window.__tilefx_dbg.pendingCap = maxPending;
+        window.__tilefx_dbg.pendingClamped = Number(window.__tilefx_dbg.pendingClamped || 0) + 1;
+      }
+      return;
+    }
     if (this.textureCache.has(key)) return;
     if (this._pendingUploads.has(key)) return;
     this._setTileState(key, TILE_STATE.REQUESTED);
@@ -1552,6 +1594,8 @@ export class TileFXRenderer {
     if (this.isScrolling && cachePressure) return;
     const readyCount = Number(this._stateCounts().ready || 0);
     const visibleTarget = Number(this.tiles?.length || 0) + this.idleUploadOverscan;
+    const maxPending = Math.max(24, Number(this.tiles?.length || 1) * 2);
+    if (window.__tilefx_dbg) window.__tilefx_dbg.pendingCap = maxPending;
     if (!this.isScrolling && readyCount >= visibleTarget) return;
     if (now < this.backpressureUntil) return;
     if (this._uploadsWindow.length >= this.uploadBudgetPerSecond) return;
@@ -1678,14 +1722,16 @@ export class TileFXRenderer {
     tiles.forEach((tile) => {
       const rect = tile?.rect;
       if (!rect) return;
-      const localLeft = Number(rect.left || 0) - vp.offsetX;
-      const localTop = Number(rect.top || 0) - vp.offsetY;
-      const localRight = localLeft + Number(rect.width || 0);
-      const localBottom = localTop + Number(rect.height || 0);
-      const x1 = localLeft * dpr;
-      const y1 = localTop * dpr;
-      const x2 = localRight * dpr;
-      const y2 = localBottom * dpr;
+      const localRect = this._getTileRectInVisualViewport(rect, vp);
+      const localLeft = localRect.left;
+      const localTop = localRect.top;
+      const localRight = localRect.right;
+      const localBottom = localRect.bottom;
+      const canvasRect = this._cssRectToCanvasRect(localRect, dpr);
+      const x1 = canvasRect.x1;
+      const y1 = canvasRect.y1;
+      const x2 = canvasRect.x2;
+      const y2 = canvasRect.y2;
       if (!Number.isFinite(x1 + y1 + x2 + y2)) return;
       if (x2 <= x1 || y2 <= y1) return;
       if (localRight <= 0 || localBottom <= 0 || localLeft >= vp.width || localTop >= vp.height) return;
@@ -1722,11 +1768,11 @@ export class TileFXRenderer {
         hasTex = 1;
         this._setTileState(key, TILE_STATE.READY);
         shouldSwapSet = Boolean(tileEl && swapState !== TILE_SWAP_STATE.FX_SWAPPED);
-      } else if (tileEl && swapState === TILE_SWAP_STATE.FX_SWAPPED && !this.isScrolling) {
+      } else if (tileEl && swapState === TILE_SWAP_STATE.FX_SWAPPED && !this.isScrolling && this._canReleaseSwap(tileEl, now)) {
         this.applyDomSwap(tile, false, 'missing-texture');
         if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
         this._setTileState(key, TILE_STATE.DOM_ONLY);
-      } else if (tileEl && swapState !== TILE_SWAP_STATE.DOM_VISIBLE && !this.isScrolling) {
+      } else if (tileEl && swapState !== TILE_SWAP_STATE.DOM_VISIBLE && !this.isScrolling && this._canReleaseSwap(tileEl, now)) {
         this.applyDomSwap(tile, false, 'fallback-dom-visible');
       }
       if (!hasTex) gl.uniform2f(this.u.u_tex_size, 1, 1);

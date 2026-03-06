@@ -1469,3 +1469,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added offscreen swap restore hysteresis in `_restoreUntrackedSwaps(activeTileEls, now)` (frame/time thresholds) and skip unswap churn during scrolling to prevent scroll-away disappear/reappear flashes.
 - Added tile debug-rect mismatch logging (`[tilefx] rect mismatch` when >2px) and expanded explorer layout diagnostics with `tileFxCanvasTransformChain` to surface transformed/filter/backdrop ancestor stacks.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` and refreshed `docs/todo/AGENTS.md` task checklist for the new authoritative swap-state contract.
+
+### Latest Implementation Notes (2026-03-06, compositor lock + rect source-of-truth pass)
+- Hardened FX compositor behavior in `public/explorer.html` by forcing `#tilefxCanvas` to a top-level fixed layer contract (body-attached, transform/filter cleared), adding `fx-safemode` class toggles in FX mode, and disabling swapped pseudo-element painters.
+- Added stricter layout diagnostics: `tileFxCanvasTransformChain` is now computed once per debug pass and emits an explicit `[tilefx] canvas transform-chain detected` error when non-empty in FX view.
+- Centralized TileFX rect mapping in `public/js/explorer-shaders.mjs` with `_getTileRectInVisualViewport(...)` + `_cssRectToCanvasRect(...)` helpers so visualViewport offsets/DPR conversion are applied from one source-of-truth.
+- Added swap minimum-hold gating (`_canReleaseSwap`, `_swapMinHoldMs`) on top of offscreen hysteresis to prevent edge-of-viewport swap thrash and transient DOM reappearance.
+- Added fed/pending pressure controls: adaptive overscan+fed cap in `collectTileFxTiles()` and pending-cap telemetry (`pendingCap`, `pendingClamped`) in TileFX upload queueing/drain.
+- Updated static assertions and TODO checklist for safemode CSS, rect helper APIs, pending cap telemetry, and FX mode safeties.

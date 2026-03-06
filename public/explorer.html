@@ -110,7 +110,14 @@
     }
 
     #bgImpulseCanvas{ z-index: 0; }
-    #tilefxCanvas{ z-index: 1; }
+    #tilefxCanvas{
+      z-index: 3000;
+      contain: layout paint size !important;
+      transform: none !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
     body:not(.fx-mode) #tilefxCanvas{ display: none !important; opacity: 0 !important; }
     canvas.fx-shared-overlay{ z-index: 2; }
     canvas.fx-debug-overlay{ z-index: 3; }
@@ -854,6 +861,21 @@
     body.fx-mode.fx-swap-sanity #mediaGridRoot.view-fx .asset[data-tex="1"]{
       outline: 1px solid rgba(140,255,120,0.95);
       outline-offset: -1px;
+    }
+    body.fx-mode #mediaGridRoot.view-fx .asset.fx-swapped .thumb::before,
+    body.fx-mode #mediaGridRoot.view-fx .asset.fx-swapped .thumb::after,
+    body.fx-mode #mediaGridRoot.view-fx .asset.fx-swapped::before,
+    body.fx-mode #mediaGridRoot.view-fx .asset.fx-swapped::after{
+      content: none !important;
+    }
+    body.fx-safemode .content,
+    body.fx-safemode .content .scroll,
+    body.fx-safemode #mediaGridRoot{
+      transform: none !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      perspective: none !important;
     }
     #mediaGridRoot.view-fx .asset,
     #mediaGridRoot.view-fx .asset::before,
@@ -2225,7 +2247,9 @@
       const grid = el('mediaGrid');
       if (!root || !grid || state.view !== 'fx') return [];
       const rootRect = root.getBoundingClientRect();
-      const overscan = 300;
+      const scrolling = !!tileFxDbg.scrolling;
+      const overscan = scrolling ? 180 : 320;
+      const maxFed = scrolling ? 140 : 240;
       const cards = Array.from(grid.querySelectorAll('.asset'));
       const tiles = [];
       let culled = 0;
@@ -2326,7 +2350,7 @@
             if (!ready && card.dataset.tex !== 'pending') card.dataset.tex = '0';
           },
         });
-        if (tiles.length >= 260) break;
+        if (tiles.length >= maxFed) break;
       }
       const thumbCounts = { img: 0, cssbg: 0, poster: 0, none: 0 };
       for (const tile of tiles) {
@@ -2351,6 +2375,8 @@
         };
       });
       tileFxDbg.swappedTiles = cards.filter((card) => card?.dataset?.tex === '1').length;
+      tileFxDbg.maxFed = maxFed;
+      tileFxDbg.collectOverscan = overscan;
       tileFxScanStats.scannedCount = cards.length;
       tileFxScanStats.culledCount = culled;
       tileFxScanStats.renderedCount = tiles.length;
@@ -3924,10 +3950,13 @@
     function applyTileFxCanvasState(enabled){
       const tileCanvas = el('tilefxCanvas');
       if (!tileCanvas) return;
+      if (tileCanvas.parentElement !== document.body) document.body.appendChild(tileCanvas);
       tileCanvas.classList.toggle('is-on', !!enabled);
       tileCanvas.style.display = enabled ? 'block' : 'none';
       tileCanvas.style.opacity = enabled ? '1' : '0';
       tileCanvas.style.pointerEvents = 'none';
+      tileCanvas.style.transform = 'none';
+      tileCanvas.style.filter = 'none';
     }
 
     function armTileFxSwapSanity(){
@@ -3968,6 +3997,7 @@
       const root = el('mediaGridRoot');
       if (root) root.classList.toggle('view-fx', fxEnabled);
       document.body.classList.toggle('fx-mode', fxEnabled);
+      document.body.classList.toggle('fx-safemode', fxEnabled);
       if (!fxEnabled) document.body.classList.remove('fx-swap-sanity');
       applyTileFxCanvasState(fxEnabled);
 
@@ -5313,6 +5343,29 @@
       const fxCanvas = document.querySelector('canvas[data-assetfx="overlay"]');
       const fxCanvasStyle = fxCanvas ? getComputedStyle(fxCanvas) : null;
       const fxCanvasRect = fxCanvas ? fxCanvas.getBoundingClientRect() : null;
+      const transformChain = (() => {
+        const chain = [];
+        let node = fxCanvas?.parentElement || null;
+        while (node && chain.length < 8){
+          const csNode = getComputedStyle(node);
+          const transform = String(csNode.transform || 'none');
+          const filter = String(csNode.filter || 'none');
+          const backdrop = String(csNode.backdropFilter || 'none');
+          if (transform !== 'none' || filter !== 'none' || backdrop !== 'none') {
+            chain.push({
+              node: node.id || node.className || node.tagName,
+              transform,
+              filter,
+              backdrop,
+            });
+          }
+          node = node.parentElement;
+        }
+        return chain;
+      })();
+      if (state.view === 'fx' && transformChain.length) {
+        console.error('[tilefx] canvas transform-chain detected', transformChain);
+      }
       console.debug('[layoutdebug]', {
         gridDisplay: gs.display,
         gridAutoFlow: gs.gridAutoFlow,
@@ -5348,26 +5401,7 @@
           }
           return null;
         })(),
-        tileFxCanvasTransformChain: (() => {
-          const chain = [];
-          let node = fxCanvas?.parentElement || null;
-          while (node && chain.length < 8){
-            const csNode = getComputedStyle(node);
-            const transform = String(csNode.transform || 'none');
-            const filter = String(csNode.filter || 'none');
-            const backdrop = String(csNode.backdropFilter || 'none');
-            if (transform !== 'none' || filter !== 'none' || backdrop !== 'none') {
-              chain.push({
-                node: node.id || node.className || node.tagName,
-                transform,
-                filter,
-                backdrop,
-              });
-            }
-            node = node.parentElement;
-          }
-          return chain;
-        })(),
+        tileFxCanvasTransformChain: transformChain,
       });
     }
 
