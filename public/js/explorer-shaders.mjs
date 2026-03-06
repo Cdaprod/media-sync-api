@@ -1443,7 +1443,7 @@ export class TileFXRenderer {
       const hasTexture = drawMeta.hasTexture === true;
       const wasDrawnThisPass = drawMeta.wasDrawnThisPass === true;
       const rectValid = drawMeta.rectValid === true;
-      const isSwapEligible = this.mode === 'fx' && this.enabled && hasTexture && wasDrawnThisPass && rectValid;
+      const isSwapEligible = this.mode === 'fx' && this.enabled && visible && hasTexture && wasDrawnThisPass && rectValid;
       let owner = 'DOM';
       let releaseBlocked = false;
 
@@ -1454,17 +1454,9 @@ export class TileFXRenderer {
           if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
         }
       } else if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
-        const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
-        const canReleaseByIdle = idleFor >= this._swapReleaseIdleMs;
-        const canRelease = canReleaseByIdle && this._canReleaseVisibleSwap({ tileEl, visible }, now);
-        if (canRelease) {
-          this.applyDomSwap(tile, false, visible ? 'ownership:visible-dom' : 'ownership:offscreen-dom');
-          this._swapReleaseAllowed += 1;
-          this._offscreenSwapReleaseAllowed += 1;
-          if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
-        } else {
-          releaseBlocked = true;
-        }
+        // Active/fed tiles do not release ownership here; only untracked tiles may release.
+        this._swapReleaseBlocked += 1;
+        releaseBlocked = true;
       }
 
       rows.push({
@@ -1528,10 +1520,11 @@ export class TileFXRenderer {
     });
   }
 
-  _restoreUntrackedSwaps(activeTileEls = new Set(), now = performance.now(), visibleTileEls = new Set()) {
+  _restoreUntrackedSwaps(activeTileEls = new Set(), now = performance.now(), visibleTileEls = new Set(), nearVisibleTileEls = new Set()) {
     if (!this._swappedTileRefs.size) return;
     const active = activeTileEls instanceof Set ? activeTileEls : new Set();
     const visible = visibleTileEls instanceof Set ? visibleTileEls : new Set();
+    const nearVisible = nearVisibleTileEls instanceof Set ? nearVisibleTileEls : new Set();
     if (this.isScrolling) return;
     const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
     for (const [tileEl, tile] of Array.from(this._swappedTileRefs.entries())) {
@@ -1550,7 +1543,7 @@ export class TileFXRenderer {
       const seen = this._swapSeenFrameByTile.get(tileEl) || { frame: this._frame, t: now };
       const frameGap = Math.max(0, this._frame - Number(seen.frame || 0));
       const msGap = Math.max(0, now - Number(seen.t || now));
-      if (visible.has(tileEl)) {
+      if (visible.has(tileEl) || nearVisible.has(tileEl)) {
         this._swapReleaseBlocked += 1;
         this._visibleSwapReleaseBlocked += 1;
         continue;
@@ -1865,6 +1858,7 @@ export class TileFXRenderer {
     const debugRects = [];
     const activeTileEls = new Set();
     const visibleTileEls = new Set();
+    const nearVisibleTileEls = new Set();
     const drawResults = new Map();
     tiles.forEach((tile) => {
       const k = String(tile?.key || '');
@@ -1887,6 +1881,7 @@ export class TileFXRenderer {
       const y2 = canvasRect.y2;
       const tileEl = tile?.tileEl || null;
       const visible = !(localRight <= 0 || localBottom <= 0 || localLeft >= vp.width || localTop >= vp.height);
+      const nearVisible = !(localRight <= -140 || localBottom <= -140 || localLeft >= (vp.width + 140) || localTop >= (vp.height + 140));
       const rectValid = Number.isFinite(x1 + y1 + x2 + y2) && x2 > x1 && y2 > y1;
       if (tileEl) {
         drawResults.set(tileEl, {
@@ -1901,7 +1896,10 @@ export class TileFXRenderer {
       }
       if (!rectValid) return;
       if (!visible) return;
-      if (tileEl) visibleTileEls.add(tileEl);
+      if (tileEl) {
+        visibleTileEls.add(tileEl);
+        if (nearVisible) nearVisibleTileEls.add(tileEl);
+      }
       if (this.debugRectsEnabled) debugRects.push({ left: localLeft, top: localTop, width: localRight - localLeft, height: localBottom - localTop });
 
       const color = this._typeColor(tile.type);
@@ -1963,7 +1961,7 @@ export class TileFXRenderer {
 
     this._renderDebugRects(debugRects);
     this.syncVisibleTileOwnership(tiles, drawResults, now);
-    this._restoreUntrackedSwaps(activeTileEls, now, visibleTileEls);
+    this._restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls);
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
     if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
       this.backpressureUntil = now + this.uploadPauseMs;

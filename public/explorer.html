@@ -2592,9 +2592,9 @@
       const rootRect = root.getBoundingClientRect();
       const scrolling = !!tileFxDbg.scrolling;
       const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-      const overscan = scrolling ? (coarsePointer ? 120 : 140) : (coarsePointer ? 220 : 280);
-      const maxFed = scrolling ? (coarsePointer ? 52 : 88) : (coarsePointer ? 96 : 168);
-      const maxPromoted = scrolling ? (coarsePointer ? 6 : 9) : (coarsePointer ? 16 : 30);
+      const overscan = scrolling ? (coarsePointer ? 96 : 128) : (coarsePointer ? 180 : 240);
+      const maxFed = scrolling ? (coarsePointer ? 42 : 72) : (coarsePointer ? 84 : 144);
+      const maxPromoted = scrolling ? (coarsePointer ? 4 : 7) : (coarsePointer ? 12 : 24);
       const cards = Array.from(grid.querySelectorAll('.asset'));
       const visibleCards = [];
       const overscanCards = [];
@@ -2710,6 +2710,19 @@
       }
 
       const tiles = [];
+      const viewportCenterY = (rootRect.top + rootRect.bottom) * 0.5;
+      const viewportCenterX = (rootRect.left + rootRect.right) * 0.5;
+      overscanCards.sort((a, b) => {
+        const ar = a?.rect || {};
+        const br = b?.rect || {};
+        const acx = Number(ar.left || 0) + (Number(ar.width || 0) * 0.5);
+        const bcx = Number(br.left || 0) + (Number(br.width || 0) * 0.5);
+        const acy = Number(ar.top || 0) + (Number(ar.height || 0) * 0.5);
+        const bcy = Number(br.top || 0) + (Number(br.height || 0) * 0.5);
+        const ad = Math.abs(acy - viewportCenterY) + (Math.abs(acx - viewportCenterX) * 0.35);
+        const bd = Math.abs(bcy - viewportCenterY) + (Math.abs(bcx - viewportCenterX) * 0.35);
+        return ad - bd;
+      });
       const addTile = (tile) => {
         if (!tile || tiles.length >= maxFed) return false;
         tiles.push(tile);

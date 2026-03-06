@@ -71,3 +71,12 @@
 - [x] Kept collect/scroll/viewport paths lifecycle-neutral (no new lifecycle mutations, watchdogs, or recovery loops).
 - [ ] Capture physical iPhone Safari run after aggressive scroll-stop and paste one `window.logVisibleTileOwnership()` console sample in PR notes.
 - [ ] Validate on iPhone that visible thumbnails no longer flip DOM↔FX ownership at viewport edges during scroll.
+
+## 2026-03-06 — Renderer behavior finish pass (new)
+- [x] Enforced draw-truth-only swap eligibility (`visible + texture + drawn this pass + valid rect`) so cache/READY alone can no longer claim ownership.
+- [x] Blocked swap release for active/fed tiles in ownership sync path.
+- [x] Restricted untracked swap release to non-visible and non-near-visible tiles only.
+- [x] Re-prioritized overscan promotions by viewport distance and reduced scroll-time feed caps to reduce gradual page takeover.
+- [x] Kept lifecycle/proof/hud feature surface unchanged (behavior-only pass).
+- [ ] Validate on physical iPhone Safari that visible tiles no longer alternate DOM/FX at viewport edges after aggressive scroll-stop.
+- [ ] Capture and attach one `window.logVisibleTileOwnership(12)` output after aggressive scroll-stop.

@@ -186,7 +186,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "card.classList.toggle('tilefx-ready', !!ready);" in html
     assert 'COVERAGE_LOW' in html
     assert 'visiblePromotedThisPass' in html
-    assert 'const maxPromoted = scrolling ? (coarsePointer ? 6 : 9) : (coarsePointer ? 16 : 30);' in html
+    assert 'const maxPromoted = scrolling ? (coarsePointer ? 4 : 7) : (coarsePointer ? 12 : 24);' in html
     assert 'visibleCards.forEach((tile) => addTile(tile));' in html
     assert 'texturesUploaded' in html
     assert 'texturesPending' in html
@@ -258,7 +258,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'lastIllegalDisable: null,' in shader_module
     assert "console.warn('[tilefx] rect mismatch'" in shader_module
     assert 'window.__tilefx_dbg.pendingCap = maxPending;' in shader_module
-    assert '_restoreUntrackedSwaps(activeTileEls, now, visibleTileEls);' in shader_module
+    assert '_restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls);' in shader_module
     assert 'const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length' in shader_module
     assert "tileEl.classList.toggle('fx-swapped', !!swapped);" in shader_module
     assert "document.body?.classList?.contains('fx-mode')" in shader_module

@@ -1530,3 +1530,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added compact ownership probe `window.logVisibleTileOwnership(limit)` in `public/explorer.html` for on-device console truth checks of visible tile owner/state/draw/texture/data-tex fields.
 - Added HUD lifecycle stability line (`lifecycleStable`) and surfaced new ownership counters in expanded rows.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the new ownership helper APIs/telemetry and revised fed-set constants.
+
+### Latest Implementation Notes (2026-03-06, renderer behavior finish pass)
+- Tightened thumbnail ownership authority in `public/js/explorer-shaders.mjs` so FX swap now requires draw truth (`visible && hasTexture && wasDrawnThisPass && rectValid`) instead of cache/READY state alone.
+- Changed active/fed tile behavior to block swap release inside `syncVisibleTileOwnership(...)`; swap release is now restricted to untracked tiles only.
+- Hardened `_restoreUntrackedSwaps(...)` with an additional near-visible guard set so release cannot touch currently visible or near-visible tiles.
+- Re-tuned visible-first feed constants in `collectTileFxTiles()` (`overscan`, `maxFed`, `maxPromoted`) and sorted overscan candidates by viewport distance so near-visible tiles warm first and distant gradual takeover is reduced.
+- Kept lifecycle and diagnostics surface unchanged for this pass; changes are renderer behavior + ownership/release policy only.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the tuned constants and updated untracked-swap call signature.
