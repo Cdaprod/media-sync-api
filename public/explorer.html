@@ -1932,6 +1932,8 @@
     let tileFxLastCollectAt = 0;
     const TILEFX_SCAN_MIN_INTERVAL_MS = 120;
     const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;
+    const TILEFX_WATCHDOG_INTERVAL_MS = 900;
+    const TILEFX_WATCHDOG_STALE_MS = 1200;
     let tileFxCardSeq = 0;
     const tileFxPrevKeyByCard = new Map();
     let tileFxProbeRows = [];
@@ -2169,6 +2171,31 @@
       tileFxCollectPending = requestAnimationFrame(runCollect);
     }
 
+
+    function maybeRecoverTileFxRuntime(reason = 'watchdog'){
+      if (state.view !== 'fx' || !window.__tilefx_enabled) return false;
+      const enabled = !!tileFxDbg.enabled;
+      const raf = !!tileFxDbg.rafRunning;
+      const staleDraw = Number(tileFxDbg.drawCalls || 0) <= 0
+        && Number(tileFxDbg.lastFrameMs || 0) <= 0
+        && Number(tileFxDbg.scrollIdleMs || 0) > TILEFX_WATCHDOG_STALE_MS;
+      if (enabled && raf && !staleDraw) return false;
+      console.warn('[tilefx] runtime watchdog recover', {
+        reason,
+        enabled,
+        raf,
+        staleDraw,
+        drawCalls: Number(tileFxDbg.drawCalls || 0),
+        scrollIdleMs: Number(tileFxDbg.scrollIdleMs || 0),
+      });
+      tileFX.setMode('fx');
+      tileFX.enable();
+      scheduleTileFxCollect(`recover:${reason}`);
+      if (!tileFxDbg.scrolling) {
+        toast('warn', 'FX runtime recovered', `Re-armed TileFX (${reason}).`);
+      }
+      return true;
+    }
 
     function inNoPreviewZone(target){
       return !!(target && target.closest && target.closest('[data-no-preview], .sel-ui'));
@@ -4869,6 +4896,11 @@
       scheduleTileFxCollect('idle-heartbeat');
     }, TILEFX_SCAN_IDLE_INTERVAL_MS);
 
+    setInterval(() => {
+      if (state.view !== 'fx' || !window.__tilefx_enabled) return;
+      maybeRecoverTileFxRuntime('heartbeat');
+    }, TILEFX_WATCHDOG_INTERVAL_MS);
+
     window.addEventListener('resize', () => {
       if (actionsPanel.classList.contains('open')) positionActionsPanel();
     });
@@ -4914,6 +4946,7 @@
       const onVisualViewportEvent = () => {
         if (state.view !== 'fx' || !window.__tilefx_enabled) return;
         scheduleTileFxCollect('visual-viewport-live');
+        maybeRecoverTileFxRuntime('visual-viewport');
         scheduleTileFxCollectViewportDebounced();
       };
       window.visualViewport.addEventListener('resize', onVisualViewportEvent, { passive: true });

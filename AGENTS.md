@@ -1455,3 +1455,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Hooked painter-leak checks into `scheduleTileFxCollect(...)` after DOM-swap verification so diagnostics run on the same scan cadence without affecting normal mode behavior.
 - Kept diagnostics deduplicated per tile key and throttled via a short timer to avoid toast spam during continuous scrolling.
 - Updated `docs/todo/AGENTS.md` and static assertions in `tests/test_public_explorer_program_monitor.py` for the new debug toast hook and query flag.
+
+### Latest Implementation Notes (2026-03-06, FX runtime watchdog auto-recover)
+- Added `maybeRecoverTileFxRuntime(reason)` in `public/explorer.html` to auto-recover TileFX in FX view when debug state indicates renderer/RAF has gone stale (`enabled/raf` false or stale draw counters after idle).
+- Wired watchdog recovery to heartbeat interval (`TILEFX_WATCHDOG_INTERVAL_MS=900`) and visualViewport live events so recover attempts happen without mode-exit teardown side effects.
+- Recovery path now reasserts `tileFX.setMode('fx')`, `tileFX.enable()`, and schedules fresh tile collection with a reason tag for traceable diagnostics.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for watchdog constants, helper function, and recovery callsites.
+- Updated `docs/todo/AGENTS.md` checklist to mark watchdog task complete and keep iPhone proof/perf profiling tasks open.

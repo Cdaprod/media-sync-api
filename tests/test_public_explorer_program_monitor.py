@@ -490,6 +490,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'if (host.parentElement !== document.body) document.body.appendChild(host);' in html
     assert '#ui-portal .actions-panel{' in html and 'pointer-events: auto;' in html
     assert 'function setFxSuspend(suspend)' in html
+    assert "function maybeRecoverTileFxRuntime(reason = 'watchdog'){" in html
     assert 'function inNoPreviewZone(target)' in html
     assert "if (inNoPreviewZone(event.target)) return;" in html
     assert "target.closest('[data-no-preview], .sel-ui')" in html
@@ -508,6 +509,8 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'tileFX.teardownForModeExit({ removeCanvas: false });' in html
     assert 'tileFX.noteScroll();' in html
     assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html
+    assert 'const TILEFX_WATCHDOG_INTERVAL_MS = 900;' in html
+    assert 'const TILEFX_WATCHDOG_STALE_MS = 1200;' in html
     assert "`mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`" in html
     assert "console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');" in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
@@ -525,6 +528,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'canvasZIndex: fxCanvasStyle?.zIndex || null,' in html
     assert 'gridRootZIndex: rs.zIndex,' in html
     assert 'canvasHeightPx: fxCanvas?.height || null,' in html
+    assert "maybeRecoverTileFxRuntime('visual-viewport');" in html
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert 'tileFxCanvasTransformedAncestor:' in html
     assert '#mediaGridRoot{' in html and 'isolation: isolate;' in html
@@ -535,6 +539,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'maybeToastTileFxPainterLeak(reason);' in html
     assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html
     assert "scheduleTileFxCollect('idle-heartbeat')" in html
+    assert "maybeRecoverTileFxRuntime('heartbeat');" in html
     assert 'maxTex ${Number(tileFxDbg.maxTexEdge || 0)}' in html
     assert '.app{ position: relative; z-index: 2; }' in html
     assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
