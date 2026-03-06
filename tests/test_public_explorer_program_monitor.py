@@ -171,6 +171,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'window.captureTileFxProof = captureTileFxProof;' in html
     assert 'function exportTileFxProofSummary(){' in html
     assert 'window.exportTileFxProofSummary = exportTileFxProofSummary;' in html
+    assert "function logTileFxProofSummary(reason = 'manual'){" in html
+    assert 'window.logTileFxProofSummary = logTileFxProofSummary;' in html
     assert 'function computeTileFxHealthVerdict(){' in html
     assert "function assertTileFxLiveness(reason = 'runtime-check'){" in html
     assert "btn.id = 'tilefxProbeBtn';" in html
@@ -188,6 +190,14 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'texturesPending' in html
     assert 'thumbs: img' in html
     assert 'rectMismatch:' in html
+    assert 'rectMismatchVisibleCount' in html
+    assert 'rectMismatchMaxPx' in html
+    assert 'rectMismatchAvgPx' in html
+    assert 'visibleReadyButNotSwapped' in html
+    assert 'visibleSwappedButNoTexture' in html
+    assert "proofPass: health === 'ok'" in html
+    assert 'deadOverlayHidden' in html
+    assert 'deadOverlayReason' in html
     assert "renderer:${tileFxDbg.enabled ? 'enabled' : 'disabled'}" in html
     assert 'health:${healthVerdict}' in html
     assert 'visiblePainterLeakCount' in html
@@ -236,6 +246,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "disable(reason = '', { allowInFxView = false } = {})" in shader_module
     assert "console.warn('[tilefx] DISABLE'" in shader_module
     assert "console.error('[tilefx] illegal disable during FX view'" in shader_module
+    assert 'illegalDisableBlocked: 0,' in shader_module
+    assert 'lastIllegalDisable: null,' in shader_module
     assert "console.warn('[tilefx] rect mismatch'" in shader_module
     assert 'window.__tilefx_dbg.pendingCap = maxPending;' in shader_module
     assert '_restoreUntrackedSwaps(activeTileEls, now);' in shader_module

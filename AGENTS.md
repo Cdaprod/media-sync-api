@@ -1500,3 +1500,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added a debug-only `Capture Proof` button (`fxdebug=1&tilefxProof=1`) that triggers proof capture plus summary export in one tap.
 - Added defensive dead-overlay behavior in `assertTileFxLiveness(...)`: first FX liveness failure now hides `#tilefxCanvas` to avoid stale glow overlays when renderer is disabled.
 - HUD compact/expanded output now includes renderer truth labels and health verdict lines (`health: ...`) to make lifecycle invariant failures explicit during runtime verification.
+
+### Latest Implementation Notes (2026-03-06, physical-proof verdict + lockstep aggregate pass)
+- Added `window.logTileFxProofSummary(reason)` in `public/explorer.html` as a read-only proof workflow helper that chains `captureTileFxProof(...)` + `exportTileFxProofSummary()` and logs `[tilefx-proof-summary]` output.
+- Proof export now reports `proofPass`, `deadOverlayHidden`, `deadOverlayReason`, visible mismatch aggregates (`rectMismatchVisibleCount`, `rectMismatchMaxPx`, `rectMismatchAvgPx`), and visible ownership fields (`visibleReadyButNotSwapped`, `visibleSwappedButNoTexture`, `visibleUploadingCount`).
+- `computeTileFxHealthVerdict()` now treats visible-set settle conditions as first-class (`scrollIdleMs` gate) and fails explicitly on ready-not-swapped / swapped-no-texture ownership anomalies.
+- `computeTileFxRectLockstep()` now records per-axis mismatch components (`fxVsDomX/Y`, `overlayVsDomX/Y`) and aggregate mismatch statistics while preserving >2px mismatch capture semantics.
+- `assertTileFxLiveness(...)` now tracks dead-overlay state (`deadOverlayHidden`/`deadOverlayReason`) and resets those markers automatically when FX liveness is healthy again.
+- Added test assertions for the new proof helper/verdict fields and renderer illegal-disable telemetry in `tests/test_public_explorer_program_monitor.py`.

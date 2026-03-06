@@ -1954,7 +1954,12 @@
     tileFxDbg.evictedTiles = Number(tileFxDbg.evictedTiles || 0);
     tileFxDbg.rectMismatchRows = Array.isArray(tileFxDbg.rectMismatchRows) ? tileFxDbg.rectMismatchRows : [];
     tileFxDbg.rectMismatch = Number(tileFxDbg.rectMismatch || 0);
+    tileFxDbg.rectMismatchVisibleCount = Number(tileFxDbg.rectMismatchVisibleCount || 0);
+    tileFxDbg.rectMismatchMaxPx = Number(tileFxDbg.rectMismatchMaxPx || 0);
+    tileFxDbg.rectMismatchAvgPx = Number(tileFxDbg.rectMismatchAvgPx || 0);
     tileFxDbg.firstLivenessFailure = tileFxDbg.firstLivenessFailure || null;
+    tileFxDbg.deadOverlayHidden = tileFxDbg.deadOverlayHidden === true;
+    tileFxDbg.deadOverlayReason = String(tileFxDbg.deadOverlayReason || 'none');
 
     const tileFxScanStats = {
       scannedCount: 0,
@@ -2035,8 +2040,7 @@
             font: '12px/1.2 var(--mono)',
           });
           proofBtn.addEventListener('click', () => {
-            captureTileFxProof('manual-button');
-            exportTileFxProofSummary();
+            logTileFxProofSummary('manual-button');
             toast('ok', 'FX Proof', 'Captured proof summary to console.');
           });
           document.body.appendChild(proofBtn);
@@ -2133,6 +2137,9 @@
         texturesInCache: Number(tileFxDbg.texturesInCache || 0),
         scrolling: !!tileFxDbg.scrolling,
         scrollIdleMs: Number(tileFxDbg.scrollIdleMs || 0),
+        visibleReadyButNotSwapped: Number(tileFxDbg.visibleReadyButNotSwapped || 0),
+        visibleSwappedButNoTexture: Number(tileFxDbg.visibleSwappedButNoTexture || 0),
+        visibleUploadingCount: Number(tileFxDbg.visibleUploading || 0),
         vv,
         visibleTiles: rows,
       };
@@ -2140,23 +2147,35 @@
     }
     window.captureTileFxProof = captureTileFxProof;
 
+    function logTileFxProofSummary(reason = 'manual'){
+      captureTileFxProof(reason);
+      const summary = exportTileFxProofSummary();
+      console.log('[tilefx-proof-summary]', summary);
+      return summary;
+    }
+    window.logTileFxProofSummary = logTileFxProofSummary;
+
     function computeTileFxHealthVerdict(){
       if (state.view !== 'fx') return 'ok';
       if (!tileFxDbg.enabled || !tileFxDbg.rafRunning) return 'lifecycle_invariant';
       const visible = Number(tileFxDbg.tilesVisible || 0);
       const drawn = Number(tileFxDbg.tilesDrawn || 0);
       if (visible > 0 && drawn <= 0) return 'visible_not_drawn';
-      if (Number(tileFxDbg.rectMismatch || 0) > 0) return 'rect_mismatch';
+      if (Number(tileFxDbg.rectMismatchVisibleCount || tileFxDbg.rectMismatch || 0) > 0) return 'rect_mismatch';
       if (Number(tileFxDbg.visiblePainterLeakCount || 0) > 0) return 'dual_owner';
       const visibleReady = Number(tileFxDbg.visibleReady || 0);
       const visibleUploading = Number(tileFxDbg.visibleUploading || 0);
       const visibleDomOnly = Number(tileFxDbg.visibleDomOnly || 0);
-      if (visible > 0 && visibleReady <= 0 && visibleUploading <= 0 && visibleDomOnly > 0) return 'unexpected_dom_only';
+      const settleMs = Math.max(0, Number(tileFxDbg.scrollIdleMs || 0));
+      if (visible > 0 && visibleReady <= 0 && visibleUploading <= 0 && visibleDomOnly > 0 && settleMs >= 280) return 'unexpected_dom_only';
+      if (settleMs >= 280 && Number(tileFxDbg.visibleReadyButNotSwapped || 0) > 0) return 'unexpected_dom_only';
+      if (settleMs >= 280 && Number(tileFxDbg.visibleSwappedButNoTexture || 0) > 0) return 'dual_owner';
       return 'ok';
     }
 
     function exportTileFxProofSummary(){
       const proof = window.__tilefx_proof || {};
+      const health = computeTileFxHealthVerdict();
       const summary = {
         timestamp: Date.now(),
         view: String(state.view || 'grid'),
@@ -2164,8 +2183,11 @@
         rafRunning: !!tileFxDbg.rafRunning,
         mode: String(tileFxDbg.mode || state.view || 'grid'),
         fail: String(tileFxDbg.failReason || 'none'),
-        health: computeTileFxHealthVerdict(),
+        health,
+        proofPass: health === 'ok',
         firstLivenessFailure: tileFxDbg.firstLivenessFailure || null,
+        deadOverlayHidden: tileFxDbg.deadOverlayHidden === true,
+        deadOverlayReason: String(tileFxDbg.deadOverlayReason || 'none'),
         visibleCount: Number(tileFxDbg.visibleCount || 0),
         tilesVisible: Number(tileFxDbg.tilesVisible || 0),
         tilesDrawn: Number(tileFxDbg.tilesDrawn || 0),
@@ -2173,7 +2195,13 @@
         visibleUploading: Number(tileFxDbg.visibleUploading || 0),
         visibleDomOnly: Number(tileFxDbg.visibleDomOnly || 0),
         visibleSwapped: Number(tileFxDbg.visibleSwapped || 0),
+        visibleReadyButNotSwapped: Number(tileFxDbg.visibleReadyButNotSwapped || 0),
+        visibleSwappedButNoTexture: Number(tileFxDbg.visibleSwappedButNoTexture || 0),
+        visibleUploadingCount: Number(tileFxDbg.visibleUploading || 0),
         rectMismatchCount: Number(tileFxDbg.rectMismatch || 0),
+        rectMismatchVisibleCount: Number(tileFxDbg.rectMismatchVisibleCount || 0),
+        rectMismatchMaxPx: Number(tileFxDbg.rectMismatchMaxPx || 0),
+        rectMismatchAvgPx: Number(tileFxDbg.rectMismatchAvgPx || 0),
         swapSetCalls: Number(tileFxDbg.swapSetCalls || 0),
         swapClearCalls: Number(tileFxDbg.swapClearCalls || 0),
         swapReleaseBlocked: Number(tileFxDbg.swapReleaseBlocked || 0),
@@ -2205,7 +2233,6 @@
           };
         }),
       };
-      console.log('[tilefx-proof-summary]', summary);
       return summary;
     }
     window.exportTileFxProofSummary = exportTileFxProofSummary;
@@ -2214,7 +2241,11 @@
       if (state.view !== 'fx') return;
       const enabled = !!tileFxDbg.enabled;
       const rafRunning = !!tileFxDbg.rafRunning;
-      if (enabled && rafRunning) return;
+      if (enabled && rafRunning) {
+        tileFxDbg.deadOverlayHidden = false;
+        tileFxDbg.deadOverlayReason = 'none';
+        return;
+      }
       if (!tileFxDbg.firstLivenessFailure) {
         tileFxDbg.firstLivenessFailure = {
           reason,
@@ -2229,6 +2260,8 @@
         if (fxCanvas) {
           fxCanvas.style.display = 'none';
           fxCanvas.style.opacity = '0';
+          tileFxDbg.deadOverlayHidden = true;
+          tileFxDbg.deadOverlayReason = String(reason || 'runtime-check');
         }
       }
     }
@@ -2237,6 +2270,9 @@
       if (state.view !== 'fx') {
         tileFxDbg.rectMismatchRows = [];
         tileFxDbg.rectMismatch = 0;
+        tileFxDbg.rectMismatchVisibleCount = 0;
+        tileFxDbg.rectMismatchMaxPx = 0;
+        tileFxDbg.rectMismatchAvgPx = 0;
         return;
       }
       const vp = {
@@ -2244,6 +2280,7 @@
         offsetY: Number(window.visualViewport?.offsetTop || 0),
       };
       const mismatches = [];
+      const mismatchPxRows = [];
       for (const tile of tiles.slice(0, 40)) {
         const tileEl = tile?.tileEl;
         if (!tileEl || !tileEl.isConnected) continue;
@@ -2251,16 +2288,22 @@
         const fxRect = tileFX._getTileRectInVisualViewport?.(domRect, vp) || { left: domRect.left, top: domRect.top };
         const overlayEl = tileEl.querySelector('.asset-overlay');
         const overlayRect = overlayEl?.getBoundingClientRect?.() || domRect;
-        const delta = Math.max(
-          Math.abs(Number(fxRect.left || 0) - Number(domRect.left - vp.offsetX || 0)),
-          Math.abs(Number(fxRect.top || 0) - Number(domRect.top - vp.offsetY || 0)),
-          Math.abs(Number(overlayRect.left || 0) - Number(domRect.left || 0)),
-          Math.abs(Number(overlayRect.top || 0) - Number(domRect.top || 0)),
-        );
+        const fxVsDomX = Math.abs(Number(fxRect.left || 0) - Number(domRect.left - vp.offsetX || 0));
+        const fxVsDomY = Math.abs(Number(fxRect.top || 0) - Number(domRect.top - vp.offsetY || 0));
+        const overlayVsDomX = Math.abs(Number(overlayRect.left || 0) - Number(domRect.left || 0));
+        const overlayVsDomY = Math.abs(Number(overlayRect.top || 0) - Number(domRect.top || 0));
+        const delta = Math.max(fxVsDomX, fxVsDomY, overlayVsDomX, overlayVsDomY);
+        mismatchPxRows.push(delta);
         if (delta > 2) {
           mismatches.push({
             key: String(tile.key || tileEl.dataset.fxCardId || ''),
             delta: Number(delta.toFixed(2)),
+            axis: {
+              fxVsDomX: Number(fxVsDomX.toFixed(2)),
+              fxVsDomY: Number(fxVsDomY.toFixed(2)),
+              overlayVsDomX: Number(overlayVsDomX.toFixed(2)),
+              overlayVsDomY: Number(overlayVsDomY.toFixed(2)),
+            },
             dom: { x: Number(domRect.left.toFixed(2)), y: Number(domRect.top.toFixed(2)) },
             fx: { x: Number((fxRect.left || 0).toFixed(2)), y: Number((fxRect.top || 0).toFixed(2)) },
             overlay: { x: Number(overlayRect.left.toFixed(2)), y: Number(overlayRect.top.toFixed(2)) },
@@ -2269,6 +2312,9 @@
       }
       tileFxDbg.rectMismatchRows = mismatches.slice(0, 10);
       tileFxDbg.rectMismatch = tileFxDbg.rectMismatchRows.length;
+      tileFxDbg.rectMismatchVisibleCount = tileFxDbg.rectMismatchRows.length;
+      tileFxDbg.rectMismatchMaxPx = Number((mismatchPxRows.length ? Math.max(...mismatchPxRows) : 0).toFixed(2));
+      tileFxDbg.rectMismatchAvgPx = Number((mismatchPxRows.length ? (mismatchPxRows.reduce((a, b) => a + b, 0) / mismatchPxRows.length) : 0).toFixed(2));
     }
 
 
@@ -2672,6 +2718,14 @@
           },
         };
       });
+      const settleWindowMet = Number(tileFxDbg.scrollIdleMs || 0) >= 280;
+      if (settleWindowMet) {
+        tileFxDbg.visibleReadyButNotSwapped = tileFxProbeRows.filter((row) => row.hasTexture && row.dataTex !== '1').length;
+        tileFxDbg.visibleSwappedButNoTexture = tileFxProbeRows.filter((row) => row.dataTex === '1' && !row.hasTexture).length;
+      } else {
+        tileFxDbg.visibleReadyButNotSwapped = 0;
+        tileFxDbg.visibleSwappedButNoTexture = 0;
+      }
       tileFxDbg.swappedTiles = cards.filter((card) => card?.dataset?.tex === '1').length;
       tileFxDbg.maxFed = maxFed;
       tileFxDbg.collectOverscan = overscan;
@@ -4308,6 +4362,8 @@
       if (fxEnabled) {
         window.__tilefx_enabled = true;
         tileFxDbg.firstLivenessFailure = null;
+        tileFxDbg.deadOverlayHidden = false;
+        tileFxDbg.deadOverlayReason = 'none';
         tileFX.enable('setView:fx');
         tileFX.start();
         applyTileFxCanvasState(true);
