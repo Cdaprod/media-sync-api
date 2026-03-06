@@ -1543,3 +1543,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Fixed FX lifecycle bootstrap false-negative in `assertTileFxViewLifecycle(...)`: RAF is now considered healthy when a frame is scheduled (`tileFX.raf > 0`) even before `tileFxDbg.rafRunning` flips true on the first callback.
 - This prevents immediate containment fallback during valid startup, which was hiding the TileFX canvas and restoring DOM swaps before the first render loop tick.
 - Kept renderer architecture/features unchanged; this patch only corrects startup ordering so the existing scan→feed→upload→draw pipeline can proceed.
+
+### Latest Implementation Notes (2026-03-06, thumb painter leak + ownership snapshot fix)
+- Updated `collectTileFxTiles()` painter extraction in `public/explorer.html` so `thumbPaintEls` always includes `.thumb` alongside `img.asset-thumb`, and includes `.thumb .scrim` when present, ensuring swapped thumbnail suppression targets real paint surfaces (not just `<img>` nodes).
+- Updated painter leak detector in `countVisibleThumbPainters(...)` to treat hidden nodes as non-painting even if they still have CSS background values, eliminating false-positive leak reports from hidden thumb wrappers.
+- Expanded `TileFXRenderer.applyDomSwap(...)` background suppression/restoration in `public/js/explorer-shaders.mjs` to snapshot/restore `backgroundImage/background/backgroundColor` per thumb paint node and aggressively neutralize `.thumb` surface paint while swapped.
+- Updated `TileFXRenderer.getVisibleOwnershipRows(limit)` fallback to return current fed tile ownership rows when no per-frame ownership rows are cached yet, so `window.logVisibleTileOwnership(...)` no longer returns an empty snapshot during active FX startup windows.
+- Added one FX-active guard log in `window.logVisibleTileOwnership(...)` when rows are unexpectedly empty while FX is enabled.

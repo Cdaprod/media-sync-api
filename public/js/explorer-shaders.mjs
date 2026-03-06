@@ -1338,21 +1338,35 @@ export class TileFXRenderer {
         paintEl.style.pointerEvents = prior.pointerEvents;
       }
     }
-    const bgNode = thumbBgEl || paintEls.find((el) => String(getComputedStyle(el).backgroundImage || '').trim() !== 'none') || null;
-    if (!bgNode) return;
+    const bgNodes = [thumbBgEl, ...paintEls].filter(Boolean);
     if (swapped) {
-      const computedBg = String(getComputedStyle(bgNode).backgroundImage || '').trim();
-      if (computedBg && computedBg !== 'none') {
-        if (!this._domSwapBgState.has(bgNode)) this._domSwapBgState.set(bgNode, bgNode.style.backgroundImage || '');
+      bgNodes.forEach((bgNode) => {
+        const computedBg = String(getComputedStyle(bgNode).backgroundImage || '').trim();
+        const isThumbSurface = bgNode.classList?.contains('thumb') || bgNode.closest?.('.thumb') === bgNode;
+        if (!isThumbSurface && (!computedBg || computedBg === 'none')) return;
+        if (!this._domSwapBgState.has(bgNode)) {
+          this._domSwapBgState.set(bgNode, {
+            backgroundImage: bgNode.style.backgroundImage || '',
+            background: bgNode.style.background || '',
+            backgroundColor: bgNode.style.backgroundColor || '',
+          });
+        }
         bgNode.style.backgroundImage = 'none';
-      }
+        if (isThumbSurface) {
+          bgNode.style.background = 'transparent';
+          bgNode.style.backgroundColor = 'transparent';
+        }
+      });
       return;
     }
-    if (this._domSwapBgState.has(bgNode)) {
-      const priorBg = this._domSwapBgState.get(bgNode);
-      bgNode.style.backgroundImage = priorBg || '';
+    bgNodes.forEach((bgNode) => {
+      if (!this._domSwapBgState.has(bgNode)) return;
+      const priorBg = this._domSwapBgState.get(bgNode) || {};
+      bgNode.style.backgroundImage = priorBg.backgroundImage || '';
+      bgNode.style.background = priorBg.background || '';
+      bgNode.style.backgroundColor = priorBg.backgroundColor || '';
       this._domSwapBgState.delete(bgNode);
-    }
+    });
     this._setSwapState(tileEl, TILE_SWAP_STATE.DOM_VISIBLE, reason || 'swap:restored');
   }
 
@@ -1476,7 +1490,24 @@ export class TileFXRenderer {
 
   getVisibleOwnershipRows(limit = 12) {
     const max = Math.max(1, Number(limit || 12));
-    return Array.isArray(this._lastOwnershipRows) ? this._lastOwnershipRows.slice(0, max) : [];
+    const rows = Array.isArray(this._lastOwnershipRows) ? this._lastOwnershipRows : [];
+    if (rows.length) return rows.slice(0, max);
+    return (Array.isArray(this.tiles) ? this.tiles : []).slice(0, max).map((tile) => {
+      const tileEl = tile?.tileEl || null;
+      const key = String(tile?.key || tileEl?.dataset?.fxCardId || '');
+      const swapState = this._getSwapState(tileEl);
+      const hasTexture = key ? this.hasTexture(key) : false;
+      return {
+        key,
+        state: String(this.getTileState(key)),
+        visible: true,
+        wasDrawnThisPass: false,
+        hasTexture,
+        dataTex: String(tileEl?.dataset?.tex || '0'),
+        owner: (swapState === TILE_SWAP_STATE.FX_SWAPPED && hasTexture) ? 'FX' : 'DOM',
+        releaseBlocked: false,
+      };
+    });
   }
 
   _renderDebugRects(debugRects = []) {

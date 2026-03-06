@@ -2099,7 +2099,8 @@
         const opacity = Number(cs.opacity || 1);
         const visible = String(cs.visibility || '').toLowerCase() !== 'hidden';
         const hasBg = String(cs.backgroundImage || '').toLowerCase() !== 'none';
-        if ((Number.isFinite(opacity) ? opacity > 0.03 : true) && (visible || hasBg)) {
+        const paints = visible && ((Number.isFinite(opacity) ? opacity > 0.03 : true) || hasBg);
+        if (paints) {
           offenders.push(`${node.tagName}.${String(node.className || '').trim() || 'na'}`);
         }
       }
@@ -2574,6 +2575,9 @@
       const rows = (typeof tileFX.getVisibleOwnershipRows === 'function')
         ? tileFX.getVisibleOwnershipRows(limit)
         : [];
+      if (state.view === 'fx' && window.__tilefx_enabled && !rows.length) {
+        console.error('[tilefx-visible-ownership] empty rows while FX is active');
+      }
       const summary = {
         timestamp: Date.now(),
         view: String(state.view || 'grid'),
@@ -2635,6 +2639,7 @@
           thumbSrc = thumbEl.dataset.thumbUrl || thumbEl.currentSrc || thumbEl.getAttribute('src') || '';
           thumbSurfaceEl = thumbWrap || thumbEl;
           addPaintEl(thumbEl);
+          addPaintEl(thumbWrap);
         }
         if (posterEl && posterEl.getAttribute('poster')) {
           if (!thumbSrc) {
@@ -2669,6 +2674,8 @@
             addPaintEl(thumbWrap);
           }
         }
+        const thumbScrim = card.querySelector('.thumb .scrim');
+        if (thumbScrim) addPaintEl(thumbScrim);
         if (!thumbSurfaceEl) thumbSurfaceEl = thumbWrap || thumbEl || posterEl || pictureEl || null;
         card.dataset.fxReady = card.dataset.fxReady || '0';
         if (card.dataset.tex !== '1' && card.dataset.tex !== 'pending') card.dataset.tex = '0';
