@@ -1,5 +1,14 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-07 — Abstraction compression + visible FX ownership maturation (new)
+- [x] Added simplified lifecycle stage helpers (`_isEnteringPhase()`, `getFxLifecycleStage()`) so architecture reads primarily as entering vs steady.
+- [x] Added guarded bootstrap commit fallback (`>=90% ready` after 1200ms) to prevent single-tile stalls from blocking visible FX ownership indefinitely.
+- [x] Added bootstrap empty-set transition to `steady` so entry cannot stall with zero captured visible tiles.
+- [x] Updated visible counters to derive from visible ownership rows (`visibleReady/Swapped/DomOnly`) instead of global state counts.
+- [x] Kept reconcile-path ownership authority and DOM metadata boundary unchanged.
+- [ ] Validate on physical iPhone that `visibleReady` and `visibleSwapped` rise above zero in settled FX sessions with real visible media.
+- [ ] Capture iPhone sample (`window.logVisibleTileOwnership(12)`) and proof summary line after enter FX → settle → short scroll → stop.
+
 ## 2026-03-07 — Dual-owner collapse from live visible ownership truth (new)
 - [x] Added binary visible-owner reconcile helper (`_reconcileVisibleOwnerFromTruth(...)`) so visible tiles are collapsed deterministically to DOM or FX from current draw-truth.
 - [x] Routed steady visible-lock and draw-truth-loss paths through the same reconcile helper to avoid visible mixed-owner persistence across frames.

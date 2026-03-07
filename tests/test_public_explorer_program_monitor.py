@@ -205,6 +205,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'fedVisibleRatio' in html
     assert 'visibleSwapReleaseBlocked' in html
     assert 'offscreenSwapReleaseAllowed' in html
+    assert 'fxLifecycleStage' in shader_module
     assert 'visibleReadyButNotSwapped' in html
     assert 'visibleSwappedButNoTexture' in html
     assert "proofPass: health === 'ok'" in html
@@ -227,10 +228,13 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_cssRectToCanvasRect(localRect, dpr = 1)' in shader_module
     assert '_canReleaseSwap(tileEl, now = performance.now())' in shader_module
     assert 'syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now())' in shader_module
+    assert '_isEnteringPhase() {' in shader_module
+    assert 'getFxLifecycleStage() {' in shader_module
     assert '_reconcileVisibleOwnerFromTruth(tile, {' in shader_module
     assert "this._fxEntryPhase = 'bootstrap_collect';" in shader_module
     assert "this._fxEntryPhase = 'bootstrap_ready';" in shader_module
     assert "this._fxEntryPhase = 'bootstrap_commit';" in shader_module
+    assert 'bootstrapReadyRatio >= 0.9' in shader_module
     assert "this.applyDomSwap(tile, true, 'bootstrap:batch-commit');" in shader_module
     assert "reasonFx: 'steady:visible-lock'," in shader_module
     assert "reasonDom: 'steady:draw-truth-lost'," in shader_module

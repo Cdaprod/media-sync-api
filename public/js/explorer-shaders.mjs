@@ -1142,6 +1142,14 @@ export class TileFXRenderer {
     return String(this._fxEntryPhase || 'steady');
   }
 
+  _isEnteringPhase() {
+    return this.mode === 'fx' && String(this._fxEntryPhase || 'steady') !== 'steady';
+  }
+
+  getFxLifecycleStage() {
+    return this._isEnteringPhase() ? 'entering' : 'steady';
+  }
+
   setEnabled(enabled = false) {
     this.enabled = enabled === true;
     if (window.__tilefx_dbg) window.__tilefx_dbg.enabled = this.enabled;
@@ -1534,8 +1542,15 @@ export class TileFXRenderer {
       const swapState = this._getSwapState(row.tileEl);
       return swapState === TILE_SWAP_STATE.FX_SWAPPED && !row.ready;
     });
-    if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_ready' && bootstrapTotal > 0 && bootstrapReady === bootstrapTotal && !hasVisibleDualOwner) {
-      this._fxEntryPhase = 'bootstrap_commit';
+    const bootstrapElapsedMs = Math.max(0, now - Number(this._fxEntryStartedAt || now));
+    const canCommitByFallback = bootstrapTotal > 0 && bootstrapReadyRatio >= 0.9 && bootstrapElapsedMs >= 1200;
+    if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_ready') {
+      if (bootstrapTotal === 0) {
+        this._fxEntryPhase = 'steady';
+      } else if ((bootstrapReady === bootstrapTotal || canCommitByFallback) && !hasVisibleDualOwner) {
+        // Fallback allows progress when one visible tile stalls, while still committing as a grouped batch.
+        this._fxEntryPhase = 'bootstrap_commit';
+      }
     }
     if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_commit') {
       bootstrapRows.forEach(({ tile, ready }) => {
@@ -1549,7 +1564,7 @@ export class TileFXRenderer {
       });
       this._fxEntryPhase = 'steady';
     }
-    const blockVisibleSwapCommit = this.mode === 'fx' && this._fxEntryPhase !== 'steady';
+    const blockVisibleSwapCommit = this._isEnteringPhase();
     const inSteady = this.mode === 'fx' && this._fxEntryPhase === 'steady';
     active.forEach((tile) => {
       const tileEl = tile?.tileEl || null;
@@ -2197,10 +2212,12 @@ export class TileFXRenderer {
     this._drawCalls = drawCalls;
     if (window.__tilefx_dbg) {
       const stateCounts = this._stateCounts();
-      const visibleReady = stateCounts.ready;
-      const visibleUploading = stateCounts.requested + stateCounts.uploading;
-      const visibleDomOnly = stateCounts.domOnly;
-      const visibleSwapped = this._swappedTileRefs.size;
+      const ownershipRows = Array.isArray(this._lastOwnershipRows) ? this._lastOwnershipRows : [];
+      const visibleRows = ownershipRows.filter((row) => row?.visible === true);
+      const visibleReady = visibleRows.filter((row) => row.hasTexture === true && row.rectValid === true).length;
+      const visibleUploading = Math.max(0, visibleRows.length - visibleReady);
+      const visibleDomOnly = visibleRows.filter((row) => row.owner !== 'FX').length;
+      const visibleSwapped = visibleRows.filter((row) => row.owner === 'FX').length;
       window.__tilefx_dbg.visibleCount = tiles.length;
       window.__tilefx_dbg.tilesVisible = tiles.length;
       window.__tilefx_dbg.overscanCount = tiles.length;
@@ -2249,6 +2266,7 @@ export class TileFXRenderer {
       window.__tilefx_dbg.visibleUploading = visibleUploading;
       window.__tilefx_dbg.visibleDomOnly = visibleDomOnly;
       window.__tilefx_dbg.visibleSwapped = visibleSwapped;
+      window.__tilefx_dbg.fxLifecycleStage = this.getFxLifecycleStage();
       window.__tilefx_dbg.swapReleaseBlocked = this._swapReleaseBlocked;
       window.__tilefx_dbg.swapReleaseAllowed = this._swapReleaseAllowed;
       window.__tilefx_dbg.visibleSwapReleaseBlocked = this._visibleSwapReleaseBlocked;

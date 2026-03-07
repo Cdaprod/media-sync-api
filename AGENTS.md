@@ -1598,3 +1598,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Tightened bootstrap visible-set stability by removing recapture-on-empty behavior during non-steady phases; bootstrap now keeps the captured visible set intersection and avoids incremental visible claiming resets that can reintroduce top-to-bottom takeover feel.
 - Kept ownership hot-path order unchanged (visible ownership sync before untracked cleanup) and limited this pass to behavior correction using existing ownership truth surfaces.
 - Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the reconcile helper wiring and steady ownership reason markers.
+
+### Latest Implementation Notes (2026-03-07, abstraction compression + visible FX ownership maturation)
+- Compressed lifecycle mental model in `public/js/explorer-shaders.mjs` with `getFxLifecycleStage()` and `_isEnteringPhase()` so runtime behavior reads as `entering` vs `steady` while preserving internal bootstrap sub-phases as implementation detail.
+- Kept bootstrap coherent-batch entry and added a guarded fallback commit path (`>=90% ready` after 1200ms) with inline comment, so one stalled visible tile on iPhone no longer blocks all visible FX ownership forever.
+- Added bootstrap empty-set escape (`bootstrap_ready` with zero captured visible tiles advances to `steady`) to avoid getting stuck in entering state with permanent DOM ownership.
+- Updated debug visible counters (`visibleReady`, `visibleSwapped`, `visibleDomOnly`, `visibleUploading`) to derive from current visible ownership rows rather than global tile-state counts, making ownership health reflect on-screen truth.
+- Preserved DOM metadata ownership (`.asset-ui`) and existing visible ownership reconcile path (`_reconcileVisibleOwnerFromTruth(...)`) while keeping hot-path ordering unchanged (visible ownership resolution before untracked cleanup).
