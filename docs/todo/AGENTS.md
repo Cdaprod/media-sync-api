@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-07 — Dual-owner collapse from live visible ownership truth (new)
+- [x] Added binary visible-owner reconcile helper (`_reconcileVisibleOwnerFromTruth(...)`) so visible tiles are collapsed deterministically to DOM or FX from current draw-truth.
+- [x] Routed steady visible-lock and draw-truth-loss paths through the same reconcile helper to avoid visible mixed-owner persistence across frames.
+- [x] Removed bootstrap recapture-on-empty behavior so entry keeps a stable captured visible set and avoids row-by-row reclaim resets.
+- [x] Kept ownership sync ordering (visible sync before cleanup) and avoided adding new proof/HUD/recovery surfaces.
+- [ ] Validate on physical iPhone Safari that visible `dual_owner` does not persist after settle.
+- [ ] Capture one iPhone `window.logVisibleTileOwnership(12)` sample and one short proof-summary line after enter FX → settle → short scroll → stop.
+
 ## 2026-03-07 — Visible ownership truth-path repair (new)
 - [x] Treated FX-active empty ownership rows with visible DOM cards as an ownership-truth bug in `window.logVisibleTileOwnership(limit)`.
 - [x] Updated ownership logging to include visible DOM card count and explicit truth-bug flag in returned summary (`visibleDomCards`, `ownershipTruthBug`).

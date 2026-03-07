@@ -1466,6 +1466,28 @@ export class TileFXRenderer {
     return true;
   }
 
+  _reconcileVisibleOwnerFromTruth(tile, {
+    shouldFxOwner = false,
+    swapState = TILE_SWAP_STATE.DOM_VISIBLE,
+    reasonFx = 'ownership:visible-fx',
+    reasonDom = 'ownership:visible-dom',
+  } = {}) {
+    const tileEl = tile?.tileEl || null;
+    if (!tileEl) return 'DOM';
+    if (shouldFxOwner) {
+      if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
+        this.applyDomSwap(tile, true, reasonFx);
+        if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+      }
+      return 'FX';
+    }
+    if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
+      this.applyDomSwap(tile, false, reasonDom);
+      if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+    }
+    return 'DOM';
+  }
+
   syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now()) {
     const rows = [];
     const active = Array.isArray(activeTiles) ? activeTiles : [];
@@ -1503,9 +1525,6 @@ export class TileFXRenderer {
         if (visibleSet.has(tileEl)) keep.add(tileEl);
       }
       this._bootstrapVisibleTileEls = keep;
-      if (!this._bootstrapVisibleTileEls.size && visibleSet.size) {
-        this._bootstrapVisibleTileEls = new Set(visibleSet);
-      }
     }
     const bootstrapRows = visibleRows.filter((row) => this._bootstrapVisibleTileEls.has(row.tileEl));
     const bootstrapTotal = bootstrapRows.length;
@@ -1547,20 +1566,23 @@ export class TileFXRenderer {
       let releaseBlocked = false;
 
       if (visibleSteadyLock) {
-        owner = 'FX';
-        if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
-          this.applyDomSwap(tile, true, 'steady:visible-lock');
-          if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
-        }
-      } else if (visible && inSteady && swapState === TILE_SWAP_STATE.FX_SWAPPED && !isSwapEligible) {
-        this.applyDomSwap(tile, false, 'steady:draw-truth-lost');
-        if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+        owner = this._reconcileVisibleOwnerFromTruth(tile, {
+          shouldFxOwner: true,
+          swapState,
+          reasonFx: 'steady:visible-lock',
+        });
+      } else if (visible && inSteady) {
+        owner = this._reconcileVisibleOwnerFromTruth(tile, {
+          shouldFxOwner: false,
+          swapState,
+          reasonDom: 'steady:draw-truth-lost',
+        });
       } else if (isSwapEligible && !blockVisibleSwapCommit) {
-        owner = 'FX';
-        if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
-          this.applyDomSwap(tile, true, 'ownership:drawn-visible');
-          if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
-        }
+        owner = this._reconcileVisibleOwnerFromTruth(tile, {
+          shouldFxOwner: true,
+          swapState,
+          reasonFx: 'ownership:drawn-visible',
+        });
       } else if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
         // Active/fed tiles do not release ownership here; only untracked tiles may release.
         this._swapReleaseBlocked += 1;

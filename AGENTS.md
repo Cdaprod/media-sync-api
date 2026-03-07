@@ -1591,3 +1591,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added per-frame draw-truth retention map (`_lastDrawByTileEl`) and wired render-pass updates so visible ownership rows can include current-frame truth even when cache rows are not yet populated.
 - Expanded ownership row shape to include compact inspection fields required for visible truth checks: `fed`, `rectValid`, and `swapState` alongside existing state/owner/texture fields.
 - Kept the fix scoped to ownership truth path only (no new proof exporters/HUD panels/recovery loops), and updated static assertions in `tests/test_public_explorer_program_monitor.py` accordingly.
+
+### Latest Implementation Notes (2026-03-07, dual-owner collapse using live visible ownership truth)
+- Added `_reconcileVisibleOwnerFromTruth(...)` in `public/js/explorer-shaders.mjs` to make visible ownership decisions binary and deterministic from draw-truth, collapsing visible tiles immediately to DOM or FX ownership without lingering mixed states.
+- Updated `syncVisibleTileOwnership(...)` to route visible ownership transitions through the reconcile helper for both steady visible-lock and draw-truth-loss correction paths, preventing mixed visible owner persistence across frames.
+- Tightened bootstrap visible-set stability by removing recapture-on-empty behavior during non-steady phases; bootstrap now keeps the captured visible set intersection and avoids incremental visible claiming resets that can reintroduce top-to-bottom takeover feel.
+- Kept ownership hot-path order unchanged (visible ownership sync before untracked cleanup) and limited this pass to behavior correction using existing ownership truth surfaces.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the reconcile helper wiring and steady ownership reason markers.

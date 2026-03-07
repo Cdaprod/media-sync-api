@@ -227,12 +227,13 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_cssRectToCanvasRect(localRect, dpr = 1)' in shader_module
     assert '_canReleaseSwap(tileEl, now = performance.now())' in shader_module
     assert 'syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now())' in shader_module
+    assert '_reconcileVisibleOwnerFromTruth(tile, {' in shader_module
     assert "this._fxEntryPhase = 'bootstrap_collect';" in shader_module
     assert "this._fxEntryPhase = 'bootstrap_ready';" in shader_module
     assert "this._fxEntryPhase = 'bootstrap_commit';" in shader_module
     assert "this.applyDomSwap(tile, true, 'bootstrap:batch-commit');" in shader_module
-    assert "this.applyDomSwap(tile, true, 'steady:visible-lock');" in shader_module
-    assert "this.applyDomSwap(tile, false, 'steady:draw-truth-lost');" in shader_module
+    assert "reasonFx: 'steady:visible-lock'," in shader_module
+    assert "reasonDom: 'steady:draw-truth-lost'," in shader_module
     assert 'this._bootstrapVisibleTileEls = new Set();' in shader_module
     assert 'getVisibleOwnershipRows(limit = 12)' in shader_module
     assert '_collectVisibleDomOwnershipRows(limit = 12)' in shader_module
