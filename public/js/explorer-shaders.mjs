@@ -960,6 +960,8 @@ export class TileFXRenderer {
     this._visibleSwapReleaseBlocked = 0;
     this._offscreenSwapReleaseAllowed = 0;
     this._lastOwnershipRows = [];
+    this._fxEntryPhase = 'steady';
+    this._fxEntryStartedAt = 0;
     this._swapLeakLoggedKeys = new Set();
     this._illegalDisableLogged = false;
     this._debugRectLayer = null;
@@ -1116,9 +1118,21 @@ export class TileFXRenderer {
   }
 
   setMode(mode = 'grid') {
+    const prevMode = this.mode;
     const next = String(mode || 'grid').toLowerCase();
     this.mode = (next === 'fx' || next === 'grid' || next === 'list') ? next : 'grid';
+    if (this.mode === 'fx' && prevMode !== 'fx') {
+      this._fxEntryPhase = 'bootstrap';
+      this._fxEntryStartedAt = performance.now();
+    } else if (this.mode !== 'fx') {
+      this._fxEntryPhase = 'steady';
+      this._fxEntryStartedAt = 0;
+    }
     if (window.__tilefx_dbg) window.__tilefx_dbg.mode = this.mode;
+  }
+
+  getFxEntryPhase() {
+    return String(this._fxEntryPhase || 'steady');
   }
 
   setEnabled(enabled = false) {
@@ -1448,6 +1462,26 @@ export class TileFXRenderer {
   syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now()) {
     const rows = [];
     const active = Array.isArray(activeTiles) ? activeTiles : [];
+    const visibleRows = [];
+    active.forEach((tile) => {
+      const tileEl = tile?.tileEl || null;
+      if (!tileEl || !tileEl.isConnected) return;
+      const drawMeta = drawResults.get(tileEl) || {};
+      if (drawMeta.visible !== true) return;
+      const hasTexture = drawMeta.hasTexture === true;
+      const wasDrawnThisPass = drawMeta.wasDrawnThisPass === true;
+      const rectValid = drawMeta.rectValid === true;
+      visibleRows.push({ tile, tileEl, hasTexture, wasDrawnThisPass, rectValid, ready: hasTexture && wasDrawnThisPass && rectValid });
+    });
+    const visibleTotal = visibleRows.length;
+    const visibleReady = visibleRows.filter((row) => row.ready).length;
+    const visibleReadyRatio = visibleTotal > 0 ? (visibleReady / visibleTotal) : 1;
+    const entryPhase = this._fxEntryPhase;
+    const batchReady = visibleTotal > 0 && (visibleReady === visibleTotal || visibleReadyRatio >= 0.8);
+    if (this.mode === 'fx' && entryPhase !== 'steady' && batchReady) {
+      this._fxEntryPhase = 'steady';
+    }
+    const blockVisibleSwapCommit = this.mode === 'fx' && this._fxEntryPhase !== 'steady';
     active.forEach((tile) => {
       const tileEl = tile?.tileEl || null;
       if (!tileEl || !tileEl.isConnected) return;
@@ -1461,7 +1495,7 @@ export class TileFXRenderer {
       let owner = 'DOM';
       let releaseBlocked = false;
 
-      if (isSwapEligible) {
+      if (isSwapEligible && !blockVisibleSwapCommit) {
         owner = 'FX';
         if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
           this.applyDomSwap(tile, true, 'ownership:drawn-visible');
