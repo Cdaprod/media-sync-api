@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-07 — Verdict/domSwap truth reconciliation (active)
+- [x] Treated `health: dual_owner` under otherwise healthy visible FX ownership as a verdict-layer mismatch, not a pipeline failure.
+- [x] Updated health verdict logic to prefer current visible ownership truth (`visibleSwapped/visibleDomOnly/visibleMissingTextures`) and avoid stale dual-owner verdicts after settle.
+- [x] Tightened visible painter leak detection to count actual thumbnail paint contributors only (hidden/non-painting wrappers no longer counted).
+- [x] Cleared stale leak counters when no swapped tiles are present so old leak state does not poison health verdicts.
+- [ ] Re-check on physical iPhone Safari that HUD health now aligns with `window.logVisibleTileOwnership(12)` and `window.exportTileFxProofSummary?.()` after scroll-stop.
+
 ## 2026-03-07 — Physical iPhone parity handoff (active)
 - [x] Confirmed parity run should use existing tools only (`window.logVisibleTileOwnership(12)`, `window.exportTileFxProofSummary?.()`).
 - [x] Kept container-side work closed (no new HUD/proof/toast/watchdog systems added in this handoff step).

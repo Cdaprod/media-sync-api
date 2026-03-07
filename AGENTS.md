@@ -1678,3 +1678,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Shifted focus from container-only refinement to a physical iPhone Safari parity run using existing truth surfaces only.
 - Locked handoff commands to `window.logVisibleTileOwnership(12)` and `window.exportTileFxProofSummary?.()` before/after a short scroll-stop cycle.
 - Explicitly deferred further renderer changes until one concrete on-device issue is observed, to avoid speculative complexity growth.
+
+## 2026-03-07 — Health verdict + domSwap/leak reconciliation pass (new)
+- Fixed verdict-layer mismatch where healthy visible FX ownership could still show `health: dual_owner` by prioritizing current visible truth in `computeTileFxHealthVerdict()`.
+- Updated DOM swap validity checks to evaluate currently swapped tiles and thumb-body paint leakage instead of unrelated card-shell CSS, reducing stale `domSwapOk` contradictions.
+- Tightened `countVisibleThumbPainters(...)` to count only actual paint contributors (visible media/background with drawable area), reducing false-positive leak noise.
+- Cleared stale leak counters when no swapped tiles are present to prevent historical leak state from contaminating current verdicts.
+- Kept solved layers frozen (lifecycle/queue/drain/texture/draw/ownership pipeline unchanged) and limited this pass to truth reconciliation + detector noise reduction.

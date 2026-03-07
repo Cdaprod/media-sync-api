@@ -2105,17 +2105,23 @@
 
     function countVisibleThumbPainters(tileEl){
       if (!tileEl) return { count: 0, offenders: [] };
-      const candidates = Array.from(tileEl.querySelectorAll('.thumb-body img, .thumb-body video, .thumb-body picture, .thumb-body [data-thumb], .thumb-body [style*="background-image"], .thumb-body, .thumb'));
+      const candidates = Array.from(tileEl.querySelectorAll('.thumb-body img, .thumb-body video, .thumb-body [data-thumb], .thumb-body [style*="background-image"]'));
       const offenders = [];
       for (const node of candidates) {
         const cs = getComputedStyle(node);
+        const display = String(cs.display || '').toLowerCase() !== 'none';
+        const visibility = String(cs.visibility || '').toLowerCase() !== 'hidden';
         const opacity = Number(cs.opacity || 1);
-        const visible = String(cs.visibility || '').toLowerCase() !== 'hidden';
+        const rect = node.getBoundingClientRect();
+        const area = Number(rect.width || 0) * Number(rect.height || 0);
         const hasBg = String(cs.backgroundImage || '').toLowerCase() !== 'none';
-        const paints = visible && ((Number.isFinite(opacity) ? opacity > 0.03 : true) || hasBg);
-        if (paints) {
-          offenders.push(`${node.tagName}.${String(node.className || '').trim() || 'na'}`);
-        }
+        const mediaVisible = (node.tagName === 'IMG' || node.tagName === 'VIDEO')
+          ? ((node.tagName === 'IMG' && Number(node.naturalWidth || 0) > 0)
+            || (node.tagName === 'VIDEO' && (Number(node.videoWidth || 0) > 0 || String(node.poster || '').trim().length > 0)))
+          : hasBg;
+        const paints = display && visibility && (Number.isFinite(opacity) ? opacity > 0.03 : true) && area > 4 && mediaVisible;
+        if (!paints) continue;
+        offenders.push(`${node.tagName}.${String(node.className || '').trim() || 'na'}`);
       }
       return { count: offenders.length, offenders };
     }
@@ -2178,14 +2184,28 @@
       const drawn = Number(tileFxDbg.tilesDrawn || 0);
       if (visible > 0 && drawn <= 0) return 'visible_not_drawn';
       if (Number(tileFxDbg.rectMismatchVisibleCount || tileFxDbg.rectMismatch || 0) > 0) return 'rect_mismatch';
-      if (Number(tileFxDbg.visiblePainterLeakCount || 0) > 0) return 'dual_owner';
       const visibleReady = Number(tileFxDbg.visibleReady || 0);
       const visibleUploading = Number(tileFxDbg.visibleUploading || 0);
       const visibleDomOnly = Number(tileFxDbg.visibleDomOnly || 0);
+      const visibleSwapped = Number(tileFxDbg.visibleSwapped || 0);
+      const visibleMissingTextures = Number(tileFxDbg.visibleMissingTextures || 0);
+      const readyButNotSwapped = Number(tileFxDbg.visibleReadyButNotSwapped || 0);
+      const swappedButNoTexture = Number(tileFxDbg.visibleSwappedButNoTexture || 0);
       const settleMs = Math.max(0, Number(tileFxDbg.scrollIdleMs || 0));
+      const domSwapOk = tileFxDbg.domSwapOk === true;
+      const steadyHealthyVisible = visible > 0
+        && visibleSwapped > 0
+        && visibleDomOnly <= 0
+        && visibleMissingTextures <= 0
+        && readyButNotSwapped <= 0
+        && swappedButNoTexture <= 0
+        && domSwapOk;
+      if (steadyHealthyVisible) return 'ok';
       if (visible > 0 && visibleReady <= 0 && visibleUploading <= 0 && visibleDomOnly > 0 && settleMs >= 280) return 'unexpected_dom_only';
-      if (settleMs >= 280 && Number(tileFxDbg.visibleReadyButNotSwapped || 0) > 0) return 'unexpected_dom_only';
-      if (settleMs >= 280 && Number(tileFxDbg.visibleSwappedButNoTexture || 0) > 0) return 'dual_owner';
+      if (settleMs >= 280 && readyButNotSwapped > 0) return 'unexpected_dom_only';
+      if (settleMs >= 280 && swappedButNoTexture > 0) return 'dual_owner';
+      const painterLeaks = Number(tileFxDbg.visiblePainterLeakCount || 0);
+      if (settleMs >= 280 && painterLeaks > 0 && (visibleDomOnly > 0 || !domSwapOk)) return 'dual_owner';
       return 'ok';
     }
 
@@ -2474,19 +2494,20 @@
     }
 
     function verifyTileFxDomSwap(){
-      const sample = document.querySelector('#mediaGrid .asset');
-      if (!sample || state.view !== 'fx') {
+      if (state.view !== 'fx') {
         tileFxDbg.domSwapOk = false;
         return;
       }
-      const style = getComputedStyle(sample);
-      const bg = String(style.backgroundImage || style.background || '').toLowerCase();
-      const shadow = String(style.boxShadow || '').toLowerCase();
-      const backdrop = String(style.backdropFilter || '').toLowerCase();
-      const bgOk = bg.includes('none') || bg.includes('transparent') || bg.includes('rgba(0, 0, 0, 0)');
-      const shadowOk = shadow.includes('none');
-      const backdropOk = backdrop.includes('none');
-      tileFxDbg.domSwapOk = Boolean(bgOk && shadowOk && backdropOk);
+      const swappedTiles = Array.from(document.querySelectorAll('#mediaGrid .asset[data-tex="1"]')).slice(0, 6);
+      if (!swappedTiles.length) {
+        tileFxDbg.domSwapOk = Number(tileFxDbg.visibleDomOnly || 0) <= 0;
+        return;
+      }
+      const leakCount = swappedTiles.reduce((sum, tileEl) => {
+        const leak = countVisibleThumbPainters(tileEl);
+        return sum + Number(leak.count || 0);
+      }, 0);
+      tileFxDbg.domSwapOk = leakCount <= 0;
       if (!tileFxDbg.domSwapOk) {
         tileFxDbg.failReason = tileFxDbg.failReason || 'DOM_SWAP_INVALID';
       } else if (tileFxDbg.failReason === 'DOM_SWAP_INVALID') {
@@ -2499,7 +2520,11 @@
       if (!FX_DEBUG) return;
       if (state.view !== 'fx' || !window.__tilefx_enabled) return;
       const swappedTiles = Array.from(document.querySelectorAll('#mediaGrid .asset[data-tex="1"]')).slice(0, 6);
-      if (!swappedTiles.length) return;
+      if (!swappedTiles.length) {
+        tileFxDbg.visiblePainterLeakCount = 0;
+        tileFxDbg.painterLeakRows = [];
+        return;
+      }
       const leakRows = [];
       for (const tileEl of swappedTiles){
         const tileKey = String(tileEl.dataset.fxCardId || tileEl.dataset.relativePath || tileEl.dataset.path || tileEl.dataset.streamUrl || '');
