@@ -1577,3 +1577,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Implemented grouped visible-batch commit in `bootstrap_commit` (`applyDomSwap(..., true, 'bootstrap:batch-commit')`) so visible ownership switches coherently instead of row-order stagger.
 - Froze offscreen promotion before steady by updating `collectTileFxTiles()` to detect non-steady entry phase and run visible-only collection (`maxPromoted = 0`, overscan loop break, minimal overscan).
 - Protected bootstrap visible tiles from untracked cleanup release by extending `_restoreUntrackedSwaps(...)` with a protected tile set and blocking release while phase is non-steady.
+
+### Latest Implementation Notes (2026-03-07, steady-state visible ownership discipline)
+- Tightened TileFX steady behavior in `public/js/explorer-shaders.mjs` with an explicit visible-lock rule: visible draw-valid tiles in `steady` are force-kept FX-owned (`steady:visible-lock`) and do not drift back to DOM because of offscreen/queue churn.
+- Added steady mismatch correction for visible swapped tiles that lose draw-truth (`steady:draw-truth-lost`) so invalid visible FX ownership is corrected on the next sync pass instead of persisting.
+- Kept ownership sync order visible-first: visible ownership decisions are still applied before `_restoreUntrackedSwaps(...)` cleanup in render commit flow.
+- Hardened swap release policy in `_restoreUntrackedSwaps(...)`: visible release remains blocked, while near-visible release now requires stronger hold windows (`_swapReleaseNearVisibleIdleMs`, `_swapReleaseNearVisibleDelayFrames`, `_swapReleaseNearVisibleDelayMs`) before release is allowed.
+- Reduced steady-state warming churn in `collectTileFxTiles()` with more conservative non-bootstrap feed constants (lower steady overscan/maxFed/maxPromoted, especially for coarse-pointer/mobile) to prioritize visible stability under scroll-stop-scroll patterns.

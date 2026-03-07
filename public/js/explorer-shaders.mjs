@@ -955,6 +955,9 @@ export class TileFXRenderer {
     this._swapReleaseDelayMs = 260;
     this._swapMinHoldMs = 320;
     this._swapReleaseIdleMs = 260;
+    this._swapReleaseNearVisibleIdleMs = 520;
+    this._swapReleaseNearVisibleDelayFrames = 20;
+    this._swapReleaseNearVisibleDelayMs = 520;
     this._swapReleaseBlocked = 0;
     this._swapReleaseAllowed = 0;
     this._visibleSwapReleaseBlocked = 0;
@@ -1527,6 +1530,7 @@ export class TileFXRenderer {
       this._fxEntryPhase = 'steady';
     }
     const blockVisibleSwapCommit = this.mode === 'fx' && this._fxEntryPhase !== 'steady';
+    const inSteady = this.mode === 'fx' && this._fxEntryPhase === 'steady';
     active.forEach((tile) => {
       const tileEl = tile?.tileEl || null;
       if (!tileEl || !tileEl.isConnected) return;
@@ -1537,10 +1541,20 @@ export class TileFXRenderer {
       const wasDrawnThisPass = drawMeta.wasDrawnThisPass === true;
       const rectValid = drawMeta.rectValid === true;
       const isSwapEligible = this.mode === 'fx' && this.enabled && visible && hasTexture && wasDrawnThisPass && rectValid;
+      const visibleSteadyLock = inSteady && isSwapEligible;
       let owner = 'DOM';
       let releaseBlocked = false;
 
-      if (isSwapEligible && !blockVisibleSwapCommit) {
+      if (visibleSteadyLock) {
+        owner = 'FX';
+        if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
+          this.applyDomSwap(tile, true, 'steady:visible-lock');
+          if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+        }
+      } else if (visible && inSteady && swapState === TILE_SWAP_STATE.FX_SWAPPED && !isSwapEligible) {
+        this.applyDomSwap(tile, false, 'steady:draw-truth-lost');
+        if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+      } else if (isSwapEligible && !blockVisibleSwapCommit) {
         owner = 'FX';
         if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
           this.applyDomSwap(tile, true, 'ownership:drawn-visible');
@@ -1659,10 +1673,21 @@ export class TileFXRenderer {
       const seen = this._swapSeenFrameByTile.get(tileEl) || { frame: this._frame, t: now };
       const frameGap = Math.max(0, this._frame - Number(seen.frame || 0));
       const msGap = Math.max(0, now - Number(seen.t || now));
-      if (visible.has(tileEl) || nearVisible.has(tileEl)) {
+      if (visible.has(tileEl)) {
         this._swapReleaseBlocked += 1;
         this._visibleSwapReleaseBlocked += 1;
         continue;
+      }
+      if (nearVisible.has(tileEl)) {
+        const nearVisibleHold = idleFor < this._swapReleaseNearVisibleIdleMs
+          || frameGap < this._swapReleaseNearVisibleDelayFrames
+          || msGap < this._swapReleaseNearVisibleDelayMs
+          || !this._canReleaseSwap(tileEl, now);
+        if (nearVisibleHold) {
+          this._swapReleaseBlocked += 1;
+          this._visibleSwapReleaseBlocked += 1;
+          continue;
+        }
       }
       if (this.mode === 'fx' && this._fxEntryPhase !== 'steady' && protectedTiles.has(tileEl)) {
         this._swapReleaseBlocked += 1;
