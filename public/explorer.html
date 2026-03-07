@@ -2614,9 +2614,16 @@
       const rootRect = root.getBoundingClientRect();
       const scrolling = !!tileFxDbg.scrolling;
       const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-      const overscan = scrolling ? (coarsePointer ? 96 : 128) : (coarsePointer ? 180 : 240);
-      const maxFed = scrolling ? (coarsePointer ? 42 : 72) : (coarsePointer ? 84 : 144);
-      const maxPromoted = scrolling ? (coarsePointer ? 4 : 7) : (coarsePointer ? 12 : 24);
+      const entryPhase = (typeof tileFX.getFxEntryPhase === 'function')
+        ? String(tileFX.getFxEntryPhase() || 'steady')
+        : 'steady';
+      const inBootstrap = entryPhase !== 'steady';
+      const overscan = inBootstrap
+        ? 24
+        : (scrolling ? (coarsePointer ? 96 : 128) : (coarsePointer ? 180 : 240));
+      const maxFedBase = scrolling ? (coarsePointer ? 42 : 72) : (coarsePointer ? 84 : 144);
+      const maxFed = inBootstrap ? 512 : maxFedBase;
+      const maxPromoted = inBootstrap ? 0 : (scrolling ? (coarsePointer ? 4 : 7) : (coarsePointer ? 12 : 24));
       const cards = Array.from(grid.querySelectorAll('.asset'));
       const visibleCards = [];
       const overscanCards = [];
@@ -2756,6 +2763,7 @@
       visibleCards.forEach((tile) => addTile(tile));
       let visiblePromotedThisPass = 0;
       for (const tile of overscanCards) {
+        if (inBootstrap) break;
         if (tiles.length >= maxFed) break;
         const hasTexture = !!(tile.key && tileFX.hasTexture(tile.key));
         const swapped = String(tile.tileEl?.dataset?.tex || '') === '1';
@@ -2809,6 +2817,7 @@
       tileFxDbg.collectOverscan = overscan;
       tileFxDbg.visiblePromotedThisPass = visiblePromotedThisPass;
       tileFxDbg.fedVisibleRatio = Number((visibleCards.length / Math.max(tiles.length, 1)).toFixed(3));
+      tileFxDbg.fxEntryPhase = entryPhase;
       tileFxScanStats.scannedCount = cards.length;
       tileFxScanStats.culledCount = culled;
       tileFxScanStats.renderedCount = tiles.length;

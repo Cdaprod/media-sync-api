@@ -1569,3 +1569,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated `syncVisibleTileOwnership(...)` to compute a visible readiness batch (`visibleReadyRatio`) from draw truth (`visible`, `hasTexture`, `wasDrawnThisPass`, `rectValid`) and auto-promote phase to `steady` only when readiness reaches all-visible or at least 80%.
 - During `bootstrap`, visible tile swap commits are blocked (`blockVisibleSwapCommit`) so DOM→FX ownership transfer no longer occurs incrementally row-by-row; visible swaps are now committed as a synchronized batch after readiness threshold.
 - Kept steady-state ownership logic and swap eligibility rules unchanged after phase promotion; this patch only changes FX entry behavior and first-visible commit timing.
+
+### Latest Implementation Notes (2026-03-07, strict visible-batch FX entry completion)
+- Replaced the single bootstrap phase with explicit phase sequencing in `public/js/explorer-shaders.mjs`: `bootstrap_collect` → `bootstrap_ready` → `bootstrap_commit` → `steady`.
+- Tightened bootstrap exit to require **100% readiness** of the captured visible bootstrap set (`visible + hasTexture + wasDrawnThisPass + rectValid`) before entering commit; removed the prior >=80% ready promotion behavior.
+- Added bootstrap visible-set stabilization (`_bootstrapVisibleTileEls`) and forced DOM ownership reset at bootstrap collect so visible tiles do not partially swap during entry.
+- Implemented grouped visible-batch commit in `bootstrap_commit` (`applyDomSwap(..., true, 'bootstrap:batch-commit')`) so visible ownership switches coherently instead of row-order stagger.
+- Froze offscreen promotion before steady by updating `collectTileFxTiles()` to detect non-steady entry phase and run visible-only collection (`maxPromoted = 0`, overscan loop break, minimal overscan).
+- Protected bootstrap visible tiles from untracked cleanup release by extending `_restoreUntrackedSwaps(...)` with a protected tile set and blocking release while phase is non-steady.

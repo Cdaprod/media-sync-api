@@ -962,6 +962,7 @@ export class TileFXRenderer {
     this._lastOwnershipRows = [];
     this._fxEntryPhase = 'steady';
     this._fxEntryStartedAt = 0;
+    this._bootstrapVisibleTileEls = new Set();
     this._swapLeakLoggedKeys = new Set();
     this._illegalDisableLogged = false;
     this._debugRectLayer = null;
@@ -1122,11 +1123,13 @@ export class TileFXRenderer {
     const next = String(mode || 'grid').toLowerCase();
     this.mode = (next === 'fx' || next === 'grid' || next === 'list') ? next : 'grid';
     if (this.mode === 'fx' && prevMode !== 'fx') {
-      this._fxEntryPhase = 'bootstrap';
+      this._fxEntryPhase = 'bootstrap_collect';
       this._fxEntryStartedAt = performance.now();
+      this._bootstrapVisibleTileEls = new Set();
     } else if (this.mode !== 'fx') {
       this._fxEntryPhase = 'steady';
       this._fxEntryStartedAt = 0;
+      this._bootstrapVisibleTileEls = new Set();
     }
     if (window.__tilefx_dbg) window.__tilefx_dbg.mode = this.mode;
   }
@@ -1473,12 +1476,54 @@ export class TileFXRenderer {
       const rectValid = drawMeta.rectValid === true;
       visibleRows.push({ tile, tileEl, hasTexture, wasDrawnThisPass, rectValid, ready: hasTexture && wasDrawnThisPass && rectValid });
     });
-    const visibleTotal = visibleRows.length;
-    const visibleReady = visibleRows.filter((row) => row.ready).length;
-    const visibleReadyRatio = visibleTotal > 0 ? (visibleReady / visibleTotal) : 1;
-    const entryPhase = this._fxEntryPhase;
-    const batchReady = visibleTotal > 0 && (visibleReady === visibleTotal || visibleReadyRatio >= 0.8);
-    if (this.mode === 'fx' && entryPhase !== 'steady' && batchReady) {
+    const visibleSet = new Set(visibleRows.map((row) => row.tileEl));
+    if (this.mode !== 'fx') {
+      this._bootstrapVisibleTileEls = new Set();
+      this._fxEntryPhase = 'steady';
+    }
+    if (!(this._bootstrapVisibleTileEls instanceof Set)) {
+      this._bootstrapVisibleTileEls = new Set();
+    }
+    if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_collect') {
+      this._bootstrapVisibleTileEls = new Set(visibleSet);
+      visibleRows.forEach(({ tile }) => {
+        if (String(tile?.tileEl?.dataset?.tex || '0') === '1') {
+          this.applyDomSwap(tile, false, 'bootstrap:collect-reset');
+        }
+      });
+      this._fxEntryPhase = 'bootstrap_ready';
+    }
+    if (this.mode === 'fx' && this._fxEntryPhase !== 'steady') {
+      const keep = new Set();
+      for (const tileEl of this._bootstrapVisibleTileEls) {
+        if (visibleSet.has(tileEl)) keep.add(tileEl);
+      }
+      this._bootstrapVisibleTileEls = keep;
+      if (!this._bootstrapVisibleTileEls.size && visibleSet.size) {
+        this._bootstrapVisibleTileEls = new Set(visibleSet);
+      }
+    }
+    const bootstrapRows = visibleRows.filter((row) => this._bootstrapVisibleTileEls.has(row.tileEl));
+    const bootstrapTotal = bootstrapRows.length;
+    const bootstrapReady = bootstrapRows.filter((row) => row.ready).length;
+    const bootstrapReadyRatio = bootstrapTotal > 0 ? (bootstrapReady / bootstrapTotal) : 0;
+    const hasVisibleDualOwner = bootstrapRows.some((row) => {
+      const swapState = this._getSwapState(row.tileEl);
+      return swapState === TILE_SWAP_STATE.FX_SWAPPED && !row.ready;
+    });
+    if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_ready' && bootstrapTotal > 0 && bootstrapReady === bootstrapTotal && !hasVisibleDualOwner) {
+      this._fxEntryPhase = 'bootstrap_commit';
+    }
+    if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_commit') {
+      bootstrapRows.forEach(({ tile, ready }) => {
+        if (ready) {
+          const swapState = this._getSwapState(tile?.tileEl || null);
+          if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
+            this.applyDomSwap(tile, true, 'bootstrap:batch-commit');
+            if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+          }
+        }
+      });
       this._fxEntryPhase = 'steady';
     }
     const blockVisibleSwapCommit = this.mode === 'fx' && this._fxEntryPhase !== 'steady';
@@ -1519,6 +1564,11 @@ export class TileFXRenderer {
       });
     });
     this._lastOwnershipRows = rows;
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.fxEntryPhase = String(this._fxEntryPhase || 'steady');
+      window.__tilefx_dbg.bootstrapVisibleCount = Number(this._bootstrapVisibleTileEls?.size || 0);
+      window.__tilefx_dbg.bootstrapReadyRatio = Number(bootstrapReadyRatio || 0);
+    }
     return rows;
   }
 
@@ -1585,11 +1635,12 @@ export class TileFXRenderer {
     });
   }
 
-  _restoreUntrackedSwaps(activeTileEls = new Set(), now = performance.now(), visibleTileEls = new Set(), nearVisibleTileEls = new Set()) {
+  _restoreUntrackedSwaps(activeTileEls = new Set(), now = performance.now(), visibleTileEls = new Set(), nearVisibleTileEls = new Set(), protectedTileEls = new Set()) {
     if (!this._swappedTileRefs.size) return;
     const active = activeTileEls instanceof Set ? activeTileEls : new Set();
     const visible = visibleTileEls instanceof Set ? visibleTileEls : new Set();
     const nearVisible = nearVisibleTileEls instanceof Set ? nearVisibleTileEls : new Set();
+    const protectedTiles = protectedTileEls instanceof Set ? protectedTileEls : new Set();
     if (this.isScrolling) return;
     const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
     for (const [tileEl, tile] of Array.from(this._swappedTileRefs.entries())) {
@@ -1609,6 +1660,11 @@ export class TileFXRenderer {
       const frameGap = Math.max(0, this._frame - Number(seen.frame || 0));
       const msGap = Math.max(0, now - Number(seen.t || now));
       if (visible.has(tileEl) || nearVisible.has(tileEl)) {
+        this._swapReleaseBlocked += 1;
+        this._visibleSwapReleaseBlocked += 1;
+        continue;
+      }
+      if (this.mode === 'fx' && this._fxEntryPhase !== 'steady' && protectedTiles.has(tileEl)) {
         this._swapReleaseBlocked += 1;
         this._visibleSwapReleaseBlocked += 1;
         continue;
@@ -2026,7 +2082,7 @@ export class TileFXRenderer {
 
     this._renderDebugRects(debugRects);
     this.syncVisibleTileOwnership(tiles, drawResults, now);
-    this._restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls);
+    this._restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls, this._bootstrapVisibleTileEls);
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
     if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
       this.backpressureUntil = now + this.uploadPauseMs;

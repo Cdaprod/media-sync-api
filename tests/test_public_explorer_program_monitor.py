@@ -186,7 +186,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "card.classList.toggle('tilefx-ready', !!ready);" in html
     assert 'COVERAGE_LOW' in html
     assert 'visiblePromotedThisPass' in html
-    assert 'const maxPromoted = scrolling ? (coarsePointer ? 4 : 7) : (coarsePointer ? 12 : 24);' in html
+    assert "const entryPhase = (typeof tileFX.getFxEntryPhase === 'function')" in html
+    assert "const inBootstrap = entryPhase !== 'steady';" in html
+    assert 'const maxPromoted = inBootstrap ? 0 : (scrolling ? (coarsePointer ? 4 : 7) : (coarsePointer ? 12 : 24));' in html
+    assert 'if (inBootstrap) break;' in html
     assert 'visibleCards.forEach((tile) => addTile(tile));' in html
     assert 'texturesUploaded' in html
     assert 'texturesPending' in html
@@ -221,6 +224,11 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_cssRectToCanvasRect(localRect, dpr = 1)' in shader_module
     assert '_canReleaseSwap(tileEl, now = performance.now())' in shader_module
     assert 'syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now())' in shader_module
+    assert "this._fxEntryPhase = 'bootstrap_collect';" in shader_module
+    assert "this._fxEntryPhase = 'bootstrap_ready';" in shader_module
+    assert "this._fxEntryPhase = 'bootstrap_commit';" in shader_module
+    assert "this.applyDomSwap(tile, true, 'bootstrap:batch-commit');" in shader_module
+    assert 'this._bootstrapVisibleTileEls = new Set();' in shader_module
     assert 'getVisibleOwnershipRows(limit = 12)' in shader_module
     assert 'tileStateByKey = new Map();' in shader_module
     assert 'decodedSrcSet = new Set();' in shader_module
@@ -258,7 +266,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'lastIllegalDisable: null,' in shader_module
     assert "console.warn('[tilefx] rect mismatch'" in shader_module
     assert 'window.__tilefx_dbg.pendingCap = maxPending;' in shader_module
-    assert '_restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls);' in shader_module
+    assert '_restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls, this._bootstrapVisibleTileEls);' in shader_module
     assert 'const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length' in shader_module
     assert "tileEl.classList.toggle('fx-swapped', !!swapped);" in shader_module
     assert "document.body?.classList?.contains('fx-mode')" in shader_module
