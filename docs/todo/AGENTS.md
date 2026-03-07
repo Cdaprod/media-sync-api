@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-07 — Full visible-window FX coherence (active)
+- [x] Identified remaining mixed-window cause: visible cards could stay plain grid-style before first collect pass because placeholder ownership was applied incrementally from collector timing.
+- [x] Added immediate visible-window pending stamp on FX entry (`markVisibleFxWindowPending('setView:fx')`) so currently visible cards become `pending` or `1`, not `0`.
+- [x] Removed `window.__tilefx_enabled` dependency from visible pending assignment in collector so FX-view visible cards do not wait for enable-flag timing to enter placeholder state.
+- [x] Verified early FX window now starts fully coherent in-container (`visibleCount:20`, `pending:20`, `zero:0` immediately after entry).
+- [ ] Re-check same behavior on physical iPhone Safari and confirm no lower-window plain-grid patch remains.
+
 ## 2026-03-07 — Visible FX placeholder ownership policy (active)
 - [x] Identified visible DOM-thumb fallback path: cards were defaulting to `data-tex="0"` for non-ready states in `collectTileFxTiles()` / `onTextureReady(...)`, allowing full DOM thumb body paint in FX view.
 - [x] Enforced visible/near-visible FX fallback policy: non-ready cards now stay in `data-tex="pending"` (FX placeholder) instead of full DOM thumb body.

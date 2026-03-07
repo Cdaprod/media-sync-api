@@ -1691,3 +1691,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated policy so FX-visible and FX-near-visible non-ready cards use `data-tex="pending"` (placeholder) instead of full DOM thumb body; only fully culled cards clear back to `0`.
 - Added explicit placeholder CSS for `data-tex="pending"` that hides thumb-body painter nodes and shows a lightweight FX placeholder gradient while keeping `.asset-ui` metadata DOM-owned.
 - Kept solved pipeline/lifecycle layers unchanged and limited this pass to visible ownership paint policy + warm re-entry retention.
+
+## 2026-03-07 — Full visible-window coherence pass (new)
+- Remaining mixed-window issue was a timing gap: some visible cards stayed `data-tex="0"` until collector ownership assignment ran, producing partial top/bottom FX takeover perception.
+- Added `markVisibleFxWindowPending('setView:fx')` in `setView(...)` after render to immediately stamp currently visible cards to `pending` unless already texture-owned.
+- Updated collector visible assignment to set `pending` in FX view without waiting on `window.__tilefx_enabled` timing, ensuring visible cards resolve to placeholder or texture consistently.
+- In-container runtime check now shows immediate coherent visible window on entry (`pending` for all visible cards, `zero` none) before texture maturation.

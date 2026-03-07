@@ -2835,7 +2835,7 @@
         const inVisible = !(r.bottom < rootRect.top || r.top > rootRect.bottom || r.right < rootRect.left || r.left > rootRect.right);
         card.dataset.fxInVisible = inVisible ? '1' : '0';
         card.dataset.fxNearVisible = '1';
-        if (state.view === 'fx' && window.__tilefx_enabled && card.dataset.tex !== '1') {
+        if (state.view === 'fx' && card.dataset.tex !== '1') {
           card.dataset.tex = 'pending';
         }
         const tile = createTileFromCard(card, r);
@@ -4544,6 +4544,26 @@
       return assertTileFxViewLifecycle(`sync:${reason}`);
     }
 
+
+    function markVisibleFxWindowPending(reason = 'mark-visible'){
+      if (state.view !== 'fx') return;
+      const root = el('mediaGridRoot');
+      const grid = el('mediaGrid');
+      if (!root || !grid) return;
+      const rootRect = root.getBoundingClientRect();
+      const cards = Array.from(grid.querySelectorAll('.asset'));
+      for (const card of cards) {
+        if (!card?.isConnected) continue;
+        const r = card.getBoundingClientRect();
+        const inVisible = !(r.bottom < rootRect.top || r.top > rootRect.bottom || r.right < rootRect.left || r.left > rootRect.right);
+        if (!inVisible) continue;
+        card.dataset.fxInVisible = '1';
+        card.dataset.fxNearVisible = '1';
+        if (card.dataset.tex !== '1') card.dataset.tex = 'pending';
+      }
+      if (window.__tilefx_dbg) window.__tilefx_dbg.lastVisiblePendingReason = reason;
+    }
+
     function setView(view){
       const nextView = (view === 'fx' || view === 'grid' || view === 'list') ? view : 'grid';
       const fxEnabled = nextView === 'fx';
@@ -4575,6 +4595,7 @@
       }
       renderMedia();
       if (fxEnabled) {
+        markVisibleFxWindowPending('setView:fx');
         scheduleTileFxCollect('view-change');
       }
       updateTileFxHud();
