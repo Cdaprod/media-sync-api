@@ -861,6 +861,23 @@
       opacity: 0 !important;
       visibility: hidden !important;
     }
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb-body,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb > img.asset-thumb,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb img.asset-thumb{
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb::after{
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(120% 80% at 10% 0%, rgba(110, 208, 255, 0.18), rgba(14, 23, 49, 0) 58%),
+        linear-gradient(135deg, rgba(10, 18, 38, 0.92), rgba(16, 28, 58, 0.9));
+      box-shadow: inset 0 0 0 1px rgba(136, 196, 255, 0.22);
+      z-index: 1;
+      pointer-events: none;
+    }
     body.fx-mode.fx-swap-sanity #mediaGridRoot.view-fx .asset[data-tex="1"]{
       outline: 1px solid rgba(140,255,120,0.95);
       outline-offset: -1px;
@@ -2794,7 +2811,12 @@
           onTextureReady: (ready) => {
             card.classList.toggle('tilefx-ready', !!ready);
             card.dataset.fxReady = ready ? '1' : '0';
-            if (!ready && card.dataset.tex !== 'pending') card.dataset.tex = '0';
+            if (ready) {
+              card.dataset.tex = '1';
+              return;
+            }
+            const keepPlaceholder = card.dataset.fxInVisible === '1' || card.dataset.fxNearVisible === '1';
+            card.dataset.tex = keepPlaceholder ? 'pending' : '0';
           },
         };
       };
@@ -2804,10 +2826,18 @@
         const r = card.getBoundingClientRect();
         const inOverscan = !(r.bottom < (rootRect.top - overscan) || r.top > (rootRect.bottom + overscan) || r.right < (rootRect.left - overscan) || r.left > (rootRect.right + overscan));
         if (!inOverscan) {
+          card.dataset.fxInVisible = '0';
+          card.dataset.fxNearVisible = '0';
+          if (card.dataset.tex === 'pending') card.dataset.tex = '0';
           culled += 1;
           continue;
         }
         const inVisible = !(r.bottom < rootRect.top || r.top > rootRect.bottom || r.right < rootRect.left || r.left > rootRect.right);
+        card.dataset.fxInVisible = inVisible ? '1' : '0';
+        card.dataset.fxNearVisible = '1';
+        if (state.view === 'fx' && window.__tilefx_enabled && card.dataset.tex !== '1') {
+          card.dataset.tex = 'pending';
+        }
         const tile = createTileFromCard(card, r);
         if (inVisible) visibleCards.push(tile);
         else overscanCards.push(tile);

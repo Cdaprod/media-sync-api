@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-07 — Visible FX placeholder ownership policy (active)
+- [x] Identified visible DOM-thumb fallback path: cards were defaulting to `data-tex="0"` for non-ready states in `collectTileFxTiles()` / `onTextureReady(...)`, allowing full DOM thumb body paint in FX view.
+- [x] Enforced visible/near-visible FX fallback policy: non-ready cards now stay in `data-tex="pending"` (FX placeholder) instead of full DOM thumb body.
+- [x] Added explicit FX placeholder visual treatment for `data-tex="pending"` and hid `.thumb-body` paint nodes for that state.
+- [x] Added warm re-entry retention: cards in overscan keep placeholder ownership (`pending`) and only drop to `0` when fully culled out of overscan.
+- [ ] Re-check on physical iPhone Safari that this removes the “normal asset behind FX asset” appearance after settle + short scroll-stop.
+
 ## 2026-03-07 — Verdict/domSwap truth reconciliation (active)
 - [x] Treated `health: dual_owner` under otherwise healthy visible FX ownership as a verdict-layer mismatch, not a pipeline failure.
 - [x] Updated health verdict logic to prefer current visible ownership truth (`visibleSwapped/visibleDomOnly/visibleMissingTextures`) and avoid stale dual-owner verdicts after settle.

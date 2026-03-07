@@ -1685,3 +1685,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Tightened `countVisibleThumbPainters(...)` to count only actual paint contributors (visible media/background with drawable area), reducing false-positive leak noise.
 - Cleared stale leak counters when no swapped tiles are present to prevent historical leak state from contaminating current verdicts.
 - Kept solved layers frozen (lifecycle/queue/drain/texture/draw/ownership pipeline unchanged) and limited this pass to truth reconciliation + detector noise reduction.
+
+## 2026-03-07 — Visible placeholder ownership policy pass (new)
+- Found the remaining visible fallback path in `collectTileFxTiles()` / tile `onTextureReady(...)`: non-ready cards could drop to `data-tex="0"`, exposing full DOM thumbnail bodies during FX mode.
+- Updated policy so FX-visible and FX-near-visible non-ready cards use `data-tex="pending"` (placeholder) instead of full DOM thumb body; only fully culled cards clear back to `0`.
+- Added explicit placeholder CSS for `data-tex="pending"` that hides thumb-body painter nodes and shows a lightweight FX placeholder gradient while keeping `.asset-ui` metadata DOM-owned.
+- Kept solved pipeline/lifecycle layers unchanged and limited this pass to visible ownership paint policy + warm re-entry retention.
