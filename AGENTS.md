@@ -1584,3 +1584,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Kept ownership sync order visible-first: visible ownership decisions are still applied before `_restoreUntrackedSwaps(...)` cleanup in render commit flow.
 - Hardened swap release policy in `_restoreUntrackedSwaps(...)`: visible release remains blocked, while near-visible release now requires stronger hold windows (`_swapReleaseNearVisibleIdleMs`, `_swapReleaseNearVisibleDelayFrames`, `_swapReleaseNearVisibleDelayMs`) before release is allowed.
 - Reduced steady-state warming churn in `collectTileFxTiles()` with more conservative non-bootstrap feed constants (lower steady overscan/maxFed/maxPromoted, especially for coarse-pointer/mobile) to prioritize visible stability under scroll-stop-scroll patterns.
+
+### Latest Implementation Notes (2026-03-07, visible ownership truth-path repair)
+- Fixed `window.logVisibleTileOwnership(limit)` in `public/explorer.html` to treat empty rows in active FX view with visible DOM cards as an ownership-truth bug (`visibleDomCards > 0 && rows.length === 0`) and return summary flags (`visibleDomCards`, `ownershipTruthBug`) without adding new HUD/diagnostic surfaces.
+- Updated `TileFXRenderer.getVisibleOwnershipRows(limit)` in `public/js/explorer-shaders.mjs` to prefer a current visible DOM-set scan (`_collectVisibleDomOwnershipRows(...)`) before falling back to cached rows, preventing stale/empty cache returns when visible cards are present.
+- Added per-frame draw-truth retention map (`_lastDrawByTileEl`) and wired render-pass updates so visible ownership rows can include current-frame truth even when cache rows are not yet populated.
+- Expanded ownership row shape to include compact inspection fields required for visible truth checks: `fed`, `rectValid`, and `swapState` alongside existing state/owner/texture fields.
+- Kept the fix scoped to ownership truth path only (no new proof exporters/HUD panels/recovery loops), and updated static assertions in `tests/test_public_explorer_program_monitor.py` accordingly.

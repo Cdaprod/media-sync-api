@@ -174,6 +174,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "function logTileFxProofSummary(reason = 'manual'){" in html
     assert 'window.logTileFxProofSummary = logTileFxProofSummary;' in html
     assert 'window.logVisibleTileOwnership = logVisibleTileOwnership;' in html
+    assert 'ownership truth bug: visible cards present but ownership rows empty' in html
+    assert 'ownershipTruthBug: stillEmpty,' in html
+    assert 'visibleDomCards,' in html
     assert 'function computeTileFxHealthVerdict(){' in html
     assert "function assertTileFxViewLifecycle(reason = 'sync'){" in html
     assert "function containTileFxInvariantFailure(reason = 'lifecycle', details = {}){" in html
@@ -232,6 +235,11 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "this.applyDomSwap(tile, false, 'steady:draw-truth-lost');" in shader_module
     assert 'this._bootstrapVisibleTileEls = new Set();' in shader_module
     assert 'getVisibleOwnershipRows(limit = 12)' in shader_module
+    assert '_collectVisibleDomOwnershipRows(limit = 12)' in shader_module
+    assert 'this._lastDrawByTileEl = new WeakMap();' in shader_module
+    assert 'swapState: String(swapState || TILE_SWAP_STATE.DOM_VISIBLE),' in shader_module
+    assert 'rectValid,' in shader_module
+    assert 'fed: true,' in shader_module
     assert 'tileStateByKey = new Map();' in shader_module
     assert 'decodedSrcSet = new Set();' in shader_module
     assert '_setTileState(key, TILE_STATE.READY);' in shader_module

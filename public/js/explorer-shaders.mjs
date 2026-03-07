@@ -963,6 +963,7 @@ export class TileFXRenderer {
     this._visibleSwapReleaseBlocked = 0;
     this._offscreenSwapReleaseAllowed = 0;
     this._lastOwnershipRows = [];
+    this._lastDrawByTileEl = new WeakMap();
     this._fxEntryPhase = 'steady';
     this._fxEntryStartedAt = 0;
     this._bootstrapVisibleTileEls = new Set();
@@ -1570,8 +1571,11 @@ export class TileFXRenderer {
         key: String(tile?.key || tileEl.dataset?.fxCardId || ''),
         state: String(this.getTileState(String(tile?.key || ''))),
         visible,
+        fed: true,
         wasDrawnThisPass,
+        rectValid,
         hasTexture,
+        swapState: String(swapState || TILE_SWAP_STATE.DOM_VISIBLE),
         dataTex: String(tileEl.dataset?.tex || '0'),
         owner,
         releaseBlocked,
@@ -1588,6 +1592,8 @@ export class TileFXRenderer {
 
   getVisibleOwnershipRows(limit = 12) {
     const max = Math.max(1, Number(limit || 12));
+    const domRows = this._collectVisibleDomOwnershipRows(max);
+    if (domRows.length) return domRows.slice(0, max);
     const rows = Array.isArray(this._lastOwnershipRows) ? this._lastOwnershipRows : [];
     if (rows.length) return rows.slice(0, max);
     return (Array.isArray(this.tiles) ? this.tiles : []).slice(0, max).map((tile) => {
@@ -1599,13 +1605,55 @@ export class TileFXRenderer {
         key,
         state: String(this.getTileState(key)),
         visible: true,
+        fed: true,
         wasDrawnThisPass: false,
+        rectValid: true,
         hasTexture,
+        swapState: String(swapState || TILE_SWAP_STATE.DOM_VISIBLE),
         dataTex: String(tileEl?.dataset?.tex || '0'),
         owner: (swapState === TILE_SWAP_STATE.FX_SWAPPED && hasTexture) ? 'FX' : 'DOM',
         releaseBlocked: false,
       };
     });
+  }
+
+  _collectVisibleDomOwnershipRows(limit = 12) {
+    const max = Math.max(1, Number(limit || 12));
+    const rootEl = document.getElementById('mediaGridRoot') || document.querySelector('[data-fx-grid-root="1"]');
+    const gridEl = document.getElementById('mediaGrid') || rootEl?.querySelector?.('#mediaGrid');
+    if (!rootEl || !gridEl) return [];
+    const rootRect = rootEl.getBoundingClientRect();
+    const fedEls = new Set((Array.isArray(this.tiles) ? this.tiles : []).map((tile) => tile?.tileEl).filter(Boolean));
+    const rows = [];
+    const cards = Array.from(gridEl.querySelectorAll('.asset'));
+    for (const tileEl of cards) {
+      if (!tileEl || !tileEl.isConnected) continue;
+      const rect = tileEl.getBoundingClientRect();
+      const visible = !(rect.bottom < rootRect.top || rect.top > rootRect.bottom || rect.right < rootRect.left || rect.left > rootRect.right);
+      if (!visible) continue;
+      const key = String(tileEl.dataset?.assetId || tileEl.dataset?.path || tileEl.dataset?.relative || tileEl.dataset?.sha256 || tileEl.dataset?.fxCardId || '');
+      const drawMeta = this._lastDrawByTileEl.get(tileEl) || {};
+      const swapState = this._getSwapState(tileEl);
+      const rectValid = drawMeta.rectValid === true || (Number(rect.width || 0) > 0 && Number(rect.height || 0) > 0);
+      const hasTexture = drawMeta.hasTexture === true || (key ? this.hasTexture(key) : false);
+      const wasDrawnThisPass = drawMeta.wasDrawnThisPass === true;
+      const owner = (swapState === TILE_SWAP_STATE.FX_SWAPPED && hasTexture) ? 'FX' : 'DOM';
+      rows.push({
+        key,
+        state: String(this.getTileState(key)),
+        visible: true,
+        fed: fedEls.has(tileEl),
+        wasDrawnThisPass,
+        rectValid,
+        hasTexture,
+        swapState: String(swapState || TILE_SWAP_STATE.DOM_VISIBLE),
+        dataTex: String(tileEl.dataset?.tex || '0'),
+        owner,
+        releaseBlocked: false,
+      });
+      if (rows.length >= max) break;
+    }
+    return rows;
   }
 
   _renderDebugRects(debugRects = []) {
@@ -2106,6 +2154,16 @@ export class TileFXRenderer {
     });
 
     this._renderDebugRects(debugRects);
+    this._lastDrawByTileEl = new WeakMap();
+    drawResults.forEach((meta, tileEl) => {
+      if (!tileEl || !meta) return;
+      this._lastDrawByTileEl.set(tileEl, {
+        visible: meta.visible === true,
+        rectValid: meta.rectValid === true,
+        hasTexture: meta.hasTexture === true,
+        wasDrawnThisPass: meta.wasDrawnThisPass === true,
+      });
+    });
     this.syncVisibleTileOwnership(tiles, drawResults, now);
     this._restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls, this._bootstrapVisibleTileEls);
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);

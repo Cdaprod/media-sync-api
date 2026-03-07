@@ -2589,17 +2589,39 @@
     window.setViewMode = setView;
 
     function logVisibleTileOwnership(limit = 12){
-      const rows = (typeof tileFX.getVisibleOwnershipRows === 'function')
-        ? tileFX.getVisibleOwnershipRows(limit)
+      const max = Math.max(1, Number(limit || 12));
+      let rows = (typeof tileFX.getVisibleOwnershipRows === 'function')
+        ? tileFX.getVisibleOwnershipRows(max)
         : [];
-      if (state.view === 'fx' && window.__tilefx_enabled && !rows.length) {
-        console.error('[tilefx-visible-ownership] empty rows while FX is active');
+      const root = el('mediaGridRoot');
+      const grid = el('mediaGrid');
+      let visibleDomCards = 0;
+      if (root && grid) {
+        const rootRect = root.getBoundingClientRect();
+        visibleDomCards = Array.from(grid.querySelectorAll('.asset')).filter((card) => {
+          if (!card?.isConnected) return false;
+          const r = card.getBoundingClientRect();
+          return !(r.bottom < rootRect.top || r.top > rootRect.bottom || r.right < rootRect.left || r.left > rootRect.right);
+        }).length;
+      }
+      const ownershipTruthBug = state.view === 'fx' && window.__tilefx_enabled && visibleDomCards > 0 && (!Array.isArray(rows) || rows.length === 0);
+      if (ownershipTruthBug && typeof tileFX.getVisibleOwnershipRows === 'function') {
+        rows = tileFX.getVisibleOwnershipRows(Math.max(max, visibleDomCards));
+      }
+      const stillEmpty = state.view === 'fx' && window.__tilefx_enabled && visibleDomCards > 0 && (!Array.isArray(rows) || rows.length === 0);
+      if (stillEmpty) {
+        console.error('[tilefx-visible-ownership] ownership truth bug: visible cards present but ownership rows empty', {
+          visibleDomCards,
+          max,
+        });
       }
       const summary = {
         timestamp: Date.now(),
         view: String(state.view || 'grid'),
         mode: String(tileFxDbg.mode || state.view || 'grid'),
-        rows,
+        visibleDomCards,
+        ownershipTruthBug: stillEmpty,
+        rows: Array.isArray(rows) ? rows.slice(0, max) : [],
       };
       console.info('[tilefx-visible-ownership]', summary);
       return summary;
