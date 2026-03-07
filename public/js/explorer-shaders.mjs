@@ -1803,12 +1803,15 @@ export class TileFXRenderer {
 
   _resolveTileSource(tile) {
     const img = tile?.thumbEl || null;
-    if (img) {
-      const thumbUrl = String(img.dataset?.thumbUrl || '').trim();
-      return { kind: 'img', source: img, url: thumbUrl || img.currentSrc || img.getAttribute('src') || '' };
-    }
     const kind = String(tile?.thumbKind || '').toLowerCase();
     const thumbSrc = String(tile?.thumbSrc || '').trim();
+    if (img) {
+      const thumbUrl = String(img.dataset?.thumbUrl || '').trim();
+      const imgUrl = String(thumbUrl || img.currentSrc || img.getAttribute('src') || '').trim();
+      if (imgUrl) return { kind: 'img', source: img, url: imgUrl };
+      if (thumbSrc) return { kind: kind || 'url', source: null, url: thumbSrc };
+      return { kind: 'img', source: img, url: '' };
+    }
     if (!thumbSrc) return { kind: 'none', source: null, url: '' };
     if (kind === 'cssbg') return { kind: 'cssbg', source: null, url: thumbSrc };
     if (kind === 'videoposter' || kind === 'poster') return { kind: 'poster', source: null, url: thumbSrc };
@@ -1968,8 +1971,26 @@ export class TileFXRenderer {
     const readyCount = Number(this._stateCounts().ready || 0);
     const visibleTarget = Number(this.tiles?.length || 0) + this.idleUploadOverscan;
     const maxPending = Math.max(24, Number(this.tiles?.length || 1) * 2);
-    if (window.__tilefx_dbg) window.__tilefx_dbg.pendingCap = maxPending;
-    if (!this.isScrolling && readyCount >= visibleTarget) return;
+    const vp = getViewportMetrics();
+    let visibleMissingTextures = 0;
+    const tiles = Array.isArray(this.tiles) ? this.tiles : [];
+    for (const tile of tiles) {
+      const key = String(tile?.key || '');
+      if (!key || this.textureCache.has(key)) continue;
+      const rect = tile?.rect || tile?.tileEl?.getBoundingClientRect?.() || null;
+      if (!rect) continue;
+      const left = Number(rect.left || 0) - Number(vp.offsetX || 0);
+      const top = Number(rect.top || 0) - Number(vp.offsetY || 0);
+      const right = left + Number(rect.width || 0);
+      const bottom = top + Number(rect.height || 0);
+      const visible = !(right <= 0 || bottom <= 0 || left >= Number(vp.width || 0) || top >= Number(vp.height || 0));
+      if (visible) visibleMissingTextures += 1;
+    }
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.pendingCap = maxPending;
+      window.__tilefx_dbg.visibleMissingTextures = visibleMissingTextures;
+    }
+    if (!this.isScrolling && readyCount >= visibleTarget && visibleMissingTextures <= 0) return;
     if (now < this.backpressureUntil) return;
     if (this._uploadsWindow.length >= this.uploadBudgetPerSecond) return;
 
@@ -2114,16 +2135,21 @@ export class TileFXRenderer {
       const visible = !(localRight <= 0 || localBottom <= 0 || localLeft >= vp.width || localTop >= vp.height);
       const nearVisible = !(localRight <= -140 || localBottom <= -140 || localLeft >= (vp.width + 140) || localTop >= (vp.height + 140));
       const rectValid = Number.isFinite(x1 + y1 + x2 + y2) && x2 > x1 && y2 > y1;
+      const key = String(tile?.key || '');
       if (tileEl) {
         drawResults.set(tileEl, {
           tile,
           tileEl,
-          key: String(tile?.key || ''),
+          key,
           visible,
           rectValid,
           hasTexture: false,
           wasDrawnThisPass: false,
         });
+      }
+      if (key && visible && !this.textureCache.has(key)) {
+        // Visible tiles are upload-first: queue texture prep even if rect is temporarily invalid.
+        this._queueTileImageUpload(tile, key);
       }
       if (!rectValid) return;
       if (!visible) return;
@@ -2139,7 +2165,6 @@ export class TileFXRenderer {
       gl.uniform1f(this.u.u_selected, tile.selected ? 1 : 0);
 
       let hasTex = 0;
-      const key = String(tile.key || '');
       const priorState = key ? (this.tileStateByKey.get(key) || TILE_STATE.DOM_ONLY) : TILE_STATE.DOM_ONLY;
       const swapState = this._getSwapState(tileEl);
       const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));

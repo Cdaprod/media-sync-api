@@ -1605,3 +1605,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added bootstrap empty-set escape (`bootstrap_ready` with zero captured visible tiles advances to `steady`) to avoid getting stuck in entering state with permanent DOM ownership.
 - Updated debug visible counters (`visibleReady`, `visibleSwapped`, `visibleDomOnly`, `visibleUploading`) to derive from current visible ownership rows rather than global tile-state counts, making ownership health reflect on-screen truth.
 - Preserved DOM metadata ownership (`.asset-ui`) and existing visible ownership reconcile path (`_reconcileVisibleOwnerFromTruth(...)`) while keeping hot-path ordering unchanged (visible ownership resolution before untracked cleanup).
+
+### Latest Implementation Notes (2026-03-07, visible upload/draw pipeline unblock)
+- Identified the first visible FX-maturity blocker in `public/js/explorer-shaders.mjs` as upload-drain gating: `_drainPendingUploads(...)` could early-return when global ready counts looked sufficient even while currently visible tiles still lacked textures.
+- Updated `_drainPendingUploads(...)` to compute `visibleMissingTextures` from the current visible tile set and skip the idle ready-count early-return while visible tiles remain texture-missing.
+- Added `visibleMissingTextures` runtime telemetry in `window.__tilefx_dbg` for existing diagnostics consumption (no new HUD/proof surfaces).
+- Hardened `_resolveTileSource(tile)` with fallback-to-`thumbSrc` when an image node exists but has no usable URL yet, preventing silent source stalls for visible cards that still carry non-img resolved thumb sources.
+- Kept ownership policy/reconcile semantics unchanged for this pass; changes are targeted to source→upload→texture→draw maturation path only.
+- Follow-up in same pass: queued visible tile uploads directly in `_render(...)` before rect-valid draw gating (`if (key && visible && !textureCache.has(key)) _queueTileImageUpload(...)`) so temporarily invalid visible rects no longer block source/upload progression.

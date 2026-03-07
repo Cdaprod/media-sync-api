@@ -264,6 +264,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'totalReuploads()' in shader_module
     assert 'has(key)' in shader_module
     assert '_queueTileImageUpload(tile, key)' in shader_module
+    assert 'Visible tiles are upload-first: queue texture prep even if rect is temporarily invalid.' in shader_module
+    assert 'window.__tilefx_dbg.visibleMissingTextures = visibleMissingTextures;' in shader_module
+    assert 'if (!this.isScrolling && readyCount >= visibleTarget && visibleMissingTextures <= 0) return;' in shader_module
+    assert "if (thumbSrc) return { kind: kind || 'url', source: null, url: thumbSrc };" in shader_module
     assert 'getViewportMetrics()' in shader_module
     assert 'resizeTileFxCanvasToViewport(canvas, dprCap = 2)' in shader_module
     assert 'this.debugRectsEnabled = new URLSearchParams(window.location.search).get(\'tilefxDebugRects\') === \'1\';' in shader_module

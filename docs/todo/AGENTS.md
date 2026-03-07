@@ -1,5 +1,14 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-07 — Visible source→upload→texture pipeline unblock (new)
+- [x] Found first failing stage: `_drainPendingUploads(...)` idle early-return could skip uploads while visible tiles still lacked textures.
+- [x] Added visible-missing-texture gating so upload drain continues until visible tiles are texture-backed.
+- [x] Added source-resolution fallback in `_resolveTileSource(tile)` to use `thumbSrc` when image nodes have no usable URL.
+- [x] Queued visible uploads before rect-valid draw gating in `_render(...)` so temporarily invalid visible rects cannot block texture acquisition.
+- [x] Kept ownership resolver/policy unchanged in this pass; pipeline-only fix.
+- [ ] Validate on physical iPhone that settled FX sessions show visible rows with `hasTexture:true` and `owner:"FX"` for at least some visible tiles.
+- [ ] Capture one iPhone `window.logVisibleTileOwnership(12)` sample and one proof-summary line with `visibleReady`/`visibleSwapped` > 0.
+
 ## 2026-03-07 — Abstraction compression + visible FX ownership maturation (new)
 - [x] Added simplified lifecycle stage helpers (`_isEnteringPhase()`, `getFxLifecycleStage()`) so architecture reads primarily as entering vs steady.
 - [x] Added guarded bootstrap commit fallback (`>=90% ready` after 1200ms) to prevent single-tile stalls from blocking visible FX ownership indefinitely.
