@@ -1477,3 +1477,264 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added swap minimum-hold gating (`_canReleaseSwap`, `_swapMinHoldMs`) on top of offscreen hysteresis to prevent edge-of-viewport swap thrash and transient DOM reappearance.
 - Added fed/pending pressure controls: adaptive overscan+fed cap in `collectTileFxTiles()` and pending-cap telemetry (`pendingCap`, `pendingClamped`) in TileFX upload queueing/drain.
 - Updated static assertions and TODO checklist for safemode CSS, rect helper APIs, pending cap telemetry, and FX mode safeties.
+
+### Latest Implementation Notes (2026-03-06, FX lifecycle single-owner stabilization)
+- Removed runtime watchdog auto-recovery in `public/explorer.html` (heartbeat + visualViewport recovery paths) so TileFX lifecycle changes now happen only through explicit `setView('fx'|'grid'|'list')` transitions.
+- FX view entry now explicitly enables/starts TileFX and shows the canvas; non-FX view entry disables/stops/clears TileFX, restores all DOM swaps, clears fed tiles, and hides the canvas.
+- Added `restoreAllDomSwaps(reason)` to `public/js/explorer-shaders.mjs` and reused it from teardown + non-FX transitions for deterministic DOM thumbnail restoration.
+- Added explicit layer-contract diagnostics (`logTileFxLayerContract`) and z-index tokens (`--z-bg-canvas`, `--z-tilefx-canvas`, `--z-hud`) so HUD/probe/toast layers stay above the TileFX plane while retaining pointer-event isolation.
+- HUD alert semantics now prioritize lifecycle invariants (`view===fx && !enabled` or `view!==fx && drawCalls>0`) to reduce misleading stale-failure noise during view switches.
+
+### Latest Implementation Notes (2026-03-06, FX final stabilization proof + visible-set health)
+- Added proof mode in `public/explorer.html` behind `?tilefxProof=1` with `window.captureTileFxProof(reason)` snapshots persisted at `window.__tilefx_proof` (view/liveness counters, visualViewport metrics, and top visible tile rows including rect/data-tex/texture state).
+- Added non-recovering FX liveness assertions (`assertTileFxLiveness`) that record the first failure to `window.__tilefx_dbg.firstLivenessFailure` and emit one high-signal error without automatic re-arm/teardown behavior.
+- Added lockstep rect mismatch probing (`computeTileFxRectLockstep`) to compare DOM tile rects, FX mapped rects, and metadata overlay anchors; mismatches >2px are stored in `window.__tilefx_dbg.rectMismatchRows` with HUD summary.
+- Updated fed-set collection in `collectTileFxTiles()` to deterministic visible-first ordering with bounded overscan promotions while scrolling (`visiblePromotedThisPass`) and retained adaptive `collectOverscan`/`maxFed` telemetry.
+- Added visible painter leak diagnostics and per-card `data-visiblePainterLeakCount`; swapped painter leaks now log once per tile in debug with optional toast only when `tilefxPainterToast=1`.
+- Added compact-by-default HUD mode for non-debug runs, plus visible health telemetry (`visibleReady`, `visibleUploading`, `visibleDomOnly`, `visibleSwapped`) and swap release counters (`swapReleaseBlocked`, `swapReleaseAllowed`).
+- Updated `TileFXRenderer` release gating with `_swapReleaseIdleMs` and idle checks so swap clears are blocked during transient churn, favoring stable visible ownership.
+
+### Latest Implementation Notes (2026-03-06, lifecycle invariant guard + proof summary export)
+- Added a hard disable guard in `public/js/explorer-shaders.mjs`: `TileFXRenderer.disable(reason, { allowInFxView = false })` now blocks illegal disable attempts while `window.__explorer_view === 'fx'`, logs stack traces, and records `illegalDisableBlocked`/`lastIllegalDisable` debug metadata.
+- Added `computeTileFxHealthVerdict()` and `window.exportTileFxProofSummary()` in `public/explorer.html` so physical iPhone runs can export a compact proof payload (liveness, visible-set health, swap counters, cache metrics, viewport metrics, and row-level ownership/mismatch snapshots).
+- Added a debug-only `Capture Proof` button (`fxdebug=1&tilefxProof=1`) that triggers proof capture plus summary export in one tap.
+- Added defensive dead-overlay behavior in `assertTileFxLiveness(...)`: first FX liveness failure now hides `#tilefxCanvas` to avoid stale glow overlays when renderer is disabled.
+- HUD compact/expanded output now includes renderer truth labels and health verdict lines (`health: ...`) to make lifecycle invariant failures explicit during runtime verification.
+
+### Latest Implementation Notes (2026-03-06, physical-proof verdict + lockstep aggregate pass)
+- Added `window.logTileFxProofSummary(reason)` in `public/explorer.html` as a read-only proof workflow helper that chains `captureTileFxProof(...)` + `exportTileFxProofSummary()` and logs `[tilefx-proof-summary]` output.
+- Proof export now reports `proofPass`, `deadOverlayHidden`, `deadOverlayReason`, visible mismatch aggregates (`rectMismatchVisibleCount`, `rectMismatchMaxPx`, `rectMismatchAvgPx`), and visible ownership fields (`visibleReadyButNotSwapped`, `visibleSwappedButNoTexture`, `visibleUploadingCount`).
+- `computeTileFxHealthVerdict()` now treats visible-set settle conditions as first-class (`scrollIdleMs` gate) and fails explicitly on ready-not-swapped / swapped-no-texture ownership anomalies.
+- `computeTileFxRectLockstep()` now records per-axis mismatch components (`fxVsDomX/Y`, `overlayVsDomX/Y`) and aggregate mismatch statistics while preserving >2px mismatch capture semantics.
+- `assertTileFxLiveness(...)` now tracks dead-overlay state (`deadOverlayHidden`/`deadOverlayReason`) and resets those markers automatically when FX liveness is healthy again.
+- Added test assertions for the new proof helper/verdict fields and renderer illegal-disable telemetry in `tests/test_public_explorer_program_monitor.py`.
+
+### Latest Implementation Notes (2026-03-06, lifecycle sync authority follow-up)
+- Centralized FX lifecycle transitions in `public/explorer.html` via `syncTileFxLifecycleToView(...)` so both `setView(...)` and `destroyTileFX(...)` share a single authoritative enable/disable/start/stop/clear/restore path.
+- `destroyTileFX(...)` now syncs lifecycle by current view instead of directly disabling renderer state, preserving FX-view disable guard behavior while still allowing explicit non-FX teardown.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` to check for the lifecycle sync helper + setView callsites instead of the removed direct `tileFX.enable('setView:fx')` / `tileFX.disable('setView:non-fx')` strings.
+
+### Latest Implementation Notes (2026-03-06, lifecycle invariant lock pass)
+- Refactored `syncTileFxLifecycleToView(view, reason, opts)` in `public/explorer.html` to be the single authority for FX lifecycle mutation (enable/disable/start/stop/canvas show-hide/restore+clear paths), with `setView(...)` and `destroyTileFX(...)` both routed through that helper.
+- Added `assertTileFxViewLifecycle(reason)` to run immediately after lifecycle sync calls; it force-corrects mismatched runtime state and contains unrecoverable failures through `containTileFxInvariantFailure(...)` (hide canvas + restore DOM swaps + mark dead-overlay fields).
+- Removed runtime liveness assertions from collect/heartbeat cadence so lifecycle assertion is sync-only rather than per-frame/per-scroll noise.
+- Added explicit viewport contract comment and retained visualViewport handlers as resize/collect only (no lifecycle mutation).
+- Tightened renderer-side illegal disable telemetry in `public/js/explorer-shaders.mjs` by logging one stack-bearing console error per illegal-disable streak while still counting every blocked attempt (`illegalDisableBlocked`, `lastIllegalDisable`).
+- Updated static monitor tests for the new lifecycle helper signatures/containment helpers and for lifecycle-authority string checks.
+
+### Latest Implementation Notes (2026-03-06, visible ownership + scroll stability pass)
+- Added renderer ownership authority helpers in `public/js/explorer-shaders.mjs`: `syncVisibleTileOwnership(activeTiles, drawResults, now)` and `getVisibleOwnershipRows(limit)` so swap decisions are based on draw-truth (`wasDrawnThisPass`, valid rect, texture present) instead of cache presence alone.
+- Added stricter swap-release guards to prevent visible tile unswaps: `_restoreUntrackedSwaps(...)` now accepts visible-tile sets and blocks release for currently visible tiles; new telemetry tracks `visibleSwapReleaseBlocked` and `offscreenSwapReleaseAllowed`.
+- Kept lifecycle untouched in hot paths while tightening ownership behavior: post-draw ownership sync runs once per render commit and does not mutate lifecycle enable/disable/RAF state.
+- Tuned fed-set behavior in `collectTileFxTiles()` for coarse-pointer/mobile scroll stability with smaller scrolling caps (`collectOverscan`, `maxFed`, `maxPromoted`) and added `fedVisibleRatio` telemetry.
+- Added compact ownership probe `window.logVisibleTileOwnership(limit)` in `public/explorer.html` for on-device console truth checks of visible tile owner/state/draw/texture/data-tex fields.
+- Added HUD lifecycle stability line (`lifecycleStable`) and surfaced new ownership counters in expanded rows.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the new ownership helper APIs/telemetry and revised fed-set constants.
+
+### Latest Implementation Notes (2026-03-06, renderer behavior finish pass)
+- Tightened thumbnail ownership authority in `public/js/explorer-shaders.mjs` so FX swap now requires draw truth (`visible && hasTexture && wasDrawnThisPass && rectValid`) instead of cache/READY state alone.
+- Changed active/fed tile behavior to block swap release inside `syncVisibleTileOwnership(...)`; swap release is now restricted to untracked tiles only.
+- Hardened `_restoreUntrackedSwaps(...)` with an additional near-visible guard set so release cannot touch currently visible or near-visible tiles.
+- Re-tuned visible-first feed constants in `collectTileFxTiles()` (`overscan`, `maxFed`, `maxPromoted`) and sorted overscan candidates by viewport distance so near-visible tiles warm first and distant gradual takeover is reduced.
+- Kept lifecycle and diagnostics surface unchanged for this pass; changes are renderer behavior + ownership/release policy only.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the tuned constants and updated untracked-swap call signature.
+
+### Latest Implementation Notes (2026-03-06, lifecycle bootstrap deadlock fix)
+- Fixed FX lifecycle bootstrap false-negative in `assertTileFxViewLifecycle(...)`: RAF is now considered healthy when a frame is scheduled (`tileFX.raf > 0`) even before `tileFxDbg.rafRunning` flips true on the first callback.
+- This prevents immediate containment fallback during valid startup, which was hiding the TileFX canvas and restoring DOM swaps before the first render loop tick.
+- Kept renderer architecture/features unchanged; this patch only corrects startup ordering so the existing scan→feed→upload→draw pipeline can proceed.
+
+### Latest Implementation Notes (2026-03-06, thumb painter leak + ownership snapshot fix)
+- Updated `collectTileFxTiles()` painter extraction in `public/explorer.html` so `thumbPaintEls` always includes `.thumb` alongside `img.asset-thumb`, and includes `.thumb .scrim` when present, ensuring swapped thumbnail suppression targets real paint surfaces (not just `<img>` nodes).
+- Updated painter leak detector in `countVisibleThumbPainters(...)` to treat hidden nodes as non-painting even if they still have CSS background values, eliminating false-positive leak reports from hidden thumb wrappers.
+- Expanded `TileFXRenderer.applyDomSwap(...)` background suppression/restoration in `public/js/explorer-shaders.mjs` to snapshot/restore `backgroundImage/background/backgroundColor` per thumb paint node and aggressively neutralize `.thumb` surface paint while swapped.
+- Updated `TileFXRenderer.getVisibleOwnershipRows(limit)` fallback to return current fed tile ownership rows when no per-frame ownership rows are cached yet, so `window.logVisibleTileOwnership(...)` no longer returns an empty snapshot during active FX startup windows.
+- Added one FX-active guard log in `window.logVisibleTileOwnership(...)` when rows are unexpectedly empty while FX is enabled.
+
+### Latest Implementation Notes (2026-03-06, metadata-safe thumb/body split)
+- Refactored grid tile markup in `public/explorer.html` so `.thumb` now contains sibling layers: `.thumb-body` (thumbnail painters only) and `.asset-ui` (metadata + controls), preventing FX thumbnail suppression from hiding metadata.
+- Moved `.asset-overlay`, badges/title/subtitle, selector UI, play button, and preview pill into `.asset-ui` so DOM metadata remains visible/stable while FX swaps thumbnail body ownership.
+- Updated tile painter collection to target `.thumb-body` surfaces (`img.asset-thumb`, body background, `.thumb-body .scrim`) and removed reliance on suppressing `.thumb` as a whole painter surface.
+- Updated painter leak candidate scanning to include `.thumb-body` so leak detection aligns with the new ownership boundary.
+
+### Latest Implementation Notes (2026-03-06, FX lifecycle runtime-truth alignment)
+- Updated lifecycle/health/HUD runtime checks in `public/explorer.html` to treat renderer state as active when either debug flags or live renderer fields indicate activity (`tileFxDbg.enabled || tileFX.enabled`, `tileFxDbg.rafRunning || tileFX.raf > 0`).
+- This removes false `lifecycle_invariant` states caused by debug-field lag while RAF is already scheduled/running and prevents misleading `enabled:0|raf:0` HUD output during valid FX startup.
+- Kept lifecycle authority path unchanged (`syncTileFxLifecycleToView(...)`) and did not add new proof/hud/recovery surfaces.
+- Updated static monitor expectations for the runtime-truth HUD strings in `tests/test_public_explorer_program_monitor.py`.
+
+### Latest Implementation Notes (2026-03-06, visible batch-gated FX entry phase)
+- Added a TileFX entry-phase tracker in `public/js/explorer-shaders.mjs` (`_fxEntryPhase`, `_fxEntryStartedAt`) and mode-transition handling in `setMode(...)` so entering FX starts in `bootstrap` and non-FX modes reset to `steady`.
+- Added `getFxEntryPhase()` to expose renderer entry state to collector/lifecycle callers without coupling to private fields.
+- Updated `syncVisibleTileOwnership(...)` to compute a visible readiness batch (`visibleReadyRatio`) from draw truth (`visible`, `hasTexture`, `wasDrawnThisPass`, `rectValid`) and auto-promote phase to `steady` only when readiness reaches all-visible or at least 80%.
+- During `bootstrap`, visible tile swap commits are blocked (`blockVisibleSwapCommit`) so DOM→FX ownership transfer no longer occurs incrementally row-by-row; visible swaps are now committed as a synchronized batch after readiness threshold.
+- Kept steady-state ownership logic and swap eligibility rules unchanged after phase promotion; this patch only changes FX entry behavior and first-visible commit timing.
+
+### Latest Implementation Notes (2026-03-07, strict visible-batch FX entry completion)
+- Replaced the single bootstrap phase with explicit phase sequencing in `public/js/explorer-shaders.mjs`: `bootstrap_collect` → `bootstrap_ready` → `bootstrap_commit` → `steady`.
+- Tightened bootstrap exit to require **100% readiness** of the captured visible bootstrap set (`visible + hasTexture + wasDrawnThisPass + rectValid`) before entering commit; removed the prior >=80% ready promotion behavior.
+- Added bootstrap visible-set stabilization (`_bootstrapVisibleTileEls`) and forced DOM ownership reset at bootstrap collect so visible tiles do not partially swap during entry.
+- Implemented grouped visible-batch commit in `bootstrap_commit` (`applyDomSwap(..., true, 'bootstrap:batch-commit')`) so visible ownership switches coherently instead of row-order stagger.
+- Froze offscreen promotion before steady by updating `collectTileFxTiles()` to detect non-steady entry phase and run visible-only collection (`maxPromoted = 0`, overscan loop break, minimal overscan).
+- Protected bootstrap visible tiles from untracked cleanup release by extending `_restoreUntrackedSwaps(...)` with a protected tile set and blocking release while phase is non-steady.
+
+### Latest Implementation Notes (2026-03-07, steady-state visible ownership discipline)
+- Tightened TileFX steady behavior in `public/js/explorer-shaders.mjs` with an explicit visible-lock rule: visible draw-valid tiles in `steady` are force-kept FX-owned (`steady:visible-lock`) and do not drift back to DOM because of offscreen/queue churn.
+- Added steady mismatch correction for visible swapped tiles that lose draw-truth (`steady:draw-truth-lost`) so invalid visible FX ownership is corrected on the next sync pass instead of persisting.
+- Kept ownership sync order visible-first: visible ownership decisions are still applied before `_restoreUntrackedSwaps(...)` cleanup in render commit flow.
+- Hardened swap release policy in `_restoreUntrackedSwaps(...)`: visible release remains blocked, while near-visible release now requires stronger hold windows (`_swapReleaseNearVisibleIdleMs`, `_swapReleaseNearVisibleDelayFrames`, `_swapReleaseNearVisibleDelayMs`) before release is allowed.
+- Reduced steady-state warming churn in `collectTileFxTiles()` with more conservative non-bootstrap feed constants (lower steady overscan/maxFed/maxPromoted, especially for coarse-pointer/mobile) to prioritize visible stability under scroll-stop-scroll patterns.
+
+### Latest Implementation Notes (2026-03-07, visible ownership truth-path repair)
+- Fixed `window.logVisibleTileOwnership(limit)` in `public/explorer.html` to treat empty rows in active FX view with visible DOM cards as an ownership-truth bug (`visibleDomCards > 0 && rows.length === 0`) and return summary flags (`visibleDomCards`, `ownershipTruthBug`) without adding new HUD/diagnostic surfaces.
+- Updated `TileFXRenderer.getVisibleOwnershipRows(limit)` in `public/js/explorer-shaders.mjs` to prefer a current visible DOM-set scan (`_collectVisibleDomOwnershipRows(...)`) before falling back to cached rows, preventing stale/empty cache returns when visible cards are present.
+- Added per-frame draw-truth retention map (`_lastDrawByTileEl`) and wired render-pass updates so visible ownership rows can include current-frame truth even when cache rows are not yet populated.
+- Expanded ownership row shape to include compact inspection fields required for visible truth checks: `fed`, `rectValid`, and `swapState` alongside existing state/owner/texture fields.
+- Kept the fix scoped to ownership truth path only (no new proof exporters/HUD panels/recovery loops), and updated static assertions in `tests/test_public_explorer_program_monitor.py` accordingly.
+
+### Latest Implementation Notes (2026-03-07, dual-owner collapse using live visible ownership truth)
+- Added `_reconcileVisibleOwnerFromTruth(...)` in `public/js/explorer-shaders.mjs` to make visible ownership decisions binary and deterministic from draw-truth, collapsing visible tiles immediately to DOM or FX ownership without lingering mixed states.
+- Updated `syncVisibleTileOwnership(...)` to route visible ownership transitions through the reconcile helper for both steady visible-lock and draw-truth-loss correction paths, preventing mixed visible owner persistence across frames.
+- Tightened bootstrap visible-set stability by removing recapture-on-empty behavior during non-steady phases; bootstrap now keeps the captured visible set intersection and avoids incremental visible claiming resets that can reintroduce top-to-bottom takeover feel.
+- Kept ownership hot-path order unchanged (visible ownership sync before untracked cleanup) and limited this pass to behavior correction using existing ownership truth surfaces.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the reconcile helper wiring and steady ownership reason markers.
+
+### Latest Implementation Notes (2026-03-07, abstraction compression + visible FX ownership maturation)
+- Compressed lifecycle mental model in `public/js/explorer-shaders.mjs` with `getFxLifecycleStage()` and `_isEnteringPhase()` so runtime behavior reads as `entering` vs `steady` while preserving internal bootstrap sub-phases as implementation detail.
+- Kept bootstrap coherent-batch entry and added a guarded fallback commit path (`>=90% ready` after 1200ms) with inline comment, so one stalled visible tile on iPhone no longer blocks all visible FX ownership forever.
+- Added bootstrap empty-set escape (`bootstrap_ready` with zero captured visible tiles advances to `steady`) to avoid getting stuck in entering state with permanent DOM ownership.
+- Updated debug visible counters (`visibleReady`, `visibleSwapped`, `visibleDomOnly`, `visibleUploading`) to derive from current visible ownership rows rather than global tile-state counts, making ownership health reflect on-screen truth.
+- Preserved DOM metadata ownership (`.asset-ui`) and existing visible ownership reconcile path (`_reconcileVisibleOwnerFromTruth(...)`) while keeping hot-path ordering unchanged (visible ownership resolution before untracked cleanup).
+
+### Latest Implementation Notes (2026-03-07, visible upload/draw pipeline unblock)
+- Identified the first visible FX-maturity blocker in `public/js/explorer-shaders.mjs` as upload-drain gating: `_drainPendingUploads(...)` could early-return when global ready counts looked sufficient even while currently visible tiles still lacked textures.
+- Updated `_drainPendingUploads(...)` to compute `visibleMissingTextures` from the current visible tile set and skip the idle ready-count early-return while visible tiles remain texture-missing.
+- Added `visibleMissingTextures` runtime telemetry in `window.__tilefx_dbg` for existing diagnostics consumption (no new HUD/proof surfaces).
+- Hardened `_resolveTileSource(tile)` with fallback-to-`thumbSrc` when an image node exists but has no usable URL yet, preventing silent source stalls for visible cards that still carry non-img resolved thumb sources.
+- Kept ownership policy/reconcile semantics unchanged for this pass; changes are targeted to source→upload→texture→draw maturation path only.
+- Follow-up in same pass: queued visible tile uploads directly in `_render(...)` before rect-valid draw gating (`if (key && visible && !textureCache.has(key)) _queueTileImageUpload(...)`) so temporarily invalid visible rects no longer block source/upload progression.
+
+### Latest Implementation Notes (2026-03-07, visible FX ownership truth verification + tiny cleanup)
+- Verified the real explorer runtime truth loop (enter FX → settle → short scroll → stop) against `/public/explorer.html` and confirmed visible FX maturation is now occurring (`hasTexture:true`, `wasDrawnThisPass:true`, `owner:"FX"`) from `window.logVisibleTileOwnership(12)` output.
+- Captured proof summary/runtime slice showing `visibleReady:1`, `visibleSwapped:1`, `visibleDomOnly:0`, `visibleMissingTextures:0` for the sampled settled run; no `dual_owner` was observed in the sampled visible rows.
+- Per follow-up cleanup guidance, removed one redundant in-draw `_queueTileImageUpload(tile, key)` call in `_render(...)` now that visible upload-first queueing runs earlier (before rect-valid gating); behavior remains upload-first and texture progression is unchanged.
+- Kept scope narrow: no new abstractions, proof systems, or telemetry surfaces were added in this pass.
+
+### Latest Implementation Notes (2026-03-07, lifecycle dead-state elimination in FX view)
+- Fixed the core contradiction in `public/explorer.html` lifecycle sync: FX view can no longer silently settle with a dead renderer (`enabled:0`, `raf:0`) as a “contained” steady state.
+- Updated `assertTileFxViewLifecycle(...)` to use live runtime truth (`tileFX.enabled`, `tileFX.raf`) for startup checks and to retry one RAF before declaring a fatal lifecycle failure.
+- Kept containment for true failures only and added explicit fatal exit (`forceExitFxAfterFatalLifecycle(...)`) that cleanly switches back to grid/DOM-safe mode instead of leaving `view === 'fx'` while renderer is stopped.
+- Updated `syncTileFxLifecycleToView(...)` to return assertion truth in FX mode, keeping lifecycle authority behavior explicit.
+- Pruned the top of `docs/todo/AGENTS.md` to behavior-first lifecycle tasks and collapsed repeated proof-capture chores into a deferred section.
+
+### Latest Implementation Notes (2026-03-07, visible pending upload starvation fix)
+- Found the next concrete post-lifecycle blocker in the visible pipeline: pending upload drain order could spend frame budget on non-visible work before visible pending keys, leaving visible cards texture-missing/DOM-only under queue pressure.
+- Updated `_drainPendingUploads(...)` in `public/js/explorer-shaders.mjs` to build a visible-first pending work list (`visiblePendingKeys` then `otherPendingKeys`) so visible tiles get upload attempts first each drain cycle.
+- Updated `_queueTileImageUpload(...)` image prep path to prefer preparing the existing DOM `img` element first (including load wait) and only fall back to URL preload when the element prep fails and a URL exists.
+- Kept scope narrow to source→queue→upload→texture maturity; no new proof/HUD/watchdog surfaces were added in this pass.
+
+### Latest Implementation Notes (2026-03-07, single-visible-card source/upload maturity)
+- Narrowed the next blocker to the seeded 1-visible-card path: lifecycle remains alive, but the card could stay DOM-only when image-source prep stalled before texture upload.
+- Adjusted `_queueTileImageUpload(...)` so `img` kind prep is deterministic for visible cards: use DOM image when immediately usable, otherwise preload via URL first and only fall back to DOM image prep if URL preload fails.
+- Retained visible-first pending drain ordering in `_drainPendingUploads(...)` so single visible keys are serviced before non-visible warm items.
+- Added minimal runtime pipeline breadcrumb (`window.__tilefx_dbg.lastVisiblePipeline`) and row `pipeline` reflection for existing ownership rows, without adding new HUD/proof/toast/watchdog surfaces.
+
+### Latest Implementation Notes (2026-03-07, queue-stage fix in collector path)
+- Confirmed the seeded single-card runtime key/source binding is valid (`ingest/originals/img0.jpg` with thumbnail URL/currentSrc) and that prior null diagnostics were caused by detached context, not missing DOM card data.
+- Fixed queue-stage gating by allowing visible upload queueing from `updateTiles(...)` (collector-fed path) so a visible texture-missing tile can enter `_queueTileImageUpload(...)` even when render-loop visibility gating is stale.
+- Triggered `_drainPendingUploads(...)` from `updateTiles(...)` after visible queueing so queued visible work can progress without waiting for later render-loop timing.
+- Kept the patch narrow to queue/drain stage progression; no new HUD/proof/toast/watchdog surfaces were added.
+- Runtime in this container still reports `tileFX.gl` unavailable / renderer failed in headless Firefox (`glReady:false`, `failed:true`), which prevents texture creation/draw ownership confirmation in this environment despite queue-path changes.
+
+### Latest Implementation Notes (2026-03-07, queue truth reflection + null-texturecache guard)
+- Found a concrete queue-path defect after binding to the real visible key: `_queueTileImageUpload(...)` still dereferenced `this.textureCache.has(key)` even when texture cache was unavailable, preventing reliable queue insertion for the seeded visible key path.
+- Fixed `_queueTileImageUpload(...)` guard to use null-safe cache checks (`this.textureCache?.has?.(key)`), allowing queue state to populate even before texture cache initialization.
+- Fixed queue truth reflection for visible ownership rows by adding `queued` from `_pendingUploads.has(key)` in `getVisibleOwnershipRows(...)` / `_collectVisibleDomOwnershipRows(...)` payloads.
+- Fixed render-path pipeline metadata writeback bug (`key` undefined in `_lastDrawByTileEl` snapshot) by binding pipeline stage to `meta.key`.
+- Runtime truth now shows queue as real for the seeded key (`inPendingUploads:true`, `queued:true`), with next blocker moved to downstream drain/texture in this headless environment (`WEBGL_UNAVAILABLE`).
+
+## 2026-03-07 — Seeded drain-stage settlement pass (new)
+- Narrowed the follow-up to the proven next stage (`drain`) for seeded key `ingest/originals/img0.jpg`; avoided lifecycle/bootstrap/ownership policy churn in this pass.
+- Hardened `TileFXRenderer._drainPendingUploads(...)` to settle pending uploads into a terminal failure when FX drain is unavailable (e.g., `WEBGL_UNAVAILABLE`), preventing perpetual in-flight hangs.
+- Added per-key drain trace truth (`drainEvaluated`, `drainAttempted`, `failureReason`) and threaded it into existing ownership/live-state readouts for truthful runtime debugging without adding new HUD/proof systems.
+- Added `getUploadLiveState(key)` to report pending/in-flight/texture terminal truth for the seeded runtime key checks.
+- Seeded runtime check now advances beyond drain in headless run: `inPendingUploads:false`, `inUploadInFlight:false`, `inTextureCache:true`, row shows `hasTexture:true`, `wasDrawnThisPass:true`, `owner:"FX"`.
+
+## 2026-03-07 — Multi-visible entry coherence pass (new)
+- Advanced from seeded single-card proof to multi-visible viewport stability checks using the same runtime truth path (`window.logVisibleTileOwnership(...)`).
+- Updated bootstrap entry behavior in `TileFXRenderer.syncVisibleTileOwnership(...)` to commit only when the captured bootstrap-visible set is fully ready (`bootstrapReady === bootstrapTotal`), removing the partial 90% fallback commit that could leave mixed visible DOM/FX ownership after entry.
+- Verified in-container multi-visible run that multiple visible rows matured to `hasTexture:true`, `wasDrawnThisPass:true`, and `owner:"FX"`, with no persistent `dual_owner` rows after settle.
+- Verified short scroll-stop cycles (down/stop, up/stop) preserved visible FX ownership stability without persistent edge flip-flop rows.
+- Kept scope narrow: no new lifecycle architecture, HUD/proof/toast/watchdog/screenshot tooling added.
+
+## 2026-03-07 — Post-proof cleanup pass (new)
+- Kept scope on device-parity readiness and cleanup only; no new HUD/proof/toast/watchdog/screenshot surfaces were introduced.
+- Removed dead pending-upload cleanup code in `TileFXRenderer.destroy()` that referenced legacy `pending.img/onLoad/onError` listeners no longer attached by the current queue pipeline.
+- Removed unused `pending.promise` field/assignments from `_queueTileImageUpload(...)`; queue prep still runs identically via direct promise chains.
+- Preserved strict bootstrap-visible batch commit (`bootstrapReady === bootstrapTotal`) and re-validated multi-visible scroll-stop stability in-container.
+- Updated `docs/todo/AGENTS.md` top section to a concise post-proof checklist (real iPhone parity + one final concrete visual issue).
+
+## 2026-03-07 — Device parity support handoff (new)
+- Shifted focus from container-only refinement to a physical iPhone Safari parity run using existing truth surfaces only.
+- Locked handoff commands to `window.logVisibleTileOwnership(12)` and `window.exportTileFxProofSummary?.()` before/after a short scroll-stop cycle.
+- Explicitly deferred further renderer changes until one concrete on-device issue is observed, to avoid speculative complexity growth.
+
+## 2026-03-07 — Health verdict + domSwap/leak reconciliation pass (new)
+- Fixed verdict-layer mismatch where healthy visible FX ownership could still show `health: dual_owner` by prioritizing current visible truth in `computeTileFxHealthVerdict()`.
+- Updated DOM swap validity checks to evaluate currently swapped tiles and thumb-body paint leakage instead of unrelated card-shell CSS, reducing stale `domSwapOk` contradictions.
+- Tightened `countVisibleThumbPainters(...)` to count only actual paint contributors (visible media/background with drawable area), reducing false-positive leak noise.
+- Cleared stale leak counters when no swapped tiles are present to prevent historical leak state from contaminating current verdicts.
+- Kept solved layers frozen (lifecycle/queue/drain/texture/draw/ownership pipeline unchanged) and limited this pass to truth reconciliation + detector noise reduction.
+
+## 2026-03-07 — Visible placeholder ownership policy pass (new)
+- Found the remaining visible fallback path in `collectTileFxTiles()` / tile `onTextureReady(...)`: non-ready cards could drop to `data-tex="0"`, exposing full DOM thumbnail bodies during FX mode.
+- Updated policy so FX-visible and FX-near-visible non-ready cards use `data-tex="pending"` (placeholder) instead of full DOM thumb body; only fully culled cards clear back to `0`.
+- Added explicit placeholder CSS for `data-tex="pending"` that hides thumb-body painter nodes and shows a lightweight FX placeholder gradient while keeping `.asset-ui` metadata DOM-owned.
+- Kept solved pipeline/lifecycle layers unchanged and limited this pass to visible ownership paint policy + warm re-entry retention.
+
+## 2026-03-07 — Full visible-window coherence pass (new)
+- Remaining mixed-window issue was a timing gap: some visible cards stayed `data-tex="0"` until collector ownership assignment ran, producing partial top/bottom FX takeover perception.
+- Added `markVisibleFxWindowPending('setView:fx')` in `setView(...)` after render to immediately stamp currently visible cards to `pending` unless already texture-owned.
+- Updated collector visible assignment to set `pending` in FX view without waiting on `window.__tilefx_enabled` timing, ensuring visible cards resolve to placeholder or texture consistently.
+- In-container runtime check now shows immediate coherent visible window on entry (`pending` for all visible cards, `zero` none) before texture maturation.
+
+## 2026-03-08 — Near-visible pre-cull tracking fix (new)
+- Addressed PR #94 review feedback in `public/js/explorer-shaders.mjs`: `nearVisibleTileEls` is now populated before the visible-only cull path returns.
+- Kept ownership semantics tight: `visibleTileEls` still receives only truly visible tiles while near-visible edge tiles remain eligible for `_restoreUntrackedSwaps(...)` hysteresis protection.
+- Preserved existing non-visible render candidate culling (`if (!visible) return;`) so rendering behavior remains unchanged outside this tracking fix.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to assert near-visible registration occurs before the visible-cull return.
+
+## 2026-03-08 — Non-FX disable warning-noise cleanup (new)
+- Investigated console spam path and confirmed `[tilefx] DISABLE sync:setView:non-fx` is a legitimate call from `setView(...)`/startup non-FX transitions, not an illegal lifecycle breach.
+- Updated `TileFXRenderer.disable(...)` logging policy: legal disables are now debug-level (`fxdebug=1` only) and no longer emit warning stack traces; illegal disable attempts while view is still FX continue to emit error-level logs with stack and are blocked.
+- Preserved lifecycle semantics and scope (no ownership/drain/watchdog architecture changes), while retaining `window.__tilefx_dbg.lastDisable` bookkeeping for truth inspection.
+- Removed redundant startup `setView('grid')` invocation when already in grid mode after initial refresh, preventing duplicate legitimate disable calls from polluting console output.
+- Added/updated tests to lock the new policy and startup guard behavior.
+
+## 2026-03-08 — Pending-to-texture pipeline stall fix (new)
+- Investigated the remaining visual defect (cards stuck `data-tex="pending"`) as a texture-readiness pipeline issue, separate from lifecycle/logging.
+- Identified the concrete gate in `public/js/explorer-shaders.mjs`: `tile.onTextureReady(...)` ran only inside the visible+rect-valid draw path, so cards could keep placeholder ownership even when cache texture truth was already ready.
+- Updated renderer ordering so per-tile cache truth (`entry?.texture`) drives `onTextureReady(...)` before visible/rect culls; draw culling and swap eligibility remain unchanged.
+- Resulting behavior: fed visible/near-visible tiles now receive readiness promotion to `data-tex="1"` as soon as texture exists, instead of waiting for draw-eligibility timing.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to lock callback-before-cull ordering.
+
+## 2026-03-08 — Visible thumb-body ownership policy cleanup (new)
+- Followed up after verdict/logging fixes and targeted the remaining patchy visual layer: some visible cards could still show normal DOM thumb bodies during FX mode while neighbors were FX/placeholder.
+- Root cause at policy layer: placeholder painter suppression was keyed only to `data-tex="pending"`, so transient non-texture states in near-visible FX window could leak full DOM thumb body paint.
+- Tightened CSS ownership policy in `public/explorer.html`: any `data-fx-near-visible="1"` card that is not `data-tex="1"` now suppresses thumb-body/thumb-image painters and shows the existing FX placeholder treatment.
+- Kept `.asset-ui` and card structure fully DOM-owned (titles/subtitles/badges/selectors/affordances unchanged); no lifecycle, queue, or renderer architecture changes were made.
+- Added test coverage in `tests/test_public_explorer_program_monitor.py` for the near-visible non-textured placeholder selector.
+
+## 2026-03-08 — Feed pipeline starvation fix after policy stabilization (new)
+- Investigated the “renderer alive but uploads/cache/swap all zero” state as a collect→feed pipeline continuity issue (not lifecycle/logging/UI ownership).
+- Found the blocking gate in `TileFXRenderer._render(...)`: non-null-safe `this.textureCache.has/get` reads could execute before cache bootstrap was guaranteed, tripping render-loop failure and preventing ongoing tile feed progression.
+- Switched render feed/cache reads to null-safe access (`this.textureCache?.has?.(key)`, `this.textureCache?.get?.(key, now)`) so fed tiles still queue and advance while cache initialization catches up.
+- Kept scope minimal: no card overlay changes, no lifecycle architecture changes, no new debug subsystems.
+- Added regression assertions in `tests/test_public_explorer_program_monitor.py` for null-safe texture-cache usage in render path.
+
+## 2026-03-08 — Proof export stale-capture guard (new)
+- Accepted settled runtime evidence that FX feed/upload/cache/swap pipeline is alive; stopped treating renderer pipeline as the active blocker in this pass.
+- Identified remaining contradiction as truth-surface timing: `exportTileFxProofSummary()` could export an older non-settled `window.__tilefx_proof` snapshot while runtime was already FX-enabled and drawing.
+- Added a narrow refresh guard in `exportTileFxProofSummary()` to re-capture proof (`captureTileFxProof('export:refresh')`) when runtime indicates active FX but captured proof indicates non-running/zero-visible state.
+- Kept fix scoped to proof snapshot consistency only (no lifecycle, queue/drain, or UI ownership rewrites).
+- Added regression assertion in `tests/test_public_explorer_program_monitor.py` for the export refresh line.
