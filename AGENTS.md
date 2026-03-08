@@ -1697,3 +1697,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `markVisibleFxWindowPending('setView:fx')` in `setView(...)` after render to immediately stamp currently visible cards to `pending` unless already texture-owned.
 - Updated collector visible assignment to set `pending` in FX view without waiting on `window.__tilefx_enabled` timing, ensuring visible cards resolve to placeholder or texture consistently.
 - In-container runtime check now shows immediate coherent visible window on entry (`pending` for all visible cards, `zero` none) before texture maturation.
+
+## 2026-03-08 — Near-visible pre-cull tracking fix (new)
+- Addressed PR #94 review feedback in `public/js/explorer-shaders.mjs`: `nearVisibleTileEls` is now populated before the visible-only cull path returns.
+- Kept ownership semantics tight: `visibleTileEls` still receives only truly visible tiles while near-visible edge tiles remain eligible for `_restoreUntrackedSwaps(...)` hysteresis protection.
+- Preserved existing non-visible render candidate culling (`if (!visible) return;`) so rendering behavior remains unchanged outside this tracking fix.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to assert near-visible registration occurs before the visible-cull return.

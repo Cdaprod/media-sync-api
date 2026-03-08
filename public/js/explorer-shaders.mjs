@@ -2333,12 +2333,12 @@ export class TileFXRenderer {
         // Fed tiles are upload-first: queue texture prep even if visibility/rect state is temporarily stale.
         this._queueTileImageUpload(tile, key);
       }
+      if (tileEl) {
+        if (nearVisible) nearVisibleTileEls.add(tileEl);
+        if (visible) visibleTileEls.add(tileEl);
+      }
       if (!rectValid) return;
       if (!visible) return;
-      if (tileEl) {
-        visibleTileEls.add(tileEl);
-        if (nearVisible) nearVisibleTileEls.add(tileEl);
-      }
       if (this.debugRectsEnabled) debugRects.push({ left: localLeft, top: localTop, width: localRight - localLeft, height: localBottom - localTop });
 
       const color = this._typeColor(tile.type);

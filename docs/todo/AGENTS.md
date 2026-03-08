@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-08 — Near-visible tracking before visible cull (active)
+- [x] Moved near-visible set membership so edge tiles are tracked before the visible-only render-candidate cull.
+- [x] Kept `visibleTileEls` restricted to actually visible tiles.
+- [x] Preserved non-visible render candidate early return behavior.
+- [x] Added a regression test that asserts near-visible registration occurs before `if (!visible) return;`.
+- [ ] Re-run physical iPhone short scroll-stop cycle to confirm edge tiles remain under near-visible swap-hold hysteresis after leaving viewport.
+
 ## 2026-03-07 — Full visible-window FX coherence (active)
 - [x] Identified remaining mixed-window cause: visible cards could stay plain grid-style before first collect pass because placeholder ownership was applied incrementally from collector timing.
 - [x] Added immediate visible-window pending stamp on FX entry (`markVisibleFxWindowPending('setView:fx')`) so currently visible cards become `pending` or `1`, not `0`.

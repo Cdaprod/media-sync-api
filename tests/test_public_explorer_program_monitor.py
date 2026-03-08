@@ -557,6 +557,15 @@ def test_explorer_shared_renderer_singleton_symbols_present():
     assert 'if (this.container && RENDERERS.has(this.container)) RENDERERS.delete(this.container);' in shader_module
 
 
+def test_explorer_near_visible_tracking_happens_before_visible_cull():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    near_idx = shader_module.index('if (nearVisible) nearVisibleTileEls.add(tileEl);')
+    visible_cull_idx = shader_module.index('if (!visible) return;', near_idx)
+    visible_add_idx = shader_module.index('if (visible) visibleTileEls.add(tileEl);', near_idx)
+    assert near_idx < visible_cull_idx
+    assert visible_add_idx < visible_cull_idx
+
+
 
 
 def test_explorer_asset_css_visual_animation_is_minimized():
