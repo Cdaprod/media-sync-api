@@ -1743,3 +1743,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added `public/js/explorer-mock-assets.mjs` with explicit mock activation detection (`?mock=1` or `window.__EXPLORER_MOCK__`), fixture loading, normalization, and deterministic embedded fallback generation.
 - Added `public/fixtures/explorer-mock-assets.json` as a baseline fixture payload for explorer-side mock data workflows.
 - Kept this pass scoped to asset-mock data plumbing only; no API contract or backend storage behavior changes.
+
+## 2026-03-08 — Explorer mock-mode early boot short-circuit (new)
+- Root cause of preview failure: `DOMContentLoaded` always entered API-first `refreshExplorerData()` (`/api/sources`, `/api/projects`) before any mock takeover, so preview/webview hosts surfaced boot error cards and stayed empty.
+- Added early boot mock routing in `public/explorer.html`: explicit mock activation now runs before API boot, with direct mock source/project/media hydration and API boot bypass.
+- Added preview fallback guard for local embedded preview contexts (`window.opener` / iframe + local host) so API boot errors in editor previews reroute to mock hydration instead of showing source/project failure toasts.
+- Expanded mock activation helper in `public/js/explorer-mock-assets.mjs` to include common webview protocols (`vscode-webview:`, `capacitor:`, `ionic:`) in addition to `file:` and explicit flags.
+- Preserved deployed safety by keeping real `http/https` non-preview boot on API path unless explicit mock activation is requested.

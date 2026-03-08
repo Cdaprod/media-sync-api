@@ -1892,6 +1892,7 @@
 
   <script type="module">
     import { AssetFX, ExplorerShaders, TileFXRenderer } from './js/explorer-shaders.mjs';
+    import { isLikelyPreviewEnvironment, loadExplorerMockAssets, normalizeExplorerMockAsset, shouldUseExplorerMocks } from './js/explorer-mock-assets.mjs';
 
     void ExplorerShaders;
     // -------------------------
@@ -1935,6 +1936,7 @@
       activeProject: null,   // {name, source, ...}
       media: [],             // items from /media
       mediaScope: 'project', // project|all
+      mockMode: false,
       view: 'grid',          // fx|grid|list
       q: '',
       filters: {
@@ -4618,18 +4620,71 @@
     // -------------------------
     // Fetchers
     // -------------------------
-    async function loadSources(){
+    function mockSourceRecordsFor(media = []){
+      const names = new Set(media.map((item) => String(item.project_source || item.source || 'primary')));
+      if (!names.size) names.add('primary');
+      return Array.from(names).sort().map((name) => ({
+        name,
+        root: '/mock',
+        type: 'mock',
+        enabled: true,
+        accessible: true,
+      }));
+    }
+
+    function mockProjectRecordsFor(media = []){
+      const map = new Map();
+      media.forEach((item) => {
+        const name = String(item.project_name || item.project || '').trim();
+        if (!name) return;
+        const source = String(item.project_source || item.source || 'primary');
+        map.set(`${source}::${name}`, {
+          name,
+          source,
+          instructions: 'Mock preview project',
+        });
+      });
+      return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    async function activateMockMode(reason = 'explicit'){
+      const rawAssets = await loadExplorerMockAssets();
+      const mockAssets = rawAssets.map((asset) => normalizeExplorerMockAsset(asset));
+      state.mockMode = true;
+      state.activeProject = null;
+      state.mediaScope = 'all';
+      state.sources = mockSourceRecordsFor(mockAssets);
+      state.projects = mockProjectRecordsFor(mockAssets);
+      state.media = sortMediaByRecent(mockAssets);
+      clearSelectionState();
+      state.focused = null;
+      el('uploadBtn').disabled = true;
+      el('uploadCaption').textContent = 'Mock preview mode (uploads disabled)';
+      el('uploadStatus').textContent = `Loaded ${state.media.length} mock assets`;
+      renderSources();
+      renderProjects();
+      updateMediaMeta();
+      renderMedia();
+      updateTopCounts();
+      updateSelectionUI();
+      renderMoveTargets();
+      toast('good', 'Mock mode', `Preview dataset loaded (${reason})`);
+    }
+
+    async function loadSources({ suppressErrorToast = false } = {}){
       try{
         const r = await fetch(`${API}/api/sources`);
         if (!r.ok) throw new Error('Failed to list sources');
         state.sources = await r.json();
         renderSources();
+        return state.sources;
       }catch(e){
-        toast('bad','Sources', e.message);
+        if (!suppressErrorToast) toast('bad','Sources', e.message);
+        throw e;
       }
     }
 
-    async function loadProjects(){
+    async function loadProjects({ suppressErrorToast = false } = {}){
       try{
         const r = await fetch(`${API}/api/projects`);
         if (!r.ok) throw new Error('Failed to list projects');
@@ -4637,8 +4692,10 @@
         renderProjects();
         updateTopCounts();
         renderMoveTargets();
+        return state.projects;
       }catch(e){
-        toast('bad','Projects', e.message);
+        if (!suppressErrorToast) toast('bad','Projects', e.message);
+        throw e;
       }
     }
 
@@ -5450,9 +5507,13 @@
     // -------------------------
     // Events / bindings
     // -------------------------
-    async function refreshExplorerData({ toastOnSuccess = true } = {}){
-      await loadSources();
-      await loadProjects();
+    async function refreshExplorerData({ toastOnSuccess = true, suppressErrorToast = false } = {}){
+      if (state.mockMode) {
+        await activateMockMode('refresh');
+        return;
+      }
+      await loadSources({ suppressErrorToast });
+      await loadProjects({ suppressErrorToast });
       if (state.activeProject) await loadMedia();
       else await loadAllMedia();
       if (toastOnSuccess) toast('good','Refresh','Reloaded projects + media');
@@ -6042,8 +6103,22 @@
       const mq = window.matchMedia('(max-width: 860px)');
       if (typeof mq.addEventListener === 'function') mq.addEventListener('change', () => syncSidebarMode());
       else if (typeof mq.addListener === 'function') mq.addListener(() => syncSidebarMode());
-      toast('good','Boot','Loading sources + projects…');
-      await refreshExplorerData({ toastOnSuccess: false });
+      const explicitMock = shouldUseExplorerMocks();
+      if (explicitMock) {
+        await activateMockMode('activation');
+      } else {
+        toast('good','Boot','Loading sources + projects…');
+        try {
+          await refreshExplorerData({ toastOnSuccess: false, suppressErrorToast: true });
+        } catch (error) {
+          if (isLikelyPreviewEnvironment()) {
+            await activateMockMode('preview-fallback');
+          } else {
+            toast('bad', 'Boot', error?.message || 'Failed to load explorer data');
+            throw error;
+          }
+        }
+      }
       if (state.view !== 'grid') setView('grid');
       updateTopCounts();
       updateSelectionUI();

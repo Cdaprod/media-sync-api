@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-08 — Explorer mock boot bypass for preview/webview (active)
+- [x] Identified root cause: explorer boot still executed API-first `refreshExplorerData()` before mock activation, so preview hosts surfaced sources/projects failure toasts and never entered mock render flow.
+- [x] Moved mock decision to early boot gate: explicit mock/file/webview protocol now routes directly into mock state hydration before API source/project fetch calls.
+- [x] Added preview fallback routing for local embedded/webview contexts (`window.opener` / iframe on local host) to bypass API boot failures and hydrate mock data.
+- [x] Kept deployed safety: non-preview real `http/https` boot path still uses API and does not silently fall back unless preview heuristics match.
+- [x] Added regression assertions in `tests/test_public_explorer_program_monitor.py` for early mock boot short-circuit and preview detection helpers.
+- [ ] Validate on iOS editor preview that boot failure cards no longer appear and mock assets render immediately.
+
 ## 2026-03-08 — Proof snapshot stale-capture reconciliation (active)
 - [x] Accepted runtime confirmation that core FX pipeline is live (feed/upload/cache/swap no longer primary blocker).
 - [x] Narrowed remaining contradiction to proof export timing: stale non-settled captures could be exported while runtime was already settled in FX.

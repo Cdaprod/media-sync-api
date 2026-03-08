@@ -2,6 +2,19 @@ const MOCK_PARAM = 'mock';
 const FIXTURE_PARAM = 'fixture';
 const DEFAULT_FIXTURE = 'explorer-mock-assets';
 
+const WEBVIEW_PROTOCOLS = new Set(['file:', 'vscode-webview:', 'capacitor:', 'ionic:']);
+
+function hostLooksLocal(hostname = '') {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return false;
+  return host === 'localhost'
+    || host === '127.0.0.1'
+    || host === '0.0.0.0'
+    || host.endsWith('.local')
+    || host.endsWith('.localhost')
+    || host.endsWith('.test');
+}
+
 function queryParams() {
   try {
     return new URLSearchParams(window.location.search || '');
@@ -98,7 +111,15 @@ export function shouldUseExplorerMocks() {
   const params = queryParams();
   const explicit = params.get(MOCK_PARAM) === '1' || window.__EXPLORER_MOCK__ === true;
   if (explicit) return true;
-  return String(window.location.protocol || '') === 'file:';
+  return WEBVIEW_PROTOCOLS.has(String(window.location.protocol || '').toLowerCase());
+}
+
+export function isLikelyPreviewEnvironment() {
+  const protocol = String(window.location.protocol || '').toLowerCase();
+  if (WEBVIEW_PROTOCOLS.has(protocol)) return true;
+  if (window.opener && hostLooksLocal(window.location.hostname)) return true;
+  if (window.top !== window.self && hostLooksLocal(window.location.hostname)) return true;
+  return false;
 }
 
 export async function loadExplorerMockAssets() {

@@ -607,7 +607,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'function inNoPreviewZone(target)' in html
     assert "if (inNoPreviewZone(event.target)) return;" in html
     assert "target.closest('[data-no-preview], .sel-ui')" in html
-    assert 'async function refreshExplorerData({ toastOnSuccess = true } = {})' in html
+    assert 'async function refreshExplorerData({ toastOnSuccess = true, suppressErrorToast = false } = {})' in html
     assert "<button id=\"viewFx\" class=\"active\" type=\"button\">FX</button>" in html
     assert "if (typeof cardFX?.setDissolveMode === 'function') {" in html
     assert "cardFX.setDissolveMode('tile');" in html
@@ -634,7 +634,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert "`mode: ${state.view} | enabled: ${runtimeEnabled ? '1' : '0'} | raf: ${runtimeRafRunning ? '1' : '0'}`" in html
     assert "console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');" in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
-    assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
+    assert "await refreshExplorerData({ toastOnSuccess: false, suppressErrorToast: true });" in html
     assert "if (state.view !== 'grid') setView('grid');" in html
     assert 'if (ui.inspectorOpen) {' in html
     assert 'state.focused = null;' in html
@@ -749,6 +749,28 @@ def test_explorer_selection_click_is_scoped_to_sel_ui_only():
     assert 'class="selector sel-ui"' in html
     assert "const selUi = event.target.closest('.sel-ui[data-no-preview=\"1\"]');" in html
     assert "if (!event.target.closest('.sel-shell, .sel-order, input[type=\"checkbox\"][data-select-key]')) return;" in html
+
+
+def test_explorer_mock_mode_short_circuits_boot_and_api_errors():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert "import { isLikelyPreviewEnvironment, loadExplorerMockAssets, normalizeExplorerMockAsset, shouldUseExplorerMocks } from './js/explorer-mock-assets.mjs';" in html
+    assert 'state.mockMode = true;' in html
+    assert 'if (state.mockMode) {' in html
+    assert "await activateMockMode('activation');" in html
+    assert "await refreshExplorerData({ toastOnSuccess: false, suppressErrorToast: true });" in html
+    assert 'if (isLikelyPreviewEnvironment()) {' in html
+    assert "await activateMockMode('preview-fallback');" in html
+    assert "toast('bad', 'Boot', error?.message || 'Failed to load explorer data');" in html
+
+
+def test_explorer_mock_module_supports_webview_preview_detection():
+    module = Path('public/js/explorer-mock-assets.mjs').read_text(encoding='utf-8')
+    assert "const WEBVIEW_PROTOCOLS = new Set(['file:', 'vscode-webview:', 'capacitor:', 'ionic:']);" in module
+    assert 'export function shouldUseExplorerMocks() {' in module
+    assert "return WEBVIEW_PROTOCOLS.has(String(window.location.protocol || '').toLowerCase());" in module
+    assert 'export function isLikelyPreviewEnvironment() {' in module
+    assert "if (window.opener && hostLooksLocal(window.location.hostname)) return true;" in module
+    assert "if (window.top !== window.self && hostLooksLocal(window.location.hostname)) return true;" in module
 
 
 def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():
