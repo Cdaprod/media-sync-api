@@ -6030,7 +6030,7 @@
       else if (typeof mq.addListener === 'function') mq.addListener(() => syncSidebarMode());
       toast('good','Boot','Loading sources + projects…');
       await refreshExplorerData({ toastOnSuccess: false });
-      setView('grid');
+      if (state.view !== 'grid') setView('grid');
       updateTopCounts();
       updateSelectionUI();
       logLayoutDebug();

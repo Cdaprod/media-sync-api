@@ -1703,3 +1703,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Kept ownership semantics tight: `visibleTileEls` still receives only truly visible tiles while near-visible edge tiles remain eligible for `_restoreUntrackedSwaps(...)` hysteresis protection.
 - Preserved existing non-visible render candidate culling (`if (!visible) return;`) so rendering behavior remains unchanged outside this tracking fix.
 - Added regression coverage in `tests/test_public_explorer_program_monitor.py` to assert near-visible registration occurs before the visible-cull return.
+
+## 2026-03-08 — Non-FX disable warning-noise cleanup (new)
+- Investigated console spam path and confirmed `[tilefx] DISABLE sync:setView:non-fx` is a legitimate call from `setView(...)`/startup non-FX transitions, not an illegal lifecycle breach.
+- Updated `TileFXRenderer.disable(...)` logging policy: legal disables are now debug-level (`fxdebug=1` only) and no longer emit warning stack traces; illegal disable attempts while view is still FX continue to emit error-level logs with stack and are blocked.
+- Preserved lifecycle semantics and scope (no ownership/drain/watchdog architecture changes), while retaining `window.__tilefx_dbg.lastDisable` bookkeeping for truth inspection.
+- Removed redundant startup `setView('grid')` invocation when already in grid mode after initial refresh, preventing duplicate legitimate disable calls from polluting console output.
+- Added/updated tests to lock the new policy and startup guard behavior.

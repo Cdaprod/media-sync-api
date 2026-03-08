@@ -292,7 +292,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "restoreAllDomSwaps(reason = 'restore:all') {" in shader_module
     assert "applyDomSwap(tile, swapped = false, reason = '') {" in shader_module
     assert "disable(reason = '', { allowInFxView = false } = {})" in shader_module
-    assert "console.warn('[tilefx] DISABLE'" in shader_module
+    assert "console.warn('[tilefx] DISABLE'" not in shader_module
+    assert "console.debug('[tilefx] disable'" in shader_module
     assert "console.error('[tilefx] illegal disable during FX view'" in shader_module
     assert 'illegalDisableBlocked: 0,' in shader_module
     assert 'lastIllegalDisable: null,' in shader_module
@@ -617,6 +618,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert "console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');" in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
     assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
+    assert "if (state.view !== 'grid') setView('grid');" in html
     assert 'if (ui.inspectorOpen) {' in html
     assert 'state.focused = null;' in html
     assert "const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';" in html

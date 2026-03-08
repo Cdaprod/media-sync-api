@@ -1164,11 +1164,12 @@ export class TileFXRenderer {
 
   disable(reason = '', { allowInFxView = false } = {}) {
     const why = String(reason || 'unspecified');
-    const stack = (() => {
-      try { return new Error().stack || ''; } catch { return ''; }
-    })();
     const activeView = String((typeof window !== 'undefined' ? window.__explorer_view : '') || '');
+    const captureStack = () => {
+      try { return new Error().stack || ''; } catch { return ''; }
+    };
     if (!allowInFxView && activeView === 'fx') {
+      const stack = captureStack();
       if (!this._illegalDisableLogged) {
         try {
           console.error('[tilefx] illegal disable during FX view', { reason: why, stack });
@@ -1182,13 +1183,16 @@ export class TileFXRenderer {
       return false;
     }
     this._illegalDisableLogged = false;
-    try {
-      console.warn('[tilefx] DISABLE', why, stack);
-    } catch {}
+    const debugLifecycle = new URLSearchParams(window.location.search).get('fxdebug') === '1';
+    if (debugLifecycle) {
+      try {
+        console.debug('[tilefx] disable', { reason: why, view: activeView || 'unknown' });
+      } catch {}
+    }
     if (window.__tilefx_dbg) {
       window.__tilefx_dbg.lastDisable = {
         reason: why,
-        stack,
+        view: activeView || 'unknown',
         t: Date.now(),
       };
     }

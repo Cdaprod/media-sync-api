@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-08 — Non-FX disable logging policy cleanup (active)
+- [x] Confirmed `sync:setView:non-fx` is a legitimate lifecycle transition path from `setView(...)` and startup bootstrap.
+- [x] Changed `TileFXRenderer.disable(...)` so legal non-FX disables no longer emit warning/error stack spam; illegal disable-in-FX remains error-level.
+- [x] Kept lifecycle behavior scoped: no ownership pipeline or watchdog architecture changes in this patch.
+- [x] Reduced startup duplicate non-FX disable calls by avoiding redundant `setView('grid')` when already in grid mode after initial data refresh.
+- [x] Updated tests to assert legal-disable logging uses debug-level path and legacy warn path is absent.
+- [ ] Re-check on physical iPhone that grid/list transitions no longer show `[tilefx] DISABLE sync:setView:non-fx` warning stack noise.
+
 ## 2026-03-08 — Near-visible tracking before visible cull (active)
 - [x] Moved near-visible set membership so edge tiles are tracked before the visible-only render-candidate cull.
 - [x] Kept `visibleTileEls` restricted to actually visible tiles.
