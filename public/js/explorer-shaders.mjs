@@ -2333,11 +2333,11 @@ export class TileFXRenderer {
           wasDrawnThisPass: false,
         });
       }
-      if (key && !this.textureCache.has(key)) {
+      if (key && !this.textureCache?.has?.(key)) {
         // Fed tiles are upload-first: queue texture prep even if visibility/rect state is temporarily stale.
         this._queueTileImageUpload(tile, key);
       }
-      const entry = key ? this.textureCache.get(key, now) : null;
+      const entry = key ? this.textureCache?.get?.(key, now) : null;
       if (tileEl) {
         if (nearVisible) nearVisibleTileEls.add(tileEl);
         if (visible) visibleTileEls.add(tileEl);
@@ -2362,7 +2362,7 @@ export class TileFXRenderer {
       const swapState = this._getSwapState(tileEl);
       const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
       if (tileEl) this._swapSeenFrameByTile.set(tileEl, { frame: this._frame, t: now });
-      if (key && !this.textureCache.has(key)) {
+      if (key && !this.textureCache?.has?.(key)) {
         if (priorState === TILE_STATE.READY) {
           this._setTileState(key, TILE_STATE.EVICTED);
           if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {

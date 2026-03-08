@@ -1724,3 +1724,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Tightened CSS ownership policy in `public/explorer.html`: any `data-fx-near-visible="1"` card that is not `data-tex="1"` now suppresses thumb-body/thumb-image painters and shows the existing FX placeholder treatment.
 - Kept `.asset-ui` and card structure fully DOM-owned (titles/subtitles/badges/selectors/affordances unchanged); no lifecycle, queue, or renderer architecture changes were made.
 - Added test coverage in `tests/test_public_explorer_program_monitor.py` for the near-visible non-textured placeholder selector.
+
+## 2026-03-08 — Feed pipeline starvation fix after policy stabilization (new)
+- Investigated the “renderer alive but uploads/cache/swap all zero” state as a collect→feed pipeline continuity issue (not lifecycle/logging/UI ownership).
+- Found the blocking gate in `TileFXRenderer._render(...)`: non-null-safe `this.textureCache.has/get` reads could execute before cache bootstrap was guaranteed, tripping render-loop failure and preventing ongoing tile feed progression.
+- Switched render feed/cache reads to null-safe access (`this.textureCache?.has?.(key)`, `this.textureCache?.get?.(key, now)`) so fed tiles still queue and advance while cache initialization catches up.
+- Kept scope minimal: no card overlay changes, no lifecycle architecture changes, no new debug subsystems.
+- Added regression assertions in `tests/test_public_explorer_program_monitor.py` for null-safe texture-cache usage in render path.

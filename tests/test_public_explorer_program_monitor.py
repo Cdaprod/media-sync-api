@@ -578,6 +578,13 @@ def test_explorer_texture_ready_callback_runs_before_visible_cull():
     assert callback_idx < rect_cull_idx
     assert callback_idx < visible_cull_idx
 
+
+def test_explorer_render_pipeline_uses_null_safe_texture_cache_access():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert 'if (key && !this.textureCache?.has?.(key)) {' in shader_module
+    assert 'const entry = key ? this.textureCache?.get?.(key, now) : null;' in shader_module
+
+
 def test_explorer_asset_css_visual_animation_is_minimized():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert '.asset:hover{' in html

@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-08 — Feed-stage promotion/pipeline reactivation (active)
+- [x] Traced the zero-upload idle state to a render-stage feed gate: `_render(...)` used non-null-safe `this.textureCache.has/get` access before cache bootstrap was guaranteed, allowing loop failure and starving feed/upload progression.
+- [x] Made render feed checks null-safe (`this.textureCache?.has?.(key)`, `this.textureCache?.get?.(key, now)`) so fed tiles continue to queue/upload even if cache bootstrap is one tick behind.
+- [x] Kept scope narrow to collect→feed→upload pipeline continuity; no lifecycle/logging/card-UI rewrites in this pass.
+- [x] Added regression assertions for null-safe texture-cache access in render pipeline.
+- [ ] Re-check on device/runtime probe that counters move off zero (`uploadsQueued/uploadsAttempted/texturesPending/cache/swapOps`) and tiles progress pending→upload→cache→swap.
+
 ## 2026-03-08 — Visible thumb-body ownership policy finalization (active)
 - [x] Isolated remaining mixed visual state to thumb-body paint policy: visible/near-visible cards could still present DOM thumb body whenever `data-tex` briefly remained non-`1`/non-`pending`.
 - [x] Enforced FX-window painter policy in CSS: any card flagged `data-fx-near-visible="1"` and not `data-tex="1"` now uses placeholder suppression for `.thumb-body`/thumb image painters.
