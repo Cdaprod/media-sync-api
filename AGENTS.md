@@ -1710,3 +1710,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Preserved lifecycle semantics and scope (no ownership/drain/watchdog architecture changes), while retaining `window.__tilefx_dbg.lastDisable` bookkeeping for truth inspection.
 - Removed redundant startup `setView('grid')` invocation when already in grid mode after initial refresh, preventing duplicate legitimate disable calls from polluting console output.
 - Added/updated tests to lock the new policy and startup guard behavior.
+
+## 2026-03-08 — Pending-to-texture pipeline stall fix (new)
+- Investigated the remaining visual defect (cards stuck `data-tex="pending"`) as a texture-readiness pipeline issue, separate from lifecycle/logging.
+- Identified the concrete gate in `public/js/explorer-shaders.mjs`: `tile.onTextureReady(...)` ran only inside the visible+rect-valid draw path, so cards could keep placeholder ownership even when cache texture truth was already ready.
+- Updated renderer ordering so per-tile cache truth (`entry?.texture`) drives `onTextureReady(...)` before visible/rect culls; draw culling and swap eligibility remain unchanged.
+- Resulting behavior: fed visible/near-visible tiles now receive readiness promotion to `data-tex="1"` as soon as texture exists, instead of waiting for draw-eligibility timing.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to lock callback-before-cull ordering.

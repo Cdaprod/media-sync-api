@@ -2337,9 +2337,16 @@ export class TileFXRenderer {
         // Fed tiles are upload-first: queue texture prep even if visibility/rect state is temporarily stale.
         this._queueTileImageUpload(tile, key);
       }
+      const entry = key ? this.textureCache.get(key, now) : null;
       if (tileEl) {
         if (nearVisible) nearVisibleTileEls.add(tileEl);
         if (visible) visibleTileEls.add(tileEl);
+        if (drawResults.has(tileEl) && entry?.texture) drawResults.get(tileEl).hasTexture = true;
+      }
+      if (typeof tile?.onTextureReady === 'function') {
+        try {
+          tile.onTextureReady(Boolean(entry?.texture));
+        } catch {}
       }
       if (!rectValid) return;
       if (!visible) return;
@@ -2370,7 +2377,6 @@ export class TileFXRenderer {
           }
         }
       }
-      const entry = key ? this.textureCache.get(key, now) : null;
       let shouldSwapSet = false;
       if (entry?.texture) {
         gl.activeTexture(gl.TEXTURE0);
@@ -2386,11 +2392,6 @@ export class TileFXRenderer {
         if (drawResults.has(tileEl)) drawResults.get(tileEl).releaseBlocked = true;
       }
       if (!hasTex) gl.uniform2f(this.u.u_tex_size, 1, 1);
-      if (typeof tile?.onTextureReady === 'function') {
-        try {
-          tile.onTextureReady(Boolean(entry?.texture));
-        } catch {}
-      }
       gl.uniform1f(this.u.u_has_tex, hasTex);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       if (tileEl && drawResults.has(tileEl)) drawResults.get(tileEl).wasDrawnThisPass = true;

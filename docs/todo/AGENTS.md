@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-08 — Pending→texture stall in visible window (active)
+- [x] Traced stall gate to renderer callback ordering: `tile.onTextureReady(...)` only ran after `rectValid` + `visible` draw culls, so some cards remained `data-tex="pending"` when texture became available but draw eligibility lagged.
+- [x] Moved texture readiness callback invocation to run immediately after cache lookup for every fed tile (before visible-only culls), while preserving draw culls and swap eligibility rules.
+- [x] Kept scope tight to readiness pipeline sequencing (no lifecycle/logging/DOM architecture changes).
+- [x] Added regression test asserting `onTextureReady(Boolean(entry?.texture))` executes before `if (!rectValid) return;` and `if (!visible) return;`.
+- [ ] Re-check on physical iPhone scroll-stop run that previously stalled placeholder cards now resolve from `pending` to `1` in the visible/near-visible FX window.
+
 ## 2026-03-08 — Non-FX disable logging policy cleanup (active)
 - [x] Confirmed `sync:setView:non-fx` is a legitimate lifecycle transition path from `setView(...)` and startup bootstrap.
 - [x] Changed `TileFXRenderer.disable(...)` so legal non-FX disables no longer emit warning/error stack spam; illegal disable-in-FX remains error-level.

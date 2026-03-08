@@ -569,6 +569,15 @@ def test_explorer_near_visible_tracking_happens_before_visible_cull():
 
 
 
+
+def test_explorer_texture_ready_callback_runs_before_visible_cull():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    callback_idx = shader_module.index('tile.onTextureReady(Boolean(entry?.texture));')
+    visible_cull_idx = shader_module.index('if (!visible) return;', callback_idx)
+    rect_cull_idx = shader_module.index('if (!rectValid) return;', callback_idx)
+    assert callback_idx < rect_cull_idx
+    assert callback_idx < visible_cull_idx
+
 def test_explorer_asset_css_visual_animation_is_minimized():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert '.asset:hover{' in html
