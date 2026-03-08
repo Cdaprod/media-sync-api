@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TileFX</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --video: #1ad4ff;
+  --image: #b06aff;
+  --audio: #ffaa1a;
+  --bg: #02030a;
+  --card: #04050f;
+}
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background:var(--bg);
+  font-family:'JetBrains Mono',monospace;
+  color:#9ab0d8;
+}
+
+/* Fixed GL canvas — full viewport, renders behind everything */
+#glc{
+position:fixed;inset:0;z-index:1;
+pointer-events:none;
+image-rendering:pixelated;
+}
+
+#shell{
+position:fixed;inset:0;z-index:2;
+overflow-y:auto;overflow-x:hidden;
+-webkit-overflow-scrolling:touch;
+background:transparent;
+}
+#shell::-webkit-scrollbar{display:none;}
+
+/* ── Topbar ── */
+#bar{
+position:sticky;top:0;z-index:20;
+padding:max(env(safe-area-inset-top),10px) 10px 8px;
+background:linear-gradient(180deg,rgba(2,3,10,.97) 65%,transparent);
+display:flex;align-items:center;gap:8px;
+}
+#bar h1{
+flex:1;font-size:10px;font-weight:700;
+letter-spacing:.22em;text-transform:uppercase;
+color:rgba(160,195,255,.4);
+}
+.tg{
+display:flex;gap:1px;
+background:rgba(255,255,255,.03);
+border:1px solid rgba(255,255,255,.06);
+border-radius:5px;padding:2px;
+}
+.tb{
+background:transparent;border:none;
+color:rgba(160,190,240,.22);
+font-family:inherit;font-size:8px;font-weight:700;
+letter-spacing:.12em;text-transform:uppercase;
+padding:4px 9px;border-radius:3px;cursor:pointer;
+transition:all .12s;
+}
+.tb.on{background:rgba(255,255,255,.07);color:#c8e0ff;}
+
+/* ── Legend ── */
+.leg{
+display:flex;gap:10px;padding:0 10px 6px;
+}
+.li{
+display:flex;align-items:center;gap:4px;
+font-size:7px;letter-spacing:.12em;text-transform:uppercase;
+color:rgba(140,170,220,.26);
+}
+.ld{width:5px;height:5px;border-radius:50%;}
+
+/* ── Grid ── */
+#grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:2px;
+padding:0 2px 80px;
+}
+
+/* ── Card ── */
+.asset{
+position:relative;
+display:flex;flex-direction:column;
+background:var(–card);
+border-radius:1px;overflow:hidden;
+cursor:pointer;user-select:none;
+transition:transform .1s cubic-bezier(.2,1,.3,1);
+}
+.asset:active{transform:scale(.955);}
+
+/* thumb — dark surface that shader renders over */
+.thumb{
+position:relative;width:100%;aspect-ratio:1;
+overflow:hidden;background:#03040c;flex-shrink:0;
+}
+.thumb img{
+position:absolute;inset:0;width:100%;height:100%;
+object-fit:cover;display:block;
+opacity:0;transition:opacity .7s ease;
+}
+.thumb img.ok{opacity:.7;}
+.tf{position:absolute;inset:0;}
+
+/* audio bars */
+.wav{
+position:absolute;inset:0;
+display:flex;align-items:center;justify-content:center;gap:2px;z-index:1;
+}
+.wav span{
+width:2px;border-radius:1px;
+animation:wv var(–d) ease-in-out infinite alternate;
+animation-delay:var(–dl);
+opacity:.4;
+}
+@keyframes wv{0%{transform:scaleY(.1)}100%{transform:scaleY(1)}}
+
+/* play */
+.pli{
+position:absolute;inset:0;display:flex;
+align-items:center;justify-content:center;z-index:2;pointer-events:none;
+}
+
+/* ── Asset UI (stays DOM) ── */
+.asset-ui{
+padding:4px 6px 5px;background:var(–card);
+position:relative;z-index:10;flex-shrink:0;
+}
+.ur1{display:flex;align-items:center;gap:4px;margin-bottom:2px;}
+.bdg{
+font-size:7px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+padding:1px 4px;border-radius:2px;line-height:1.6;flex-shrink:0;
+}
+.nm{
+font-size:8px;color:rgba(185,210,255,.52);
+white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;
+}
+.ur2{display:flex;justify-content:space-between;align-items:center;}
+.sz{font-size:7px;color:rgba(120,148,200,.26);letter-spacing:.04em;}
+.ck{
+width:13px;height:13px;border-radius:50%;
+border:1px solid rgba(255,255,255,.11);flex-shrink:0;
+transition:all .12s;
+}
+.asset.sel .ck{background:#38f4b5;border-color:#38f4b5;}
+.asset.sel .ck::after{
+content:'';display:block;width:3px;height:5px;
+border-right:1.5px solid #020608;border-bottom:1.5px solid #020608;
+transform:rotate(45deg) translate(0,-1px);margin:1px auto 0;
+}
+
+/* type fills & badges */
+.asset[data-t=video] .tf{background:radial-gradient(ellipse at 38% 44%,#051520,#020408);}
+.asset[data-t=video] .bdg{background:hsla(197,80%,18%,.55);color:hsl(197,85%,64%);border:1px solid hsla(197,70%,40%,.18);}
+.asset[data-t=video] .wav span{background:var(–video);}
+.asset[data-t=image] .tf{background:radial-gradient(ellipse at 62%  36%,#0d0522,#030106);}
+.asset[data-t=image] .bdg{background:hsla(275,55%,18%,.55);color:hsl(275,72%,72%);border:1px solid hsla(275,55%,44%,.18);}
+.asset[data-t=image] .wav span{background:var(–image);}
+.asset[data-t=audio] .tf{background:radial-gradient(ellipse at 50%  62%,#1c0d00,#050200);}
+.asset[data-t=audio] .bdg{background:hsla(36,78%,16%,.55);color:hsl(36,94%,56%);border:1px solid hsla(36,70%,38%,.18);}
+.asset[data-t=audio] .wav span{background:var(–audio);}
+
+/* ── List mode ── */
+.lm #grid{grid-template-columns:1fr;gap:1px;}
+.lm .asset{flex-direction:row;height:48px;border-radius:2px;}
+.lm .thumb{width:48px;height:48px;aspect-ratio:unset;flex-shrink:0;}
+.lm .thumb img{opacity:0!important;}
+.lm .thumb img.ok{opacity:.9!important;}
+.lm .asset-ui{flex:1;flex-direction:row;display:flex;align-items:center;gap:8px;padding:0 10px;}
+.lm .ur1{flex:1;margin:0;}
+.lm .nm{font-size:10px;}
+.lm .ur2{flex-shrink:0;gap:8px;}
+.lm .pli,.lm .wav{display:none;}
+
+/* ── Grid mode — plain DOM ── */
+.gm .thumb img.ok{opacity:.85!important;}
+
+/* ── Footer ── */
+#foot{
+position:fixed;bottom:0;left:0;right:0;z-index:20;
+padding:8px 10px max(env(safe-area-inset-bottom),10px);
+background:linear-gradient(transparent,rgba(2,3,10,.97));
+display:flex;justify-content:space-between;
+font-size:7px;color:rgba(110,140,200,.18);letter-spacing:.07em;
+}
+</style>
+
+</head>
+<body>
+
+<canvas id="glc"></canvas>
+
+<div id="shell">
+  <div id="bar">
+    <h1>Media Library</h1>
+    <div class="tg">
+      <button class="tb on" id="b-fx">FX</button>
+      <button class="tb"    id="b-grid">Grid</button>
+      <button class="tb"    id="b-list">List</button>
+    </div>
+  </div>
+  <div class="leg">
+    <div class="li"><span class="ld" style="background:var(--video)"></span>Video</div>
+    <div class="li"><span class="ld" style="background:var(--image)"></span>Image</div>
+    <div class="li"><span class="ld" style="background:var(--audio)"></span>Audio</div>
+  </div>
+  <div id="grid"></div>
+</div>
+
+<div id="foot">
+  <span id="fmode">FX · holographic surface · all uniforms live</span>
+  <span id="fcount"></span>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────────────────────
+var ASSETS = [
+  {k:'v1', t:'video',n:'compiled.mp4',             s:'13 mb',  p:null},
+  {k:'v2', t:'video',n:'compose-17718757562.mp4',   s:'127 mb', p:null},
+  {k:'v3', t:'video',n:'compose-17718756717.mp4',   s:'266 mb', p:null},
+  {k:'v4', t:'video',n:'IMG_8742.MOV',              s:'75 mb',  p:'https://picsum.photos/seed/v4/300/300'},
+  {k:'v5', t:'video',n:'ScreenRecording_02-16.mp4', s:'43 mb',  p:null},
+  {k:'i1', t:'image',n:'debug_first_frame.png',     s:'420 kb', p:'https://picsum.photos/seed/i1/300/300'},
+  {k:'v6', t:'video',n:'copy_52F30171.mp4',         s:'284 mb', p:'https://picsum.photos/seed/v6/300/300'},
+  {k:'v7', t:'video',n:'copy_D9313B00.mp4',         s:'315 mb', p:'https://picsum.photos/seed/v7/300/300'},
+  {k:'v8', t:'video',n:'manual_test.mov',           s:'46 mb',  p:null},
+  {k:'v9', t:'video',n:'render_preview.mp4',        s:'23 kb',  p:null},
+  {k:'v10',t:'video',n:'render.mov',                s:'23 kb',  p:null},
+  {k:'v11',t:'video',n:'copy_2346AFD0.mp4',         s:'395 mb', p:'https://picsum.photos/seed/v11/300/300'},
+  {k:'v12',t:'video',n:'copy_5A249C5C.mp4',         s:'26 mb',  p:'https://picsum.photos/seed/v12/300/300'},
+  {k:'a1', t:'audio',n:'cvilni-violin.m4a',         s:'6.0 mb', p:null},
+  {k:'a2', t:'audio',n:'electro-synth.mp3',         s:'2.7 mb', p:null},
+  {k:'a3', t:'audio',n:'synth-wave.mp3',            s:'8.5 mb', p:null},
+  {k:'v13',t:'video',n:'ZZV-1914.mov',              s:'208 mb', p:'https://picsum.photos/seed/v13/300/300'},
+  {k:'v14',t:'video',n:'ZZV-1856-copy.mov',         s:'73 mb',  p:'https://picsum.photos/seed/v14/300/300'},
+  {k:'i2', t:'image',n:'screenshot_01.png',         s:'1.2 mb', p:'https://picsum.photos/seed/i2/300/300'},
+  {k:'i3', t:'image',n:'screenshot_02.png',         s:'980 kb', p:'https://picsum.photos/seed/i3/300/300'},
+  {k:'a4', t:'audio',n:'ambient-loop.mp3',          s:'4.1 mb', p:null},
+  {k:'a5', t:'audio',n:'drums-break.wav',           s:'3.3 mb', p:null},
+  {k:'i4', t:'image',n:'poster_frame.jpg',          s:'220 kb', p:'https://picsum.photos/seed/i4/300/300'},
+  {k:'v16',t:'video',n:'raw_footage_B.mov',         s:'1.1 gb', p:'https://picsum.photos/seed/v16/300/300'},
+  {k:'i5', t:'image',n:'thumbnail_alt.png',         s:'88 kb',  p:'https://picsum.photos/seed/i5/300/300'},
+  {k:'i6', t:'image',n:'frame_export_01.png',       s:'340 kb', p:'https://picsum.photos/seed/i6/300/300'},
+];
+
+// linear-ish type colours
+var TRGB = {
+  video: [0.10, 0.83, 1.00],
+  image: [0.69, 0.42, 1.00],
+  audio: [1.00, 0.67, 0.10],
+};
+
+// ─────────────────────────────────────────────────────────────
+// DOM BUILD
+// ─────────────────────────────────────────────────────────────
+var grid  = document.getElementById('grid');
+var TILES = [];
+var COLS  = 3;
+
+ASSETS.forEach(function(a) {
+  var card = document.createElement('div');
+  card.className = 'asset'; card.dataset.t = a.t;
+
+  var thumb = document.createElement('div'); thumb.className = 'thumb';
+  var fill  = document.createElement('div'); fill.className  = 'tf';
+  thumb.appendChild(fill);
+
+  if (a.p) {
+    var img = document.createElement('img'); img.loading = 'lazy';
+    (function(asset, el) {
+      el.onload = function() {
+        el.classList.add('ok');
+        asset._r   = true;
+        asset._rAt = performance.now();
+        asset._iw  = el.naturalWidth  || 300;
+        asset._ih  = el.naturalHeight || 300;
+        if (gl) uploadTex(asset, el);
+      };
+    })(a, img);
+    img.src = a.p;
+    thumb.appendChild(img);
+  }
+
+  if (a.t === 'audio') {
+    var wav = document.createElement('div'); wav.className = 'wav';
+    for (var j = 0; j < 11; j++) {
+      var sp = document.createElement('span');
+      sp.style.cssText = '--d:' + (0.45 + Math.random() * .9).toFixed(2) + 's;'
+        + '--dl:' + (j * .065).toFixed(2) + 's;'
+        + 'height:' + (8 + Math.round(Math.random() * 32)) + 'px;';
+      wav.appendChild(sp);
+    }
+    thumb.appendChild(wav);
+  }
+
+  if (a.t === 'video') {
+    var pl = document.createElement('div'); pl.className = 'pli';
+    pl.innerHTML = '<svg width="26" height="26" viewBox="0 0 26 26">'
+      + '<circle cx="13" cy="13" r="12" fill="rgba(0,0,0,.32)" stroke="rgba(255,255,255,.14)" stroke-width="1"/>'
+      + '<path d="M11 9L19 13L11 17V9Z" fill="rgba(255,255,255,.68)"/></svg>';
+    thumb.appendChild(pl);
+  }
+
+  card.appendChild(thumb);
+
+  var ui = document.createElement('div'); ui.className = 'asset-ui';
+  ui.innerHTML = '<div class="ur1"><span class="bdg">' + a.t + '</span>'
+    + '<span class="nm">' + a.n + '</span></div>'
+    + '<div class="ur2"><span class="sz">' + a.s + '</span>'
+    + '<div class="ck"></div></div>';
+  card.appendChild(ui);
+  grid.appendChild(card);
+
+  var state = { card: card, thumb: thumb, asset: a, hov: 0, hovS: 0, adj: [0,0,0,0] };
+  card.addEventListener('pointerdown',  function(e) { e.preventDefault(); card.classList.toggle('sel'); });
+  card.addEventListener('pointerenter', function()  { state.hov = 1; });
+  card.addEventListener('pointerleave', function()  { state.hov = 0; });
+  TILES.push(state);
+  a._st = state;
+});
+
+document.getElementById('fcount').textContent = ASSETS.length + ' assets';
+
+// Adjacency (3-col)
+(function() {
+  var n = TILES.length;
+  for (var i = 0; i < n; i++) {
+    var t = TILES[i].asset.t, c = i % COLS, adj = [0,0,0,0];
+    if (i - COLS >= 0           && TILES[i-COLS].asset.t === t) adj[0] = 1;
+    if (c < COLS-1 && i+1 < n  && TILES[i+1].asset.t   === t) adj[1] = 1;
+    if (i + COLS < n            && TILES[i+COLS].asset.t === t) adj[2] = 1;
+    if (c > 0                   && TILES[i-1].asset.t   === t) adj[3] = 1;
+    TILES[i].adj = adj;
+  }
+})();
+
+// ─────────────────────────────────────────────────────────────
+// WEBGL
+// ─────────────────────────────────────────────────────────────
+var cv  = document.getElementById('glc');
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+var VW, VH;
+function resize() {
+  VW = window.innerWidth; VH = window.innerHeight;
+  cv.width  = Math.round(VW * DPR);
+  cv.height = Math.round(VH * DPR);
+  cv.style.width  = VW + 'px';
+  cv.style.height = VH + 'px';
+  if (gl) gl.viewport(0, 0, cv.width, cv.height);
+}
+resize();
+window.addEventListener('resize', resize);
+
+var gl = cv.getContext('webgl', {
+  alpha: true, antialias: false,
+  premultipliedAlpha: false, preserveDrawingBuffer: false
+});
+
+if (!gl) { cv.style.display = 'none'; }
+else {
+
+// ── VERTEX ────────────────────────────────────────────────────
+var VS = `
+attribute vec2 a_pos;
+varying   vec2 v_tile_uv;
+uniform   vec4 u_rect;
+uniform   vec2 u_resolution;
+void main(){
+  vec2 px  = mix(u_rect.xy, u_rect.zw, a_pos * .5 + .5);
+  vec2 ndc = px / u_resolution * 2. - 1.;
+  ndc.y    = -ndc.y;
+  gl_Position  = vec4(ndc, 0., 1.);
+  v_tile_uv    = a_pos * .5 + .5;
+}`;
+
+// ── FRAGMENT — holographic neon reactor surface ───────────────
+var FS = `
+precision highp float;
+varying vec2  v_tile_uv;
+uniform vec2  u_resolution;
+uniform vec4  u_rect;
+uniform float u_dpr;
+uniform sampler2D u_tex;
+uniform float u_has_tex;
+uniform vec2  u_tex_size;
+uniform vec3  u_type_color;
+uniform float u_selected;
+uniform float u_hover;
+uniform float u_time;
+uniform float u_shimmer;
+uniform vec4  u_hide_edge;
+
+#define PI 3.14159265
+
+float hash21(vec2 p){
+  vec3 q=fract(vec3(p.xyx)*.1031);
+  q+=dot(q,q.yzx+33.33);
+  return fract((q.x+q.y)*q.z);
+}
+mat2 rot(float a){float s=sin(a),c=cos(a);return mat2(c,-s,s,c);}
+float sdRBox(vec2 p,vec2 b,float r){vec2 q=abs(p)-b+r;return length(max(q,0.))+min(max(q.x,q.y),0.)-r;}
+float edgePulse(float d,float w,float t,float ph){return (1.-smoothstep(0.,w,d))*(.5+.5*sin(t+ph+d*.12));}
+vec2 coverUv(vec2 uv,vec2 tpx,vec2 tsz){
+  float ta=tpx.x/max(tpx.y,1.),ia=tsz.x/max(tsz.y,1.);
+  vec2 o=uv;
+  if(ia>ta){float s=ta/ia;o.x=(uv.x-.5)/s+.5;}
+  else{float s=ia/ta;o.y=(uv.y-.5)/s+.5;}
+  return o;
+}
+
+void main(){
+  vec2 uv = v_tile_uv;
+  vec2 szCSS = max(u_rect.zw - u_rect.xy, vec2(1.));
+  vec2 szPhy = szCSS * max(u_dpr, 1.);
+  vec2 p     = (uv - .5) * szPhy;
+  float t    = u_time;
+
+  /* ── SDF mask ── */
+  float rad  = min(szPhy.x,szPhy.y) * .07;
+  float sdf  = sdRBox(p, szPhy*.5, rad);
+  float mask = 1. - smoothstep(0., 2., sdf);
+  if (mask < .003) discard;
+
+  vec2  fc  = uv - .5;
+  float r   = length(fc);
+  vec2  dir = normalize(fc + 1e-5);
+  float activity = clamp(u_hover * .7 + u_selected * 1.2, 0., 1.6);
+  vec3  tc   = u_type_color;
+
+  /* ── Adjacency edge distances ── */
+  float dT=p.y+szPhy.y*.5, dB=szPhy.y*.5-p.y;
+  float dL=p.x+szPhy.x*.5, dR=szPhy.x*.5-p.x;
+  float sT=1.-u_hide_edge.x, sR=1.-u_hide_edge.y;
+  float sB=1.-u_hide_edge.z, sL=1.-u_hide_edge.w;
+
+  /* ──────────────────────────────────────────────────────────
+     HOLOGRAPHIC ROTATING ENERGY FIELD
+     Three independently rotating fields interfere with each other.
+     This is what makes the surface feel ALIVE from a distance.
+  ────────────────────────────────────────────────────────── */
+  vec2 fv = uv * 2. - 1.;
+  vec2 f1 = rot(t * .21)  * fv;
+  vec2 f2 = rot(-t * .13) * fv;
+  vec2 f3 = rot(t * .07)  * (fv + vec2(sin(t*.3)*.2, cos(t*.4)*.2));
+
+  float swirl   = sin(f1.x*9.+t*1.9)   * sin(f1.y*8.-t*1.3);
+  float rings   = sin(length(f2)*28.-t*5.1) * exp(-length(f2)*1.0);
+  float lattice = sin((f3.x+f3.y)*20.+t*2.1) * sin((f3.x-f3.y)*20.-t*1.7);
+
+  /* Neon reactor: a fourth high-freq field that crackles */
+  float crackle = sin(f1.x*42.-t*8.3)*sin(f1.y*38.+t*7.1)*.3
+                + sin(f2.x*31.+t*6.4)*sin(f2.y*27.-t*5.9)*.3;
+
+  float field = swirl*.30 + rings*.38 + lattice*.22 + crackle*.10;
+  field = .5 + .5*field;
+
+  /* ──────────────────────────────────────────────────────────
+     REFRACTION — impossible optical distortion
+     The surface bends what's underneath it.
+  ────────────────────────────────────────────────────────── */
+  float refAmp = .008 + u_hover*.014 + u_selected*.010 + field*.004;
+  float refAngle = sin(r*18.-t*2.8)*.6 + cos((uv.x-uv.y)*14.+t*2.3)*.4;
+  vec2  refV  = dir * refAngle * refAmp;
+  /* barrel distortion component */
+  vec2  barrel = fc * (1. + r*r * (.18 + activity*.09));
+  vec2  texUv  = coverUv(barrel*.5+.5 + refV, szCSS, max(u_tex_size,vec2(1.)));
+
+  /* ──────────────────────────────────────────────────────────
+     CHROMATIC ABERRATION — scales with energy + interaction
+  ────────────────────────────────────────────────────────── */
+  float ab = .0025 + .005*activity + .003*field;
+  vec2  abv = dir * ab;
+  vec3  texCol = vec3(.05,.08,.14);
+  if (u_has_tex > .5) {
+    texCol.r = texture2D(u_tex, clamp(texUv + abv*1.5, .001,.999)).r;
+    texCol.g = texture2D(u_tex, clamp(texUv,           .001,.999)).g;
+    texCol.b = texture2D(u_tex, clamp(texUv - abv,     .001,.999)).b;
+    /* vignette */
+    float vig = 1. - smoothstep(.25,.90, length(fc*1.55));
+    texCol *= mix(1., vig, .42);
+    /* micro-warp scanlines from field */
+    texCol += sin(uv.x*160.+t*9.)*sin(uv.y*130.-t*8.) * .012;
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     IMPOSSIBLE GLASS SLAB
+     Anisotropic fresnel + animated specular sweep
+  ────────────────────────────────────────────────────────── */
+  float fr = pow(1.-clamp(1.-r*1.5,0.,1.), 2.2);
+  float diag = uv.x*.44 + (1.-uv.y)*.56;
+
+  /* moving caustic specular */
+  float caustic = sin(diag*22.-t*4.8)*.5 + sin(diag*11.+t*3.1)*.3
+                + sin((uv.x*8.-uv.y*6.)*3.+t*2.)*.2;
+  caustic = caustic*.5+.5;
+  float specBand = smoothstep(.52,.59,diag)*(1.-smoothstep(.59,.66,diag));
+
+  vec3 glass = vec3(.03,.05,.09);
+  glass += vec3(.05,.07,.12) * fr;
+  glass += vec3(.12,.15,.22) * specBand * (.4 + .6*caustic);
+  /* type-color ghost tint on the glass */
+  glass += tc * .06 * fr;
+
+  vec3 surface = mix(glass, texCol, u_has_tex * .88);
+
+  /* ──────────────────────────────────────────────────────────
+     EDGE PULSE SYSTEM
+     Hard bright line + wide inward bloom, both animated
+  ────────────────────────────────────────────────────────── */
+  float lw = 1.8;
+  float bw = min(szPhy.x,szPhy.y) * .28;
+
+  float eLine =
+    sT*edgePulse(dT,lw,t*4.2,0.0) + sR*edgePulse(dR,lw,t*3.9,1.4) +
+    sB*edgePulse(dB,lw,t*4.4,2.6) + sL*edgePulse(dL,lw,t*3.7,3.8);
+  eLine = clamp(eLine,0.,1.);
+
+  float eBloom =
+    sT*(1.-smoothstep(0.,bw,dT)) + sR*(1.-smoothstep(0.,bw,dR)) +
+    sB*(1.-smoothstep(0.,bw,dB)) + sL*(1.-smoothstep(0.,bw,dL));
+  eBloom = clamp(eBloom,0.,1.);
+
+  /* corner kill for cluster interiors */
+  float ck = 1.
+    -(1.-sT)*(1.-sL)*smoothstep(0.,14.,length(vec2(dL,dT)))
+    -(1.-sT)*(1.-sR)*smoothstep(0.,14.,length(vec2(dR,dT)))
+    -(1.-sB)*(1.-sL)*smoothstep(0.,14.,length(vec2(dL,dB)))
+    -(1.-sB)*(1.-sR)*smoothstep(0.,14.,length(vec2(dR,dB)));
+  ck=clamp(ck,0.,1.); eLine*=ck; eBloom*=ck;
+
+  /* ──────────────────────────────────────────────────────────
+     INTERIOR LIVING LIGHT
+     Plasma field + scan lines + radial burst
+  ────────────────────────────────────────────────────────── */
+  float plasma =
+    sin(uv.x*16.+t*1.9)*sin(uv.y*13.-t*1.5)*sin((uv.x+uv.y)*11.+t*1.3);
+  plasma = .5+.5*plasma;
+
+  float scan  = .5+.5*sin(uv.y*szPhy.y*.07 - t*(7.+activity*3.));
+  float burst = (1.-smoothstep(.04,.85,r))*(.5+.5*sin(r*40.-t*6.5));
+
+  /* ──────────────────────────────────────────────────────────
+     ARRIVAL SHIMMER — expanding ring on load
+  ────────────────────────────────────────────────────────── */
+  float shimRing = u_shimmer * smoothstep(.25,.01, abs(r - (.16+.58*(1.-u_shimmer))));
+  float shimFlush= u_shimmer * (1.-smoothstep(0.,.65,r)) * .35;
+
+  /* ──────────────────────────────────────────────────────────
+     SELECTION / HOVER pulse
+  ────────────────────────────────────────────────────────── */
+  float bth      = .72 + .28*sin(t*(.42+u_selected*.95));
+  float selPulse = u_selected*(.55+.38*sin(t*3.2))*bth;
+  float hovBoost = u_hover * .9;
+  float gI       = (.45 + selPulse + hovBoost) * bth;
+
+  /* ──────────────────────────────────────────────────────────
+     PLACEHOLDER ENERGY (when no texture)
+     Surface is pure reactor — plasma + scan + crackle field
+  ────────────────────────────────────────────────────────── */
+  vec3 placeholder = vec3(.02,.04,.08)
+    + tc * (.15 + .30*plasma + .12*scan + .08*field)
+    + vec3(.05,.08,.13)*fr
+    + tc * crackle * .08;
+  surface = mix(placeholder, surface, u_has_tex);
+
+  /* ──────────────────────────────────────────────────────────
+     COMPOSITE
+  ────────────────────────────────────────────────────────── */
+  /* interference stripes (high-freq) */
+  float interference = sin(uv.x*260.+t*12.)*.5 + sin(uv.y*210.-t*9.)*.5;
+  float grain = hash21(gl_FragCoord.xy/max(u_dpr,1.) + fract(t*.13)) - .5;
+
+  vec3 color = surface;
+
+  /* edge glow — this is where the type color LIVES */
+  color += tc * eLine * (1.1 + gI * .9);
+  color += tc * eBloom * (.12 + gI * .14);
+
+  /* interior energy */
+  color += tc * plasma * (.06 + activity*.06);
+  color += tc * burst  * .07;
+  color += tc * scan   * .025 * (.5 + activity);
+
+  /* arrival */
+  color += tc * shimRing * .7;
+  color += tc * shimFlush * .3;
+
+  /* caustic specular shimmer */
+  color += vec3(.14,.18,.26) * specBand * caustic * .22;
+
+  /* interference + crackle in the surface */
+  color += tc * interference * .016;
+  color += tc * field        * .04 * (u_has_tex < .5 ? 1. : .3);
+
+  /* hover brightening */
+  color = mix(color, color*1.12+tc*.06, u_hover*.4);
+
+  /* depth shade from center */
+  color *= 1. - smoothstep(0.,.82,r)*.12;
+
+  /* film grain */
+  color += grain * mix(.024,.012,u_has_tex);
+
+  /* soft mask at UV corners */
+  vec2 sm = smoothstep(vec2(0.),vec2(.015),uv)*smoothstep(vec2(0.),vec2(.015),1.-uv);
+  float softM = sm.x*sm.y;
+
+  float alpha = mix(.93,1.,u_has_tex)*mask*softM;
+  gl_FragColor = vec4(clamp(color,0.,1.), clamp(alpha,0.,1.));
+}`;
+
+// ── Compile ──────────────────────────────────────────────────
+function mkS(src,type){
+  var s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+var prog=gl.createProgram();
+gl.attachShader(prog,mkS(VS,gl.VERTEX_SHADER));
+gl.attachShader(prog,mkS(FS,gl.FRAGMENT_SHADER));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+
+var UL={};
+['u_rect','u_resolution','u_dpr','u_tex','u_has_tex','u_tex_size',
+ 'u_type_color','u_selected','u_hover','u_time','u_shimmer','u_hide_edge'
+].forEach(function(n){UL[n]=gl.getUniformLocation(prog,n);});
+var APOS=gl.getAttribLocation(prog,'a_pos');
+var qbuf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,qbuf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+
+// ── Textures ─────────────────────────────────────────────────
+var TX={};
+function mkTex(){
+  var t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  return t;
+}
+var BLANK=mkTex();
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([10,13,22,255]));
+
+function uploadTex(asset,el){
+  if(TX[asset.k])return;
+  var t=mkTex();
+  gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,el);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  TX[asset.k]=t;
+}
+
+// ── Render loop ───────────────────────────────────────────────
+var fxOn=true, t0=null, SDUR=2500;
+
+function frame(ts){
+  requestAnimationFrame(frame);
+  if(!t0)t0=ts;
+  var t=(ts-t0)*.001;
+
+  gl.viewport(0,0,cv.width,cv.height);
+  gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  if(!fxOn)return;
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER,qbuf);
+  gl.enableVertexAttribArray(APOS);
+  gl.vertexAttribPointer(APOS,2,gl.FLOAT,false,0,0);
+
+  // globals
+  gl.uniform2f(UL['u_resolution'],VW,VH);
+  gl.uniform1f(UL['u_dpr'],DPR);
+  gl.uniform1f(UL['u_time'],t);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(UL['u_tex'],0);
+
+  var vpH=VH, ovs=200;
+
+  for(var i=0;i<TILES.length;i++){
+    var s=TILES[i], a=s.asset;
+    var rct=s.thumb.getBoundingClientRect();
+    if(rct.bottom<-ovs||rct.top>vpH+ovs)continue;
+
+    // smooth hover
+    s.hovS += (s.hov - s.hovS) * .10;
+
+    // shimmer
+    var shim=0;
+    if(a._r&&a._rAt){var age=ts-a._rAt,pct=age/SDUR;if(pct<1)shim=Math.sin(Math.PI*pct);}
+
+    // per-tile uniforms — ALL live
+    gl.uniform4f(UL['u_rect'],rct.left,rct.top,rct.right,rct.bottom);
+    gl.uniform3f(UL['u_type_color'],TRGB[a.t][0],TRGB[a.t][1],TRGB[a.t][2]);
+    gl.uniform1f(UL['u_selected'],s.card.classList.contains('sel')?1:0);
+    gl.uniform1f(UL['u_hover'],s.hovS);
+    gl.uniform1f(UL['u_shimmer'],shim);
+    gl.uniform4f(UL['u_hide_edge'],s.adj[0],s.adj[1],s.adj[2],s.adj[3]);
+    gl.uniform1f(UL['u_has_tex'],a._r?1:0);
+    gl.uniform2f(UL['u_tex_size'],a._iw||1,a._ih||1);
+
+    gl.bindTexture(gl.TEXTURE_2D,TX[a.k]||BLANK);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  }
+}
+requestAnimationFrame(frame);
+
+} // end gl branch
+
+// ── Mode toggle ───────────────────────────────────────────────
+function setMode(m){
+  document.querySelectorAll('.tb').forEach(function(b){b.classList.remove('on');});
+  document.getElementById('b-'+m).classList.add('on');
+  document.body.classList.remove('lm','gm');
+  fxOn = m==='fx';
+  cv.style.opacity = fxOn?'1':'0';
+  document.getElementById('fmode').textContent =
+    m==='fx'  ?'FX · holographic surface · all uniforms live':
+    m==='grid' ?'Grid · plain DOM thumbnails':
+                'List · plain DOM thumbnails';
+  if(m==='list') document.body.classList.add('lm');
+  if(m==='grid') document.body.classList.add('gm');
+  TILES.forEach(function(s){
+    var img=s.thumb.querySelector('img');
+    if(!img)return;
+    img.style.opacity = (!fxOn && img.classList.contains('ok'))?'.85':'';
+  });
+}
+document.getElementById('b-fx').onclick   = function(){setMode('fx');};
+document.getElementById('b-grid').onclick = function(){setMode('grid');};
+document.getElementById('b-list').onclick = function(){setMode('list');};
+</script>
+
+</body>
+</html>
