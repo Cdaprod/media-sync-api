@@ -862,12 +862,16 @@
       visibility: hidden !important;
     }
     body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb-body,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-fx-near-visible="1"]:not([data-tex="1"]) .thumb-body,
     body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb > img.asset-thumb,
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb img.asset-thumb{
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-fx-near-visible="1"]:not([data-tex="1"]) .thumb > img.asset-thumb,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb img.asset-thumb,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-fx-near-visible="1"]:not([data-tex="1"]) .thumb img.asset-thumb{
       opacity: 0 !important;
       visibility: hidden !important;
     }
-    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb::after{
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-tex="pending"] .thumb::after,
+    body.fx-mode #mediaGridRoot.view-fx .asset[data-fx-near-visible="1"]:not([data-tex="1"]) .thumb::after{
       content: '';
       position: absolute;
       inset: 0;

@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-08 — Visible thumb-body ownership policy finalization (active)
+- [x] Isolated remaining mixed visual state to thumb-body paint policy: visible/near-visible cards could still present DOM thumb body whenever `data-tex` briefly remained non-`1`/non-`pending`.
+- [x] Enforced FX-window painter policy in CSS: any card flagged `data-fx-near-visible="1"` and not `data-tex="1"` now uses placeholder suppression for `.thumb-body`/thumb image painters.
+- [x] Preserved DOM ownership for `.asset-ui` metadata, badges, selectors, and affordances; no overlay/UI architecture rewrites were introduced.
+- [x] Added a regression assertion in tests for the near-visible non-textured placeholder selector.
+- [ ] Re-check on physical iPhone that visible FX window no longer shows normal DOM thumb bodies behind FX/placeholder cards during short scroll-stop cycles.
+
 ## 2026-03-08 — Pending→texture stall in visible window (active)
 - [x] Traced stall gate to renderer callback ordering: `tile.onTextureReady(...)` only ran after `rectValid` + `visible` draw culls, so some cards remained `data-tex="pending"` when texture became available but draw eligibility lagged.
 - [x] Moved texture readiness callback invocation to run immediately after cache lookup for every fed tile (before visible-only culls), while preserving draw culls and swap eligibility rules.

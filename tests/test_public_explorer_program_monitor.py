@@ -716,6 +716,7 @@ def test_explorer_card_shell_skin_and_bg_impulse_present():
     assert '.asset .scrim{' in html
     assert '.asset .play-btn{' in html
     assert '.asset .preview-pill{' in html
+    assert '[data-fx-near-visible="1"]:not([data-tex="1"]) .thumb-body' in html
     assert 'id="bgImpulseCanvas" class="bg-impulse-canvas"' in html
     assert 'function wireBackgroundImpulse()' in html
     assert "document.addEventListener('pointerdown', pushImpulse, { passive: true });" in html

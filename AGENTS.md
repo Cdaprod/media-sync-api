@@ -1717,3 +1717,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated renderer ordering so per-tile cache truth (`entry?.texture`) drives `onTextureReady(...)` before visible/rect culls; draw culling and swap eligibility remain unchanged.
 - Resulting behavior: fed visible/near-visible tiles now receive readiness promotion to `data-tex="1"` as soon as texture exists, instead of waiting for draw-eligibility timing.
 - Added regression coverage in `tests/test_public_explorer_program_monitor.py` to lock callback-before-cull ordering.
+
+## 2026-03-08 — Visible thumb-body ownership policy cleanup (new)
+- Followed up after verdict/logging fixes and targeted the remaining patchy visual layer: some visible cards could still show normal DOM thumb bodies during FX mode while neighbors were FX/placeholder.
+- Root cause at policy layer: placeholder painter suppression was keyed only to `data-tex="pending"`, so transient non-texture states in near-visible FX window could leak full DOM thumb body paint.
+- Tightened CSS ownership policy in `public/explorer.html`: any `data-fx-near-visible="1"` card that is not `data-tex="1"` now suppresses thumb-body/thumb-image painters and shows the existing FX placeholder treatment.
+- Kept `.asset-ui` and card structure fully DOM-owned (titles/subtitles/badges/selectors/affordances unchanged); no lifecycle, queue, or renderer architecture changes were made.
+- Added test coverage in `tests/test_public_explorer_program_monitor.py` for the near-visible non-textured placeholder selector.
