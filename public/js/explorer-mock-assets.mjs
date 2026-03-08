@@ -117,6 +117,7 @@ export function shouldUseExplorerMocks() {
 export function isLikelyPreviewEnvironment() {
   const protocol = String(window.location.protocol || '').toLowerCase();
   if (WEBVIEW_PROTOCOLS.has(protocol)) return true;
+  if (hostLooksLocal(window.location.hostname)) return true;
   if (window.opener && hostLooksLocal(window.location.hostname)) return true;
   if (window.top !== window.self && hostLooksLocal(window.location.hostname)) return true;
   return false;

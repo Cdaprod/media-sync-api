@@ -1750,3 +1750,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added preview fallback guard for local embedded preview contexts (`window.opener` / iframe + local host) so API boot errors in editor previews reroute to mock hydration instead of showing source/project failure toasts.
 - Expanded mock activation helper in `public/js/explorer-mock-assets.mjs` to include common webview protocols (`vscode-webview:`, `capacitor:`, `ionic:`) in addition to `file:` and explicit flags.
 - Preserved deployed safety by keeping real `http/https` non-preview boot on API path unless explicit mock activation is requested.
+
+## 2026-03-08 — Localhost top-level preview mock fallback widening (new)
+- Addressed remaining preview gap where top-level editor-hosted localhost previews could fail API boot without `?mock=1` and still miss mock fallback because preview detection previously required opener/iframe context.
+- Updated `isLikelyPreviewEnvironment()` in `public/js/explorer-mock-assets.mjs` to classify localhost/loopback/local-test hostnames as preview contexts directly.
+- Maintained production safety: this heuristic is only used in boot error fallback routing, so deployed non-local hosts continue real API behavior unless explicit mock activation is requested.
+- Added regression assertion in `tests/test_public_explorer_program_monitor.py` for direct localhost preview detection branch.

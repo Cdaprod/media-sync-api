@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+
+## 2026-03-08 — Editor preview mock fallback without query flag (active)
+- [x] Reproduced the remaining gap: top-level local editor preview can fail API boot without `?mock=1`, but previous preview heuristic only treated embedded/opener contexts as preview fallback eligible.
+- [x] Broadened `isLikelyPreviewEnvironment()` to treat localhost/loopback/local test hosts as preview contexts for API-failure fallback routing.
+- [x] Kept deployed behavior safe: fallback still occurs only after API boot failure and only for local-preview host heuristics, not arbitrary remote `http/https` hosts.
+- [x] Added regression assertion in `tests/test_public_explorer_program_monitor.py` for localhost-based preview detection.
+- [ ] Validate from text-editor preview “no localStorage.json” path that explorer auto-renders mock assets without needing manual `?mock=1`.
+
 ## 2026-03-08 — Explorer mock boot bypass for preview/webview (active)
 - [x] Identified root cause: explorer boot still executed API-first `refreshExplorerData()` before mock activation, so preview hosts surfaced sources/projects failure toasts and never entered mock render flow.
 - [x] Moved mock decision to early boot gate: explicit mock/file/webview protocol now routes directly into mock state hydration before API source/project fetch calls.

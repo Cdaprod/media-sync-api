@@ -769,6 +769,7 @@ def test_explorer_mock_module_supports_webview_preview_detection():
     assert 'export function shouldUseExplorerMocks() {' in module
     assert "return WEBVIEW_PROTOCOLS.has(String(window.location.protocol || '').toLowerCase());" in module
     assert 'export function isLikelyPreviewEnvironment() {' in module
+    assert "if (hostLooksLocal(window.location.hostname)) return true;" in module
     assert "if (window.opener && hostLooksLocal(window.location.hostname)) return true;" in module
     assert "if (window.top !== window.self && hostLooksLocal(window.location.hostname)) return true;" in module
 
