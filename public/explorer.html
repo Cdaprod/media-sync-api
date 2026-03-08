@@ -2231,7 +2231,17 @@
     }
 
     function exportTileFxProofSummary(){
-      const proof = window.__tilefx_proof || {};
+      let proof = window.__tilefx_proof || {};
+      const runtimeView = String(state.view || 'grid');
+      const runtimeEnabled = tileFxDbg.enabled === true || tileFX?.enabled === true;
+      const runtimeRafRunning = tileFxDbg.rafRunning === true || Number(tileFX?.raf || 0) > 0;
+      const capturedView = String(proof.view || 'grid');
+      const capturedEnabled = proof.enabled === true;
+      const capturedRafRunning = proof.rafRunning === true;
+      const capturedVisible = Number(proof.tilesVisible || 0);
+      const proofStale = capturedView !== runtimeView
+        || (runtimeView === 'fx' && runtimeEnabled && runtimeRafRunning && (!capturedEnabled || !capturedRafRunning || capturedVisible <= 0));
+      if (proofStale) proof = captureTileFxProof('export:refresh');
       const health = computeTileFxHealthVerdict();
       const summary = {
         timestamp: Date.now(),

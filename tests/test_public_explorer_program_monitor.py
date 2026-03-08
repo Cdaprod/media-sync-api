@@ -170,6 +170,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "function captureTileFxProof(reason = 'manual'){" in html
     assert 'window.captureTileFxProof = captureTileFxProof;' in html
     assert 'function exportTileFxProofSummary(){' in html
+    assert "if (proofStale) proof = captureTileFxProof('export:refresh');" in html
     assert 'window.exportTileFxProofSummary = exportTileFxProofSummary;' in html
     assert "function logTileFxProofSummary(reason = 'manual'){" in html
     assert 'window.logTileFxProofSummary = logTileFxProofSummary;' in html

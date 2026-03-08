@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-08 — Proof snapshot stale-capture reconciliation (active)
+- [x] Accepted runtime confirmation that core FX pipeline is live (feed/upload/cache/swap no longer primary blocker).
+- [x] Narrowed remaining contradiction to proof export timing: stale non-settled captures could be exported while runtime was already settled in FX.
+- [x] Added a minimal `exportTileFxProofSummary()` refresh guard to recapture proof when current runtime is FX+enabled+raf-running but captured proof shows non-running/zero-visible state.
+- [x] Kept scope strictly to truth-surface timing; no pipeline/lifecycle/UI architecture changes.
+- [ ] Re-check on device that contradictory `view:"fx"` + `enabled:false` proof objects no longer appear once runtime is settled.
+
 ## 2026-03-08 — Feed-stage promotion/pipeline reactivation (active)
 - [x] Traced the zero-upload idle state to a render-stage feed gate: `_render(...)` used non-null-safe `this.textureCache.has/get` access before cache bootstrap was guaranteed, allowing loop failure and starving feed/upload progression.
 - [x] Made render feed checks null-safe (`this.textureCache?.has?.(key)`, `this.textureCache?.get?.(key, now)`) so fed tiles continue to queue/upload even if cache bootstrap is one tick behind.

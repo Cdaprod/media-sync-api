@@ -1731,3 +1731,10 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Switched render feed/cache reads to null-safe access (`this.textureCache?.has?.(key)`, `this.textureCache?.get?.(key, now)`) so fed tiles still queue and advance while cache initialization catches up.
 - Kept scope minimal: no card overlay changes, no lifecycle architecture changes, no new debug subsystems.
 - Added regression assertions in `tests/test_public_explorer_program_monitor.py` for null-safe texture-cache usage in render path.
+
+## 2026-03-08 — Proof export stale-capture guard (new)
+- Accepted settled runtime evidence that FX feed/upload/cache/swap pipeline is alive; stopped treating renderer pipeline as the active blocker in this pass.
+- Identified remaining contradiction as truth-surface timing: `exportTileFxProofSummary()` could export an older non-settled `window.__tilefx_proof` snapshot while runtime was already FX-enabled and drawing.
+- Added a narrow refresh guard in `exportTileFxProofSummary()` to re-capture proof (`captureTileFxProof('export:refresh')`) when runtime indicates active FX but captured proof indicates non-running/zero-visible state.
+- Kept fix scoped to proof snapshot consistency only (no lifecycle, queue/drain, or UI ownership rewrites).
+- Added regression assertion in `tests/test_public_explorer_program_monitor.py` for the export refresh line.
