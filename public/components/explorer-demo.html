@@ -1,10 +1,410 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Explorer — Asset Preview Demo</title>
 <script type="module" src="./asset-preview.mjs"></script>
+<!-- normalizeAsset also exported from asset-preview.mjs -->
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #080a0d;
+    color: #e8eaf0;
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px 40px;
+    gap: 32px;
+  }
+
+h1 {
+font-size: 11px;
+letter-spacing: .25em;
+color: rgba(255,255,255,.3);
+text-transform: uppercase;
+}
+
+/* ── fake grid of tiles ── */
+.grid {
+display: grid;
+grid-template-columns: repeat(3, 120px);
+gap: 10px;
+}
+.tile {
+height: 160px;
+border-radius: 10px;
+background: #0e1117;
+border: 1px solid rgba(255,255,255,.06);
+cursor: pointer;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+gap: 8px;
+transition: border-color .15s, background .15s;
+position: relative;
+overflow: hidden;
+}
+.tile:hover {
+border-color: rgba(255,255,255,.16);
+background: #141820;
+}
+.tile-kind {
+font-size: 8px;
+letter-spacing: .15em;
+padding: 2px 7px;
+border-radius: 3px;
+}
+.tile-kind.video { background: rgba(0,229,255,.1); color: #00e5ff; }
+.tile-kind.image { background: rgba(255,107,53,.1); color: #ff6b35; }
+.tile-kind.audio { background: rgba(192,132,252,.1); color: #c084fc; }
+.tile-name { font-size: 8px; color: rgba(255,255,255,.4); text-align: center; padding: 0 8px; }
+
+/* ── demo controls ── */
+.controls {
+display: flex;
+gap: 8px;
+flex-wrap: wrap;
+justify-content: center;
+}
+.ctrl-btn {
+font-family: inherit;
+font-size: 9px;
+letter-spacing: .1em;
+padding: 6px 14px;
+border-radius: 100px;
+border: 1px solid rgba(255,255,255,.1);
+background: rgba(255,255,255,.05);
+color: rgba(255,255,255,.55);
+cursor: pointer;
+transition: all .2s;
+}
+.ctrl-btn:hover { color: #fff; border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.1); }
+
+/*
+
+- ── Preview panel — responsive sizing ──────────────────────────────────────
+- 
+- The panel is positioned fixed and centered in the viewport.
+- It never exceeds the viewport in either dimension.
+- 
+- Portrait phones  → tall narrow panel (up to 92vh tall, max 480px wide)
+- Landscape phones → shorter wide panel (up to 88vh tall, max 720px wide)
+- Tablets/desktop  → comfortable centered panel with generous max sizes
+- 
+- The asset-preview web component’s :host is width/height:100%, so it
+- exactly fills whatever size we give the element here — no fixed px
+- values live inside the component itself.
+- ────────────────────────────────────────────────────────────────────────────
+  */
+  asset-preview {
+  position: fixed;
+  /* center in viewport */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+
+
+/*
+ * Default (portrait): take as much height as possible, constrain width.
+ * min() picks the smaller of the two so we never overflow.
+ */
+width:  min(92vw, 460px);
+height: min(92vh, 860px);
+
+filter: drop-shadow(0 0 80px rgba(0,0,0,.9));
+transition: width .4s cubic-bezier(.16,1,.3,1),
+            height .4s cubic-bezier(.16,1,.3,1);
+
+
+}
+
+/*
+
+- Landscape orientation: the viewport is now wider than tall.
+- Flip the constraints — constrain height first, allow more width.
+  */
+  @media (orientation: landscape) {
+  asset-preview {
+  width:  min(88vw, 820px);
+  height: min(88vh, 520px);
+  }
+  }
+
+/*
+
+- Tablet / large screen: more generous proportions.
+- The panel stays comfortably centered without feeling too large.
+  */
+  @media (min-width: 768px) and (orientation: portrait) {
+  asset-preview {
+  width:  min(70vw, 500px);
+  height: min(85vh, 900px);
+  }
+  }
+  @media (min-width: 768px) and (orientation: landscape) {
+  asset-preview {
+  width:  min(65vw, 900px);
+  height: min(82vh, 600px);
+  }
+  }
+
+/* backdrop scrim behind the panel */
+#backdrop {
+position: fixed;
+inset: 0;
+background: rgba(0,0,0,.6);
+backdrop-filter: blur(6px);
+z-index: 99;
+opacity: 0;
+pointer-events: none;
+transition: opacity .35s;
+}
+#backdrop.visible { opacity: 1; pointer-events: auto; }
+
+.event-log {
+font-size: 9px;
+color: rgba(255,255,255,.25);
+letter-spacing: .06em;
+min-height: 18px;
+}
+</style>
+
+</head>
+<body>
+
+<h1>Cdaprod Explorer — asset-preview.mjs demo</h1>
+
+<!-- Fake media grid -->
+
+<div class="grid" id="grid"></div>
+
+<!-- Manual controls -->
+
+<div class="controls">
+  <button class="ctrl-btn" id="btnVideo">Open Video</button>
+  <button class="ctrl-btn" id="btnImage">Open Image</button>
+  <button class="ctrl-btn" id="btnAudio">Open Audio</button>
+  <button class="ctrl-btn" id="btnClose">Close</button>
+  <button class="ctrl-btn" id="btnSticker" title="Press S key too">+ Sticker</button>
+</div>
+
+<div class="event-log" id="log">click a tile or button to preview</div>
+
+<!-- Backdrop -->
+
+<div id="backdrop"></div>
+
+<!-- The web component — no other config needed -->
+
+<asset-preview id="preview" hidden></asset-preview>
+
+<script type="module">
+import { normalizeAsset } from './asset-preview.mjs';
+
+// ── Sample "API" asset library (mimics your real API response shape) ──────────
+// These match the fields normalizeAsset() understands. Your real explorer
+// passes the raw API response through normalizeAsset() before calling load().
+const API_ASSETS = [
+  {
+    id: 'asset-001',
+    filename: 'compiled-0011.mp4',
+    relative_path: 'exports/compiled-0011.mp4',
+    kind: 'video',
+    duration_seconds: 0.040,
+    width: 1080, height: 1920, fps: 25, codec: 'h264', file_size_kb: 269,
+    stream_url: null, // null = placeholder (no real file in demo)
+    obs_cover: 'Cover', obs_slot: 'Slot 1', exclusive: true,
+  },
+  {
+    id: 'asset-002',
+    filename: 'session-b-raw.mp4',
+    relative_path: 'raw/session-b-raw.mp4',
+    kind: 'video',
+    duration_seconds: 182,
+    width: 3840, height: 2160, fps: 60, codec: 'h265', file_size_kb: 2100000,
+    stream_url: null,
+    obs_cover: 'Fit', obs_slot: 'Slot 2', exclusive: false,
+  },
+  {
+    id: 'asset-003',
+    filename: 'frame-0032.jpg',
+    relative_path: 'frames/frame-0032.jpg',
+    kind: 'image',
+    width: 1080, height: 1920, format: 'jpeg', bit_depth: 8, file_size_kb: 412,
+    stream_url: null,
+  },
+  {
+    id: 'asset-004',
+    filename: 'poster-hero.png',
+    relative_path: 'assets/poster-hero.png',
+    kind: 'image',
+    width: 2560, height: 1440, format: 'png', bit_depth: 16, file_size_kb: 4915,
+    stream_url: null,
+  },
+  {
+    id: 'asset-005',
+    filename: 'ambient-loop-03.aac',
+    relative_path: 'audio/ambient-loop-03.aac',
+    kind: 'audio',
+    duration_seconds: 204, bitrate_kbps: 192, channels: 2, sample_rate_hz: 44100,
+    stream_url: null,
+  },
+  {
+    id: 'asset-006',
+    filename: 'foley-impact.wav',
+    relative_path: 'audio/foley-impact.wav',
+    kind: 'audio',
+    duration_seconds: 1.4, bitrate_kbps: 320, channels: 1, sample_rate_hz: 48000,
+    stream_url: null,
+  },
+];
+
+// ── Build fake grid ───────────────────────────────────────────────────────────
+const grid = document.getElementById('grid');
+API_ASSETS.forEach((apiAsset, i) => {
+  const tile = document.createElement('div');
+  tile.className = 'tile';
+  tile.innerHTML = `
+    <div class="tile-kind ${apiAsset.kind}">${apiAsset.kind.toUpperCase()}</div>
+    <div class="tile-name">${apiAsset.filename}</div>
+  `;
+  tile.addEventListener('click', () => openPreview(i));
+  grid.appendChild(tile);
+});
+
+// ── Explorer config — passed once to configure the component ─────────────────
+const preview  = document.getElementById('preview');
+const backdrop = document.getElementById('backdrop');
+const log      = document.getElementById('log');
+
+// configure() is the ONLY place Explorer-specific logic enters the component.
+// All other wiring is via event listeners below.
+preview.configure({
+  // Stream URL builder — Explorer owns the URL pattern
+  streamUrlBuilder: (asset) => `/media/${asset.path}?source=primary`,
+  // OBS slot options — pulled from your Explorer config/API
+  obsSlots: ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'],
+  obsCoverModes: ['Cover', 'Fit', 'Fill'],
+  resolveEnabled: true,
+  composeEnabled: true,
+});
+
+// ── Adapter context — Explorer provides field mappings + derived values ───────
+// This is what you'd customize in your real explorer.html to match your API shape.
+const adapterCtx = {
+  // resolvePreviewSrc: maps API asset → playable URL
+  // In demo: null (placeholders). In real explorer: your media server URL.
+  resolvePreviewSrc: (a) => a.stream_url ?? null,
+
+  // buildQuickMeta: override default chip generation if your field names differ
+  // Leave undefined to use normalizeAsset's built-in defaults.
+  buildQuickMeta: undefined,
+
+  // buildObsState: override if your API uses different field names
+  buildObsState: (a) => ({
+    cover     : a.obs_cover ?? 'Cover',
+    slot      : a.obs_slot  ?? 'Slot 1',
+    exclusive : a.exclusive ?? false,
+  }),
+};
+
+// ── THE BRIDGE — this is the only function that changes in your explorer ───────
+// Replace your current openOldPreviewPanel(asset) call with openPreview(index).
+function openPreview(index) {
+  // Normalize the full list once (or keep a normalized cache)
+  const normalizedList = API_ASSETS.map(a => normalizeAsset(a, adapterCtx));
+
+  // Tell the component about the full list for internal prev/next
+  preview.setAssets(normalizedList, index);
+
+  // Load and open
+  preview.load(normalizedList[index]);
+  preview.open();
+  backdrop.classList.add('visible');
+  log.textContent = `Opened: ${normalizedList[index].name}`;
+}
+
+// ── EVENT LISTENERS — Explorer handles all application logic ──────────────────
+preview.addEventListener('preview-close', () => {
+  backdrop.classList.remove('visible');
+  log.textContent = 'Panel closed.';
+});
+
+// prev/next are now handled internally by setAssets() — these fire for
+// Explorer to sync its own selection state if needed
+preview.addEventListener('preview-prev', e => {
+  log.textContent = `← ${e.detail.asset?.name}`;
+  // sync your Explorer selection state here if needed
+});
+preview.addEventListener('preview-next', e => {
+  log.textContent = `→ ${e.detail.asset?.name}`;
+});
+
+// All application actions — Explorer handles business logic, component handles UI
+preview.addEventListener('preview-action', e => {
+  const { action, asset, streamUrl, obsState, stickers } = e.detail;
+
+  switch (action) {
+    case 'stream':
+      // Explorer's real copyStreamUrl() logic goes here
+      log.textContent = `Copied: ${streamUrl}`;
+      break;
+
+    case 'obs':
+      // Explorer's sendToOBS() — obsState has { cover, slot, exclusive }
+      log.textContent = `OBS → ${obsState.slot} / ${obsState.cover} / excl:${obsState.exclusive} → ${asset.name}`;
+      break;
+
+    case 'resolve':
+      // Explorer's sendToResolve()
+      log.textContent = `Resolve ← ${asset.name}`;
+      break;
+
+    case 'compose':
+      // Explorer opens the scene composer with this asset + current sticker layout
+      log.textContent = `Compose: ${asset.name} + ${stickers?.length ?? 0} stickers`;
+      break;
+
+    case 'tag':
+      // Explorer opens tag dialog for asset.raw (original API object)
+      log.textContent = `Tag: ${asset.name}`;
+      break;
+
+    case 'delete':
+      log.textContent = `Delete: ${asset.name}`;
+      preview.close();
+      break;
+
+    default:
+      log.textContent = `Action: ${action} → ${asset?.name}`;
+  }
+});
+
+// Backdrop click closes panel
+backdrop.addEventListener('click', () => preview.close());
+
+// ── Demo: sticker test ────────────────────────────────────────────────────────
+// Demonstrates addSticker() API — wire this to your composer in real explorer.
+document.addEventListener('keydown', e => {
+  if (e.key === 's') {
+    // Add mic-wave.html as a sticker (bottom strip)
+    const id = preview.addSticker('./mic-wave.html', { x: 0.03, y: 0.72, w: 0.94, h: 0.16 });
+    log.textContent = `Sticker added: ${id}`;
+  }
+  if (e.key === 'c') { preview.clearStickers(); log.textContent = 'Stickers cleared.'; }
+  if (e.key === 'e') { /* toggle edit mode via keyboard — component handles it via edit-mode button */ }
+});
+</script>
+
+<!-- normalizeAsset also exported from asset-preview.mjs -->
+
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -167,28 +567,34 @@
     min-height: 18px;
   }
 </style>
+
 </head>
 <body>
 
 <h1>Cdaprod Explorer — asset-preview.mjs demo</h1>
 
 <!-- Fake media grid -->
+
 <div class="grid" id="grid"></div>
 
 <!-- Manual controls -->
+
 <div class="controls">
-  <button class="ctrl-btn" onclick="loadAndOpen('video')">Open Video</button>
-  <button class="ctrl-btn" onclick="loadAndOpen('image')">Open Image</button>
-  <button class="ctrl-btn" onclick="loadAndOpen('audio')">Open Audio</button>
-  <button class="ctrl-btn" onclick="preview.close()">Close</button>
+  <button class="ctrl-btn" id="btnVideo">Open Video</button>
+  <button class="ctrl-btn" id="btnImage">Open Image</button>
+  <button class="ctrl-btn" id="btnAudio">Open Audio</button>
+  <button class="ctrl-btn" id="btnClose">Close</button>
+  <button class="ctrl-btn" id="btnSticker" title="Press S key too">+ Sticker</button>
 </div>
 
 <div class="event-log" id="log">click a tile or button to preview</div>
 
 <!-- Backdrop -->
+
 <div id="backdrop"></div>
 
 <!-- The web component — no other config needed -->
+
 <asset-preview id="preview" hidden></asset-preview>
 
 <script>
@@ -296,5 +702,6 @@ preview.addEventListener('preview-action', e => {
 // Backdrop click closes panel
 backdrop.addEventListener('click', () => preview.close());
 </script>
+
 </body>
 </html>
