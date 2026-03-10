@@ -1,0 +1,2364 @@
+{
+  "assets": [
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-001.jpg",
+      "path": "/mock/MockProject-1/image-asset-001.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-001.jpg",
+      "sha256": "0000000100000001000000010000000100000001000000010000000100000001",
+      "size_bytes": 120000,
+      "thumb_url": "https://picsum.photos/id/100/640/360",
+      "stream_url": "https://picsum.photos/id/100/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:00:00Z",
+      "indexed_at": "2025-01-01T00:00:00Z",
+      "uploaded_at": "2025-01-01T00:00:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-002.mp4",
+      "path": "/mock/MockProject-2/video-asset-002.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-002.mp4",
+      "sha256": "0000000200000002000000020000000200000002000000020000000200000002",
+      "size_bytes": 120137,
+      "thumb_url": "https://picsum.photos/id/101/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:01:00Z",
+      "indexed_at": "2025-01-01T00:01:00Z",
+      "uploaded_at": "2025-01-01T00:01:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-003.mp3",
+      "path": "/mock/MockProject-3/audio-asset-003.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-003.mp3",
+      "sha256": "0000000300000003000000030000000300000003000000030000000300000003",
+      "size_bytes": 120274,
+      "thumb_url": "https://picsum.photos/id/102/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:02:00Z",
+      "indexed_at": "2025-01-01T00:02:00Z",
+      "uploaded_at": "2025-01-01T00:02:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-004.jpg",
+      "path": "/mock/MockProject-4/image-asset-004.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-004.jpg",
+      "sha256": "0000000400000004000000040000000400000004000000040000000400000004",
+      "size_bytes": 120411,
+      "thumb_url": "https://picsum.photos/id/103/640/360",
+      "stream_url": "https://picsum.photos/id/103/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:03:00Z",
+      "indexed_at": "2025-01-01T00:03:00Z",
+      "uploaded_at": "2025-01-01T00:03:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-005.mp4",
+      "path": "/mock/MockProject-1/video-asset-005.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-005.mp4",
+      "sha256": "0000000500000005000000050000000500000005000000050000000500000005",
+      "size_bytes": 120548,
+      "thumb_url": "https://picsum.photos/id/104/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:04:00Z",
+      "indexed_at": "2025-01-01T00:04:00Z",
+      "uploaded_at": "2025-01-01T00:04:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-006.mp3",
+      "path": "/mock/MockProject-2/audio-asset-006.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-006.mp3",
+      "sha256": "0000000600000006000000060000000600000006000000060000000600000006",
+      "size_bytes": 120685,
+      "thumb_url": "https://picsum.photos/id/105/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:05:00Z",
+      "indexed_at": "2025-01-01T00:05:00Z",
+      "uploaded_at": "2025-01-01T00:05:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-007.jpg",
+      "path": "/mock/MockProject-3/image-asset-007.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-007.jpg",
+      "sha256": "0000000700000007000000070000000700000007000000070000000700000007",
+      "size_bytes": 120822,
+      "thumb_url": "https://picsum.photos/id/106/640/360",
+      "stream_url": "https://picsum.photos/id/106/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:06:00Z",
+      "indexed_at": "2025-01-01T00:06:00Z",
+      "uploaded_at": "2025-01-01T00:06:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-008.mp4",
+      "path": "/mock/MockProject-4/video-asset-008.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-008.mp4",
+      "sha256": "0000000800000008000000080000000800000008000000080000000800000008",
+      "size_bytes": 120959,
+      "thumb_url": "https://picsum.photos/id/107/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:07:00Z",
+      "indexed_at": "2025-01-01T00:07:00Z",
+      "uploaded_at": "2025-01-01T00:07:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-009.mp3",
+      "path": "/mock/MockProject-1/audio-asset-009.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-009.mp3",
+      "sha256": "0000000900000009000000090000000900000009000000090000000900000009",
+      "size_bytes": 121096,
+      "thumb_url": "https://picsum.photos/id/108/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:08:00Z",
+      "indexed_at": "2025-01-01T00:08:00Z",
+      "uploaded_at": "2025-01-01T00:08:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-010.jpg",
+      "path": "/mock/MockProject-2/image-asset-010.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-010.jpg",
+      "sha256": "0000000a0000000a0000000a0000000a0000000a0000000a0000000a0000000a",
+      "size_bytes": 121233,
+      "thumb_url": "https://picsum.photos/id/109/640/360",
+      "stream_url": "https://picsum.photos/id/109/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:09:00Z",
+      "indexed_at": "2025-01-01T00:09:00Z",
+      "uploaded_at": "2025-01-01T00:09:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-011.mp4",
+      "path": "/mock/MockProject-3/video-asset-011.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-011.mp4",
+      "sha256": "0000000b0000000b0000000b0000000b0000000b0000000b0000000b0000000b",
+      "size_bytes": 121370,
+      "thumb_url": "https://picsum.photos/id/110/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:10:00Z",
+      "indexed_at": "2025-01-01T00:10:00Z",
+      "uploaded_at": "2025-01-01T00:10:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-012.mp3",
+      "path": "/mock/MockProject-4/audio-asset-012.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-012.mp3",
+      "sha256": "0000000c0000000c0000000c0000000c0000000c0000000c0000000c0000000c",
+      "size_bytes": 121507,
+      "thumb_url": "https://picsum.photos/id/111/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:11:00Z",
+      "indexed_at": "2025-01-01T00:11:00Z",
+      "uploaded_at": "2025-01-01T00:11:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-013.jpg",
+      "path": "/mock/MockProject-1/image-asset-013.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-013.jpg",
+      "sha256": "0000000d0000000d0000000d0000000d0000000d0000000d0000000d0000000d",
+      "size_bytes": 121644,
+      "thumb_url": "https://picsum.photos/id/112/640/360",
+      "stream_url": "https://picsum.photos/id/112/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:12:00Z",
+      "indexed_at": "2025-01-01T00:12:00Z",
+      "uploaded_at": "2025-01-01T00:12:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-014.mp4",
+      "path": "/mock/MockProject-2/video-asset-014.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-014.mp4",
+      "sha256": "0000000e0000000e0000000e0000000e0000000e0000000e0000000e0000000e",
+      "size_bytes": 121781,
+      "thumb_url": "https://picsum.photos/id/113/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:13:00Z",
+      "indexed_at": "2025-01-01T00:13:00Z",
+      "uploaded_at": "2025-01-01T00:13:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-015.mp3",
+      "path": "/mock/MockProject-3/audio-asset-015.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-015.mp3",
+      "sha256": "0000000f0000000f0000000f0000000f0000000f0000000f0000000f0000000f",
+      "size_bytes": 121918,
+      "thumb_url": "https://picsum.photos/id/114/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:14:00Z",
+      "indexed_at": "2025-01-01T00:14:00Z",
+      "uploaded_at": "2025-01-01T00:14:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-016.jpg",
+      "path": "/mock/MockProject-4/image-asset-016.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-016.jpg",
+      "sha256": "0000001000000010000000100000001000000010000000100000001000000010",
+      "size_bytes": 122055,
+      "thumb_url": "https://picsum.photos/id/115/640/360",
+      "stream_url": "https://picsum.photos/id/115/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:15:00Z",
+      "indexed_at": "2025-01-01T00:15:00Z",
+      "uploaded_at": "2025-01-01T00:15:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-017.mp4",
+      "path": "/mock/MockProject-1/video-asset-017.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-017.mp4",
+      "sha256": "0000001100000011000000110000001100000011000000110000001100000011",
+      "size_bytes": 122192,
+      "thumb_url": "https://picsum.photos/id/116/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:16:00Z",
+      "indexed_at": "2025-01-01T00:16:00Z",
+      "uploaded_at": "2025-01-01T00:16:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-018.mp3",
+      "path": "/mock/MockProject-2/audio-asset-018.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-018.mp3",
+      "sha256": "0000001200000012000000120000001200000012000000120000001200000012",
+      "size_bytes": 122329,
+      "thumb_url": "https://picsum.photos/id/117/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:17:00Z",
+      "indexed_at": "2025-01-01T00:17:00Z",
+      "uploaded_at": "2025-01-01T00:17:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-019.jpg",
+      "path": "/mock/MockProject-3/image-asset-019.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-019.jpg",
+      "sha256": "0000001300000013000000130000001300000013000000130000001300000013",
+      "size_bytes": 122466,
+      "thumb_url": "https://picsum.photos/id/118/640/360",
+      "stream_url": "https://picsum.photos/id/118/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:18:00Z",
+      "indexed_at": "2025-01-01T00:18:00Z",
+      "uploaded_at": "2025-01-01T00:18:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-020.mp4",
+      "path": "/mock/MockProject-4/video-asset-020.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-020.mp4",
+      "sha256": "0000001400000014000000140000001400000014000000140000001400000014",
+      "size_bytes": 122603,
+      "thumb_url": "https://picsum.photos/id/119/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:19:00Z",
+      "indexed_at": "2025-01-01T00:19:00Z",
+      "uploaded_at": "2025-01-01T00:19:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-021.mp3",
+      "path": "/mock/MockProject-1/audio-asset-021.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-021.mp3",
+      "sha256": "0000001500000015000000150000001500000015000000150000001500000015",
+      "size_bytes": 122740,
+      "thumb_url": "https://picsum.photos/id/120/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:20:00Z",
+      "indexed_at": "2025-01-01T00:20:00Z",
+      "uploaded_at": "2025-01-01T00:20:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-022.jpg",
+      "path": "/mock/MockProject-2/image-asset-022.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-022.jpg",
+      "sha256": "0000001600000016000000160000001600000016000000160000001600000016",
+      "size_bytes": 122877,
+      "thumb_url": "https://picsum.photos/id/121/640/360",
+      "stream_url": "https://picsum.photos/id/121/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:21:00Z",
+      "indexed_at": "2025-01-01T00:21:00Z",
+      "uploaded_at": "2025-01-01T00:21:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-023.mp4",
+      "path": "/mock/MockProject-3/video-asset-023.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-023.mp4",
+      "sha256": "0000001700000017000000170000001700000017000000170000001700000017",
+      "size_bytes": 123014,
+      "thumb_url": "https://picsum.photos/id/122/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:22:00Z",
+      "indexed_at": "2025-01-01T00:22:00Z",
+      "uploaded_at": "2025-01-01T00:22:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-024.mp3",
+      "path": "/mock/MockProject-4/audio-asset-024.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-024.mp3",
+      "sha256": "0000001800000018000000180000001800000018000000180000001800000018",
+      "size_bytes": 123151,
+      "thumb_url": "https://picsum.photos/id/123/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:23:00Z",
+      "indexed_at": "2025-01-01T00:23:00Z",
+      "uploaded_at": "2025-01-01T00:23:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-025.jpg",
+      "path": "/mock/MockProject-1/image-asset-025.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-025.jpg",
+      "sha256": "0000001900000019000000190000001900000019000000190000001900000019",
+      "size_bytes": 123288,
+      "thumb_url": "https://picsum.photos/id/124/640/360",
+      "stream_url": "https://picsum.photos/id/124/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:24:00Z",
+      "indexed_at": "2025-01-01T00:24:00Z",
+      "uploaded_at": "2025-01-01T00:24:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-026.mp4",
+      "path": "/mock/MockProject-2/video-asset-026.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-026.mp4",
+      "sha256": "0000001a0000001a0000001a0000001a0000001a0000001a0000001a0000001a",
+      "size_bytes": 123425,
+      "thumb_url": "https://picsum.photos/id/125/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:25:00Z",
+      "indexed_at": "2025-01-01T00:25:00Z",
+      "uploaded_at": "2025-01-01T00:25:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-027.mp3",
+      "path": "/mock/MockProject-3/audio-asset-027.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-027.mp3",
+      "sha256": "0000001b0000001b0000001b0000001b0000001b0000001b0000001b0000001b",
+      "size_bytes": 123562,
+      "thumb_url": "https://picsum.photos/id/126/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:26:00Z",
+      "indexed_at": "2025-01-01T00:26:00Z",
+      "uploaded_at": "2025-01-01T00:26:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-028.jpg",
+      "path": "/mock/MockProject-4/image-asset-028.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-028.jpg",
+      "sha256": "0000001c0000001c0000001c0000001c0000001c0000001c0000001c0000001c",
+      "size_bytes": 123699,
+      "thumb_url": "https://picsum.photos/id/127/640/360",
+      "stream_url": "https://picsum.photos/id/127/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:27:00Z",
+      "indexed_at": "2025-01-01T00:27:00Z",
+      "uploaded_at": "2025-01-01T00:27:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-029.mp4",
+      "path": "/mock/MockProject-1/video-asset-029.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-029.mp4",
+      "sha256": "0000001d0000001d0000001d0000001d0000001d0000001d0000001d0000001d",
+      "size_bytes": 123836,
+      "thumb_url": "https://picsum.photos/id/128/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:28:00Z",
+      "indexed_at": "2025-01-01T00:28:00Z",
+      "uploaded_at": "2025-01-01T00:28:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-030.mp3",
+      "path": "/mock/MockProject-2/audio-asset-030.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-030.mp3",
+      "sha256": "0000001e0000001e0000001e0000001e0000001e0000001e0000001e0000001e",
+      "size_bytes": 123973,
+      "thumb_url": "https://picsum.photos/id/129/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:29:00Z",
+      "indexed_at": "2025-01-01T00:29:00Z",
+      "uploaded_at": "2025-01-01T00:29:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-031.jpg",
+      "path": "/mock/MockProject-3/image-asset-031.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-031.jpg",
+      "sha256": "0000001f0000001f0000001f0000001f0000001f0000001f0000001f0000001f",
+      "size_bytes": 124110,
+      "thumb_url": "https://picsum.photos/id/130/640/360",
+      "stream_url": "https://picsum.photos/id/130/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:30:00Z",
+      "indexed_at": "2025-01-01T00:30:00Z",
+      "uploaded_at": "2025-01-01T00:30:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-032.mp4",
+      "path": "/mock/MockProject-4/video-asset-032.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-032.mp4",
+      "sha256": "0000002000000020000000200000002000000020000000200000002000000020",
+      "size_bytes": 124247,
+      "thumb_url": "https://picsum.photos/id/131/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:31:00Z",
+      "indexed_at": "2025-01-01T00:31:00Z",
+      "uploaded_at": "2025-01-01T00:31:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-033.mp3",
+      "path": "/mock/MockProject-1/audio-asset-033.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-033.mp3",
+      "sha256": "0000002100000021000000210000002100000021000000210000002100000021",
+      "size_bytes": 124384,
+      "thumb_url": "https://picsum.photos/id/132/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:32:00Z",
+      "indexed_at": "2025-01-01T00:32:00Z",
+      "uploaded_at": "2025-01-01T00:32:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-034.jpg",
+      "path": "/mock/MockProject-2/image-asset-034.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-034.jpg",
+      "sha256": "0000002200000022000000220000002200000022000000220000002200000022",
+      "size_bytes": 124521,
+      "thumb_url": "https://picsum.photos/id/133/640/360",
+      "stream_url": "https://picsum.photos/id/133/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:33:00Z",
+      "indexed_at": "2025-01-01T00:33:00Z",
+      "uploaded_at": "2025-01-01T00:33:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-035.mp4",
+      "path": "/mock/MockProject-3/video-asset-035.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-035.mp4",
+      "sha256": "0000002300000023000000230000002300000023000000230000002300000023",
+      "size_bytes": 124658,
+      "thumb_url": "https://picsum.photos/id/134/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:34:00Z",
+      "indexed_at": "2025-01-01T00:34:00Z",
+      "uploaded_at": "2025-01-01T00:34:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-036.mp3",
+      "path": "/mock/MockProject-4/audio-asset-036.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-036.mp3",
+      "sha256": "0000002400000024000000240000002400000024000000240000002400000024",
+      "size_bytes": 124795,
+      "thumb_url": "https://picsum.photos/id/135/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:35:00Z",
+      "indexed_at": "2025-01-01T00:35:00Z",
+      "uploaded_at": "2025-01-01T00:35:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-037.jpg",
+      "path": "/mock/MockProject-1/image-asset-037.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-037.jpg",
+      "sha256": "0000002500000025000000250000002500000025000000250000002500000025",
+      "size_bytes": 124932,
+      "thumb_url": "https://picsum.photos/id/136/640/360",
+      "stream_url": "https://picsum.photos/id/136/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:36:00Z",
+      "indexed_at": "2025-01-01T00:36:00Z",
+      "uploaded_at": "2025-01-01T00:36:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-038.mp4",
+      "path": "/mock/MockProject-2/video-asset-038.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-038.mp4",
+      "sha256": "0000002600000026000000260000002600000026000000260000002600000026",
+      "size_bytes": 125069,
+      "thumb_url": "https://picsum.photos/id/137/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:37:00Z",
+      "indexed_at": "2025-01-01T00:37:00Z",
+      "uploaded_at": "2025-01-01T00:37:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-039.mp3",
+      "path": "/mock/MockProject-3/audio-asset-039.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-039.mp3",
+      "sha256": "0000002700000027000000270000002700000027000000270000002700000027",
+      "size_bytes": 125206,
+      "thumb_url": "https://picsum.photos/id/138/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:38:00Z",
+      "indexed_at": "2025-01-01T00:38:00Z",
+      "uploaded_at": "2025-01-01T00:38:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-040.jpg",
+      "path": "/mock/MockProject-4/image-asset-040.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-040.jpg",
+      "sha256": "0000002800000028000000280000002800000028000000280000002800000028",
+      "size_bytes": 125343,
+      "thumb_url": "https://picsum.photos/id/139/640/360",
+      "stream_url": "https://picsum.photos/id/139/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:39:00Z",
+      "indexed_at": "2025-01-01T00:39:00Z",
+      "uploaded_at": "2025-01-01T00:39:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-041.mp4",
+      "path": "/mock/MockProject-1/video-asset-041.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-041.mp4",
+      "sha256": "0000002900000029000000290000002900000029000000290000002900000029",
+      "size_bytes": 125480,
+      "thumb_url": "https://picsum.photos/id/140/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:40:00Z",
+      "indexed_at": "2025-01-01T00:40:00Z",
+      "uploaded_at": "2025-01-01T00:40:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-042.mp3",
+      "path": "/mock/MockProject-2/audio-asset-042.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-042.mp3",
+      "sha256": "0000002a0000002a0000002a0000002a0000002a0000002a0000002a0000002a",
+      "size_bytes": 125617,
+      "thumb_url": "https://picsum.photos/id/141/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:41:00Z",
+      "indexed_at": "2025-01-01T00:41:00Z",
+      "uploaded_at": "2025-01-01T00:41:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-043.jpg",
+      "path": "/mock/MockProject-3/image-asset-043.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-043.jpg",
+      "sha256": "0000002b0000002b0000002b0000002b0000002b0000002b0000002b0000002b",
+      "size_bytes": 125754,
+      "thumb_url": "https://picsum.photos/id/142/640/360",
+      "stream_url": "https://picsum.photos/id/142/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:42:00Z",
+      "indexed_at": "2025-01-01T00:42:00Z",
+      "uploaded_at": "2025-01-01T00:42:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-044.mp4",
+      "path": "/mock/MockProject-4/video-asset-044.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-044.mp4",
+      "sha256": "0000002c0000002c0000002c0000002c0000002c0000002c0000002c0000002c",
+      "size_bytes": 125891,
+      "thumb_url": "https://picsum.photos/id/143/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:43:00Z",
+      "indexed_at": "2025-01-01T00:43:00Z",
+      "uploaded_at": "2025-01-01T00:43:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-045.mp3",
+      "path": "/mock/MockProject-1/audio-asset-045.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-045.mp3",
+      "sha256": "0000002d0000002d0000002d0000002d0000002d0000002d0000002d0000002d",
+      "size_bytes": 126028,
+      "thumb_url": "https://picsum.photos/id/144/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:44:00Z",
+      "indexed_at": "2025-01-01T00:44:00Z",
+      "uploaded_at": "2025-01-01T00:44:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-046.jpg",
+      "path": "/mock/MockProject-2/image-asset-046.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-046.jpg",
+      "sha256": "0000002e0000002e0000002e0000002e0000002e0000002e0000002e0000002e",
+      "size_bytes": 126165,
+      "thumb_url": "https://picsum.photos/id/145/640/360",
+      "stream_url": "https://picsum.photos/id/145/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:45:00Z",
+      "indexed_at": "2025-01-01T00:45:00Z",
+      "uploaded_at": "2025-01-01T00:45:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-047.mp4",
+      "path": "/mock/MockProject-3/video-asset-047.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-047.mp4",
+      "sha256": "0000002f0000002f0000002f0000002f0000002f0000002f0000002f0000002f",
+      "size_bytes": 126302,
+      "thumb_url": "https://picsum.photos/id/146/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:46:00Z",
+      "indexed_at": "2025-01-01T00:46:00Z",
+      "uploaded_at": "2025-01-01T00:46:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-048.mp3",
+      "path": "/mock/MockProject-4/audio-asset-048.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-048.mp3",
+      "sha256": "0000003000000030000000300000003000000030000000300000003000000030",
+      "size_bytes": 126439,
+      "thumb_url": "https://picsum.photos/id/147/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:47:00Z",
+      "indexed_at": "2025-01-01T00:47:00Z",
+      "uploaded_at": "2025-01-01T00:47:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-049.jpg",
+      "path": "/mock/MockProject-1/image-asset-049.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-049.jpg",
+      "sha256": "0000003100000031000000310000003100000031000000310000003100000031",
+      "size_bytes": 126576,
+      "thumb_url": "https://picsum.photos/id/148/640/360",
+      "stream_url": "https://picsum.photos/id/148/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:48:00Z",
+      "indexed_at": "2025-01-01T00:48:00Z",
+      "uploaded_at": "2025-01-01T00:48:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-050.mp4",
+      "path": "/mock/MockProject-2/video-asset-050.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-050.mp4",
+      "sha256": "0000003200000032000000320000003200000032000000320000003200000032",
+      "size_bytes": 126713,
+      "thumb_url": "https://picsum.photos/id/149/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:49:00Z",
+      "indexed_at": "2025-01-01T00:49:00Z",
+      "uploaded_at": "2025-01-01T00:49:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-051.mp3",
+      "path": "/mock/MockProject-3/audio-asset-051.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-051.mp3",
+      "sha256": "0000003300000033000000330000003300000033000000330000003300000033",
+      "size_bytes": 126850,
+      "thumb_url": "https://picsum.photos/id/150/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:50:00Z",
+      "indexed_at": "2025-01-01T00:50:00Z",
+      "uploaded_at": "2025-01-01T00:50:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-052.jpg",
+      "path": "/mock/MockProject-4/image-asset-052.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-052.jpg",
+      "sha256": "0000003400000034000000340000003400000034000000340000003400000034",
+      "size_bytes": 126987,
+      "thumb_url": "https://picsum.photos/id/151/640/360",
+      "stream_url": "https://picsum.photos/id/151/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:51:00Z",
+      "indexed_at": "2025-01-01T00:51:00Z",
+      "uploaded_at": "2025-01-01T00:51:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-053.mp4",
+      "path": "/mock/MockProject-1/video-asset-053.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-053.mp4",
+      "sha256": "0000003500000035000000350000003500000035000000350000003500000035",
+      "size_bytes": 127124,
+      "thumb_url": "https://picsum.photos/id/152/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:52:00Z",
+      "indexed_at": "2025-01-01T00:52:00Z",
+      "uploaded_at": "2025-01-01T00:52:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-054.mp3",
+      "path": "/mock/MockProject-2/audio-asset-054.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-054.mp3",
+      "sha256": "0000003600000036000000360000003600000036000000360000003600000036",
+      "size_bytes": 127261,
+      "thumb_url": "https://picsum.photos/id/153/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:53:00Z",
+      "indexed_at": "2025-01-01T00:53:00Z",
+      "uploaded_at": "2025-01-01T00:53:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-055.jpg",
+      "path": "/mock/MockProject-3/image-asset-055.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-055.jpg",
+      "sha256": "0000003700000037000000370000003700000037000000370000003700000037",
+      "size_bytes": 127398,
+      "thumb_url": "https://picsum.photos/id/154/640/360",
+      "stream_url": "https://picsum.photos/id/154/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:54:00Z",
+      "indexed_at": "2025-01-01T00:54:00Z",
+      "uploaded_at": "2025-01-01T00:54:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-056.mp4",
+      "path": "/mock/MockProject-4/video-asset-056.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-056.mp4",
+      "sha256": "0000003800000038000000380000003800000038000000380000003800000038",
+      "size_bytes": 127535,
+      "thumb_url": "https://picsum.photos/id/155/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:55:00Z",
+      "indexed_at": "2025-01-01T00:55:00Z",
+      "uploaded_at": "2025-01-01T00:55:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-057.mp3",
+      "path": "/mock/MockProject-1/audio-asset-057.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-057.mp3",
+      "sha256": "0000003900000039000000390000003900000039000000390000003900000039",
+      "size_bytes": 127672,
+      "thumb_url": "https://picsum.photos/id/156/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:56:00Z",
+      "indexed_at": "2025-01-01T00:56:00Z",
+      "uploaded_at": "2025-01-01T00:56:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-058.jpg",
+      "path": "/mock/MockProject-2/image-asset-058.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-058.jpg",
+      "sha256": "0000003a0000003a0000003a0000003a0000003a0000003a0000003a0000003a",
+      "size_bytes": 127809,
+      "thumb_url": "https://picsum.photos/id/157/640/360",
+      "stream_url": "https://picsum.photos/id/157/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T00:57:00Z",
+      "indexed_at": "2025-01-01T00:57:00Z",
+      "uploaded_at": "2025-01-01T00:57:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-059.mp4",
+      "path": "/mock/MockProject-3/video-asset-059.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-059.mp4",
+      "sha256": "0000003b0000003b0000003b0000003b0000003b0000003b0000003b0000003b",
+      "size_bytes": 127946,
+      "thumb_url": "https://picsum.photos/id/158/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T00:58:00Z",
+      "indexed_at": "2025-01-01T00:58:00Z",
+      "uploaded_at": "2025-01-01T00:58:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-060.mp3",
+      "path": "/mock/MockProject-4/audio-asset-060.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-060.mp3",
+      "sha256": "0000003c0000003c0000003c0000003c0000003c0000003c0000003c0000003c",
+      "size_bytes": 128083,
+      "thumb_url": "https://picsum.photos/id/159/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T00:59:00Z",
+      "indexed_at": "2025-01-01T00:59:00Z",
+      "uploaded_at": "2025-01-01T00:59:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-061.jpg",
+      "path": "/mock/MockProject-1/image-asset-061.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-061.jpg",
+      "sha256": "0000003d0000003d0000003d0000003d0000003d0000003d0000003d0000003d",
+      "size_bytes": 128220,
+      "thumb_url": "https://picsum.photos/id/160/640/360",
+      "stream_url": "https://picsum.photos/id/160/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:00:00Z",
+      "indexed_at": "2025-01-01T01:00:00Z",
+      "uploaded_at": "2025-01-01T01:00:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-062.mp4",
+      "path": "/mock/MockProject-2/video-asset-062.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-062.mp4",
+      "sha256": "0000003e0000003e0000003e0000003e0000003e0000003e0000003e0000003e",
+      "size_bytes": 128357,
+      "thumb_url": "https://picsum.photos/id/161/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:01:00Z",
+      "indexed_at": "2025-01-01T01:01:00Z",
+      "uploaded_at": "2025-01-01T01:01:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-063.mp3",
+      "path": "/mock/MockProject-3/audio-asset-063.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-063.mp3",
+      "sha256": "0000003f0000003f0000003f0000003f0000003f0000003f0000003f0000003f",
+      "size_bytes": 128494,
+      "thumb_url": "https://picsum.photos/id/162/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:02:00Z",
+      "indexed_at": "2025-01-01T01:02:00Z",
+      "uploaded_at": "2025-01-01T01:02:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-064.jpg",
+      "path": "/mock/MockProject-4/image-asset-064.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-064.jpg",
+      "sha256": "0000004000000040000000400000004000000040000000400000004000000040",
+      "size_bytes": 128631,
+      "thumb_url": "https://picsum.photos/id/163/640/360",
+      "stream_url": "https://picsum.photos/id/163/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:03:00Z",
+      "indexed_at": "2025-01-01T01:03:00Z",
+      "uploaded_at": "2025-01-01T01:03:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-065.mp4",
+      "path": "/mock/MockProject-1/video-asset-065.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-065.mp4",
+      "sha256": "0000004100000041000000410000004100000041000000410000004100000041",
+      "size_bytes": 128768,
+      "thumb_url": "https://picsum.photos/id/164/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:04:00Z",
+      "indexed_at": "2025-01-01T01:04:00Z",
+      "uploaded_at": "2025-01-01T01:04:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-066.mp3",
+      "path": "/mock/MockProject-2/audio-asset-066.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-066.mp3",
+      "sha256": "0000004200000042000000420000004200000042000000420000004200000042",
+      "size_bytes": 128905,
+      "thumb_url": "https://picsum.photos/id/165/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:05:00Z",
+      "indexed_at": "2025-01-01T01:05:00Z",
+      "uploaded_at": "2025-01-01T01:05:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-067.jpg",
+      "path": "/mock/MockProject-3/image-asset-067.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-067.jpg",
+      "sha256": "0000004300000043000000430000004300000043000000430000004300000043",
+      "size_bytes": 129042,
+      "thumb_url": "https://picsum.photos/id/166/640/360",
+      "stream_url": "https://picsum.photos/id/166/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:06:00Z",
+      "indexed_at": "2025-01-01T01:06:00Z",
+      "uploaded_at": "2025-01-01T01:06:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-068.mp4",
+      "path": "/mock/MockProject-4/video-asset-068.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-068.mp4",
+      "sha256": "0000004400000044000000440000004400000044000000440000004400000044",
+      "size_bytes": 129179,
+      "thumb_url": "https://picsum.photos/id/167/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:07:00Z",
+      "indexed_at": "2025-01-01T01:07:00Z",
+      "uploaded_at": "2025-01-01T01:07:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-069.mp3",
+      "path": "/mock/MockProject-1/audio-asset-069.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-069.mp3",
+      "sha256": "0000004500000045000000450000004500000045000000450000004500000045",
+      "size_bytes": 129316,
+      "thumb_url": "https://picsum.photos/id/168/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:08:00Z",
+      "indexed_at": "2025-01-01T01:08:00Z",
+      "uploaded_at": "2025-01-01T01:08:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-070.jpg",
+      "path": "/mock/MockProject-2/image-asset-070.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-070.jpg",
+      "sha256": "0000004600000046000000460000004600000046000000460000004600000046",
+      "size_bytes": 129453,
+      "thumb_url": "https://picsum.photos/id/169/640/360",
+      "stream_url": "https://picsum.photos/id/169/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:09:00Z",
+      "indexed_at": "2025-01-01T01:09:00Z",
+      "uploaded_at": "2025-01-01T01:09:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-071.mp4",
+      "path": "/mock/MockProject-3/video-asset-071.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-071.mp4",
+      "sha256": "0000004700000047000000470000004700000047000000470000004700000047",
+      "size_bytes": 129590,
+      "thumb_url": "https://picsum.photos/id/170/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:10:00Z",
+      "indexed_at": "2025-01-01T01:10:00Z",
+      "uploaded_at": "2025-01-01T01:10:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-072.mp3",
+      "path": "/mock/MockProject-4/audio-asset-072.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-072.mp3",
+      "sha256": "0000004800000048000000480000004800000048000000480000004800000048",
+      "size_bytes": 129727,
+      "thumb_url": "https://picsum.photos/id/171/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:11:00Z",
+      "indexed_at": "2025-01-01T01:11:00Z",
+      "uploaded_at": "2025-01-01T01:11:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-073.jpg",
+      "path": "/mock/MockProject-1/image-asset-073.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-073.jpg",
+      "sha256": "0000004900000049000000490000004900000049000000490000004900000049",
+      "size_bytes": 129864,
+      "thumb_url": "https://picsum.photos/id/172/640/360",
+      "stream_url": "https://picsum.photos/id/172/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:12:00Z",
+      "indexed_at": "2025-01-01T01:12:00Z",
+      "uploaded_at": "2025-01-01T01:12:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-074.mp4",
+      "path": "/mock/MockProject-2/video-asset-074.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-074.mp4",
+      "sha256": "0000004a0000004a0000004a0000004a0000004a0000004a0000004a0000004a",
+      "size_bytes": 130001,
+      "thumb_url": "https://picsum.photos/id/173/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:13:00Z",
+      "indexed_at": "2025-01-01T01:13:00Z",
+      "uploaded_at": "2025-01-01T01:13:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-075.mp3",
+      "path": "/mock/MockProject-3/audio-asset-075.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-075.mp3",
+      "sha256": "0000004b0000004b0000004b0000004b0000004b0000004b0000004b0000004b",
+      "size_bytes": 130138,
+      "thumb_url": "https://picsum.photos/id/174/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:14:00Z",
+      "indexed_at": "2025-01-01T01:14:00Z",
+      "uploaded_at": "2025-01-01T01:14:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-076.jpg",
+      "path": "/mock/MockProject-4/image-asset-076.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-076.jpg",
+      "sha256": "0000004c0000004c0000004c0000004c0000004c0000004c0000004c0000004c",
+      "size_bytes": 130275,
+      "thumb_url": "https://picsum.photos/id/175/640/360",
+      "stream_url": "https://picsum.photos/id/175/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:15:00Z",
+      "indexed_at": "2025-01-01T01:15:00Z",
+      "uploaded_at": "2025-01-01T01:15:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-077.mp4",
+      "path": "/mock/MockProject-1/video-asset-077.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-077.mp4",
+      "sha256": "0000004d0000004d0000004d0000004d0000004d0000004d0000004d0000004d",
+      "size_bytes": 130412,
+      "thumb_url": "https://picsum.photos/id/176/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:16:00Z",
+      "indexed_at": "2025-01-01T01:16:00Z",
+      "uploaded_at": "2025-01-01T01:16:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-078.mp3",
+      "path": "/mock/MockProject-2/audio-asset-078.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-078.mp3",
+      "sha256": "0000004e0000004e0000004e0000004e0000004e0000004e0000004e0000004e",
+      "size_bytes": 130549,
+      "thumb_url": "https://picsum.photos/id/177/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:17:00Z",
+      "indexed_at": "2025-01-01T01:17:00Z",
+      "uploaded_at": "2025-01-01T01:17:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-079.jpg",
+      "path": "/mock/MockProject-3/image-asset-079.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-079.jpg",
+      "sha256": "0000004f0000004f0000004f0000004f0000004f0000004f0000004f0000004f",
+      "size_bytes": 130686,
+      "thumb_url": "https://picsum.photos/id/178/640/360",
+      "stream_url": "https://picsum.photos/id/178/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:18:00Z",
+      "indexed_at": "2025-01-01T01:18:00Z",
+      "uploaded_at": "2025-01-01T01:18:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-080.mp4",
+      "path": "/mock/MockProject-4/video-asset-080.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-080.mp4",
+      "sha256": "0000005000000050000000500000005000000050000000500000005000000050",
+      "size_bytes": 130823,
+      "thumb_url": "https://picsum.photos/id/179/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:19:00Z",
+      "indexed_at": "2025-01-01T01:19:00Z",
+      "uploaded_at": "2025-01-01T01:19:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-081.mp3",
+      "path": "/mock/MockProject-1/audio-asset-081.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-081.mp3",
+      "sha256": "0000005100000051000000510000005100000051000000510000005100000051",
+      "size_bytes": 130960,
+      "thumb_url": "https://picsum.photos/id/180/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:20:00Z",
+      "indexed_at": "2025-01-01T01:20:00Z",
+      "uploaded_at": "2025-01-01T01:20:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-082.jpg",
+      "path": "/mock/MockProject-2/image-asset-082.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-082.jpg",
+      "sha256": "0000005200000052000000520000005200000052000000520000005200000052",
+      "size_bytes": 131097,
+      "thumb_url": "https://picsum.photos/id/181/640/360",
+      "stream_url": "https://picsum.photos/id/181/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:21:00Z",
+      "indexed_at": "2025-01-01T01:21:00Z",
+      "uploaded_at": "2025-01-01T01:21:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-083.mp4",
+      "path": "/mock/MockProject-3/video-asset-083.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-083.mp4",
+      "sha256": "0000005300000053000000530000005300000053000000530000005300000053",
+      "size_bytes": 131234,
+      "thumb_url": "https://picsum.photos/id/182/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:22:00Z",
+      "indexed_at": "2025-01-01T01:22:00Z",
+      "uploaded_at": "2025-01-01T01:22:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-084.mp3",
+      "path": "/mock/MockProject-4/audio-asset-084.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-084.mp3",
+      "sha256": "0000005400000054000000540000005400000054000000540000005400000054",
+      "size_bytes": 131371,
+      "thumb_url": "https://picsum.photos/id/183/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:23:00Z",
+      "indexed_at": "2025-01-01T01:23:00Z",
+      "uploaded_at": "2025-01-01T01:23:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-085.jpg",
+      "path": "/mock/MockProject-1/image-asset-085.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-085.jpg",
+      "sha256": "0000005500000055000000550000005500000055000000550000005500000055",
+      "size_bytes": 131508,
+      "thumb_url": "https://picsum.photos/id/184/640/360",
+      "stream_url": "https://picsum.photos/id/184/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:24:00Z",
+      "indexed_at": "2025-01-01T01:24:00Z",
+      "uploaded_at": "2025-01-01T01:24:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-086.mp4",
+      "path": "/mock/MockProject-2/video-asset-086.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-086.mp4",
+      "sha256": "0000005600000056000000560000005600000056000000560000005600000056",
+      "size_bytes": 131645,
+      "thumb_url": "https://picsum.photos/id/185/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:25:00Z",
+      "indexed_at": "2025-01-01T01:25:00Z",
+      "uploaded_at": "2025-01-01T01:25:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-087.mp3",
+      "path": "/mock/MockProject-3/audio-asset-087.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-087.mp3",
+      "sha256": "0000005700000057000000570000005700000057000000570000005700000057",
+      "size_bytes": 131782,
+      "thumb_url": "https://picsum.photos/id/186/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:26:00Z",
+      "indexed_at": "2025-01-01T01:26:00Z",
+      "uploaded_at": "2025-01-01T01:26:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-088.jpg",
+      "path": "/mock/MockProject-4/image-asset-088.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-088.jpg",
+      "sha256": "0000005800000058000000580000005800000058000000580000005800000058",
+      "size_bytes": 131919,
+      "thumb_url": "https://picsum.photos/id/187/640/360",
+      "stream_url": "https://picsum.photos/id/187/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:27:00Z",
+      "indexed_at": "2025-01-01T01:27:00Z",
+      "uploaded_at": "2025-01-01T01:27:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-089.mp4",
+      "path": "/mock/MockProject-1/video-asset-089.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-089.mp4",
+      "sha256": "0000005900000059000000590000005900000059000000590000005900000059",
+      "size_bytes": 132056,
+      "thumb_url": "https://picsum.photos/id/188/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:28:00Z",
+      "indexed_at": "2025-01-01T01:28:00Z",
+      "uploaded_at": "2025-01-01T01:28:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-090.mp3",
+      "path": "/mock/MockProject-2/audio-asset-090.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-090.mp3",
+      "sha256": "0000005a0000005a0000005a0000005a0000005a0000005a0000005a0000005a",
+      "size_bytes": 132193,
+      "thumb_url": "https://picsum.photos/id/189/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:29:00Z",
+      "indexed_at": "2025-01-01T01:29:00Z",
+      "uploaded_at": "2025-01-01T01:29:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-091.jpg",
+      "path": "/mock/MockProject-3/image-asset-091.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-091.jpg",
+      "sha256": "0000005b0000005b0000005b0000005b0000005b0000005b0000005b0000005b",
+      "size_bytes": 132330,
+      "thumb_url": "https://picsum.photos/id/190/640/360",
+      "stream_url": "https://picsum.photos/id/190/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:30:00Z",
+      "indexed_at": "2025-01-01T01:30:00Z",
+      "uploaded_at": "2025-01-01T01:30:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-092.mp4",
+      "path": "/mock/MockProject-4/video-asset-092.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-092.mp4",
+      "sha256": "0000005c0000005c0000005c0000005c0000005c0000005c0000005c0000005c",
+      "size_bytes": 132467,
+      "thumb_url": "https://picsum.photos/id/191/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:31:00Z",
+      "indexed_at": "2025-01-01T01:31:00Z",
+      "uploaded_at": "2025-01-01T01:31:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-093.mp3",
+      "path": "/mock/MockProject-1/audio-asset-093.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-093.mp3",
+      "sha256": "0000005d0000005d0000005d0000005d0000005d0000005d0000005d0000005d",
+      "size_bytes": 132604,
+      "thumb_url": "https://picsum.photos/id/192/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:32:00Z",
+      "indexed_at": "2025-01-01T01:32:00Z",
+      "uploaded_at": "2025-01-01T01:32:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-094.jpg",
+      "path": "/mock/MockProject-2/image-asset-094.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-094.jpg",
+      "sha256": "0000005e0000005e0000005e0000005e0000005e0000005e0000005e0000005e",
+      "size_bytes": 132741,
+      "thumb_url": "https://picsum.photos/id/193/640/360",
+      "stream_url": "https://picsum.photos/id/193/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:33:00Z",
+      "indexed_at": "2025-01-01T01:33:00Z",
+      "uploaded_at": "2025-01-01T01:33:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-095.mp4",
+      "path": "/mock/MockProject-3/video-asset-095.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-095.mp4",
+      "sha256": "0000005f0000005f0000005f0000005f0000005f0000005f0000005f0000005f",
+      "size_bytes": 132878,
+      "thumb_url": "https://picsum.photos/id/194/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:34:00Z",
+      "indexed_at": "2025-01-01T01:34:00Z",
+      "uploaded_at": "2025-01-01T01:34:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-096.mp3",
+      "path": "/mock/MockProject-4/audio-asset-096.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-096.mp3",
+      "sha256": "0000006000000060000000600000006000000060000000600000006000000060",
+      "size_bytes": 133015,
+      "thumb_url": "https://picsum.photos/id/195/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:35:00Z",
+      "indexed_at": "2025-01-01T01:35:00Z",
+      "uploaded_at": "2025-01-01T01:35:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-097.jpg",
+      "path": "/mock/MockProject-1/image-asset-097.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-097.jpg",
+      "sha256": "0000006100000061000000610000006100000061000000610000006100000061",
+      "size_bytes": 133152,
+      "thumb_url": "https://picsum.photos/id/196/640/360",
+      "stream_url": "https://picsum.photos/id/196/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:36:00Z",
+      "indexed_at": "2025-01-01T01:36:00Z",
+      "uploaded_at": "2025-01-01T01:36:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-098.mp4",
+      "path": "/mock/MockProject-2/video-asset-098.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-098.mp4",
+      "sha256": "0000006200000062000000620000006200000062000000620000006200000062",
+      "size_bytes": 133289,
+      "thumb_url": "https://picsum.photos/id/197/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:37:00Z",
+      "indexed_at": "2025-01-01T01:37:00Z",
+      "uploaded_at": "2025-01-01T01:37:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-099.mp3",
+      "path": "/mock/MockProject-3/audio-asset-099.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-099.mp3",
+      "sha256": "0000006300000063000000630000006300000063000000630000006300000063",
+      "size_bytes": 133426,
+      "thumb_url": "https://picsum.photos/id/198/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:38:00Z",
+      "indexed_at": "2025-01-01T01:38:00Z",
+      "uploaded_at": "2025-01-01T01:38:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-100.jpg",
+      "path": "/mock/MockProject-4/image-asset-100.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-100.jpg",
+      "sha256": "0000006400000064000000640000006400000064000000640000006400000064",
+      "size_bytes": 133563,
+      "thumb_url": "https://picsum.photos/id/199/640/360",
+      "stream_url": "https://picsum.photos/id/199/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:39:00Z",
+      "indexed_at": "2025-01-01T01:39:00Z",
+      "uploaded_at": "2025-01-01T01:39:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-101.mp4",
+      "path": "/mock/MockProject-1/video-asset-101.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-101.mp4",
+      "sha256": "0000006500000065000000650000006500000065000000650000006500000065",
+      "size_bytes": 133700,
+      "thumb_url": "https://picsum.photos/id/200/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:40:00Z",
+      "indexed_at": "2025-01-01T01:40:00Z",
+      "uploaded_at": "2025-01-01T01:40:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-102.mp3",
+      "path": "/mock/MockProject-2/audio-asset-102.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-102.mp3",
+      "sha256": "0000006600000066000000660000006600000066000000660000006600000066",
+      "size_bytes": 133837,
+      "thumb_url": "https://picsum.photos/id/201/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:41:00Z",
+      "indexed_at": "2025-01-01T01:41:00Z",
+      "uploaded_at": "2025-01-01T01:41:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-103.jpg",
+      "path": "/mock/MockProject-3/image-asset-103.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-103.jpg",
+      "sha256": "0000006700000067000000670000006700000067000000670000006700000067",
+      "size_bytes": 133974,
+      "thumb_url": "https://picsum.photos/id/202/640/360",
+      "stream_url": "https://picsum.photos/id/202/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:42:00Z",
+      "indexed_at": "2025-01-01T01:42:00Z",
+      "uploaded_at": "2025-01-01T01:42:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-104.mp4",
+      "path": "/mock/MockProject-4/video-asset-104.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-104.mp4",
+      "sha256": "0000006800000068000000680000006800000068000000680000006800000068",
+      "size_bytes": 134111,
+      "thumb_url": "https://picsum.photos/id/203/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:43:00Z",
+      "indexed_at": "2025-01-01T01:43:00Z",
+      "uploaded_at": "2025-01-01T01:43:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-105.mp3",
+      "path": "/mock/MockProject-1/audio-asset-105.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-105.mp3",
+      "sha256": "0000006900000069000000690000006900000069000000690000006900000069",
+      "size_bytes": 134248,
+      "thumb_url": "https://picsum.photos/id/204/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:44:00Z",
+      "indexed_at": "2025-01-01T01:44:00Z",
+      "uploaded_at": "2025-01-01T01:44:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-106.jpg",
+      "path": "/mock/MockProject-2/image-asset-106.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-106.jpg",
+      "sha256": "0000006a0000006a0000006a0000006a0000006a0000006a0000006a0000006a",
+      "size_bytes": 134385,
+      "thumb_url": "https://picsum.photos/id/205/640/360",
+      "stream_url": "https://picsum.photos/id/205/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:45:00Z",
+      "indexed_at": "2025-01-01T01:45:00Z",
+      "uploaded_at": "2025-01-01T01:45:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-107.mp4",
+      "path": "/mock/MockProject-3/video-asset-107.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-107.mp4",
+      "sha256": "0000006b0000006b0000006b0000006b0000006b0000006b0000006b0000006b",
+      "size_bytes": 134522,
+      "thumb_url": "https://picsum.photos/id/206/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:46:00Z",
+      "indexed_at": "2025-01-01T01:46:00Z",
+      "uploaded_at": "2025-01-01T01:46:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-108.mp3",
+      "path": "/mock/MockProject-4/audio-asset-108.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-108.mp3",
+      "sha256": "0000006c0000006c0000006c0000006c0000006c0000006c0000006c0000006c",
+      "size_bytes": 134659,
+      "thumb_url": "https://picsum.photos/id/207/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:47:00Z",
+      "indexed_at": "2025-01-01T01:47:00Z",
+      "uploaded_at": "2025-01-01T01:47:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-109.jpg",
+      "path": "/mock/MockProject-1/image-asset-109.jpg",
+      "relative_path": "ingest/originals/MockProject-1/image-asset-109.jpg",
+      "sha256": "0000006d0000006d0000006d0000006d0000006d0000006d0000006d0000006d",
+      "size_bytes": 134796,
+      "thumb_url": "https://picsum.photos/id/208/640/360",
+      "stream_url": "https://picsum.photos/id/208/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:48:00Z",
+      "indexed_at": "2025-01-01T01:48:00Z",
+      "uploaded_at": "2025-01-01T01:48:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-110.mp4",
+      "path": "/mock/MockProject-2/video-asset-110.mp4",
+      "relative_path": "ingest/originals/MockProject-2/video-asset-110.mp4",
+      "sha256": "0000006e0000006e0000006e0000006e0000006e0000006e0000006e0000006e",
+      "size_bytes": 134933,
+      "thumb_url": "https://picsum.photos/id/209/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:49:00Z",
+      "indexed_at": "2025-01-01T01:49:00Z",
+      "uploaded_at": "2025-01-01T01:49:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-111.mp3",
+      "path": "/mock/MockProject-3/audio-asset-111.mp3",
+      "relative_path": "ingest/originals/MockProject-3/audio-asset-111.mp3",
+      "sha256": "0000006f0000006f0000006f0000006f0000006f0000006f0000006f0000006f",
+      "size_bytes": 135070,
+      "thumb_url": "https://picsum.photos/id/210/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:50:00Z",
+      "indexed_at": "2025-01-01T01:50:00Z",
+      "uploaded_at": "2025-01-01T01:50:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-112.jpg",
+      "path": "/mock/MockProject-4/image-asset-112.jpg",
+      "relative_path": "ingest/originals/MockProject-4/image-asset-112.jpg",
+      "sha256": "0000007000000070000000700000007000000070000000700000007000000070",
+      "size_bytes": 135207,
+      "thumb_url": "https://picsum.photos/id/211/640/360",
+      "stream_url": "https://picsum.photos/id/211/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:51:00Z",
+      "indexed_at": "2025-01-01T01:51:00Z",
+      "uploaded_at": "2025-01-01T01:51:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-113.mp4",
+      "path": "/mock/MockProject-1/video-asset-113.mp4",
+      "relative_path": "ingest/originals/MockProject-1/video-asset-113.mp4",
+      "sha256": "0000007100000071000000710000007100000071000000710000007100000071",
+      "size_bytes": 135344,
+      "thumb_url": "https://picsum.photos/id/212/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:52:00Z",
+      "indexed_at": "2025-01-01T01:52:00Z",
+      "uploaded_at": "2025-01-01T01:52:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-114.mp3",
+      "path": "/mock/MockProject-2/audio-asset-114.mp3",
+      "relative_path": "ingest/originals/MockProject-2/audio-asset-114.mp3",
+      "sha256": "0000007200000072000000720000007200000072000000720000007200000072",
+      "size_bytes": 135481,
+      "thumb_url": "https://picsum.photos/id/213/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:53:00Z",
+      "indexed_at": "2025-01-01T01:53:00Z",
+      "uploaded_at": "2025-01-01T01:53:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "image",
+      "filename": "image-asset-115.jpg",
+      "path": "/mock/MockProject-3/image-asset-115.jpg",
+      "relative_path": "ingest/originals/MockProject-3/image-asset-115.jpg",
+      "sha256": "0000007300000073000000730000007300000073000000730000007300000073",
+      "size_bytes": 135618,
+      "thumb_url": "https://picsum.photos/id/214/640/360",
+      "stream_url": "https://picsum.photos/id/214/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:54:00Z",
+      "indexed_at": "2025-01-01T01:54:00Z",
+      "uploaded_at": "2025-01-01T01:54:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "video",
+      "filename": "video-asset-116.mp4",
+      "path": "/mock/MockProject-4/video-asset-116.mp4",
+      "relative_path": "ingest/originals/MockProject-4/video-asset-116.mp4",
+      "sha256": "0000007400000074000000740000007400000074000000740000007400000074",
+      "size_bytes": 135755,
+      "thumb_url": "https://picsum.photos/id/215/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:55:00Z",
+      "indexed_at": "2025-01-01T01:55:00Z",
+      "uploaded_at": "2025-01-01T01:55:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-1",
+      "source": "primary",
+      "kind": "audio",
+      "filename": "audio-asset-117.mp3",
+      "path": "/mock/MockProject-1/audio-asset-117.mp3",
+      "relative_path": "ingest/originals/MockProject-1/audio-asset-117.mp3",
+      "sha256": "0000007500000075000000750000007500000075000000750000007500000075",
+      "size_bytes": 135892,
+      "thumb_url": "https://picsum.photos/id/216/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:56:00Z",
+      "indexed_at": "2025-01-01T01:56:00Z",
+      "uploaded_at": "2025-01-01T01:56:00Z",
+      "tags": [
+        "sound"
+      ]
+    },
+    {
+      "project": "MockProject-2",
+      "source": "mock-nas",
+      "kind": "image",
+      "filename": "image-asset-118.jpg",
+      "path": "/mock/MockProject-2/image-asset-118.jpg",
+      "relative_path": "ingest/originals/MockProject-2/image-asset-118.jpg",
+      "sha256": "0000007600000076000000760000007600000076000000760000007600000076",
+      "size_bytes": 136029,
+      "thumb_url": "https://picsum.photos/id/217/640/360",
+      "stream_url": "https://picsum.photos/id/217/640/360",
+      "orient": "landscape",
+      "created_at": "2025-01-01T01:57:00Z",
+      "indexed_at": "2025-01-01T01:57:00Z",
+      "uploaded_at": "2025-01-01T01:57:00Z",
+      "tags": [
+        "image",
+        "landscape"
+      ]
+    },
+    {
+      "project": "MockProject-3",
+      "source": "primary",
+      "kind": "video",
+      "filename": "video-asset-119.mp4",
+      "path": "/mock/MockProject-3/video-asset-119.mp4",
+      "relative_path": "ingest/originals/MockProject-3/video-asset-119.mp4",
+      "sha256": "0000007700000077000000770000007700000077000000770000007700000077",
+      "size_bytes": 136166,
+      "thumb_url": "https://picsum.photos/id/218/360/640",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "orient": "portrait",
+      "created_at": "2025-01-01T01:58:00Z",
+      "indexed_at": "2025-01-01T01:58:00Z",
+      "uploaded_at": "2025-01-01T01:58:00Z",
+      "tags": [
+        "video",
+        "portrait"
+      ]
+    },
+    {
+      "project": "MockProject-4",
+      "source": "mock-nas",
+      "kind": "audio",
+      "filename": "audio-asset-120.mp3",
+      "path": "/mock/MockProject-4/audio-asset-120.mp3",
+      "relative_path": "ingest/originals/MockProject-4/audio-asset-120.mp3",
+      "sha256": "0000007800000078000000780000007800000078000000780000007800000078",
+      "size_bytes": 136303,
+      "thumb_url": "https://picsum.photos/id/219/480/480",
+      "stream_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+      "orient": "square",
+      "created_at": "2025-01-01T01:59:00Z",
+      "indexed_at": "2025-01-01T01:59:00Z",
+      "uploaded_at": "2025-01-01T01:59:00Z",
+      "tags": [
+        "sound"
+      ]
+    }
+  ]
+}
