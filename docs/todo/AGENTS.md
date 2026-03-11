@@ -1,6 +1,14 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+
+## 2026-03-08 — FX bootstrap ready-timeout escape hatch (active)
+- [x] Addressed bootstrap stall risk where `bootstrap_ready` previously required `bootstrapReady === bootstrapTotal`, allowing one never-ready visible tile to block steady-state entry.
+- [x] Added bounded timeout gate (`tilefxBootstrapReadyMs`, default 1200ms) so FX bootstrap advances to commit/steady even when a subset of visible tiles never become ready.
+- [x] Preserved existing full-ready fast path and batch-commit behavior for ready tiles; timeout path only prevents indefinite entering-phase lock.
+- [x] Added debug counters/telemetry for timeout occurrences (`bootstrapReadyTimedOut`, elapsed/pending fields) and regression assertions in tests.
+- [ ] Validate on iPhone that one permanently-failed visible thumbnail no longer blocks FX takeover for neighboring visible cards.
+
 ## 2026-03-08 — Editor preview mock fallback without query flag (active)
 - [x] Reproduced the remaining gap: top-level local editor preview can fail API boot without `?mock=1`, but previous preview heuristic only treated embedded/opener contexts as preview fallback eligible.
 - [x] Broadened `isLikelyPreviewEnvironment()` to treat localhost/loopback/local test hosts as preview contexts for API-failure fallback routing.

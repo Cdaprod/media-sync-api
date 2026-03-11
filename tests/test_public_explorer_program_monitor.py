@@ -237,6 +237,10 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "this._fxEntryPhase = 'bootstrap_ready';" in shader_module
     assert "this._fxEntryPhase = 'bootstrap_commit';" in shader_module
     assert 'bootstrapReady === bootstrapTotal' in shader_module
+    assert "this._bootstrapReadyTimeoutMs = Math.max(250, Number(new URLSearchParams(window.location.search).get('tilefxBootstrapReadyMs') || 1200));" in shader_module
+    assert 'const bootstrapReadyTimedOut = bootstrapElapsed >= this._bootstrapReadyTimeoutMs;' in shader_module
+    assert 'else if (bootstrapReadyTimedOut) {' in shader_module
+    assert 'window.__tilefx_dbg.bootstrapReadyTimedOut = Number(window.__tilefx_dbg.bootstrapReadyTimedOut || 0) + 1;' in shader_module
     assert "this.applyDomSwap(tile, true, 'bootstrap:batch-commit');" in shader_module
     assert "reasonFx: 'steady:visible-lock'," in shader_module
     assert "reasonDom: 'steady:draw-truth-lost'," in shader_module
