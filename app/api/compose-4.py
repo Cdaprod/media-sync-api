@@ -23,7 +23,7 @@ curl -X POST ‘http://localhost:8787/api/projects/demo/compose/upload?output_na
 -F ‘files=@/path/a.mp4’ -F ‘files=@/path/b.mp4’
 """
 
-from **future** import annotations
+from __future__ import annotations
 
 # =============================================================================
 
