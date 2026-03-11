@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Blob Loader Single File</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+  }
+
+  /* This file is intentionally self-contained and minimal so it can be
+     dropped into an explorer scroll container or adapted into a component. */
+  #blobLoaderStage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 320px;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  #blobLoaderCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+</style>
+</head>
+<body>
+  <div id="blobLoaderStage">
+    <canvas id="blobLoaderCanvas"></canvas>
+  </div>
+
+<script type="module">
+const VERT = `
+precision highp float;
+
+attribute vec2 a_uv;
+
+uniform float u_time;
+uniform float u_progress;
+uniform float u_stageMix;
+uniform vec2  u_viewport;
+
+varying vec3 v_worldPos;
+varying vec3 v_normal;
+varying vec2 v_uv;
+varying float v_height;
+varying float v_stageMix;
+varying float v_mass;
+varying float v_rimMask;
+varying float v_centerBias;
+varying float v_lumaBias;
+
+vec2 hash2(vec2 p){
+  p = vec2(
+    dot(p, vec2(127.1, 311.7)),
+    dot(p, vec2(269.5, 183.3))
+  );
+  return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+}
+
+float noise(vec2 p){
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+
+  float a = dot(hash2(i + vec2(0.0, 0.0)), f - vec2(0.0, 0.0));
+  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));
+  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));
+  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));
+
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float fbm(vec2 p){
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 5; i++) {
+    v += a * noise(p);
+    p = p * 2.02 + vec2(1.7, 9.2);
+    a *= 0.5;
+  }
+  return v;
+}
+
+float softBlob(vec2 p, vec2 c, float r, float blur){
+  float d = length(p - c);
+  return 1.0 - smoothstep(r, r + blur, d);
+}
+
+vec2 orbit(vec2 base, float amp, float speed, float phase){
+  return base + vec2(
+    amp * sin(speed + phase),
+    amp * cos(speed * 0.93 + phase * 1.17)
+  );
+}
+
+/*
+  4 loader positions / states blended over time:
+  0 = indexing assets (denser, darker, tighter cluster)
+  1 = preparing thumbnails (brighter, wider, more fluorescent)
+  2 = clustering previews (multi-lobed / splat spread)
+  3 = finalizing grid (tightening and stabilizing)
+*/
+float blobField(vec2 p, float t, float stageMix){
+  float stateT = mod(t * 0.085, 4.0);
+  float stateA = floor(stateT);
+  float stateB = mod(stateA + 1.0, 4.0);
+  float localMix = smoothstep(0.18, 0.82, fract(stateT));
+  float stateIdx = mix(stateA, stateB, localMix);
+
+  float prepBias = stageMix;
+  float active = mix(stateIdx / 3.0, stageMix, 0.35);
+
+  vec2 c0 = orbit(vec2( 0.00,  0.00), mix(0.018, 0.040, active), t * 0.70, 0.10);
+  vec2 c1 = orbit(vec2(-0.22,  0.08), mix(0.030, 0.060, active), t * 0.88, 0.80);
+  vec2 c2 = orbit(vec2( 0.20,  0.12), mix(0.028, 0.066, active), t * 0.81, 2.20);
+  vec2 c3 = orbit(vec2(-0.10, -0.20), mix(0.025, 0.070, active), t * 0.74, 3.40);
+  vec2 c4 = orbit(vec2( 0.16, -0.16), mix(0.026, 0.072, active), t * 0.79, 4.70);
+  vec2 c5 = orbit(vec2( 0.00,  0.24), mix(0.018, 0.055, active), t * 0.61, 5.50);
+
+  float r0 = mix(0.34, 0.48, active);
+  float r1 = mix(0.14, 0.24, active);
+  float r2 = mix(0.14, 0.25, active);
+  float r3 = mix(0.13, 0.23, active);
+  float r4 = mix(0.12, 0.24, active);
+  float r5 = mix(0.11, 0.20, active);
+
+  float blur = mix(0.18, 0.24, active);
+
+  float f = 0.0;
+  f += softBlob(p, c0, r0, blur);
+  f += softBlob(p, c1, r1, blur);
+  f += softBlob(p, c2, r2, blur);
+  f += softBlob(p, c3, r3, blur);
+  f += softBlob(p, c4, r4, blur);
+  f += softBlob(p, c5, r5, blur);
+
+  float splatNoise = fbm(p * mix(2.2, 3.4, active) + vec2(t * 0.12, -t * 0.10));
+  float fineNoise  = fbm(p * mix(4.5, 5.6, active) + vec2(-t * 0.06, t * 0.05));
+
+  f += splatNoise * mix(0.14, 0.22, active);
+  f += fineNoise  * mix(0.04, 0.07, active);
+
+  /* state-dependent redistribution */
+  float state1 = 1.0 - smoothstep(0.22, 0.78, abs(stateIdx - 1.0));
+  float state2 = 1.0 - smoothstep(0.22, 0.78, abs(stateIdx - 2.0));
+
+  f += softBlob(p, orbit(vec2(-0.28, 0.00), 0.03, t * 0.95, 1.9), 0.16, 0.14) * state2 * 0.7;
+  f += softBlob(p, orbit(vec2( 0.28, 0.00), 0.03, t * 0.90, 4.3), 0.16, 0.14) * state2 * 0.7;
+  f += softBlob(p, orbit(vec2( 0.00,-0.28), 0.03, t * 0.87, 2.6), 0.15, 0.14) * state1 * 0.45;
+
+  return f;
+}
+
+float blobMask(vec2 p, float t, float stageMix){
+  float f = blobField(p, t, stageMix);
+  return smoothstep(0.42, 0.80, f);
+}
+
+float blobHeight(vec2 p, float t, float progress, float stageMix){
+  float f = blobField(p, t, stageMix);
+  float body = smoothstep(0.40, 0.90, f);
+
+  float dome = pow(clamp(body, 0.0, 1.0), mix(1.9, 1.3, stageMix));
+  float lowFreq = fbm(p * 1.75 + vec2(t * 0.10, -t * 0.08));
+  float hiFreq  = fbm(p * 4.4 + vec2(-t * 0.06, t * 0.05));
+
+  float breathing = mix(
+    0.015 * sin(t * 1.10),
+    0.032 * sin(t * 0.76 + 1.0),
+    stageMix
+  );
+
+  float progressInflate = smoothstep(0.0, 1.0, progress) * mix(0.010, 0.036, stageMix);
+  float centerBias = 1.0 - smoothstep(0.0, 0.96, length(p));
+
+  return
+    dome * mix(0.24, 0.36, stageMix) +
+    lowFreq * 0.032 * body +
+    hiFreq  * 0.015 * body +
+    breathing * body +
+    progressInflate * centerBias;
+}
+
+vec3 blobPos(vec2 uv, float t, float progress, float stageMix){
+  vec2 p = uv;
+
+  float mask = blobMask(p, t, stageMix);
+  float h = blobHeight(p, t, progress, stageMix) * mask;
+
+  vec2 g1 = vec2(
+    blobField(p + vec2(0.010, 0.0), t, stageMix) - blobField(p - vec2(0.010, 0.0), t, stageMix),
+    blobField(p + vec2(0.0, 0.010), t, stageMix) - blobField(p - vec2(0.0, 0.010), t, stageMix)
+  );
+
+  vec2 grad = normalize(g1 + vec2(1e-5));
+  vec2 tangent = vec2(-grad.y, grad.x);
+
+  float driftA = sin(t * 0.44 + p.x * 3.2 + p.y * 2.1);
+  float driftB = sin(t * 0.57 - p.y * 2.8 + p.x * 1.6);
+
+  vec2 lateral =
+      tangent * 0.013 * driftA * mask * mix(0.50, 1.05, stageMix) +
+      grad    * 0.008 * driftB * mask * mix(0.30, 0.60, stageMix);
+
+  return vec3(p + lateral, h);
+}
+
+void main(){
+  vec2 uv = a_uv;
+  float eps = 0.006;
+
+  vec3 p  = blobPos(uv, u_time, u_progress, u_stageMix);
+  vec3 px = blobPos(uv + vec2(eps, 0.0), u_time, u_progress, u_stageMix);
+  vec3 py = blobPos(uv + vec2(0.0, eps), u_time, u_progress, u_stageMix);
+
+  vec3 dx = px - p;
+  vec3 dy = py - p;
+  vec3 n = normalize(cross(dx, dy));
+
+  float mass = blobMask(uv, u_time, u_stageMix);
+  float rimMask = smoothstep(0.22, 0.90, mass) - smoothstep(0.70, 1.02, mass);
+  float centerBias = 1.0 - smoothstep(0.0, 0.92, length(uv));
+  float lumaBias = smoothstep(0.30, 0.92, mass);
+
+  v_worldPos = p;
+  v_normal = n;
+  v_uv = uv;
+  v_height = p.z;
+  v_stageMix = u_stageMix;
+  v_mass = mass;
+  v_rimMask = rimMask;
+  v_centerBias = centerBias;
+  v_lumaBias = lumaBias;
+
+  float aspect = u_viewport.x / max(1.0, u_viewport.y);
+
+  vec2 clip = p.xy * 1.08;
+  clip.x /= max(1.0, aspect * 0.98);
+
+  float depthPush = p.z * 0.34;
+  clip *= (1.0 + depthPush * 0.10);
+
+  gl_Position = vec4(clip, p.z * 0.07, 1.0);
+}
+`;
+
+const FRAG = `
+precision highp float;
+
+uniform float u_time;
+uniform float u_progress;
+uniform float u_stageMix;
+
+varying vec3 v_worldPos;
+varying vec3 v_normal;
+varying vec2 v_uv;
+varying float v_height;
+varying float v_stageMix;
+varying float v_mass;
+varying float v_rimMask;
+varying float v_centerBias;
+varying float v_lumaBias;
+
+float hash12(vec2 p){
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+vec3 paletteIndexing(float t){
+  vec3 a = vec3(0.010, 0.028, 0.090);
+  vec3 b = vec3(0.022, 0.120, 0.240);
+  vec3 c = vec3(0.45, 0.78, 0.98);
+  vec3 d = vec3(0.00, 0.18, 0.42);
+  return a + b * cos(6.28318 * (c * t + d));
+}
+
+vec3 paletteThumbs(float t){
+  vec3 a = vec3(0.020, 0.070, 0.160);
+  vec3 b = vec3(0.120, 0.280, 0.420);
+  vec3 c = vec3(0.80, 0.96, 1.00);
+  vec3 d = vec3(0.06, 0.20, 0.46);
+  return a + b * cos(6.28318 * (c * t + d));
+}
+
+void main(){
+  float stageMix = u_stageMix;
+  float progress = u_progress;
+
+  vec3 N = normalize(v_normal);
+  vec3 V = normalize(vec3(0.0, 0.0, 1.65) - v_worldPos);
+
+  vec3 L1 = normalize(vec3(-0.48, 0.42, 1.18));
+  vec3 L2 = normalize(vec3( 0.72,-0.18, 0.98));
+
+  float mass = clamp(v_mass, 0.0, 1.0);
+  float h = clamp(v_height * 3.2, 0.0, 1.0);
+
+  vec3 colA = paletteIndexing(0.12 + h * 0.30 + 0.03 * sin(u_time * 0.30));
+  vec3 colB = paletteThumbs(0.18 + h * 0.36 + 0.03 * sin(u_time * 0.24 + 1.1));
+  vec3 baseCol = mix(colA, colB, stageMix);
+
+  float ndl1 = max(dot(N, L1), 0.0);
+  float ndl2 = max(dot(N, L2), 0.0);
+
+  float fres = pow(1.0 - max(dot(N, V), 0.0), mix(2.8, 1.45, stageMix));
+  float rim  = pow(1.0 - max(dot(N, V), 0.0), mix(2.0, 1.15, stageMix));
+
+  vec3 H1 = normalize(L1 + V);
+  vec3 H2 = normalize(L2 + V);
+
+  /* much softer specular so stage 1 stops looking like hard plastic */
+  float spec1 = pow(max(dot(N, H1), 0.0), mix(42.0, 20.0, stageMix));
+  float spec2 = pow(max(dot(N, H2), 0.0), mix(24.0, 14.0, stageMix));
+
+  float pulse = mix(
+    0.5 + 0.5 * sin(u_time * 1.7),
+    0.5 + 0.5 * sin(u_time * 1.0 + 1.2),
+    stageMix
+  );
+
+  vec3 deepBody = mix(
+    vec3(0.006, 0.018, 0.060),
+    vec3(0.012, 0.050, 0.120),
+    stageMix
+  );
+
+  vec3 fluorescence = mix(
+    vec3(0.08, 0.18, 0.82),
+    vec3(0.18, 0.96, 0.98),
+    stageMix
+  );
+
+  vec3 rimCol = mix(
+    vec3(0.04, 0.22, 0.58),
+    vec3(0.56, 0.94, 1.00),
+    stageMix
+  );
+
+  float innerCore = pow(clamp(mass, 0.0, 1.0), mix(1.8, 1.15, stageMix));
+  float shellBand = clamp(v_rimMask, 0.0, 1.0);
+
+  vec3 col = vec3(0.0);
+
+  col += deepBody * (0.44 + 0.34 * innerCore);
+  col += baseCol * (0.16 + 0.46 * innerCore);
+
+  col += baseCol * ndl1 * 0.16;
+  col += baseCol * ndl2 * 0.08;
+
+  col += fluorescence * pow(innerCore, mix(1.7, 0.92, stageMix)) * mix(0.34, 1.30, stageMix);
+  col += fluorescence * pulse * smoothstep(0.30, 0.92, innerCore) * mix(0.04, 0.32, stageMix);
+
+  col += rimCol * rim * shellBand * mix(0.20, 0.58, stageMix);
+  col += rimCol * fres * mix(0.08, 0.38, stageMix);
+
+  col += vec3(0.84, 0.94, 1.0) * spec1 * mix(0.04, 0.02, stageMix);
+  col += vec3(0.62, 0.92, 1.0) * spec2 * mix(0.025, 0.015, stageMix);
+
+  col += mix(
+    vec3(0.00, 0.03, 0.06),
+    vec3(0.02, 0.18, 0.18),
+    stageMix
+  ) * smoothstep(0.0, 1.0, progress) * (0.24 + 0.76 * pulse);
+
+  float grain = hash12(gl_FragCoord.xy + u_time * 14.0);
+  col += (grain - 0.5) * 0.008;
+
+  float alpha = clamp(
+    smoothstep(0.28, 0.88, mass) * (0.80 + 0.20 * fres),
+    0.0, 1.0
+  );
+
+  gl_FragColor = vec4(col, alpha);
+}
+`;
+
+function createShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const msg = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw new Error(msg || 'Shader compile failed');
+  }
+  return shader;
+}
+
+function createProgram(gl, vertSrc, fragSrc) {
+  const vert = createShader(gl, gl.VERTEX_SHADER, vertSrc);
+  const frag = createShader(gl, gl.FRAGMENT_SHADER, fragSrc);
+  const program = gl.createProgram();
+  gl.attachShader(program, vert);
+  gl.attachShader(program, frag);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const msg = gl.getProgramInfoLog(program);
+    gl.deleteProgram(program);
+    throw new Error(msg || 'Program link failed');
+  }
+  return program;
+}
+
+function createDiscMesh(radialSegments = 200, ringSegments = 90) {
+  const verts = [];
+  const indices = [];
+
+  for (let y = 0; y <= ringSegments; y++) {
+    const v = y / ringSegments;
+    const r = v;
+
+    for (let x = 0; x <= radialSegments; x++) {
+      const u = x / radialSegments;
+      const ang = u * Math.PI * 2.0;
+      verts.push(Math.cos(ang) * r, Math.sin(ang) * r);
+    }
+  }
+
+  const stride = radialSegments + 1;
+
+  for (let y = 0; y < ringSegments; y++) {
+    for (let x = 0; x < radialSegments; x++) {
+      const i0 = y * stride + x;
+      const i1 = i0 + 1;
+      const i2 = i0 + stride;
+      const i3 = i2 + 1;
+
+      indices.push(i0, i2, i1);
+      indices.push(i1, i2, i3);
+    }
+  }
+
+  return {
+    vertices: new Float32Array(verts),
+    indices: new Uint16Array(indices),
+  };
+}
+
+class BlobLoaderGeometry {
+  constructor(canvas, opts = {}) {
+    this.canvas = canvas;
+    this.gl = canvas.getContext('webgl', {
+      alpha: true,
+      premultipliedAlpha: false,
+      antialias: true,
+    });
+
+    if (!this.gl) {
+      throw new Error('WebGL not supported');
+    }
+
+    this.program = createProgram(this.gl, VERT, FRAG);
+    this.start = performance.now();
+
+    this.progress = 0;
+    this.stageMix = 0;
+    this.stageTarget = 0;
+    this.auto = true;
+    this.speed = opts.speed ?? 1.0;
+    this.progressSpeed = opts.progressSpeed ?? 0.12;
+    this._raf = null;
+
+    this._init();
+    this._resize();
+    window.addEventListener('resize', () => this._resize(), { passive: true });
+
+    this._raf = requestAnimationFrame((t) => this._frame(t));
+  }
+
+  _init() {
+    const gl = this.gl;
+    gl.useProgram(this.program);
+
+    const mesh = createDiscMesh(220, 96);
+    this.indexCount = mesh.indices.length;
+
+    this.vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.STATIC_DRAW);
+
+    this.indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+
+    this.aUV = gl.getAttribLocation(this.program, 'a_uv');
+    gl.enableVertexAttribArray(this.aUV);
+    gl.vertexAttribPointer(this.aUV, 2, gl.FLOAT, false, 0, 0);
+
+    this.uTime = gl.getUniformLocation(this.program, 'u_time');
+    this.uProgress = gl.getUniformLocation(this.program, 'u_progress');
+    this.uStageMix = gl.getUniformLocation(this.program, 'u_stageMix');
+    this.uViewport = gl.getUniformLocation(this.program, 'u_viewport');
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.DEPTH_TEST);
+  }
+
+  _resize() {
+    const gl = this.gl;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+
+    gl.viewport(0, 0, w, h);
+  }
+
+  setStage(name) {
+    this.stageTarget = name === 'thumbnails' ? 1 : 0;
+  }
+
+  setProgress(v) {
+    this.progress = Math.max(0, Math.min(1, v));
+  }
+
+  destroy() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = null;
+  }
+
+  _frame(now) {
+    const gl = this.gl;
+    const t = ((now - this.start) * 0.001) * this.speed;
+
+    if (this.auto) {
+      const cycle = (t * this.progressSpeed) % 1.0;
+      this.progress = cycle;
+
+      /* same blob, flowing through denser -> fluorescent states */
+      this.stageTarget = cycle < 0.48 ? 0.0 : 1.0;
+    }
+
+    this.stageMix += (this.stageTarget - this.stageMix) * 0.035;
+
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.useProgram(this.program);
+
+    gl.uniform1f(this.uTime, t);
+    gl.uniform1f(this.uProgress, this.progress);
+    gl.uniform1f(this.uStageMix, this.stageMix);
+    gl.uniform2f(this.uViewport, this.canvas.width, this.canvas.height);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.vertexAttribPointer(this.aUV, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(this.aUV);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+
+    this._raf = requestAnimationFrame((tt) => this._frame(tt));
+  }
+}
+
+const canvas = document.getElementById('blobLoaderCanvas');
+const loader = new BlobLoaderGeometry(canvas, {
+  speed: 1.0,
+  progressSpeed: 0.115,
+});
+
+/*
+  Optional external control when embedded inside your explorer:
+
+  loader.setStage('indexing');
+  loader.setStage('thumbnails');
+  loader.setProgress(0.42);
+  loader.auto = false;
+
+  window.blobLoader = loader;
+*/
+window.blobLoader = loader;
+</script>
+</body>
+</html>

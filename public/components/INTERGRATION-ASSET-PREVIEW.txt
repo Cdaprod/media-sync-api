@@ -1,0 +1,89 @@
+# explorer.html — asset-preview integration
+# Three surgical changes, nothing else touches.
+
+════════════════════════════════════════════════
+CHANGE 1 — Add to <head> (after the existing <title> line)
+════════════════════════════════════════════════
+
+ADD this line after:
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+INSERT:
+  <script type="module" src="asset-preview.mjs"></script>
+
+
+════════════════════════════════════════════════
+CHANGE 2 — Add element to <body> (anywhere before the scripts, e.g. just after <div id="toasts">)
+════════════════════════════════════════════════
+
+After:
+  <div class="toasts" id="toasts"></div>
+
+INSERT:
+  <asset-preview id="assetPreview" hidden></asset-preview>
+
+CSS sizing (add to the existing <style> block, or inline):
+
+  asset-preview {
+    position: fixed;
+    z-index: 8500;               /* above drawer (7000) below modals (8000+) */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width:  min(92vw, 460px);
+    height: min(92vh, 860px);
+  }
+  @media (orientation: landscape) {
+    asset-preview { width: min(88vw, 820px); height: min(88vh, 520px); }
+  }
+  @media (min-width: 768px) and (orientation: portrait) {
+    asset-preview { width: min(70vw, 500px); height: min(85vh, 900px); }
+  }
+
+
+════════════════════════════════════════════════
+CHANGE 3 — One-line change in wireAssetPointerHandlers
+════════════════════════════════════════════════
+
+Find (inside wireAssetPointerHandlers, in the pointerup block):
+        if (ui.inspectorOpen) {
+          closeDrawer();
+          return;
+        }
+        openDrawer(item);
+
+REPLACE with:
+        if (ui.inspectorOpen) {
+          closeDrawer();
+          return;
+        }
+        (window.__openAssetPreview ?? openDrawer)(item);
+
+
+════════════════════════════════════════════════
+CHANGE 4 — Add the patch script at the bottom (just before </body>)
+════════════════════════════════════════════════
+
+After the existing </script> near </body>, add:
+
+  <script type="module" src="explorer-preview-patch.js"></script>
+
+OR inline the entire contents of explorer-preview-patch.js inside a
+  <script type="module"> … </script>
+block if you want a single-file deployment.
+
+
+════════════════════════════════════════════════
+FILE LAYOUT
+════════════════════════════════════════════════
+
+public/
+  explorer.html          ← your existing file (4 surgical changes above)
+  asset-preview.mjs      ← the v2.0 component (output from our session)
+  explorer-preview-patch.js  ← the routing glue (from this session)
+  js/
+    explorer-shaders.mjs
+    obs-websocket.js
+    obs-push.js
+    program_monitor_handoff.js
+    explorer-mock-assets.mjs

@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Blob Splat State Morph</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  #blobCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+  }
+</style>
+</head>
+<body>
+<canvas id="blobCanvas"></canvas>
+
+<script type="module">
+const VERT = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+
+void main() {
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+`;
+
+const FRAG = `
+precision highp float;
+
+varying vec2 v_uv;
+
+uniform vec2  u_res;
+uniform float u_time;
+uniform float u_progress;
+uniform float u_stateMix;
+uniform float u_statePulse;
+
+#define MAX_STEPS 34
+#define MAX_DIST  5.5
+#define SURF_EPS  0.0035
+
+float smin(float a, float b, float k){
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
+}
+
+mat2 rot(float a){
+  float c = cos(a), s = sin(a);
+  return mat2(c, -s, s, c);
+}
+
+float hash21(vec2 p){
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+vec3 hash33(vec3 p){
+  p = vec3(
+    dot(p, vec3(127.1, 311.7, 74.7)),
+    dot(p, vec3(269.5, 183.3, 246.1)),
+    dot(p, vec3(113.5, 271.9, 124.6))
+  );
+  return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+}
+
+float noise3(vec3 p){
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+
+  float n000 = dot(hash33(i + vec3(0.0,0.0,0.0)), f - vec3(0.0,0.0,0.0));
+  float n100 = dot(hash33(i + vec3(1.0,0.0,0.0)), f - vec3(1.0,0.0,0.0));
+  float n010 = dot(hash33(i + vec3(0.0,1.0,0.0)), f - vec3(0.0,1.0,0.0));
+  float n110 = dot(hash33(i + vec3(1.0,1.0,0.0)), f - vec3(1.0,1.0,0.0));
+  float n001 = dot(hash33(i + vec3(0.0,0.0,1.0)), f - vec3(0.0,0.0,1.0));
+  float n101 = dot(hash33(i + vec3(1.0,0.0,1.0)), f - vec3(1.0,0.0,1.0));
+  float n011 = dot(hash33(i + vec3(0.0,1.0,1.0)), f - vec3(0.0,1.0,1.0));
+  float n111 = dot(hash33(i + vec3(1.0,1.0,1.0)), f - vec3(1.0,1.0,1.0));
+
+  float nx00 = mix(n000, n100, f.x);
+  float nx10 = mix(n010, n110, f.x);
+  float nx01 = mix(n001, n101, f.x);
+  float nx11 = mix(n011, n111, f.x);
+
+  float nxy0 = mix(nx00, nx10, f.y);
+  float nxy1 = mix(nx01, nx11, f.y);
+
+  return mix(nxy0, nxy1, f.z);
+}
+
+float fbm3(vec3 p){
+  float v = 0.0;
+  float a = 0.5;
+  for(int i = 0; i < 3; i++){
+    v += a * noise3(p);
+    p = p * 2.02 + vec3(1.7, 9.2, 3.4);
+    a *= 0.5;
+  }
+  return v;
+}
+
+float sdSphere(vec3 p, float r){
+  return length(p) - r;
+}
+
+float sdEllipsoid(vec3 p, vec3 r){
+  float k0 = length(p / r);
+  float k1 = length(p / (r * r));
+  return k0 * (k0 - 1.0) / max(k1, 0.0001);
+}
+
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p - a;
+  vec3 ba = b - a;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 0.0001), 0.0, 1.0);
+  return length(pa - ba * h) - r;
+}
+
+vec3 bezier(vec3 a, vec3 b, vec3 c, float t){
+  float s = 1.0 - t;
+  return s * s * a + 2.0 * s * t * b + t * t * c;
+}
+
+float sdBezierCapsule6(vec3 p, vec3 a, vec3 b, vec3 c, float r0, float r1){
+  float d = 1e5;
+
+  for(int i = 0; i < 6; i++){
+    float t0 = float(i) / 5.0;
+    float t1 = min(1.0, t0 + 1.0 / 5.0);
+    vec3 p0 = bezier(a, b, c, t0);
+    vec3 p1 = bezier(a, b, c, t1);
+    float rr = mix(r0, r1, t0);
+    d = min(d, sdCapsule(p, p0, p1, rr));
+  }
+
+  return d;
+}
+
+vec3 armBaseA(int i){
+  if(i == 0) return vec3(-0.16,  0.20,  0.04);
+  if(i == 1) return vec3( 0.18,  0.16, -0.02);
+  if(i == 2) return vec3( 0.22, -0.04,  0.02);
+  return         vec3(-0.18, -0.16, -0.02);
+}
+
+vec3 armCtrlA(int i){
+  if(i == 0) return vec3(-0.42,  0.44,  0.10);
+  if(i == 1) return vec3( 0.42,  0.40, -0.10);
+  if(i == 2) return vec3( 0.54, -0.12,  0.10);
+  return         vec3(-0.44, -0.42, -0.10);
+}
+
+vec3 armTipA(int i){
+  if(i == 0) return vec3(-0.82,  0.72,  0.10);
+  if(i == 1) return vec3( 0.78,  0.68, -0.10);
+  if(i == 2) return vec3( 0.98, -0.04,  0.06);
+  return         vec3(-0.80, -0.76, -0.08);
+}
+
+float armRadA(int i){
+  if(i == 0) return 0.090;
+  if(i == 1) return 0.086;
+  if(i == 2) return 0.078;
+  return         0.084;
+}
+
+vec3 armBaseB(int i){
+  if(i == 0) return vec3( 0.00,  0.22, -0.04);
+  if(i == 1) return vec3( 0.18,  0.02,  0.04);
+  if(i == 2) return vec3( 0.02, -0.22, -0.02);
+  return         vec3(-0.20,  0.02,  0.02);
+}
+
+vec3 armCtrlB(int i){
+  if(i == 0) return vec3( 0.00,  0.54,  0.06);
+  if(i == 1) return vec3( 0.58,  0.12,  0.12);
+  if(i == 2) return vec3( 0.10, -0.56, -0.12);
+  return         vec3(-0.56,  0.10,  0.10);
+}
+
+vec3 armTipB(int i){
+  if(i == 0) return vec3( 0.02,  0.96,  0.00);
+  if(i == 1) return vec3( 0.90,  0.18,  0.08);
+  if(i == 2) return vec3( 0.10, -0.96, -0.08);
+  return         vec3(-0.90,  0.20,  0.06);
+}
+
+float armRadB(int i){
+  if(i == 0) return 0.096;
+  if(i == 1) return 0.086;
+  if(i == 2) return 0.092;
+  return         0.086;
+}
+
+float blobDistance(vec3 p){
+  float t = u_time;
+  float sm = u_stateMix;
+  float pulse = u_statePulse;
+
+  p.xy *= rot(0.07 * sin(t * 0.45));
+  p.xz *= rot(-0.05 * cos(t * 0.37));
+
+  vec3 q = p;
+  q.xy *= rot(0.11 * sin(t * 0.24));
+
+  float coreA = sdEllipsoid(q, vec3(0.42, 0.54, 0.40));
+  float coreB = sdEllipsoid(q, vec3(0.50, 0.60, 0.48));
+  float d = mix(coreA, coreB, sm);
+
+  float broad = fbm3(p * 2.0 + vec3(t * 0.08, -t * 0.06, t * 0.04));
+  float fine  = fbm3(p * 4.2 + vec3(-t * 0.04, t * 0.06, -t * 0.03));
+
+  d += broad * mix(0.035, 0.050, sm);
+  d += fine  * mix(0.010, 0.014, sm);
+
+  for(int i = 0; i < 4; i++){
+    vec3 a = mix(armBaseA(i), armBaseB(i), sm);
+    vec3 b = mix(armCtrlA(i), armCtrlB(i), sm);
+    vec3 c = mix(armTipA(i),  armTipB(i),  sm);
+
+    float r0 = mix(armRadA(i), armRadB(i), sm);
+    float r1 = r0 * mix(0.76, 0.88, sm);
+
+    float fi = float(i);
+    vec3 wob = vec3(
+      0.025 * sin(t * (0.58 + 0.03 * fi) + fi * 1.3),
+      0.025 * cos(t * (0.52 + 0.04 * fi) + fi * 0.9),
+      0.018 * sin(t * (0.64 + 0.04 * fi) + fi * 2.0)
+    );
+
+    c += wob * mix(0.35, 0.58, sm) * (0.55 + 0.45 * pulse);
+    b += wob * 0.20;
+
+    float armD = sdBezierCapsule6(p, a, b, c, r0, r1);
+    d = smin(d, armD, mix(0.18, 0.22, sm));
+
+    float dropD = sdSphere(
+      p - (c + normalize(c - b) * 0.05),
+      r1 * mix(0.65, 0.85, sm)
+    );
+    d = smin(d, dropD, 0.10);
+  }
+
+  float cavA = sdSphere(p - vec3( 0.14,  0.02, 0.06), mix(0.08, 0.12, sm));
+  float cavB = sdSphere(p - vec3(-0.12, -0.06, -0.04), mix(0.07, 0.10, sm));
+
+  d = max(d, -cavA);
+  d = max(d, -cavB);
+
+  return d;
+}
+
+float glowMaskAt(vec3 p){
+  float d = blobDistance(p);
+  return smoothstep(0.14, -0.16, d);
+}
+
+float shellMaskAt(vec3 p){
+  float d = blobDistance(p);
+  return smoothstep(0.05, -0.012, abs(d));
+}
+
+vec3 calcNormal(vec3 p){
+  vec2 e = vec2(0.003, 0.0);
+  return normalize(vec3(
+    blobDistance(p + e.xyy) - blobDistance(p - e.xyy),
+    blobDistance(p + e.yxy) - blobDistance(p - e.yxy),
+    blobDistance(p + e.yyx) - blobDistance(p - e.yyx)
+  ));
+}
+
+float raymarch(vec3 ro, vec3 rd, out vec3 hitPos){
+  float t = 0.0;
+
+  for(int i = 0; i < MAX_STEPS; i++){
+    vec3 p = ro + rd * t;
+    float d = blobDistance(p);
+
+    if(d < SURF_EPS){
+      hitPos = p;
+      return t;
+    }
+
+    if(t > MAX_DIST) break;
+
+    t += max(d * 0.74, 0.004);
+  }
+
+  hitPos = ro + rd * t;
+  return -1.0;
+}
+
+vec3 paletteIndexing(float t){
+  vec3 a = vec3(0.006, 0.010, 0.018);
+  vec3 b = vec3(0.012, 0.030, 0.070);
+  vec3 c = vec3(0.18, 0.24, 0.34);
+  vec3 d = vec3(0.02, 0.08, 0.12);
+  return a + b * cos(6.28318 * (c * t + d));
+}
+
+vec3 paletteThumbs(float t){
+  vec3 a = vec3(0.010, 0.028, 0.045);
+  vec3 b = vec3(0.040, 0.130, 0.150);
+  vec3 c = vec3(0.28, 0.34, 0.40);
+  vec3 d = vec3(0.02, 0.10, 0.12);
+  return a + b * cos(6.28318 * (c * t + d));
+}
+
+void main(){
+  vec2 uv = v_uv * 2.0 - 1.0;
+  float aspect = u_res.x / max(1.0, u_res.y);
+  uv.x *= aspect;
+
+  vec3 ro = vec3(0.0, 0.0, 3.4);
+  vec3 ta = vec3(0.0, 0.0, 0.0);
+
+  ro.x += 0.04 * sin(u_time * 0.22);
+  ro.y += 0.03 * cos(u_time * 0.20);
+
+  vec3 ww = normalize(ta - ro);
+  vec3 uu = normalize(cross(ww, vec3(0.0, 1.0, 0.0)));
+  vec3 vv = normalize(cross(uu, ww));
+
+  vec3 rd = normalize(uv.x * uu + uv.y * vv + 2.20 * ww);
+
+  vec3 hitPos;
+  float tHit = raymarch(ro, rd, hitPos);
+
+  if(tHit < 0.0){
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+    return;
+  }
+
+  float glowMask = glowMaskAt(hitPos);
+  float shellMask = shellMaskAt(hitPos);
+
+  vec3 N = calcNormal(hitPos);
+  vec3 V = normalize(ro - hitPos);
+
+  vec3 L1 = normalize(vec3(-0.45, 0.70, 1.0));
+  vec3 L2 = normalize(vec3( 0.85,-0.18, 0.75));
+  vec3 L3 = normalize(vec3( 0.10, 0.95, 0.60));
+
+  float ndl1 = max(dot(N, L1), 0.0);
+  float ndl2 = max(dot(N, L2), 0.0);
+  float ndl3 = max(dot(N, L3), 0.0);
+
+  float fres = pow(1.0 - max(dot(N, V), 0.0), mix(3.2, 1.9, u_stateMix));
+  float rim  = pow(1.0 - max(dot(N, V), 0.0), mix(2.2, 1.35, u_stateMix));
+
+  vec3 H1 = normalize(L1 + V);
+  vec3 H2 = normalize(L2 + V);
+
+  float spec1 = pow(max(dot(N, H1), 0.0), mix(36.0, 18.0, u_stateMix));
+  float spec2 = pow(max(dot(N, H2), 0.0), mix(18.0, 10.0, u_stateMix));
+
+  float hNoise = fbm3(hitPos * 3.2 + vec3(u_time * 0.05, -u_time * 0.04, u_time * 0.03));
+  float mottle = fbm3(hitPos * 6.0 + vec3(-u_time * 0.03, u_time * 0.04, -u_time * 0.02));
+
+  vec3 baseA = paletteIndexing(0.18 + hNoise * 0.55);
+  vec3 baseB = paletteThumbs(0.20 + hNoise * 0.72);
+  vec3 base = mix(baseA, baseB, u_stateMix);
+
+  vec3 deepA = vec3(0.004, 0.006, 0.010);
+  vec3 deepB = vec3(0.008, 0.028, 0.032);
+  vec3 deep = mix(deepA, deepB, u_stateMix);
+
+  vec3 fluoA = vec3(0.04, 0.08, 0.20);
+  vec3 fluoB = vec3(0.06, 0.72, 0.68);
+  vec3 fluo = mix(fluoA, fluoB, u_stateMix);
+
+  vec3 rimA = vec3(0.08, 0.12, 0.20);
+  vec3 rimB = vec3(0.28, 0.86, 0.82);
+  vec3 rimCol = mix(rimA, rimB, u_stateMix);
+
+  vec3 col = vec3(0.0);
+  col += deep * 1.10;
+  col += base * (0.14 + 0.28 * ndl1 + 0.10 * ndl2);
+  col += base * mottle * 0.06;
+  col += fluo * smoothstep(0.30, 0.88, glowMask) * mix(0.05, 0.42, u_stateMix);
+  col += fluo * u_statePulse * smoothstep(0.45, 0.94, glowMask) * mix(0.02, 0.16, u_stateMix);
+  col += rimCol * rim * shellMask * mix(0.14, 0.34, u_stateMix);
+  col += rimCol * fres * mix(0.05, 0.16, u_stateMix);
+  col += vec3(0.86, 0.92, 0.98) * spec1 * mix(0.10, 0.04, u_stateMix);
+  col += vec3(0.58, 0.84, 0.92) * spec2 * mix(0.05, 0.025, u_stateMix);
+  col += vec3(0.14, 0.16, 0.18) * ndl3 * mix(0.18, 0.08, u_stateMix);
+
+  col += mix(
+    vec3(0.00, 0.015, 0.04),
+    vec3(0.01, 0.10, 0.10),
+    u_stateMix
+  ) * smoothstep(0.0, 1.0, u_progress) * (0.28 + 0.72 * u_statePulse);
+
+  float grain = hash21(gl_FragCoord.xy + u_time * 11.0);
+  col += (grain - 0.5) * 0.006;
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+function createShader(gl, type, src) {
+  const shader = gl.createShader(type);
+  if (!shader) {
+    throw new Error('gl.createShader returned null');
+  }
+
+  gl.shaderSource(shader, src);
+  gl.compileShader(shader);
+
+  const ok = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+  const log = gl.getShaderInfoLog(shader);
+
+  if (!ok) {
+    console.error(type === gl.VERTEX_SHADER ? 'VERT FAIL' : 'FRAG FAIL');
+    console.error(log);
+    gl.deleteShader(shader);
+    throw new Error(log || 'shader compile failed');
+  }
+
+  if (log && log.trim()) {
+    console.warn(type === gl.VERTEX_SHADER ? 'VERT LOG' : 'FRAG LOG', log);
+  }
+
+  return shader;
+}
+
+function createProgram(gl, vertSrc, fragSrc) {
+  const program = gl.createProgram();
+  if (!program) {
+    throw new Error('gl.createProgram returned null');
+  }
+
+  const vs = createShader(gl, gl.VERTEX_SHADER, vertSrc);
+  const fs = createShader(gl, gl.FRAGMENT_SHADER, fragSrc);
+
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
+  gl.linkProgram(program);
+
+  const ok = gl.getProgramParameter(program, gl.LINK_STATUS);
+  const log = gl.getProgramInfoLog(program);
+
+  if (!ok) {
+    console.error('LINK FAIL');
+    console.error(log);
+    gl.deleteProgram(program);
+    throw new Error(log || 'program link failed');
+  }
+
+  if (log && log.trim()) {
+    console.warn('LINK LOG', log);
+  }
+
+  return program;
+}
+
+class BlobSplatLoader {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.gl = canvas.getContext('webgl', {
+      alpha: true,
+      premultipliedAlpha: false,
+      antialias: false,
+      preserveDrawingBuffer: false
+    });
+
+    if (!this.gl) {
+      throw new Error('WebGL not supported');
+    }
+
+    this.program = createProgram(this.gl, VERT, FRAG);
+    this.start = performance.now();
+    this.progress = 0.0;
+    this.stateMix = 0.0;
+    this.stateTarget = 0.0;
+    this.auto = true;
+    this._raf = null;
+
+    this._init();
+    this._resize();
+    window.addEventListener('resize', () => this._resize(), { passive: true });
+    this._raf = requestAnimationFrame((t) => this._frame(t));
+  }
+
+  _init() {
+    const gl = this.gl;
+
+    const quad = new Float32Array([
+      -1, -1,
+       1, -1,
+      -1,  1,
+       1,  1
+    ]);
+
+    this.buf = gl.createBuffer();
+    if (!this.buf) {
+      throw new Error('Failed to create quad buffer');
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
+    gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+
+    gl.useProgram(this.program);
+
+    this.aPos = gl.getAttribLocation(this.program, 'a_pos');
+    this.uRes = gl.getUniformLocation(this.program, 'u_res');
+    this.uTime = gl.getUniformLocation(this.program, 'u_time');
+    this.uProgress = gl.getUniformLocation(this.program, 'u_progress');
+    this.uStateMix = gl.getUniformLocation(this.program, 'u_stateMix');
+    this.uStatePulse = gl.getUniformLocation(this.program, 'u_statePulse');
+
+    gl.enableVertexAttribArray(this.aPos);
+    gl.vertexAttribPointer(this.aPos, 2, gl.FLOAT, false, 0, 0);
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  }
+
+  _resize() {
+    const dpr = 1.0;
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+
+    this.gl.viewport(0, 0, w, h);
+  }
+
+  setStage(name) {
+    this.stateTarget = name === 'thumbnails' ? 1.0 : 0.0;
+  }
+
+  setProgress(v) {
+    this.progress = Math.max(0, Math.min(1, v));
+  }
+
+  destroy() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = null;
+  }
+
+  _frame(now) {
+    const gl = this.gl;
+    const t = (now - this.start) * 0.001;
+
+    if (this.auto) {
+      const cyc = (t * 0.06) % 1.0;
+      this.progress = cyc;
+      this.stateTarget = cyc < 0.50 ? 0.0 : 1.0;
+    }
+
+    this.stateMix += (this.stateTarget - this.stateMix) * 0.030;
+
+    const transitionPulse = 0.5 + 0.5 * Math.sin(t * (this.stateMix > 0.5 ? 1.05 : 1.45));
+    const statePulse = (0.30 + 0.70 * this.progress) * transitionPulse;
+
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.useProgram(this.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
+
+    gl.enableVertexAttribArray(this.aPos);
+    gl.vertexAttribPointer(this.aPos, 2, gl.FLOAT, false, 0, 0);
+
+    gl.uniform2f(this.uRes, this.canvas.width, this.canvas.height);
+    gl.uniform1f(this.uTime, t);
+    gl.uniform1f(this.uProgress, this.progress);
+    gl.uniform1f(this.uStateMix, this.stateMix);
+    gl.uniform1f(this.uStatePulse, statePulse);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    const err = gl.getError();
+    if (err !== gl.NO_ERROR) {
+      console.error('WebGL error', err);
+    }
+
+    this._raf = requestAnimationFrame((tt) => this._frame(tt));
+  }
+}
+
+try {
+  const loader = new BlobSplatLoader(document.getElementById('blobCanvas'));
+  window.blobLoader = loader;
+} catch (err) {
+  console.error(err);
+  document.body.innerHTML = '<pre style="padding:16px;font:14px/1.5 monospace;color:#900;white-space:pre-wrap;">' +
+    String(err && err.stack ? err.stack : err) +
+    '</pre>';
+}
+</script>
+</body>
+</html>
