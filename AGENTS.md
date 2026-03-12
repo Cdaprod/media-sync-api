@@ -1756,3 +1756,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated `isLikelyPreviewEnvironment()` in `public/js/explorer-mock-assets.mjs` to classify localhost/loopback/local-test hostnames as preview contexts directly.
 - Maintained production safety: this heuristic is only used in boot error fallback routing, so deployed non-local hosts continue real API behavior unless explicit mock activation is requested.
 - Added regression assertion in `tests/test_public_explorer_program_monitor.py` for direct localhost preview detection branch.
+
+## 2026-03-08 — TileFX bootstrap non-ready timeout safeguard (new)
+- Addressed review feedback on `bootstrap_ready` stalling: entry phase previously required all bootstrap-visible tiles to become ready (`bootstrapReady === bootstrapTotal`), so a single never-ready tile could block steady state indefinitely.
+- Added bounded timeout escape hatch in `public/js/explorer-shaders.mjs` via `tilefxBootstrapReadyMs` (default `1200ms`): once elapsed in `bootstrap_ready`, renderer advances to `bootstrap_commit` so FX entry cannot deadlock on one failed tile.
+- Preserved full-ready fast path and existing batch commit semantics for ready tiles; timeout path is a safety valve, not a behavior rewrite.
+- Added timeout telemetry fields under `window.__tilefx_dbg` (`bootstrapReadyTimedOut`, `bootstrapReadyElapsedMs`, `bootstrapReadyPending`, `bootstrapReadyTimeoutMs`) and regression assertions in `tests/test_public_explorer_program_monitor.py`.

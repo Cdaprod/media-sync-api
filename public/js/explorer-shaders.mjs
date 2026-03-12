@@ -967,6 +967,7 @@ export class TileFXRenderer {
     this._lastDrawByTileEl = new WeakMap();
     this._fxEntryPhase = 'steady';
     this._fxEntryStartedAt = 0;
+    this._bootstrapReadyTimeoutMs = Math.max(250, Number(new URLSearchParams(window.location.search).get('tilefxBootstrapReadyMs') || 1200));
     this._bootstrapVisibleTileEls = new Set();
     this._swapLeakLoggedKeys = new Set();
     this._illegalDisableLogged = false;
@@ -1550,6 +1551,8 @@ export class TileFXRenderer {
     const bootstrapRows = visibleRows.filter((row) => this._bootstrapVisibleTileEls.has(row.tileEl));
     const bootstrapTotal = bootstrapRows.length;
     const bootstrapReady = bootstrapRows.filter((row) => row.ready).length;
+    const bootstrapElapsed = now - Number(this._fxEntryStartedAt || now);
+    const bootstrapReadyTimedOut = bootstrapElapsed >= this._bootstrapReadyTimeoutMs;
     const bootstrapReadyRatio = bootstrapTotal > 0 ? (bootstrapReady / bootstrapTotal) : 0;
     const hasVisibleDualOwner = bootstrapRows.some((row) => {
       const swapState = this._getSwapState(row.tileEl);
@@ -1560,6 +1563,13 @@ export class TileFXRenderer {
         this._fxEntryPhase = 'steady';
       } else if (bootstrapReady === bootstrapTotal && !hasVisibleDualOwner) {
         this._fxEntryPhase = 'bootstrap_commit';
+      } else if (bootstrapReadyTimedOut) {
+        this._fxEntryPhase = 'bootstrap_commit';
+        if (window.__tilefx_dbg) {
+          window.__tilefx_dbg.bootstrapReadyTimedOut = Number(window.__tilefx_dbg.bootstrapReadyTimedOut || 0) + 1;
+          window.__tilefx_dbg.bootstrapReadyElapsedMs = Number(bootstrapElapsed || 0);
+          window.__tilefx_dbg.bootstrapReadyPending = Math.max(0, bootstrapTotal - bootstrapReady);
+        }
       }
     }
     if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_commit') {
@@ -1642,6 +1652,7 @@ export class TileFXRenderer {
       window.__tilefx_dbg.fxEntryPhase = String(this._fxEntryPhase || 'steady');
       window.__tilefx_dbg.bootstrapVisibleCount = Number(this._bootstrapVisibleTileEls?.size || 0);
       window.__tilefx_dbg.bootstrapReadyRatio = Number(bootstrapReadyRatio || 0);
+      window.__tilefx_dbg.bootstrapReadyTimeoutMs = Number(this._bootstrapReadyTimeoutMs || 0);
     }
     return rows;
   }
