@@ -15,12 +15,12 @@ Internal architecture (single file, layered):
 
 Example (existing files):
 curl -X POST http://localhost:8787/api/projects/demo/compose   
--H ‘Content-Type: application/json’   
--d ‘{"inputs":["ingest/originals/a.mp4","ingest/originals/b.mp4"]}’
+-H 'Content-Type: application/json'   
+-d '{"inputs":["ingest/originals/a.mp4","ingest/originals/b.mp4"]}'
 
 Example (upload then compose):
-curl -X POST ‘http://localhost:8787/api/projects/demo/compose/upload?output_name=final.mp4’   
--F ‘files=@/path/a.mp4’ -F ‘files=@/path/b.mp4’
+curl -X POST 'http://localhost:8787/api/projects/demo/compose/upload?output_name=final.mp4'   
+-F 'files=@/path/a.mp4' -F 'files=@/path/b.mp4'
 """
 
 from __future__ import annotations
@@ -222,7 +222,7 @@ f"/media/{encoded_project}/download/{encoded_path}"
 if download
 else f"/media/{encoded_project}/{encoded_path}"
 )
-return f"{base_url.rstrip(’/’)}{path}{suffix}"
+return f"{base_url.rstrip('/')}{path}{suffix}"
 
 # =============================================================================
 
@@ -309,7 +309,7 @@ result: set[str] = set()
 for entry in files:
 rel = entry.get("relative_path") if isinstance(entry, dict) else None
 if isinstance(rel, str):
-result.add(rel.replace("\", "/").lstrip("/"))
+result.add(rel.replace("\\", "/").lstrip("/"))
 return result
 
 # =============================================================================
@@ -980,7 +980,7 @@ return _compose_service.compose_existing(ctx, spec, request)
 async def compose_upload(
 project_name: str,
 request: Request,
-files: list[UploadFile] = File(…),
+files: list[UploadFile] = File(...),
 source: str | None = Query(default=None),
 output_name: str = Query(default="compiled.mp4"),
 target_dir: str = Query(default="exports"),

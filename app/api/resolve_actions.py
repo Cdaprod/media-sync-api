@@ -1,4 +1,4 @@
-"""Resolve bridge endpoints for handoff to a local Resolve agent.
+"""Resolve bridge endpoints for handoff to a local Davinci Resolve agent.
 
 Usage:
     # Request Resolve to open/import media for a project
