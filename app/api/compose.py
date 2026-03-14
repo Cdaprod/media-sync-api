@@ -331,6 +331,163 @@ def _build_absolute_media_url(
     return f"{base_url.rstrip('/')}{path}{suffix}"
 
 
+# Added to compute "display"
+def _display_geometry_from_probe(probe: dict[str, int]) -> tuple[int, int]:
+    width = int(probe.get("width") or 0)
+    height = int(probe.get("height") or 0)
+    rotate = int(probe.get("rotate") or 0)
+
+    if rotate in {90, 270}:
+        return height, width
+    return width, height
+
+
+# Added for video dimensions and rotation
+def _probe_video_geometry(path: Path) -> dict[str, int]:
+    """
+    Return decoded geometry hints for a video file.
+
+    width/height are the stored stream dimensions.
+    rotate is normalized to one of: 0, 90, 180, 270 when detectable.
+    """
+    command = [
+        "ffprobe",
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height:stream_tags=rotate:side_data",
+        "-of", "json",
+        str(path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        return {"width": 0, "height": 0, "rotate": 0}
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {"width": 0, "height": 0, "rotate": 0}
+
+    streams = payload.get("streams", [])
+    if not streams:
+        return {"width": 0, "height": 0, "rotate": 0}
+
+    stream = streams[0]
+    width = int(stream.get("width") or 0)
+    height = int(stream.get("height") or 0)
+
+    rotate = 0
+
+    tag_rotate = stream.get("tags", {}).get("rotate")
+    if isinstance(tag_rotate, str):
+        try:
+            rotate = int(tag_rotate) % 360
+        except ValueError:
+            rotate = 0
+
+    side_data_list = stream.get("side_data_list", [])
+    for side in side_data_list:
+        if not isinstance(side, dict):
+            continue
+
+        rotation = side.get("rotation")
+        if isinstance(rotation, (int, float)):
+            rotate = int(rotation) % 360
+
+        display_matrix = side.get("displaymatrix")
+        if isinstance(display_matrix, str):
+            dm = display_matrix.lower()
+            if "rotation of -90.00 degrees" in dm:
+                rotate = 270
+            elif "rotation of 90.00 degrees" in dm:
+                rotate = 90
+            elif "rotation of 180.00 degrees" in dm or "rotation of -180.00 degrees" in dm:
+                rotate = 180
+
+    rotate = rotate % 360
+    if rotate not in {0, 90, 180, 270}:
+        rotate = 0
+
+    return {
+        "width": width,
+        "height": height,
+        "rotate": rotate,
+    }
+
+
+# Added for orientation normalization
+def _normalize_video_segment(
+    input_path: Path,
+    output_path: Path,
+    *,
+    target_width: int,
+    target_height: int,
+) -> Path:
+    """
+    Re-encode one video clip into a normalized intermediate MP4.
+
+    Policy:
+    - detect source rotation
+    - apply explicit rotation transform when needed
+    - scale to fit inside target canvas
+    - pad to exact target canvas
+    - strip metadata so orientation does not leak forward
+    """
+    probe = _probe_video_geometry(input_path)
+    rotate = int(probe.get("rotate") or 0)
+
+    vf_parts: list[str] = []
+
+    if rotate == 90:
+        vf_parts.append("transpose=1")
+    elif rotate == 270:
+        vf_parts.append("transpose=2")
+    elif rotate == 180:
+        vf_parts.append("hflip,vflip")
+
+    vf_parts.append(
+        f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease"
+    )
+    vf_parts.append(
+        f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black"
+    )
+    vf_parts.append("setsar=1")
+
+    vf = ",".join(vf_parts)
+
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i", str(input_path),
+
+        "-map_metadata", "-1",
+
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-vf", vf,
+
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+        "-metadata:s:v:0", "rotate=0",
+
+        str(output_path),
+    ]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr_tail = _error_tail(result.stderr)
+        stdout_tail = _error_tail(result.stdout)
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "video normalization failed; "
+                f"stderr_tail={stderr_tail or '<empty>'}; "
+                f"stdout_tail={stdout_tail or '<empty>'}"
+            ),
+        )
+
+    return output_path
+
+
 # =============================================================================
 # 5. PROJECT / ENVIRONMENT HELPERS
 # =============================================================================
@@ -1033,25 +1190,55 @@ class ComposePreprocessor:
     """
     Sole owner of PreparedSegment production.
 
-    Responsibility split:
-    - ComposePlanner: validate inputs, resolve output path, select strategy
-    - ComposePreprocessor: produce prepared_segments (this class)
-    - ComposeExecutor: consume prepared_segments
-
-    Today: video inputs pass through unchanged.
-    Future: image -> timed video segment, audio -> slated video segment.
-    To enable image support, implement the image branch and expand
-    SUPPORTED_DIRECT_COMPOSE_KINDS to include "image".
+    Policy:
+    - first video clip decides orientation family
+    - portrait jobs normalize to 1080x1920
+    - landscape jobs normalize to 1920x1080
+    - image/audio preprocessing is still not enabled
     """
 
     def prepare(self, assets: Sequence[InputAsset], work_dir: Path) -> list[PreparedSegment]:
         prepared: list[PreparedSegment] = []
-        for asset in assets:
+
+        normalized_dir = work_dir / "normalized"
+        normalized_dir.mkdir(parents=True, exist_ok=True)
+
+        video_assets = [asset for asset in assets if asset.kind == "video"]
+        if not video_assets:
+            raise HTTPException(status_code=400, detail="No video assets available for compose")
+
+        first_probe = _probe_video_geometry(video_assets[0].path)
+        display_width, display_height = _display_geometry_from_probe(first_probe)
+
+        if display_width <= 0 or display_height <= 0:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not determine target canvas from first clip: {video_assets[0].path.name}",
+            )
+
+        if display_height >= display_width:
+            target_width, target_height = 1080, 1920
+        else:
+            target_width, target_height = 1920, 1080
+
+        for idx, asset in enumerate(assets):
             if asset.kind == "video":
-                prepared.append(PreparedSegment(path=asset.path, source_kind="video", generated=False))
+                out_path = normalized_dir / f"segment_{idx:04d}.mp4"
+                normalized_path = _normalize_video_segment(
+                    asset.path,
+                    out_path,
+                    target_width=target_width,
+                    target_height=target_height,
+                )
+                prepared.append(
+                    PreparedSegment(
+                        path=normalized_path,
+                        source_kind="video",
+                        generated=True,
+                    )
+                )
                 continue
-            # _validate_supported_inputs() should have already blocked non-video upstream.
-            # This is a final safety net.
+
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -1059,6 +1246,7 @@ class ComposePreprocessor:
                     "Image/audio preprocessing is not yet enabled."
                 ),
             )
+
         return prepared
 
 
