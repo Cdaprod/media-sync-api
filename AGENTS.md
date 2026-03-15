@@ -1834,3 +1834,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Static TileFX (`public/js/explorer-shaders.mjs`) now enforces explicit performance guardrails with frame-time bands (`target/warm/degrade/critical`), bounded adaptive quality profiles (`high/balanced/low/safe`), and coarse-pointer fallback behavior that holds safe quality during sustained critical frame pressure before recovery.
 - TileFX debug telemetry now publishes guardrail policy/runtime fields on `window.__tilefx_dbg` (`perfGuardrails`, `perfFrameEmaMs`, `perfFrameBand`, `perfQuality`, `perfAdaptiveState`, `mobileFallbackActive`, `mobileFallbackReason`) to keep runtime diagnosis deterministic.
 - Next.js Explorer package remains intentionally grid/list-only for FX policy: no package TileFX mode is exposed, and unsupported view tokens must normalize to deterministic grid/list fallback (`normalizeExplorerView` in `docker/packages/Explorer/src/state.ts`) until a future explicit parity migration.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Explorer package bulk parity slice now uses typed bulk request contracts in `src/api.ts`, stable cross-project asset-ref builders in `ExplorerApp.tsx`, and drawer/select-bar wiring for tag/move/delete/compose using source+project+relative_path refs.

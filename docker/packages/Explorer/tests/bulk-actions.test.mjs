@@ -173,3 +173,49 @@ test('compose success helpers expose scoped refresh and artifact details', () =>
   assert.ok(content.includes('await loadProjects();'));
   assert.ok(content.includes("addToast('good', 'Compose', `Created ${buildComposeArtifactSummary(payload, outputName)}`)"));
 });
+
+
+test('buildSelectionAssetRefs preserves mixed-source and mixed-project refs', () => {
+  const explorerModule = loadTsModule(path.join(packageRoot, 'src', 'ExplorerApp.tsx'));
+  const selectedItems = [
+    { project_name: 'P1-A', project_source: 'primary', relative_path: 'ingest/originals/a.mov', kind: 'video' },
+    { project_name: 'P2-B', project_source: 'nas-b', relative_path: 'ingest/originals/a.mov', kind: 'video' },
+  ];
+  const refs = explorerModule.buildSelectionAssetRefs({ selectedItems, focusedItem: null });
+  assert.deepEqual(refs, [
+    { source: 'primary', project: 'P1-A', relative_path: 'ingest/originals/a.mov' },
+    { source: 'nas-b', project: 'P2-B', relative_path: 'ingest/originals/a.mov' },
+  ]);
+});
+
+test('buildSelectionAssetRefs keeps focused-request ordering for compose payloads', () => {
+  const explorerModule = loadTsModule(path.join(packageRoot, 'src', 'ExplorerApp.tsx'));
+  const selectedItems = [
+    { project_name: 'P1-A', project_source: 'primary', relative_path: 'ingest/originals/2.mov', kind: 'video' },
+    { project_name: 'P1-A', project_source: 'primary', relative_path: 'ingest/originals/1.mov', kind: 'video' },
+  ];
+  const focusedItem = { project_name: 'P3-C', project_source: 'nas-c', relative_path: 'ingest/originals/focus.mov', kind: 'video' };
+  const refs = explorerModule.buildSelectionAssetRefs({
+    selectedItems,
+    focusedItem,
+    requested: [
+      { source: 'primary', project: 'P1-A', relative_path: 'ingest/originals/1.mov' },
+      { source: 'nas-c', project: 'P3-C', relative_path: 'ingest/originals/focus.mov' },
+    ],
+    videosOnly: true,
+  });
+  assert.deepEqual(refs, [
+    { source: 'primary', project: 'P1-A', relative_path: 'ingest/originals/1.mov' },
+    { source: 'nas-c', project: 'P3-C', relative_path: 'ingest/originals/focus.mov' },
+  ]);
+});
+
+test('buildSelectionAssetRefs guardrails return empty refs for invalid selections', () => {
+  const explorerModule = loadTsModule(path.join(packageRoot, 'src', 'ExplorerApp.tsx'));
+  const selectedItems = [
+    { project_name: 'P1-A', project_source: 'primary', relative_path: '', kind: 'video' },
+    { project_name: '', project_source: 'primary', relative_path: 'ingest/originals/a.mov', kind: 'video' },
+  ];
+  const refs = explorerModule.buildSelectionAssetRefs({ selectedItems, focusedItem: null });
+  assert.deepEqual(refs, []);
+});
