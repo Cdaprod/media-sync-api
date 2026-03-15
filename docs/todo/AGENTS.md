@@ -2,6 +2,13 @@
 
 
 
+## 2026-03-15 — Explorer custom delete modal styling pass (active)
+- [x] Replaced native `window.confirm` delete prompt with a non-blocking in-app modal that matches Explorer theme and preserves async flow.
+- [x] Added modal accessibility hooks (`role="dialog"`, `aria-modal`, labelled/described content) and close affordances (Cancel, backdrop tap, Escape key).
+- [x] Kept delete scope reconciliation fix intact (`reloadMediaForCurrentScope`) while switching delete flow to await modal confirmation.
+- [x] Updated regression assertions in `tests/test_public_explorer_program_monitor.py` for modal wiring + async confirmation branch.
+- [ ] Validate iPhone Safari tap ergonomics/spacing for the custom modal against inspector drawer context.
+
 ## 2026-03-15 — Explorer delete confirm + post-delete scope reconciliation (active)
 - [x] Added an explicit delete confirmation prompt before bulk/inspector delete requests are sent.
 - [x] Fixed delete target resolution to honor drawer-focused assets as well as selected assets so single-item drawer deletes always resolve API refs.

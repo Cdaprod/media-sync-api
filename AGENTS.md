@@ -1768,3 +1768,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Fixed delete target resolution for drawer-initiated deletes by resolving refs from focused item and current media when selection state is empty.
 - Added `reloadMediaForCurrentScope()` and switched delete success flow to scope-aware reload (`loadMedia` for active project, `loadAllMedia` for all-project mode) to avoid post-delete fake-empty/no-project UI drift.
 - Added regression coverage in `tests/test_public_explorer_program_monitor.py` to assert confirmation wiring and scope-aware post-delete reload hooks remain present.
+
+## 2026-03-15 — Explorer custom delete modal (new)
+- Replaced native `window.confirm` in `public/explorer.html` delete flow with a custom Promise-based confirm modal (`#confirmDeleteModal`) to match Explorer styling and avoid blocking the render loop.
+- Added modal interactions for Cancel/Confirm, backdrop-tap cancel, and Escape-key cancel; modal toggles `body.confirm-open` while active and restores listeners/state on cleanup.
+- Updated delete path to `await confirmDeleteAction(...)` while preserving scope-aware post-delete reload behavior (`reloadMediaForCurrentScope`) from the previous fix.
+- Expanded static explorer regression assertions in `tests/test_public_explorer_program_monitor.py` to lock modal markup, async confirmation wiring, and scope-aware reload hooks.
