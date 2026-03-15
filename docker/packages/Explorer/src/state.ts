@@ -33,10 +33,44 @@ export interface MediaMeta {
 
 const EXPLORER_VIEW_SET = new Set<ExplorerView>(['grid', 'list']);
 
+export interface ExplorerViewNormalization {
+  view: ExplorerView;
+  changed: boolean;
+  reason: 'ok' | 'fx_disabled' | 'invalid';
+  message: string;
+}
+
 export function normalizeExplorerView(view: unknown, fallback: ExplorerView = 'grid'): ExplorerView {
   const raw = String(view || '').trim().toLowerCase();
   if (EXPLORER_VIEW_SET.has(raw as ExplorerView)) return raw as ExplorerView;
   return fallback;
+}
+
+export function normalizeExplorerViewState(view: unknown, fallback: ExplorerView = 'grid'): ExplorerViewNormalization {
+  const raw = String(view || '').trim().toLowerCase();
+  const normalized = normalizeExplorerView(raw, fallback);
+  if (normalized === raw) {
+    return {
+      view: normalized,
+      changed: false,
+      reason: 'ok',
+      message: '',
+    };
+  }
+  if (raw === 'fx' || raw.includes('fx')) {
+    return {
+      view: normalized,
+      changed: true,
+      reason: 'fx_disabled',
+      message: 'FX view is unavailable in this Explorer build. Switched to Grid/List safely.',
+    };
+  }
+  return {
+    view: normalized,
+    changed: true,
+    reason: 'invalid',
+    message: 'Unsupported view was ignored. Switched to a safe Grid/List mode.',
+  };
 }
 
 export function getMediaType(item: MediaItem): MediaTypeFilter {

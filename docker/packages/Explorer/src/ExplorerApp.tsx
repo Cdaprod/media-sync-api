@@ -9,6 +9,7 @@ import {
   extractAiTags,
   extractTags,
   filterMedia,
+  normalizeExplorerViewState,
   pruneSelection,
   sortMedia,
   sortMediaByRecent,
@@ -40,6 +41,7 @@ interface ExplorerAppProps {
 const DEFAULT_VIEW: ExplorerView = 'grid';
 const POINTER_THRESHOLD = 8;
 const LONG_PRESS_MS = 480;
+const VIEW_PREFS_KEY = 'explorer-view-v1';
 
 
 
@@ -650,6 +652,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       cancelled = true;
     };
   }, [filteredMedia, updateCardOrientation, view]);
+
+  const applyNormalizedView = useCallback((incomingView: unknown, source: 'url' | 'storage' | 'ui') => {
+    const normalized = normalizeExplorerViewState(incomingView, DEFAULT_VIEW);
+    setView(normalized.view);
+    if (normalized.changed && normalized.message) {
+      const title = normalized.reason === 'fx_disabled' ? 'View Mode' : 'View';
+      addToast('warn', title, `${normalized.message} (${source})`);
+    }
+    return normalized.view;
+  }, [addToast]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search || '');
+    const urlView = params.get('view');
+    if (urlView) {
+      applyNormalizedView(urlView, 'url');
+      return;
+    }
+    const stored = window.localStorage.getItem(VIEW_PREFS_KEY);
+    if (stored) applyNormalizedView(stored, 'storage');
+  }, [applyNormalizedView]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(VIEW_PREFS_KEY, view);
+  }, [view]);
 
   const buildUploadUrl = useCallback((project: Project) => buildProjectUploadUrl(project), []);
 
@@ -1922,14 +1951,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <button
                   className={view === 'grid' ? 'active' : ''}
                   type="button"
-                  onClick={() => setView('grid')}
+                  onClick={() => applyNormalizedView('grid', 'ui')}
                 >
                   Grid
                 </button>
                 <button
                   className={view === 'list' ? 'active' : ''}
                   type="button"
-                  onClick={() => setView('list')}
+                  onClick={() => applyNormalizedView('list', 'ui')}
                 >
                   List
                 </button>

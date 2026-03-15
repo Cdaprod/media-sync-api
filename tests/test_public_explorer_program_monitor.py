@@ -262,7 +262,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "this._fxEntryPhase = 'bootstrap_ready';" in shader_module
     assert "this._fxEntryPhase = 'bootstrap_commit';" in shader_module
     assert 'bootstrapReady === bootstrapTotal' in shader_module
-    assert "this._bootstrapReadyTimeoutMs = Math.max(250, Number(new URLSearchParams(window.location.search).get('tilefxBootstrapReadyMs') || 1200));" in shader_module
+    assert "this._bootstrapReadyTimeoutMs = readClampedSearchParam(queryParams, 'tilefxBootstrapReadyMs', {" in shader_module
     assert 'const bootstrapReadyTimedOut = bootstrapElapsed >= this._bootstrapReadyTimeoutMs;' in shader_module
     assert 'else if (bootstrapReadyTimedOut) {' in shader_module
     assert 'window.__tilefx_dbg.bootstrapReadyTimedOut = Number(window.__tilefx_dbg.bootstrapReadyTimedOut || 0) + 1;' in shader_module
@@ -346,7 +346,7 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'uploadsSucceeded: 0,' in shader_module
     assert 'uploadsFailed: 0,' in shader_module
     assert 'resizeImageForGL(img, maxEdge = 320)' in shader_module
-    assert "new URLSearchParams(window.location.search).get('tilefxMaxTex')" in shader_module
+    assert "readClampedSearchParam(queryParams, 'tilefxMaxTex'" in shader_module
     assert 'this._baseMaxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));' in shader_module
     assert 'this.maxTexEdge = this._baseMaxTexEdge;' in shader_module
     assert 'averageTextureSize() {' in shader_module
@@ -819,6 +819,17 @@ def test_explorer_tilefx_guardrail_policy_contract_present():
     assert 'window.__tilefx_dbg.perfAdaptiveState = {' in shader_module
     assert 'window.__tilefx_dbg.mobileFallbackActive = this._mobileFxFallback;' in shader_module
     assert "window.__tilefx_dbg.mobileFallbackReason = this._mobileFxFallback ? 'coarse-pointer-critical-frames' : '';" in shader_module
+    assert 'tuningLimits: Object.freeze({' in shader_module
+    assert 'readClampedSearchParam(queryParams, \'tilefxMaxTex\'' in shader_module
+    assert 'readClampedSearchParam(queryParams, \'tilefxIdleReadyMargin\'' in shader_module
+    assert 'readClampedSearchParam(queryParams, \'fxtileuploads\'' in shader_module
+    assert 'readClampedSearchParam(queryParams, \'fxtileuploadsframe\'' in shader_module
+    assert 'readClampedSearchParam(queryParams, \'tilefxBootstrapReadyMs\'' in shader_module
+    assert '_triggerGuardrailFallback(\'min-tier-critical-repeat\')' in shader_module
+    assert 'this.restoreAllDomSwaps(`fallback:${reason}`);' in shader_module
+    assert 'window.__tilefx_dbg.perfFallbackTransitions = this._perfFallbackTransitions;' in shader_module
+    assert 'window.__tilefx_dbg.perfFallbackCooldownUntil = this._perfFallbackCooldownUntil;' in shader_module
+    assert 'perfQueryTuning: {' in shader_module
 
 
 def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():

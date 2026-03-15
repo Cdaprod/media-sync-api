@@ -1,5 +1,19 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-15 — Explorer package test command reliability note (completed)
+- [x] Updated `docker/packages/Explorer/README.md` test instructions to run `npm ci --silent` before `npm test --silent` so clean environments do not report missing dev dependency failures.
+- [x] Re-ran package test flow with install-first ordering to keep validation output fully green.
+- [ ] Follow-up: add a lightweight root-level script/Make target that wraps Explorer install+test for one-command local verification.
+
+## 2026-03-15 — Durable FX policy normalization + guardrail fallback (completed)
+- [x] Hardened static TileFX query-parameter tuning with explicit clamped bounds for max texture size, idle overscan, upload budgets, and bootstrap-ready timeout.
+- [x] Added guardrail fallback transitions when minimum quality remains under sustained critical pressure to restore DOM ownership and re-enter FX safely without lockups.
+- [x] Expanded TileFX telemetry surface for policy diagnostics (`perfMinTierCriticalStreak`, `perfFallbackTransitions`, `perfFallbackCooldownUntil`, `perfQueryTuning`).
+- [x] Enforced package no-FX normalization across URL/localStorage/UI entry points with deterministic toast messaging for downgraded view tokens.
+- [x] Added static + package regressions to lock guardrail/fallback hooks and ensure package explorer cannot persist FX as the active view.
+- [ ] Follow-up: add a small shared package helper to parse/normalize URL view params so static/package view-policy messages can share one wording contract.
+
+
 ## 2026-03-15 — Masonry + topbar section header integration follow-up (completed)
 - [x] Reworked package grid to true dense masonry-style packing (`grid-auto-flow: dense` + `grid-auto-rows`) with per-asset row spans derived from media kind/orientation.
 - [x] Restored section-header/topbar cooperation by aligning package main layout padding with `var(--topbar-offset)` so content headers no longer sit behind the top bar.

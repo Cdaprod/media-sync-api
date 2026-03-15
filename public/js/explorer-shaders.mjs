@@ -178,6 +178,22 @@ const STATE_EVICT_AFTER_MS = 300000;
 const STATE_MAX_KEYS = 1200;
 const NEAR_VIEW_MAX = 180;
 
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readClampedSearchParam(params, key, {
+  min = 0,
+  max = Number.MAX_SAFE_INTEGER,
+  fallback = 0,
+  integer = false,
+} = {}) {
+  const raw = Number(params.get(key));
+  if (!Number.isFinite(raw)) return fallback;
+  const clamped = clampNumber(raw, min, max);
+  return integer ? Math.round(clamped) : clamped;
+}
+
 const TILEFX_PERF_GUARDRAILS = Object.freeze({
   frameTimeBands: Object.freeze({
     targetMs: 16.7,
@@ -196,6 +212,15 @@ const TILEFX_PERF_GUARDRAILS = Object.freeze({
     minQualityKey: 'safe',
     sustainedCriticalFrames: 18,
     recoverFrames: 45,
+    repeatedMinTierCriticalFrames: 42,
+    fallbackCooldownMs: 1600,
+  }),
+  tuningLimits: Object.freeze({
+    maxTexEdge: Object.freeze({ min: 128, max: 2048 }),
+    idleReadyMargin: Object.freeze({ min: 0, max: 24 }),
+    uploadBudgetPerSecond: Object.freeze({ min: 1, max: 30 }),
+    uploadsPerFrame: Object.freeze({ min: 1, max: 4 }),
+    bootstrapReadyMs: Object.freeze({ min: 250, max: 4000 }),
   }),
 });
 
@@ -950,15 +975,37 @@ export class TileFXRenderer {
     this._pendingWaitLoad = 0;
     this._srcMissing = 0;
     const coarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-    const maxTexParam = Number(new URLSearchParams(window.location.search).get('tilefxMaxTex') || 0);
+    const queryParams = new URLSearchParams(window.location.search);
+    const tuningLimits = TILEFX_PERF_GUARDRAILS.tuningLimits;
+    const maxTexParam = readClampedSearchParam(queryParams, 'tilefxMaxTex', {
+      min: tuningLimits.maxTexEdge.min,
+      max: tuningLimits.maxTexEdge.max,
+      fallback: 0,
+      integer: true,
+    });
     this.isCoarsePointer = Boolean(coarse);
     this._baseMaxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));
     this.maxTexEdge = this._baseMaxTexEdge;
-    this._baseIdleUploadOverscan = Math.max(0, Number(new URLSearchParams(window.location.search).get('tilefxIdleReadyMargin') || 6));
+    this._baseIdleUploadOverscan = readClampedSearchParam(queryParams, 'tilefxIdleReadyMargin', {
+      min: tuningLimits.idleReadyMargin.min,
+      max: tuningLimits.idleReadyMargin.max,
+      fallback: 6,
+      integer: true,
+    });
     this.idleUploadOverscan = this._baseIdleUploadOverscan;
-    this._baseUploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 8));
+    this._baseUploadBudgetPerSecond = readClampedSearchParam(queryParams, 'fxtileuploads', {
+      min: tuningLimits.uploadBudgetPerSecond.min,
+      max: tuningLimits.uploadBudgetPerSecond.max,
+      fallback: 8,
+      integer: true,
+    });
     this.uploadBudgetPerSecond = this._baseUploadBudgetPerSecond;
-    this._baseMaxUploadsPerFrame = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploadsframe') || 1));
+    this._baseMaxUploadsPerFrame = readClampedSearchParam(queryParams, 'fxtileuploadsframe', {
+      min: tuningLimits.uploadsPerFrame.min,
+      max: tuningLimits.uploadsPerFrame.max,
+      fallback: 1,
+      integer: true,
+    });
     this.maxUploadsPerFrame = this._baseMaxUploadsPerFrame;
     this.uploadPauseMs = 250;
     this.backpressureUntil = 0;
@@ -973,6 +1020,9 @@ export class TileFXRenderer {
     this._perfQuality = 'high';
     this._perfCriticalStreak = 0;
     this._perfRecoveryStreak = 0;
+    this._perfMinTierCriticalStreak = 0;
+    this._perfFallbackTransitions = 0;
+    this._perfFallbackCooldownUntil = 0;
     this._mobileFxFallback = false;
     this.gl = null;
     this.program = null;
@@ -1000,7 +1050,12 @@ export class TileFXRenderer {
     this._lastDrawByTileEl = new WeakMap();
     this._fxEntryPhase = 'steady';
     this._fxEntryStartedAt = 0;
-    this._bootstrapReadyTimeoutMs = Math.max(250, Number(new URLSearchParams(window.location.search).get('tilefxBootstrapReadyMs') || 1200));
+    this._bootstrapReadyTimeoutMs = readClampedSearchParam(queryParams, 'tilefxBootstrapReadyMs', {
+      min: tuningLimits.bootstrapReadyMs.min,
+      max: tuningLimits.bootstrapReadyMs.max,
+      fallback: 1200,
+      integer: true,
+    });
     this._bootstrapVisibleTileEls = new Set();
     this._swapLeakLoggedKeys = new Set();
     this._illegalDisableLogged = false;
@@ -1077,6 +1132,17 @@ export class TileFXRenderer {
         perfAdaptiveState: null,
         mobileFallbackActive: false,
         mobileFallbackReason: '',
+        perfMinTierCriticalStreak: 0,
+        perfFallbackTransitions: 0,
+        perfFallbackReason: '',
+        perfFallbackCooldownUntil: 0,
+        perfQueryTuning: {
+          tilefxMaxTex: this._baseMaxTexEdge,
+          tilefxIdleReadyMargin: this._baseIdleUploadOverscan,
+          fxtileuploads: this._baseUploadBudgetPerSecond,
+          fxtileuploadsframe: this._baseMaxUploadsPerFrame,
+          tilefxBootstrapReadyMs: this._bootstrapReadyTimeoutMs,
+        },
       };
     }
 
@@ -2596,6 +2662,19 @@ export class TileFXRenderer {
       }
     }
 
+    const atMinTier = nextQuality === mobileFallback.minQualityKey;
+    if (nextBand === 'critical' && atMinTier) {
+      this._perfMinTierCriticalStreak += 1;
+    } else {
+      this._perfMinTierCriticalStreak = Math.max(0, this._perfMinTierCriticalStreak - 1);
+    }
+
+    const shouldFallbackTransition = this._perfMinTierCriticalStreak >= Number(mobileFallback.repeatedMinTierCriticalFrames || 0)
+      && performance.now() >= Number(this._perfFallbackCooldownUntil || 0);
+    if (shouldFallbackTransition) {
+      this._triggerGuardrailFallback('min-tier-critical-repeat');
+    }
+
     if (this._mobileFxFallback) nextQuality = mobileFallback.minQualityKey;
     this._perfQuality = nextQuality;
     const qualityProfile = quality[nextQuality] || quality.high;
@@ -2611,6 +2690,9 @@ export class TileFXRenderer {
       window.__tilefx_dbg.perfQuality = this._perfQuality;
       window.__tilefx_dbg.mobileFallbackActive = this._mobileFxFallback;
       window.__tilefx_dbg.mobileFallbackReason = this._mobileFxFallback ? 'coarse-pointer-critical-frames' : '';
+      window.__tilefx_dbg.perfMinTierCriticalStreak = this._perfMinTierCriticalStreak;
+      window.__tilefx_dbg.perfFallbackTransitions = this._perfFallbackTransitions;
+      window.__tilefx_dbg.perfFallbackCooldownUntil = this._perfFallbackCooldownUntil;
       window.__tilefx_dbg.perfAdaptiveState = {
         dprCap: this.dprCap,
         maxTexEdge: this.maxTexEdge,
@@ -2620,6 +2702,25 @@ export class TileFXRenderer {
         criticalStreak: this._perfCriticalStreak,
         recoveryStreak: this._perfRecoveryStreak,
       };
+    }
+  }
+
+  _triggerGuardrailFallback(reason = 'guardrail') {
+    const now = performance.now();
+    this._perfFallbackTransitions += 1;
+    this._perfFallbackCooldownUntil = now + Number(this._perfGuardrails.mobileFallback.fallbackCooldownMs || 0);
+    this._perfMinTierCriticalStreak = 0;
+    this._mobileFxFallback = true;
+    this.backpressureUntil = Math.max(this.backpressureUntil, now + (this.uploadPauseMs * 2));
+    this._pendingUploads.clear();
+    this.restoreAllDomSwaps(`fallback:${reason}`);
+    this._fxEntryPhase = 'bootstrap_collect';
+    this._fxEntryStartedAt = now;
+    this._bootstrapVisibleTileEls = new Set();
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.perfFallbackReason = String(reason || 'guardrail');
+      window.__tilefx_dbg.perfFallbackTransitions = this._perfFallbackTransitions;
+      window.__tilefx_dbg.perfFallbackCooldownUntil = this._perfFallbackCooldownUntil;
     }
   }
 
