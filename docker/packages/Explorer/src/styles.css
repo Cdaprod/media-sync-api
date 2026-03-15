@@ -439,7 +439,8 @@ select.control{
   width: min(420px, 100vw - 24px);
   max-width: 100%;
   transform: translateX(-105%);
-  transition: transform 160ms ease;
+  opacity: 0;
+  transition: transform 160ms ease, opacity 140ms ease;
   pointer-events: none;
   z-index: 90;
 }
@@ -802,6 +803,7 @@ select.control{
   display:flex;
   align-items:center;
   justify-content:center;
+  min-height: 220px;
 }
 .asset .preview-pill{
   position: absolute;
@@ -940,6 +942,7 @@ select.control{
   display:flex;
   align-items:center;
   justify-content:center;
+  min-height: 220px;
 }
 .row .mini img{ width:100%; height:100%; object-fit: cover; display:block; }
 .row .info{ flex:1; min-width:0; }
@@ -968,14 +971,15 @@ select.control{
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow);
   transform: translateX(110%);
-  transition: transform 160ms ease;
+  opacity: 0;
+  transition: transform 160ms ease, opacity 140ms ease;
   z-index: 80;
   display:flex;
   flex-direction: column;
   min-height: 0;
   pointer-events: none;
 }
-.drawer.open{ transform: translateX(0%); pointer-events: auto; }
+.drawer.open{ transform: translateX(0%); opacity: 1; pointer-events: auto; }
 .drawer-h{
   padding: 14px 14px 10px;
   border-bottom: 1px solid var(--border);
@@ -1016,6 +1020,7 @@ select.control{
 .xbtn:hover{ background: rgba(255,255,255,0.10); }
 
 .drawer-body{
+  position: relative;
   padding: 14px;
   display:flex;
   flex-direction: column;
@@ -1031,8 +1036,9 @@ select.control{
   display:flex;
   align-items:center;
   justify-content:center;
+  min-height: 220px;
 }
-.preview video, .preview img{
+.preview video, .preview img, .preview audio{
   width: 100%;
   height: auto;
   display:block;
@@ -1071,18 +1077,26 @@ select.control{
   gap: 8px;
 }
 .drawer-tag-panel{
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 14px;
+  z-index: 5;
+  margin-top: 0;
+  background: rgba(11,16,32,0.96);
+  box-shadow: var(--shadow);
   display: none;
-  transform: translateY(-6px);
-  opacity: 0;
-  transition: opacity 140ms ease, transform 140ms ease;
 }
 .drawer-tag-panel.open{
   display: block;
-  transform: translateY(0);
-  opacity: 1;
 }
 .drawer-tag-panel .taglist{
   padding: 0;
+  max-height: 120px;
+  overflow: auto;
+}
+.drawer-tag-panel .tag-editor{
+  margin-top: 10px;
 }
 
 /* Bottom selection bar */

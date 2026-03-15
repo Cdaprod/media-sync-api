@@ -19,6 +19,8 @@ import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
 import {
   buildProgramMonitorDescriptor,
   buildStreamPathFromItem,
+  canUseObsIntegration,
+  canUseProgramMonitorIntegration,
   copyTextWithFallback,
   decideExplorerBootMode,
   formatBytes,
@@ -69,6 +71,56 @@ const getAssetIndex = (items: MediaItem[]): Map<string, MediaItem> => {
   });
   return map;
 };
+
+export interface PreviewDrawerUiState {
+  inspectorOpen: boolean;
+  drawerTagPanelOpen: boolean;
+}
+
+export type PreviewDrawerEvent = 'open' | 'close' | 'toggle_tag_panel';
+
+export function reducePreviewDrawerState(
+  state: PreviewDrawerUiState,
+  event: PreviewDrawerEvent,
+  context: { hasFocused: boolean },
+): PreviewDrawerUiState {
+  if (event === 'open') {
+    return { inspectorOpen: true, drawerTagPanelOpen: false };
+  }
+  if (event === 'close') {
+    return { inspectorOpen: false, drawerTagPanelOpen: false };
+  }
+  if (!context.hasFocused) {
+    return { ...state, drawerTagPanelOpen: false };
+  }
+  return { ...state, drawerTagPanelOpen: !state.drawerTagPanelOpen };
+}
+
+export function getPreviewDrawerActionState(input: {
+  hasFocused: boolean;
+  activeProject: boolean;
+  isFocusedSelected: boolean;
+  hasStreamUrl: boolean;
+  canUseObs: boolean;
+  canUseProgramMonitor: boolean;
+}): {
+  canPlay: boolean;
+  canCopyStream: boolean;
+  canSendObs: boolean;
+  canProgramMonitor: boolean;
+  canSelectToggle: boolean;
+  canDelete: boolean;
+} {
+  const hasFocused = Boolean(input.hasFocused);
+  return {
+    canPlay: hasFocused && input.hasStreamUrl,
+    canCopyStream: hasFocused && input.hasStreamUrl,
+    canSendObs: hasFocused && input.hasStreamUrl && input.canUseObs,
+    canProgramMonitor: hasFocused && input.hasStreamUrl && input.canUseProgramMonitor,
+    canSelectToggle: hasFocused && input.activeProject,
+    canDelete: hasFocused && input.activeProject,
+  };
+}
 
 export function mapOrderedVideoAssetRefs(
   selectedItems: MediaItem[],
@@ -791,16 +843,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const openDrawer = useCallback((item: MediaItem) => {
+    const nextState = reducePreviewDrawerState(
+      { inspectorOpen, drawerTagPanelOpen },
+      'open',
+      { hasFocused: true },
+    );
     setFocused(item);
-    setInspectorOpen(true);
-    setDrawerTagPanelOpen(false);
-  }, []);
+    setInspectorOpen(nextState.inspectorOpen);
+    setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
+  }, [drawerTagPanelOpen, inspectorOpen]);
 
   const closeDrawer = useCallback(() => {
-    setInspectorOpen(false);
+    const nextState = reducePreviewDrawerState(
+      { inspectorOpen, drawerTagPanelOpen },
+      'close',
+      { hasFocused: Boolean(focused) },
+    );
+    setInspectorOpen(nextState.inspectorOpen);
     setFocused(null);
-    setDrawerTagPanelOpen(false);
-  }, []);
+    setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
+  }, [drawerTagPanelOpen, focused, inspectorOpen]);
 
   const openUploadPicker = useCallback(() => {
     const input = uploadInputRef.current;
@@ -1097,6 +1159,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [filteredMedia, selected]);
 
   const handleProgramMonitorHandoff = useCallback(async () => {
+    if (!canUseProgramMonitorIntegration(typeof window !== 'undefined' ? window : undefined)) {
+      addToast('warn', 'Program Monitor', 'Program Monitor handoff is unavailable in this browser context.');
+      return;
+    }
     const selectedItems = getSelectedItems();
     if (!selectedItems.length) {
       addToast('warn', 'Program Monitor', 'Select one or more clips');
@@ -1121,6 +1187,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [addToast, getSelectedItems, resolveAssetUrl]);
 
   const handleSendFocusedToObs = useCallback(async () => {
+    if (!canUseObsIntegration(typeof window !== 'undefined' ? window : undefined)) {
+      addToast('warn', 'OBS', 'OBS handoff is unavailable in this browser context.');
+      return;
+    }
     if (!focused) {
       addToast('warn', 'OBS', 'Open a focused item first');
       return;
@@ -1614,6 +1684,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
   const canSelect = mediaScope === 'all' || Boolean(activeProject);
+  const hasFocused = Boolean(focused);
+  const focusedHasStreamUrl = Boolean(focused && buildStreamPathFromItem(focused));
+  const canObsIntegration = canUseObsIntegration(typeof window !== 'undefined' ? window : undefined);
+  const canProgramMonitor = canUseProgramMonitorIntegration(typeof window !== 'undefined' ? window : undefined);
+  const drawerActionState = getPreviewDrawerActionState({
+    hasFocused,
+    activeProject: Boolean(activeProject),
+    isFocusedSelected: Boolean(focused && selectedIdentitySet.has(buildMediaIdentity(focused))),
+    hasStreamUrl: focusedHasStreamUrl,
+    canUseObs: canObsIntegration,
+    canUseProgramMonitor: canProgramMonitor,
+  });
   const projectLabel = (item: MediaItem) => {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
@@ -2389,19 +2471,48 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   | null;
                 mediaElement?.play?.();
               }}
+              disabled={!drawerActionState.canPlay}
             >
               ▶ Play
             </button>
-            <button className="btn" type="button" onClick={() => focused && handleCopyStream(focused)}>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => focused && handleCopyStream(focused)}
+              disabled={!drawerActionState.canCopyStream}
+            >
               ⧉ Copy stream URL
             </button>
-            <button className="btn" type="button" onClick={handleSendFocusedToObs}>
+            <button
+              className="btn"
+              type="button"
+              onClick={handleSendFocusedToObs}
+              disabled={!drawerActionState.canSendObs}
+              title={canObsIntegration ? '' : 'OBS handoff unavailable in this context'}
+            >
               📡 Send to OBS
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => focused && void handleProgramMonitorHandoff()}
+              disabled={!drawerActionState.canProgramMonitor}
+              title={canProgramMonitor ? '' : 'Program Monitor handoff unavailable in this context'}
+            >
+              ↗ Program Monitor
             </button>
             <button
               className={`btn ${drawerTagPanelOpen ? 'primary' : ''}`}
               type="button"
-              onClick={() => setDrawerTagPanelOpen((prev) => !prev)}
+              onClick={() => {
+                const nextState = reducePreviewDrawerState(
+                  { inspectorOpen, drawerTagPanelOpen },
+                  'toggle_tag_panel',
+                  { hasFocused: Boolean(focused) },
+                );
+                setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
+              }}
+              disabled={!hasFocused}
             >
               🏷 Tag
             </button>
@@ -2409,7 +2520,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               className={`btn ${focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '' : 'primary'}`}
               type="button"
               onClick={() => focused && toggleSelected(focused.relative_path)}
-              disabled={!activeProject}
+              disabled={!drawerActionState.canSelectToggle}
             >
               {focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '− Deselect' : '＋ Select'}
             </button>
@@ -2417,7 +2528,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               className="btn bad"
               type="button"
               onClick={() => focused && requestDeleteMediaPaths([toAssetRef(focused)], 'Delete focused media?', 'This action cannot be undone.')}
-              disabled={!activeProject}
+              disabled={!drawerActionState.canDelete}
             >
               🗑 Delete
             </button>
@@ -2426,8 +2537,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           <div className={`drawer-tag-panel ${drawerTagPanelOpen ? 'open' : ''}`}>
             <div className="tag-panel">
               <div className="pillbar">
-                <button className="btn" type="button" onClick={() => void handleBulkTagEdit('add')}>Add tag</button>
-                <button className="btn" type="button" onClick={() => void handleBulkTagEdit('remove')}>Remove tag</button>
+                <button className="btn" type="button" onClick={() => void handleBulkTagEdit('add')}>＋ Tag</button>
+                <button className="btn" type="button" onClick={() => void handleBulkTagEdit('remove')}>− Remove</button>
               </div>
               <div className="taglist">
                 {focused && extractTags([focused]).length ? extractTags([focused]).map((tag) => (
