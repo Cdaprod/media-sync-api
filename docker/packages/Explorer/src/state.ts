@@ -1,4 +1,4 @@
-import type { MediaItem } from './types';
+import type { ExplorerView, MediaItem } from './types';
 import { normalizeTagList } from './utils';
 
 export interface MediaActionRef {
@@ -28,6 +28,15 @@ export interface MediaMeta {
   types: Set<MediaTypeFilter>;
   hasTags: boolean;
   hasSize: boolean;
+}
+
+
+const EXPLORER_VIEW_SET = new Set<ExplorerView>(['grid', 'list']);
+
+export function normalizeExplorerView(view: unknown, fallback: ExplorerView = 'grid'): ExplorerView {
+  const raw = String(view || '').trim().toLowerCase();
+  if (EXPLORER_VIEW_SET.has(raw as ExplorerView)) return raw as ExplorerView;
+  return fallback;
 }
 
 export function getMediaType(item: MediaItem): MediaTypeFilter {

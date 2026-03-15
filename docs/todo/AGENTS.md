@@ -1,5 +1,17 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-15 — FX performance guardrails policy (completed)
+- [x] Define static FX frame-time guardrails with explicit bands (`target`, `warm`, `degrade`, `critical`) and bounded adaptive quality tiers (`high`, `balanced`, `low`, `safe`).
+- [x] Enforce coarse-pointer/mobile fallback policy in static FX: hold `safe` quality under sustained critical frames, then recover only after sustained stable frames.
+- [x] Expose adaptive telemetry in `window.__tilefx_dbg` (`perfGuardrails`, `perfFrameEmaMs`, `perfFrameBand`, `perfQuality`, `perfAdaptiveState`, and mobile fallback fields).
+- [x] Add static regression assertions to prevent accidental removal of adaptive guardrail policy wiring.
+- [x] Document package FX policy: **intentionally deferred** in `docker/packages/Explorer`; package UI remains deterministic grid/list only with explicit fallback normalization.
+- [x] Add package tests for deterministic no-FX fallback behavior (`normalizeExplorerView` + grid/list-only contract).
+
+### Follow-up tasks
+- [ ] Run physical iPhone Safari validation for sustained-scroll transitions and confirm coarse-pointer fallback enters/exits as expected using `window.__tilefx_dbg` telemetry.
+- [ ] If package FX parity is promoted later, mirror static guardrail semantics in package state/tests before introducing an FX view toggle.
+
 ## 2026-03-15 — Consolidated preview convergence epic (active)
 
 ### Phase A — Baseline map (scope: inventory + delta capture only)
