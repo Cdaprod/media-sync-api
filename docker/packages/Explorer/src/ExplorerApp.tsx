@@ -2,25 +2,33 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { createApiClient } from './api';
+import { buildProjectUploadUrl, createApiClient } from './api';
 import {
+  buildMediaIdentity,
   collectMediaMeta,
   extractAiTags,
   extractTags,
   filterMedia,
+  getActionRefs,
   pruneSelection,
   sortMedia,
   sortMediaByRecent,
   toggleSelection,
 } from './state';
-import type { MediaMeta, MediaTypeFilter, SortKey } from './state';
+import type { MediaActionRef, MediaMeta, MediaTypeFilter, SortKey } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
 import {
+  buildProgramMonitorDescriptor,
+  buildStreamPathFromItem,
   copyTextWithFallback,
+  decideExplorerBootMode,
   formatBytes,
   guessKind,
   inferApiBaseUrl,
   kindBadgeClass,
+  loadExplorerMockAssets,
+  pushAssetToObs,
+  sendToProgramMonitor,
   toAbsoluteUrl,
 } from './utils';
 
@@ -341,6 +349,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
+  const [mockMode, setMockMode] = useState(false);
   const dragPathsRef = useRef<string[]>([]);
 
   const [resolveProjectMode, setResolveProjectMode] = useState('current');
@@ -371,13 +380,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     );
     return sortMedia(filtered, sortKey, mediaMeta);
   }, [media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
-  const itemsByPath = useMemo(() => {
-    const map = new Map<string, MediaItem>();
-    media.forEach((item) => {
-      if (item.relative_path) map.set(item.relative_path, item);
-    });
-    return map;
-  }, [media]);
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
   const typeLabel = TYPE_LABELS[typeFilter] ?? TYPE_LABELS.all;
@@ -446,10 +448,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, [filteredMedia, updateCardOrientation, view]);
 
-  const buildUploadUrl = useCallback((project: Project) => {
-    const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
-    return project.upload_url || `/api/projects/${encodeURIComponent(project.name)}/upload${query}`;
-  }, []);
+  const buildUploadUrl = useCallback((project: Project) => buildProjectUploadUrl(project), []);
 
   const resolveAssetUrl = useCallback(
     (path?: string) => {
@@ -508,6 +507,51 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [mediaMeta, typeFilter, untaggedOnly, sortKey]);
 
+  const loadMockData = useCallback(async () => {
+    try {
+      const assets = await loadExplorerMockAssets(fetch);
+      const normalized = assets.map((item) => ({
+        ...item,
+        project_name: item.project_name || item.project || 'MockProject-1',
+        project_source: item.project_source || item.source || 'primary',
+      }));
+      const byProject = new Map<string, Project>();
+      for (const item of normalized) {
+        const projectName = String(item.project_name || item.project || 'MockProject-1');
+        const sourceName = String(item.project_source || item.source || 'primary');
+        const key = `${sourceName}|${projectName}`;
+        if (!byProject.has(key)) {
+          byProject.set(key, {
+            name: projectName,
+            source: sourceName,
+            source_accessible: true,
+            index_exists: true,
+            upload_url: `/api/projects/${encodeURIComponent(projectName)}/upload${sourceName !== 'primary' ? `?source=${encodeURIComponent(sourceName)}` : ''}`,
+          });
+        }
+      }
+      setProjects(Array.from(byProject.values()));
+      setSources([{
+        name: 'primary',
+        root: '/mock',
+        type: 'mock',
+        enabled: true,
+        accessible: true,
+      }]);
+      setMedia(sortMediaByRecent(normalized));
+      setActiveProject(null);
+      setMediaScope('all');
+      setSelected(new Set());
+      setFocused(null);
+      setMockMode(true);
+      addToast('good', 'Mock Mode', 'Loaded preview mock assets');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load mock assets';
+      addToast('bad', 'Mock Mode', message);
+    }
+  }, [addToast]);
+
+
   const loadSources = useCallback(async () => {
     try {
       const payload = await api.listSources();
@@ -524,9 +568,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setProjects(payload);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to list projects';
+      const fallbackToMock = typeof window !== 'undefined' && decideExplorerBootMode({
+        location: window.location,
+        apiFailed: true,
+        hasOpener: Boolean(window.opener),
+        embedded: window.top !== window.self,
+      }) === 'mock';
+      if (fallbackToMock) {
+        addToast('warn', 'Projects', `${message}. Falling back to mock preview assets.`);
+        await loadMockData();
+        return;
+      }
       addToast('bad', 'Projects', message);
     }
-  }, [api, addToast]);
+  }, [api, addToast, loadMockData]);
 
   const loadMedia = useCallback(
     async (project: Project | null) => {
@@ -578,6 +633,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     setMedia(sortMediaByRecent(gathered));
   }, [addToast, api, projects]);
+
 
   const refreshAll = useCallback(async () => {
     await loadSources();
@@ -806,6 +862,56 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [addToast, resolveAssetUrl]);
 
+
+  const getSelectedItems = useCallback((): MediaItem[] => {
+    if (!selected.size) return [];
+    return filteredMedia.filter((item) => selected.has(item.relative_path));
+  }, [filteredMedia, selected]);
+
+  const handleProgramMonitorHandoff = useCallback(async () => {
+    const selectedItems = getSelectedItems();
+    if (!selectedItems.length) {
+      addToast('warn', 'Program Monitor', 'Select one or more clips');
+      return;
+    }
+    const origin = window.location.origin;
+    const urls = selectedItems
+      .map((item) => toAbsoluteUrl(resolveAssetUrl(buildStreamPathFromItem(item)), origin))
+      .filter(Boolean);
+    if (!urls.length) {
+      addToast('warn', 'Program Monitor', 'No stream URLs found for the selection.');
+      return;
+    }
+    const descriptors = selectedItems.map((item) => buildProgramMonitorDescriptor(item, origin));
+    try {
+      await sendToProgramMonitor(urls, descriptors);
+      addToast('good', 'Program Monitor', `Sent ${urls.length} stream URL(s).`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Handoff failed';
+      addToast('bad', 'Program Monitor', message);
+    }
+  }, [addToast, getSelectedItems, resolveAssetUrl]);
+
+  const handleSendFocusedToObs = useCallback(async () => {
+    if (!focused) {
+      addToast('warn', 'OBS', 'Open a focused item first');
+      return;
+    }
+    const origin = window.location.origin;
+    const assetUrl = toAbsoluteUrl(resolveAssetUrl(buildStreamPathFromItem(focused)), origin);
+    if (!assetUrl) {
+      addToast('warn', 'OBS', 'No stream URL available for this item.');
+      return;
+    }
+    try {
+      await pushAssetToObs({ assetUrl });
+      addToast('good', 'OBS', 'Pushed asset to OBS Browser Source.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'OBS push failed';
+      addToast('bad', 'OBS', message);
+    }
+  }, [addToast, focused, resolveAssetUrl]);
+
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const openContextMenu = useCallback((x: number, y: number, items: MediaItem[]) => {
@@ -882,9 +988,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         clearTimer();
         timer = window.setTimeout(() => {
           const selectedItems = selected.has(item.relative_path)
-            ? Array.from(selected)
-              .map((path) => itemsByPath.get(path))
-              .filter((entry): entry is MediaItem => Boolean(entry))
+            ? filteredMedia.filter((entry) => selected.has(entry.relative_path))
             : [item];
           openContextMenu(pressX, pressY, selectedItems);
         }, LONG_PRESS_MS);
@@ -944,9 +1048,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         event.preventDefault();
         if (dragging) return;
         const selectedItems = selected.has(item.relative_path)
-          ? Array.from(selected)
-            .map((path) => itemsByPath.get(path))
-            .filter((entry): entry is MediaItem => Boolean(entry))
+          ? filteredMedia.filter((entry) => selected.has(entry.relative_path))
           : [item];
         openContextMenu(event.clientX, event.clientY, selectedItems);
       };
@@ -959,7 +1061,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onContextMenu: handleContextMenu,
       };
     },
-    [activeProject, dragging, itemsByPath, moveMediaPaths, openContextMenu, openDrawer, projects, selected, toggleSelected],
+    [activeProject, dragging, filteredMedia, moveMediaPaths, openContextMenu, openDrawer, projects, selected, toggleSelected],
   );
 
   const handlePreviewSelected = useCallback(() => {
@@ -1073,18 +1175,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [dragging]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mode = decideExplorerBootMode({
+      location: window.location,
+      explicitMockFlag: Boolean((window as Window & { __EXPLORER_MOCK__?: boolean }).__EXPLORER_MOCK__),
+      hasOpener: Boolean(window.opener),
+      embedded: window.top !== window.self,
+    });
+    if (mode === 'mock') {
+      void loadMockData();
+      return;
+    }
     addToast('good', 'Boot', 'Loading sources + projects…');
+    setMockMode(false);
     void loadSources();
     void loadProjects();
-  }, [addToast, loadProjects, loadSources]);
+  }, [addToast, loadMockData, loadProjects, loadSources]);
 
   useEffect(() => {
+    if (mockMode) return;
     if (activeProject) {
       void loadMedia(activeProject);
     } else {
       void loadAllMedia();
     }
-  }, [activeProject, loadAllMedia, loadMedia]);
+  }, [activeProject, loadAllMedia, loadMedia, mockMode]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -1242,7 +1357,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, []);
 
-  const selectedCount = selected.size;
+  const selectedMediaItems = useMemo(
+    () => filteredMedia.filter((item) => selected.has(item.relative_path)),
+    [filteredMedia, selected],
+  );
+  const selectedRefs = useMemo<MediaActionRef[]>(() => getActionRefs(selectedMediaItems), [selectedMediaItems]);
+  const selectedIdentitySet = useMemo(() => new Set(selectedMediaItems.map((item) => buildMediaIdentity(item))), [selectedMediaItems]);
+  const selectedCount = selectedRefs.length || selected.size;
   const contextActions = useMemo(
     () => (contextMenu ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
@@ -1777,7 +1898,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
-                  const isSelected = selected.has(item.relative_path);
+                  const isSelected = selectedIdentitySet.has(buildMediaIdentity(item));
 
                   return (
                     <div
@@ -1855,7 +1976,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
-                  const isSelected = selected.has(item.relative_path);
+                  const isSelected = selectedIdentitySet.has(buildMediaIdentity(item));
 
                   return (
                     <div
@@ -1917,9 +2038,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ⇢ Send to Resolve
         </button>
         <button
+          className="btn"
+          type="button"
+          onClick={handleProgramMonitorHandoff}
+          disabled={!selectedCount}
+        >
+          ↗ Program Monitor
+        </button>
+        <button
           className="btn bad"
           type="button"
-          onClick={() => deleteMediaPaths(Array.from(selected))}
+          onClick={() => deleteMediaPaths(selectedRefs.map((ref) => ref.relative_path))}
           disabled={!activeProject || !selectedCount}
         >
           🗑 Delete
@@ -1982,13 +2111,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <button className="btn" type="button" onClick={() => focused && handleCopyStream(focused)}>
               ⧉ Copy stream URL
             </button>
+            <button className="btn" type="button" onClick={handleSendFocusedToObs}>
+              📡 Send to OBS
+            </button>
             <button
-              className={`btn ${focused && selected.has(focused.relative_path) ? '' : 'primary'}`}
+              className={`btn ${focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '' : 'primary'}`}
               type="button"
               onClick={() => focused && toggleSelected(focused.relative_path)}
               disabled={!activeProject}
             >
-              {focused && selected.has(focused.relative_path) ? '− Deselect' : '＋ Select'}
+              {focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '− Deselect' : '＋ Select'}
             </button>
             <button
               className="btn bad"

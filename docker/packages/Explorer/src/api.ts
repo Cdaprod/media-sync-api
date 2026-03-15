@@ -7,6 +7,19 @@ export interface ResolveRequest {
   mode: string;
 }
 
+
+export function buildProjectUploadUrl(project: Project): string {
+  const source = String(project.source || '').trim();
+  const query = source ? `?source=${encodeURIComponent(source)}` : '';
+  return project.upload_url || `/api/projects/${encodeURIComponent(project.name)}/upload${query}`;
+}
+
+export function buildUploadFormData(file: File): FormData {
+  const form = new FormData();
+  form.append('file', file);
+  return form;
+}
+
 export interface ApiClient {
   listSources: () => Promise<Source[]>;
   listProjects: () => Promise<Project[]>;
@@ -63,8 +76,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       return response.json();
     },
     async uploadMedia(url: string, file: File): Promise<Record<string, unknown>> {
-      const form = new FormData();
-      form.append('file', file);
+      const form = buildUploadFormData(file);
       const response = await fetch(buildUrl(url), { method: 'POST', body: form });
       const payload = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {

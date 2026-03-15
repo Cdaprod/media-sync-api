@@ -593,6 +593,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-05-22)
 - Explorer topbars now auto-hide via a shared intent controller and reveal zone, reusing the same hover/intent logic for dropdown menus in both static and Next.js explorers.
 
+
+### Latest Implementation Notes (2026-03-15)
+- Explorer package now includes behavior-first typed migration primitives in `src/utils.ts`: Program Monitor handoff payloading/ACK flow, OBS push adapter guardrails, mock/preview boot decisions, and URL/copy fallbacks parity helpers (ported from static explorer scripts without cross-importing `/public`).
+- Next.js Explorer now uses helper-driven mock boot fallback + idempotent selected action refs (`source|project|relative_path`) to keep repeated delete/handoff actions deterministic in all-project contexts.
+
 ### Latest Implementation Notes (2025-05-23)
 - Explorer assets now use unified pointer handlers for tap/preview/long-press context menus, include drag-hover project assist on the brand toggle, and ship a shared context menu in static + Next.js explorers.
 

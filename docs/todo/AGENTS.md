@@ -1,6 +1,15 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-15 — Explorer behavior-first migration primitives (active)
+- [x] Extended `docker/packages/Explorer/src/utils.ts` with typed parity helpers for URL/path normalization + clipboard copy fallbacks and centralized upload/stream URL shaping.
+- [x] Ported Program Monitor handoff behavior into typed helpers (`buildProgramMonitorDescriptor`, `sendToProgramMonitor`) and wired Explorer selection actions to use the helper boundary.
+- [x] Added typed OBS push adapter (`pushAssetToObs`) with browser API/script guardrails and connected drawer action flow.
+- [x] Added typed mock/preview boot decision helpers (`shouldUseExplorerMocks`, `isLikelyPreviewEnvironment`, `decideExplorerBootMode`) and wired Explorer boot fallback to mock assets.
+- [x] Tightened idempotent action targeting by deriving unique action refs from selected media identity (`source|project|relative_path`) before delete/handoff actions.
+- [ ] Add direct unit tests that execute helper functions (not string-presence checks) for boot decisions + Program Monitor payload composition.
+
+
 
 ## 2026-03-15 — Delete identity collision guard (active)
 - [x] Reworked explorer delete resolver matching to use stable asset identity keys (`asset_uuid`/`asset_id` fallback, then `source+project+relative_path`) instead of `relative_path` alone.
