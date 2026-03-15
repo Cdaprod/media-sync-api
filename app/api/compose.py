@@ -336,7 +336,14 @@ def _display_geometry_from_probe(probe: dict[str, int]) -> tuple[int, int]:
     width = int(probe.get("width") or 0)
     height = int(probe.get("height") or 0)
     rotate = int(probe.get("rotate") or 0)
-
+    logger.info(
+        "normalize_video_segment input=%s rotate=%s target=%sx%s",
+        input_path.name,
+        rotate,
+        target_width,
+        target_height,
+    )
+    
     if rotate in {90, 270}:
         return height, width
     return width, height
@@ -439,9 +446,9 @@ def _normalize_video_segment(
     vf_parts: list[str] = []
 
     if rotate == 90:
-        vf_parts.append("transpose=1")
-    elif rotate == 270:
         vf_parts.append("transpose=2")
+    elif rotate == 270:
+        vf_parts.append("transpose=1")
     elif rotate == 180:
         vf_parts.append("hflip,vflip")
 
