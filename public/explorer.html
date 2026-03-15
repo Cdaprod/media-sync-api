@@ -3118,6 +3118,12 @@
       setTimeout(() => t.remove(), 3100);
     }
 
+    function confirmDeleteAction(count){
+      const total = Math.max(1, Number(count) || 0);
+      const label = total === 1 ? 'this asset' : `these ${total} assets`;
+      return window.confirm(`Delete ${label}?\n\nThis removes the media file from disk and updates the project index.`);
+    }
+
     function escapeHtml(s){
       const value = s === null || s === undefined ? '' : String(s);
       return value
@@ -5127,9 +5133,65 @@
       updateSelectionUI();
     }
 
+    function toAssetRef(item){
+      return {
+        source: itemSourceName(item),
+        project: itemProjectName(item),
+        relative_path: item.relative_path || '',
+        kind: guessKind(item),
+        asset_id: item.asset_id || null,
+        asset_uuid: item.asset_uuid || null,
+        sha256: item.sha256 || null,
+      };
+    }
+
+    function resolveAssetsForDelete(paths){
+      const wanted = new Set((Array.isArray(paths) ? paths : []).filter(Boolean));
+      const selected = selectedAssetRefsOrdered();
+      if (!wanted.size) return selected;
+      const refs = [];
+      const seen = new Set();
+      const addRef = (ref) => {
+        if (!ref?.project || !ref?.relative_path) return;
+        const key = `${ref.source || 'primary'}::${ref.project}::${ref.relative_path}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        refs.push(ref);
+      };
+
+      selected.forEach((ref) => {
+        if (wanted.has(ref.relative_path)) addRef(ref);
+      });
+
+      if (state.focused?.relative_path && wanted.has(state.focused.relative_path)) {
+        addRef(toAssetRef(state.focused));
+      }
+
+      if (!refs.length && state.activeProject?.name){
+        state.media
+          .filter((item) => wanted.has(item.relative_path))
+          .forEach((item) => addRef(toAssetRef(item)));
+      }
+
+      return refs;
+    }
+
+    async function reloadMediaForCurrentScope(){
+      if (state.activeProject?.name) await loadMedia();
+      else if (state.mediaScope === 'all') await loadAllMedia();
+      else {
+        state.media = [];
+        updateMediaMeta();
+        renderMedia();
+        updateTopCounts();
+        updateSelectionUI();
+      }
+    }
+
     async function deletePaths(paths){
-      const assets = selectedAssetRefsOrdered();
+      const assets = resolveAssetsForDelete(paths);
       if (!assets.length){ toast('warn','Delete','Select one or more clips'); return; }
+      if (!confirmDeleteAction(assets.length)) return;
       try{
         const r = await fetch(`${API}/api/assets/bulk/delete`, {
           method:'POST',
@@ -5142,7 +5204,7 @@
         clearSelectionState();
         state.focused = null;
         setInspectorOpen(false);
-        await loadMedia();
+        await reloadMediaForCurrentScope();
         updateSelectionUI();
       }catch(e){
         toast('bad','Delete', e.message);
