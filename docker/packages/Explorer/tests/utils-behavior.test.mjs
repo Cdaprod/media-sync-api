@@ -132,3 +132,14 @@ test('package styles keep section header + masonry grid contracts', () => {
   assert.match(app, /getGridAssetSpan/);
   assert.match(app, /'--asset-span'/);
 });
+
+test('package explorer keeps grid/list-only controls and never wires FX runtime', () => {
+  const app = fs.readFileSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx'), 'utf8');
+  assert.match(app, /normalizeExplorerViewState/);
+  assert.match(app, /const applyNormalizedView/);
+  assert.match(app, /applyNormalizedView\('grid', 'ui'\)/);
+  assert.match(app, /applyNormalizedView\('list', 'ui'\)/);
+  assert.ok(!app.includes("setView('fx')"));
+  assert.ok(!app.includes('TileFXRenderer'));
+  assert.ok(!app.includes('fx-mode'));
+});

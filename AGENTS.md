@@ -1868,3 +1868,14 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Package explorer grid now uses dense masonry-style packing in `docker/packages/Explorer/src/styles.css` (`grid-auto-flow: dense`, `grid-auto-rows: 8px`) with `--asset-span` row spans from `getGridAssetSpan(...)` in `ExplorerApp.tsx`, eliminating vertical hole artifacts while preserving orientation-driven scale differences.
 - Package main layout now pads by `var(--topbar-offset)` so section headers render in conjunction with the fixed top bar instead of tucking behind it.
 - Added/updated package style contract tests in `docker/packages/Explorer/tests/utils-behavior.test.mjs` and revalidated the full static+package test command chain.
+
+### Latest Implementation Notes (2026-03-15)
+- Static TileFX policy durability pass in `public/js/explorer-shaders.mjs`: query-param tuning is now clamped through shared helpers (`readClampedSearchParam` + guardrail `tuningLimits`) for `tilefxMaxTex`, `tilefxIdleReadyMargin`, `fxtileuploads`, `fxtileuploadsframe`, and `tilefxBootstrapReadyMs`.
+- Added repeated-min-tier fallback transitions in TileFX adaptive logic (`_triggerGuardrailFallback`) so sustained critical pressure at minimum quality forces a safe DOM-swap restore + bootstrap re-entry instead of stalling in a degraded lockup state.
+- TileFX debug telemetry now includes fallback/tuning diagnostics (`perfMinTierCriticalStreak`, `perfFallbackTransitions`, `perfFallbackReason`, `perfFallbackCooldownUntil`, `perfQueryTuning`) while keeping existing `perfGuardrails` fields intact.
+- Explorer package view handling now normalizes no-FX policy at every entry point via `normalizeExplorerViewState(...)` in `docker/packages/Explorer/src/state.ts`, with `ExplorerApp.tsx` applying normalization for URL params, persisted localStorage view, and UI view toggles plus user-safe warning toasts on downgraded inputs.
+- Regression coverage updated: static policy contract tests assert clamped query parsing + fallback hooks, and package tests assert deterministic no-FX normalization semantics and absence of FX runtime wiring in the package explorer.
+
+### Latest Implementation Notes (2026-03-15)
+- Updated `docker/packages/Explorer/README.md` testing instructions to use install-first ordering (`npm ci --silent` then `npm test --silent`) so clean checkout validation avoids missing-dev-dependency failures.
+- Revalidated the package test sequence with the new documented command order and kept the static regression command in the same runbook.

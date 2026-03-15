@@ -82,5 +82,8 @@ The Explorer Actions panel and selection bar now include a **Compose** flow that
 ## Testing
 
 ```bash
-npm run test
+npm ci --silent
+npm test --silent
 ```
+
+Run tests from a clean dependency state (or after dependency changes) so the TypeScript-powered node test harness can resolve local dev dependencies deterministically.

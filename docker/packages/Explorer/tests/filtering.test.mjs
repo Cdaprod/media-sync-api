@@ -113,7 +113,7 @@ test('sortMedia handles name and size ordering with missing sizes last', () => {
 
 
 test('normalizeExplorerView enforces deterministic grid/list fallback (no FX mode)', () => {
-  const { normalizeExplorerView } = loadTsModule(statePath);
+  const { normalizeExplorerView, normalizeExplorerViewState } = loadTsModule(statePath);
 
   assert.equal(normalizeExplorerView('grid'), 'grid');
   assert.equal(normalizeExplorerView('list'), 'list');
@@ -121,4 +121,20 @@ test('normalizeExplorerView enforces deterministic grid/list fallback (no FX mod
   assert.equal(normalizeExplorerView('FX'), 'grid');
   assert.equal(normalizeExplorerView('tilefx', 'list'), 'list');
   assert.equal(normalizeExplorerView(''), 'grid');
+
+  const fxState = normalizeExplorerViewState('fx');
+  assert.equal(fxState.view, 'grid');
+  assert.equal(fxState.changed, true);
+  assert.equal(fxState.reason, 'fx_disabled');
+  assert.match(fxState.message, /FX view is unavailable/i);
+
+  const invalidState = normalizeExplorerViewState('unsupported-view', 'list');
+  assert.equal(invalidState.view, 'list');
+  assert.equal(invalidState.changed, true);
+  assert.equal(invalidState.reason, 'invalid');
+
+  const okState = normalizeExplorerViewState('grid');
+  assert.equal(okState.view, 'grid');
+  assert.equal(okState.changed, false);
+  assert.equal(okState.reason, 'ok');
 });
