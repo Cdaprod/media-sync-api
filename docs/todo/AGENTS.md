@@ -2,6 +2,20 @@
 
 
 
+## 2026-03-15 — Delete identity collision guard (active)
+- [x] Reworked explorer delete resolver matching to use stable asset identity keys (`asset_uuid`/`asset_id` fallback, then `source+project+relative_path`) instead of `relative_path` alone.
+- [x] Updated delete entrypoints (context menu, selected-bar, drawer) to pass asset objects where possible so all-project deletes cannot cross-match by path collisions.
+- [x] Preserved legacy string-path support with focused/active-project narrowing while preventing broad path-only expansion in all-project scope.
+- [x] Added regression assertions in `tests/test_public_explorer_program_monitor.py` to block reintroduction of `wanted.has(ref.relative_path)` logic.
+- [ ] Add runtime test coverage that simulates same-relative-path assets across two projects and verifies only the intended asset ref is submitted.
+
+## 2026-03-15 — Explorer custom delete modal styling pass (active)
+- [x] Replaced native `window.confirm` delete prompt with a non-blocking in-app modal that matches Explorer theme and preserves async flow.
+- [x] Added modal accessibility hooks (`role="dialog"`, `aria-modal`, labelled/described content) and close affordances (Cancel, backdrop tap, Escape key).
+- [x] Kept delete scope reconciliation fix intact (`reloadMediaForCurrentScope`) while switching delete flow to await modal confirmation.
+- [x] Updated regression assertions in `tests/test_public_explorer_program_monitor.py` for modal wiring + async confirmation branch.
+- [ ] Validate iPhone Safari tap ergonomics/spacing for the custom modal against inspector drawer context.
+
 ## 2026-03-15 — Explorer delete confirm + post-delete scope reconciliation (active)
 - [x] Added an explicit delete confirmation prompt before bulk/inspector delete requests are sent.
 - [x] Fixed delete target resolution to honor drawer-focused assets as well as selected assets so single-item drawer deletes always resolve API refs.
