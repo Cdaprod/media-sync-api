@@ -2,6 +2,20 @@
 
 
 
+## 2026-03-15 — Explorer custom delete modal styling pass (active)
+- [x] Replaced native `window.confirm` delete prompt with a non-blocking in-app modal that matches Explorer theme and preserves async flow.
+- [x] Added modal accessibility hooks (`role="dialog"`, `aria-modal`, labelled/described content) and close affordances (Cancel, backdrop tap, Escape key).
+- [x] Kept delete scope reconciliation fix intact (`reloadMediaForCurrentScope`) while switching delete flow to await modal confirmation.
+- [x] Updated regression assertions in `tests/test_public_explorer_program_monitor.py` for modal wiring + async confirmation branch.
+- [ ] Validate iPhone Safari tap ergonomics/spacing for the custom modal against inspector drawer context.
+
+## 2026-03-15 — Explorer delete confirm + post-delete scope reconciliation (active)
+- [x] Added an explicit delete confirmation prompt before bulk/inspector delete requests are sent.
+- [x] Fixed delete target resolution to honor drawer-focused assets as well as selected assets so single-item drawer deletes always resolve API refs.
+- [x] Added scope-aware post-delete reload (`project` vs `all projects`) to prevent the fake-empty/no-project state after successful deletes.
+- [x] Added regression assertions in `tests/test_public_explorer_program_monitor.py` for confirm + reload hooks.
+- [ ] Validate on iPhone Safari that deleting from drawer keeps current source/project scope hydrated without manual refresh.
+
 ## 2026-03-08 — FX bootstrap ready-timeout escape hatch (active)
 - [x] Addressed bootstrap stall risk where `bootstrap_ready` previously required `bootstrapReady === bootstrapTotal`, allowing one never-ready visible tile to block steady-state entry.
 - [x] Added bounded timeout gate (`tilefxBootstrapReadyMs`, default 1200ms) so FX bootstrap advances to commit/steady even when a subset of visible tiles never become ready.

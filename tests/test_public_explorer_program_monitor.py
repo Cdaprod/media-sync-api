@@ -130,6 +130,25 @@ def test_explorer_selection_keys_support_all_projects_scope():
     assert '/api/assets/bulk/compose' in html
 
 
+
+
+def test_explorer_delete_requires_confirm_and_scope_aware_reload():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'function confirmDeleteAction(count)' in html
+    assert "const modal = el('confirmDeleteModal');" in html
+    assert "return new Promise((resolve) => {" in html
+    assert "modal.classList.add('open');" in html
+    assert "if (event.target === modal) cleanup(false);" in html
+    assert 'const confirmed = await confirmDeleteAction(assets.length);' in html
+    assert 'if (!confirmed) return;' in html
+    assert 'id="confirmDeleteModal" class="confirm-modal"' in html
+    assert 'id="confirmDeleteCancel" class="btn"' in html
+    assert 'id="confirmDeleteSubmit" class="btn bad"' in html
+    assert 'function resolveAssetsForDelete(paths)' in html
+    assert 'function reloadMediaForCurrentScope()' in html
+    assert "else if (state.mediaScope === 'all') await loadAllMedia();" in html
+    assert 'await reloadMediaForCurrentScope();' in html
+
 def test_explorer_selection_bar_compose_action_present():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert 'id="selCompose"' in html
