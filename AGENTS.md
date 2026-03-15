@@ -1817,3 +1817,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2026-03-15)
 - Preview/inspector convergence in the Next.js Explorer now adopts static-parity drawer deltas only: drawer action set includes Program Monitor + OBS affordances with explicit unavailable-state disabling/toasts, preview media sizing adds audio + minimum height parity, and drawer tags stay as an overlay panel in `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`; intentionally deferred this pass are static-only FX/tile renderer/debug controls and full inline tag-editor parity (prompt-based tag edits remain in package explorer).
+
+### Latest Implementation Notes (2026-03-15)
+- Stabilized the Explorer package API client contract in `docker/packages/Explorer/src/api.ts` with a shared error extractor that consistently surfaces actionable `detail`, nested `detail.message`, or `message` text for list/upload/resolve/delete/move and bulk asset endpoints.
+- Added a focused fetch-mocked API contract suite at `docker/packages/Explorer/tests/api-contract.test.mjs` covering request URL/query/body construction for sources/projects/media/upload/resolve/delete/move/bulk-delete/bulk-tags/bulk-move/bulk-compose, including ordered `assets` array invariants.
+- Updated `docs/todo/AGENTS.md` with a completed checklist for this API contract stabilization slice.
