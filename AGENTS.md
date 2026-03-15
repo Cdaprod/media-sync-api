@@ -1762,3 +1762,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added bounded timeout escape hatch in `public/js/explorer-shaders.mjs` via `tilefxBootstrapReadyMs` (default `1200ms`): once elapsed in `bootstrap_ready`, renderer advances to `bootstrap_commit` so FX entry cannot deadlock on one failed tile.
 - Preserved full-ready fast path and existing batch commit semantics for ready tiles; timeout path is a safety valve, not a behavior rewrite.
 - Added timeout telemetry fields under `window.__tilefx_dbg` (`bootstrapReadyTimedOut`, `bootstrapReadyElapsedMs`, `bootstrapReadyPending`, `bootstrapReadyTimeoutMs`) and regression assertions in `tests/test_public_explorer_program_monitor.py`.
+
+## 2026-03-15 — Explorer delete confirmation + scope-safe refresh (new)
+- Added explicit delete confirmation in `public/explorer.html` (`confirmDeleteAction`) so destructive deletes require user acknowledgment before API calls.
+- Fixed delete target resolution for drawer-initiated deletes by resolving refs from focused item and current media when selection state is empty.
+- Added `reloadMediaForCurrentScope()` and switched delete success flow to scope-aware reload (`loadMedia` for active project, `loadAllMedia` for all-project mode) to avoid post-delete fake-empty/no-project UI drift.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to assert confirmation wiring and scope-aware post-delete reload hooks remain present.
