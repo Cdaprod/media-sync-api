@@ -1791,3 +1791,16 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added a dedicated parity-buckets matrix under `docs/todo/AGENTS.md` → `## 2026-03-07 — Physical iPhone parity handoff (active)` to keep Static vs Next.js scope tracking consistent for future commits.
 - Matrix rows now cover shell/layout, media behavior, integrations, and data/API with explicit `Static` / `Next.js` / `Parity` checklist columns.
 - Each bucket row includes concrete grep locators in both codepaths (`public/explorer.html` and `docker/packages/Explorer/src/ExplorerApp.tsx` + related JS modules) so parity patches are idempotent and easy to anchor.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer migration slice 1 landed in `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`: topbar brand now mirrors the static explorer title-toggle treatment and the actions trigger/panel positioning was aligned to the fixed topbar behavior.
+- Added/updated migration checkboxes in `docs/todo/AGENTS.md`; keep marking slices complete one-by-one with isolated commits.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer migration slice 2 updated card rendering parity in `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`: grid uses responsive CSS-grid cards, selection uses `.is-selected` affordances with selection-order badges, and list rows now reflect selected state consistently.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer migration slice 3 added inspector parity structure in `docker/packages/Explorer/src/ExplorerApp.tsx`: drawer action pills now include a Tag toggle and a drawer tag panel section for focused manual/AI tags, with matching panel styles in `src/styles.css`.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer migration slice 4 now routes delete triggers through an in-app confirmation modal (context menu, selection bar, and drawer delete pill) and upgraded upload affordances to explicit choose/upload controls in the sidebar panel.
