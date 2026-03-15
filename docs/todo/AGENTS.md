@@ -1,5 +1,29 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-15 — Dual-track Explorer upgrades (active)
+- [ ] **Commit classification (required):** classify each Explorer feature commit as either shared behavior (patch both static + package) or package-only/static-only with a short written reason.
+- [ ] **Paired path locators (required):** include explicit task rows for both codepaths before implementation.
+  - [ ] Static path locator(s): `public/explorer.html`, `public/js/explorer-shaders.mjs` (and any additional touched static explorer modules).
+  - [ ] Package path locator(s): `docker/packages/Explorer/src/ExplorerApp.tsx`, `docker/packages/Explorer/src/styles.css`, `docker/packages/Explorer/src/api.ts`, `docker/packages/Explorer/src/state.ts` (and any additional touched package modules).
+- [ ] **Parity verification rows per feature slice (required):**
+  - [ ] UI behavior parity verified between static + package explorers for the touched feature slice.
+  - [ ] API request-shape parity verified (query params, payload fields/order, and response handling) between static + package explorers.
+- [ ] **Dual-stack testing rows (required):**
+  - [ ] Static explorer regression assertions added/updated (or documented no-op with reason).
+  - [ ] Explorer package tests added/updated (or documented no-op with reason).
+- [ ] **Completion gate (required):** mark task rows `[x]` only when both codepaths are implemented, or when an explicit documented exception explains why only one path changed.
+
+### Future Explorer feature commit template (copy/paste)
+- [ ] Feature slice: `<name>`
+  - [ ] Classification: `shared` **or** `package-only` / `static-only` (reason: `<short reason>`)
+  - [ ] Static path row: `<file/path>`
+  - [ ] Package path row: `<file/path>`
+  - [ ] Parity verification (UI behavior)
+  - [ ] Parity verification (API request shape)
+  - [ ] Static regression test row: `<test reference or reason>`
+  - [ ] Package test row: `<test reference or reason>`
+  - [ ] Completion `[x]` only after both paths done or documented exception recorded.
+
 
 ## 2026-03-15 — Explorer API contract stabilization (completed)
 - [x] Added a focused package API contract suite for explorer-used endpoints in `docker/packages/Explorer/tests/api-contract.test.mjs`.
