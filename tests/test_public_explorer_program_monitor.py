@@ -347,7 +347,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'uploadsFailed: 0,' in shader_module
     assert 'resizeImageForGL(img, maxEdge = 320)' in shader_module
     assert "new URLSearchParams(window.location.search).get('tilefxMaxTex')" in shader_module
-    assert 'this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));' in shader_module
+    assert 'this._baseMaxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));' in shader_module
+    assert 'this.maxTexEdge = this._baseMaxTexEdge;' in shader_module
     assert 'averageTextureSize() {' in shader_module
     assert 'pendingWaitLoad: 0,' in shader_module
     assert 'pendingReady: 0,' in shader_module
@@ -868,3 +869,21 @@ def test_explorer_overlay_sanitizer_inert_contract_present():
     assert '[data-overlay-sanitized="1"]{' in html
     assert "setNodeStyleSafe(node, 'pointerEvents', 'none');" in html
     assert "setNodeDataSafe(node, 'overlaySanitized', '1');" in html
+
+
+def test_explorer_preview_drawer_hook_cluster_and_tag_panel_contract_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'id="drawer" class="drawer"' in html
+    assert 'id="drawerPreview"' in html
+    assert 'id="drawerPlay"' in html
+    assert 'id="drawerCopy"' in html
+    assert 'id="drawerTagToggle"' in html
+    assert 'id="drawerSendOBS"' in html
+    assert 'id="drawerDelete"' in html
+    assert 'id="drawerTagPanel"' in html
+    assert "function setInspectorOpen(open){" in html
+    assert "el('drawerTagPanel')?.classList.remove('open');" in html
+    assert "el('drawerTagToggle').onclick = () => {" in html
+    assert "panel?.classList.toggle('open');" in html
+    assert "el('drawerTagInput')?.focus();" in html
+    assert "el('drawerBackdrop').addEventListener('click', closeDrawer);" in html

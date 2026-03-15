@@ -1,5 +1,45 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-15 — Masonry + topbar section header integration follow-up (completed)
+- [x] Reworked package grid to true dense masonry-style packing (`grid-auto-flow: dense` + `grid-auto-rows`) with per-asset row spans derived from media kind/orientation.
+- [x] Restored section-header/topbar cooperation by aligning package main layout padding with `var(--topbar-offset)` so content headers no longer sit behind the top bar.
+- [x] Added regression checks to lock masonry contracts in package CSS plus row-span wiring in `ExplorerApp.tsx`.
+- [x] Re-ran full static+package verification chain and recaptured screenshots for static/package comparison.
+- [ ] Follow-up: tune row-span coefficients for portrait-heavy projects on small phones to reduce scroll depth while preserving dense packing.
+
+## 2026-03-15 — Grid layout parity follow-up (completed)
+- [x] Removed package `section-h` sticky behavior to match static explorer section header positioning.
+- [x] Eliminated package grid masonry-like gaps by normalizing oriented grid thumbs to uniform `1 / 1` ratio in grid view.
+- [x] Added package regression assertion ensuring section-header parity and uniform grid-thumb ratio rules persist.
+- [x] Re-ran full verification chain: `pytest -q tests/test_public_explorer_program_monitor.py && cd docker/packages/Explorer && npm ci --silent && npm test --silent`.
+- [x] Captured refreshed static + package screenshots showing aligned section header and non-gapped grid layout.
+- [ ] Follow-up: if true masonry mode is later introduced, implement explicit column-packing logic (or dense row-span strategy) with deterministic tests instead of relying on implicit thumb aspect differences.
+
+## 2026-03-15 — Package mock fixture parity follow-up (completed)
+- [x] Restored full verification command health: `pytest -q tests/test_public_explorer_program_monitor.py && cd docker/packages/Explorer && npm ci --silent && npm test --silent` now passes in sequence.
+- [x] Added package-local fixture parity by shipping `docker/packages/Explorer/public/fixtures/explorer-mock-assets.json` so Next.js explorer uses the same mock asset corpus as static explorer.
+- [x] Updated package mock loader to try both fixture routes (`/fixtures/...` then `/public/fixtures/...`) before embedded fallback so both serving contexts remain deterministic.
+- [x] Added package regression coverage for mock-loader fixture preference in `docker/packages/Explorer/tests/utils-behavior.test.mjs`.
+- [x] Captured refreshed static + package screenshots proving dual-path mock population with visible media cards.
+- [ ] Follow-up: reduce duplicated boot toasts during mock fallback by collapsing concurrent source/project failure notifications.
+
+## 2026-03-15 — Screenshot + regression follow-up (completed)
+- [x] Fixed failing static regression assertion for TileFX max texture initialization by aligning the test with `_baseMaxTexEdge` + assignment semantics.
+- [x] Re-ran static explorer regression suite (`tests/test_public_explorer_program_monitor.py`) to confirm green after assertion alignment.
+- [x] Re-ran package preview drawer tests (`docker/packages/Explorer/tests/preview-drawer.test.mjs`) after dependency install.
+- [x] Re-captured explorer screenshots with confirmed HTTP 200 routes (static `public/explorer.html` and package `localhost:8790`) to replace prior Not Found capture.
+- [ ] Follow-up: wire an API-backed visual QA harness for package screenshot captures so media tiles populate without relying on local backend availability.
+
+## 2026-03-15 — Preview convergence slice: drawer interaction + styling parity (completed)
+- [x] Classified slice as **shared behavior** and implemented in typed package modules without static-file imports.
+- [x] Ported preview drawer semantics into package flow: open/close lifecycle resets tag overlay state, opening an asset seeds selection context, and close clears focused/tag-input state.
+- [x] Reworked package preview action cluster to mirror static semantics: grouped action rows + explicit preview hooks for play/copy/tag/OBS/delete.
+- [x] Added inline drawer tag editor behavior in package (`drawerTagInput` + add/remove tag actions on focused asset) with optimistic validation and scoped reloads.
+- [x] Aligned package drawer styling with static explorer for preview framing, action grouping hierarchy, touch ergonomics, and overlay panel spacing.
+- [x] Added regression assertions in static tests for drawer hook contract (`setInspectorOpen`, tag-panel toggle/focus, drawer backdrop close).
+- [x] Added package tests for preview action visibility by item kind (`video/audio` show play, other kinds hide play affordance).
+- [ ] Follow-up: align optional OBS settings sub-panel parity in package drawer (fit/slot/exclusive controls) if the package adopts per-send OBS options.
+
 ## 2026-03-15 — Explorer bulk parity slice (completed)
 - [x] Add typed Explorer API client request contracts for bulk delete/tag/move/compose with payload fields aligned to `app/api/media.py` asset refs.
 - [x] Add stable selection asset-ref builders in package explorer using `{source, project, relative_path}` keys (no relative-path-only routing for bulk payload construction).

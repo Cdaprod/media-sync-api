@@ -69,6 +69,13 @@ interface ComposeDialogState {
 
 const isVideoItem = (item: MediaItem): boolean => guessKind(item) === 'video';
 
+const getGridAssetSpan = (kind: string, orient: string): number => {
+  if (kind === 'audio') return 34;
+  if (orient === 'portrait') return 58;
+  if (orient === 'landscape') return 38;
+  return 46;
+};
+
 const getAssetIndex = (items: MediaItem[]): Map<string, MediaItem> => {
   const map = new Map<string, MediaItem>();
   items.forEach((item) => {
@@ -125,6 +132,11 @@ export function getPreviewDrawerActionState(input: {
     canSelectToggle: hasFocused && input.activeProject,
     canDelete: hasFocused && input.activeProject,
   };
+}
+
+export function getPreviewDrawerActionVisibility(kind: string | null | undefined): { showPlay: boolean } {
+  const normalized = String(kind || '').toLowerCase();
+  return { showPlay: normalized === 'video' || normalized === 'audio' };
 }
 
 
@@ -526,6 +538,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [drawerTagPanelOpen, setDrawerTagPanelOpen] = useState(false);
+  const [drawerTagInput, setDrawerTagInput] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [assetDragActive, setAssetDragActive] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -544,6 +557,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const drawerTagInputRef = useRef<HTMLInputElement | null>(null);
   const mediaScrollRef = useRef<HTMLDivElement | null>(null);
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
@@ -873,9 +887,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       { hasFocused: true },
     );
     setFocused(item);
+    if (item.relative_path && (activeProject || mediaScope === 'all')) {
+      setSelected((current) => {
+        if (current.has(item.relative_path)) return current;
+        const next = new Set(current);
+        next.add(item.relative_path);
+        return next;
+      });
+    }
     setInspectorOpen(nextState.inspectorOpen);
     setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
-  }, [drawerTagPanelOpen, inspectorOpen]);
+    setDrawerTagInput('');
+  }, [activeProject, drawerTagPanelOpen, inspectorOpen, mediaScope]);
 
   const closeDrawer = useCallback(() => {
     const nextState = reducePreviewDrawerState(
@@ -886,7 +909,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setInspectorOpen(nextState.inspectorOpen);
     setFocused(null);
     setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
+    setDrawerTagInput('');
   }, [drawerTagPanelOpen, focused, inspectorOpen]);
+
+  useEffect(() => {
+    if (!drawerTagPanelOpen) return;
+    drawerTagInputRef.current?.focus();
+  }, [drawerTagPanelOpen]);
 
   const openUploadPicker = useCallback(() => {
     const input = uploadInputRef.current;
@@ -1055,6 +1084,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('bad', 'Tags', message);
     }
   }, [activeProject, addToast, api, focused, loadAllMedia, loadMedia, resolveRequestedAssets]);
+
+
+  const handleDrawerTagApply = useCallback(async (mode: 'add' | 'remove') => {
+    if (!focused) {
+      addToast('warn', 'Tags', 'Select an asset first');
+      return;
+    }
+    const tags = drawerTagInput.split(',').map((entry) => entry.trim()).filter(Boolean);
+    if (!tags.length) {
+      addToast('warn', 'Tags', `Enter one or more tags to ${mode}`);
+      return;
+    }
+    try {
+      await api.bulkTagAssets([toAssetRef(focused)], mode === 'add' ? tags : [], mode === 'remove' ? tags : []);
+      setDrawerTagInput('');
+      if (activeProject) await loadMedia(activeProject);
+      else await loadAllMedia();
+      addToast('good', 'Tags', `${mode === 'add' ? 'Added' : 'Removed'} tags`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Tag update failed';
+      addToast('bad', 'Tags', message);
+    }
+  }, [activeProject, addToast, api, drawerTagInput, focused, loadAllMedia, loadMedia]);
 
   const openComposeDialog = useCallback(() => {
     const assets = buildSelectionAssetRefs({ selectedItems: selectedMediaItems, focusedItem: focused, requested: focused ? [toAssetRef(focused)] : [], videosOnly: true });
@@ -1748,6 +1800,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     canUseObs: canObsIntegration,
     canUseProgramMonitor: canProgramMonitor,
   });
+  const previewKind = focused ? guessKind(focused) : null;
+  const drawerActionVisibility = getPreviewDrawerActionVisibility(previewKind);
   const projectLabel = (item: MediaItem) => {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
@@ -2295,6 +2349,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       data-orient-locked={orientLocked ? 'true' : 'false'}
                       data-thumb-key={thumbKey}
                       data-relative={item.relative_path || ''}
+                      style={{ '--asset-span': String(getGridAssetSpan(kind, orient)) } as React.CSSProperties}
                       {...pointerHandlers}
                     >
                       <div className="thumb">
@@ -2512,108 +2567,126 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             })() : null}
           </div>
 
-          <div className="drawer-actions">
-            <button
-              className="btn"
-              type="button"
-              onClick={() => {
-                const mediaElement = document.querySelector('.drawer video, .drawer audio') as
-                  | HTMLVideoElement
-                  | HTMLAudioElement
-                  | null;
-                mediaElement?.play?.();
-              }}
-              disabled={!drawerActionState.canPlay}
-            >
-              ▶ Play
-            </button>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => focused && handleCopyStream(focused)}
-              disabled={!drawerActionState.canCopyStream}
-            >
-              ⧉ Copy stream URL
-            </button>
-            <button
-              className="btn"
-              type="button"
-              onClick={handleSendFocusedToObs}
-              disabled={!drawerActionState.canSendObs}
-              title={canObsIntegration ? '' : 'OBS handoff unavailable in this context'}
-            >
-              📡 Send to OBS
-            </button>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => focused && void handleProgramMonitorHandoff()}
-              disabled={!drawerActionState.canProgramMonitor}
-              title={canProgramMonitor ? '' : 'Program Monitor handoff unavailable in this context'}
-            >
-              ↗ Program Monitor
-            </button>
-            <button
-              className={`btn ${drawerTagPanelOpen ? 'primary' : ''}`}
-              type="button"
-              onClick={() => {
-                const nextState = reducePreviewDrawerState(
-                  { inspectorOpen, drawerTagPanelOpen },
-                  'toggle_tag_panel',
-                  { hasFocused: Boolean(focused) },
-                );
-                setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
-              }}
-              disabled={!hasFocused}
-            >
-              🏷 Tag
-            </button>
-            <button
-              className="btn"
-              type="button"
-              onClick={moveFocusedAsset}
-              disabled={!hasFocused}
-            >
-              ⇄ Move
-            </button>
-            <button
-              className="btn"
-              type="button"
-              onClick={openComposeDialog}
-              disabled={!selectedVideoCount && !(focused && guessKind(focused) === 'video')}
-            >
-              🎞 Compose
-            </button>
-            <button
-              className={`btn ${focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '' : 'primary'}`}
-              type="button"
-              onClick={() => focused && toggleSelected(focused.relative_path)}
-              disabled={!drawerActionState.canSelectToggle}
-            >
-              {focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '− Deselect' : '＋ Select'}
-            </button>
-            <button
-              className="btn bad"
-              type="button"
-              onClick={() => focused && requestDeleteMediaPaths([toAssetRef(focused)], 'Delete focused media?', 'This action cannot be undone.')}
-              disabled={!drawerActionState.canDelete}
-            >
-              🗑 Delete
-            </button>
+          <div className="drawer-actions" data-preview-actions="1">
+            <div className="drawer-actions-group" data-preview-group="primary">
+              {drawerActionVisibility.showPlay ? (
+                <button
+                  className="btn"
+                  type="button"
+                  data-preview-action="play"
+                  onClick={() => {
+                    const mediaElement = document.querySelector('.drawer video, .drawer audio') as
+                      | HTMLVideoElement
+                      | HTMLAudioElement
+                      | null;
+                    mediaElement?.play?.();
+                  }}
+                  disabled={!drawerActionState.canPlay}
+                >
+                  ▶ Play
+                </button>
+              ) : null}
+              <button
+                className="btn"
+                type="button"
+                data-preview-action="copy"
+                onClick={() => focused && handleCopyStream(focused)}
+                disabled={!drawerActionState.canCopyStream}
+              >
+                ⧉ Copy stream URL
+              </button>
+              <button
+                className="btn"
+                type="button"
+                data-preview-action="obs"
+                onClick={handleSendFocusedToObs}
+                disabled={!drawerActionState.canSendObs}
+                title={canObsIntegration ? '' : 'OBS handoff unavailable in this context'}
+              >
+                📡 Send to OBS
+              </button>
+            </div>
+            <div className="drawer-actions-group" data-preview-group="secondary">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => focused && void handleProgramMonitorHandoff()}
+                disabled={!drawerActionState.canProgramMonitor}
+                title={canProgramMonitor ? '' : 'Program Monitor handoff unavailable in this context'}
+              >
+                ↗ Program Monitor
+              </button>
+              <button
+                className={`btn ${drawerTagPanelOpen ? 'primary' : ''}`}
+                type="button"
+                data-preview-action="tag"
+                onClick={() => {
+                  const nextState = reducePreviewDrawerState(
+                    { inspectorOpen, drawerTagPanelOpen },
+                    'toggle_tag_panel',
+                    { hasFocused: Boolean(focused) },
+                  );
+                  setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
+                }}
+                disabled={!hasFocused}
+              >
+                🏷 Tag
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={moveFocusedAsset}
+                disabled={!hasFocused}
+              >
+                ⇄ Move
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={openComposeDialog}
+                disabled={!selectedVideoCount && !(focused && guessKind(focused) === 'video')}
+              >
+                🎞 Compose
+              </button>
+              <button
+                className={`btn ${focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '' : 'primary'}`}
+                type="button"
+                onClick={() => focused && toggleSelected(focused.relative_path)}
+                disabled={!drawerActionState.canSelectToggle}
+              >
+                {focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '− Deselect' : '＋ Select'}
+              </button>
+              <button
+                className="btn bad"
+                type="button"
+                data-preview-action="delete"
+                onClick={() => focused && requestDeleteMediaPaths([toAssetRef(focused)], 'Delete focused media?', 'This action cannot be undone.')}
+                disabled={!drawerActionState.canDelete}
+              >
+                🗑 Delete
+              </button>
+            </div>
           </div>
 
-          <div className={`drawer-tag-panel ${drawerTagPanelOpen ? 'open' : ''}`}>
+          <div className={`drawer-tag-panel ${drawerTagPanelOpen ? 'open' : ''} ${focused ? '' : 'is-hidden'}`}>
             <div className="tag-panel">
-              <div className="pillbar">
-                <button className="btn" type="button" onClick={() => void handleBulkTagEdit('add')}>＋ Tag</button>
-                <button className="btn" type="button" onClick={() => void handleBulkTagEdit('remove')}>− Remove</button>
-              </div>
               <div className="taglist">
                 {focused && extractTags([focused]).length ? extractTags([focused]).map((tag) => (
                   <span className="tag" key={`focused-tag-${tag}`}>{tag}</span>
                 )) : <span className="tag">No tags</span>}
               </div>
-              <div className="taglist">
+              <div className="tag-editor">
+                <input
+                  ref={drawerTagInputRef}
+                  type="text"
+                  value={drawerTagInput}
+                  onChange={(event) => setDrawerTagInput(event.target.value)}
+                  placeholder="Add or remove tag…"
+                />
+                <button className="btn" type="button" onClick={() => void handleDrawerTagApply('add')}>＋ Tag</button>
+                <button className="btn" type="button" onClick={() => void handleDrawerTagApply('remove')}>− Remove</button>
+              </div>
+              <div className="taglist" data-preview-taglist="ai">
                 {focused && extractAiTags([focused]).length ? extractAiTags([focused]).map((tag) => (
                   <span className="tag" key={`focused-ai-tag-${tag}`}>{tag}</span>
                 )) : <span className="tag">No AI tags</span>}
