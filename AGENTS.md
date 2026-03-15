@@ -1762,3 +1762,22 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added bounded timeout escape hatch in `public/js/explorer-shaders.mjs` via `tilefxBootstrapReadyMs` (default `1200ms`): once elapsed in `bootstrap_ready`, renderer advances to `bootstrap_commit` so FX entry cannot deadlock on one failed tile.
 - Preserved full-ready fast path and existing batch commit semantics for ready tiles; timeout path is a safety valve, not a behavior rewrite.
 - Added timeout telemetry fields under `window.__tilefx_dbg` (`bootstrapReadyTimedOut`, `bootstrapReadyElapsedMs`, `bootstrapReadyPending`, `bootstrapReadyTimeoutMs`) and regression assertions in `tests/test_public_explorer_program_monitor.py`.
+
+## 2026-03-15 — Explorer delete confirmation + scope-safe refresh (new)
+- Added explicit delete confirmation in `public/explorer.html` (`confirmDeleteAction`) so destructive deletes require user acknowledgment before API calls.
+- Fixed delete target resolution for drawer-initiated deletes by resolving refs from focused item and current media when selection state is empty.
+- Added `reloadMediaForCurrentScope()` and switched delete success flow to scope-aware reload (`loadMedia` for active project, `loadAllMedia` for all-project mode) to avoid post-delete fake-empty/no-project UI drift.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to assert confirmation wiring and scope-aware post-delete reload hooks remain present.
+
+## 2026-03-15 — Explorer custom delete modal (new)
+- Replaced native `window.confirm` in `public/explorer.html` delete flow with a custom Promise-based confirm modal (`#confirmDeleteModal`) to match Explorer styling and avoid blocking the render loop.
+- Added modal interactions for Cancel/Confirm, backdrop-tap cancel, and Escape-key cancel; modal toggles `body.confirm-open` while active and restores listeners/state on cleanup.
+- Updated delete path to `await confirmDeleteAction(...)` while preserving scope-aware post-delete reload behavior (`reloadMediaForCurrentScope`) from the previous fix.
+- Expanded static explorer regression assertions in `tests/test_public_explorer_program_monitor.py` to lock modal markup, async confirmation wiring, and scope-aware reload hooks.
+
+## 2026-03-15 — Explorer delete identity-key hardening (new)
+- Addressed all-project delete collision risk in `public/explorer.html` by replacing path-only delete matching with `assetIdentityKey(...)` lookups.
+- Resolver now prefers explicit asset identity (`asset_uuid`/`asset_id`, else `source+project+relative_path`) and no longer performs `wanted.has(ref.relative_path)` path-only inclusion against selected refs.
+- Updated delete callsites to pass asset objects (`selectedItemsOrdered`, drawer `state.focused`, context-menu `items`) so requested deletes preserve full identity across sources/projects.
+- Kept compatibility for legacy string-path requests with focused/active-project narrowing and retained scope-aware post-delete reload behavior.
+- Expanded regression assertions in `tests/test_public_explorer_program_monitor.py` to lock identity-key matching and guard against relative-path-only regressions.

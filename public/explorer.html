@@ -1600,6 +1600,68 @@
       justify-content: flex-end;
       flex-wrap: wrap;
     }
+
+    body.confirm-open{
+      overflow: hidden;
+    }
+
+    .confirm-modal{
+      position: fixed;
+      inset: 0;
+      z-index: calc(var(--z-modal) + 10);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(3, 8, 18, 0.56);
+      backdrop-filter: blur(10px) saturate(1.08);
+      -webkit-backdrop-filter: blur(10px) saturate(1.08);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--dur-fast) var(--ease-settle);
+    }
+
+    .confirm-modal.open{
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .confirm-card{
+      width: min(420px, 92vw);
+      border-radius: 16px;
+      border: 1px solid rgba(120,170,255,0.24);
+      background: linear-gradient(180deg, rgba(14, 22, 44, 0.98), rgba(8, 14, 32, 0.98));
+      box-shadow: 0 24px 70px rgba(0,0,0,0.48), inset 0 0 0 1px rgba(255,255,255,0.02);
+      padding: 18px;
+    }
+
+    .confirm-title{
+      margin: 0 0 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .confirm-body{
+      margin: 0 0 18px;
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .confirm-actions{
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .confirm-actions .btn{
+      min-width: 92px;
+    }
+
+    .confirm-actions .btn.bad{
+      box-shadow: 0 0 0 1px rgba(255,90,120,0.08) inset;
+    }
   </style>
 </head>
 
@@ -3118,6 +3180,63 @@
       setTimeout(() => t.remove(), 3100);
     }
 
+    function confirmDeleteAction(count){
+      const modal = el('confirmDeleteModal');
+      const titleEl = el('confirmDeleteTitle');
+      const bodyEl = el('confirmDeleteBody');
+      const cancelBtn = el('confirmDeleteCancel');
+      const confirmBtn = el('confirmDeleteSubmit');
+      const total = Math.max(1, Number(count) || 0);
+      const noun = total === 1 ? 'asset' : `${total} assets`;
+      const title = total === 1 ? 'Delete this asset?' : `Delete ${noun}?`;
+      const body = 'This removes the media file from disk and updates the project index.';
+
+      if (!modal || !titleEl || !bodyEl || !cancelBtn || !confirmBtn){
+        return Promise.resolve(window.confirm(`${title}\n\n${body}`));
+      }
+
+      titleEl.textContent = title;
+      bodyEl.textContent = body;
+
+      return new Promise((resolve) => {
+        let settled = false;
+        const cleanup = (confirmed) => {
+          if (settled) return;
+          settled = true;
+          modal.classList.remove('open');
+          modal.setAttribute('aria-hidden', 'true');
+          document.body.classList.remove('confirm-open');
+          cancelBtn.removeEventListener('click', onCancel);
+          confirmBtn.removeEventListener('click', onConfirm);
+          modal.removeEventListener('click', onBackdrop);
+          window.removeEventListener('keydown', onKeydown);
+          resolve(Boolean(confirmed));
+        };
+
+        const onCancel = () => cleanup(false);
+        const onConfirm = () => cleanup(true);
+        const onBackdrop = (event) => {
+          if (event.target === modal) cleanup(false);
+        };
+        const onKeydown = (event) => {
+          if (event.key === 'Escape'){
+            event.preventDefault();
+            cleanup(false);
+          }
+        };
+
+        cancelBtn.addEventListener('click', onCancel);
+        confirmBtn.addEventListener('click', onConfirm);
+        modal.addEventListener('click', onBackdrop);
+        window.addEventListener('keydown', onKeydown);
+
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('confirm-open');
+        requestAnimationFrame(() => confirmBtn.focus());
+      });
+    }
+
     function escapeHtml(s){
       const value = s === null || s === undefined ? '' : String(s);
       return value
@@ -3787,7 +3906,7 @@
       actions.push({
         id: 'delete',
         label: `Delete ${count} item${count > 1 ? 's' : ''}`,
-        handler: () => deletePaths(items.map((entry) => entry.relative_path)),
+        handler: () => deletePaths(items),
       });
       return actions;
     }
@@ -5127,9 +5246,108 @@
       updateSelectionUI();
     }
 
+    function toAssetRef(item){
+      return {
+        source: itemSourceName(item),
+        project: itemProjectName(item),
+        relative_path: item.relative_path || '',
+        kind: guessKind(item),
+        asset_id: item.asset_id || null,
+        asset_uuid: item.asset_uuid || null,
+        sha256: item.sha256 || null,
+      };
+    }
+
+    function assetIdentityKey(item){
+      if (!item) return '';
+      const uuid = item.asset_uuid || item.asset_id || '';
+      if (uuid) return `uuid::${uuid}`;
+      const source = item.source || item.project_source || '';
+      const project = item.project || item.project_name || '';
+      const rel = item.relative_path || '';
+      if (!project || !rel) return '';
+      return `triple::${source || 'primary'}::${project}::${rel}`;
+    }
+
+    function resolveAssetsForDelete(items){
+      const requested = Array.isArray(items) ? items : [];
+      const refs = [];
+      const seen = new Set();
+      const addRef = (ref) => {
+        if (!ref?.project || !ref?.relative_path) return;
+        const key = assetIdentityKey(ref);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        refs.push(ref);
+      };
+
+      const selected = selectedAssetRefsOrdered();
+      if (!requested.length){
+        selected.forEach(addRef);
+        return refs;
+      }
+
+      const wanted = new Set();
+      const legacyPaths = new Set();
+      requested.forEach((entry) => {
+        if (!entry) return;
+        if (typeof entry === 'string') {
+          legacyPaths.add(entry);
+          return;
+        }
+        const key = assetIdentityKey(entry);
+        if (key) wanted.add(key);
+      });
+
+      if (legacyPaths.size){
+        if (state.focused?.relative_path && legacyPaths.has(state.focused.relative_path)) {
+          wanted.add(assetIdentityKey(toAssetRef(state.focused)));
+        } else if (state.activeProject?.name){
+          const activeSource = state.activeProject.source || 'primary';
+          state.media.forEach((item) => {
+            if (item.relative_path && legacyPaths.has(item.relative_path) && itemProjectName(item) === state.activeProject.name && itemSourceName(item) === activeSource) {
+              wanted.add(assetIdentityKey(toAssetRef(item)));
+            }
+          });
+        }
+      }
+
+      if (!wanted.size) return refs;
+
+      selected.forEach((ref) => {
+        if (wanted.has(assetIdentityKey(ref))) addRef(ref);
+      });
+
+      if (state.focused){
+        const focusedRef = toAssetRef(state.focused);
+        if (wanted.has(assetIdentityKey(focusedRef))) addRef(focusedRef);
+      }
+
+      state.media.forEach((item) => {
+        const ref = toAssetRef(item);
+        if (wanted.has(assetIdentityKey(ref))) addRef(ref);
+      });
+
+      return refs;
+    }
+
+    async function reloadMediaForCurrentScope(){
+      if (state.activeProject?.name) await loadMedia();
+      else if (state.mediaScope === 'all') await loadAllMedia();
+      else {
+        state.media = [];
+        updateMediaMeta();
+        renderMedia();
+        updateTopCounts();
+        updateSelectionUI();
+      }
+    }
+
     async function deletePaths(paths){
-      const assets = selectedAssetRefsOrdered();
+      const assets = resolveAssetsForDelete(paths);
       if (!assets.length){ toast('warn','Delete','Select one or more clips'); return; }
+      const confirmed = await confirmDeleteAction(assets.length);
+      if (!confirmed) return;
       try{
         const r = await fetch(`${API}/api/assets/bulk/delete`, {
           method:'POST',
@@ -5142,7 +5360,7 @@
         clearSelectionState();
         state.focused = null;
         setInspectorOpen(false);
-        await loadMedia();
+        await reloadMediaForCurrentScope();
         updateSelectionUI();
       }catch(e){
         toast('bad','Delete', e.message);
@@ -5731,7 +5949,7 @@
     el('clearSelBtn').addEventListener('click', clearSelection);
     const clearSelBtnTop = el('clearSelBtnTop');
     if (clearSelBtnTop) clearSelBtnTop.addEventListener('click', clearSelection);
-    el('deleteSelBtn').addEventListener('click', () => deletePaths(selectedRelativePathsForAction()));
+    el('deleteSelBtn').addEventListener('click', () => deletePaths(selectedItemsOrdered()));
 
     // Selection bar actions
     el('selTagToggle').addEventListener('click', () => toggleSelectPanel('selTagPanel'));
@@ -5778,7 +5996,7 @@
     el('drawerClose').addEventListener('click', closeDrawer);
     el('drawerDelete').addEventListener('click', () => {
       if (!state.focused) return;
-      deletePaths([state.focused.relative_path]);
+      deletePaths([state.focused]);
     });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape'){
@@ -6125,6 +6343,16 @@
       logLayoutDebug();
     });
   </script>
+  <div id="confirmDeleteModal" class="confirm-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="confirmDeleteTitle" aria-describedby="confirmDeleteBody">
+    <div class="confirm-card">
+      <h3 id="confirmDeleteTitle" class="confirm-title">Delete this asset?</h3>
+      <p id="confirmDeleteBody" class="confirm-body">This removes the media file from disk and updates the project index.</p>
+      <div class="confirm-actions">
+        <button id="confirmDeleteCancel" class="btn" type="button">Cancel</button>
+        <button id="confirmDeleteSubmit" class="btn bad" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
   <div id="ui-portal" aria-hidden="false"></div>
   <div id="contextMenu" class="context-menu" role="menu" aria-hidden="true"></div>
 </body>
