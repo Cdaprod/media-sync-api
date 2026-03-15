@@ -110,6 +110,15 @@
 - [ ] Re-check on physical iPhone Safari that HUD health now aligns with `window.logVisibleTileOwnership(12)` and `window.exportTileFxProofSummary?.()` after scroll-stop.
 
 ## 2026-03-07 — Physical iPhone parity handoff (active)
+### Explorer parity feature buckets (Static ↔ Next.js)
+
+| Feature bucket | Static | Next.js | Parity | Static locator (grep target) | Next.js locator (grep target) |
+| --- | --- | --- | --- | --- | --- |
+| Shell/layout (topbar, projects drawer, actions panel, inspector drawer, context menu, modals) | [x] | [x] | [ ] | `public/explorer.html` → `function openProjectsDrawer()` / `function openInspectorDrawer()` / `function openAssetContextMenu(` / `function openDeleteConfirmModal(` | `docker/packages/Explorer/src/ExplorerApp.tsx` → `toggleProjectsDrawer` / `renderInspectorDrawer` / `handleAssetContextMenu` / `renderDeleteConfirmModal` |
+| Media behavior (search, type filter, sort options, quick filters, select/multi-select, move/delete/tag, upload) | [x] | [x] | [ ] | `public/explorer.html` → `function applyMediaFilters()` / `function sortMediaItems(` / `function submitUpload(` / `function applyTagsToSelection(` | `docker/packages/Explorer/src/ExplorerApp.tsx` → `applyMediaFilters` / `sortMedia` / `handleUploadSubmit` / `handleApplyTags` |
+| Integrations (Program Monitor handoff, OBS push, mock boot, TileFX) | [x] | [x] | [ ] | `public/js/program_monitor_handoff.js` (`sendProgramMonitorSelection`) + `public/js/obs-push.js` (`pushMediaToOBS`) + `public/js/explorer-mock-assets.mjs` (`buildMockExplorerState`) + `public/js/explorer-shaders.mjs` (`class TileFXRenderer`) | `docker/packages/Explorer/src/ExplorerApp.tsx` → `handleProgramMonitorHandoff` / `handleSendToOBS` / `resolveMockMode` / `tileFx` integration block |
+| Data/API (source selection, all-projects feed, project-scoped actions, absolute URL normalization) | [x] | [x] | [ ] | `public/explorer.html` → `function loadSources(` / `function loadAllProjectsMedia(` / `function canRunProjectScopedAction(` / `function toAbsoluteMediaUrl(` | `docker/packages/Explorer/src/api.ts` → `toAbsoluteUrl` + `docker/packages/Explorer/src/ExplorerApp.tsx` → `loadSources` / `loadAllProjectsMedia` / `isProjectActionEnabled` |
+
 - [x] Confirmed parity run should use existing tools only (`window.logVisibleTileOwnership(12)`, `window.exportTileFxProofSummary?.()`).
 - [x] Kept container-side work closed (no new HUD/proof/toast/watchdog systems added in this handoff step).
 - [ ] Run on physical iPhone Safari in FX view after settle:

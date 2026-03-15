@@ -1781,3 +1781,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated delete callsites to pass asset objects (`selectedItemsOrdered`, drawer `state.focused`, context-menu `items`) so requested deletes preserve full identity across sources/projects.
 - Kept compatibility for legacy string-path requests with focused/active-project narrowing and retained scope-aware post-delete reload behavior.
 - Expanded regression assertions in `tests/test_public_explorer_program_monitor.py` to lock identity-key matching and guard against relative-path-only regressions.
+
+## 2026-03-15 — Explorer parity checklist matrix in docs/todo AGENTS (new)
+- Added a dedicated parity-buckets matrix under `docs/todo/AGENTS.md` → `## 2026-03-07 — Physical iPhone parity handoff (active)` to keep Static vs Next.js scope tracking consistent for future commits.
+- Matrix rows now cover shell/layout, media behavior, integrations, and data/API with explicit `Static` / `Next.js` / `Parity` checklist columns.
+- Each bucket row includes concrete grep locators in both codepaths (`public/explorer.html` and `docker/packages/Explorer/src/ExplorerApp.tsx` + related JS modules) so parity patches are idempotent and easy to anchor.
