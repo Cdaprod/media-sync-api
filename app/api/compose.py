@@ -426,7 +426,8 @@ def _normalize_video_segment(
     Re-encode one video clip into a normalized intermediate MP4.
 
     Policy:
-    - detect source rotation
+    - detect source rotation ourselves
+    - disable ffmpeg autorotate
     - apply explicit rotation transform when needed
     - scale to fit inside target canvas
     - pad to exact target canvas
@@ -457,18 +458,15 @@ def _normalize_video_segment(
     command = [
         "ffmpeg",
         "-y",
+        "-noautorotate",
         "-i", str(input_path),
-
         "-map_metadata", "-1",
-
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-vf", vf,
-
         "-c:a", "aac",
         "-movflags", "+faststart",
         "-metadata:s:v:0", "rotate=0",
-
         str(output_path),
     ]
 
