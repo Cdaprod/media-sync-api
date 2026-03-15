@@ -1825,3 +1825,7 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2026-03-15)
 - Explorer feature work now follows a dual-track parity protocol: each feature commit must classify scope (shared vs single-path exception), include paired static/package path locators, verify UI + API parity per slice, and record static/package test coverage before marking tasks complete in `docs/todo/AGENTS.md`.
+
+### Latest Implementation Notes (2026-03-15)
+- Added one consolidated preview convergence epic in `docs/todo/AGENTS.md` with phased, non-overlapping execution rows (Phase A baseline inventories + explicit static/package deltas; Phase B primitive-first implementation via `api.ts`/`state.ts`/`utils.ts` before JSX/CSS reshaping; Phase C validation/docs updates across package tests, static regression hooks, and Explorer README updates).
+- Preview delta intent is now explicitly tracked as shared across both stacks (static `public/explorer.html` and package `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`) with ordered completion gates to prevent overlap and state-desync regressions.

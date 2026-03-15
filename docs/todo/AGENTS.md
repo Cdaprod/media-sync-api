@@ -1,5 +1,33 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-15 — Consolidated preview convergence epic (active)
+
+### Phase A — Baseline map (scope: inventory + delta capture only)
+- [ ] Inventory preview panel behavior in `public/explorer.html` covering: drawer layout, media viewport, action pills, tag/OBS panels, and metadata blocks.
+- [ ] Inventory package equivalents in `docker/packages/Explorer/src/ExplorerApp.tsx` and `docker/packages/Explorer/src/styles.css` for the same preview slices.
+- [ ] Record explicit static-vs-package deltas as checkbox items grouped into:
+  - [ ] Behavior deltas
+  - [ ] Styling deltas
+  - [ ] Interaction/state deltas
+
+### Phase B — Implementation (scope: primitives first, then UI shaping)
+- [ ] Port missing preview behavior primitives into package modules before JSX/CSS reshaping:
+  - [ ] `docker/packages/Explorer/src/api.ts`
+  - [ ] `docker/packages/Explorer/src/state.ts`
+  - [ ] `docker/packages/Explorer/src/utils.ts`
+- [ ] Apply matching preview styling upgrades in both stacks where UX is intentionally shared (`public/explorer.html` and package `styles.css`/component markup).
+- [ ] Preserve idempotent state transitions: repeated open/close/toggle actions must keep drawer state + selected asset context synchronized with no desync drift.
+
+### Phase C — Validation + docs (scope: regression coverage + workflow notes)
+- [ ] Add package tests under `docker/packages/Explorer/tests/` for preview state transitions and action visibility.
+- [ ] Extend static explorer regression assertions for equivalent preview hooks and drawer interaction paths.
+- [ ] Update `docker/packages/Explorer/README.md` when workflow/controls change due to convergence updates.
+
+### Epic execution guardrails (non-overlap)
+- [ ] Complete and lock Phase A delta map before starting Phase B implementation checkboxes.
+- [ ] Complete implementation checkboxes in Phase B before checking any Phase C validation rows.
+- [ ] Merge or absorb overlapping task stubs into the most abstract parent row to keep this epic non-duplicative.
+
 ## 2026-03-15 — Dual-track Explorer upgrades (active)
 - [ ] **Commit classification (required):** classify each Explorer feature commit as either shared behavior (patch both static + package) or package-only/static-only with a short written reason.
 - [ ] **Paired path locators (required):** include explicit task rows for both codepaths before implementation.
