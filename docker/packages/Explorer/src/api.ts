@@ -7,6 +7,12 @@ export interface ResolveRequest {
   mode: string;
 }
 
+export interface BulkComposeAssetRef {
+  source: string;
+  project: string;
+  relative_path: string;
+}
+
 export interface BulkComposeOptions {
   outputSource?: string | null;
   targetDir?: string;
@@ -53,7 +59,7 @@ export interface ApiClient {
     targetSource?: string,
   ) => Promise<Record<string, unknown>>;
   bulkComposeAssets: (
-    assets: Array<{ source: string; project: string; relative_path: string }>,
+    assets: BulkComposeAssetRef[],
     outputProject: string,
     outputName: string,
     options?: BulkComposeOptions,
@@ -197,7 +203,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       }
       return data;
     },
-    async bulkComposeAssets(assets, outputProject, outputName, options): Promise<Record<string, unknown>> {
+    async bulkComposeAssets(assets: BulkComposeAssetRef[], outputProject, outputName, options): Promise<Record<string, unknown>> {
       const response = await fetch(buildUrl('/api/assets/bulk/compose'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

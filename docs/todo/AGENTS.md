@@ -1,6 +1,18 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+
+## 2026-03-15 — Explorer compose parity in package (active)
+- [x] Added/confirmed typed `bulkComposeAssets(...)` API client helper targeting `POST /api/assets/bulk/compose`.
+- [x] Added compose modal flow in `docker/packages/Explorer/src/ExplorerApp.tsx` within existing Actions/select-bar controls (no new route/module tree).
+- [x] Compose action now enables only for selections that contain video assets, with deterministic ordered refs preserved for payload generation.
+- [x] Compose success now surfaces artifact details in toasts and refreshes scoped media + project data using existing reload flows.
+- [x] Added/updated Explorer package tests for disabled selection guardrails, payload ordering, and success refresh/feedback wiring.
+- [x] Updated package docs (`docker/packages/Explorer/README.md`) with compose behavior notes.
+- [ ] Add an interaction-level render test that drives modal input edits + submit/cancel keyboard handling.
+
+
+
 ## 2026-03-15 — Explorer Next.js bulk asset action contract (active)
 - [x] Add typed bulk asset API helpers in `docker/packages/Explorer/src/api.ts` for delete/tags/move/compose using ordered `{source,project,relative_path}` payloads.
 - [x] Extend Next.js explorer asset-ref mapper in `docker/packages/Explorer/src/ExplorerApp.tsx` to resolve ordered refs from selection + focused drawer item with legacy path fallback.
