@@ -89,3 +89,46 @@ test('upload url helper omits undefined sources', () => {
     '/api/projects/P1/upload?source=nas-a',
   );
 });
+
+
+test('mock asset loader prefers fixture paths before embedded fallback', async () => {
+  const utils = loadTsModule(path.join(packageRoot, 'src', 'utils.ts'));
+  const calls = [];
+  const fakeFetch = async (url) => {
+    calls.push(url);
+    if (url === '/fixtures/explorer-mock-assets.json') {
+      return {
+        ok: true,
+        json: async () => ({
+          assets: [{
+            project: 'MockProject-1',
+            source: 'primary',
+            kind: 'image',
+            relative_path: 'ingest/originals/MockProject-1/image-asset-001.jpg',
+            stream_url: 'https://example.test/mock.jpg',
+            thumb_url: 'https://example.test/mock.jpg',
+            sha256: '1'.repeat(64),
+          }],
+        }),
+      };
+    }
+    return { ok: false, json: async () => ({}) };
+  };
+
+  const assets = await utils.loadExplorerMockAssets(fakeFetch);
+  assert.equal(calls[0], '/fixtures/explorer-mock-assets.json');
+  assert.equal(assets.length, 1);
+  assert.equal(assets[0].project_name, 'MockProject-1');
+});
+
+
+test('package styles keep section header + masonry grid contracts', () => {
+  const css = fs.readFileSync(path.join(packageRoot, 'src', 'styles.css'), 'utf8');
+  const app = fs.readFileSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx'), 'utf8');
+  assert.match(css, /\.main\{[\s\S]*padding:\s*var\(--topbar-offset\)\s*0\s*0;/);
+  assert.match(css, /\.section-h\{[\s\S]*position:\s*relative;/);
+  assert.match(css, /\.grid\{[\s\S]*grid-auto-flow:\s*dense;[\s\S]*grid-auto-rows:\s*8px;/);
+  assert.match(css, /\.asset\{[\s\S]*grid-row:\s*span\s*var\(--asset-span,\s*46\);/);
+  assert.match(app, /getGridAssetSpan/);
+  assert.match(app, /'--asset-span'/);
+});

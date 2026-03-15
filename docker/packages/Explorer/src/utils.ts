@@ -499,15 +499,23 @@ export function normalizeExplorerMockAsset(asset: Partial<MediaItem> | Record<st
 }
 
 export async function loadExplorerMockAssets(fetcher: typeof fetch): Promise<MediaItem[]> {
-  try {
-    const fixtureUrl = '/fixtures/explorer-mock-assets.json';
-    const response = await fetcher(fixtureUrl, { cache: 'no-store' });
-    if (!response.ok) throw new Error('fixture_fetch_failed');
-    const payload = await response.json();
-    const assets = Array.isArray(payload) ? payload : (Array.isArray(payload?.assets) ? payload.assets : []);
-    if (!assets.length) throw new Error('fixture_empty');
-    return assets.map((asset: Record<string, unknown>) => normalizeExplorerMockAsset(asset));
-  } catch {
-    return Array.from({ length: 120 }, (_, index) => normalizeExplorerMockAsset(buildEmbeddedMockAsset(index)));
+  const fixtureCandidates = [
+    '/fixtures/explorer-mock-assets.json',
+    '/public/fixtures/explorer-mock-assets.json',
+  ];
+
+  for (const fixtureUrl of fixtureCandidates) {
+    try {
+      const response = await fetcher(fixtureUrl, { cache: 'no-store' });
+      if (!response.ok) continue;
+      const payload = await response.json();
+      const assets = Array.isArray(payload) ? payload : (Array.isArray(payload?.assets) ? payload.assets : []);
+      if (!assets.length) continue;
+      return assets.map((asset: Record<string, unknown>) => normalizeExplorerMockAsset(asset));
+    } catch {
+      // try next fixture candidate
+    }
   }
+
+  return Array.from({ length: 120 }, (_, index) => normalizeExplorerMockAsset(buildEmbeddedMockAsset(index)));
 }

@@ -1838,3 +1838,33 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2026-03-15)
 - Explorer package bulk parity slice now uses typed bulk request contracts in `src/api.ts`, stable cross-project asset-ref builders in `ExplorerApp.tsx`, and drawer/select-bar wiring for tag/move/delete/compose using source+project+relative_path refs.
+
+### Latest Implementation Notes (2026-03-15)
+- Preview convergence slice upgraded package drawer semantics in `docker/packages/Explorer/src/ExplorerApp.tsx`: opening the drawer now seeds selection context for the focused asset when project-scoped or all-project scope is active; drawer close clears focus-tag input state; tag overlay auto-focuses the drawer tag input when opened.
+- Package preview action cluster now mirrors static interaction grouping with explicit preview action hooks (`data-preview-action` for play/copy/obs/tag/delete) and item-kind visibility guardrails (`getPreviewDrawerActionVisibility`) so Play only renders for video/audio items.
+- Package drawer tag panel now uses an inline typed input flow (`drawerTagInput`) with focused-asset scoped bulk-tag API calls (add/remove), replacing prompt-only behavior for drawer-tag edits while keeping existing API client isolation.
+- Updated `docker/packages/Explorer/src/styles.css` to align drawer visual hierarchy + touch ergonomics with static explorer: action groups, preview framing, non-selectable drawer surfaces, and mobile-safe action button sizing.
+- Added regression coverage for static preview hook contract in `tests/test_public_explorer_program_monitor.py` and package preview kind-visibility invariants in `docker/packages/Explorer/tests/preview-drawer.test.mjs`.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Addressed post-PR regression: updated `tests/test_public_explorer_program_monitor.py` TileFX max texture assertion to match current shader initialization (`_baseMaxTexEdge` followed by `maxTexEdge` assignment), restoring suite pass state.
+- Re-ran static + package preview regression checks and captured fresh browser screenshots with confirmed 200 routes to avoid prior Not Found artifact output when sharing preview results.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Package mock parity upgraded: `docker/packages/Explorer` now ships `public/fixtures/explorer-mock-assets.json` so the Next.js explorer consumes the same fixture corpus used by static explorer mock mode.
+- `loadExplorerMockAssets(...)` in `docker/packages/Explorer/src/utils.ts` now attempts both `/fixtures/explorer-mock-assets.json` and `/public/fixtures/explorer-mock-assets.json` before embedded fallback, keeping preview behavior deterministic across serving contexts.
+- Added regression test coverage in `docker/packages/Explorer/tests/utils-behavior.test.mjs` for fixture-path preference and revalidated the full command chain (`pytest ... && npm ci && npm test`).
+
+
+### Latest Implementation Notes (2026-03-15)
+- Package explorer grid/layout parity update: `docker/packages/Explorer/src/styles.css` now matches static section-header behavior (`.section-h` is non-sticky/relative) and enforces uniform square thumb ratios for oriented assets in grid view to eliminate masonry-like vertical gaps.
+- Added package regression coverage in `docker/packages/Explorer/tests/utils-behavior.test.mjs` to lock section-header parity plus uniform grid-thumb ratio CSS rules.
+- Revalidated full static+package test chain and recaptured static/package screenshots with mock fixtures to confirm aligned non-gapped grid rendering.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Package explorer grid now uses dense masonry-style packing in `docker/packages/Explorer/src/styles.css` (`grid-auto-flow: dense`, `grid-auto-rows: 8px`) with `--asset-span` row spans from `getGridAssetSpan(...)` in `ExplorerApp.tsx`, eliminating vertical hole artifacts while preserving orientation-driven scale differences.
+- Package main layout now pads by `var(--topbar-offset)` so section headers render in conjunction with the fixed top bar instead of tucking behind it.
+- Added/updated package style contract tests in `docker/packages/Explorer/tests/utils-behavior.test.mjs` and revalidated the full static+package test command chain.

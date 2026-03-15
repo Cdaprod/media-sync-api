@@ -118,3 +118,14 @@ test('optional integration availability helpers report unavailable browser conte
   assert.equal(utils.canUseObsIntegration({}), false);
   assert.equal(utils.canUseObsIntegration({ document: { createElement: () => ({}) } }), true);
 });
+
+
+test('preview drawer action visibility follows item kind for play affordance', () => {
+  const explorer = loadTsModule(path.join(packageRoot, 'src', 'ExplorerApp.tsx'));
+
+  assert.equal(explorer.getPreviewDrawerActionVisibility('video').showPlay, true);
+  assert.equal(explorer.getPreviewDrawerActionVisibility('audio').showPlay, true);
+  assert.equal(explorer.getPreviewDrawerActionVisibility('image').showPlay, false);
+  assert.equal(explorer.getPreviewDrawerActionVisibility('other').showPlay, false);
+  assert.equal(explorer.getPreviewDrawerActionVisibility(null).showPlay, false);
+});
