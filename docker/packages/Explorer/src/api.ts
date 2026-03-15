@@ -7,6 +7,13 @@ export interface ResolveRequest {
   mode: string;
 }
 
+export interface BulkComposeOptions {
+  outputSource?: string | null;
+  targetDir?: string;
+  mode?: 'auto' | 'copy' | 'encode';
+  allowOverwrite?: boolean;
+}
+
 
 export function buildProjectUploadUrl(project: Project): string {
   const source = String(project.source || '').trim();
@@ -33,6 +40,23 @@ export interface ApiClient {
     targetProject: string,
     source?: string,
     targetSource?: string,
+  ) => Promise<Record<string, unknown>>;
+  bulkDeleteAssets: (assets: Array<{ source: string; project: string; relative_path: string }>) => Promise<Record<string, unknown>>;
+  bulkTagAssets: (
+    assets: Array<{ source: string; project: string; relative_path: string }>,
+    addTags: string[],
+    removeTags: string[],
+  ) => Promise<Record<string, unknown>>;
+  bulkMoveAssets: (
+    assets: Array<{ source: string; project: string; relative_path: string }>,
+    targetProject: string,
+    targetSource?: string,
+  ) => Promise<Record<string, unknown>>;
+  bulkComposeAssets: (
+    assets: Array<{ source: string; project: string; relative_path: string }>,
+    outputProject: string,
+    outputName: string,
+    options?: BulkComposeOptions,
   ) => Promise<Record<string, unknown>>;
   buildUrl: (path: string) => string;
 }
@@ -130,6 +154,66 @@ export function createApiClient(baseUrl: string): ApiClient {
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
         throw new Error(String(data?.detail || data?.message || 'Move failed'));
+      }
+      return data;
+    },
+    async bulkDeleteAssets(assets): Promise<Record<string, unknown>> {
+      const response = await fetch(buildUrl('/api/assets/bulk/delete'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assets }),
+      });
+      const data = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || data?.message || 'Bulk delete failed'));
+      }
+      return data;
+    },
+    async bulkTagAssets(assets, addTags, removeTags): Promise<Record<string, unknown>> {
+      const response = await fetch(buildUrl('/api/assets/bulk/tags'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assets, add_tags: addTags, remove_tags: removeTags }),
+      });
+      const data = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || data?.message || 'Bulk tag update failed'));
+      }
+      return data;
+    },
+    async bulkMoveAssets(assets, targetProject, targetSource): Promise<Record<string, unknown>> {
+      const response = await fetch(buildUrl('/api/assets/bulk/move'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assets,
+          target_project: targetProject,
+          target_source: targetSource || null,
+        }),
+      });
+      const data = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || data?.message || 'Bulk move failed'));
+      }
+      return data;
+    },
+    async bulkComposeAssets(assets, outputProject, outputName, options): Promise<Record<string, unknown>> {
+      const response = await fetch(buildUrl('/api/assets/bulk/compose'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assets,
+          output_project: outputProject,
+          output_source: options?.outputSource || null,
+          output_name: outputName,
+          target_dir: options?.targetDir || 'exports',
+          mode: options?.mode || 'auto',
+          allow_overwrite: Boolean(options?.allowOverwrite),
+        }),
+      });
+      const data = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || data?.message || 'Bulk compose failed'));
       }
       return data;
     },

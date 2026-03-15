@@ -1804,3 +1804,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2026-03-15)
 - Next.js Explorer migration slice 4 now routes delete triggers through an in-app confirmation modal (context menu, selection bar, and drawer delete pill) and upgraded upload affordances to explicit choose/upload controls in the sidebar panel.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer bulk asset actions now call ordered-ref endpoints in `docker/packages/Explorer/src/api.ts` (`/api/assets/bulk/delete|tags|move|compose`) with typed helpers and explicit error extraction.
+- `docker/packages/Explorer/src/ExplorerApp.tsx` now uses a shared ordered asset-ref mapper (`mapOrderedAssetRefs`) that resolves refs from current selection plus drawer-focused assets (including legacy relative-path fallback), then routes delete/move/tag/compose actions through bulk APIs with explicit user-safe toasts.
+- Added targeted package tests in `docker/packages/Explorer/tests/bulk-actions.test.mjs` covering mixed all-project ordered payloads, single-project move payload routing, and explicit empty-selection guardrail/action wiring assertions.

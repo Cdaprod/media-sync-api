@@ -1,6 +1,14 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-15 — Explorer Next.js bulk asset action contract (active)
+- [x] Add typed bulk asset API helpers in `docker/packages/Explorer/src/api.ts` for delete/tags/move/compose using ordered `{source,project,relative_path}` payloads.
+- [x] Extend Next.js explorer asset-ref mapper in `docker/packages/Explorer/src/ExplorerApp.tsx` to resolve ordered refs from selection + focused drawer item with legacy path fallback.
+- [x] Route existing selection/action controls to bulk endpoints with explicit toast-based success/failure handling (no silent failures).
+- [x] Add targeted Explorer tests validating bulk payload shapes + routing checks for mixed all-project and single-project scenarios.
+- [ ] Add interaction-level tests (rendered component) for selection collisions where identical `relative_path` exists across multiple projects.
+
+
 ## 2026-03-15 — Next.js Explorer UI migration slices (active)
 - [x] Slice 1: Topbar/projects/actions structure + controls mapped to static explorer brand/title toggle and actions trigger layout.
 - [x] Slice 2: Media grid/list card rendering and selection affordances parity pass.
