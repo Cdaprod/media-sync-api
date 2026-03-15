@@ -1,6 +1,12 @@
 import type { MediaItem } from './types';
 import { normalizeTagList } from './utils';
 
+export interface MediaActionRef {
+  source: string;
+  project: string;
+  relative_path: string;
+}
+
 export type MediaTypeFilter = 'all' | 'video' | 'image' | 'audio' | 'overlay' | 'unknown';
 export type SortKey =
   | 'newest'
@@ -97,6 +103,28 @@ export function extractAiTags(items: MediaItem[]): string[] {
     normalizeTagList(item.ai_tags || item.aiTags).forEach((tag) => tags.add(tag));
   }
   return Array.from(tags).sort();
+}
+
+export function buildMediaIdentity(item: MediaItem): string {
+  const source = String(item.project_source || item.source || 'primary');
+  const project = String(item.project_name || item.project || '');
+  const relativePath = String(item.relative_path || '');
+  return [source, project, relativePath].join('|');
+}
+
+export function getActionRefs(items: MediaItem[]): MediaActionRef[] {
+  const unique = new Map<string, MediaActionRef>();
+  for (const item of items) {
+    const ref = {
+      source: String(item.project_source || item.source || 'primary'),
+      project: String(item.project_name || item.project || ''),
+      relative_path: String(item.relative_path || ''),
+    };
+    if (!ref.project || !ref.relative_path) continue;
+    const key = `${ref.source}|${ref.project}|${ref.relative_path}`;
+    unique.set(key, ref);
+  }
+  return Array.from(unique.values());
 }
 
 const parseTimestamp = (value?: string | null): number => {

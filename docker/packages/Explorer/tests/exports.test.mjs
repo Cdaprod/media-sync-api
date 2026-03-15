@@ -36,7 +36,8 @@ test('api base inference keeps LAN host reachable', () => {
   const content = fs.readFileSync(utilsPath, 'utf8');
   assert.ok(content.includes('inferApiBaseUrl'));
   assert.ok(content.includes('media-sync-api'));
-  assert.ok(content.includes(':8787'));
+  assert.ok(content.includes('DEFAULT_API_PORT'));
+  assert.ok(content.includes(8787));
   assert.ok(content.includes("if (!trimmed) return ''"));
 });
 
