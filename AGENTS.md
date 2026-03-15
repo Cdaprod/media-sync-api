@@ -1822,3 +1822,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Stabilized the Explorer package API client contract in `docker/packages/Explorer/src/api.ts` with a shared error extractor that consistently surfaces actionable `detail`, nested `detail.message`, or `message` text for list/upload/resolve/delete/move and bulk asset endpoints.
 - Added a focused fetch-mocked API contract suite at `docker/packages/Explorer/tests/api-contract.test.mjs` covering request URL/query/body construction for sources/projects/media/upload/resolve/delete/move/bulk-delete/bulk-tags/bulk-move/bulk-compose, including ordered `assets` array invariants.
 - Updated `docs/todo/AGENTS.md` with a completed checklist for this API contract stabilization slice.
+
+### Latest Implementation Notes (2026-03-15)
+- Explorer feature work now follows a dual-track parity protocol: each feature commit must classify scope (shared vs single-path exception), include paired static/package path locators, verify UI + API parity per slice, and record static/package test coverage before marking tasks complete in `docs/todo/AGENTS.md`.
