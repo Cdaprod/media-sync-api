@@ -62,6 +62,16 @@ export default function ExplorerPage() {
 }
 ```
 
+
+## Compose action parity
+
+The Explorer Actions panel and selection bar now include a **Compose** flow that mirrors static explorer bulk-compose behavior using `POST /api/assets/bulk/compose`.
+
+- Compose is enabled only when the current selection contains at least one **video** asset.
+- Selection ordering is preserved when building the `assets` payload, so repeated runs are deterministic.
+- The compose modal reuses existing in-app modal patterns to collect output project/source/name.
+- On success, Explorer shows the created artifact summary in toast feedback and reloads media using existing scope-aware logic (`current project` or `all projects`).
+
 ## Testing
 
 ```bash

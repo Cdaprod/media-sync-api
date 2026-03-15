@@ -99,10 +99,77 @@ test('explorer bulk actions include explicit empty-selection guardrails and api 
   const content = fs.readFileSync(explorerPath, 'utf8');
   assert.match(content, /if \(!assets\.length\) \{\s*addToast\('warn', 'Delete', 'Select one or more clips'\)/);
   assert.match(content, /if \(!assets\.length\) \{\s*addToast\('warn', 'Move', 'Select one or more clips'\)/);
-  assert.match(content, /if \(!assets\.length\) \{\s*addToast\('warn', 'Compose', 'Select one or more clips'\)/);
+  assert.match(content, /if \(!assets\.length\) \{\s*addToast\('warn', 'Compose', 'Select one or more video clips'\)/);
   assert.ok(content.includes('api.bulkDeleteAssets'));
   assert.ok(content.includes('api.bulkTagAssets'));
   assert.ok(content.includes('api.bulkMoveAssets'));
   assert.ok(content.includes('api.bulkComposeAssets'));
   assert.ok(content.includes('mapOrderedAssetRefs('));
+});
+
+
+test('bulk api client preserves ordered refs for compose payload', async () => {
+  const apiModule = loadTsModule(path.join(packageRoot, 'src', 'api.ts'));
+  const calls = [];
+  global.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    return {
+      ok: true,
+      async json() {
+        return { status: 'ok', path: 'exports/compose.mp4' };
+      },
+    };
+  };
+
+  const client = apiModule.createApiClient('');
+  const assets = [
+    { source: 'primary', project: 'P2-B', relative_path: 'ingest/originals/02.mov' },
+    { source: 'primary', project: 'P2-B', relative_path: 'ingest/originals/01.mov' },
+  ];
+  await client.bulkComposeAssets(assets, 'P2-B', 'timeline.mp4', { outputSource: 'primary' });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/api/assets/bulk/compose');
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body.assets, assets);
+  assert.equal(body.output_project, 'P2-B');
+  assert.equal(body.output_name, 'timeline.mp4');
+});
+
+test('compose helper excludes non-video selections and keeps deterministic order', () => {
+  const explorerModule = loadTsModule(path.join(packageRoot, 'src', 'ExplorerApp.tsx'));
+  const selectedItems = [
+    { project_name: 'P1-A', project_source: 'primary', relative_path: 'ingest/originals/clip-b.mov', kind: 'video' },
+    { project_name: 'P1-A', project_source: 'primary', relative_path: 'ingest/originals/frame.jpg', kind: 'image' },
+    { project_name: 'P1-A', project_source: 'primary', relative_path: 'ingest/originals/clip-a.mov', kind: 'video' },
+  ];
+  const refs = explorerModule.mapOrderedVideoAssetRefs(selectedItems, null);
+  assert.deepEqual(refs, [
+    { source: 'primary', project: 'P1-A', relative_path: 'ingest/originals/clip-b.mov' },
+    { source: 'primary', project: 'P1-A', relative_path: 'ingest/originals/clip-a.mov' },
+  ]);
+
+  const content = fs.readFileSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx'), 'utf8');
+  assert.ok(content.includes("disabled={!selectedVideoCount}"));
+  assert.match(content, /addToast\('warn', 'Compose', 'Select one or more video clips'\)/);
+});
+
+test('compose success helpers expose scoped refresh and artifact details', () => {
+  const explorerModule = loadTsModule(path.join(packageRoot, 'src', 'ExplorerApp.tsx'));
+  assert.equal(explorerModule.getComposeRefreshScope({ name: 'P1', source: 'primary' }), 'project');
+  assert.equal(explorerModule.getComposeRefreshScope(null), 'all');
+  assert.equal(
+    explorerModule.buildComposeArtifactSummary(
+      { path: 'exports/final.mp4', output_project: 'P3-C', output_source: 'nas-b' },
+      'fallback.mp4',
+    ),
+    'exports/final.mp4 (P3-C @ nas-b)',
+  );
+
+  const content = fs.readFileSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx'), 'utf8');
+  assert.ok(content.includes('const refreshScope = getComposeRefreshScope(activeProject);'));
+  assert.ok(content.includes("if (refreshScope === 'project') await loadMedia(activeProject);"));
+  assert.ok(content.includes('else await loadAllMedia();'));
+  assert.ok(content.includes('await loadProjects();'));
+  assert.ok(content.includes("addToast('good', 'Compose', `Created ${buildComposeArtifactSummary(payload, outputName)}`)"));
 });

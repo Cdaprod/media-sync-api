@@ -53,6 +53,48 @@ const assetRefKey = (item: MediaActionRef | null | undefined): string => {
   return `${item.source || 'primary'}::${item.project}::${item.relative_path}`;
 };
 
+interface ComposeDialogState {
+  assets: MediaActionRef[];
+  outputProject: string;
+  outputSource: string;
+  outputName: string;
+}
+
+const isVideoItem = (item: MediaItem): boolean => guessKind(item) === 'video';
+
+const getAssetIndex = (items: MediaItem[]): Map<string, MediaItem> => {
+  const map = new Map<string, MediaItem>();
+  items.forEach((item) => {
+    map.set(assetRefKey(toAssetRef(item)), item);
+  });
+  return map;
+};
+
+export function mapOrderedVideoAssetRefs(
+  selectedItems: MediaItem[],
+  focusedItem: MediaItem | null,
+  requested: Array<MediaActionRef | string> = [],
+): MediaActionRef[] {
+  const itemIndex = getAssetIndex(selectedItems);
+  return mapOrderedAssetRefs(selectedItems, focusedItem, requested).filter((ref) => {
+    const item = itemIndex.get(assetRefKey(ref));
+    return Boolean(item && isVideoItem(item));
+  });
+}
+
+export function getComposeRefreshScope(activeProject: Project | null): 'project' | 'all' {
+  return activeProject ? 'project' : 'all';
+}
+
+export function buildComposeArtifactSummary(payload: Record<string, unknown>, fallbackName: string): string {
+  const path = String(payload.path || payload.output_path || payload.relative_path || fallbackName);
+  const outputProject = String(payload.output_project || payload.project || '').trim();
+  const outputSource = String(payload.output_source || payload.source || '').trim();
+  if (outputProject && outputSource) return `${path} (${outputProject} @ ${outputSource})`;
+  if (outputProject) return `${path} (${outputProject})`;
+  return path;
+}
+
 export function mapOrderedAssetRefs(
   selectedItems: MediaItem[],
   focusedItem: MediaItem | null,
@@ -417,6 +459,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ requested: Array<MediaActionRef | string>; title: string; message: string } | null>(null);
+  const [composeDialog, setComposeDialog] = useState<ComposeDialogState | null>(null);
+  const [composeSubmitting, setComposeSubmitting] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
   const dragPathsRef = useRef<string[]>([]);
@@ -704,16 +748,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [addToast, api, projects]);
 
 
+  const reloadMediaForCurrentScope = useCallback(async () => {
+    if (activeProject) {
+      await loadMedia(activeProject);
+      return;
+    }
+    await loadAllMedia();
+  }, [activeProject, loadAllMedia, loadMedia]);
+
   const refreshAll = useCallback(async () => {
     await loadSources();
     await loadProjects();
-    if (activeProject) {
-      await loadMedia(activeProject);
-    } else {
-      await loadAllMedia();
-    }
+    await reloadMediaForCurrentScope();
     addToast('good', 'Refresh', 'Reloaded projects + media');
-  }, [activeProject, addToast, loadAllMedia, loadMedia, loadProjects, loadSources]);
+  }, [addToast, loadProjects, loadSources, reloadMediaForCurrentScope]);
 
   const selectProject = useCallback(
     (project: Project) => {
@@ -890,34 +938,55 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [activeProject, addToast, api, focused, loadAllMedia, loadMedia, resolveRequestedAssets]);
 
-  const handleComposeSelected = useCallback(async () => {
-    const assets = resolveRequestedAssets();
+  const openComposeDialog = useCallback(() => {
+    const assets = mapOrderedVideoAssetRefs(filteredMedia.filter((item) => selected.has(item.relative_path)), focused);
     if (!assets.length) {
-      addToast('warn', 'Compose', 'Select one or more clips');
+      addToast('warn', 'Compose', 'Select one or more video clips');
       return;
     }
-    const outputProject = activeProject?.name || assets[0]?.project;
-    const outputSource = activeProject?.source || assets[0]?.source;
+    const outputProject = activeProject?.name || assets[0]?.project || '';
     if (!outputProject) {
       addToast('warn', 'Compose', 'Select an output project first');
       return;
     }
-    const outputName = `compose-${Date.now()}.mp4`;
+    const outputSource = activeProject?.source || assets[0]?.source || 'primary';
+    setComposeDialog({
+      assets,
+      outputProject,
+      outputSource,
+      outputName: `compose-${Date.now()}.mp4`,
+    });
+  }, [activeProject, addToast, filteredMedia, focused, selected]);
+
+  const submitComposeDialog = useCallback(async () => {
+    if (!composeDialog || composeSubmitting) return;
+    const outputProject = composeDialog.outputProject.trim();
+    const outputName = composeDialog.outputName.trim();
+    if (!outputProject || !outputName) {
+      addToast('warn', 'Compose', 'Provide output project and output name');
+      return;
+    }
+    setComposeSubmitting(true);
     try {
-      const payload = await api.bulkComposeAssets(assets, outputProject, outputName, {
-        outputSource,
+      const payload = await api.bulkComposeAssets(composeDialog.assets, outputProject, outputName, {
+        outputSource: composeDialog.outputSource,
         targetDir: 'exports',
         mode: 'auto',
         allowOverwrite: false,
       });
-      addToast('good', 'Compose', `Created ${String(payload?.path || outputName)}`);
-      if (activeProject) await loadMedia(activeProject);
+      addToast('good', 'Compose', `Created ${buildComposeArtifactSummary(payload, outputName)}`);
+      setComposeDialog(null);
+      const refreshScope = getComposeRefreshScope(activeProject);
+      if (refreshScope === 'project') await loadMedia(activeProject);
       else await loadAllMedia();
+      await loadProjects();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Compose failed';
       addToast('bad', 'Compose', message);
+    } finally {
+      setComposeSubmitting(false);
     }
-  }, [activeProject, addToast, api, loadAllMedia, loadMedia, resolveRequestedAssets]);
+  }, [activeProject, addToast, api, composeDialog, composeSubmitting, loadAllMedia, loadMedia, loadProjects]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -1533,8 +1602,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [filteredMedia, selected],
   );
   const selectedRefs = useMemo<MediaActionRef[]>(() => mapOrderedAssetRefs(selectedMediaItems, focused), [selectedMediaItems, focused]);
+  const selectedVideoRefs = useMemo<MediaActionRef[]>(() => mapOrderedVideoAssetRefs(selectedMediaItems, focused), [selectedMediaItems, focused]);
   const selectedIdentitySet = useMemo(() => new Set(selectedMediaItems.map((item) => buildMediaIdentity(item))), [selectedMediaItems]);
   const selectedCount = selectedRefs.length || selected.size;
+  const selectedVideoCount = selectedVideoRefs.length;
   const contextActions = useMemo(
     () => (contextMenu ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
@@ -1784,8 +1855,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <button
                   className="btn"
                   type="button"
-                  onClick={handleComposeSelected}
-                  disabled={!selectedCount}
+                  onClick={openComposeDialog}
+                  disabled={!selectedVideoCount}
                 >
                   🎞 Compose
                 </button>
@@ -2253,8 +2324,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <button
           className="btn"
           type="button"
-          onClick={handleComposeSelected}
-          disabled={!selectedCount}
+          onClick={openComposeDialog}
+          disabled={!selectedVideoCount}
         >
           🎞 Compose
         </button>
@@ -2427,6 +2498,50 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               {action.label}
             </button>
           ))}
+        </div>
+      ) : null}
+
+
+      {composeDialog ? (
+        <div className="modal-shell" role="dialog" aria-modal="true" aria-labelledby="compose-title" aria-describedby="compose-message">
+          <div className="modal-backdrop" onClick={() => (!composeSubmitting ? setComposeDialog(null) : null)}></div>
+          <div className="modal">
+            <h3 id="compose-title">Compose selected videos</h3>
+            <p id="compose-message">Compose {composeDialog.assets.length} selected video clip(s) into a new artifact.</p>
+            <div className="kv" style={{ marginBottom: '10px' }}>
+              <div className="k">Output project</div>
+              <div className="v">
+                <input
+                  className="control"
+                  value={composeDialog.outputProject}
+                  onChange={(event) => setComposeDialog((current) => (current ? { ...current, outputProject: event.target.value } : current))}
+                  disabled={composeSubmitting}
+                />
+              </div>
+              <div className="k">Output source</div>
+              <div className="v">
+                <input
+                  className="control"
+                  value={composeDialog.outputSource}
+                  onChange={(event) => setComposeDialog((current) => (current ? { ...current, outputSource: event.target.value } : current))}
+                  disabled={composeSubmitting}
+                />
+              </div>
+              <div className="k">Output name</div>
+              <div className="v">
+                <input
+                  className="control"
+                  value={composeDialog.outputName}
+                  onChange={(event) => setComposeDialog((current) => (current ? { ...current, outputName: event.target.value } : current))}
+                  disabled={composeSubmitting}
+                />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" type="button" onClick={() => setComposeDialog(null)} disabled={composeSubmitting}>Cancel</button>
+              <button className="btn good" type="button" onClick={() => void submitComposeDialog()} disabled={composeSubmitting}>Compose</button>
+            </div>
+          </div>
         </div>
       ) : null}
 

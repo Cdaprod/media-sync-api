@@ -1809,3 +1809,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Next.js Explorer bulk asset actions now call ordered-ref endpoints in `docker/packages/Explorer/src/api.ts` (`/api/assets/bulk/delete|tags|move|compose`) with typed helpers and explicit error extraction.
 - `docker/packages/Explorer/src/ExplorerApp.tsx` now uses a shared ordered asset-ref mapper (`mapOrderedAssetRefs`) that resolves refs from current selection plus drawer-focused assets (including legacy relative-path fallback), then routes delete/move/tag/compose actions through bulk APIs with explicit user-safe toasts.
 - Added targeted package tests in `docker/packages/Explorer/tests/bulk-actions.test.mjs` covering mixed all-project ordered payloads, single-project move payload routing, and explicit empty-selection guardrail/action wiring assertions.
+
+### Latest Implementation Notes (2026-03-15)
+- Explorer package compose parity now uses the existing bulk endpoint (`POST /api/assets/bulk/compose`) with a modal-driven output project/source/name prompt in `docker/packages/Explorer/src/ExplorerApp.tsx`.
+- Compose controls in both the Actions panel and select bar are enabled only when selected assets include at least one video, while payload ordering remains deterministic via ordered asset-ref mapping.
+- Successful compose requests now show artifact summary details and trigger scope-aware media refresh plus project reload; package README + tests were updated for compose guardrails/order/refresh coverage.
