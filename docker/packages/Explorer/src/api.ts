@@ -78,6 +78,20 @@ async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json().catch(() => ({}))) as T;
 }
 
+function extractErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') return fallback;
+  const details = payload as { detail?: unknown; message?: unknown };
+  const detail = details.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (detail && typeof detail === 'object' && 'message' in detail) {
+    const nestedMessage = (detail as { message?: unknown }).message;
+    if (typeof nestedMessage === 'string' && nestedMessage.trim()) return nestedMessage;
+  }
+  const message = details.message;
+  if (typeof message === 'string' && message.trim()) return message;
+  return fallback;
+}
+
 export function createApiClient(baseUrl: string): ApiClient {
   const buildUrl = buildUrlFactory(baseUrl);
 
@@ -85,32 +99,35 @@ export function createApiClient(baseUrl: string): ApiClient {
     buildUrl,
     async listSources(): Promise<Source[]> {
       const response = await fetch(buildUrl('/api/sources'));
+      const payload = await parseJson<Source[] & { detail?: unknown; message?: unknown }>(response);
       if (!response.ok) {
-        throw new Error('Failed to list sources');
+        throw new Error(extractErrorMessage(payload, 'Failed to list sources'));
       }
-      return response.json();
+      return payload;
     },
     async listProjects(): Promise<Project[]> {
       const response = await fetch(buildUrl('/api/projects'));
+      const payload = await parseJson<Project[] & { detail?: unknown; message?: unknown }>(response);
       if (!response.ok) {
-        throw new Error('Failed to list projects');
+        throw new Error(extractErrorMessage(payload, 'Failed to list projects'));
       }
-      return response.json();
+      return payload;
     },
     async listMedia(project: string, source?: string): Promise<MediaResponse> {
       const query = source ? `?source=${encodeURIComponent(source)}` : '';
       const response = await fetch(buildUrl(`/api/projects/${encodeURIComponent(project)}/media${query}`));
+      const payload = await parseJson<MediaResponse & { detail?: unknown; message?: unknown }>(response);
       if (!response.ok) {
-        throw new Error('Failed to load media list');
+        throw new Error(extractErrorMessage(payload, 'Failed to load media list'));
       }
-      return response.json();
+      return payload;
     },
     async uploadMedia(url: string, file: File): Promise<Record<string, unknown>> {
       const form = buildUploadFormData(file);
       const response = await fetch(buildUrl(url), { method: 'POST', body: form });
       const payload = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
-        throw new Error(String(payload?.detail || payload?.message || 'Upload failed'));
+        throw new Error(extractErrorMessage(payload, 'Upload failed'));
       }
       return payload;
     },
@@ -123,7 +140,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       });
       const data = await parseJson<ResolveOpenResponse & { detail?: string; message?: string }>(response);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || 'Resolve request failed'));
+        throw new Error(extractErrorMessage(data, 'Resolve request failed'));
       }
       return data;
     },
@@ -136,7 +153,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || 'Delete failed'));
+        throw new Error(extractErrorMessage(data, 'Delete failed'));
       }
       return data;
     },
@@ -159,7 +176,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || 'Move failed'));
+        throw new Error(extractErrorMessage(data, 'Move failed'));
       }
       return data;
     },
@@ -171,7 +188,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || 'Bulk delete failed'));
+        throw new Error(extractErrorMessage(data, 'Bulk delete failed'));
       }
       return data;
     },
@@ -183,7 +200,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || 'Bulk tag update failed'));
+        throw new Error(extractErrorMessage(data, 'Bulk tag update failed'));
       }
       return data;
     },
@@ -199,7 +216,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || 'Bulk move failed'));
+        throw new Error(extractErrorMessage(data, 'Bulk move failed'));
       }
       return data;
     },
@@ -219,7 +236,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
-        throw new Error(String(data?.detail || data?.message || 'Bulk compose failed'));
+        throw new Error(extractErrorMessage(data, 'Bulk compose failed'));
       }
       return data;
     },

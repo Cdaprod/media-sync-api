@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+
+## 2026-03-15 — Explorer API contract stabilization (completed)
+- [x] Added a focused package API contract suite for explorer-used endpoints in `docker/packages/Explorer/tests/api-contract.test.mjs`.
+- [x] Locked query-string + JSON body invariants for source/project scoping across sources/projects/media/upload/resolve/delete/move/bulk-delete/bulk-tags/bulk-move/bulk-compose requests.
+- [x] Added ordered asset-ref invariants so `assets` arrays remain deterministic and unmodified across bulk delete/tag/move/compose payloads.
+- [x] Added failure-path assertions to enforce actionable error messages from `detail`, nested `detail.message`, and `message` payload shapes.
+- [x] Verified the suite is self-contained with mocked `fetch` only (no live service dependency).
+
 ## 2026-03-15 — Preview/Inspector convergence pass (active)
 - [x] Build parity checklist rows for drawer preview layout/controls, tag panel interactions, OBS handoff, Program Monitor handoff, and FX/tile controls scope.
 - [x] Port agreed preview/inspector deltas into `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css` while preserving existing class names where possible.
