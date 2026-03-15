@@ -110,3 +110,15 @@ test('sortMedia handles name and size ordering with missing sizes last', () => {
   const sizeAsc = sortMedia(items, 'size-asc', meta);
   assert.deepEqual(sizeAsc.map((item) => item.relative_path), ['C/file-c.mp4', 'A/file-a.mp4', 'B/file-b.mp4']);
 });
+
+
+test('normalizeExplorerView enforces deterministic grid/list fallback (no FX mode)', () => {
+  const { normalizeExplorerView } = loadTsModule(statePath);
+
+  assert.equal(normalizeExplorerView('grid'), 'grid');
+  assert.equal(normalizeExplorerView('list'), 'list');
+  assert.equal(normalizeExplorerView('fx'), 'grid');
+  assert.equal(normalizeExplorerView('FX'), 'grid');
+  assert.equal(normalizeExplorerView('tilefx', 'list'), 'list');
+  assert.equal(normalizeExplorerView(''), 'grid');
+});

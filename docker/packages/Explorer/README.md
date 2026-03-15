@@ -63,6 +63,13 @@ export default function ExplorerPage() {
 ```
 
 
+
+## FX mode policy
+
+- The static explorer (`/public/explorer.html`) owns TileFX/WebGL behavior and adaptive performance guardrails.
+- This Next.js package intentionally **defers FX mode** for now; only `grid` and `list` views are supported.
+- Any unsupported view token (including `fx`) must normalize to deterministic grid/list fallback (`normalizeExplorerView` in `src/state.ts`).
+
 ## Compose action parity
 
 The Explorer Actions panel and selection bar now include a **Compose** flow that mirrors static explorer bulk-compose behavior using `POST /api/assets/bulk/compose`.

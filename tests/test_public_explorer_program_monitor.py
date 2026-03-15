@@ -803,6 +803,23 @@ def test_explorer_mock_module_supports_webview_preview_detection():
     assert "if (window.top !== window.self && hostLooksLocal(window.location.hostname)) return true;" in module
 
 
+def test_explorer_tilefx_guardrail_policy_contract_present():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert 'const TILEFX_PERF_GUARDRAILS = Object.freeze({' in shader_module
+    assert 'frameTimeBands: Object.freeze({' in shader_module
+    assert 'adaptiveQuality: Object.freeze({' in shader_module
+    assert "mobileFallback: Object.freeze({" in shader_module
+    assert 'this._perfGuardrails = TILEFX_PERF_GUARDRAILS;' in shader_module
+    assert 'this._perfFrameEma = 16.7;' in shader_module
+    assert "this._perfQuality = 'high';" in shader_module
+    assert 'this._mobileFxFallback = false;' in shader_module
+    assert 'const qualityProfile = quality[nextQuality] || quality.high;' in shader_module
+    assert 'this.maxTexEdge = Math.max(64, Math.round(this._baseMaxTexEdge * Number(qualityProfile.maxTexEdgeScale || 1)));' in shader_module
+    assert 'window.__tilefx_dbg.perfAdaptiveState = {' in shader_module
+    assert 'window.__tilefx_dbg.mobileFallbackActive = this._mobileFxFallback;' in shader_module
+    assert "window.__tilefx_dbg.mobileFallbackReason = this._mobileFxFallback ? 'coarse-pointer-critical-frames' : '';" in shader_module
+
+
 def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
     assert "position: 'fixed'" in shader_module

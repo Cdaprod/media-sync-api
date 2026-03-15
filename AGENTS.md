@@ -1829,3 +1829,8 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-03-15)
 - Added one consolidated preview convergence epic in `docs/todo/AGENTS.md` with phased, non-overlapping execution rows (Phase A baseline inventories + explicit static/package deltas; Phase B primitive-first implementation via `api.ts`/`state.ts`/`utils.ts` before JSX/CSS reshaping; Phase C validation/docs updates across package tests, static regression hooks, and Explorer README updates).
 - Preview delta intent is now explicitly tracked as shared across both stacks (static `public/explorer.html` and package `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`) with ordered completion gates to prevent overlap and state-desync regressions.
+
+### Latest Implementation Notes (2026-03-15)
+- Static TileFX (`public/js/explorer-shaders.mjs`) now enforces explicit performance guardrails with frame-time bands (`target/warm/degrade/critical`), bounded adaptive quality profiles (`high/balanced/low/safe`), and coarse-pointer fallback behavior that holds safe quality during sustained critical frame pressure before recovery.
+- TileFX debug telemetry now publishes guardrail policy/runtime fields on `window.__tilefx_dbg` (`perfGuardrails`, `perfFrameEmaMs`, `perfFrameBand`, `perfQuality`, `perfAdaptiveState`, `mobileFallbackActive`, `mobileFallbackReason`) to keep runtime diagnosis deterministic.
+- Next.js Explorer package remains intentionally grid/list-only for FX policy: no package TileFX mode is exposed, and unsupported view tokens must normalize to deterministic grid/list fallback (`normalizeExplorerView` in `docker/packages/Explorer/src/state.ts`) until a future explicit parity migration.
