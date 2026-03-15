@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-15 — Explorer bulk parity slice (completed)
+- [x] Add typed Explorer API client request contracts for bulk delete/tag/move/compose with payload fields aligned to `app/api/media.py` asset refs.
+- [x] Add stable selection asset-ref builders in package explorer using `{source, project, relative_path}` keys (no relative-path-only routing for bulk payload construction).
+- [x] Wire selection bar + drawer bulk actions (tag/move/delete/compose) through the shared builders and existing bulk endpoints.
+- [x] Preserve idempotent refresh semantics by reloading project scope or all-project scope after mutations.
+- [x] Add/extend package tests for mixed-source/mixed-project payload construction, compose ordering, and empty/invalid selection guardrails.
+- [ ] Follow-up: migrate package selection state from `Set<relative_path>` to identity keys (`source|project|relative_path`) for full duplicate-filename safety in all-project mode.
+
 ## 2026-03-15 — FX performance guardrails policy (completed)
 - [x] Define static FX frame-time guardrails with explicit bands (`target`, `warm`, `degrade`, `critical`) and bounded adaptive quality tiers (`high`, `balanced`, `low`, `safe`).
 - [x] Enforce coarse-pointer/mobile fallback policy in static FX: hold `safe` quality under sustained critical frames, then recover only after sustained stable frames.

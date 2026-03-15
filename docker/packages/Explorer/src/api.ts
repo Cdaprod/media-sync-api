@@ -13,6 +13,28 @@ export interface BulkComposeAssetRef {
   relative_path: string;
 }
 
+export interface BulkTagAssetsRequest {
+  assets: BulkComposeAssetRef[];
+  add_tags: string[];
+  remove_tags: string[];
+}
+
+export interface BulkMoveAssetsRequest {
+  assets: BulkComposeAssetRef[];
+  target_project: string;
+  target_source: string | null;
+}
+
+export interface BulkComposeAssetsRequest {
+  assets: BulkComposeAssetRef[];
+  output_project: string;
+  output_source: string | null;
+  output_name: string;
+  target_dir: string;
+  mode: 'auto' | 'copy' | 'encode';
+  allow_overwrite: boolean;
+}
+
 export interface BulkComposeOptions {
   outputSource?: string | null;
   targetDir?: string;
@@ -47,14 +69,14 @@ export interface ApiClient {
     source?: string,
     targetSource?: string,
   ) => Promise<Record<string, unknown>>;
-  bulkDeleteAssets: (assets: Array<{ source: string; project: string; relative_path: string }>) => Promise<Record<string, unknown>>;
+  bulkDeleteAssets: (assets: BulkComposeAssetRef[]) => Promise<Record<string, unknown>>;
   bulkTagAssets: (
-    assets: Array<{ source: string; project: string; relative_path: string }>,
+    assets: BulkComposeAssetRef[],
     addTags: string[],
     removeTags: string[],
   ) => Promise<Record<string, unknown>>;
   bulkMoveAssets: (
-    assets: Array<{ source: string; project: string; relative_path: string }>,
+    assets: BulkComposeAssetRef[],
     targetProject: string,
     targetSource?: string,
   ) => Promise<Record<string, unknown>>;
@@ -193,10 +215,11 @@ export function createApiClient(baseUrl: string): ApiClient {
       return data;
     },
     async bulkTagAssets(assets, addTags, removeTags): Promise<Record<string, unknown>> {
+      const payload: BulkTagAssetsRequest = { assets, add_tags: addTags, remove_tags: removeTags };
       const response = await fetch(buildUrl('/api/assets/bulk/tags'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assets, add_tags: addTags, remove_tags: removeTags }),
+        body: JSON.stringify(payload),
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
@@ -205,14 +228,15 @@ export function createApiClient(baseUrl: string): ApiClient {
       return data;
     },
     async bulkMoveAssets(assets, targetProject, targetSource): Promise<Record<string, unknown>> {
+      const payload: BulkMoveAssetsRequest = {
+        assets,
+        target_project: targetProject,
+        target_source: targetSource || null,
+      };
       const response = await fetch(buildUrl('/api/assets/bulk/move'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          assets,
-          target_project: targetProject,
-          target_source: targetSource || null,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {
@@ -221,18 +245,19 @@ export function createApiClient(baseUrl: string): ApiClient {
       return data;
     },
     async bulkComposeAssets(assets: BulkComposeAssetRef[], outputProject, outputName, options): Promise<Record<string, unknown>> {
+      const payload: BulkComposeAssetsRequest = {
+        assets,
+        output_project: outputProject,
+        output_source: options?.outputSource || null,
+        output_name: outputName,
+        target_dir: options?.targetDir || 'exports',
+        mode: options?.mode || 'auto',
+        allow_overwrite: Boolean(options?.allowOverwrite),
+      };
       const response = await fetch(buildUrl('/api/assets/bulk/compose'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          assets,
-          output_project: outputProject,
-          output_source: options?.outputSource || null,
-          output_name: outputName,
-          target_dir: options?.targetDir || 'exports',
-          mode: options?.mode || 'auto',
-          allow_overwrite: Boolean(options?.allowOverwrite),
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await parseJson<Record<string, unknown>>(response);
       if (!response.ok) {

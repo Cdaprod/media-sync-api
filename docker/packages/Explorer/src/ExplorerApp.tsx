@@ -43,11 +43,16 @@ const LONG_PRESS_MS = 480;
 
 
 
-const toAssetRef = (item: MediaItem): MediaActionRef => ({
-  source: String(item.project_source || item.source || 'primary'),
-  project: String(item.project_name || item.project || ''),
-  relative_path: String(item.relative_path || ''),
-});
+
+export function buildStableAssetRef(item: MediaItem): MediaActionRef {
+  return {
+    source: String(item.project_source || item.source || 'primary'),
+    project: String(item.project_name || item.project || ''),
+    relative_path: String(item.relative_path || ''),
+  };
+}
+
+const toAssetRef = (item: MediaItem): MediaActionRef => buildStableAssetRef(item);
 
 const assetRefKey = (item: MediaActionRef | null | undefined): string => {
   if (!item) return '';
@@ -122,16 +127,31 @@ export function getPreviewDrawerActionState(input: {
   };
 }
 
+
+export function buildSelectionAssetRefs(input: {
+  selectedItems: MediaItem[];
+  focusedItem: MediaItem | null;
+  requested?: Array<MediaActionRef | string>;
+  videosOnly?: boolean;
+}): MediaActionRef[] {
+  const refs = mapOrderedAssetRefs(input.selectedItems, input.focusedItem, input.requested || []);
+  if (!input.videosOnly) return refs;
+  const videoKeySet = new Set<string>();
+  input.selectedItems.forEach((item) => {
+    if (isVideoItem(item)) videoKeySet.add(assetRefKey(toAssetRef(item)));
+  });
+  if (input.focusedItem && isVideoItem(input.focusedItem)) {
+    videoKeySet.add(assetRefKey(toAssetRef(input.focusedItem)));
+  }
+  return refs.filter((ref) => videoKeySet.has(assetRefKey(ref)));
+}
+
 export function mapOrderedVideoAssetRefs(
   selectedItems: MediaItem[],
   focusedItem: MediaItem | null,
   requested: Array<MediaActionRef | string> = [],
 ): MediaActionRef[] {
-  const itemIndex = getAssetIndex(selectedItems);
-  return mapOrderedAssetRefs(selectedItems, focusedItem, requested).filter((ref) => {
-    const item = itemIndex.get(assetRefKey(ref));
-    return Boolean(item && isVideoItem(item));
-  });
+  return buildSelectionAssetRefs({ selectedItems, focusedItem, requested, videosOnly: true });
 }
 
 export function getComposeRefreshScope(activeProject: Project | null): 'project' | 'all' {
@@ -545,6 +565,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     );
     return sortMedia(filtered, sortKey, mediaMeta);
   }, [media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const selectedMediaItems = useMemo(
+    () => filteredMedia.filter((item) => selected.has(item.relative_path)),
+    [filteredMedia, selected],
+  );
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
   const typeLabel = TYPE_LABELS[typeFilter] ?? TYPE_LABELS.all;
@@ -905,8 +929,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, addToast, api, buildUploadUrl, loadMedia]);
 
   const resolveRequestedAssets = useCallback(
-    (requested: Array<MediaActionRef | string> = []) => mapOrderedAssetRefs(filteredMedia.filter((item) => selected.has(item.relative_path)), focused, requested),
-    [filteredMedia, focused, selected],
+    (requested: Array<MediaActionRef | string> = []) => buildSelectionAssetRefs({ selectedItems: selectedMediaItems, focusedItem: focused, requested }),
+    [focused, selectedMediaItems],
   );
 
   const deleteMediaPaths = useCallback(
@@ -976,6 +1000,38 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [activeProject, addToast, api, focused, loadAllMedia, loadMedia, loadProjects, resolveRequestedAssets],
   );
 
+  const moveFocusedAsset = useCallback(async () => {
+    if (!focused) {
+      addToast('warn', 'Move', 'Focus an item first');
+      return;
+    }
+    const focusedRef = toAssetRef(focused);
+    const candidates = projects.filter((project) => (
+      !(project.name === focusedRef.project && String(project.source || 'primary') === String(focusedRef.source || 'primary'))
+    ));
+    if (!candidates.length) {
+      addToast('warn', 'Move', 'No destination projects available');
+      return;
+    }
+    const selectedLabel = window.prompt(
+      `Move to project (name or name@source): ${candidates.map((project) => `${project.name}@${project.source || 'primary'}`).join(', ')}`,
+      `${candidates[0].name}@${candidates[0].source || 'primary'}`,
+    );
+    if (!selectedLabel) return;
+    const [targetName, targetSourceRaw] = selectedLabel.split('@');
+    const targetNameNormalized = String(targetName || '').trim();
+    const targetSourceNormalized = String(targetSourceRaw || '').trim();
+    const targetProject = candidates.find((project) => (
+      project.name === targetNameNormalized
+      && String(project.source || 'primary') === (targetSourceNormalized || String(project.source || 'primary'))
+    ));
+    if (!targetProject) {
+      addToast('warn', 'Move', 'Destination not found');
+      return;
+    }
+    await moveMediaPaths([focusedRef], targetProject);
+  }, [addToast, focused, moveMediaPaths, projects]);
+
   const handleBulkTagEdit = useCallback(async (mode: 'add' | 'remove') => {
     const targetAssets = resolveRequestedAssets(focused ? [toAssetRef(focused)] : []);
     if (!targetAssets.length) {
@@ -1001,7 +1057,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, addToast, api, focused, loadAllMedia, loadMedia, resolveRequestedAssets]);
 
   const openComposeDialog = useCallback(() => {
-    const assets = mapOrderedVideoAssetRefs(filteredMedia.filter((item) => selected.has(item.relative_path)), focused);
+    const assets = buildSelectionAssetRefs({ selectedItems: selectedMediaItems, focusedItem: focused, requested: focused ? [toAssetRef(focused)] : [], videosOnly: true });
     if (!assets.length) {
       addToast('warn', 'Compose', 'Select one or more video clips');
       return;
@@ -1018,7 +1074,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       outputSource,
       outputName: `compose-${Date.now()}.mp4`,
     });
-  }, [activeProject, addToast, filteredMedia, focused, selected]);
+  }, [activeProject, addToast, focused, selectedMediaItems]);
 
   const submitComposeDialog = useCallback(async () => {
     if (!composeDialog || composeSubmitting) return;
@@ -1667,10 +1723,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, []);
 
-  const selectedMediaItems = useMemo(
-    () => filteredMedia.filter((item) => selected.has(item.relative_path)),
-    [filteredMedia, selected],
-  );
   const selectedRefs = useMemo<MediaActionRef[]>(() => mapOrderedAssetRefs(selectedMediaItems, focused), [selectedMediaItems, focused]);
   const selectedVideoRefs = useMemo<MediaActionRef[]>(() => mapOrderedVideoAssetRefs(selectedMediaItems, focused), [selectedMediaItems, focused]);
   const selectedIdentitySet = useMemo(() => new Set(selectedMediaItems.map((item) => buildMediaIdentity(item))), [selectedMediaItems]);
@@ -2515,6 +2567,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               disabled={!hasFocused}
             >
               🏷 Tag
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={moveFocusedAsset}
+              disabled={!hasFocused}
+            >
+              ⇄ Move
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={openComposeDialog}
+              disabled={!selectedVideoCount && !(focused && guessKind(focused) === 'video')}
+            >
+              🎞 Compose
             </button>
             <button
               className={`btn ${focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '' : 'primary'}`}
