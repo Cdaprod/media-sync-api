@@ -344,10 +344,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [drawerTagPanelOpen, setDrawerTagPanelOpen] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [assetDragActive, setAssetDragActive] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ paths: string[]; title: string; message: string } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
   const dragPathsRef = useRef<string[]>([]);
@@ -677,10 +679,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const openDrawer = useCallback((item: MediaItem) => {
     setFocused(item);
     setInspectorOpen(true);
+    setDrawerTagPanelOpen(false);
   }, []);
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
+    setFocused(null);
+    setDrawerTagPanelOpen(false);
+  }, []);
+
+  const openUploadPicker = useCallback(() => {
+    const input = uploadInputRef.current;
+    if (!input) return;
+    const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerInput.showPicker === 'function') {
+      pickerInput.showPicker();
+      return;
+    }
+    input.click();
   }, []);
 
   const handleUpload = useCallback(async () => {
@@ -835,6 +851,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [activeProject, addToast, api, buildUploadUrl, loadMedia],
   );
 
+  const requestDeleteMediaPaths = useCallback((paths: string[], title: string, message: string) => {
+    const unique = Array.from(new Set(paths.filter(Boolean)));
+    if (!unique.length) return;
+    setDeleteConfirm({ paths: unique, title, message });
+  }, []);
+
+  const confirmDeleteMedia = useCallback(async () => {
+    if (!deleteConfirm) return;
+    const payload = deleteConfirm.paths;
+    setDeleteConfirm(null);
+    await deleteMediaPaths(payload);
+  }, [deleteConfirm, deleteMediaPaths]);
+
   const handleCopyStream = useCallback(async (item: MediaItem) => {
     if (!item.stream_url) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -955,10 +984,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     actions.push({
       id: 'delete',
       label: `Delete ${count} item${count > 1 ? 's' : ''}`,
-      handler: () => deleteMediaPaths(items.map((entry) => entry.relative_path)),
+      handler: () => requestDeleteMediaPaths(items.map((entry) => entry.relative_path), 'Delete selected media?', `This will permanently remove ${items.length} item(s).`),
     });
     return actions;
-  }, [deleteMediaPaths, handleCopySelectedUrls, handleCopyStream, openDrawer, resolveAssetUrl]);
+  }, [handleCopySelectedUrls, handleCopyStream, openDrawer, requestDeleteMediaPaths, resolveAssetUrl]);
 
   const buildAssetPointerHandlers = useCallback(
     (item: MediaItem) => {
@@ -1226,6 +1255,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [closeDrawer, inspectorOpen, sidebarOpen]);
 
+
+  useEffect(() => {
+    if (!deleteConfirm) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDeleteConfirm(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [deleteConfirm]);
+
   const [topbarHidden, setTopbarHidden] = useState(false);
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const topbarRevealRef = useRef<HTMLDivElement | null>(null);
@@ -1383,7 +1424,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       <div className="topbar" ref={topbarRef}>
         <div className="topbar-inner">
           <div
-            className="brand"
+            className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
             title="LAN-only media-sync-api explorer"
             ref={brandRef}
             role="button"
@@ -1396,23 +1437,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               }
             }}
           >
-            <div className="logo" aria-hidden="true"></div>
-            <div>
-              <h1>media-sync-api</h1>
-              <div className="sub">Explorer • projects → ingest → index → preview → Resolve</div>
+            <div className="brand-text">
+              <h1>
+                <button type="button" aria-label="Toggle projects drawer">
+                  <span className="brand-title is-primary">Cdaprod&apos;s Explorer</span>
+                  <span className="brand-title is-secondary">Cdaprod&apos;s Projects</span>
+                </button>
+              </h1>
+              <div className="sub">media-sync-api</div>
             </div>
           </div>
 
           <div className="toolbar">
-            <div className="toolbar-toggle">
-              <button
-                className="btn mobile-only"
-                type="button"
-                onClick={() => setSidebarOpen((prev) => !prev)}
-              >
-                Projects
-              </button>
-            </div>
             <div className="topbar-controls">
               <div className="search" role="search">
                 <span className="kbd">⌘K</span>
@@ -1488,7 +1524,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 aria-expanded={actionsOpen}
                 onClick={() => setActionsOpen((prev) => !prev)}
               >
-                Actions ▾
+                Actions
+                <span aria-hidden="true">▾</span>
               </button>
             </div>
             <div className={`actions-panel ${actionsOpen ? 'open' : ''}`} role="region" aria-label="Explorer actions">
@@ -1823,11 +1860,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               <div className="card">
                 <strong>Upload to active project</strong>
                 <div className="small">{uploadCaption}</div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' }}>
-                  <input ref={uploadInputRef} type="file" style={{ maxWidth: '100%', color: 'var(--muted)' }} />
+                <div className="upload-panel">
+                  <input ref={uploadInputRef} type="file" className="visually-hidden" />
+                  <button className="btn" type="button" onClick={openUploadPicker} disabled={!activeProject}>
+                    Choose file
+                  </button>
                   <button className="btn good" type="button" onClick={handleUpload} disabled={!activeProject}>
                     Upload
                   </button>
+                  <span className="small upload-name">{uploadInputRef.current?.files?.[0]?.name || 'No file selected'}</span>
                 </div>
                 <div className="small" style={{ marginTop: '8px' }}>{uploadStatus}</div>
               </div>
@@ -1898,12 +1939,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
-                  const isSelected = selectedIdentitySet.has(buildMediaIdentity(item));
+                  const identity = buildMediaIdentity(item);
+                  const isSelected = selectedIdentitySet.has(identity);
+                  const selectionOrder = selectedMediaItems.findIndex((entry) => buildMediaIdentity(entry) === identity) + 1;
 
                   return (
                     <div
                       key={`${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
-                      className={`asset ${isSelected ? 'selected' : ''}`}
+                      className={`asset ${isSelected ? 'is-selected' : ''}`}
                       data-kind={kind}
                       data-orient={orient}
                       data-orient-locked={orientLocked ? 'true' : 'false'}
@@ -1912,36 +1955,51 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       {...pointerHandlers}
                     >
                       <div className="thumb">
-                        <img
-                          className="asset-thumb"
-                          src={safeThumbUrl}
-                          alt={title}
-                          loading="lazy"
-                          data-thumb-url={thumbUrl}
-                          data-thumb-fallback={fallbackThumb}
-                        />
-                        <div className="asset-overlay">
-                          <div className="asset-ol-tl">
-                            <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
-                          </div>
-                          <div className="asset-ol-tr">
-                            <div className="selector" title="Select">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                aria-label="Select media"
-                                disabled={!canSelect}
-                                onClick={(event) => event.stopPropagation()}
-                                onChange={() => toggleSelected(item.relative_path)}
-                              />
+                        <div className="thumb-body">
+                          <img
+                            className="asset-thumb"
+                            src={safeThumbUrl}
+                            alt={title}
+                            loading="lazy"
+                            data-thumb-url={thumbUrl}
+                            data-thumb-fallback={fallbackThumb}
+                            data-thumb-state="pending"
+                          />
+                        </div>
+                        <div className="asset-ui">
+                          <div className="asset-overlay">
+                            <div className="scrim" aria-hidden="true"></div>
+                            <div className="asset-ol-tl">
+                              <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
                             </div>
-                          </div>
-                          <div className="asset-ol-bl">
-                            <span className="badge">{size}</span>
-                          </div>
-                          <div className="asset-ol-bottom">
-                            <div className="asset-title">{title}</div>
-                            <div className="asset-subtitle">{sub}</div>
+                            <div className="asset-ol-tr">
+                              <div className="selector" title="Select">
+                                <label className="sel-shell">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    aria-label="Select media"
+                                    disabled={!canSelect}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={() => toggleSelected(item.relative_path)}
+                                  />
+                                  <span className="sel-order" aria-hidden="true">{selectionOrder || ''}</span>
+                                </label>
+                              </div>
+                            </div>
+                            <div className="asset-ol-bl">
+                              <span className="badge">{size}</span>
+                            </div>
+                            {kind === 'video' || kind === 'audio' ? (
+                              <div className="play-btn" aria-hidden="true">
+                                <div className="play-btn-inner">▶</div>
+                              </div>
+                            ) : null}
+                            <div className="preview-pill" aria-hidden="true">preview</div>
+                            <div className="asset-ol-bottom">
+                              <div className="asset-title">{title}</div>
+                              <div className="asset-subtitle">{sub}</div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1976,11 +2034,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
-                  const isSelected = selectedIdentitySet.has(buildMediaIdentity(item));
+                  const identity = buildMediaIdentity(item);
+                  const isSelected = selectedIdentitySet.has(identity);
 
                   return (
                     <div
-                      className="row"
+                      className={`row ${isSelected ? 'is-selected' : ''}`}
                       key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
                       {...pointerHandlers}
                     >
@@ -2048,7 +2107,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <button
           className="btn bad"
           type="button"
-          onClick={() => deleteMediaPaths(selectedRefs.map((ref) => ref.relative_path))}
+          onClick={() => requestDeleteMediaPaths(selectedRefs.map((ref) => ref.relative_path), 'Delete selected media?', `This will permanently remove ${selectedCount} item(s).`)}
           disabled={!activeProject || !selectedCount}
         >
           🗑 Delete
@@ -2115,6 +2174,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               📡 Send to OBS
             </button>
             <button
+              className={`btn ${drawerTagPanelOpen ? 'primary' : ''}`}
+              type="button"
+              onClick={() => setDrawerTagPanelOpen((prev) => !prev)}
+            >
+              🏷 Tag
+            </button>
+            <button
               className={`btn ${focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '' : 'primary'}`}
               type="button"
               onClick={() => focused && toggleSelected(focused.relative_path)}
@@ -2125,11 +2191,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <button
               className="btn bad"
               type="button"
-              onClick={() => focused && deleteMediaPaths([focused.relative_path])}
+              onClick={() => focused && requestDeleteMediaPaths([focused.relative_path], 'Delete focused media?', 'This action cannot be undone.')}
               disabled={!activeProject}
             >
               🗑 Delete
             </button>
+          </div>
+
+          <div className={`drawer-tag-panel ${drawerTagPanelOpen ? 'open' : ''}`}>
+            <div className="tag-panel">
+              <div className="taglist">
+                {focused && extractTags([focused]).length ? extractTags([focused]).map((tag) => (
+                  <span className="tag" key={`focused-tag-${tag}`}>{tag}</span>
+                )) : <span className="tag">No tags</span>}
+              </div>
+              <div className="taglist">
+                {focused && extractAiTags([focused]).length ? extractAiTags([focused]).map((tag) => (
+                  <span className="tag" key={`focused-ai-tag-${tag}`}>{tag}</span>
+                )) : <span className="tag">No AI tags</span>}
+              </div>
+            </div>
           </div>
 
           <div className="kv">
@@ -2188,6 +2269,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               {action.label}
             </button>
           ))}
+        </div>
+      ) : null}
+
+
+      {deleteConfirm ? (
+        <div className="modal-shell" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-message">
+          <div className="modal-backdrop" onClick={() => setDeleteConfirm(null)}></div>
+          <div className="modal">
+            <h3 id="delete-confirm-title">{deleteConfirm.title}</h3>
+            <p id="delete-confirm-message">{deleteConfirm.message}</p>
+            <div className="modal-actions">
+              <button className="btn" type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className="btn bad" type="button" onClick={() => void confirmDeleteMedia()}>Delete</button>
+            </div>
+          </div>
         </div>
       ) : null}
 

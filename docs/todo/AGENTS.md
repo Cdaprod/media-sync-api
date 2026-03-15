@@ -1,6 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-15 — Next.js Explorer UI migration slices (active)
+- [x] Slice 1: Topbar/projects/actions structure + controls mapped to static explorer brand/title toggle and actions trigger layout.
+- [x] Slice 2: Media grid/list card rendering and selection affordances parity pass.
+- [x] Slice 3: Inspector drawer + tag panel + action pills parity pass.
+- [x] Slice 4: Context menus + delete confirm/modal flows + upload panel affordances parity pass.
+
 ## 2026-03-15 — Explorer behavior-first migration primitives (active)
 - [x] Extended `docker/packages/Explorer/src/utils.ts` with typed parity helpers for URL/path normalization + clipboard copy fallbacks and centralized upload/stream URL shaping.
 - [x] Ported Program Monitor handoff behavior into typed helpers (`buildProgramMonitorDescriptor`, `sendToProgramMonitor`) and wired Explorer selection actions to use the helper boundary.
