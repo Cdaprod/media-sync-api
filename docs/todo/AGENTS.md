@@ -1,5 +1,40 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-15 — Preview/Inspector convergence pass (active)
+- [x] Build parity checklist rows for drawer preview layout/controls, tag panel interactions, OBS handoff, Program Monitor handoff, and FX/tile controls scope.
+- [x] Port agreed preview/inspector deltas into `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css` while preserving existing class names where possible.
+- [x] Add regression tests for preview drawer action visibility/state transitions and optional integration fallback behavior.
+- [ ] Capture a browser screenshot artifact after the next visual QA pass on a running explorer container.
+
+### Preview/Inspector parity checklist rows
+- [x] **Drawer preview layout/controls parity**
+  - [x] Keep preview media container structure (`.drawer > .drawer-body > .preview`) aligned between static + package explorers.
+  - [x] Adopt preview minimum-height/media fitting parity (`min-height`, audio sizing in preview media selectors).
+  - [x] Keep drawer action pill set aligned: Play, Copy stream URL, Send to OBS, Program Monitor, Tag, Select toggle, Delete.
+- [x] **Tag panel interactions parity**
+  - [x] Keep tag panel as drawer overlay (`.drawer-tag-panel`) rather than resizing/shrinking preview area.
+  - [x] Keep drawer tag toggle state reset behavior on open/close and focused-item transitions.
+  - [x] Preserve prompt-based tag edit API call path for now; defer full inline tag editor parity until dedicated pass.
+- [x] **OBS handoff affordances parity**
+  - [x] Surface drawer-level OBS pill with disabled state + unavailable-title affordance when integration context is missing.
+  - [x] Keep explicit warning toast fallback when OBS integration is unavailable.
+- [x] **Program Monitor handoff affordances parity**
+  - [x] Surface drawer-level Program Monitor pill with disabled state + unavailable-title affordance when integration context is missing.
+  - [x] Keep explicit warning toast fallback when Program Monitor integration is unavailable.
+- [x] **FX/tile rendering controls (included vs deferred)**
+  - [x] Included: preview/inspector UI parity only (drawer controls, overlay behavior, action availability state).
+  - [x] Deferred: static-only FX renderer controls/debug overlays (`window.__tilefx_*`, shader lifecycle probes, physical iPhone proof capture workflows).
+
+### Branch intake checklist (record-first, no assumptions)
+- [ ] Intake `me/explorer-shaders-and-compose-api-upgrades` changes into this parity matrix **after** recording concrete refs:
+  - [ ] commit hash: `TBD`
+  - [ ] compare range / identifier: `TBD`
+  - [ ] impacted preview/inspector files: `TBD`
+- [ ] Intake `tags.py` branch context into this parity matrix **after** recording concrete refs:
+  - [ ] commit hash: `TBD`
+  - [ ] compare range / identifier: `TBD`
+  - [ ] impacted preview/inspector files: `TBD`
+
 
 
 ## 2026-03-15 — Explorer compose parity in package (active)

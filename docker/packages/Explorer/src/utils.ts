@@ -177,6 +177,19 @@ export function buildStreamPathFromItem(item: MediaItem): string {
   return '';
 }
 
+
+export function canUseProgramMonitorIntegration(targetWindow: unknown): boolean {
+  if (!targetWindow || typeof targetWindow !== 'object') return false;
+  const maybeWindow = targetWindow as Window;
+  return typeof maybeWindow.open === 'function';
+}
+
+export function canUseObsIntegration(targetWindow: unknown): boolean {
+  if (!targetWindow || typeof targetWindow !== 'object') return false;
+  const maybeWindow = targetWindow as Window;
+  return Boolean(maybeWindow.document && typeof maybeWindow.document.createElement === 'function');
+}
+
 export async function sendToProgramMonitor(
   streamUrls: string[],
   descriptors: ProgramMonitorAssetDescriptor[],

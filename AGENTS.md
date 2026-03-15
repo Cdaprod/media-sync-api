@@ -1814,3 +1814,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer package compose parity now uses the existing bulk endpoint (`POST /api/assets/bulk/compose`) with a modal-driven output project/source/name prompt in `docker/packages/Explorer/src/ExplorerApp.tsx`.
 - Compose controls in both the Actions panel and select bar are enabled only when selected assets include at least one video, while payload ordering remains deterministic via ordered asset-ref mapping.
 - Successful compose requests now show artifact summary details and trigger scope-aware media refresh plus project reload; package README + tests were updated for compose guardrails/order/refresh coverage.
+
+### Latest Implementation Notes (2026-03-15)
+- Preview/inspector convergence in the Next.js Explorer now adopts static-parity drawer deltas only: drawer action set includes Program Monitor + OBS affordances with explicit unavailable-state disabling/toasts, preview media sizing adds audio + minimum height parity, and drawer tags stay as an overlay panel in `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`; intentionally deferred this pass are static-only FX/tile renderer/debug controls and full inline tag-editor parity (prompt-based tag edits remain in package explorer).
