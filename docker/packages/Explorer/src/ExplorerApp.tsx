@@ -24,6 +24,8 @@ import {
   kindBadgeClass,
   toAbsoluteUrl,
 } from './utils';
+import { AssetPreviewPanel } from './AssetPreviewPanel';
+import { normalizePreviewAsset } from './previewAdapter';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -355,6 +357,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const drawerMediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
 
   const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
@@ -471,6 +474,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     },
     [api],
   );
+
+  const normalizedPreviewAsset = useMemo(() => {
+    if (!focused) return null;
+    return normalizePreviewAsset(focused, resolveAssetUrl);
+  }, [focused, resolveAssetUrl]);
 
   const updateSidebarMode = useCallback(() => {
     const mobile = window.matchMedia('(max-width: 860px)').matches;
@@ -2099,27 +2107,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
         <div className="drawer-body">
           <div className="preview">
-            {focused ? (() => {
-              const kind = guessKind(focused);
-              if (kind === 'video') {
-                return (
-                  <video controls preload="metadata" src={resolveAssetUrl(focused.stream_url)} />
-                );
-              }
-              if (kind === 'image') {
-                const rawUrl = focused.stream_url || focused.thumb_url || focused.thumbnail_url || '';
-                return <img src={resolveAssetUrl(rawUrl)} alt="preview" />;
-              }
-              if (kind === 'audio') {
-                return <audio controls src={resolveAssetUrl(focused.stream_url)} />;
-              }
-              return (
-                <div style={{ padding: '14px', color: 'var(--muted)', fontSize: '12px' }}>
-                  No native preview for this type.<br />
-                  <span className="kbd">{kind}</span>
-                </div>
-              );
-            })() : null}
+            <AssetPreviewPanel
+              asset={normalizedPreviewAsset}
+              onMediaReady={(el) => {
+                drawerMediaRef.current = el;
+              }}
+            />
           </div>
 
           <div className="drawer-actions">
@@ -2127,11 +2120,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               className="btn"
               type="button"
               onClick={() => {
-                const mediaElement = document.querySelector('.drawer video, .drawer audio') as
-                  | HTMLVideoElement
-                  | HTMLAudioElement
-                  | null;
-                mediaElement?.play?.();
+                drawerMediaRef.current?.play?.();
               }}
             >
               ▶ Play

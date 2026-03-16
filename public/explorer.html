@@ -1316,21 +1316,120 @@
     .preview{
       border: 1px solid var(--border);
       border-radius: var(--radius2);
-      background: rgba(255,255,255,0.04);
+      background: #070b16;
       overflow:hidden;
+      position: relative;
+      min-height: 220px;
+    }
+    .preview-media,
+    .preview-media video,
+    .preview-media img,
+    .preview-media audio{
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      display:block;
+      background: rgba(0,0,0,0.30);
+      max-height: 52vh;
+      object-fit: contain;
+    }
+    .preview-shell{
+      position: relative;
+      min-height: 220px;
+      max-height: 52vh;
+      height: min(52vh, 420px);
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 20%, rgba(22,31,63,0.7), #070b16 58%);
+    }
+    .preview-media{
       display:flex;
       align-items:center;
       justify-content:center;
-      min-height: 220px;
     }
-    .preview video, .preview img, .preview audio{
-      width: 100%;
-      height: auto;
-      max-width: 100%;
-      display:block;
-      background: rgba(0,0,0,0.25);
-      max-height: 52vh;
-      object-fit: contain;
+    .preview-wave{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      opacity:.8;
+      pointer-events:none;
+    }
+    .preview-overlay{
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity .24s ease;
+      z-index: 3;
+    }
+    .preview-overlay.fade{
+      opacity: 0;
+    }
+    .preview-top,
+    .preview-bottom{
+      padding: 10px;
+      background: linear-gradient(to bottom, rgba(0,0,0,.78), transparent);
+    }
+    .preview-bottom{
+      background: linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,.32));
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .preview-kind{
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: rgba(201,214,255,.85);
+      display: inline-flex;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(100,116,255,.15);
+    }
+    .preview-title{
+      font-size: 12px;
+      font-weight: 650;
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .preview-path{
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .preview-chip{
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.45);
+      color: rgba(255,255,255,.8);
+    }
+    .preview-chip.badge{
+      color: #8fe2ff;
+      border-color: rgba(143,226,255,.35);
+    }
+    .preview-empty{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      gap:8px;
+      color: var(--muted);
+      font-size: 12px;
     }
 
     #mediaGrid,
@@ -5479,6 +5578,117 @@
     // -------------------------
     // Drawer / inspector
     // -------------------------
+    function buildPreviewModel(item){
+      const kind = guessKind(item);
+      const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
+      return {
+        kind,
+        title,
+        path: item.relative_path || '',
+        src: item.stream_url || item.streamUrl || '',
+        poster: item.thumb_url || item.thumbnail_url || item.stream_url || '',
+        duration: typeof item.duration === 'number' ? `${item.duration.toFixed(3)}s` : 'unknown',
+        resolution: (item.width && item.height) ? `${item.width}×${item.height}` : 'unknown',
+      };
+    }
+
+    function attachPreviewOverlayBehavior(preview, mediaElement){
+      const overlay = preview.querySelector('.preview-overlay');
+      if (!overlay || !mediaElement || (mediaElement.tagName !== 'VIDEO' && mediaElement.tagName !== 'AUDIO')) return;
+      let hideTimer = null;
+      const showOverlay = () => {
+        overlay.classList.remove('fade');
+        if (hideTimer){
+          clearTimeout(hideTimer);
+          hideTimer = null;
+        }
+      };
+      const scheduleHide = () => {
+        if (mediaElement.paused) return;
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+          overlay.classList.add('fade');
+        }, 1800);
+      };
+      mediaElement.addEventListener('play', scheduleHide);
+      mediaElement.addEventListener('pause', showOverlay);
+      mediaElement.addEventListener('ended', showOverlay);
+      preview.addEventListener('pointermove', () => {
+        showOverlay();
+        scheduleHide();
+      });
+      preview.addEventListener('pointerdown', showOverlay);
+    }
+
+    function startPreviewWaveform(canvas, audioEl){
+      if (!canvas || !audioEl || audioEl.tagName !== 'AUDIO') return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      let raf = 0;
+      const draw = () => {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        if (canvas.width !== Math.floor(rect.width * dpr) || canvas.height !== Math.floor(rect.height * dpr)) {
+          canvas.width = Math.floor(rect.width * dpr);
+          canvas.height = Math.floor(rect.height * dpr);
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+        const bars = 54;
+        const t = performance.now() / 260;
+        const energy = audioEl.paused ? 0.4 : 1;
+        for (let i = 0; i < bars; i++) {
+          const amp = (Math.sin((i * 0.55) + t) * 0.5 + 0.5) * energy;
+          const bh = Math.max(2, amp * h * 0.62);
+          const x = (w / bars) * i + 1;
+          const y = (h - bh) / 2;
+          ctx.fillStyle = `rgba(170,120,255,${0.12 + amp * 0.58})`;
+          ctx.fillRect(x, y, Math.max(2, (w / bars) - 3), bh);
+        }
+        raf = requestAnimationFrame(draw);
+      };
+      raf = requestAnimationFrame(draw);
+      audioEl.addEventListener('emptied', () => cancelAnimationFrame(raf), { once: true });
+    }
+
+    function renderDrawerPreview(preview, item){
+      const model = buildPreviewModel(item);
+      const mediaHtml = model.kind === 'audio'
+        ? `<audio class="preview-player" controls preload="metadata" src="${escapeHtml(model.src)}"></audio><canvas class="preview-wave"></canvas>`
+        : model.kind === 'video'
+          ? `<video class="preview-player" controls preload="metadata" playsinline src="${escapeHtml(model.src)}"></video>`
+          : model.kind === 'image'
+            ? `<img class="preview-player" src="${escapeHtml(model.src || model.poster)}" alt="${escapeHtml(model.title)}">`
+            : `<div class="preview-empty">No native preview for this type.<span class="kbd">${escapeHtml(model.kind)}</span></div>`;
+
+      preview.innerHTML = `
+        <div class="preview-shell">
+          <div class="preview-media">${mediaHtml}</div>
+          <div class="preview-overlay">
+            <div class="preview-top">
+              <span class="preview-kind">${escapeHtml(model.kind)}</span>
+              <div class="preview-title">${escapeHtml(model.title)}</div>
+              <div class="preview-path">${escapeHtml(model.path)}</div>
+            </div>
+            <div class="preview-bottom">
+              <span class="preview-chip badge">Duration: ${escapeHtml(model.duration)}</span>
+              <span class="preview-chip">Resolution: ${escapeHtml(model.resolution)}</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const media = preview.querySelector('video, audio');
+      attachPreviewOverlayBehavior(preview, media);
+      const waveCanvas = preview.querySelector('.preview-wave');
+      if (waveCanvas && media?.tagName === 'AUDIO'){
+        startPreviewWaveform(waveCanvas, media);
+      }
+      return media;
+    }
+
     // Drawer / inspector
     // -------------------------
     function openDrawer(item){
@@ -5491,8 +5701,9 @@
         }
       }
 
-      const kind = guessKind(item);
-      const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
+      const previewModel = buildPreviewModel(item);
+      const kind = previewModel.kind;
+      const title = previewModel.title;
       currentInspectorKey = String(item.sha256 || item.relative_path || item.stream_url || title || '');
       const inspectorToken = ++inspectorRequestToken;
       el('drawerTitle').textContent = title;
@@ -5500,33 +5711,7 @@
 
       // preview
       const preview = el('drawerPreview');
-      preview.innerHTML = '';
-      if (kind === 'video'){
-        const v = document.createElement('video');
-        v.controls = true;
-        v.src = item.stream_url || '';
-        v.preload = 'metadata';
-        v.playsInline = true;
-        v.setAttribute('playsinline', '');
-        preview.appendChild(v);
-      }else if (kind === 'image'){
-        const img = document.createElement('img');
-        img.src = item.stream_url || item.thumb_url || item.thumbnail_url || '';
-        img.alt = title;
-        preview.appendChild(img);
-      }else if (kind === 'audio'){
-        const a = document.createElement('audio');
-        a.controls = true;
-        a.src = item.stream_url || '';
-        preview.appendChild(a);
-      }else{
-        const box = document.createElement('div');
-        box.style.padding = '14px';
-        box.style.color = 'var(--muted)';
-        box.style.fontSize = '12px';
-        box.innerHTML = `No native preview for this type.<br><span class="kbd">${escapeHtml(kind)}</span>`;
-        preview.appendChild(box);
-      }
+      renderDrawerPreview(preview, item);
 
       // metadata table (show what you have; hides gracefully if missing)
       const kv = el('drawerKV');

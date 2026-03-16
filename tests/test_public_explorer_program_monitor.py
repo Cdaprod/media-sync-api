@@ -66,6 +66,18 @@ def test_explorer_ios_touch_guards_and_play_handler():
     assert "media.play?.().catch(() => {});" in html
 
 
+def test_explorer_drawer_uses_overlay_preview_renderer_without_fullscreen_takeover():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'function buildPreviewModel(item)' in html
+    assert 'function renderDrawerPreview(preview, item)' in html
+    assert 'preview-shell' in html
+    assert 'preview-overlay' in html
+    assert 'preview-wave' in html
+    assert 'function attachPreviewOverlayBehavior(preview, mediaElement)' in html
+    assert "setInspectorOpen(true);" in html
+    assert "<aside id=\"drawer\" class=\"drawer\"" in html
+
+
 def test_explorer_grid_responsive_rules_and_orientation_hooks():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert '--grid-col-width' in html
