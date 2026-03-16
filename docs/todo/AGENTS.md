@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Overlay hit-layer + wrapper removal pass (active)
+- [x] Fixed overlay hit testing in static/package preview by promoting overlay to interactive pointer layer.
+- [x] Disabled pointer hit interception when overlay fades so hidden controls do not block media taps.
+- [x] Removed legacy inner `.preview` wrapper framing so the immersive preview shell is now the direct drawer preview surface.
+- [x] Increased top-nav tap target sizes for iPhone Safari comfort.
+- [x] Re-ran package build/typecheck and preview regression suites after DOM/CSS simplification.
+- [ ] Verify on physical iPhone Safari that overlay controls are now consistently tappable during playback.
+
 ## 2026-03-16 — Package build/type regression fix (active)
 - [x] Fixed package `next build` type failure in focused resolve flow by aligning source argument to `string | undefined`.
 - [x] Narrowed focused resolve `media_rel_paths` to strict `string[]` with an explicit type predicate.

@@ -276,6 +276,9 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-16)
+- Fixed overlay hit-testing in both static and package explorers by making `.preview-overlay` the interactive layer (`pointer-events: auto`) while keeping hidden-state passthrough (`.fade` disables pointer events).
+- Removed the legacy inner preview wrapper container (`.preview`) so the immersive black preview shell is now the direct drawer preview surface rather than a nested boxed child.
+- Increased overlay nav button hit targets to improve iPhone Safari tap reliability and revalidated package build/tests after DOM/CSS simplification.
 - Fixed Next.js package build/type regression in `handleFocusedResolve` by passing `sourceName` as `string | undefined` (not `null`) and narrowing `media_rel_paths` to `string[]` with an explicit type predicate.
 - Verified package production build (`npm run build`) now completes successfully and reran package/static regression checks.
 - Preview drawer convergence pass completed for both static and Next.js explorers: overlay controls now own play/pause, seek, volume, prev/next, copy/select/delete actions, and old duplicate control rows were removed.

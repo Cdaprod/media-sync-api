@@ -2278,8 +2278,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </div>
 
         <div className="drawer-body">
-          <div className="preview">
-            <AssetPreviewPanel
+          <AssetPreviewPanel
               asset={normalizedPreviewAsset}
               onPrev={() => focusRelative(-1)}
               onNext={() => focusRelative(1)}
@@ -2304,7 +2303,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               onDetailsToggle={() => setPreviewDetailsOpen((prev) => !prev)}
               selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}
             />
-          </div>
         </div>
       </aside>
 

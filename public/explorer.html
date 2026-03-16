@@ -1313,14 +1313,6 @@
       overflow:auto;
       min-height: 0;
     }
-    .preview{
-      border: 1px solid var(--border);
-      border-radius: var(--radius2);
-      background: #070b16;
-      overflow:hidden;
-      position: relative;
-      min-height: 220px;
-    }
     .preview-media,
     .preview-media video,
     .preview-media img,
@@ -1383,13 +1375,14 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      pointer-events: none;
+      pointer-events: auto;
       opacity: 1;
       transition: opacity .24s ease;
       z-index: 3;
     }
     .preview-overlay.fade{
       opacity: 0;
+      pointer-events: none;
     }
     .preview-top,
     .preview-bottom{
@@ -1414,8 +1407,8 @@
       border: 1px solid rgba(255,255,255,0.2);
       background: rgba(0,0,0,0.36);
       color: rgba(255,255,255,0.9);
-      width: 30px;
-      height: 30px;
+      width: 42px;
+      height: 42px;
       border-radius: 10px;
       cursor: pointer;
     }
@@ -1525,8 +1518,7 @@
     .row,
     .drawer,
     .drawer-h,
-    .drawer-body,
-    .preview{
+    .drawer-body{
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
@@ -2061,7 +2053,7 @@
       </div>
 
       <div class="drawer-body">
-        <div class="preview" id="drawerPreview"></div>
+        <div id="drawerPreview"></div>
 
         <div class="tag-panel" id="drawerObsPanel">
           <div class="small">OBS Send settings</div>

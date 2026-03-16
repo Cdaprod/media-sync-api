@@ -72,6 +72,11 @@ def test_explorer_drawer_uses_overlay_preview_renderer_without_fullscreen_takeov
     assert 'function renderDrawerPreview(preview, item, handlers = {})' in html
     assert 'preview-shell' in html
     assert 'preview-overlay' in html
+    assert 'pointer-events: auto;' in html
+    assert '.preview-overlay.fade{' in html
+    assert 'pointer-events: none;' in html
+    assert '<div id="drawerPreview"></div>' in html
+    assert 'class="preview" id="drawerPreview"' not in html
     assert 'preview-wave' in html
     assert 'function attachPreviewOverlayBehavior(preview, mediaElement)' in html
     assert 'preview-center-play' in html
