@@ -88,6 +88,31 @@ npm test --silent
 
 Run tests from a clean dependency state (or after dependency changes) so the TypeScript-powered node test harness can resolve local dev dependencies deterministically.
 
+
+## Visual QA screenshot sanity check (package explorer + preview panel)
+
+Capture package screenshots from the Next.js app route with mock assets enabled so style inspections include drawer-preview behavior.
+
+```bash
+cd /workspace/media-sync-api/docker/packages/Explorer
+npm ci --silent
+npm run dev -- --hostname 127.0.0.1 --port 8790
+curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8790/?mock=1"
+curl -fsS "http://127.0.0.1:8790/?mock=1" | rg -q 'data-ui-hook="explorer-app-shell"' && echo "route-content-ok"
+```
+
+Expected output:
+- status code: `200`
+- content check: `route-content-ok`
+
+Use this URL in Playwright/browser tooling for package captures:
+
+```text
+http://127.0.0.1:8790/?mock=1
+```
+
+For preview-panel shots, click any mock media card so the drawer opens before taking the screenshot.
+
 ## Visual QA screenshot sanity check (static explorer)
 
 When capturing UI screenshots, serve the **repo root** so the static explorer route resolves correctly and does not return a white `Not Found` page.

@@ -18,6 +18,7 @@ import {
 import type { MediaActionRef, MediaMeta, MediaTypeFilter, SortKey } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
 import {
+  buildPreviewMediaDescriptor,
   buildProgramMonitorDescriptor,
   buildStreamPathFromItem,
   canUseObsIntegration,
@@ -26,6 +27,7 @@ import {
   decideExplorerBootMode,
   formatBytes,
   guessKind,
+  normalizePreviewKind,
   inferApiBaseUrl,
   kindBadgeClass,
   loadExplorerMockAssets,
@@ -1838,7 +1840,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     canUseObs: canObsIntegration,
     canUseProgramMonitor: canProgramMonitor,
   });
-  const previewKind = focused ? guessKind(focused) : null;
+  const previewKind = focused ? normalizePreviewKind(guessKind(focused)) : null;
   const drawerActionVisibility = getPreviewDrawerActionVisibility(previewKind);
   const projectLabel = (item: MediaItem) => {
     if (!item.project_name) return '';
@@ -2583,23 +2585,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <div className="drawer-body">
           <div className="preview">
             {focused ? (() => {
-              const kind = guessKind(focused);
-              if (kind === 'video') {
+              const descriptor = buildPreviewMediaDescriptor(focused, guessKind(focused));
+              if (descriptor.kind === 'video') {
                 return (
-                  <video controls preload="metadata" src={resolveAssetUrl(focused.stream_url)} />
+                  <video controls preload="metadata" src={resolveAssetUrl(descriptor.source)} />
                 );
               }
-              if (kind === 'image') {
-                const rawUrl = focused.stream_url || focused.thumb_url || focused.thumbnail_url || '';
-                return <img src={resolveAssetUrl(rawUrl)} alt="preview" />;
+              if (descriptor.kind === 'image') {
+                return <img src={resolveAssetUrl(descriptor.source)} alt="preview" />;
               }
-              if (kind === 'audio') {
-                return <audio controls src={resolveAssetUrl(focused.stream_url)} />;
+              if (descriptor.kind === 'audio') {
+                return <audio controls src={resolveAssetUrl(descriptor.source)} />;
               }
               return (
                 <div style={{ padding: '14px', color: 'var(--muted)', fontSize: '12px' }}>
                   No native preview for this type.<br />
-                  <span className="kbd">{kind}</span>
+                  <span className="kbd">{descriptor.kind}</span>
                 </div>
               );
             })() : null}

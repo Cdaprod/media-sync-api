@@ -1901,3 +1901,25 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-03-16)
 - Hardened screenshot QA guidance in `docker/packages/Explorer/README.md` to require both `200` status and route-content verification (`id="brandTitle"` -> `route-content-ok`) before trusting captures.
 - Expanded `docker/packages/Explorer/tests/utils-behavior.test.mjs` README contract assertions so screenshot-route and content-check guardrails remain enforced over future docs edits.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Integration pass kickoff for `me/explorer-shaders-and-compose-api-upgrades`: commit 1 unified preview primitives so static explorer imports `normalizePreviewKind` + `buildPreviewMediaDescriptor` from `public/js/asset-preview.mjs`, and package explorer now mirrors that descriptor helper in `docker/packages/Explorer/src/utils.ts` for typed preview source/title resolution.
+- Added contract-level test coverage in static + package suites to lock the new helper imports/usage before panel wiring commits.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Integration pass commit 2 wired preview rendering to shared descriptor helpers in both explorer implementations: static drawer now uses `buildPreviewMediaDescriptor(...)` + normalized kind handling, and package drawer preview media elements resolve through the same descriptor semantics for video/image/audio source selection.
+- Static contract assertions now lock preview helper imports and descriptor invocation in `public/explorer.html`.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Integration pass commit 3 carried topbar/section visual tokens across both explorers: added shared `--section-surface` and applied it to topbar gradient + section headers in `public/explorer.html` and `docker/packages/Explorer/src/styles.css` to keep style parity deterministic.
+- Added static/package contract assertions to keep the new section-surface token and section header background wiring from drifting.
+- Deferred API-upgrade deltas from `me/explorer-shaders-and-compose-api-upgrades` because that branch reference is not available in this local clone (no remote refs), and current compose API contract is already implemented/tested locally.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Added explicit package visual-QA screenshot guidance in `docker/packages/Explorer/README.md` for `http://127.0.0.1:8790/?mock=1`, including status/content guardrails (`data-ui-hook="explorer-app-shell"`) and a drawer-open preview capture note for style review.
+- Expanded `docker/packages/Explorer/tests/utils-behavior.test.mjs` README contract assertions to lock both static and package screenshot routes plus preview-panel capture instructions.
+- Captured package explorer mock screenshots for closed and open preview-panel states to support style inspection feedback cycles.

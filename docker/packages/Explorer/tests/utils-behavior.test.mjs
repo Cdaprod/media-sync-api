@@ -91,6 +91,19 @@ test('upload url helper omits undefined sources', () => {
 });
 
 
+
+test('preview descriptor helper normalizes kind and resolves image fallback source', () => {
+  const utils = loadTsModule(path.join(packageRoot, 'src', 'utils.ts'));
+  const descriptor = utils.buildPreviewMediaDescriptor({
+    relative_path: 'ingest/originals/clip.jpg',
+    stream_url: '',
+    thumb_url: '/media/thumb.jpg',
+  }, 'IMAGE');
+  assert.equal(descriptor.kind, 'image');
+  assert.equal(descriptor.source, '/media/thumb.jpg');
+  assert.equal(descriptor.title, 'clip.jpg');
+});
+
 test('mock asset loader prefers fixture paths before embedded fallback', async () => {
   const utils = loadTsModule(path.join(packageRoot, 'src', 'utils.ts'));
   const calls = [];
@@ -127,6 +140,8 @@ test('package styles keep section header + masonry grid contracts', () => {
   const app = fs.readFileSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx'), 'utf8');
   assert.match(css, /\.main\{[\s\S]*padding:\s*var\(--topbar-offset\)\s*0\s*0;/);
   assert.match(css, /\.section-h\{[\s\S]*position:\s*relative;/);
+  assert.match(css, /--section-surface:/);
+  assert.match(css, /\.section-h\{[\s\S]*background:\s*var\(--section-surface\);/);
   assert.match(css, /\.grid\{[\s\S]*grid-auto-flow:\s*dense;[\s\S]*grid-auto-rows:\s*8px;/);
   assert.match(css, /\.asset\{[\s\S]*grid-row:\s*span\s*var\(--asset-span,\s*46\);/);
   assert.match(app, /getGridAssetSpan/);
@@ -151,11 +166,14 @@ test('package explorer exposes topbar/section ui hook selectors for static parit
   assert.match(app, /data-ui-hook=\"projects-section-header\"/);
 });
 
-test('README documents static screenshot route to avoid Not Found captures', () => {
+test('README documents static and package screenshot routes with content checks', () => {
   const readme = fs.readFileSync(path.join(packageRoot, 'README.md'), 'utf8');
   assert.match(readme, /Visual QA screenshot sanity check/);
   assert.match(readme, /http:\/\/127\.0\.0\.1:8000\/public\/explorer\.html\?mock=1/);
+  assert.match(readme, /http:\/\/127\.0\.0\.1:8790\/\?mock=1/);
   assert.match(readme, /status code:\s*`200`/);
   assert.match(readme, /route-content-ok/);
   assert.match(readme, /id="brandTitle"/);
+  assert.match(readme, /data-ui-hook="explorer-app-shell"/);
+  assert.match(readme, /preview-panel shots, click any mock media card/i);
 });

@@ -59,6 +59,24 @@ export function guessKind(item: MediaItem): string {
   return 'document';
 }
 
+
+export function normalizePreviewKind(kind: string | null | undefined): string {
+  return String(kind || '').toLowerCase();
+}
+
+export function buildPreviewMediaDescriptor(item: MediaItem, kind: string | null | undefined): {
+  kind: string;
+  source: string;
+  title: string;
+} {
+  const normalizedKind = normalizePreviewKind(kind);
+  const streamUrl = String(item.stream_url || (item as MediaItem & { streamUrl?: string }).streamUrl || '');
+  const thumbUrl = String(item.thumb_url || item.thumbnail_url || '');
+  const source = normalizedKind === 'image' ? (streamUrl || thumbUrl) : streamUrl;
+  const title = String(item.relative_path || 'unnamed').split('/').pop() || 'unnamed';
+  return { kind: normalizedKind, source, title };
+}
+
 export function kindBadgeClass(kind: string): string {
   if (kind === 'video') return 'kind-video';
   if (kind === 'image') return 'kind-image';

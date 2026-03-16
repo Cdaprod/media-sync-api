@@ -171,19 +171,23 @@ def test_explorer_shader_asset_fx_wiring_present():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
 
     assert "import { AssetFX, ExplorerShaders, TileFXRenderer } from './js/explorer-shaders.mjs';" in html
-    assert "import { PREVIEW_ACTIONS, getPreviewActionVisibility } from './js/asset-preview.mjs';" in html
+    assert "import { PREVIEW_ACTIONS, buildPreviewMediaDescriptor, getPreviewActionVisibility, normalizePreviewKind } from './js/asset-preview.mjs';" in html
     assert 'data-preview-action="play"' in html
     assert 'data-preview-action="copy"' in html
     assert 'data-preview-action="tag"' in html
     assert 'data-preview-action="obs"' in html
     assert 'data-preview-action="delete"' in html
     assert 'getPreviewActionVisibility(kind)' in html
+    assert 'const descriptor = buildPreviewMediaDescriptor(item, kind);' in html
+    assert 'const kind = normalizePreviewKind(guessKind(item));' in html
     assert 'window.__assetfx_instance instanceof AssetFX' in html
     assert "const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root=\"1\"]') || g;" in html
     assert "cardFX.attachGrid(gridRoot, '.asset');" in html
     assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
     assert 'cardFX.pulse(selectedCard);' in html
     assert 'data-no-preview="1"' in html
+    assert '--section-surface:' in html
+    assert 'background: var(--section-surface);' in html
     assert 'loading="eager" decoding="async" fetchpriority="high"' in html
     assert 'const THUMB_APPLY_PER_FRAME = 48;' in html
     assert 'function enqueueThumbApply(task)' in html

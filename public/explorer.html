@@ -10,6 +10,7 @@
       --bg: #0b1020;
       --panel: rgba(255,255,255,0.06);
       --panel2: rgba(255,255,255,0.09);
+      --section-surface: color-mix(in srgb, var(--panel) 88%, #0f172a 12%);
       --border: rgba(255,255,255,0.10);
       --grid-gap: 4px;
       --grid-col-width: 160px;
@@ -159,7 +160,7 @@
       left: 0;
       right: 0;
       z-index: var(--z-topbar);
-      background: rgba(11,16,32,0.65);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--section-surface) 82%, #0b1220 18%), color-mix(in srgb, var(--section-surface) 72%, #020617 28%));
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
@@ -594,7 +595,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      background: rgba(11,16,32,0.55);
+      background: var(--section-surface);
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
@@ -1954,7 +1955,7 @@
 
   <script type="module">
     import { AssetFX, ExplorerShaders, TileFXRenderer } from './js/explorer-shaders.mjs';
-    import { PREVIEW_ACTIONS, getPreviewActionVisibility } from './js/asset-preview.mjs';
+    import { PREVIEW_ACTIONS, buildPreviewMediaDescriptor, getPreviewActionVisibility, normalizePreviewKind } from './js/asset-preview.mjs';
     import { isLikelyPreviewEnvironment, loadExplorerMockAssets, normalizeExplorerMockAsset, shouldUseExplorerMocks } from './js/explorer-mock-assets.mjs';
 
     void ExplorerShaders;
@@ -5492,8 +5493,9 @@
         }
       }
 
-      const kind = guessKind(item);
-      const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
+      const kind = normalizePreviewKind(guessKind(item));
+      const descriptor = buildPreviewMediaDescriptor(item, kind);
+      const title = descriptor.title;
       currentInspectorKey = String(item.sha256 || item.relative_path || item.stream_url || title || '');
       const inspectorToken = ++inspectorRequestToken;
       el('drawerTitle').textContent = title;
@@ -5505,20 +5507,20 @@
       if (kind === 'video'){
         const v = document.createElement('video');
         v.controls = true;
-        v.src = item.stream_url || '';
+        v.src = descriptor.source;
         v.preload = 'metadata';
         v.playsInline = true;
         v.setAttribute('playsinline', '');
         preview.appendChild(v);
       }else if (kind === 'image'){
         const img = document.createElement('img');
-        img.src = item.stream_url || item.thumb_url || item.thumbnail_url || '';
+        img.src = descriptor.source;
         img.alt = title;
         preview.appendChild(img);
       }else if (kind === 'audio'){
         const a = document.createElement('audio');
         a.controls = true;
-        a.src = item.stream_url || '';
+        a.src = descriptor.source;
         preview.appendChild(a);
       }else{
         const box = document.createElement('div');

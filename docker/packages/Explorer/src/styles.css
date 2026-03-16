@@ -2,6 +2,7 @@
   --bg: #0b1020;
   --panel: rgba(255,255,255,0.06);
   --panel2: rgba(255,255,255,0.09);
+  --section-surface: color-mix(in srgb, var(--panel) 88%, #0f172a 12%);
   --border: rgba(255,255,255,0.10);
   --grid-gap: 4px;
   --grid-col-width: 160px;
@@ -92,7 +93,7 @@ code { font-family: var(--mono); }
   left: 0;
   right: 0;
   z-index: 40;
-  background: rgba(11,16,32,0.65);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--section-surface) 82%, #0b1220 18%), color-mix(in srgb, var(--section-surface) 72%, #020617 28%));
   border-bottom: 1px solid rgba(255,255,255,0.06);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -517,7 +518,7 @@ select.control{
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  background: rgba(11,16,32,0.55);
+  background: var(--section-surface);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
