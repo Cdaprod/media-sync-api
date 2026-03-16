@@ -1814,3 +1814,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Package Explorer now uses `normalizePreviewAsset` + `AssetPreviewPanel` modules to keep preview rendering maintainable and adapter-oriented; drawer business actions remain owned by `ExplorerApp`.
 - Fixed a package Explorer runtime ordering bug: `normalizedPreviewAsset` now initializes after `resolveAssetUrl` callback declaration to prevent TDZ render failures in `ExplorerApp`.
 - Continued preview phase-2 convergence: static and package drawers now include center-play affordances, top overlay nav controls (prev/next/close), integrated bottom-stack playback controls (time/scrubber/volume), and in-preview action pills mapped back to existing drawer business logic.
+- Package preview media surface now toggles playback on tap/click via `handleMediaTapToggle`, matching static Explorer tap-to-play affordance for video/audio assets.

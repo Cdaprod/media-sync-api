@@ -215,6 +215,12 @@ export function AssetPreviewPanel({
     else media.pause();
   };
 
+
+  const handleMediaTapToggle = () => {
+    if (!playable) return;
+    handleTogglePlay();
+  };
+
   const handleSeek = (value: number) => {
     const media = mediaRef.current;
     if (!media) return;
@@ -255,7 +261,7 @@ export function AssetPreviewPanel({
 
   return (
     <div className="preview-shell" onPointerMove={() => setOverlayVisible(true)} onPointerDown={() => setOverlayVisible(true)}>
-      <div className="preview-media">{mediaNode}</div>
+      <div className="preview-media" onClick={handleMediaTapToggle}>{mediaNode}</div>
       {asset.kind === 'audio' ? <canvas ref={canvasRef} className="preview-wave" /> : null}
       <div className={`preview-overlay ${overlayVisible ? '' : 'fade'}`}>
         <div className="preview-top">
