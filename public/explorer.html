@@ -1297,11 +1297,27 @@
       justify-content: stretch;
       overflow: hidden;
       background: radial-gradient(circle at 50% 20%, rgba(22,31,63,0.7), #070b16 58%);
+      isolation: isolate;
+    }
+    .preview-shell::after{
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background:
+        radial-gradient(140% 100% at 50% 50%, rgba(8,12,26,0) 56%, rgba(8,12,26,0.44) 100%),
+        linear-gradient(180deg, rgba(170,189,245,0.10), rgba(13,17,33,0.08));
+      box-shadow:
+        inset 0 0 0 1px rgba(158,176,234,0.16),
+        inset 0 0 52px rgba(8,12,24,0.54);
     }
     .preview-media{
       display:flex;
       align-items:center;
       justify-content:center;
+      position: relative;
+      z-index: 1;
     }
     .preview-wave{
       position:absolute;
@@ -1310,6 +1326,7 @@
       height:100%;
       opacity:.8;
       pointer-events:none;
+      z-index: 1;
     }
     .preview-overlay{
       position: absolute;
@@ -1320,7 +1337,7 @@
       pointer-events: auto;
       opacity: 1;
       transition: opacity .24s ease;
-      z-index: 3;
+      z-index: 4;
     }
     .preview-overlay.fade{
       opacity: 0;
@@ -1595,6 +1612,12 @@
       .drawer{ height: 85%; top: auto; bottom: 0; border-left: none; border-top: 1px solid var(--border); transform: translateY(110%); right:0; width:100%; }
       .drawer.open{ transform: translateY(0%); }
       .sidebar.sidebar-drawer{ top: 52px; height: calc(100% - 52px); border-radius: 0; }
+      .preview-shell::after{
+        background: radial-gradient(130% 98% at 50% 50%, rgba(5,8,20,0) 52%, rgba(5,8,20,0.56) 100%);
+        box-shadow:
+          inset 0 0 0 1px rgba(174,193,248,0.26),
+          inset 0 0 64px rgba(5,8,20,0.62);
+      }
       .mobile-only{ display:block; }
     }
     @media (max-width: 860px){
@@ -3231,6 +3254,7 @@
     const orientationCache = new Map();
     let inspectorRequestToken = 0;
     let currentInspectorKey = '';
+    let activePreviewCleanup = null;
 
     // -------------------------
     // Utils
@@ -5572,7 +5596,9 @@
 
     function attachPreviewOverlayBehavior(preview, mediaElement){
       const overlay = preview.querySelector('.preview-overlay');
-      if (!overlay || !mediaElement || (mediaElement.tagName !== 'VIDEO' && mediaElement.tagName !== 'AUDIO')) return;
+      if (!overlay || !mediaElement || (mediaElement.tagName !== 'VIDEO' && mediaElement.tagName !== 'AUDIO')) {
+        return () => {};
+      }
       let hideTimer = null;
       const showOverlay = () => {
         overlay.classList.remove('fade');
@@ -5588,14 +5614,23 @@
           overlay.classList.add('fade');
         }, 1800);
       };
+      const handlePointerMove = () => {
+        showOverlay();
+        scheduleHide();
+      };
       mediaElement.addEventListener('play', scheduleHide);
       mediaElement.addEventListener('pause', showOverlay);
       mediaElement.addEventListener('ended', showOverlay);
-      preview.addEventListener('pointermove', () => {
-        showOverlay();
-        scheduleHide();
-      });
+      preview.addEventListener('pointermove', handlePointerMove);
       preview.addEventListener('pointerdown', showOverlay);
+      return () => {
+        mediaElement.removeEventListener('play', scheduleHide);
+        mediaElement.removeEventListener('pause', showOverlay);
+        mediaElement.removeEventListener('ended', showOverlay);
+        preview.removeEventListener('pointermove', handlePointerMove);
+        preview.removeEventListener('pointerdown', showOverlay);
+        if (hideTimer) clearTimeout(hideTimer);
+      };
     }
 
     function startPreviewWaveform(canvas, audioEl){
@@ -5629,6 +5664,18 @@
       };
       raf = requestAnimationFrame(draw);
       audioEl.addEventListener('emptied', () => cancelAnimationFrame(raf), { once: true });
+    }
+
+
+    function stopPreviewMedia(media){
+      if (!media) return;
+      try { media.pause?.(); } catch {}
+      try { media.currentTime = 0; } catch {}
+      try {
+        if (media.tagName === 'VIDEO' || media.tagName === 'AUDIO') {
+          media.load?.();
+        }
+      } catch {}
     }
 
     function renderDrawerPreview(preview, item, handlers = {}){
@@ -5691,11 +5738,23 @@
 
       const media = preview.querySelector('video, audio');
       const playPills = preview.querySelectorAll('[data-preview-play]');
-      attachPreviewOverlayBehavior(preview, media);
+      const previewOverlay = preview.querySelector('.preview-overlay');
+      const previewMediaStage = preview.querySelector('.preview-media');
+      const detachOverlayBehavior = attachPreviewOverlayBehavior(preview, media);
       const waveCanvas = preview.querySelector('.preview-wave');
       if (waveCanvas && media?.tagName === 'AUDIO'){
         startPreviewWaveform(waveCanvas, media);
       }
+      const handleSurfaceTapToggle = (event) => {
+        if (!playable || !media) return;
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.closest('button, input, select, label, a, .preview-details')) return;
+        handlers.onPlay?.(media);
+      };
+      previewMediaStage?.addEventListener('click', handleSurfaceTapToggle);
+      previewOverlay?.addEventListener('click', handleSurfaceTapToggle);
+
       if (media){
         const scrubber = preview.querySelector('[data-preview-scrubber]');
         const vol = preview.querySelector('[data-preview-volume]');
@@ -5793,9 +5852,17 @@
         detailsBtn.textContent = detailsPanel?.classList.contains('open') ? 'Hide details' : 'Show details';
       });
 
+      const cleanup = () => {
+        previewMediaStage?.removeEventListener('click', handleSurfaceTapToggle);
+        previewOverlay?.removeEventListener('click', handleSurfaceTapToggle);
+        detachOverlayBehavior?.();
+        stopPreviewMedia(media);
+      };
+
       return {
         media,
         detailsPanel,
+        cleanup,
         setSelectLabel: (isSelected) => {
           const selectBtn = preview.querySelector('[data-preview-select]');
           if (selectBtn) selectBtn.textContent = isSelected ? '− Deselect' : '+ Select';
@@ -5817,6 +5884,8 @@
     // Drawer / inspector
     // -------------------------
     function openDrawer(item, options = {}){
+      activePreviewCleanup?.();
+      activePreviewCleanup = null;
       state.focused = item;
       if (item?.relative_path && (state.activeProject || state.mediaScope === 'all')){
         const key = selectionKey(item);
@@ -5922,6 +5991,7 @@
         onNext: () => focusNeighborInDrawer(1),
       });
       previewApi?.setSelectLabel(state.selected.has(selectionKey(item)));
+      activePreviewCleanup = previewApi?.cleanup || null;
       const previewMedia = previewApi?.media;
       if (options.autoPlay && previewMedia?.tagName === 'VIDEO') {
         previewMedia.currentTime = 0;
@@ -6021,6 +6091,8 @@
     }
 
     function closeDrawer(){
+      activePreviewCleanup?.();
+      activePreviewCleanup = null;
       setInspectorOpen(false);
       state.focused = null;
       currentInspectorKey = '';

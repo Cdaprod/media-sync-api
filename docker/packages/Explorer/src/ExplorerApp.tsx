@@ -675,6 +675,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
+    setFocused(null);
+    setPreviewDetailsOpen(false);
   }, []);
 
   const focusRelative = useCallback((offset: number) => {

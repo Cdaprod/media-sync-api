@@ -57,6 +57,9 @@ test('preview adapter and panel keep drawer-based preview contract', () => {
   assert.ok(panel.includes('onTag'));
   assert.ok(panel.includes('onResolve'));
   assert.ok(panel.includes('onProgramMonitor'));
+  assert.ok(panel.includes('stopMediaPlayback'));
+  assert.ok(panel.includes('handleOverlayTapToggle'));
+  assert.ok(panel.includes('onClick={handleClose}'));
   assert.ok(panel.includes('preview-obs-row'));
   assert.ok(panel.includes('obsMode'));
   assert.ok(styles.includes('.preview-shell'));
@@ -66,6 +69,7 @@ test('preview adapter and panel keep drawer-based preview contract', () => {
   assert.ok(styles.includes('.preview-obs-row'));
   assert.ok(styles.includes('width: min(640px, 100vw);'));
   assert.ok(styles.includes('.preview-shell::after'));
+  assert.ok(styles.includes('@media (max-width: 860px){'));
   assert.ok(!styles.includes('max-height: 70vh;'));
 });
 

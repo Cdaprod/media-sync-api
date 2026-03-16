@@ -64,6 +64,7 @@ def test_explorer_ios_touch_guards_and_play_handler():
     assert "if (target.hasPointerCapture(pointerId))" in html
     assert "media.load?.();" in html
     assert "media.play?.().catch(() => {});" in html
+    assert 'handleSurfaceTapToggle' in html
 
 
 def test_explorer_drawer_uses_overlay_preview_renderer_without_fullscreen_takeover():
@@ -79,11 +80,13 @@ def test_explorer_drawer_uses_overlay_preview_renderer_without_fullscreen_takeov
     assert 'class="preview" id="drawerPreview"' not in html
     assert 'preview-wave' in html
     assert 'function attachPreviewOverlayBehavior(preview, mediaElement)' in html
+    assert 'function stopPreviewMedia(media)' in html
     assert 'preview-center-play' not in html
     assert 'preview-scrubber' in html
     assert 'data-preview-prev="1"' in html
     assert 'function focusNeighborInDrawer(offset)' in html
     assert "setInspectorOpen(true);" in html
+    assert 'activePreviewCleanup?.();' in html
     assert "<aside id=\"drawer\" class=\"drawer\"" in html
 
 

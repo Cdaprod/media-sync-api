@@ -76,6 +76,15 @@ export function AssetPreviewPanel({
 
   const playable = asset?.kind === 'video' || asset?.kind === 'audio';
 
+  const stopMediaPlayback = () => {
+    const media = mediaRef.current;
+    if (!media) return;
+    media.pause();
+    media.currentTime = 0;
+    setIsPlaying(false);
+    setCurrentTime(0);
+  };
+
   useEffect(() => {
     setOverlayVisible(true);
     setIsPlaying(false);
@@ -85,6 +94,13 @@ export function AssetPreviewPanel({
 
   useEffect(() => {
     onMediaReady?.(mediaRef.current);
+  }, [asset?.id, onMediaReady]);
+
+  useEffect(() => {
+    return () => {
+      stopMediaPlayback();
+      onMediaReady?.(null);
+    };
   }, [asset?.id, onMediaReady]);
 
   useEffect(() => {
@@ -221,6 +237,19 @@ export function AssetPreviewPanel({
     handleTogglePlay();
   };
 
+  const handleOverlayTapToggle: React.MouseEventHandler<HTMLDivElement> = (event) => {
+    if (!playable) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest('button, input, select, label, a, .preview-details')) return;
+    handleTogglePlay();
+  };
+
+  const handleClose = () => {
+    stopMediaPlayback();
+    onClose?.();
+  };
+
   const handleSeek = (value: number) => {
     const media = mediaRef.current;
     if (!media) return;
@@ -263,14 +292,14 @@ export function AssetPreviewPanel({
     <div className="preview-shell" onPointerMove={() => setOverlayVisible(true)} onPointerDown={() => setOverlayVisible(true)}>
       <div className="preview-media" onClick={handleMediaTapToggle}>{mediaNode}</div>
       {asset.kind === 'audio' ? <canvas ref={canvasRef} className="preview-wave" /> : null}
-      <div className={`preview-overlay ${overlayVisible ? '' : 'fade'}`}>
+      <div className={`preview-overlay ${overlayVisible ? '' : 'fade'}`} onClick={handleOverlayTapToggle}>
         <div className="preview-top">
           <div className="preview-top-row">
             <span className={`preview-kind kind-${asset.kind}`}>{asset.kind.toUpperCase()}</span>
             <div className="preview-nav">
               <button className="preview-icon-btn" type="button" onClick={onPrev} aria-label="Previous">‹</button>
               <button className="preview-icon-btn" type="button" onClick={onNext} aria-label="Next">›</button>
-              <button className="preview-icon-btn" type="button" onClick={onClose} aria-label="Close">✕</button>
+              <button className="preview-icon-btn" type="button" onClick={handleClose} aria-label="Close">✕</button>
             </div>
           </div>
           <div className="preview-title">{asset.name}</div>

@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Drawer regression hotfix: tap-toggle + close cleanup + mobile edge fallback (active)
+- [x] Restored media-surface tap/click toggle behavior for preview playback while guarding overlay control taps from accidental background toggles.
+- [x] Added drawer preview cleanup hooks so close/unmount/asset-switch always pause/reset active media and stop preview listeners/loops.
+- [x] Preserved prev/next autoplay while keeping manual play/pause controls functional after navigation.
+- [x] Added mobile-safe atmospheric edge fallback tuning so preview falloff remains visible on iPhone Safari without heavy effects.
+- [x] Updated package/static regression assertions for tap-toggle hooks, cleanup helpers, and edge fallback markers.
+- [ ] Validate on physical iPhone Safari that close always silences media immediately and edge falloff remains visible under low-brightness conditions.
+
 ## 2026-03-16 — Drawer media-stage sizing + atmospheric edge pass (active)
 - [x] Expanded package drawer width and tightened drawer-body spacing so the preview stage can use more of the drawer footprint.
 - [x] Removed package preview shell/media hard `70vh` caps and moved to flex-growth sizing so media can fill available drawer space.
