@@ -147,13 +147,13 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('buildThumbFallback'));
 });
 
-test('all-project clicks still open the drawer without selection', () => {
+test('asset tile preview open path requires second tap intent', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
-  assert.ok(content.includes('assetSelectionKey'));
-  assert.ok(content.includes('selectedKeysOrdered'));
-  assert.ok(content.includes('data-no-preview="1"'));
-  assert.ok(content.includes('openDrawer(item)'));
+  assert.ok(content.includes('lastTileTapRef'));
+  assert.ok(content.includes('const isSecondTap = prevTap.key === itemKey'));
+  assert.ok(content.includes('if (isSecondTap) {'));
+  assert.ok(content.includes('openDrawer(item);'));
 });
 
 test('compose action filters selected assets to videos', () => {
@@ -235,4 +235,17 @@ test('package explorer styles include static-parity selected glow and order badg
   assert.ok(styles.includes('rgba(74,240,192,0.92)'));
   assert.ok(styles.includes('.selector .sel-order'));
   assert.ok(styles.includes('.asset.is-selected .selector .sel-order'));
+});
+
+
+test('package explorer topbar layout follows static two-row structure', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(content.includes('<div className="topbar"'));
+  assert.ok(content.includes('<div className="section-h">'));
+  assert.ok(styles.includes('--topbar-subrow-height'));
+  assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
+  assert.ok(styles.includes('.content .scroll{'));
 });

@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Explorer package parity follow-up: second-tap open + topbar/layout alignment (active)
+- [x] Added second-tap tile-open gating in package Explorer so first tile tap no longer opens preview accidentally.
+- [x] Fixed selected order badge color parity by restoring package `--asset-accent` token usage for selector numbering.
+- [x] Reworked package topbar/content framing toward static parity (two-row topbar with media meta subrow and reduced grid boxing padding).
+- [x] Updated package regression assertions for second-tap open flow and topbar/layout parity markers.
+- [ ] Validate on physical iPhone Safari that second tap/long-press interactions match static Explorer and that topbar/grid spacing remains comfortable in portrait.
+
 ## 2026-03-16 — Explorer package asset interaction/context parity slice (active)
 - [x] Ported static tile pointer semantics so package tile taps open/close preview predictably and selection is limited to explicit selector targets.
 - [x] Added no-preview hit-zone guards for selector chrome to prevent accidental preview/context behavior when toggling selection.

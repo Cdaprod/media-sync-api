@@ -367,6 +367,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const selectedOrderRef = useRef<string[]>([]);
+  const lastTileTapRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
 
   const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
     const relativePath = String(item.relative_path || '').trim();
@@ -1282,11 +1283,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           }
           return;
         }
+        const now = Date.now();
         if (inspectorOpen) {
           closeDrawer();
+          lastTileTapRef.current = { key: '', at: 0 };
           return;
         }
-        openDrawer(item);
+        const prevTap = lastTileTapRef.current;
+        const isSecondTap = prevTap.key === itemKey && (now - prevTap.at) <= 900;
+        if (isSecondTap) {
+          openDrawer(item);
+          lastTileTapRef.current = { key: '', at: 0 };
+          return;
+        }
+        lastTileTapRef.current = { key: itemKey, at: now };
       };
 
       const handlePointerCancel = () => {
@@ -1867,6 +1877,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             </div>
           </div>
         </div>
+        <div className="section-h">
+          <h2>{contentTitle}</h2>
+          <div className="meta-line">
+            <span>{filteredMedia.length} items</span>
+            <span>•</span>
+            <span className="kbd">{activePath}</span>
+          </div>
+        </div>
       </div>
 
       <div className="main">
@@ -2104,15 +2122,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <div className="spinner"></div>
             <div>Preparing thumbnails…</div>
           </div>
-          <div className="section-h">
-            <h2>{contentTitle}</h2>
-            <div className="meta-line">
-              <span>{filteredMedia.length} items</span>
-              <span>•</span>
-              <span className="kbd">{activePath}</span>
-            </div>
-          </div>
-
           <div className="scroll">
             <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
               {!activeProject && mediaScope !== 'all' ? (
