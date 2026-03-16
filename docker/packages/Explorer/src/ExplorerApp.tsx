@@ -10,9 +10,10 @@ import {
   extractTags,
   filterMedia,
   pruneSelection,
+  selectionOrderIndexMap,
   sortMedia,
   sortMediaByRecent,
-  toggleSelection,
+  toggleSelectionWithOrder,
 } from './state';
 import type { MediaMeta, MediaTypeFilter, SortKey } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
@@ -333,6 +334,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [selectedOnly, setSelectedOnly] = useState(false);
   const [untaggedOnly, setUntaggedOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -364,6 +366,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const brandRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
+  const selectedOrderRef = useRef<string[]>([]);
 
   const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
     const relativePath = String(item.relative_path || '').trim();
@@ -412,9 +415,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `${selected.size} item(s) queued.`
     : 'Select clips to enable.';
 
+  const clearSelectionState = useCallback(() => {
+    setSelected(new Set());
+    setSelectedOrder([]);
+  }, []);
+
+  const inNoPreviewZone = useCallback((target: EventTarget | null) => {
+    const node = target instanceof HTMLElement ? target : null;
+    return Boolean(node?.closest?.('[data-no-preview], .sel-ui'));
+  }, []);
+
   useEffect(() => {
     orientationCacheRef.current = readOrientationCache();
   }, []);
+
+  useEffect(() => {
+    selectedOrderRef.current = selectedOrder;
+  }, [selectedOrder]);
 
   const getCachedOrientation = useCallback((key: string) => {
     return orientationCacheRef.current.get(key) ?? null;
@@ -582,7 +599,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (!project) {
         setMedia([]);
         setMediaScope('project');
-        setSelected(new Set());
+        clearSelectionState();
         return;
       }
       try {
@@ -591,17 +608,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setMedia(sortMediaByRecent(items));
         setMediaScope('project');
         const existing = new Set(items.map((item) => assetSelectionKey(item, project)));
-        setSelected((current) => pruneSelection(current, existing));
+        setSelected((current) => {
+          const next = pruneSelection(current, existing);
+          setSelectedOrder((order) => order.filter((value) => next.has(value)));
+          return next;
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load media';
         addToast('bad', 'Media', message);
       }
     },
-    [api, addToast, assetSelectionKey],
+    [api, addToast, assetSelectionKey, clearSelectionState],
   );
 
   const loadAllMedia = useCallback(async () => {
-    setSelected(new Set());
+    clearSelectionState();
     setFocused(null);
     setMediaScope('all');
     if (!projects.length) {
@@ -626,7 +647,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     }
     setMedia(sortMediaByRecent(gathered));
-  }, [addToast, api, projects]);
+  }, [addToast, api, clearSelectionState, projects]);
 
   const refreshAll = useCallback(async () => {
     await loadSources();
@@ -643,7 +664,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     (project: Project) => {
       setActiveProject(project);
       setMediaScope('project');
-      setSelected(new Set());
+      clearSelectionState();
       setFocused(null);
       setResolveProjectMode('current');
       setResolveProjectName(project.name || '');
@@ -651,21 +672,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setUploadStatus('');
       addToast('good', 'Project', `Selected ${project.name}`);
     },
-    [addToast],
+    [addToast, clearSelectionState],
   );
 
   const toggleSelected = useCallback(
     (item: MediaItem) => {
       const key = assetSelectionKey(item, activeProject);
       if (!key) return;
-      setSelected((current) => toggleSelection(current, key));
+      setSelected((current) => {
+        const { selected: nextSelected, order } = toggleSelectionWithOrder(current, selectedOrderRef.current, key);
+        selectedOrderRef.current = order;
+        setSelectedOrder(order);
+        return nextSelected;
+      });
     },
     [activeProject, assetSelectionKey],
   );
 
   const clearSelection = useCallback(() => {
-    setSelected(new Set());
-  }, []);
+    clearSelectionState();
+  }, [clearSelectionState]);
 
   const openDrawer = useCallback((item: MediaItem) => {
     setFocused(item);
@@ -752,9 +778,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       .filter(Boolean);
   }, [activeProject, assetSelectionKey]);
 
+  const selectedKeysOrdered = useMemo(() => {
+    const ordered = selectedOrder.filter((value) => selected.has(value));
+    const extras = Array.from(selected).filter((value) => !ordered.includes(value));
+    return [...ordered, ...extras];
+  }, [selected, selectedOrder]);
+
   const selectionItems = useMemo(
-    () => resolveItemsForSelection(Array.from(selected)),
-    [resolveItemsForSelection, selected],
+    () => resolveItemsForSelection(selectedKeysOrdered),
+    [resolveItemsForSelection, selectedKeysOrdered],
   );
   const selectedVideoItems = useMemo(
     () => selectionItems.filter((item) => guessKind(item) === 'video'),
@@ -1190,8 +1222,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         timer = null;
       };
 
+      const resolveContextItems = () => (selected.has(itemKey)
+        ? selectedKeysOrdered
+          .map((path) => itemsBySelectionKey.get(path))
+          .filter((entry): entry is MediaItem => Boolean(entry))
+        : [item]);
+
       const handlePointerDown = (event: React.PointerEvent) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if (inNoPreviewZone(event.target)) return;
         if ((event.target as HTMLElement).closest('input, button, a, summary')) return;
         pointerId = event.pointerId;
         startX = event.clientX;
@@ -1202,17 +1241,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         event.currentTarget.setPointerCapture(pointerId);
         clearTimer();
         timer = window.setTimeout(() => {
-          const selectedItems = selected.has(itemKey)
-            ? Array.from(selected)
-              .map((path) => itemsBySelectionKey.get(path))
-              .filter((entry): entry is MediaItem => Boolean(entry))
-            : [item];
-          openContextMenu(pressX, pressY, selectedItems);
+          openContextMenu(pressX, pressY, resolveContextItems());
         }, LONG_PRESS_MS);
       };
 
       const handlePointerMove = (event: React.PointerEvent) => {
         if (pointerId !== event.pointerId) return;
+        if (inNoPreviewZone(event.target)) return;
         const dx = event.clientX - startX;
         const dy = event.clientY - startY;
         if (!moved && (dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
@@ -1221,7 +1256,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           setDragging(true);
           setAssetDragActive(true);
           dragPathsRef.current = selected.has(itemKey)
-            ? Array.from(selected)
+            ? selectedKeysOrdered
             : [itemKey];
           if (event.clientY <= 56) setTopbarHidden(false);
         }
@@ -1230,7 +1265,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const handlePointerUp = (event: React.PointerEvent) => {
         if (pointerId !== event.pointerId) return;
         clearTimer();
-        event.currentTarget.releasePointerCapture(pointerId);
+        if (event.currentTarget.hasPointerCapture(pointerId)) {
+          event.currentTarget.releasePointerCapture(pointerId);
+        }
         pointerId = null;
         if (moved) {
           setDragging(false);
@@ -1245,14 +1282,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           }
           return;
         }
-        const selectionEnabled = Boolean(activeProject) || mediaScope === 'all';
-        if (selected.has(itemKey)) {
-          openDrawer(item);
-        } else if (selectionEnabled) {
-          toggleSelected(item);
-        } else {
-          openDrawer(item);
+        if (inspectorOpen) {
+          closeDrawer();
+          return;
         }
+        openDrawer(item);
       };
 
       const handlePointerCancel = () => {
@@ -1263,15 +1297,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       };
 
       const handleContextMenu = (event: React.MouseEvent) => {
+        if (inNoPreviewZone(event.target)) return;
         event.preventDefault();
         if (dragging) return;
-        const itemKey = assetSelectionKey(item, activeProject);
-        const selectedItems = selected.has(itemKey)
-          ? Array.from(selected)
-            .map((path) => itemsBySelectionKey.get(path))
-            .filter((entry): entry is MediaItem => Boolean(entry))
-          : [item];
-        openContextMenu(event.clientX, event.clientY, selectedItems);
+        openContextMenu(event.clientX, event.clientY, resolveContextItems());
       };
 
       return {
@@ -1282,7 +1311,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onContextMenu: handleContextMenu,
       };
     },
-    [activeProject, assetSelectionKey, dragging, itemsBySelectionKey, mediaScope, moveMediaSelection, openContextMenu, openDrawer, projects, selected, toggleSelected],
+    [
+      activeProject,
+      assetSelectionKey,
+      closeDrawer,
+      dragging,
+      inNoPreviewZone,
+      inspectorOpen,
+      itemsBySelectionKey,
+      moveMediaSelection,
+      openContextMenu,
+      openDrawer,
+      projects,
+      selected,
+      selectedKeysOrdered,
+    ],
   );
 
   const handlePreviewSelected = useCallback(() => {
@@ -1566,6 +1609,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const selectedCount = selected.size;
+  const selectedOrderMap = useMemo(() => selectionOrderIndexMap(selected, selectedOrder), [selected, selectedOrder]);
   const contextActions = useMemo(
     () => (contextMenu ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
@@ -2106,12 +2150,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   return (
                     <div
                       key={`${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
-                      className={`asset ${isSelected ? 'selected' : ''}`}
+                      className={`asset ${isSelected ? 'is-selected' : ''}`}
                       data-kind={kind}
                       data-orient={orient}
                       data-orient-locked={orientLocked ? 'true' : 'false'}
                       data-thumb-key={thumbKey}
                       data-relative={item.relative_path || ''}
+                      data-select-key={selectionKey}
                       {...pointerHandlers}
                     >
                       <div className="thumb">
@@ -2128,15 +2173,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
                           </div>
                           <div className="asset-ol-tr">
-                            <div className="selector" title="Select">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                aria-label="Select media"
-                                disabled={!canSelect}
-                                onClick={(event) => event.stopPropagation()}
-                                onChange={() => toggleSelected(item)}
-                              />
+                            <div
+                              className="selector sel-ui"
+                              title="Select"
+                              data-no-preview="1"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (!canSelect) return;
+                                const target = event.target as HTMLElement;
+                                if (!target.closest('.sel-shell, .sel-order, input[type="checkbox"]')) return;
+                                toggleSelected(item);
+                              }}
+                            >
+                              <span className="sel-shell" data-no-preview="1">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  aria-label="Select media"
+                                  disabled={!canSelect}
+                                  data-no-preview="1"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onChange={() => toggleSelected(item)}
+                                />
+                                <span className="sel-order" data-no-preview="1" aria-hidden="true">
+                                  {selectedOrderMap.get(selectionKey) ? String(Math.min(selectedOrderMap.get(selectionKey) ?? 0, 99)) : ''}
+                                </span>
+                              </span>
                             </div>
                           </div>
                           <div className="asset-ol-bl">
@@ -2184,8 +2246,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
                   return (
                     <div
-                      className="row"
+                      className={`row ${isSelected ? 'is-selected' : ''}`}
                       key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
+                      data-select-key={selectionKey}
                       {...pointerHandlers}
                     >
                       <div className="mini">
@@ -2260,7 +2323,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <button
           className="btn bad"
           type="button"
-          onClick={() => deleteMediaSelection(Array.from(selected))}
+          onClick={() => deleteMediaSelection(selectedKeysOrdered)}
           disabled={!selectedCount}
         >
           🗑 Delete

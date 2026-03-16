@@ -110,3 +110,28 @@ test('sortMedia handles name and size ordering with missing sizes last', () => {
   const sizeAsc = sortMedia(items, 'size-asc', meta);
   assert.deepEqual(sizeAsc.map((item) => item.relative_path), ['C/file-c.mp4', 'A/file-a.mp4', 'B/file-b.mp4']);
 });
+
+
+test('toggleSelectionWithOrder tracks selection order and deselection cleanup', () => {
+  const { toggleSelectionWithOrder, selectionOrderIndexMap } = loadTsModule(statePath);
+  let selected = new Set();
+  let order = [];
+
+  ({ selected, order } = toggleSelectionWithOrder(selected, order, 'a'));
+  ({ selected, order } = toggleSelectionWithOrder(selected, order, 'b'));
+  ({ selected, order } = toggleSelectionWithOrder(selected, order, 'c'));
+  assert.deepEqual(Array.from(selected), ['a', 'b', 'c']);
+  assert.deepEqual(order, ['a', 'b', 'c']);
+
+  ({ selected, order } = toggleSelectionWithOrder(selected, order, 'b'));
+  assert.deepEqual(Array.from(selected), ['a', 'c']);
+  assert.deepEqual(order, ['a', 'c']);
+
+  ({ selected, order } = toggleSelectionWithOrder(selected, order, 'b'));
+  assert.deepEqual(order, ['a', 'c', 'b']);
+
+  const orderMap = selectionOrderIndexMap(selected, order);
+  assert.equal(orderMap.get('a'), 1);
+  assert.equal(orderMap.get('c'), 2);
+  assert.equal(orderMap.get('b'), 3);
+});

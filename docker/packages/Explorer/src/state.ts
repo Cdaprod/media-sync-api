@@ -75,6 +75,35 @@ export function toggleSelection(current: Set<string>, relPath: string): Set<stri
   return next;
 }
 
+export function toggleSelectionWithOrder(
+  current: Set<string>,
+  currentOrder: string[],
+  key: string,
+): { selected: Set<string>; order: string[]; checked: boolean } {
+  const selected = new Set(current);
+  let order = currentOrder.filter((value) => selected.has(value));
+  let checked = false;
+  if (selected.has(key)) {
+    selected.delete(key);
+    order = order.filter((value) => value !== key);
+    checked = false;
+  } else {
+    selected.add(key);
+    order = order.filter((value) => value !== key);
+    order.push(key);
+    checked = true;
+  }
+  return { selected, order, checked };
+}
+
+export function selectionOrderIndexMap(selected: Set<string>, selectedOrder: string[]): Map<string, number> {
+  const order = new Map<string, number>();
+  selectedOrder
+    .filter((value) => selected.has(value))
+    .forEach((value, idx) => order.set(value, idx + 1));
+  return order;
+}
+
 export function pruneSelection(current: Set<string>, existing: Set<string>): Set<string> {
   const next = new Set<string>();
   for (const value of current) {
