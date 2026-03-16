@@ -31,6 +31,34 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('buildUploadUrl'));
   assert.ok(content.includes('handleBulkTag'));
   assert.ok(content.includes('handleComposeSelected'));
+  assert.ok(content.includes('AssetPreviewPanel'));
+  assert.ok(content.includes('normalizePreviewAsset'));
+});
+
+test('preview adapter and panel keep drawer-based preview contract', () => {
+  const adapterPath = path.join(packageRoot, 'src', 'previewAdapter.ts');
+  const panelPath = path.join(packageRoot, 'src', 'AssetPreviewPanel.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const adapter = fs.readFileSync(adapterPath, 'utf8');
+  const panel = fs.readFileSync(panelPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(adapter.includes('normalizePreviewAsset'));
+  assert.ok(adapter.includes('id:'));
+  assert.ok(adapter.includes('quick'));
+  assert.ok(panel.includes('preview-overlay'));
+  assert.ok(panel.includes('onMediaReady'));
+  assert.ok(panel.includes('preview-wave'));
+  assert.ok(styles.includes('.preview-shell'));
+  assert.ok(styles.includes('.preview-overlay.fade'));
+});
+
+test('normalized preview asset declaration is placed after resolveAssetUrl callback', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const resolveIndex = content.indexOf('const resolveAssetUrl = useCallback');
+  const normalizedIndex = content.indexOf('const normalizedPreviewAsset = useMemo');
+  assert.ok(resolveIndex >= 0);
+  assert.ok(normalizedIndex > resolveIndex);
 });
 
 test('explorer api client includes bulk media action endpoints', () => {
