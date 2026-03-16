@@ -980,7 +980,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Resolve', 'Select a project first');
       return;
     }
-    const sourceName = activeProject?.source || focused.project_source || null;
+    const sourceName = activeProject?.source || focused.project_source || undefined;
     let projectValue = projectName;
     if (resolveProjectMode === '__new__') projectValue = '__new__';
     else if (resolveProjectMode === '__select__') projectValue = '__select__';
@@ -989,7 +989,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const result = await api.sendResolve({
         project: projectValue,
         new_project_name: resolveProjectMode === '__new__' ? resolveNewName.trim() || null : null,
-        media_rel_paths: [focused.relative_path].filter(Boolean),
+        media_rel_paths: [focused.relative_path].filter((value): value is string => Boolean(value)),
         mode: resolveMode || 'import',
       }, sourceName);
       addToast('good', 'Resolve', `Sent. Job: ${result.job_id || 'ok'}`);

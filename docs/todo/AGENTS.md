@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Package build/type regression fix (active)
+- [x] Fixed package `next build` type failure in focused resolve flow by aligning source argument to `string | undefined`.
+- [x] Narrowed focused resolve `media_rel_paths` to strict `string[]` with an explicit type predicate.
+- [x] Verified `npm run build` completes for `docker/packages/Explorer` after the fix.
+- [x] Re-ran package + static regression suites to catch additional type/runtime drift.
+- [ ] Keep watching for additional strict-mode type issues as preview convergence continues.
+
 ## 2026-03-16 — Package overlay action + OBS parity pass (active)
 - [x] Added package preview overlay semantic action callbacks for OBS, tag, resolve, and program-monitor handoff while keeping ExplorerApp as logic owner.
 - [x] Added in-overlay OBS settings controls (mode cover/fit/fill, slot, exclusive) and wired values through package preview state/action flow.

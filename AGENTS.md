@@ -276,6 +276,8 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-16)
+- Fixed Next.js package build/type regression in `handleFocusedResolve` by passing `sourceName` as `string | undefined` (not `null`) and narrowing `media_rel_paths` to `string[]` with an explicit type predicate.
+- Verified package production build (`npm run build`) now completes successfully and reran package/static regression checks.
 - Preview drawer convergence pass completed for both static and Next.js explorers: overlay controls now own play/pause, seek, volume, prev/next, copy/select/delete actions, and old duplicate control rows were removed.
 - Drawer metadata/details were migrated into overlay-capable preview detail sections so media can use most of the drawer height while preserving existing metadata fetch/merge behavior.
 - Static explorer prev/next navigation now follows current filtered ordering (`filteredMedia()`) to stay aligned with on-screen explorer ordering semantics.
