@@ -1929,3 +1929,13 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Static and Next.js explorers now resolve thumbnail sources with identical server-first order (`thumbnail_url` -> `thumb_url` -> image `stream_url` fallback) and share stable cache-key semantics (`source|project|relative_path|sha256`).
 - Added regression coverage for API thumbnail-field parity, package thumbnail prioritization/cache keys, and static explorer server-first thumbnail branch wiring.
 
+
+
+### Latest Implementation Notes (2026-03-16)
+- Explorer advanced styling language now converges across `public/explorer.html` and `docker/packages/Explorer/src/styles.css` with shared token names for spacing/elevation/border alpha/control sizing/motion timings, plus preview drawer chrome parity (media stage, action rail, metadata grouping, tag panel surface).
+- Regression coverage now asserts these token/class/action hooks in both `tests/test_public_explorer_program_monitor.py` and `docker/packages/Explorer/tests/exports.test.mjs`.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Added `scripts/explorer_screenshot_smoke.sh` to validate static/package screenshot routes with both HTTP status and route-content probes before visual capture (`id="brandTitle"` for static, `data-ui-hook="explorer-app-shell"` for package).
+- Updated `docker/packages/Explorer/README.md` and `tests/test_public_index.py` so screenshot smoke usage + script contract remain documented and regression-tested.

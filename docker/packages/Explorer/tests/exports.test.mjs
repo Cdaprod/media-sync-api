@@ -122,3 +122,26 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('thumbState'));
   assert.ok(content.includes('project_source'));
 });
+
+test('shared explorer design tokens and preview chrome hooks are present', () => {
+  const stylePath = path.join(packageRoot, 'src', 'styles.css');
+  const style = fs.readFileSync(stylePath, 'utf8');
+  assert.ok(style.includes('--space-1: 4px;'));
+  assert.ok(style.includes('--panel-elev-1:'));
+  assert.ok(style.includes('--border-alpha-soft:'));
+  assert.ok(style.includes('--control-h-sm:'));
+  assert.ok(style.includes('--motion-mid:'));
+  assert.ok(style.includes('--ease-settle:'));
+  assert.ok(style.includes('.topbar{'));
+  assert.ok(style.includes('.section-h{'));
+  assert.ok(style.includes('.preview{'));
+  assert.ok(style.includes('.drawer-actions{'));
+  assert.ok(style.includes('.drawer-tag-panel{'));
+
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.ok(app.includes('data-preview-action="play"'));
+  assert.ok(app.includes('data-preview-action="copy"'));
+  assert.ok(app.includes('data-preview-action="tag"'));
+  assert.ok(app.includes('data-preview-action="delete"'));
+});

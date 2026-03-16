@@ -144,6 +144,14 @@ Expected output:
 
 If either check fails, do **not** trust screenshot output (it is likely a route/host mismatch).
 
+Use the shared smoke helper to enforce the same checks in one command:
+
+```bash
+scripts/explorer_screenshot_smoke.sh package
+scripts/explorer_screenshot_smoke.sh static
+```
+
+
 Use this URL in Playwright/browser tooling:
 
 ```text

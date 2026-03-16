@@ -924,3 +924,20 @@ def test_explorer_server_thumbnail_priority_contract_present():
     assert "return kind === 'image' ? String(item?.stream_url || item?.streamUrl || '').trim() : '';" in html
     assert 'const thumbUrl = normalizeThumbUrl(resolveThumbnailUrl(it, kind));' in html
     assert 'const thumbKey = thumbCacheKey(it);' in html
+
+def test_explorer_design_tokens_and_preview_class_hooks_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert '--space-1: 4px;' in html
+    assert '--panel-elev-1:' in html
+    assert '--border-alpha-soft:' in html
+    assert '--control-h-sm:' in html
+    assert '--motion-mid:' in html
+    assert 'class="topbar"' in html
+    assert 'class="section-h"' in html
+    assert 'class="preview"' in html
+    assert 'class="drawer-actions"' in html
+    assert 'class="tag-panel drawer-tag-panel"' in html
+    assert 'id="drawerPlay"' in html
+    assert 'id="drawerCopy"' in html
+    assert 'id="drawerTagToggle"' in html
+    assert 'id="drawerDelete"' in html
