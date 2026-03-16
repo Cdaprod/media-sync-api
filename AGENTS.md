@@ -1793,3 +1793,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Explorer package selection state now uses identity keys (`source::project::relative_path`) so all-project bulk actions no longer mis-target same-name paths across sources/projects.
 - Compose bulk action now filters selected assets to video items before calling `/api/assets/bulk/compose`, preventing mixed-kind 400 failures in multi-select workflows.
 - Next.js Explorer API-base inference now falls back to `http://<current-host>:8787` when no base URL is provided and the UI is served from non-API ports (for example `:8790`), fixing split-origin source/project/media boot failures without requiring manual env overrides.
+- FastAPI now installs CORS middleware with LAN Explorer defaults (`http://192.168.0.25:8790`, `http://localhost:8790`, `http://127.0.0.1:8790`) and `MEDIA_SYNC_CORS_ORIGINS` merging so split-origin Explorer package fetches to `:8787` succeed.

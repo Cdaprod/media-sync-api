@@ -1,6 +1,14 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-16 — API CORS support for Explorer split-origin UI (active)
+- [x] Added FastAPI CORS middleware in `app/main.py` so `/api/*` routes can be called from the Explorer UI on `:8790` while the API runs on `:8787`.
+- [x] Added LAN defaults for Explorer origins (`192.168.0.25:8790`, `localhost:8790`, `127.0.0.1:8790`) and merged them with `MEDIA_SYNC_CORS_ORIGINS` when configured.
+- [x] Preserved wildcard config support (`MEDIA_SYNC_CORS_ORIGINS=*`) with credential-safe behavior (no `allow-credentials` on wildcard).
+- [x] Added regression tests in `tests/test_cors.py` for default Explorer-origin CORS headers and wildcard preflight behavior.
+- [x] Updated `README.md` troubleshooting with cross-origin Explorer CORS guidance.
+- [ ] Validate on physical iPhone Safari that Explorer package on `:8790` can fetch `/api/sources` from `:8787` without `TypeError: Load failed`.
+
 ## 2026-03-16 — Explorer API base fallback for split-origin deploys (active)
 - [x] Confirmed package Explorer boot failures were caused by same-origin API resolution when served from non-API ports (for example `:8790`), while static explorer on `:8787` remained healthy.
 - [x] Updated package API-base inference to auto-target `http://<current-host>:8787` when no explicit base URL is configured and the browser origin is not already `:8787`.

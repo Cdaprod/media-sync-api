@@ -14,6 +14,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -62,11 +63,41 @@ async def lifespan(_: FastAPI):
     reindexer.stop()
 
 
+def _resolve_cors_settings() -> tuple[list[str], bool]:
+    """Return CORS origins + credential policy for LAN Explorer clients.
+
+    Example:
+        origins, allow_credentials = _resolve_cors_settings()
+    """
+
+    settings = get_settings()
+    default_origins = [
+        "http://192.168.0.25:8790",
+        "http://localhost:8790",
+        "http://127.0.0.1:8790",
+    ]
+    configured_origins = [origin.strip() for origin in settings.cors_origins if origin.strip()]
+    if "*" in configured_origins:
+        return ["*"], False
+    merged = sorted(set(default_origins + configured_origins))
+    return merged, True
+
+
+
+
 def create_app() -> FastAPI:
     """Create a new FastAPI instance with registered routers."""
 
     _configure_logging()
     application = FastAPI(title="media-sync-api", version="0.1.0", lifespan=lifespan)
+    cors_origins, allow_credentials = _resolve_cors_settings()
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     application.include_router(projects_router)
     application.include_router(media_api_router)
     application.include_router(assets_bulk_router)
