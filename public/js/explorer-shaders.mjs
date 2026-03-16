@@ -178,6 +178,95 @@ const STATE_EVICT_AFTER_MS = 300000;
 const STATE_MAX_KEYS = 1200;
 const NEAR_VIEW_MAX = 180;
 
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readClampedSearchParam(params, key, {
+  min = 0,
+  max = Number.MAX_SAFE_INTEGER,
+  fallback = 0,
+  integer = false,
+} = {}) {
+  const raw = Number(params.get(key));
+  if (!Number.isFinite(raw)) return fallback;
+  const clamped = clampNumber(raw, min, max);
+  return integer ? Math.round(clamped) : clamped;
+}
+
+export function readTileFxTuningFromQuery(params, {
+  coarsePointer = false,
+  guardrails = TILEFX_PERF_GUARDRAILS,
+} = {}) {
+  const searchParams = params instanceof URLSearchParams
+    ? params
+    : new URLSearchParams(String(params || ''));
+  const tuningLimits = guardrails.tuningLimits;
+  const maxTexParam = readClampedSearchParam(searchParams, 'tilefxMaxTex', {
+    min: tuningLimits.maxTexEdge.min,
+    max: tuningLimits.maxTexEdge.max,
+    fallback: 0,
+    integer: true,
+  });
+  return {
+    maxTexEdge: Math.max(64, maxTexParam || (coarsePointer ? 512 : 640)),
+    idleUploadOverscan: readClampedSearchParam(searchParams, 'tilefxIdleReadyMargin', {
+      min: tuningLimits.idleReadyMargin.min,
+      max: tuningLimits.idleReadyMargin.max,
+      fallback: 6,
+      integer: true,
+    }),
+    uploadBudgetPerSecond: readClampedSearchParam(searchParams, 'fxtileuploads', {
+      min: tuningLimits.uploadBudgetPerSecond.min,
+      max: tuningLimits.uploadBudgetPerSecond.max,
+      fallback: 8,
+      integer: true,
+    }),
+    maxUploadsPerFrame: readClampedSearchParam(searchParams, 'fxtileuploadsframe', {
+      min: tuningLimits.uploadsPerFrame.min,
+      max: tuningLimits.uploadsPerFrame.max,
+      fallback: 1,
+      integer: true,
+    }),
+    bootstrapReadyTimeoutMs: readClampedSearchParam(searchParams, 'tilefxBootstrapReadyMs', {
+      min: tuningLimits.bootstrapReadyMs.min,
+      max: tuningLimits.bootstrapReadyMs.max,
+      fallback: 1200,
+      integer: true,
+    }),
+  };
+}
+
+const TILEFX_PERF_GUARDRAILS = Object.freeze({
+  frameTimeBands: Object.freeze({
+    targetMs: 16.7,
+    warmMs: 20,
+    degradeMs: 26,
+    criticalMs: 34,
+  }),
+  adaptiveQuality: Object.freeze({
+    high: Object.freeze({ key: 'high', dprCap: 2, maxTexEdgeScale: 1, uploadBudgetScale: 1, uploadsPerFrame: 2, idleOverscan: 6 }),
+    balanced: Object.freeze({ key: 'balanced', dprCap: 1.5, maxTexEdgeScale: 0.88, uploadBudgetScale: 0.85, uploadsPerFrame: 1, idleOverscan: 5 }),
+    low: Object.freeze({ key: 'low', dprCap: 1.25, maxTexEdgeScale: 0.72, uploadBudgetScale: 0.7, uploadsPerFrame: 1, idleOverscan: 3 }),
+    safe: Object.freeze({ key: 'safe', dprCap: 1, maxTexEdgeScale: 0.6, uploadBudgetScale: 0.55, uploadsPerFrame: 1, idleOverscan: 2 }),
+  }),
+  mobileFallback: Object.freeze({
+    enabledOnCoarsePointer: true,
+    minQualityKey: 'safe',
+    sustainedCriticalFrames: 18,
+    recoverFrames: 45,
+    repeatedMinTierCriticalFrames: 42,
+    fallbackCooldownMs: 1600,
+  }),
+  tuningLimits: Object.freeze({
+    maxTexEdge: Object.freeze({ min: 128, max: 2048 }),
+    idleReadyMargin: Object.freeze({ min: 0, max: 24 }),
+    uploadBudgetPerSecond: Object.freeze({ min: 1, max: 30 }),
+    uploadsPerFrame: Object.freeze({ min: 1, max: 4 }),
+    bootstrapReadyMs: Object.freeze({ min: 250, max: 4000 }),
+  }),
+});
+
 export class MaskField {
   constructor(gridRoot, assetSel = '.asset') {
     this._root = gridRoot;
@@ -914,6 +1003,7 @@ export class TileFXRenderer {
     this._drawCalls = 0;
     this._lastFrameMs = 0;
     this._pendingUploads = new Map();
+    this._drainTraceByKey = new Map();
     this.tileStateByKey = new Map();
     this.decodedSrcSet = new Set();
     this._texturesUploaded = 0;
@@ -928,11 +1018,17 @@ export class TileFXRenderer {
     this._pendingWaitLoad = 0;
     this._srcMissing = 0;
     const coarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-    const maxTexParam = Number(new URLSearchParams(window.location.search).get('tilefxMaxTex') || 0);
-    this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));
-    this.idleUploadOverscan = Math.max(0, Number(new URLSearchParams(window.location.search).get('tilefxIdleReadyMargin') || 6));
-    this.uploadBudgetPerSecond = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploads') || 8));
-    this.maxUploadsPerFrame = Math.max(1, Number(new URLSearchParams(window.location.search).get('fxtileuploadsframe') || 1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const queryTuning = readTileFxTuningFromQuery(queryParams, { coarsePointer: coarse });
+    this.isCoarsePointer = Boolean(coarse);
+    this._baseMaxTexEdge = queryTuning.maxTexEdge;
+    this.maxTexEdge = this._baseMaxTexEdge;
+    this._baseIdleUploadOverscan = queryTuning.idleUploadOverscan;
+    this.idleUploadOverscan = this._baseIdleUploadOverscan;
+    this._baseUploadBudgetPerSecond = queryTuning.uploadBudgetPerSecond;
+    this.uploadBudgetPerSecond = this._baseUploadBudgetPerSecond;
+    this._baseMaxUploadsPerFrame = queryTuning.maxUploadsPerFrame;
+    this.maxUploadsPerFrame = this._baseMaxUploadsPerFrame;
     this.uploadPauseMs = 250;
     this.backpressureUntil = 0;
     this.isScrolling = false;
@@ -940,6 +1036,16 @@ export class TileFXRenderer {
     this._scrollIdleTimer = 0;
     this._lastScrollAt = 0;
     this.dprCap = 2;
+    this._perfGuardrails = TILEFX_PERF_GUARDRAILS;
+    this._perfFrameEma = 16.7;
+    this._perfBand = 'target';
+    this._perfQuality = 'high';
+    this._perfCriticalStreak = 0;
+    this._perfRecoveryStreak = 0;
+    this._perfMinTierCriticalStreak = 0;
+    this._perfFallbackTransitions = 0;
+    this._perfFallbackCooldownUntil = 0;
+    this._mobileFxFallback = false;
     this.gl = null;
     this.program = null;
     this.quad = null;
@@ -951,10 +1057,25 @@ export class TileFXRenderer {
     this._swapStateByTile = new WeakMap();
     this._swapSeenFrameByTile = new WeakMap();
     this._swapStartedAtByTile = new WeakMap();
-    this._swapStartedAtByTile = new WeakMap();
     this._swapReleaseDelayFrames = 10;
     this._swapReleaseDelayMs = 260;
     this._swapMinHoldMs = 320;
+    this._swapReleaseIdleMs = 260;
+    this._swapReleaseNearVisibleIdleMs = 520;
+    this._swapReleaseNearVisibleDelayFrames = 20;
+    this._swapReleaseNearVisibleDelayMs = 520;
+    this._swapReleaseBlocked = 0;
+    this._swapReleaseAllowed = 0;
+    this._visibleSwapReleaseBlocked = 0;
+    this._offscreenSwapReleaseAllowed = 0;
+    this._lastOwnershipRows = [];
+    this._lastDrawByTileEl = new WeakMap();
+    this._fxEntryPhase = 'steady';
+    this._fxEntryStartedAt = 0;
+    this._bootstrapReadyTimeoutMs = queryTuning.bootstrapReadyTimeoutMs;
+    this._bootstrapVisibleTileEls = new Set();
+    this._swapLeakLoggedKeys = new Set();
+    this._illegalDisableLogged = false;
     this._debugRectLayer = null;
     this._debugRectPool = [];
     this._debugRectMismatchLogged = new Set();
@@ -1008,6 +1129,37 @@ export class TileFXRenderer {
         pendingTiles: 0,
         swapSetCalls: 0,
         swapClearCalls: 0,
+        swapReleaseBlocked: 0,
+        swapReleaseAllowed: 0,
+        visibleSwapReleaseBlocked: 0,
+        offscreenSwapReleaseAllowed: 0,
+        fedVisibleRatio: 1,
+        visibleReady: 0,
+        visibleUploading: 0,
+        visibleDomOnly: 0,
+        visibleSwapped: 0,
+        rectMismatch: 0,
+        rectMismatchRows: [],
+        illegalDisableBlocked: 0,
+        lastIllegalDisable: null,
+        perfGuardrails: TILEFX_PERF_GUARDRAILS,
+        perfFrameEmaMs: 16.7,
+        perfFrameBand: 'target',
+        perfQuality: 'high',
+        perfAdaptiveState: null,
+        mobileFallbackActive: false,
+        mobileFallbackReason: '',
+        perfMinTierCriticalStreak: 0,
+        perfFallbackTransitions: 0,
+        perfFallbackReason: '',
+        perfFallbackCooldownUntil: 0,
+        perfQueryTuning: {
+          tilefxMaxTex: this._baseMaxTexEdge,
+          tilefxIdleReadyMargin: this._baseIdleUploadOverscan,
+          fxtileuploads: this._baseUploadBudgetPerSecond,
+          fxtileuploadsframe: this._baseMaxUploadsPerFrame,
+          tilefxBootstrapReadyMs: this._bootstrapReadyTimeoutMs,
+        },
       };
     }
 
@@ -1096,9 +1248,31 @@ export class TileFXRenderer {
   }
 
   setMode(mode = 'grid') {
+    const prevMode = this.mode;
     const next = String(mode || 'grid').toLowerCase();
     this.mode = (next === 'fx' || next === 'grid' || next === 'list') ? next : 'grid';
+    if (this.mode === 'fx' && prevMode !== 'fx') {
+      this._fxEntryPhase = 'bootstrap_collect';
+      this._fxEntryStartedAt = performance.now();
+      this._bootstrapVisibleTileEls = new Set();
+    } else if (this.mode !== 'fx') {
+      this._fxEntryPhase = 'steady';
+      this._fxEntryStartedAt = 0;
+      this._bootstrapVisibleTileEls = new Set();
+    }
     if (window.__tilefx_dbg) window.__tilefx_dbg.mode = this.mode;
+  }
+
+  getFxEntryPhase() {
+    return String(this._fxEntryPhase || 'steady');
+  }
+
+  _isEnteringPhase() {
+    return this.mode === 'fx' && String(this._fxEntryPhase || 'steady') !== 'steady';
+  }
+
+  getFxLifecycleStage() {
+    return this._isEnteringPhase() ? 'entering' : 'steady';
   }
 
   setEnabled(enabled = false) {
@@ -1112,22 +1286,66 @@ export class TileFXRenderer {
     this.setEnabled(true);
   }
 
-  disable(reason = '') {
-    try {
-      console.warn('[tilefx] DISABLE', String(reason || 'unspecified'), new Error().stack);
-    } catch {}
+  disable(reason = '', { allowInFxView = false } = {}) {
+    const why = String(reason || 'unspecified');
+    const activeView = String((typeof window !== 'undefined' ? window.__explorer_view : '') || '');
+    const captureStack = () => {
+      try { return new Error().stack || ''; } catch { return ''; }
+    };
+    if (!allowInFxView && activeView === 'fx') {
+      const stack = captureStack();
+      if (!this._illegalDisableLogged) {
+        try {
+          console.error('[tilefx] illegal disable during FX view', { reason: why, stack });
+        } catch {}
+        this._illegalDisableLogged = true;
+      }
+      if (window.__tilefx_dbg) {
+        window.__tilefx_dbg.illegalDisableBlocked = Number(window.__tilefx_dbg.illegalDisableBlocked || 0) + 1;
+        window.__tilefx_dbg.lastIllegalDisable = { reason: why, stack, t: Date.now() };
+      }
+      return false;
+    }
+    this._illegalDisableLogged = false;
+    const debugLifecycle = new URLSearchParams(window.location.search).get('fxdebug') === '1';
+    if (debugLifecycle) {
+      try {
+        console.debug('[tilefx] disable', { reason: why, view: activeView || 'unknown' });
+      } catch {}
+    }
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.lastDisable = {
+        reason: why,
+        view: activeView || 'unknown',
+        t: Date.now(),
+      };
+    }
     this.setEnabled(false);
     this.clear();
     this._drawCalls = 0;
     if (window.__tilefx_dbg) window.__tilefx_dbg.drawCalls = 0;
+    return true;
+  }
+
+  restoreAllDomSwaps(reason = 'restore:all') {
+    const swapped = Array.from(this._swappedTileRefs.entries());
+    swapped.forEach(([tileEl, tile]) => {
+      if (!tileEl || !tileEl.isConnected) {
+        this._swappedTileRefs.delete(tileEl);
+        return;
+      }
+      this.applyDomSwap(tile, false, reason);
+      this._swapSeenFrameByTile.delete(tileEl);
+    });
   }
 
   teardownForModeExit({ removeCanvas = false } = {}) {
     this.disable('teardownForModeExit');
-    (this.tiles || []).forEach((tile) => this.applyDomSwap(tile, false));
+    this.restoreAllDomSwaps('restore:teardown');
     this.tiles = [];
     this.tileStateByKey.clear();
     this._pendingUploads.clear();
+    this._drainTraceByKey.clear();
     this._uploadsWindow = [];
     this._domSwapStyleState = new WeakMap();
     this._domSwapBgState = new WeakMap();
@@ -1279,21 +1497,35 @@ export class TileFXRenderer {
         paintEl.style.pointerEvents = prior.pointerEvents;
       }
     }
-    const bgNode = thumbBgEl || paintEls.find((el) => String(getComputedStyle(el).backgroundImage || '').trim() !== 'none') || null;
-    if (!bgNode) return;
+    const bgNodes = [thumbBgEl, ...paintEls].filter(Boolean);
     if (swapped) {
-      const computedBg = String(getComputedStyle(bgNode).backgroundImage || '').trim();
-      if (computedBg && computedBg !== 'none') {
-        if (!this._domSwapBgState.has(bgNode)) this._domSwapBgState.set(bgNode, bgNode.style.backgroundImage || '');
+      bgNodes.forEach((bgNode) => {
+        const computedBg = String(getComputedStyle(bgNode).backgroundImage || '').trim();
+        const isThumbSurface = bgNode.classList?.contains('thumb') || bgNode.closest?.('.thumb') === bgNode;
+        if (!isThumbSurface && (!computedBg || computedBg === 'none')) return;
+        if (!this._domSwapBgState.has(bgNode)) {
+          this._domSwapBgState.set(bgNode, {
+            backgroundImage: bgNode.style.backgroundImage || '',
+            background: bgNode.style.background || '',
+            backgroundColor: bgNode.style.backgroundColor || '',
+          });
+        }
         bgNode.style.backgroundImage = 'none';
-      }
+        if (isThumbSurface) {
+          bgNode.style.background = 'transparent';
+          bgNode.style.backgroundColor = 'transparent';
+        }
+      });
       return;
     }
-    if (this._domSwapBgState.has(bgNode)) {
-      const priorBg = this._domSwapBgState.get(bgNode);
-      bgNode.style.backgroundImage = priorBg || '';
+    bgNodes.forEach((bgNode) => {
+      if (!this._domSwapBgState.has(bgNode)) return;
+      const priorBg = this._domSwapBgState.get(bgNode) || {};
+      bgNode.style.backgroundImage = priorBg.backgroundImage || '';
+      bgNode.style.background = priorBg.background || '';
+      bgNode.style.backgroundColor = priorBg.backgroundColor || '';
       this._domSwapBgState.delete(bgNode);
-    }
+    });
     this._setSwapState(tileEl, TILE_SWAP_STATE.DOM_VISIBLE, reason || 'swap:restored');
   }
 
@@ -1307,6 +1539,13 @@ export class TileFXRenderer {
   updateTiles(tileList) {
     this.tiles = Array.isArray(tileList) ? tileList : [];
     if (window.__tilefx_dbg) window.__tilefx_dbg.tilesFed = this.tiles.length;
+    if (!this.enabled || this.mode !== 'fx' || !Array.isArray(this.tiles) || this.tiles.length === 0) return;
+    for (const tile of this.tiles) {
+      const key = String(tile?.key || '');
+      if (!key || this._pendingUploads.has(key) || this.hasTexture(key)) continue;
+      this._queueTileImageUpload(tile, key);
+    }
+    this._drainPendingUploads(performance.now());
   }
 
   _typeColor(type = '') {
@@ -1353,6 +1592,294 @@ export class TileFXRenderer {
     if (this._debugRectLayer) this._debugRectLayer.style.display = 'none';
   }
 
+
+  _canReleaseVisibleSwap(drawMeta = null, now = performance.now()) {
+    if (!drawMeta?.tileEl) return this._canReleaseSwap(null, now);
+    if (drawMeta.visible) {
+      this._swapReleaseBlocked += 1;
+      this._visibleSwapReleaseBlocked += 1;
+      return false;
+    }
+    if (this.isScrolling) {
+      this._swapReleaseBlocked += 1;
+      return false;
+    }
+    if (!this._canReleaseSwap(drawMeta.tileEl, now)) {
+      this._swapReleaseBlocked += 1;
+      return false;
+    }
+    return true;
+  }
+
+  _reconcileVisibleOwnerFromTruth(tile, {
+    shouldFxOwner = false,
+    swapState = TILE_SWAP_STATE.DOM_VISIBLE,
+    reasonFx = 'ownership:visible-fx',
+    reasonDom = 'ownership:visible-dom',
+  } = {}) {
+    const tileEl = tile?.tileEl || null;
+    if (!tileEl) return 'DOM';
+    if (shouldFxOwner) {
+      if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
+        this.applyDomSwap(tile, true, reasonFx);
+        if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+      }
+      return 'FX';
+    }
+    if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
+      this.applyDomSwap(tile, false, reasonDom);
+      if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+    }
+    return 'DOM';
+  }
+
+  syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now()) {
+    const rows = [];
+    const active = Array.isArray(activeTiles) ? activeTiles : [];
+    const visibleRows = [];
+    active.forEach((tile) => {
+      const tileEl = tile?.tileEl || null;
+      if (!tileEl || !tileEl.isConnected) return;
+      const drawMeta = drawResults.get(tileEl) || {};
+      if (drawMeta.visible !== true) return;
+      const hasTexture = drawMeta.hasTexture === true;
+      const wasDrawnThisPass = drawMeta.wasDrawnThisPass === true;
+      const rectValid = drawMeta.rectValid === true;
+      visibleRows.push({ tile, tileEl, hasTexture, wasDrawnThisPass, rectValid, ready: hasTexture && wasDrawnThisPass && rectValid });
+    });
+    const visibleSet = new Set(visibleRows.map((row) => row.tileEl));
+    if (this.mode !== 'fx') {
+      this._bootstrapVisibleTileEls = new Set();
+      this._fxEntryPhase = 'steady';
+    }
+    if (!(this._bootstrapVisibleTileEls instanceof Set)) {
+      this._bootstrapVisibleTileEls = new Set();
+    }
+    if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_collect') {
+      this._bootstrapVisibleTileEls = new Set(visibleSet);
+      visibleRows.forEach(({ tile }) => {
+        if (String(tile?.tileEl?.dataset?.tex || '0') === '1') {
+          this.applyDomSwap(tile, false, 'bootstrap:collect-reset');
+        }
+      });
+      this._fxEntryPhase = 'bootstrap_ready';
+    }
+    if (this.mode === 'fx' && this._fxEntryPhase !== 'steady') {
+      const keep = new Set();
+      for (const tileEl of this._bootstrapVisibleTileEls) {
+        if (visibleSet.has(tileEl)) keep.add(tileEl);
+      }
+      this._bootstrapVisibleTileEls = keep;
+    }
+    const bootstrapRows = visibleRows.filter((row) => this._bootstrapVisibleTileEls.has(row.tileEl));
+    const bootstrapTotal = bootstrapRows.length;
+    const bootstrapReady = bootstrapRows.filter((row) => row.ready).length;
+    const bootstrapElapsed = now - Number(this._fxEntryStartedAt || now);
+    const bootstrapReadyTimedOut = bootstrapElapsed >= this._bootstrapReadyTimeoutMs;
+    const bootstrapReadyRatio = bootstrapTotal > 0 ? (bootstrapReady / bootstrapTotal) : 0;
+    const hasVisibleDualOwner = bootstrapRows.some((row) => {
+      const swapState = this._getSwapState(row.tileEl);
+      return swapState === TILE_SWAP_STATE.FX_SWAPPED && !row.ready;
+    });
+    if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_ready') {
+      if (bootstrapTotal === 0) {
+        this._fxEntryPhase = 'steady';
+      } else if (bootstrapReady === bootstrapTotal && !hasVisibleDualOwner) {
+        this._fxEntryPhase = 'bootstrap_commit';
+      } else if (bootstrapReadyTimedOut) {
+        this._fxEntryPhase = 'bootstrap_commit';
+        if (window.__tilefx_dbg) {
+          window.__tilefx_dbg.bootstrapReadyTimedOut = Number(window.__tilefx_dbg.bootstrapReadyTimedOut || 0) + 1;
+          window.__tilefx_dbg.bootstrapReadyElapsedMs = Number(bootstrapElapsed || 0);
+          window.__tilefx_dbg.bootstrapReadyPending = Math.max(0, bootstrapTotal - bootstrapReady);
+        }
+      }
+    }
+    if (this.mode === 'fx' && this._fxEntryPhase === 'bootstrap_commit') {
+      bootstrapRows.forEach(({ tile, ready }) => {
+        if (ready) {
+          const swapState = this._getSwapState(tile?.tileEl || null);
+          if (swapState !== TILE_SWAP_STATE.FX_SWAPPED) {
+            this.applyDomSwap(tile, true, 'bootstrap:batch-commit');
+            if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+          }
+        }
+      });
+      this._fxEntryPhase = 'steady';
+    }
+    const blockVisibleSwapCommit = this._isEnteringPhase();
+    const inSteady = this.mode === 'fx' && this._fxEntryPhase === 'steady';
+    active.forEach((tile) => {
+      const tileEl = tile?.tileEl || null;
+      if (!tileEl || !tileEl.isConnected) return;
+      const drawMeta = drawResults.get(tileEl) || {};
+      const swapState = this._getSwapState(tileEl);
+      const visible = drawMeta.visible === true;
+      const hasTexture = drawMeta.hasTexture === true;
+      const wasDrawnThisPass = drawMeta.wasDrawnThisPass === true;
+      const rectValid = drawMeta.rectValid === true;
+      const isSwapEligible = this.mode === 'fx' && this.enabled && visible && hasTexture && wasDrawnThisPass && rectValid;
+      const visibleSteadyLock = inSteady && isSwapEligible;
+      const key = String(tile?.key || tileEl.dataset?.fxCardId || '');
+      const queued = key ? this._pendingUploads.has(key) : false;
+      const pending = key ? this._pendingUploads.get(key) : null;
+      const trace = key ? this._drainTraceByKey.get(key) : null;
+      let owner = 'DOM';
+      let releaseBlocked = false;
+
+      if (visibleSteadyLock) {
+        owner = this._reconcileVisibleOwnerFromTruth(tile, {
+          shouldFxOwner: true,
+          swapState,
+          reasonFx: 'steady:visible-lock',
+        });
+      } else if (visible && inSteady) {
+        owner = this._reconcileVisibleOwnerFromTruth(tile, {
+          shouldFxOwner: false,
+          swapState,
+          reasonDom: 'steady:draw-truth-lost',
+        });
+      } else if (isSwapEligible && !blockVisibleSwapCommit) {
+        owner = this._reconcileVisibleOwnerFromTruth(tile, {
+          shouldFxOwner: true,
+          swapState,
+          reasonFx: 'ownership:drawn-visible',
+        });
+      } else if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
+        // Active/fed tiles do not release ownership here; only untracked tiles may release.
+        this._swapReleaseBlocked += 1;
+        releaseBlocked = true;
+      }
+
+      rows.push({
+        key,
+        state: String(this.getTileState(key)),
+        visible,
+        fed: true,
+        wasDrawnThisPass,
+        rectValid,
+        hasTexture,
+        queued,
+        inUploadInFlight: Boolean(pending?.inFlight),
+        drainEvaluated: Boolean(pending?.drainEvaluated || trace?.drainEvaluated),
+        drainAttempted: Boolean(pending?.drainAttempted || trace?.drainAttempted),
+        failureReason: String(pending?.failureReason || trace?.failureReason || ''),
+        swapState: String(swapState || TILE_SWAP_STATE.DOM_VISIBLE),
+        dataTex: String(tileEl.dataset?.tex || '0'),
+        owner,
+        releaseBlocked,
+      });
+    });
+    this._lastOwnershipRows = rows;
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.fxEntryPhase = String(this._fxEntryPhase || 'steady');
+      window.__tilefx_dbg.bootstrapVisibleCount = Number(this._bootstrapVisibleTileEls?.size || 0);
+      window.__tilefx_dbg.bootstrapReadyRatio = Number(bootstrapReadyRatio || 0);
+      window.__tilefx_dbg.bootstrapReadyTimeoutMs = Number(this._bootstrapReadyTimeoutMs || 0);
+    }
+    return rows;
+  }
+
+  getVisibleOwnershipRows(limit = 12) {
+    const max = Math.max(1, Number(limit || 12));
+    const domRows = this._collectVisibleDomOwnershipRows(max);
+    if (domRows.length) return domRows.slice(0, max);
+    const rows = Array.isArray(this._lastOwnershipRows) ? this._lastOwnershipRows : [];
+    if (rows.length) return rows.slice(0, max);
+    return (Array.isArray(this.tiles) ? this.tiles : []).slice(0, max).map((tile) => {
+      const tileEl = tile?.tileEl || null;
+      const key = String(tile?.key || tileEl?.dataset?.fxCardId || '');
+      const swapState = this._getSwapState(tileEl);
+      const hasTexture = key ? this.hasTexture(key) : false;
+      const queued = key ? this._pendingUploads.has(key) : false;
+      const pending = key ? this._pendingUploads.get(key) : null;
+      const trace = key ? this._drainTraceByKey.get(key) : null;
+      return {
+        key,
+        state: String(this.getTileState(key)),
+        visible: true,
+        fed: true,
+        wasDrawnThisPass: false,
+        rectValid: true,
+        hasTexture,
+        queued,
+        inUploadInFlight: Boolean(pending?.inFlight),
+        drainEvaluated: Boolean(pending?.drainEvaluated || trace?.drainEvaluated),
+        drainAttempted: Boolean(pending?.drainAttempted || trace?.drainAttempted),
+        failureReason: String(pending?.failureReason || trace?.failureReason || ''),
+        swapState: String(swapState || TILE_SWAP_STATE.DOM_VISIBLE),
+        dataTex: String(tileEl?.dataset?.tex || '0'),
+        owner: (swapState === TILE_SWAP_STATE.FX_SWAPPED && hasTexture) ? 'FX' : 'DOM',
+        releaseBlocked: false,
+      };
+    });
+  }
+
+  getUploadLiveState(key = '') {
+    const normalizedKey = String(key || '');
+    const pending = normalizedKey ? this._pendingUploads.get(normalizedKey) : null;
+    const trace = normalizedKey ? this._drainTraceByKey.get(normalizedKey) : null;
+    const textureReady = normalizedKey ? this.hasTexture(normalizedKey) : false;
+    const state = {
+      key: normalizedKey,
+      inPendingUploads: Boolean(normalizedKey && this._pendingUploads.has(normalizedKey)),
+      inUploadInFlight: Boolean(pending?.inFlight),
+      inTextureCache: textureReady,
+    };
+    if (!textureReady && !state.inPendingUploads) {
+      const reason = String(pending?.failureReason || trace?.failureReason || this._lastUploadError || '');
+      if (reason) state.failureReason = reason;
+    }
+    return state;
+  }
+
+  _collectVisibleDomOwnershipRows(limit = 12) {
+    const max = Math.max(1, Number(limit || 12));
+    const rootEl = document.getElementById('mediaGridRoot') || document.querySelector('[data-fx-grid-root="1"]');
+    const gridEl = document.getElementById('mediaGrid') || rootEl?.querySelector?.('#mediaGrid');
+    if (!rootEl || !gridEl) return [];
+    const rootRect = rootEl.getBoundingClientRect();
+    const fedEls = new Set((Array.isArray(this.tiles) ? this.tiles : []).map((tile) => tile?.tileEl).filter(Boolean));
+    const rows = [];
+    const cards = Array.from(gridEl.querySelectorAll('.asset'));
+    for (const tileEl of cards) {
+      if (!tileEl || !tileEl.isConnected) continue;
+      const rect = tileEl.getBoundingClientRect();
+      const visible = !(rect.bottom < rootRect.top || rect.top > rootRect.bottom || rect.right < rootRect.left || rect.left > rootRect.right);
+      if (!visible) continue;
+      const key = String(tileEl.dataset?.assetId || tileEl.dataset?.path || tileEl.dataset?.relative || tileEl.dataset?.sha256 || tileEl.dataset?.fxCardId || '');
+      const drawMeta = this._lastDrawByTileEl.get(tileEl) || {};
+      const swapState = this._getSwapState(tileEl);
+      const rectValid = drawMeta.rectValid === true || (Number(rect.width || 0) > 0 && Number(rect.height || 0) > 0);
+      const hasTexture = drawMeta.hasTexture === true || (key ? this.hasTexture(key) : false);
+      const wasDrawnThisPass = drawMeta.wasDrawnThisPass === true;
+      const queued = key ? this._pendingUploads.has(key) : false;
+      const pending = key ? this._pendingUploads.get(key) : null;
+      const trace = key ? this._drainTraceByKey.get(key) : null;
+      const owner = (swapState === TILE_SWAP_STATE.FX_SWAPPED && hasTexture) ? 'FX' : 'DOM';
+      rows.push({
+        key,
+        state: String(this.getTileState(key)),
+        visible: true,
+        fed: fedEls.has(tileEl),
+        wasDrawnThisPass,
+        rectValid,
+        hasTexture,
+        queued,
+        inUploadInFlight: Boolean(pending?.inFlight),
+        drainEvaluated: Boolean(pending?.drainEvaluated || trace?.drainEvaluated),
+        drainAttempted: Boolean(pending?.drainAttempted || trace?.drainAttempted),
+        failureReason: String(pending?.failureReason || trace?.failureReason || ''),
+        swapState: String(swapState || TILE_SWAP_STATE.DOM_VISIBLE),
+        dataTex: String(tileEl.dataset?.tex || '0'),
+        owner,
+        releaseBlocked: false,
+      });
+      if (rows.length >= max) break;
+    }
+    return rows;
+  }
+
   _renderDebugRects(debugRects = []) {
     if (!this.debugRectsEnabled) return;
     const layer = this._ensureDebugRectLayer();
@@ -1394,24 +1921,57 @@ export class TileFXRenderer {
     });
   }
 
-  _restoreUntrackedSwaps(activeTileEls = new Set(), now = performance.now()) {
+  _restoreUntrackedSwaps(activeTileEls = new Set(), now = performance.now(), visibleTileEls = new Set(), nearVisibleTileEls = new Set(), protectedTileEls = new Set()) {
     if (!this._swappedTileRefs.size) return;
     const active = activeTileEls instanceof Set ? activeTileEls : new Set();
+    const visible = visibleTileEls instanceof Set ? visibleTileEls : new Set();
+    const nearVisible = nearVisibleTileEls instanceof Set ? nearVisibleTileEls : new Set();
+    const protectedTiles = protectedTileEls instanceof Set ? protectedTileEls : new Set();
     if (this.isScrolling) return;
+    const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
     for (const [tileEl, tile] of Array.from(this._swappedTileRefs.entries())) {
       if (!tileEl || !tileEl.isConnected) {
         this._swappedTileRefs.delete(tileEl);
         continue;
       }
       if (active.has(tileEl)) {
+        if (visible.has(tileEl)) {
+          this._swapReleaseBlocked += 1;
+          this._visibleSwapReleaseBlocked += 1;
+        }
         this._swapSeenFrameByTile.set(tileEl, { frame: this._frame, t: now });
         continue;
       }
       const seen = this._swapSeenFrameByTile.get(tileEl) || { frame: this._frame, t: now };
       const frameGap = Math.max(0, this._frame - Number(seen.frame || 0));
       const msGap = Math.max(0, now - Number(seen.t || now));
+      if (visible.has(tileEl)) {
+        this._swapReleaseBlocked += 1;
+        this._visibleSwapReleaseBlocked += 1;
+        continue;
+      }
+      if (nearVisible.has(tileEl)) {
+        const nearVisibleHold = idleFor < this._swapReleaseNearVisibleIdleMs
+          || frameGap < this._swapReleaseNearVisibleDelayFrames
+          || msGap < this._swapReleaseNearVisibleDelayMs
+          || !this._canReleaseSwap(tileEl, now);
+        if (nearVisibleHold) {
+          this._swapReleaseBlocked += 1;
+          this._visibleSwapReleaseBlocked += 1;
+          continue;
+        }
+      }
+      if (this.mode === 'fx' && this._fxEntryPhase !== 'steady' && protectedTiles.has(tileEl)) {
+        this._swapReleaseBlocked += 1;
+        this._visibleSwapReleaseBlocked += 1;
+        continue;
+      }
       if (frameGap < this._swapReleaseDelayFrames && msGap < this._swapReleaseDelayMs) continue;
-      if (!this._canReleaseSwap(tileEl, now)) continue;
+      if (idleFor < this._swapReleaseIdleMs || !this._canReleaseSwap(tileEl, now)) {
+        this._swapReleaseBlocked += 1;
+        continue;
+      }
+      this._swapReleaseAllowed += 1;
       this.applyDomSwap(tile, false, 'restore:untracked');
       this._swapSeenFrameByTile.delete(tileEl);
     }
@@ -1430,12 +1990,15 @@ export class TileFXRenderer {
 
   _resolveTileSource(tile) {
     const img = tile?.thumbEl || null;
-    if (img) {
-      const thumbUrl = String(img.dataset?.thumbUrl || '').trim();
-      return { kind: 'img', source: img, url: thumbUrl || img.currentSrc || img.getAttribute('src') || '' };
-    }
     const kind = String(tile?.thumbKind || '').toLowerCase();
     const thumbSrc = String(tile?.thumbSrc || '').trim();
+    if (img) {
+      const thumbUrl = String(img.dataset?.thumbUrl || '').trim();
+      const imgUrl = String(thumbUrl || img.currentSrc || img.getAttribute('src') || '').trim();
+      if (imgUrl) return { kind: 'img', source: img, url: imgUrl };
+      if (thumbSrc) return { kind: kind || 'url', source: null, url: thumbSrc };
+      return { kind: 'img', source: img, url: '' };
+    }
     if (!thumbSrc) return { kind: 'none', source: null, url: '' };
     if (kind === 'cssbg') return { kind: 'cssbg', source: null, url: thumbSrc };
     if (kind === 'videoposter' || kind === 'poster') return { kind: 'poster', source: null, url: thumbSrc };
@@ -1497,7 +2060,7 @@ export class TileFXRenderer {
   }
 
   _queueTileImageUpload(tile, key) {
-    if (!key || !this.textureCache) return;
+    if (!key) return;
     this._uploadAttempt += 1;
     const visibleCount = Math.max(1, Number(this.tiles?.length || 0));
     const maxPending = Math.max(24, visibleCount * 2);
@@ -1508,7 +2071,7 @@ export class TileFXRenderer {
       }
       return;
     }
-    if (this.textureCache.has(key)) return;
+    if (this.textureCache?.has?.(key)) return;
     if (this._pendingUploads.has(key)) return;
     this._setTileState(key, TILE_STATE.REQUESTED);
     const resolved = this._resolveTileSource(tile);
@@ -1516,16 +2079,32 @@ export class TileFXRenderer {
       kind: resolved.kind,
       ready: false,
       failed: false,
+      inFlight: true,
+      drainEvaluated: false,
+      drainAttempted: false,
+      failureReason: '',
       source: null,
       lastError: '',
-      promise: null,
     };
     this._pendingUploads.set(key, pending);
+    this._drainTraceByKey.set(key, {
+      drainEvaluated: false,
+      drainAttempted: false,
+      failureReason: '',
+    });
     this._uploadsQueued += 1;
+    if (window.__tilefx_dbg) window.__tilefx_dbg.lastVisiblePipeline = { key, stage: 'queued', kind: resolved.kind };
 
     if (resolved.kind === 'none') {
       this._srcMissing += 1;
       pending.failed = true;
+      pending.inFlight = false;
+      pending.failureReason = 'NO_SOURCE';
+      this._drainTraceByKey.set(key, {
+        drainEvaluated: true,
+        drainAttempted: false,
+        failureReason: 'NO_SOURCE',
+      });
       pending.lastError = 'NO_SOURCE';
       this._lastUploadError = pending.lastError;
       if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
@@ -1540,16 +2119,26 @@ export class TileFXRenderer {
       if (!canUseElement) this._pendingWaitLoad += 1;
       const prepPromise = canUseElement
         ? this._prepareImageForUpload(imgEl)
-        : (resolved.url ? this._queueUrlImage(resolved.url) : this._prepareImageForUpload(imgEl));
-      pending.promise = prepPromise
+        : (resolved.url
+          ? this._queueUrlImage(resolved.url).catch(() => this._prepareImageForUpload(imgEl))
+          : this._prepareImageForUpload(imgEl));
+      prepPromise
         .then((prepared) => {
           pending.source = prepared;
           pending.ready = true;
           this._pendingReady += 1;
           this._setTileState(key, TILE_STATE.UPLOADING);
+          if (window.__tilefx_dbg) window.__tilefx_dbg.lastVisiblePipeline = { key, stage: 'source_ready', kind: resolved.kind };
         })
         .catch((error) => {
           pending.failed = true;
+          pending.inFlight = false;
+          pending.failureReason = String(error?.message || 'IMG_PREP_FAIL');
+          this._drainTraceByKey.set(key, {
+            drainEvaluated: true,
+            drainAttempted: false,
+            failureReason: pending.failureReason,
+          });
           pending.lastError = String(error?.message || 'IMG_PREP_FAIL');
           this._lastUploadError = pending.lastError;
           if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
@@ -1560,7 +2149,7 @@ export class TileFXRenderer {
       return;
     }
 
-    pending.promise = this._queueUrlImage(resolved.url)
+    this._queueUrlImage(resolved.url)
       .then((prepared) => {
         pending.source = prepared;
         pending.ready = true;
@@ -1569,6 +2158,13 @@ export class TileFXRenderer {
       })
       .catch((error) => {
         pending.failed = true;
+        pending.inFlight = false;
+        pending.failureReason = String(error?.message || 'URL_PREP_FAIL');
+        this._drainTraceByKey.set(key, {
+          drainEvaluated: true,
+          drainAttempted: false,
+          failureReason: pending.failureReason,
+        });
         pending.lastError = String(error?.message || 'URL_PREP_FAIL');
         this._lastUploadError = pending.lastError;
         if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
@@ -1578,7 +2174,38 @@ export class TileFXRenderer {
       });
   }
 
+  _settlePendingUploadsAsFailed(reason = 'UPLOAD_DRAIN_UNAVAILABLE') {
+    const message = String(reason || 'UPLOAD_DRAIN_UNAVAILABLE');
+    for (const [key, pending] of Array.from(this._pendingUploads.entries())) {
+      if (!key || !pending) continue;
+      pending.failed = true;
+      pending.inFlight = false;
+      pending.failureReason = message;
+      this._drainTraceByKey.set(key, {
+        drainEvaluated: true,
+        drainAttempted: false,
+        failureReason: message,
+      });
+      pending.lastError = message;
+      this._lastUploadError = message;
+      this._uploadsFailed += 1;
+      this._recordUploadReject('unknown');
+      this._setTileState(key, TILE_STATE.DOM_ONLY);
+      this._pendingUploads.delete(key);
+    }
+    if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = message;
+  }
+
   _drainPendingUploads(now) {
+    if (this._pendingUploads.size <= 0) return;
+    const glUnavailable = !this.gl || this.failed;
+    if (glUnavailable && this.enabled && this.mode === 'fx') {
+      const failureReason = this.failed
+        ? (this.failReason || 'WEBGL_UNAVAILABLE')
+        : 'WEBGL_UNAVAILABLE';
+      this._settlePendingUploadsAsFailed(failureReason);
+      return;
+    }
     if (!this.textureCache && this.gl) {
       this.textureCache = new TextureCacheLRU(this.gl, {
         maxTextures: Number(new URLSearchParams(window.location.search).get('fxtilecache') || 96),
@@ -1595,14 +2222,66 @@ export class TileFXRenderer {
     const readyCount = Number(this._stateCounts().ready || 0);
     const visibleTarget = Number(this.tiles?.length || 0) + this.idleUploadOverscan;
     const maxPending = Math.max(24, Number(this.tiles?.length || 1) * 2);
-    if (window.__tilefx_dbg) window.__tilefx_dbg.pendingCap = maxPending;
-    if (!this.isScrolling && readyCount >= visibleTarget) return;
+    const vp = getViewportMetrics();
+    let visibleMissingTextures = 0;
+    const tiles = Array.isArray(this.tiles) ? this.tiles : [];
+    for (const tile of tiles) {
+      const key = String(tile?.key || '');
+      if (!key || this.textureCache.has(key)) continue;
+      const rect = tile?.rect || tile?.tileEl?.getBoundingClientRect?.() || null;
+      if (!rect) continue;
+      const left = Number(rect.left || 0) - Number(vp.offsetX || 0);
+      const top = Number(rect.top || 0) - Number(vp.offsetY || 0);
+      const right = left + Number(rect.width || 0);
+      const bottom = top + Number(rect.height || 0);
+      const visible = !(right <= 0 || bottom <= 0 || left >= Number(vp.width || 0) || top >= Number(vp.height || 0));
+      if (visible) visibleMissingTextures += 1;
+    }
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.pendingCap = maxPending;
+      window.__tilefx_dbg.visibleMissingTextures = visibleMissingTextures;
+    }
+    if (!this.isScrolling && readyCount >= visibleTarget && visibleMissingTextures <= 0) return;
     if (now < this.backpressureUntil) return;
     if (this._uploadsWindow.length >= this.uploadBudgetPerSecond) return;
 
     let uploadsThisFrame = 0;
+    const visiblePendingKeys = [];
+    const otherPendingKeys = [];
+    const tileByKey = new Map();
+    for (const row of tiles) {
+      const rowKey = String(row?.key || '');
+      if (rowKey) tileByKey.set(rowKey, row);
+    }
     for (const [key, pending] of Array.from(this._pendingUploads.entries())) {
+      if (!key || !pending) continue;
+      const tile = tileByKey.get(key) || null;
+      if (!tile) {
+        otherPendingKeys.push([key, pending]);
+        continue;
+      }
+      const rect = tile?.rect || tile?.tileEl?.getBoundingClientRect?.() || null;
+      if (!rect) {
+        otherPendingKeys.push([key, pending]);
+        continue;
+      }
+      const left = Number(rect.left || 0) - Number(vp.offsetX || 0);
+      const top = Number(rect.top || 0) - Number(vp.offsetY || 0);
+      const right = left + Number(rect.width || 0);
+      const bottom = top + Number(rect.height || 0);
+      const visible = !(right <= 0 || bottom <= 0 || left >= Number(vp.width || 0) || top >= Number(vp.height || 0));
+      if (visible) visiblePendingKeys.push([key, pending]);
+      else otherPendingKeys.push([key, pending]);
+    }
+    const pendingWork = visiblePendingKeys.concat(otherPendingKeys);
+    for (const [key, pending] of pendingWork) {
       if (uploadsThisFrame >= this.maxUploadsPerFrame) break;
+      pending.drainEvaluated = true;
+      this._drainTraceByKey.set(key, {
+        drainEvaluated: true,
+        drainAttempted: Boolean(pending.drainAttempted),
+        failureReason: String(pending.failureReason || ''),
+      });
       if (!pending || pending.failed) {
         this._pendingUploads.delete(key);
         continue;
@@ -1620,12 +2299,25 @@ export class TileFXRenderer {
       } catch {}
       uploadsThisFrame += 1;
       this._uploadsAttempted += 1;
+      pending.drainAttempted = true;
+      this._drainTraceByKey.set(key, {
+        drainEvaluated: true,
+        drainAttempted: true,
+        failureReason: String(pending.failureReason || ''),
+      });
       Promise.resolve(uploadSource).then((resolvedSource) => {
         if (!resolvedSource) {
           this._lastUploadError = 'UPLOAD_SOURCE_MISSING';
           if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
           this._recordUploadReject('unknown');
           this._uploadsFailed += 1;
+          pending.inFlight = false;
+          pending.failureReason = this._lastUploadError;
+          this._drainTraceByKey.set(key, {
+            drainEvaluated: true,
+            drainAttempted: true,
+            failureReason: this._lastUploadError,
+          });
           this._pendingUploads.delete(key);
           this._setTileState(key, TILE_STATE.DOM_ONLY);
           return;
@@ -1635,10 +2327,18 @@ export class TileFXRenderer {
           up = this.textureCache.upsertFromImage(key, pending.source, now);
         }
         if (up.uploaded) {
+          if (window.__tilefx_dbg) window.__tilefx_dbg.lastVisiblePipeline = { key, stage: 'texture_uploaded' };
           this._uploadsWindow.push(now);
           this._texturesUploaded += 1;
           this._uploadsSucceeded += 1;
           this._setTileState(key, TILE_STATE.UPLOADING);
+          pending.inFlight = false;
+          pending.failureReason = '';
+          this._drainTraceByKey.set(key, {
+            drainEvaluated: true,
+            drainAttempted: true,
+            failureReason: '',
+          });
           this._pendingUploads.delete(key);
         } else {
           this._lastUploadError = String(up.reason || 'UPLOAD_REJECTED');
@@ -1647,6 +2347,13 @@ export class TileFXRenderer {
           else if (this._lastUploadError.includes('MISSING') || this._lastUploadError.includes('ZERO')) this._recordUploadReject('zeroSize');
           else this._recordUploadReject('unknown');
           this._uploadsFailed += 1;
+          pending.inFlight = false;
+          pending.failureReason = this._lastUploadError;
+          this._drainTraceByKey.set(key, {
+            drainEvaluated: true,
+            drainAttempted: true,
+            failureReason: this._lastUploadError,
+          });
           this._pendingUploads.delete(key);
           this._setTileState(key, TILE_STATE.DOM_ONLY);
         }
@@ -1657,6 +2364,13 @@ export class TileFXRenderer {
         if (window.__tilefx_dbg) window.__tilefx_dbg.lastFailReason = this._lastUploadError;
         if (msg.toLowerCase().includes('security') || msg.toLowerCase().includes('taint')) this._recordUploadReject('tainted');
         else this._recordUploadReject('unknown');
+        pending.inFlight = false;
+        pending.failureReason = msg;
+        this._drainTraceByKey.set(key, {
+          drainEvaluated: true,
+          drainAttempted: true,
+          failureReason: msg,
+        });
         this._pendingUploads.delete(key);
         this._setTileState(key, TILE_STATE.DOM_ONLY);
       });
@@ -1674,6 +2388,9 @@ export class TileFXRenderer {
     if (window.__tilefx_dbg) {
       window.__tilefx_dbg.dpr = tileSize.dpr;
       window.__tilefx_dbg.dprCap = this.dprCap;
+      window.__tilefx_dbg.perfFrameBand = this._perfBand;
+      window.__tilefx_dbg.perfQuality = this._perfQuality;
+      window.__tilefx_dbg.mobileFallbackActive = this._mobileFxFallback;
       window.__tilefx_dbg.backpressureUntil = this.backpressureUntil;
     }
     return { dpr: tileSize.dpr, width: w, height: h };
@@ -1709,10 +2426,15 @@ export class TileFXRenderer {
     gl.uniform1f(this.u.u_time, now * 0.001);
 
     let drawCalls = 0;
+    this._visibleSwapReleaseBlocked = 0;
+    this._offscreenSwapReleaseAllowed = 0;
     const tiles = this.tiles || [];
     const visibleKeySet = new Set();
     const debugRects = [];
     const activeTileEls = new Set();
+    const visibleTileEls = new Set();
+    const nearVisibleTileEls = new Set();
+    const drawResults = new Map();
     tiles.forEach((tile) => {
       const k = String(tile?.key || '');
       if (k) visibleKeySet.add(k);
@@ -1732,9 +2454,39 @@ export class TileFXRenderer {
       const y1 = canvasRect.y1;
       const x2 = canvasRect.x2;
       const y2 = canvasRect.y2;
-      if (!Number.isFinite(x1 + y1 + x2 + y2)) return;
-      if (x2 <= x1 || y2 <= y1) return;
-      if (localRight <= 0 || localBottom <= 0 || localLeft >= vp.width || localTop >= vp.height) return;
+      const tileEl = tile?.tileEl || null;
+      const visible = !(localRight <= 0 || localBottom <= 0 || localLeft >= vp.width || localTop >= vp.height);
+      const nearVisible = !(localRight <= -140 || localBottom <= -140 || localLeft >= (vp.width + 140) || localTop >= (vp.height + 140));
+      const rectValid = Number.isFinite(x1 + y1 + x2 + y2) && x2 > x1 && y2 > y1;
+      const key = String(tile?.key || '');
+      if (tileEl) {
+        drawResults.set(tileEl, {
+          tile,
+          tileEl,
+          key,
+          visible,
+          rectValid,
+          hasTexture: false,
+          wasDrawnThisPass: false,
+        });
+      }
+      if (key && !this.textureCache?.has?.(key)) {
+        // Fed tiles are upload-first: queue texture prep even if visibility/rect state is temporarily stale.
+        this._queueTileImageUpload(tile, key);
+      }
+      const entry = key ? this.textureCache?.get?.(key, now) : null;
+      if (tileEl) {
+        if (nearVisible) nearVisibleTileEls.add(tileEl);
+        if (visible) visibleTileEls.add(tileEl);
+        if (drawResults.has(tileEl) && entry?.texture) drawResults.get(tileEl).hasTexture = true;
+      }
+      if (typeof tile?.onTextureReady === 'function') {
+        try {
+          tile.onTextureReady(Boolean(entry?.texture));
+        } catch {}
+      }
+      if (!rectValid) return;
+      if (!visible) return;
       if (this.debugRectsEnabled) debugRects.push({ left: localLeft, top: localTop, width: localRight - localLeft, height: localBottom - localTop });
 
       const color = this._typeColor(tile.type);
@@ -1743,22 +2495,25 @@ export class TileFXRenderer {
       gl.uniform1f(this.u.u_selected, tile.selected ? 1 : 0);
 
       let hasTex = 0;
-      const key = String(tile.key || '');
-      const tileEl = tile?.tileEl || null;
       const priorState = key ? (this.tileStateByKey.get(key) || TILE_STATE.DOM_ONLY) : TILE_STATE.DOM_ONLY;
       const swapState = this._getSwapState(tileEl);
+      const idleFor = Math.max(0, now - Number(this._lastScrollAt || 0));
       if (tileEl) this._swapSeenFrameByTile.set(tileEl, { frame: this._frame, t: now });
-      if (key && !this.textureCache.has(key)) {
+      if (key && !this.textureCache?.has?.(key)) {
         if (priorState === TILE_STATE.READY) {
           this._setTileState(key, TILE_STATE.EVICTED);
           if (swapState === TILE_SWAP_STATE.FX_SWAPPED) {
-            this.applyDomSwap(tile, false, 'evicted');
-            if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+            const canReleaseByIdle = idleFor >= this._swapReleaseIdleMs;
+            const canRelease = canReleaseByIdle && this._canReleaseVisibleSwap({ tileEl, visible }, now);
+            if (canRelease) {
+              this.applyDomSwap(tile, false, 'evicted');
+              if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+              this._swapReleaseAllowed += 1;
+              this._offscreenSwapReleaseAllowed += 1;
+            }
           }
         }
-        this._queueTileImageUpload(tile, key);
       }
-      const entry = key ? this.textureCache.get(key, now) : null;
       let shouldSwapSet = false;
       if (entry?.texture) {
         gl.activeTexture(gl.TEXTURE0);
@@ -1768,30 +2523,37 @@ export class TileFXRenderer {
         hasTex = 1;
         this._setTileState(key, TILE_STATE.READY);
         shouldSwapSet = Boolean(tileEl && swapState !== TILE_SWAP_STATE.FX_SWAPPED);
-      } else if (tileEl && swapState === TILE_SWAP_STATE.FX_SWAPPED && !this.isScrolling && this._canReleaseSwap(tileEl, now)) {
-        this.applyDomSwap(tile, false, 'missing-texture');
-        if (window.__tilefx_dbg) window.__tilefx_dbg.swapClearCalls = Number(window.__tilefx_dbg.swapClearCalls || 0) + 1;
+        if (tileEl && drawResults.has(tileEl)) drawResults.get(tileEl).hasTexture = true;
+      } else if (tileEl && swapState === TILE_SWAP_STATE.FX_SWAPPED) {
         this._setTileState(key, TILE_STATE.DOM_ONLY);
-      } else if (tileEl && swapState !== TILE_SWAP_STATE.DOM_VISIBLE && !this.isScrolling && this._canReleaseSwap(tileEl, now)) {
-        this.applyDomSwap(tile, false, 'fallback-dom-visible');
+        if (drawResults.has(tileEl)) drawResults.get(tileEl).releaseBlocked = true;
       }
       if (!hasTex) gl.uniform2f(this.u.u_tex_size, 1, 1);
-      if (typeof tile?.onTextureReady === 'function') {
-        try {
-          tile.onTextureReady(Boolean(entry?.texture));
-        } catch {}
-      }
       gl.uniform1f(this.u.u_has_tex, hasTex);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      if (shouldSwapSet) {
-        this.applyDomSwap(tile, true, 'draw-ready');
-        if (window.__tilefx_dbg) window.__tilefx_dbg.swapSetCalls = Number(window.__tilefx_dbg.swapSetCalls || 0) + 1;
+      if (tileEl && drawResults.has(tileEl)) drawResults.get(tileEl).wasDrawnThisPass = true;
+      if (shouldSwapSet && tileEl && drawResults.has(tileEl)) {
+        drawResults.get(tileEl).isSwapEligible = true;
       }
       drawCalls += 1;
     });
 
     this._renderDebugRects(debugRects);
-    this._restoreUntrackedSwaps(activeTileEls, now);
+    this._lastDrawByTileEl = new WeakMap();
+    drawResults.forEach((meta, tileEl) => {
+      if (!tileEl || !meta) return;
+      this._lastDrawByTileEl.set(tileEl, {
+        visible: meta.visible === true,
+        rectValid: meta.rectValid === true,
+        hasTexture: meta.hasTexture === true,
+        wasDrawnThisPass: meta.wasDrawnThisPass === true,
+        pipeline: (window.__tilefx_dbg && window.__tilefx_dbg.lastVisiblePipeline && window.__tilefx_dbg.lastVisiblePipeline.key === String(meta.key || ''))
+          ? window.__tilefx_dbg.lastVisiblePipeline.stage
+          : '',
+      });
+    });
+    this.syncVisibleTileOwnership(tiles, drawResults, now);
+    this._restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls, this._bootstrapVisibleTileEls);
     this._uploadsWindow = this._uploadsWindow.filter((t) => (now - t) <= 1000);
     if (this._uploadsWindow.length > this.uploadBudgetPerSecond) {
       this.backpressureUntil = now + this.uploadPauseMs;
@@ -1801,6 +2563,12 @@ export class TileFXRenderer {
     this._drawCalls = drawCalls;
     if (window.__tilefx_dbg) {
       const stateCounts = this._stateCounts();
+      const ownershipRows = Array.isArray(this._lastOwnershipRows) ? this._lastOwnershipRows : [];
+      const visibleRows = ownershipRows.filter((row) => row?.visible === true);
+      const visibleReady = visibleRows.filter((row) => row.hasTexture === true && row.rectValid === true).length;
+      const visibleUploading = Math.max(0, visibleRows.length - visibleReady);
+      const visibleDomOnly = visibleRows.filter((row) => row.owner !== 'FX').length;
+      const visibleSwapped = visibleRows.filter((row) => row.owner === 'FX').length;
       window.__tilefx_dbg.visibleCount = tiles.length;
       window.__tilefx_dbg.tilesVisible = tiles.length;
       window.__tilefx_dbg.overscanCount = tiles.length;
@@ -1845,6 +2613,16 @@ export class TileFXRenderer {
       };
       window.__tilefx_dbg.readyTiles = stateCounts.ready;
       window.__tilefx_dbg.pendingTiles = stateCounts.requested + stateCounts.uploading;
+      window.__tilefx_dbg.visibleReady = visibleReady;
+      window.__tilefx_dbg.visibleUploading = visibleUploading;
+      window.__tilefx_dbg.visibleDomOnly = visibleDomOnly;
+      window.__tilefx_dbg.visibleSwapped = visibleSwapped;
+      window.__tilefx_dbg.fxLifecycleStage = this.getFxLifecycleStage();
+      window.__tilefx_dbg.swapReleaseBlocked = this._swapReleaseBlocked;
+      window.__tilefx_dbg.swapReleaseAllowed = this._swapReleaseAllowed;
+      window.__tilefx_dbg.visibleSwapReleaseBlocked = this._visibleSwapReleaseBlocked;
+      window.__tilefx_dbg.offscreenSwapReleaseAllowed = this._offscreenSwapReleaseAllowed;
+      window.__tilefx_dbg.fedVisibleRatio = Number((Number(tiles.length || 0) > 0 ? (Number(visibleTileEls.size || 0) / Number(tiles.length || 1)) : 1).toFixed(3));
       window.__tilefx_dbg.rafRunning = this.raf > 0;
       window.__tilefx_dbg.scrolling = this.isScrolling;
       window.__tilefx_dbg.scrollIdleMs = this.isScrolling ? 0 : Math.max(0, now - Number(this._lastScrollAt || 0));
@@ -1855,7 +2633,112 @@ export class TileFXRenderer {
   }
 
   _adaptDprFromFrameMs(frameMs) {
-    this.dprCap = 2;
+    const bands = this._perfGuardrails.frameTimeBands;
+    const quality = this._perfGuardrails.adaptiveQuality;
+    const mobileFallback = this._perfGuardrails.mobileFallback;
+    const frame = Math.max(1, Number(frameMs || 0));
+    this._perfFrameEma = (this._perfFrameEma * 0.85) + (frame * 0.15);
+
+    let nextBand = 'target';
+    if (this._perfFrameEma >= bands.criticalMs) nextBand = 'critical';
+    else if (this._perfFrameEma >= bands.degradeMs) nextBand = 'degrade';
+    else if (this._perfFrameEma >= bands.warmMs) nextBand = 'warm';
+    this._perfBand = nextBand;
+
+    if (nextBand === 'critical') {
+      this._perfCriticalStreak += 1;
+      this._perfRecoveryStreak = 0;
+    } else {
+      this._perfRecoveryStreak += 1;
+      if (nextBand === 'target' && this._perfCriticalStreak > 0) {
+        this._perfCriticalStreak = Math.max(0, this._perfCriticalStreak - 1);
+      }
+    }
+
+    let nextQuality = this._perfQuality;
+    if (nextBand === 'critical') {
+      if (nextQuality === 'high') nextQuality = 'balanced';
+      else if (nextQuality === 'balanced') nextQuality = 'low';
+      else nextQuality = 'safe';
+    } else if (nextBand === 'degrade') {
+      if (nextQuality === 'high') nextQuality = 'balanced';
+      else if (nextQuality === 'balanced') nextQuality = 'low';
+    } else if (nextBand === 'target' && this._perfRecoveryStreak >= 24) {
+      if (nextQuality === 'safe') nextQuality = 'low';
+      else if (nextQuality === 'low') nextQuality = 'balanced';
+      else if (nextQuality === 'balanced') nextQuality = 'high';
+      this._perfRecoveryStreak = 0;
+    }
+
+    if (this.isCoarsePointer && mobileFallback.enabledOnCoarsePointer) {
+      const stuckCritical = this._perfCriticalStreak >= mobileFallback.sustainedCriticalFrames;
+      if (stuckCritical && nextQuality === mobileFallback.minQualityKey) {
+        this._mobileFxFallback = true;
+      } else if (this._mobileFxFallback && this._perfRecoveryStreak >= mobileFallback.recoverFrames) {
+        this._mobileFxFallback = false;
+      }
+    }
+
+    const atMinTier = nextQuality === mobileFallback.minQualityKey;
+    if (nextBand === 'critical' && atMinTier) {
+      this._perfMinTierCriticalStreak += 1;
+    } else {
+      this._perfMinTierCriticalStreak = Math.max(0, this._perfMinTierCriticalStreak - 1);
+    }
+
+    const shouldFallbackTransition = this._perfMinTierCriticalStreak >= Number(mobileFallback.repeatedMinTierCriticalFrames || 0)
+      && performance.now() >= Number(this._perfFallbackCooldownUntil || 0);
+    if (shouldFallbackTransition) {
+      this._triggerGuardrailFallback('min-tier-critical-repeat');
+    }
+
+    if (this._mobileFxFallback) nextQuality = mobileFallback.minQualityKey;
+    this._perfQuality = nextQuality;
+    const qualityProfile = quality[nextQuality] || quality.high;
+    this.dprCap = Math.max(1, Math.min(2, Number(qualityProfile.dprCap || 2)));
+    this.maxTexEdge = Math.max(64, Math.round(this._baseMaxTexEdge * Number(qualityProfile.maxTexEdgeScale || 1)));
+    this.uploadBudgetPerSecond = Math.max(1, Math.round(this._baseUploadBudgetPerSecond * Number(qualityProfile.uploadBudgetScale || 1)));
+    this.maxUploadsPerFrame = Math.max(1, Math.round(Math.min(this._baseMaxUploadsPerFrame, Number(qualityProfile.uploadsPerFrame || this._baseMaxUploadsPerFrame))));
+    this.idleUploadOverscan = Math.max(0, Math.min(this._baseIdleUploadOverscan, Number(qualityProfile.idleOverscan || this._baseIdleUploadOverscan)));
+
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.perfFrameEmaMs = Number(this._perfFrameEma.toFixed(3));
+      window.__tilefx_dbg.perfFrameBand = this._perfBand;
+      window.__tilefx_dbg.perfQuality = this._perfQuality;
+      window.__tilefx_dbg.mobileFallbackActive = this._mobileFxFallback;
+      window.__tilefx_dbg.mobileFallbackReason = this._mobileFxFallback ? 'coarse-pointer-critical-frames' : '';
+      window.__tilefx_dbg.perfMinTierCriticalStreak = this._perfMinTierCriticalStreak;
+      window.__tilefx_dbg.perfFallbackTransitions = this._perfFallbackTransitions;
+      window.__tilefx_dbg.perfFallbackCooldownUntil = this._perfFallbackCooldownUntil;
+      window.__tilefx_dbg.perfAdaptiveState = {
+        dprCap: this.dprCap,
+        maxTexEdge: this.maxTexEdge,
+        uploadBudgetPerSecond: this.uploadBudgetPerSecond,
+        maxUploadsPerFrame: this.maxUploadsPerFrame,
+        idleUploadOverscan: this.idleUploadOverscan,
+        criticalStreak: this._perfCriticalStreak,
+        recoveryStreak: this._perfRecoveryStreak,
+      };
+    }
+  }
+
+  _triggerGuardrailFallback(reason = 'guardrail') {
+    const now = performance.now();
+    this._perfFallbackTransitions += 1;
+    this._perfFallbackCooldownUntil = now + Number(this._perfGuardrails.mobileFallback.fallbackCooldownMs || 0);
+    this._perfMinTierCriticalStreak = 0;
+    this._mobileFxFallback = true;
+    this.backpressureUntil = Math.max(this.backpressureUntil, now + (this.uploadPauseMs * 2));
+    this._pendingUploads.clear();
+    this.restoreAllDomSwaps(`fallback:${reason}`);
+    this._fxEntryPhase = 'bootstrap_collect';
+    this._fxEntryStartedAt = now;
+    this._bootstrapVisibleTileEls = new Set();
+    if (window.__tilefx_dbg) {
+      window.__tilefx_dbg.perfFallbackReason = String(reason || 'guardrail');
+      window.__tilefx_dbg.perfFallbackTransitions = this._perfFallbackTransitions;
+      window.__tilefx_dbg.perfFallbackCooldownUntil = this._perfFallbackCooldownUntil;
+    }
   }
 
   _start() {
@@ -1896,11 +2779,8 @@ export class TileFXRenderer {
     this.stop();
     if (this._scrollIdleTimer) clearTimeout(this._scrollIdleTimer);
     this._scrollIdleTimer = 0;
-    this._pendingUploads.forEach((pending) => {
-      try { pending?.img?.removeEventListener('load', pending?.onLoad); } catch {}
-      try { pending?.img?.removeEventListener('error', pending?.onError); } catch {}
-    });
     this._pendingUploads.clear();
+    this._drainTraceByKey.clear();
     this.textureCache?.destroy();
     this.textureCache = null;
   }

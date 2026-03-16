@@ -94,6 +94,9 @@ def test_explorer_grid_overlay_metadata():
 def test_explorer_topbar_intent_controller():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert 'topbar-reveal' in html
+    assert 'data-ui-hook="explorer-app-shell"' in html
+    assert 'data-ui-hook="explorer-topbar"' in html
+    assert 'data-ui-hook="projects-section-header"' in html
     assert 'createIntentController' in html
     assert 'wireTopbarIntent' in html
     assert 'wireDropdownIntents' in html
@@ -130,6 +133,31 @@ def test_explorer_selection_keys_support_all_projects_scope():
     assert '/api/assets/bulk/compose' in html
 
 
+
+
+def test_explorer_delete_requires_confirm_and_scope_aware_reload():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'function confirmDeleteAction(count)' in html
+    assert "const modal = el('confirmDeleteModal');" in html
+    assert "return new Promise((resolve) => {" in html
+    assert "modal.classList.add('open');" in html
+    assert "if (event.target === modal) cleanup(false);" in html
+    assert 'const confirmed = await confirmDeleteAction(assets.length);' in html
+    assert 'if (!confirmed) return;' in html
+    assert 'id="confirmDeleteModal" class="confirm-modal"' in html
+    assert 'id="confirmDeleteCancel" class="btn"' in html
+    assert 'id="confirmDeleteSubmit" class="btn bad"' in html
+    assert 'function assetIdentityKey(item)' in html
+    assert 'function resolveAssetsForDelete(items)' in html
+    assert "if (wanted.has(assetIdentityKey(ref))) addRef(ref);" in html
+    assert 'wanted.has(ref.relative_path)' not in html
+    assert "deletePaths(items)" in html
+    assert "deletePaths(selectedItemsOrdered())" in html
+    assert "deletePaths([state.focused]);" in html
+    assert 'function reloadMediaForCurrentScope()' in html
+    assert "else if (state.mediaScope === 'all') await loadAllMedia();" in html
+    assert 'await reloadMediaForCurrentScope();' in html
+
 def test_explorer_selection_bar_compose_action_present():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert 'id="selCompose"' in html
@@ -143,12 +171,23 @@ def test_explorer_shader_asset_fx_wiring_present():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
 
     assert "import { AssetFX, ExplorerShaders, TileFXRenderer } from './js/explorer-shaders.mjs';" in html
+    assert "import { PREVIEW_ACTIONS, buildPreviewMediaDescriptor, getPreviewActionVisibility, normalizePreviewKind } from './js/asset-preview.mjs';" in html
+    assert 'data-preview-action="play"' in html
+    assert 'data-preview-action="copy"' in html
+    assert 'data-preview-action="tag"' in html
+    assert 'data-preview-action="obs"' in html
+    assert 'data-preview-action="delete"' in html
+    assert 'getPreviewActionVisibility(kind)' in html
+    assert 'const descriptor = buildPreviewMediaDescriptor(item, kind);' in html
+    assert 'const kind = normalizePreviewKind(guessKind(item));' in html
     assert 'window.__assetfx_instance instanceof AssetFX' in html
     assert "const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root=\"1\"]') || g;" in html
     assert "cardFX.attachGrid(gridRoot, '.asset');" in html
     assert 'cardFX.bindCardMedia(card, cardThumb, { kind });' in html
     assert 'cardFX.pulse(selectedCard);' in html
     assert 'data-no-preview="1"' in html
+    assert '--section-surface:' in html
+    assert 'background: var(--section-surface);' in html
     assert 'loading="eager" decoding="async" fetchpriority="high"' in html
     assert 'const THUMB_APPLY_PER_FRAME = 48;' in html
     assert 'function enqueueThumbApply(task)' in html
@@ -166,19 +205,58 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "function maybeToastTileFxPainterLeak(reason = 'scan'){" in html
     assert "toast('warn', 'FX painter leak'" in html
     assert 'function ensureTileFxProbeButton(){' in html
+    assert "const TILEFX_PROOF_MODE = new URLSearchParams(window.location.search).get('tilefxProof') === '1';" in html
+    assert "function captureTileFxProof(reason = 'manual'){" in html
+    assert 'window.captureTileFxProof = captureTileFxProof;' in html
+    assert 'function exportTileFxProofSummary(){' in html
+    assert "if (proofStale) proof = captureTileFxProof('export:refresh');" in html
+    assert 'window.exportTileFxProofSummary = exportTileFxProofSummary;' in html
+    assert "function logTileFxProofSummary(reason = 'manual'){" in html
+    assert 'window.logTileFxProofSummary = logTileFxProofSummary;' in html
+    assert 'window.logVisibleTileOwnership = logVisibleTileOwnership;' in html
+    assert 'ownership truth bug: visible cards present but ownership rows empty' in html
+    assert 'ownershipTruthBug: stillEmpty,' in html
+    assert 'visibleDomCards,' in html
+    assert 'function computeTileFxHealthVerdict(){' in html
+    assert "function assertTileFxViewLifecycle(reason = 'sync'){" in html
+    assert "function containTileFxInvariantFailure(reason = 'lifecycle', details = {}){" in html
+    assert "function forceExitFxAfterFatalLifecycle(reason = 'lifecycle_fatal') {" in html
     assert "btn.id = 'tilefxProbeBtn';" in html
+    assert "proofBtn.textContent = 'Capture Proof';" in html
     assert "hud.id = 'tilefxHud';" in html
     assert "scheduleTileFxCollect('scroll')" in html
     assert "scheduleTileFxCollect('resize')" in html
     assert "scheduleTileFxCollect('render-media')" in html
     assert "card.classList.toggle('tilefx-ready', !!ready);" in html
     assert 'COVERAGE_LOW' in html
+    assert 'visiblePromotedThisPass' in html
+    assert "const entryPhase = (typeof tileFX.getFxEntryPhase === 'function')" in html
+    assert "const inBootstrap = entryPhase !== 'steady';" in html
+    assert 'const maxPromoted = inBootstrap ? 0 : (scrolling ? (coarsePointer ? 2 : 4) : (coarsePointer ? 6 : 10));' in html
+    assert 'if (inBootstrap) break;' in html
+    assert 'visibleCards.forEach((tile) => addTile(tile));' in html
     assert 'texturesUploaded' in html
     assert 'texturesPending' in html
     assert 'thumbs: img' in html
-    assert 'reject: nr' in html
+    assert 'rectMismatch:' in html
+    assert 'rectMismatchVisibleCount' in html
+    assert 'rectMismatchMaxPx' in html
+    assert 'rectMismatchAvgPx' in html
+    assert 'lifecycleStable' in html
+    assert 'fedVisibleRatio' in html
+    assert 'visibleSwapReleaseBlocked' in html
+    assert 'offscreenSwapReleaseAllowed' in html
+    assert 'fxLifecycleStage' in shader_module
+    assert 'visibleReadyButNotSwapped' in html
+    assert 'visibleSwappedButNoTexture' in html
+    assert "proofPass: health === 'ok'" in html
+    assert 'deadOverlayHidden' in html
+    assert 'deadOverlayReason' in html
+    assert "renderer:${runtimeEnabled ? 'enabled' : 'disabled'}" in html
+    assert 'health:${healthVerdict}' in html
+    assert 'visiblePainterLeakCount' in html
     assert "card.dataset.fxReady = ready ? '1' : '0';" in html
-    assert 'swap: ready' in html
+    assert 'swapOps: set' in html
     assert 'data-tex="1"' in html
     assert 'upload: queued' in html
     assert 'pending: wait' in html
@@ -190,6 +268,30 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert '_getTileRectInVisualViewport(tileRect, viewportMetrics)' in shader_module
     assert '_cssRectToCanvasRect(localRect, dpr = 1)' in shader_module
     assert '_canReleaseSwap(tileEl, now = performance.now())' in shader_module
+    assert 'syncVisibleTileOwnership(activeTiles = [], drawResults = new Map(), now = performance.now())' in shader_module
+    assert '_isEnteringPhase() {' in shader_module
+    assert 'getFxLifecycleStage() {' in shader_module
+    assert '_reconcileVisibleOwnerFromTruth(tile, {' in shader_module
+    assert "this._fxEntryPhase = 'bootstrap_collect';" in shader_module
+    assert "this._fxEntryPhase = 'bootstrap_ready';" in shader_module
+    assert "this._fxEntryPhase = 'bootstrap_commit';" in shader_module
+    assert 'bootstrapReady === bootstrapTotal' in shader_module
+    assert 'export function readTileFxTuningFromQuery(params, {' in shader_module
+    assert 'const queryTuning = readTileFxTuningFromQuery(queryParams, { coarsePointer: coarse });' in shader_module
+    assert 'this._bootstrapReadyTimeoutMs = queryTuning.bootstrapReadyTimeoutMs;' in shader_module
+    assert 'const bootstrapReadyTimedOut = bootstrapElapsed >= this._bootstrapReadyTimeoutMs;' in shader_module
+    assert 'else if (bootstrapReadyTimedOut) {' in shader_module
+    assert 'window.__tilefx_dbg.bootstrapReadyTimedOut = Number(window.__tilefx_dbg.bootstrapReadyTimedOut || 0) + 1;' in shader_module
+    assert "this.applyDomSwap(tile, true, 'bootstrap:batch-commit');" in shader_module
+    assert "reasonFx: 'steady:visible-lock'," in shader_module
+    assert "reasonDom: 'steady:draw-truth-lost'," in shader_module
+    assert 'this._bootstrapVisibleTileEls = new Set();' in shader_module
+    assert 'getVisibleOwnershipRows(limit = 12)' in shader_module
+    assert '_collectVisibleDomOwnershipRows(limit = 12)' in shader_module
+    assert 'this._lastDrawByTileEl = new WeakMap();' in shader_module
+    assert 'swapState: String(swapState || TILE_SWAP_STATE.DOM_VISIBLE),' in shader_module
+    assert 'rectValid,' in shader_module
+    assert 'fed: true,' in shader_module
     assert 'tileStateByKey = new Map();' in shader_module
     assert 'decodedSrcSet = new Set();' in shader_module
     assert '_setTileState(key, TILE_STATE.READY);' in shader_module
@@ -208,7 +310,23 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'backpressureUntil' in shader_module
     assert 'totalReuploads()' in shader_module
     assert 'has(key)' in shader_module
+    assert "if (!this.enabled || this.mode !== 'fx' || !Array.isArray(this.tiles) || this.tiles.length === 0) return;" in shader_module
+    assert 'this._queueTileImageUpload(tile, key);' in shader_module
+    assert 'this._drainPendingUploads(performance.now());' in shader_module
     assert '_queueTileImageUpload(tile, key)' in shader_module
+    assert 'this._queueUrlImage(resolved.url).catch(() => this._prepareImageForUpload(imgEl))' in shader_module
+    assert 'const pendingWork = visiblePendingKeys.concat(otherPendingKeys);' in shader_module
+    assert 'if (visible) visiblePendingKeys.push([key, pending]);' in shader_module
+    assert "window.__tilefx_dbg.lastVisiblePipeline = { key, stage: 'queued', kind: resolved.kind }" in shader_module
+    assert "window.__tilefx_dbg.lastVisiblePipeline = { key, stage: 'texture_uploaded' }" in shader_module
+    assert 'pipeline:' in shader_module
+    assert "window.__tilefx_dbg.lastVisiblePipeline.key === String(meta.key || '')" in shader_module
+    assert 'const queued = key ? this._pendingUploads.has(key) : false;' in shader_module
+    assert 'queued,' in shader_module
+    assert 'Fed tiles are upload-first: queue texture prep even if visibility/rect state is temporarily stale.' in shader_module
+    assert 'window.__tilefx_dbg.visibleMissingTextures = visibleMissingTextures;' in shader_module
+    assert 'if (!this.isScrolling && readyCount >= visibleTarget && visibleMissingTextures <= 0) return;' in shader_module
+    assert "if (thumbSrc) return { kind: kind || 'url', source: null, url: thumbSrc };" in shader_module
     assert 'getViewportMetrics()' in shader_module
     assert 'resizeTileFxCanvasToViewport(canvas, dprCap = 2)' in shader_module
     assert 'this.debugRectsEnabled = new URLSearchParams(window.location.search).get(\'tilefxDebugRects\') === \'1\';' in shader_module
@@ -217,12 +335,19 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "_setSwapState(tileEl, nextState = TILE_SWAP_STATE.DOM_VISIBLE, reason = '')" in shader_module
     assert '_drainPendingUploads(now)' in shader_module
     assert 'teardownForModeExit({ removeCanvas = false } = {}) {' in shader_module
+    assert "restoreAllDomSwaps(reason = 'restore:all') {" in shader_module
     assert "applyDomSwap(tile, swapped = false, reason = '') {" in shader_module
-    assert "disable(reason = '')" in shader_module
-    assert "console.warn('[tilefx] DISABLE'" in shader_module
+    assert "disable(reason = '', { allowInFxView = false } = {})" in shader_module
+    assert "console.warn('[tilefx] DISABLE'" not in shader_module
+    assert "console.debug('[tilefx] disable'" in shader_module
+    assert "console.error('[tilefx] illegal disable during FX view'" in shader_module
+    assert 'illegalDisableBlocked: 0,' in shader_module
+    assert 'lastIllegalDisable: null,' in shader_module
     assert "console.warn('[tilefx] rect mismatch'" in shader_module
     assert 'window.__tilefx_dbg.pendingCap = maxPending;' in shader_module
-    assert '_restoreUntrackedSwaps(activeTileEls, now);' in shader_module
+    assert 'this._swapReleaseNearVisibleIdleMs = 520;' in shader_module
+    assert 'this._swapReleaseNearVisibleDelayFrames = 20;' in shader_module
+    assert '_restoreUntrackedSwaps(activeTileEls, now, visibleTileEls, nearVisibleTileEls, this._bootstrapVisibleTileEls);' in shader_module
     assert 'const paintEls = Array.isArray(tile?.thumbPaintEls) && tile.thumbPaintEls.length' in shader_module
     assert "tileEl.classList.toggle('fx-swapped', !!swapped);" in shader_module
     assert "document.body?.classList?.contains('fx-mode')" in shader_module
@@ -237,8 +362,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'uploadsSucceeded: 0,' in shader_module
     assert 'uploadsFailed: 0,' in shader_module
     assert 'resizeImageForGL(img, maxEdge = 320)' in shader_module
-    assert "new URLSearchParams(window.location.search).get('tilefxMaxTex')" in shader_module
-    assert 'this.maxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));' in shader_module
+    assert "readClampedSearchParam(searchParams, 'tilefxMaxTex'" in shader_module
+    assert 'this._baseMaxTexEdge = queryTuning.maxTexEdge;' in shader_module
+    assert 'this.maxTexEdge = this._baseMaxTexEdge;' in shader_module
     assert 'averageTextureSize() {' in shader_module
     assert 'pendingWaitLoad: 0,' in shader_module
     assert 'pendingReady: 0,' in shader_module
@@ -479,6 +605,31 @@ def test_explorer_shared_renderer_singleton_symbols_present():
     assert 'if (this.container && RENDERERS.has(this.container)) RENDERERS.delete(this.container);' in shader_module
 
 
+def test_explorer_near_visible_tracking_happens_before_visible_cull():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    near_idx = shader_module.index('if (nearVisible) nearVisibleTileEls.add(tileEl);')
+    visible_cull_idx = shader_module.index('if (!visible) return;', near_idx)
+    visible_add_idx = shader_module.index('if (visible) visibleTileEls.add(tileEl);', near_idx)
+    assert near_idx < visible_cull_idx
+    assert visible_add_idx < visible_cull_idx
+
+
+
+
+
+def test_explorer_texture_ready_callback_runs_before_visible_cull():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    callback_idx = shader_module.index('tile.onTextureReady(Boolean(entry?.texture));')
+    visible_cull_idx = shader_module.index('if (!visible) return;', callback_idx)
+    rect_cull_idx = shader_module.index('if (!rectValid) return;', callback_idx)
+    assert callback_idx < rect_cull_idx
+    assert callback_idx < visible_cull_idx
+
+
+def test_explorer_render_pipeline_uses_null_safe_texture_cache_access():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert 'if (key && !this.textureCache?.has?.(key)) {' in shader_module
+    assert 'const entry = key ? this.textureCache?.get?.(key, now) : null;' in shader_module
 
 
 def test_explorer_asset_css_visual_animation_is_minimized():
@@ -498,32 +649,39 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'if (host.parentElement !== document.body) document.body.appendChild(host);' in html
     assert '#ui-portal .actions-panel{' in html and 'pointer-events: auto;' in html
     assert 'function setFxSuspend(suspend)' in html
-    assert "function maybeRecoverTileFxRuntime(reason = 'watchdog'){" in html
+    assert "function logTileFxLayerContract(reason = 'runtime') {" in html
     assert 'function inNoPreviewZone(target)' in html
     assert "if (inNoPreviewZone(event.target)) return;" in html
     assert "target.closest('[data-no-preview], .sel-ui')" in html
-    assert 'async function refreshExplorerData({ toastOnSuccess = true } = {})' in html
+    assert 'async function refreshExplorerData({ toastOnSuccess = true, suppressErrorToast = false } = {})' in html
     assert "<button id=\"viewFx\" class=\"active\" type=\"button\">FX</button>" in html
     assert "if (typeof cardFX?.setDissolveMode === 'function') {" in html
     assert "cardFX.setDissolveMode('tile');" in html
-    assert 'window.__tilefx_enabled = fxEnabled;' in html
+    assert 'window.__tilefx_enabled = fxMode;' in html
     assert "document.body.classList.toggle('fx-safemode', fxEnabled);" in html
     assert 'window.__explorer_view = nextView;' in html
-    assert "destroyTileFX('setView:non-fx');" in html
-    assert 'tileFX.enable();' in html
+    assert "function syncTileFxLifecycleToView(view = state.view, reason = 'sync', { forceDisableInNonFx = false } = {}){" in html
+    assert "syncTileFxLifecycleToView(nextView, 'setView:fx');" in html
+    assert 'tileFX.start();' in html
     assert 'window.tileFX = tileFX;' in html
     assert 'window.destroyTileFX = destroyTileFX;' in html
     assert 'window.setViewMode = setView;' in html
     assert "function destroyTileFX(reason = 'manual', { force = false } = {}){" in html
-    assert 'tileFX.teardownForModeExit({ removeCanvas: false });' in html
+    assert "syncTileFxLifecycleToView(nextView, 'setView:non-fx');" in html
+    assert "syncTileFxLifecycleToView(state.view, `destroy:${reason}`, { forceDisableInNonFx: true });" in html
+    assert html.count('tileFX.enable(') >= 2
+    assert html.count('tileFX.disable(') >= 2
+    assert html.count('tileFX.start();') >= 2
+    assert html.count('tileFX.stop();') >= 2
+    assert 'return assertTileFxViewLifecycle(`sync:${reason}`);' in html
+    assert 'tileFX.restoreAllDomSwaps?.();' in html
     assert 'tileFX.noteScroll();' in html
     assert 'const TILEFX_SCAN_MIN_INTERVAL_MS = 120;' in html
-    assert 'const TILEFX_WATCHDOG_INTERVAL_MS = 900;' in html
-    assert 'const TILEFX_WATCHDOG_STALE_MS = 1200;' in html
-    assert "`mode: ${state.view} | enabled: ${tileFxDbg.enabled ? '1' : '0'} | raf: ${tileFxDbg.rafRunning ? '1' : '0'}`" in html
+    assert "`mode: ${state.view} | enabled: ${runtimeEnabled ? '1' : '0'} | raf: ${runtimeRafRunning ? '1' : '0'}`" in html
     assert "console.error('TileFX invariant breach: drawCalls > 0 while not in FX mode');" in html
     assert "const activeContainer = (state.view === 'list') ? l : g;" in html
-    assert 'await refreshExplorerData({ toastOnSuccess: false });' in html
+    assert "await refreshExplorerData({ toastOnSuccess: false, suppressErrorToast: true });" in html
+    assert "if (state.view !== 'grid') setView('grid');" in html
     assert 'if (ui.inspectorOpen) {' in html
     assert 'state.focused = null;' in html
     assert "const LAYOUT_DEBUG = new URLSearchParams(window.location.search).get('layoutdebug') === '1';" in html
@@ -537,7 +695,7 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'canvasZIndex: fxCanvasStyle?.zIndex || null,' in html
     assert 'gridRootZIndex: rs.zIndex,' in html
     assert 'canvasHeightPx: fxCanvas?.height || null,' in html
-    assert "maybeRecoverTileFxRuntime('visual-viewport');" in html
+    assert "scheduleTileFxCollect('visual-viewport-live');" in html
     assert 'gridScrollHeight: gridRoot.scrollHeight,' in html
     assert 'tileFxCanvasTransformedAncestor:' in html
     assert 'tileFxCanvasTransformChain:' in html
@@ -551,9 +709,12 @@ def test_explorer_asset_css_visual_animation_is_minimized():
     assert 'maybeToastTileFxPainterLeak(reason);' in html
     assert 'const TILEFX_SCAN_IDLE_INTERVAL_MS = 1000;' in html
     assert "scheduleTileFxCollect('idle-heartbeat')" in html
-    assert "maybeRecoverTileFxRuntime('heartbeat');" in html
+    assert "setInterval(() => {\n      if (state.view !== 'fx' || !window.__tilefx_enabled) return;\n      if (tileFxDbg.scrolling) return;" in html
+    assert '// visualViewport handlers are resize/collect only; never mutate lifecycle state.' in html
     assert 'maxTex ${Number(tileFxDbg.maxTexEdge || 0)}' in html
     assert '.app{ position: relative; z-index: 2; }' in html
+    assert 'z-index: var(--z-tilefx-canvas);' in html
+    assert 'z-index: var(--z-hud);' in html
     assert 'overlaySanitizerObserver.observe(document.documentElement, { childList: true });' in html
     assert "setTimeout(() => overlaySanitizerObserver.disconnect(), 4000);" in html
     assert "setFxSuspend(open || ui.inspectorOpen);" in html
@@ -609,6 +770,7 @@ def test_explorer_card_shell_skin_and_bg_impulse_present():
     assert '.asset .scrim{' in html
     assert '.asset .play-btn{' in html
     assert '.asset .preview-pill{' in html
+    assert '[data-fx-near-visible="1"]:not([data-tex="1"]) .thumb-body' in html
     assert 'id="bgImpulseCanvas" class="bg-impulse-canvas"' in html
     assert 'function wireBackgroundImpulse()' in html
     assert "document.addEventListener('pointerdown', pushImpulse, { passive: true });" in html
@@ -633,6 +795,57 @@ def test_explorer_selection_click_is_scoped_to_sel_ui_only():
     assert 'class="selector sel-ui"' in html
     assert "const selUi = event.target.closest('.sel-ui[data-no-preview=\"1\"]');" in html
     assert "if (!event.target.closest('.sel-shell, .sel-order, input[type=\"checkbox\"][data-select-key]')) return;" in html
+
+
+def test_explorer_mock_mode_short_circuits_boot_and_api_errors():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert "import { isLikelyPreviewEnvironment, loadExplorerMockAssets, normalizeExplorerMockAsset, shouldUseExplorerMocks } from './js/explorer-mock-assets.mjs';" in html
+    assert 'state.mockMode = true;' in html
+    assert 'if (state.mockMode) {' in html
+    assert "await activateMockMode('activation');" in html
+    assert "await refreshExplorerData({ toastOnSuccess: false, suppressErrorToast: true });" in html
+    assert 'if (isLikelyPreviewEnvironment()) {' in html
+    assert "await activateMockMode('preview-fallback');" in html
+    assert "toast('bad', 'Boot', error?.message || 'Failed to load explorer data');" in html
+
+
+def test_explorer_mock_module_supports_webview_preview_detection():
+    module = Path('public/js/explorer-mock-assets.mjs').read_text(encoding='utf-8')
+    assert "const WEBVIEW_PROTOCOLS = new Set(['file:', 'vscode-webview:', 'capacitor:', 'ionic:']);" in module
+    assert 'export function shouldUseExplorerMocks() {' in module
+    assert "return WEBVIEW_PROTOCOLS.has(String(window.location.protocol || '').toLowerCase());" in module
+    assert 'export function isLikelyPreviewEnvironment() {' in module
+    assert "if (hostLooksLocal(window.location.hostname)) return true;" in module
+    assert "if (window.opener && hostLooksLocal(window.location.hostname)) return true;" in module
+    assert "if (window.top !== window.self && hostLooksLocal(window.location.hostname)) return true;" in module
+
+
+def test_explorer_tilefx_guardrail_policy_contract_present():
+    shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
+    assert 'const TILEFX_PERF_GUARDRAILS = Object.freeze({' in shader_module
+    assert 'frameTimeBands: Object.freeze({' in shader_module
+    assert 'adaptiveQuality: Object.freeze({' in shader_module
+    assert "mobileFallback: Object.freeze({" in shader_module
+    assert 'this._perfGuardrails = TILEFX_PERF_GUARDRAILS;' in shader_module
+    assert 'this._perfFrameEma = 16.7;' in shader_module
+    assert "this._perfQuality = 'high';" in shader_module
+    assert 'this._mobileFxFallback = false;' in shader_module
+    assert 'const qualityProfile = quality[nextQuality] || quality.high;' in shader_module
+    assert 'this.maxTexEdge = Math.max(64, Math.round(this._baseMaxTexEdge * Number(qualityProfile.maxTexEdgeScale || 1)));' in shader_module
+    assert 'window.__tilefx_dbg.perfAdaptiveState = {' in shader_module
+    assert 'window.__tilefx_dbg.mobileFallbackActive = this._mobileFxFallback;' in shader_module
+    assert "window.__tilefx_dbg.mobileFallbackReason = this._mobileFxFallback ? 'coarse-pointer-critical-frames' : '';" in shader_module
+    assert 'tuningLimits: Object.freeze({' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'tilefxMaxTex\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'tilefxIdleReadyMargin\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'fxtileuploads\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'fxtileuploadsframe\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'tilefxBootstrapReadyMs\'' in shader_module
+    assert '_triggerGuardrailFallback(\'min-tier-critical-repeat\')' in shader_module
+    assert 'this.restoreAllDomSwaps(`fallback:${reason}`);' in shader_module
+    assert 'window.__tilefx_dbg.perfFallbackTransitions = this._perfFallbackTransitions;' in shader_module
+    assert 'window.__tilefx_dbg.perfFallbackCooldownUntil = this._perfFallbackCooldownUntil;' in shader_module
+    assert 'perfQueryTuning: {' in shader_module
 
 
 def test_explorer_assetfx_overlay_is_viewport_fixed_and_novirt_wired():
@@ -683,3 +896,31 @@ def test_explorer_overlay_sanitizer_inert_contract_present():
     assert '[data-overlay-sanitized="1"]{' in html
     assert "setNodeStyleSafe(node, 'pointerEvents', 'none');" in html
     assert "setNodeDataSafe(node, 'overlaySanitized', '1');" in html
+
+
+def test_explorer_preview_drawer_hook_cluster_and_tag_panel_contract_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'id="drawer" class="drawer"' in html
+    assert 'id="drawerPreview"' in html
+    assert 'id="drawerPlay"' in html
+    assert 'id="drawerCopy"' in html
+    assert 'id="drawerTagToggle"' in html
+    assert 'id="drawerSendOBS"' in html
+    assert 'id="drawerDelete"' in html
+    assert 'id="drawerTagPanel"' in html
+    assert "function setInspectorOpen(open){" in html
+    assert "el('drawerTagPanel')?.classList.remove('open');" in html
+    assert "el('drawerTagToggle').onclick = () => {" in html
+    assert "panel?.classList.toggle('open');" in html
+    assert "el('drawerTagInput')?.focus();" in html
+    assert "el('drawerBackdrop').addEventListener('click', closeDrawer);" in html
+
+
+def test_explorer_server_thumbnail_priority_contract_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'function resolveThumbnailUrl(item, kind){' in html
+    assert "const canonical = String(item?.thumbnail_url || '').trim();" in html
+    assert "const legacy = String(item?.thumb_url || '').trim();" in html
+    assert "return kind === 'image' ? String(item?.stream_url || item?.streamUrl || '').trim() : '';" in html
+    assert 'const thumbUrl = normalizeThumbUrl(resolveThumbnailUrl(it, kind));' in html
+    assert 'const thumbKey = thumbCacheKey(it);' in html

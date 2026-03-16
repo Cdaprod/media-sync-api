@@ -2,25 +2,39 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { createApiClient } from './api';
+import { buildProjectUploadUrl, createApiClient } from './api';
 import {
+  buildMediaIdentity,
   collectMediaMeta,
   extractAiTags,
   extractTags,
   filterMedia,
+  normalizeExplorerViewState,
   pruneSelection,
   sortMedia,
   sortMediaByRecent,
   toggleSelection,
 } from './state';
-import type { MediaMeta, MediaTypeFilter, SortKey } from './state';
+import type { MediaActionRef, MediaMeta, MediaTypeFilter, SortKey } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
 import {
+  buildPreviewMediaDescriptor,
+  buildProgramMonitorDescriptor,
+  buildStreamPathFromItem,
+  buildThumbCacheKey,
+  canUseObsIntegration,
+  canUseProgramMonitorIntegration,
   copyTextWithFallback,
+  decideExplorerBootMode,
   formatBytes,
   guessKind,
+  normalizePreviewKind,
+  resolveThumbnailUrl,
   inferApiBaseUrl,
   kindBadgeClass,
+  loadExplorerMockAssets,
+  pushAssetToObs,
+  sendToProgramMonitor,
   toAbsoluteUrl,
 } from './utils';
 
@@ -31,7 +45,209 @@ interface ExplorerAppProps {
 const DEFAULT_VIEW: ExplorerView = 'grid';
 const POINTER_THRESHOLD = 8;
 const LONG_PRESS_MS = 480;
+const VIEW_PREFS_KEY = 'explorer-view-v1';
 
+
+
+
+export function buildStableAssetRef(item: MediaItem): MediaActionRef {
+  return {
+    source: String(item.project_source || item.source || 'primary'),
+    project: String(item.project_name || item.project || ''),
+    relative_path: String(item.relative_path || ''),
+  };
+}
+
+const toAssetRef = (item: MediaItem): MediaActionRef => buildStableAssetRef(item);
+
+const assetRefKey = (item: MediaActionRef | null | undefined): string => {
+  if (!item) return '';
+  if (!item.project || !item.relative_path) return '';
+  return `${item.source || 'primary'}::${item.project}::${item.relative_path}`;
+};
+
+interface ComposeDialogState {
+  assets: MediaActionRef[];
+  outputProject: string;
+  outputSource: string;
+  outputName: string;
+}
+
+const isVideoItem = (item: MediaItem): boolean => guessKind(item) === 'video';
+
+const getGridAssetSpan = (kind: string, orient: string): number => {
+  if (kind === 'audio') return 34;
+  if (orient === 'portrait') return 58;
+  if (orient === 'landscape') return 38;
+  return 46;
+};
+
+const getAssetIndex = (items: MediaItem[]): Map<string, MediaItem> => {
+  const map = new Map<string, MediaItem>();
+  items.forEach((item) => {
+    map.set(assetRefKey(toAssetRef(item)), item);
+  });
+  return map;
+};
+
+export interface PreviewDrawerUiState {
+  inspectorOpen: boolean;
+  drawerTagPanelOpen: boolean;
+}
+
+export type PreviewDrawerEvent = 'open' | 'close' | 'toggle_tag_panel';
+
+export function reducePreviewDrawerState(
+  state: PreviewDrawerUiState,
+  event: PreviewDrawerEvent,
+  context: { hasFocused: boolean },
+): PreviewDrawerUiState {
+  if (event === 'open') {
+    return { inspectorOpen: true, drawerTagPanelOpen: false };
+  }
+  if (event === 'close') {
+    return { inspectorOpen: false, drawerTagPanelOpen: false };
+  }
+  if (!context.hasFocused) {
+    return { ...state, drawerTagPanelOpen: false };
+  }
+  return { ...state, drawerTagPanelOpen: !state.drawerTagPanelOpen };
+}
+
+export function getPreviewDrawerActionState(input: {
+  hasFocused: boolean;
+  activeProject: boolean;
+  isFocusedSelected: boolean;
+  hasStreamUrl: boolean;
+  canUseObs: boolean;
+  canUseProgramMonitor: boolean;
+}): {
+  canPlay: boolean;
+  canCopyStream: boolean;
+  canSendObs: boolean;
+  canProgramMonitor: boolean;
+  canSelectToggle: boolean;
+  canDelete: boolean;
+} {
+  const hasFocused = Boolean(input.hasFocused);
+  return {
+    canPlay: hasFocused && input.hasStreamUrl,
+    canCopyStream: hasFocused && input.hasStreamUrl,
+    canSendObs: hasFocused && input.hasStreamUrl && input.canUseObs,
+    canProgramMonitor: hasFocused && input.hasStreamUrl && input.canUseProgramMonitor,
+    canSelectToggle: hasFocused && input.activeProject,
+    canDelete: hasFocused && input.activeProject,
+  };
+}
+
+export function getPreviewDrawerActionVisibility(kind: string | null | undefined): { showPlay: boolean } {
+  const normalized = String(kind || '').toLowerCase();
+  return { showPlay: normalized === 'video' || normalized === 'audio' };
+}
+
+export const PREVIEW_ACTIONS = Object.freeze({
+  play: 'play',
+  copy: 'copy',
+  tag: 'tag',
+  obs: 'obs',
+  delete: 'delete',
+  compose: 'compose',
+});
+
+
+export function buildSelectionAssetRefs(input: {
+  selectedItems: MediaItem[];
+  focusedItem: MediaItem | null;
+  requested?: Array<MediaActionRef | string>;
+  videosOnly?: boolean;
+}): MediaActionRef[] {
+  const refs = mapOrderedAssetRefs(input.selectedItems, input.focusedItem, input.requested || []);
+  if (!input.videosOnly) return refs;
+  const videoKeySet = new Set<string>();
+  input.selectedItems.forEach((item) => {
+    if (isVideoItem(item)) videoKeySet.add(assetRefKey(toAssetRef(item)));
+  });
+  if (input.focusedItem && isVideoItem(input.focusedItem)) {
+    videoKeySet.add(assetRefKey(toAssetRef(input.focusedItem)));
+  }
+  return refs.filter((ref) => videoKeySet.has(assetRefKey(ref)));
+}
+
+export function mapOrderedVideoAssetRefs(
+  selectedItems: MediaItem[],
+  focusedItem: MediaItem | null,
+  requested: Array<MediaActionRef | string> = [],
+): MediaActionRef[] {
+  return buildSelectionAssetRefs({ selectedItems, focusedItem, requested, videosOnly: true });
+}
+
+export function getComposeRefreshScope(activeProject: Project | null): 'project' | 'all' {
+  return activeProject ? 'project' : 'all';
+}
+
+export function buildComposeArtifactSummary(payload: Record<string, unknown>, fallbackName: string): string {
+  const path = String(payload.path || payload.output_path || payload.relative_path || fallbackName);
+  const outputProject = String(payload.output_project || payload.project || '').trim();
+  const outputSource = String(payload.output_source || payload.source || '').trim();
+  if (outputProject && outputSource) return `${path} (${outputProject} @ ${outputSource})`;
+  if (outputProject) return `${path} (${outputProject})`;
+  return path;
+}
+
+export function mapOrderedAssetRefs(
+  selectedItems: MediaItem[],
+  focusedItem: MediaItem | null,
+  requested: Array<MediaActionRef | string> = [],
+): MediaActionRef[] {
+  const refs: MediaActionRef[] = [];
+  const seen = new Set<string>();
+  const addRef = (ref: MediaActionRef | null | undefined) => {
+    const key = assetRefKey(ref);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    refs.push({ source: ref?.source || 'primary', project: ref?.project || '', relative_path: ref?.relative_path || '' });
+  };
+
+  const selectedRefs = selectedItems.map(toAssetRef).filter((ref) => ref.project && ref.relative_path);
+  if (!requested.length) {
+    selectedRefs.forEach(addRef);
+    return refs;
+  }
+
+  const wanted = new Set<string>();
+  const legacyPaths = new Set<string>();
+  requested.forEach((entry) => {
+    if (!entry) return;
+    if (typeof entry === 'string') {
+      legacyPaths.add(entry);
+      return;
+    }
+    const key = assetRefKey(entry);
+    if (key) wanted.add(key);
+  });
+
+  if (legacyPaths.size && focusedItem?.relative_path && legacyPaths.has(focusedItem.relative_path)) {
+    wanted.add(assetRefKey(toAssetRef(focusedItem)));
+  }
+  if (legacyPaths.size) {
+    selectedRefs.forEach((ref) => {
+      if (legacyPaths.has(ref.relative_path)) wanted.add(assetRefKey(ref));
+    });
+  }
+
+  if (!wanted.size) return refs;
+
+  selectedRefs.forEach((ref) => {
+    if (wanted.has(assetRefKey(ref))) addRef(ref);
+  });
+
+  if (focusedItem) {
+    const focusedRef = toAssetRef(focusedItem);
+    if (wanted.has(assetRefKey(focusedRef))) addRef(focusedRef);
+  }
+
+  return refs;
+}
 const formatListValue = (value: string | string[] | null | undefined) => {
   if (Array.isArray(value)) {
     return value.filter((entry) => entry.trim().length > 0).join(', ');
@@ -280,14 +496,6 @@ const SORT_LABELS: Record<SortKey, string> = {
   'size-asc': 'Size small→big',
 };
 
-const getThumbCacheKey = (item: MediaItem) => {
-  const project = item.project_name || item.project || '';
-  const source = item.project_source || item.source || '';
-  const rel = item.relative_path || '';
-  const sha = item.sha256 || item.hash || '';
-  return [source, project, rel, sha].filter(Boolean).join('|');
-};
-
 function useToastQueue() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const timeouts = useRef<number[]>([]);
@@ -336,11 +544,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [drawerTagPanelOpen, setDrawerTagPanelOpen] = useState(false);
+  const [drawerTagInput, setDrawerTagInput] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [assetDragActive, setAssetDragActive] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ requested: Array<MediaActionRef | string>; title: string; message: string } | null>(null);
+  const [composeDialog, setComposeDialog] = useState<ComposeDialogState | null>(null);
+  const [composeSubmitting, setComposeSubmitting] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
+  const [mockMode, setMockMode] = useState(false);
   const dragPathsRef = useRef<string[]>([]);
 
   const [resolveProjectMode, setResolveProjectMode] = useState('current');
@@ -350,6 +564,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const drawerTagInputRef = useRef<HTMLInputElement | null>(null);
   const mediaScrollRef = useRef<HTMLDivElement | null>(null);
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
@@ -371,13 +586,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     );
     return sortMedia(filtered, sortKey, mediaMeta);
   }, [media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
-  const itemsByPath = useMemo(() => {
-    const map = new Map<string, MediaItem>();
-    media.forEach((item) => {
-      if (item.relative_path) map.set(item.relative_path, item);
-    });
-    return map;
-  }, [media]);
+  const selectedMediaItems = useMemo(
+    () => filteredMedia.filter((item) => selected.has(item.relative_path)),
+    [filteredMedia, selected],
+  );
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
   const typeLabel = TYPE_LABELS[typeFilter] ?? TYPE_LABELS.all;
@@ -446,10 +658,34 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, [filteredMedia, updateCardOrientation, view]);
 
-  const buildUploadUrl = useCallback((project: Project) => {
-    const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
-    return project.upload_url || `/api/projects/${encodeURIComponent(project.name)}/upload${query}`;
-  }, []);
+  const applyNormalizedView = useCallback((incomingView: unknown, source: 'url' | 'storage' | 'ui') => {
+    const normalized = normalizeExplorerViewState(incomingView, DEFAULT_VIEW);
+    setView(normalized.view);
+    if (normalized.changed && normalized.message) {
+      const title = normalized.reason === 'fx_disabled' ? 'View Mode' : 'View';
+      addToast('warn', title, `${normalized.message} (${source})`);
+    }
+    return normalized.view;
+  }, [addToast]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search || '');
+    const urlView = params.get('view');
+    if (urlView) {
+      applyNormalizedView(urlView, 'url');
+      return;
+    }
+    const stored = window.localStorage.getItem(VIEW_PREFS_KEY);
+    if (stored) applyNormalizedView(stored, 'storage');
+  }, [applyNormalizedView]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(VIEW_PREFS_KEY, view);
+  }, [view]);
+
+  const buildUploadUrl = useCallback((project: Project) => buildProjectUploadUrl(project), []);
 
   const resolveAssetUrl = useCallback(
     (path?: string) => {
@@ -508,6 +744,51 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [mediaMeta, typeFilter, untaggedOnly, sortKey]);
 
+  const loadMockData = useCallback(async () => {
+    try {
+      const assets = await loadExplorerMockAssets(fetch);
+      const normalized = assets.map((item) => ({
+        ...item,
+        project_name: item.project_name || item.project || 'MockProject-1',
+        project_source: item.project_source || item.source || 'primary',
+      }));
+      const byProject = new Map<string, Project>();
+      for (const item of normalized) {
+        const projectName = String(item.project_name || item.project || 'MockProject-1');
+        const sourceName = String(item.project_source || item.source || 'primary');
+        const key = `${sourceName}|${projectName}`;
+        if (!byProject.has(key)) {
+          byProject.set(key, {
+            name: projectName,
+            source: sourceName,
+            source_accessible: true,
+            index_exists: true,
+            upload_url: `/api/projects/${encodeURIComponent(projectName)}/upload${sourceName !== 'primary' ? `?source=${encodeURIComponent(sourceName)}` : ''}`,
+          });
+        }
+      }
+      setProjects(Array.from(byProject.values()));
+      setSources([{
+        name: 'primary',
+        root: '/mock',
+        type: 'mock',
+        enabled: true,
+        accessible: true,
+      }]);
+      setMedia(sortMediaByRecent(normalized));
+      setActiveProject(null);
+      setMediaScope('all');
+      setSelected(new Set());
+      setFocused(null);
+      setMockMode(true);
+      addToast('good', 'Mock Mode', 'Loaded preview mock assets');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load mock assets';
+      addToast('bad', 'Mock Mode', message);
+    }
+  }, [addToast]);
+
+
   const loadSources = useCallback(async () => {
     try {
       const payload = await api.listSources();
@@ -524,9 +805,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setProjects(payload);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to list projects';
+      const fallbackToMock = typeof window !== 'undefined' && decideExplorerBootMode({
+        location: window.location,
+        apiFailed: true,
+        hasOpener: Boolean(window.opener),
+        embedded: window.top !== window.self,
+      }) === 'mock';
+      if (fallbackToMock) {
+        addToast('warn', 'Projects', `${message}. Falling back to mock preview assets.`);
+        await loadMockData();
+        return;
+      }
       addToast('bad', 'Projects', message);
     }
-  }, [api, addToast]);
+  }, [api, addToast, loadMockData]);
 
   const loadMedia = useCallback(
     async (project: Project | null) => {
@@ -579,16 +871,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setMedia(sortMediaByRecent(gathered));
   }, [addToast, api, projects]);
 
+
+  const reloadMediaForCurrentScope = useCallback(async () => {
+    if (activeProject) {
+      await loadMedia(activeProject);
+      return;
+    }
+    await loadAllMedia();
+  }, [activeProject, loadAllMedia, loadMedia]);
+
   const refreshAll = useCallback(async () => {
     await loadSources();
     await loadProjects();
-    if (activeProject) {
-      await loadMedia(activeProject);
-    } else {
-      await loadAllMedia();
-    }
+    await reloadMediaForCurrentScope();
     addToast('good', 'Refresh', 'Reloaded projects + media');
-  }, [activeProject, addToast, loadAllMedia, loadMedia, loadProjects, loadSources]);
+  }, [addToast, loadProjects, loadSources, reloadMediaForCurrentScope]);
 
   const selectProject = useCallback(
     (project: Project) => {
@@ -608,10 +905,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toggleSelected = useCallback(
     (relPath: string) => {
       if (!relPath) return;
-      if (!activeProject) return;
       setSelected((current) => toggleSelection(current, relPath));
     },
-    [activeProject, setSelected],
+    [setSelected],
   );
 
   const clearSelection = useCallback(() => {
@@ -619,12 +915,51 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const openDrawer = useCallback((item: MediaItem) => {
+    const nextState = reducePreviewDrawerState(
+      { inspectorOpen, drawerTagPanelOpen },
+      'open',
+      { hasFocused: true },
+    );
     setFocused(item);
-    setInspectorOpen(true);
-  }, []);
+    if (item.relative_path && (activeProject || mediaScope === 'all')) {
+      setSelected((current) => {
+        if (current.has(item.relative_path)) return current;
+        const next = new Set(current);
+        next.add(item.relative_path);
+        return next;
+      });
+    }
+    setInspectorOpen(nextState.inspectorOpen);
+    setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
+    setDrawerTagInput('');
+  }, [activeProject, drawerTagPanelOpen, inspectorOpen, mediaScope]);
 
   const closeDrawer = useCallback(() => {
-    setInspectorOpen(false);
+    const nextState = reducePreviewDrawerState(
+      { inspectorOpen, drawerTagPanelOpen },
+      'close',
+      { hasFocused: Boolean(focused) },
+    );
+    setInspectorOpen(nextState.inspectorOpen);
+    setFocused(null);
+    setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
+    setDrawerTagInput('');
+  }, [drawerTagPanelOpen, focused, inspectorOpen]);
+
+  useEffect(() => {
+    if (!drawerTagPanelOpen) return;
+    drawerTagInputRef.current?.focus();
+  }, [drawerTagPanelOpen]);
+
+  const openUploadPicker = useCallback(() => {
+    const input = uploadInputRef.current;
+    if (!input) return;
+    const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerInput.showPicker === 'function') {
+      pickerInput.showPicker();
+      return;
+    }
+    input.click();
   }, []);
 
   const handleUpload = useCallback(async () => {
@@ -656,69 +991,206 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [activeProject, addToast, api, buildUploadUrl, loadMedia]);
 
+  const resolveRequestedAssets = useCallback(
+    (requested: Array<MediaActionRef | string> = []) => buildSelectionAssetRefs({ selectedItems: selectedMediaItems, focusedItem: focused, requested }),
+    [focused, selectedMediaItems],
+  );
+
   const deleteMediaPaths = useCallback(
-    async (paths: string[]) => {
-      const project = activeProject;
-      if (!project) {
-        addToast('warn', 'Delete', 'Select a project first');
-        return;
-      }
-      if (!paths.length) {
+    async (requested: Array<MediaActionRef | string>) => {
+      const assets = resolveRequestedAssets(requested);
+      if (!assets.length) {
         addToast('warn', 'Delete', 'Select one or more clips');
         return;
       }
       try {
-        await api.deleteMedia(project.name, paths, project.source);
-        addToast('good', 'Delete', 'Removed media from disk and index');
-        setSelected((current) => {
-          const next = new Set(current);
-          paths.forEach((path) => next.delete(path));
-          return next;
-        });
-        if (focused && paths.includes(focused.relative_path)) {
-          setFocused(null);
-          setInspectorOpen(false);
+        const payload = await api.bulkDeleteAssets(assets);
+        addToast('good', 'Delete', `Media removed (${Number(payload?.deleted || 0)})`);
+        setSelected(new Set());
+        if (focused) {
+          const focusedRef = toAssetRef(focused);
+          if (assets.some((asset) => assetRefKey(asset) === assetRefKey(focusedRef))) {
+            setFocused(null);
+            setInspectorOpen(false);
+          }
         }
-        await loadMedia(project);
+        if (activeProject) {
+          await loadMedia(activeProject);
+        } else {
+          await loadAllMedia();
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Delete failed';
         addToast('bad', 'Delete', message);
       }
     },
-    [activeProject, addToast, api, focused, loadMedia],
+    [activeProject, addToast, api, focused, loadAllMedia, loadMedia, resolveRequestedAssets],
   );
 
   const moveMediaPaths = useCallback(
-    async (paths: string[], targetProject: Project) => {
-      const project = activeProject;
-      if (!project) return;
+    async (requested: Array<MediaActionRef | string>, targetProject: Project) => {
+      const assets = resolveRequestedAssets(requested);
+      if (!assets.length) {
+        addToast('warn', 'Move', 'Select one or more clips');
+        return;
+      }
       try {
-        await api.moveMedia(
-          project.name,
-          paths,
+        const payload = await api.bulkMoveAssets(
+          assets,
           targetProject.name,
-          project.source,
           targetProject.source,
         );
-        addToast('good', 'Move', `Moved ${paths.length} item(s) to ${targetProject.name}`);
-        setSelected((current) => {
-          const next = new Set(current);
-          paths.forEach((path) => next.delete(path));
-          return next;
-        });
-        if (focused && paths.includes(focused.relative_path)) {
-          setFocused(null);
-          setInspectorOpen(false);
+        addToast('good', 'Move', `Moved ${Number(payload?.moved || assets.length)} item(s) to ${targetProject.name}`);
+        setSelected(new Set());
+        if (focused) {
+          const focusedRef = toAssetRef(focused);
+          if (assets.some((asset) => assetRefKey(asset) === assetRefKey(focusedRef))) {
+            setFocused(null);
+            setInspectorOpen(false);
+          }
         }
-        await loadMedia(project);
+        if (activeProject) {
+          await loadMedia(activeProject);
+        } else {
+          await loadAllMedia();
+        }
         await loadProjects();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Move failed';
         addToast('bad', 'Move', message);
       }
     },
-    [activeProject, addToast, api, focused, loadMedia, loadProjects],
+    [activeProject, addToast, api, focused, loadAllMedia, loadMedia, loadProjects, resolveRequestedAssets],
   );
+
+  const moveFocusedAsset = useCallback(async () => {
+    if (!focused) {
+      addToast('warn', 'Move', 'Focus an item first');
+      return;
+    }
+    const focusedRef = toAssetRef(focused);
+    const candidates = projects.filter((project) => (
+      !(project.name === focusedRef.project && String(project.source || 'primary') === String(focusedRef.source || 'primary'))
+    ));
+    if (!candidates.length) {
+      addToast('warn', 'Move', 'No destination projects available');
+      return;
+    }
+    const selectedLabel = window.prompt(
+      `Move to project (name or name@source): ${candidates.map((project) => `${project.name}@${project.source || 'primary'}`).join(', ')}`,
+      `${candidates[0].name}@${candidates[0].source || 'primary'}`,
+    );
+    if (!selectedLabel) return;
+    const [targetName, targetSourceRaw] = selectedLabel.split('@');
+    const targetNameNormalized = String(targetName || '').trim();
+    const targetSourceNormalized = String(targetSourceRaw || '').trim();
+    const targetProject = candidates.find((project) => (
+      project.name === targetNameNormalized
+      && String(project.source || 'primary') === (targetSourceNormalized || String(project.source || 'primary'))
+    ));
+    if (!targetProject) {
+      addToast('warn', 'Move', 'Destination not found');
+      return;
+    }
+    await moveMediaPaths([focusedRef], targetProject);
+  }, [addToast, focused, moveMediaPaths, projects]);
+
+  const handleBulkTagEdit = useCallback(async (mode: 'add' | 'remove') => {
+    const targetAssets = resolveRequestedAssets(focused ? [toAssetRef(focused)] : []);
+    if (!targetAssets.length) {
+      addToast('warn', 'Tags', 'Select or focus media first');
+      return;
+    }
+    const input = window.prompt(mode === 'add' ? 'Enter tag(s) to add (comma separated)' : 'Enter tag(s) to remove (comma separated)', '');
+    if (!input) return;
+    const tags = input.split(',').map((entry) => entry.trim()).filter(Boolean);
+    if (!tags.length) {
+      addToast('warn', 'Tags', 'Enter at least one tag');
+      return;
+    }
+    try {
+      await api.bulkTagAssets(targetAssets, mode === 'add' ? tags : [], mode === 'remove' ? tags : []);
+      addToast('good', 'Tags', `${mode === 'add' ? 'Added' : 'Removed'} tags on ${targetAssets.length} item(s)`);
+      if (activeProject) await loadMedia(activeProject);
+      else await loadAllMedia();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Tag update failed';
+      addToast('bad', 'Tags', message);
+    }
+  }, [activeProject, addToast, api, focused, loadAllMedia, loadMedia, resolveRequestedAssets]);
+
+
+  const handleDrawerTagApply = useCallback(async (mode: 'add' | 'remove') => {
+    if (!focused) {
+      addToast('warn', 'Tags', 'Select an asset first');
+      return;
+    }
+    const tags = drawerTagInput.split(',').map((entry) => entry.trim()).filter(Boolean);
+    if (!tags.length) {
+      addToast('warn', 'Tags', `Enter one or more tags to ${mode}`);
+      return;
+    }
+    try {
+      await api.bulkTagAssets([toAssetRef(focused)], mode === 'add' ? tags : [], mode === 'remove' ? tags : []);
+      setDrawerTagInput('');
+      if (activeProject) await loadMedia(activeProject);
+      else await loadAllMedia();
+      addToast('good', 'Tags', `${mode === 'add' ? 'Added' : 'Removed'} tags`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Tag update failed';
+      addToast('bad', 'Tags', message);
+    }
+  }, [activeProject, addToast, api, drawerTagInput, focused, loadAllMedia, loadMedia]);
+
+  const openComposeDialog = useCallback(() => {
+    const assets = buildSelectionAssetRefs({ selectedItems: selectedMediaItems, focusedItem: focused, requested: focused ? [toAssetRef(focused)] : [], videosOnly: true });
+    if (!assets.length) {
+      addToast('warn', 'Compose', 'Select one or more video clips');
+      return;
+    }
+    const outputProject = activeProject?.name || assets[0]?.project || '';
+    if (!outputProject) {
+      addToast('warn', 'Compose', 'Select an output project first');
+      return;
+    }
+    const outputSource = activeProject?.source || assets[0]?.source || 'primary';
+    setComposeDialog({
+      assets,
+      outputProject,
+      outputSource,
+      outputName: `compose-${Date.now()}.mp4`,
+    });
+  }, [activeProject, addToast, focused, selectedMediaItems]);
+
+  const submitComposeDialog = useCallback(async () => {
+    if (!composeDialog || composeSubmitting) return;
+    const outputProject = composeDialog.outputProject.trim();
+    const outputName = composeDialog.outputName.trim();
+    if (!outputProject || !outputName) {
+      addToast('warn', 'Compose', 'Provide output project and output name');
+      return;
+    }
+    setComposeSubmitting(true);
+    try {
+      const payload = await api.bulkComposeAssets(composeDialog.assets, outputProject, outputName, {
+        outputSource: composeDialog.outputSource,
+        targetDir: 'exports',
+        mode: 'auto',
+        allowOverwrite: false,
+      });
+      addToast('good', 'Compose', `Created ${buildComposeArtifactSummary(payload, outputName)}`);
+      setComposeDialog(null);
+      const refreshScope = getComposeRefreshScope(activeProject);
+      if (refreshScope === 'project') await loadMedia(activeProject);
+      else await loadAllMedia();
+      await loadProjects();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Compose failed';
+      addToast('bad', 'Compose', message);
+    } finally {
+      setComposeSubmitting(false);
+    }
+  }, [activeProject, addToast, api, composeDialog, composeSubmitting, loadAllMedia, loadMedia, loadProjects]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -779,6 +1251,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [activeProject, addToast, api, buildUploadUrl, loadMedia],
   );
 
+  const requestDeleteMediaPaths = useCallback((requested: Array<MediaActionRef | string>, title: string, message: string) => {
+    const resolved = resolveRequestedAssets(requested);
+    if (!resolved.length) {
+      addToast('warn', 'Delete', 'Select one or more clips');
+      return;
+    }
+    setDeleteConfirm({ requested: resolved, title, message });
+  }, [addToast, resolveRequestedAssets]);
+
+  const confirmDeleteMedia = useCallback(async () => {
+    if (!deleteConfirm) return;
+    const payload = deleteConfirm.requested;
+    setDeleteConfirm(null);
+    await deleteMediaPaths(payload);
+  }, [deleteConfirm, deleteMediaPaths]);
+
   const handleCopyStream = useCallback(async (item: MediaItem) => {
     if (!item.stream_url) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -805,6 +1293,64 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Clipboard', 'Copy failed — please copy manually.');
     }
   }, [addToast, resolveAssetUrl]);
+
+
+  const getSelectedItems = useCallback((): MediaItem[] => {
+    if (!selected.size) return [];
+    return filteredMedia.filter((item) => selected.has(item.relative_path));
+  }, [filteredMedia, selected]);
+
+  const handleProgramMonitorHandoff = useCallback(async () => {
+    if (!canUseProgramMonitorIntegration(typeof window !== 'undefined' ? window : undefined)) {
+      addToast('warn', 'Program Monitor', 'Program Monitor handoff is unavailable in this browser context.');
+      return;
+    }
+    const selectedItems = getSelectedItems();
+    if (!selectedItems.length) {
+      addToast('warn', 'Program Monitor', 'Select one or more clips');
+      return;
+    }
+    const origin = window.location.origin;
+    const urls = selectedItems
+      .map((item) => toAbsoluteUrl(resolveAssetUrl(buildStreamPathFromItem(item)), origin))
+      .filter(Boolean);
+    if (!urls.length) {
+      addToast('warn', 'Program Monitor', 'No stream URLs found for the selection.');
+      return;
+    }
+    const descriptors = selectedItems.map((item) => buildProgramMonitorDescriptor(item, origin));
+    try {
+      await sendToProgramMonitor(urls, descriptors);
+      addToast('good', 'Program Monitor', `Sent ${urls.length} stream URL(s).`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Handoff failed';
+      addToast('bad', 'Program Monitor', message);
+    }
+  }, [addToast, getSelectedItems, resolveAssetUrl]);
+
+  const handleSendFocusedToObs = useCallback(async () => {
+    if (!canUseObsIntegration(typeof window !== 'undefined' ? window : undefined)) {
+      addToast('warn', 'OBS', 'OBS handoff is unavailable in this browser context.');
+      return;
+    }
+    if (!focused) {
+      addToast('warn', 'OBS', 'Open a focused item first');
+      return;
+    }
+    const origin = window.location.origin;
+    const assetUrl = toAbsoluteUrl(resolveAssetUrl(buildStreamPathFromItem(focused)), origin);
+    if (!assetUrl) {
+      addToast('warn', 'OBS', 'No stream URL available for this item.');
+      return;
+    }
+    try {
+      await pushAssetToObs({ assetUrl });
+      addToast('good', 'OBS', 'Pushed asset to OBS Browser Source.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'OBS push failed';
+      addToast('bad', 'OBS', message);
+    }
+  }, [addToast, focused, resolveAssetUrl]);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -849,10 +1395,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     actions.push({
       id: 'delete',
       label: `Delete ${count} item${count > 1 ? 's' : ''}`,
-      handler: () => deleteMediaPaths(items.map((entry) => entry.relative_path)),
+      handler: () => requestDeleteMediaPaths(items.map((entry) => toAssetRef(entry)), 'Delete selected media?', `This will permanently remove ${items.length} item(s).`),
     });
     return actions;
-  }, [deleteMediaPaths, handleCopySelectedUrls, handleCopyStream, openDrawer, resolveAssetUrl]);
+  }, [handleCopySelectedUrls, handleCopyStream, openDrawer, requestDeleteMediaPaths, resolveAssetUrl]);
 
   const buildAssetPointerHandlers = useCallback(
     (item: MediaItem) => {
@@ -882,9 +1428,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         clearTimer();
         timer = window.setTimeout(() => {
           const selectedItems = selected.has(item.relative_path)
-            ? Array.from(selected)
-              .map((path) => itemsByPath.get(path))
-              .filter((entry): entry is MediaItem => Boolean(entry))
+            ? filteredMedia.filter((entry) => selected.has(entry.relative_path))
             : [item];
           openContextMenu(pressX, pressY, selectedItems);
         }, LONG_PRESS_MS);
@@ -920,7 +1464,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               proj.name === dropEl.dataset.project
               && String(proj.source || '') === String(dropEl.dataset.source || '')
             ));
-            if (target) void moveMediaPaths(dragPathsRef.current, target);
+            if (target) void moveMediaPaths(dragPathsRef.current.map((path) => String(path)), target);
           }
           return;
         }
@@ -944,9 +1488,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         event.preventDefault();
         if (dragging) return;
         const selectedItems = selected.has(item.relative_path)
-          ? Array.from(selected)
-            .map((path) => itemsByPath.get(path))
-            .filter((entry): entry is MediaItem => Boolean(entry))
+          ? filteredMedia.filter((entry) => selected.has(entry.relative_path))
           : [item];
         openContextMenu(event.clientX, event.clientY, selectedItems);
       };
@@ -959,7 +1501,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onContextMenu: handleContextMenu,
       };
     },
-    [activeProject, dragging, itemsByPath, moveMediaPaths, openContextMenu, openDrawer, projects, selected, toggleSelected],
+    [activeProject, dragging, filteredMedia, moveMediaPaths, openContextMenu, openDrawer, projects, selected, toggleSelected],
   );
 
   const handlePreviewSelected = useCallback(() => {
@@ -1001,7 +1543,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setDragging(false);
     setAssetDragActive(false);
     if (!dragPathsRef.current.length) return;
-    await moveMediaPaths(dragPathsRef.current, project);
+    await moveMediaPaths(dragPathsRef.current.map((path) => String(path)), project);
   }, [dragging, moveMediaPaths]);
 
   const pickUpload = useCallback(() => {
@@ -1073,18 +1615,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [dragging]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mode = decideExplorerBootMode({
+      location: window.location,
+      explicitMockFlag: Boolean((window as Window & { __EXPLORER_MOCK__?: boolean }).__EXPLORER_MOCK__),
+      hasOpener: Boolean(window.opener),
+      embedded: window.top !== window.self,
+    });
+    if (mode === 'mock') {
+      void loadMockData();
+      return;
+    }
     addToast('good', 'Boot', 'Loading sources + projects…');
+    setMockMode(false);
     void loadSources();
     void loadProjects();
-  }, [addToast, loadProjects, loadSources]);
+  }, [addToast, loadMockData, loadProjects, loadSources]);
 
   useEffect(() => {
+    if (mockMode) return;
     if (activeProject) {
       void loadMedia(activeProject);
     } else {
       void loadAllMedia();
     }
-  }, [activeProject, loadAllMedia, loadMedia]);
+  }, [activeProject, loadAllMedia, loadMedia, mockMode]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -1110,6 +1665,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [closeDrawer, inspectorOpen, sidebarOpen]);
+
+
+  useEffect(() => {
+    if (!deleteConfirm) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDeleteConfirm(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [deleteConfirm]);
 
   const [topbarHidden, setTopbarHidden] = useState(false);
   const topbarRef = useRef<HTMLDivElement | null>(null);
@@ -1242,7 +1809,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, []);
 
-  const selectedCount = selected.size;
+  const selectedRefs = useMemo<MediaActionRef[]>(() => mapOrderedAssetRefs(selectedMediaItems, focused), [selectedMediaItems, focused]);
+  const selectedVideoRefs = useMemo<MediaActionRef[]>(() => mapOrderedVideoAssetRefs(selectedMediaItems, focused), [selectedMediaItems, focused]);
+  const selectedIdentitySet = useMemo(() => new Set(selectedMediaItems.map((item) => buildMediaIdentity(item))), [selectedMediaItems]);
+  const selectedCount = selectedRefs.length || selected.size;
+  const selectedVideoCount = selectedVideoRefs.length;
   const contextActions = useMemo(
     () => (contextMenu ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
@@ -1250,19 +1821,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const uploadCaption = activeProject
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
-  const canSelect = Boolean(activeProject);
+  const canSelect = mediaScope === 'all' || Boolean(activeProject);
+  const hasFocused = Boolean(focused);
+  const focusedHasStreamUrl = Boolean(focused && buildStreamPathFromItem(focused));
+  const canObsIntegration = canUseObsIntegration(typeof window !== 'undefined' ? window : undefined);
+  const canProgramMonitor = canUseProgramMonitorIntegration(typeof window !== 'undefined' ? window : undefined);
+  const drawerActionState = getPreviewDrawerActionState({
+    hasFocused,
+    activeProject: Boolean(activeProject),
+    isFocusedSelected: Boolean(focused && selectedIdentitySet.has(buildMediaIdentity(focused))),
+    hasStreamUrl: focusedHasStreamUrl,
+    canUseObs: canObsIntegration,
+    canUseProgramMonitor: canProgramMonitor,
+  });
+  const previewKind = focused ? normalizePreviewKind(guessKind(focused)) : null;
+  const drawerActionVisibility = getPreviewDrawerActionVisibility(previewKind);
   const projectLabel = (item: MediaItem) => {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
   };
 
   return (
-    <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`}>
+    <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`} data-ui-hook="explorer-app-shell">
       <div className="topbar-reveal" ref={topbarRevealRef} aria-hidden="true" />
-      <div className="topbar" ref={topbarRef}>
+      <div className="topbar" ref={topbarRef} data-ui-hook="explorer-topbar">
         <div className="topbar-inner">
           <div
-            className="brand"
+            className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
             title="LAN-only media-sync-api explorer"
             ref={brandRef}
             role="button"
@@ -1275,23 +1860,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               }
             }}
           >
-            <div className="logo" aria-hidden="true"></div>
-            <div>
-              <h1>media-sync-api</h1>
-              <div className="sub">Explorer • projects → ingest → index → preview → Resolve</div>
+            <div className="brand-text">
+              <h1>
+                <button type="button" aria-label="Toggle projects drawer">
+                  <span className="brand-title is-primary">Cdaprod&apos;s Explorer</span>
+                  <span className="brand-title is-secondary">Cdaprod&apos;s Projects</span>
+                </button>
+              </h1>
+              <div className="sub">media-sync-api</div>
             </div>
           </div>
 
           <div className="toolbar">
-            <div className="toolbar-toggle">
-              <button
-                className="btn mobile-only"
-                type="button"
-                onClick={() => setSidebarOpen((prev) => !prev)}
-              >
-                Projects
-              </button>
-            </div>
             <div className="topbar-controls">
               <div className="search" role="search">
                 <span className="kbd">⌘K</span>
@@ -1367,7 +1947,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 aria-expanded={actionsOpen}
                 onClick={() => setActionsOpen((prev) => !prev)}
               >
-                Actions ▾
+                Actions
+                <span aria-hidden="true">▾</span>
               </button>
             </div>
             <div className={`actions-panel ${actionsOpen ? 'open' : ''}`} role="region" aria-label="Explorer actions">
@@ -1375,14 +1956,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <button
                   className={view === 'grid' ? 'active' : ''}
                   type="button"
-                  onClick={() => setView('grid')}
+                  onClick={() => applyNormalizedView('grid', 'ui')}
                 >
                   Grid
                 </button>
                 <button
                   className={view === 'list' ? 'active' : ''}
                   type="button"
-                  onClick={() => setView('list')}
+                  onClick={() => applyNormalizedView('list', 'ui')}
                 >
                   List
                 </button>
@@ -1493,6 +2074,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 >
                   ⇢ Send to Resolve
                 </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={openComposeDialog}
+                  disabled={!selectedVideoCount}
+                >
+                  🎞 Compose
+                </button>
                 <button className="btn" type="button" onClick={clearSelection} disabled={!selectedCount}>
                   ✕ Clear
                 </button>
@@ -1504,7 +2093,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
       <div className="main">
         <aside className={`sidebar sidebar-drawer ${sidebarOpen ? 'is-open' : ''}`}>
-          <div className="section-h">
+          <div className="section-h" data-ui-hook="projects-section-header">
             <h2>Projects</h2>
             <div className="meta-line">
               <span>{projects.length} total</span>
@@ -1702,11 +2291,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               <div className="card">
                 <strong>Upload to active project</strong>
                 <div className="small">{uploadCaption}</div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' }}>
-                  <input ref={uploadInputRef} type="file" style={{ maxWidth: '100%', color: 'var(--muted)' }} />
+                <div className="upload-panel">
+                  <input ref={uploadInputRef} type="file" className="visually-hidden" />
+                  <button className="btn" type="button" onClick={openUploadPicker} disabled={!activeProject}>
+                    Choose file
+                  </button>
                   <button className="btn good" type="button" onClick={handleUpload} disabled={!activeProject}>
                     Upload
                   </button>
+                  <span className="small upload-name">{uploadInputRef.current?.files?.[0]?.name || 'No file selected'}</span>
                 </div>
                 <div className="small" style={{ marginTop: '8px' }}>{uploadStatus}</div>
               </div>
@@ -1766,61 +2359,77 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
-                  const thumbKey = getThumbCacheKey(item);
+                  const thumbKey = buildThumbCacheKey(item);
                   const cachedOrient = getCachedOrientation(thumbKey || item.relative_path || '');
                   const itemOrient = inferOrientationFromItem(item);
                   const orient = itemOrient || cachedOrient || 'square';
                   const orientLocked = Boolean(itemOrient || cachedOrient);
-                  const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-                    || item.thumbnail_url
-                    || (kind === 'image' ? item.stream_url : undefined));
+                  const rawThumbUrl = normalizeThumbUrl(resolveThumbnailUrl(item));
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
-                  const isSelected = selected.has(item.relative_path);
+                  const identity = buildMediaIdentity(item);
+                  const isSelected = selectedIdentitySet.has(identity);
+                  const selectionOrder = selectedMediaItems.findIndex((entry) => buildMediaIdentity(entry) === identity) + 1;
 
                   return (
                     <div
                       key={`${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
-                      className={`asset ${isSelected ? 'selected' : ''}`}
+                      className={`asset ${isSelected ? 'is-selected' : ''}`}
                       data-kind={kind}
                       data-orient={orient}
                       data-orient-locked={orientLocked ? 'true' : 'false'}
                       data-thumb-key={thumbKey}
                       data-relative={item.relative_path || ''}
+                      style={{ '--asset-span': String(getGridAssetSpan(kind, orient)) } as React.CSSProperties}
                       {...pointerHandlers}
                     >
                       <div className="thumb">
-                        <img
-                          className="asset-thumb"
-                          src={safeThumbUrl}
-                          alt={title}
-                          loading="lazy"
-                          data-thumb-url={thumbUrl}
-                          data-thumb-fallback={fallbackThumb}
-                        />
-                        <div className="asset-overlay">
-                          <div className="asset-ol-tl">
-                            <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
-                          </div>
-                          <div className="asset-ol-tr">
-                            <div className="selector" title="Select">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                aria-label="Select media"
-                                disabled={!canSelect}
-                                onClick={(event) => event.stopPropagation()}
-                                onChange={() => toggleSelected(item.relative_path)}
-                              />
+                        <div className="thumb-body">
+                          <img
+                            className="asset-thumb"
+                            src={safeThumbUrl}
+                            alt={title}
+                            loading="lazy"
+                            data-thumb-url={thumbUrl}
+                            data-thumb-fallback={fallbackThumb}
+                            data-thumb-state="pending"
+                          />
+                        </div>
+                        <div className="asset-ui">
+                          <div className="asset-overlay">
+                            <div className="scrim" aria-hidden="true"></div>
+                            <div className="asset-ol-tl">
+                              <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
                             </div>
-                          </div>
-                          <div className="asset-ol-bl">
-                            <span className="badge">{size}</span>
-                          </div>
-                          <div className="asset-ol-bottom">
-                            <div className="asset-title">{title}</div>
-                            <div className="asset-subtitle">{sub}</div>
+                            <div className="asset-ol-tr">
+                              <div className="selector" title="Select">
+                                <label className="sel-shell">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    aria-label="Select media"
+                                    disabled={!canSelect}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={() => toggleSelected(item.relative_path)}
+                                  />
+                                  <span className="sel-order" aria-hidden="true">{selectionOrder || ''}</span>
+                                </label>
+                              </div>
+                            </div>
+                            <div className="asset-ol-bl">
+                              <span className="badge">{size}</span>
+                            </div>
+                            {kind === 'video' || kind === 'audio' ? (
+                              <div className="play-btn" aria-hidden="true">
+                                <div className="play-btn-inner">▶</div>
+                              </div>
+                            ) : null}
+                            <div className="preview-pill" aria-hidden="true">preview</div>
+                            <div className="asset-ol-bottom">
+                              <div className="asset-title">{title}</div>
+                              <div className="asset-subtitle">{sub}</div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1849,17 +2458,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
-                  const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-                    || item.thumbnail_url
-                    || (kind === 'image' ? item.stream_url : undefined));
+                  const rawThumbUrl = normalizeThumbUrl(resolveThumbnailUrl(item));
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
-                  const isSelected = selected.has(item.relative_path);
+                  const identity = buildMediaIdentity(item);
+                  const isSelected = selectedIdentitySet.has(identity);
 
                   return (
                     <div
-                      className="row"
+                      className={`row ${isSelected ? 'is-selected' : ''}`}
                       key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
                       {...pointerHandlers}
                     >
@@ -1917,9 +2525,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ⇢ Send to Resolve
         </button>
         <button
+          className="btn"
+          type="button"
+          onClick={handleProgramMonitorHandoff}
+          disabled={!selectedCount}
+        >
+          ↗ Program Monitor
+        </button>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => void handleBulkTagEdit('add')}
+          disabled={!selectedCount}
+        >
+          🏷 Add Tag
+        </button>
+        <button
+          className="btn"
+          type="button"
+          onClick={openComposeDialog}
+          disabled={!selectedVideoCount}
+        >
+          🎞 Compose
+        </button>
+        <button
           className="btn bad"
           type="button"
-          onClick={() => deleteMediaPaths(Array.from(selected))}
+          onClick={() => requestDeleteMediaPaths(selectedRefs, 'Delete selected media?', `This will permanently remove ${selectedCount} item(s).`)}
           disabled={!activeProject || !selectedCount}
         >
           🗑 Delete
@@ -1943,61 +2575,152 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <div className="drawer-body">
           <div className="preview">
             {focused ? (() => {
-              const kind = guessKind(focused);
-              if (kind === 'video') {
+              const descriptor = buildPreviewMediaDescriptor(focused, guessKind(focused));
+              if (descriptor.kind === 'video') {
                 return (
-                  <video controls preload="metadata" src={resolveAssetUrl(focused.stream_url)} />
+                  <video controls preload="metadata" src={resolveAssetUrl(descriptor.source)} />
                 );
               }
-              if (kind === 'image') {
-                const rawUrl = focused.stream_url || focused.thumb_url || focused.thumbnail_url || '';
-                return <img src={resolveAssetUrl(rawUrl)} alt="preview" />;
+              if (descriptor.kind === 'image') {
+                return <img src={resolveAssetUrl(descriptor.source)} alt="preview" />;
               }
-              if (kind === 'audio') {
-                return <audio controls src={resolveAssetUrl(focused.stream_url)} />;
+              if (descriptor.kind === 'audio') {
+                return <audio controls src={resolveAssetUrl(descriptor.source)} />;
               }
               return (
                 <div style={{ padding: '14px', color: 'var(--muted)', fontSize: '12px' }}>
                   No native preview for this type.<br />
-                  <span className="kbd">{kind}</span>
+                  <span className="kbd">{descriptor.kind}</span>
                 </div>
               );
             })() : null}
           </div>
 
-          <div className="drawer-actions">
-            <button
-              className="btn"
-              type="button"
-              onClick={() => {
-                const mediaElement = document.querySelector('.drawer video, .drawer audio') as
-                  | HTMLVideoElement
-                  | HTMLAudioElement
-                  | null;
-                mediaElement?.play?.();
-              }}
-            >
-              ▶ Play
-            </button>
-            <button className="btn" type="button" onClick={() => focused && handleCopyStream(focused)}>
-              ⧉ Copy stream URL
-            </button>
-            <button
-              className={`btn ${focused && selected.has(focused.relative_path) ? '' : 'primary'}`}
-              type="button"
-              onClick={() => focused && toggleSelected(focused.relative_path)}
-              disabled={!activeProject}
-            >
-              {focused && selected.has(focused.relative_path) ? '− Deselect' : '＋ Select'}
-            </button>
-            <button
-              className="btn bad"
-              type="button"
-              onClick={() => focused && deleteMediaPaths([focused.relative_path])}
-              disabled={!activeProject}
-            >
-              🗑 Delete
-            </button>
+          <div className="drawer-actions" data-preview-actions="1">
+            <div className="drawer-actions-group" data-preview-group="primary">
+              {drawerActionVisibility.showPlay ? (
+                <button
+                  className="btn"
+                  type="button"
+                  data-preview-action="play"
+                  onClick={() => {
+                    const mediaElement = document.querySelector('.drawer video, .drawer audio') as
+                      | HTMLVideoElement
+                      | HTMLAudioElement
+                      | null;
+                    mediaElement?.play?.();
+                  }}
+                  disabled={!drawerActionState.canPlay}
+                >
+                  ▶ Play
+                </button>
+              ) : null}
+              <button
+                className="btn"
+                type="button"
+                data-preview-action="copy"
+                onClick={() => focused && handleCopyStream(focused)}
+                disabled={!drawerActionState.canCopyStream}
+              >
+                ⧉ Copy stream URL
+              </button>
+              <button
+                className="btn"
+                type="button"
+                data-preview-action="obs"
+                onClick={handleSendFocusedToObs}
+                disabled={!drawerActionState.canSendObs}
+                title={canObsIntegration ? '' : 'OBS handoff unavailable in this context'}
+              >
+                📡 Send to OBS
+              </button>
+            </div>
+            <div className="drawer-actions-group" data-preview-group="secondary">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => focused && void handleProgramMonitorHandoff()}
+                disabled={!drawerActionState.canProgramMonitor}
+                title={canProgramMonitor ? '' : 'Program Monitor handoff unavailable in this context'}
+              >
+                ↗ Program Monitor
+              </button>
+              <button
+                className={`btn ${drawerTagPanelOpen ? 'primary' : ''}`}
+                type="button"
+                data-preview-action="tag"
+                onClick={() => {
+                  const nextState = reducePreviewDrawerState(
+                    { inspectorOpen, drawerTagPanelOpen },
+                    'toggle_tag_panel',
+                    { hasFocused: Boolean(focused) },
+                  );
+                  setDrawerTagPanelOpen(nextState.drawerTagPanelOpen);
+                }}
+                disabled={!hasFocused}
+              >
+                🏷 Tag
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={moveFocusedAsset}
+                disabled={!hasFocused}
+              >
+                ⇄ Move
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={openComposeDialog}
+                disabled={!selectedVideoCount && !(focused && guessKind(focused) === 'video')}
+              >
+                🎞 Compose
+              </button>
+              <button
+                className={`btn ${focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '' : 'primary'}`}
+                type="button"
+                onClick={() => focused && toggleSelected(focused.relative_path)}
+                disabled={!drawerActionState.canSelectToggle}
+              >
+                {focused && selectedIdentitySet.has(buildMediaIdentity(focused)) ? '− Deselect' : '＋ Select'}
+              </button>
+              <button
+                className="btn bad"
+                type="button"
+                data-preview-action="delete"
+                onClick={() => focused && requestDeleteMediaPaths([toAssetRef(focused)], 'Delete focused media?', 'This action cannot be undone.')}
+                disabled={!drawerActionState.canDelete}
+              >
+                🗑 Delete
+              </button>
+            </div>
+          </div>
+
+          <div className={`drawer-tag-panel ${drawerTagPanelOpen ? 'open' : ''} ${focused ? '' : 'is-hidden'}`}>
+            <div className="tag-panel">
+              <div className="taglist">
+                {focused && extractTags([focused]).length ? extractTags([focused]).map((tag) => (
+                  <span className="tag" key={`focused-tag-${tag}`}>{tag}</span>
+                )) : <span className="tag">No tags</span>}
+              </div>
+              <div className="tag-editor">
+                <input
+                  ref={drawerTagInputRef}
+                  type="text"
+                  value={drawerTagInput}
+                  onChange={(event) => setDrawerTagInput(event.target.value)}
+                  placeholder="Add or remove tag…"
+                />
+                <button className="btn" type="button" onClick={() => void handleDrawerTagApply('add')}>＋ Tag</button>
+                <button className="btn" type="button" onClick={() => void handleDrawerTagApply('remove')}>− Remove</button>
+              </div>
+              <div className="taglist" data-preview-taglist="ai">
+                {focused && extractAiTags([focused]).length ? extractAiTags([focused]).map((tag) => (
+                  <span className="tag" key={`focused-ai-tag-${tag}`}>{tag}</span>
+                )) : <span className="tag">No AI tags</span>}
+              </div>
+            </div>
           </div>
 
           <div className="kv">
@@ -2056,6 +2779,65 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               {action.label}
             </button>
           ))}
+        </div>
+      ) : null}
+
+
+      {composeDialog ? (
+        <div className="modal-shell" role="dialog" aria-modal="true" aria-labelledby="compose-title" aria-describedby="compose-message">
+          <div className="modal-backdrop" onClick={() => (!composeSubmitting ? setComposeDialog(null) : null)}></div>
+          <div className="modal">
+            <h3 id="compose-title">Compose selected videos</h3>
+            <p id="compose-message">Compose {composeDialog.assets.length} selected video clip(s) into a new artifact.</p>
+            <div className="kv" style={{ marginBottom: '10px' }}>
+              <div className="k">Output project</div>
+              <div className="v">
+                <input
+                  className="control"
+                  value={composeDialog.outputProject}
+                  onChange={(event) => setComposeDialog((current) => (current ? { ...current, outputProject: event.target.value } : current))}
+                  disabled={composeSubmitting}
+                />
+              </div>
+              <div className="k">Output source</div>
+              <div className="v">
+                <input
+                  className="control"
+                  value={composeDialog.outputSource}
+                  onChange={(event) => setComposeDialog((current) => (current ? { ...current, outputSource: event.target.value } : current))}
+                  disabled={composeSubmitting}
+                />
+              </div>
+              <div className="k">Output name</div>
+              <div className="v">
+                <input
+                  className="control"
+                  value={composeDialog.outputName}
+                  onChange={(event) => setComposeDialog((current) => (current ? { ...current, outputName: event.target.value } : current))}
+                  disabled={composeSubmitting}
+                />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" type="button" onClick={() => setComposeDialog(null)} disabled={composeSubmitting}>Cancel</button>
+              <button className="btn good" type="button" onClick={() => void submitComposeDialog()} disabled={composeSubmitting}>Compose</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+
+      {deleteConfirm ? (
+        <div className="modal-shell" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-message">
+          <div className="modal-backdrop" onClick={() => setDeleteConfirm(null)}></div>
+          <div className="modal">
+            <h3 id="delete-confirm-title">{deleteConfirm.title}</h3>
+            <p id="delete-confirm-message">{deleteConfirm.message}</p>
+            <div className="modal-actions">
+              <button className="btn" type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className="btn bad" type="button" onClick={() => void confirmDeleteMedia()}>Delete</button>
+            </div>
+          </div>
         </div>
       ) : null}
 

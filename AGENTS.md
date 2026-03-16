@@ -593,6 +593,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2025-05-22)
 - Explorer topbars now auto-hide via a shared intent controller and reveal zone, reusing the same hover/intent logic for dropdown menus in both static and Next.js explorers.
 
+
+### Latest Implementation Notes (2026-03-15)
+- Explorer package now includes behavior-first typed migration primitives in `src/utils.ts`: Program Monitor handoff payloading/ACK flow, OBS push adapter guardrails, mock/preview boot decisions, and URL/copy fallbacks parity helpers (ported from static explorer scripts without cross-importing `/public`).
+- Next.js Explorer now uses helper-driven mock boot fallback + idempotent selected action refs (`source|project|relative_path`) to keep repeated delete/handoff actions deterministic in all-project contexts.
+
 ### Latest Implementation Notes (2025-05-23)
 - Explorer assets now use unified pointer handlers for tap/preview/long-press context menus, include drag-hover project assist on the brand toggle, and ship a shared context menu in static + Next.js explorers.
 
@@ -1477,3 +1482,450 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added swap minimum-hold gating (`_canReleaseSwap`, `_swapMinHoldMs`) on top of offscreen hysteresis to prevent edge-of-viewport swap thrash and transient DOM reappearance.
 - Added fed/pending pressure controls: adaptive overscan+fed cap in `collectTileFxTiles()` and pending-cap telemetry (`pendingCap`, `pendingClamped`) in TileFX upload queueing/drain.
 - Updated static assertions and TODO checklist for safemode CSS, rect helper APIs, pending cap telemetry, and FX mode safeties.
+
+### Latest Implementation Notes (2026-03-06, FX lifecycle single-owner stabilization)
+- Removed runtime watchdog auto-recovery in `public/explorer.html` (heartbeat + visualViewport recovery paths) so TileFX lifecycle changes now happen only through explicit `setView('fx'|'grid'|'list')` transitions.
+- FX view entry now explicitly enables/starts TileFX and shows the canvas; non-FX view entry disables/stops/clears TileFX, restores all DOM swaps, clears fed tiles, and hides the canvas.
+- Added `restoreAllDomSwaps(reason)` to `public/js/explorer-shaders.mjs` and reused it from teardown + non-FX transitions for deterministic DOM thumbnail restoration.
+- Added explicit layer-contract diagnostics (`logTileFxLayerContract`) and z-index tokens (`--z-bg-canvas`, `--z-tilefx-canvas`, `--z-hud`) so HUD/probe/toast layers stay above the TileFX plane while retaining pointer-event isolation.
+- HUD alert semantics now prioritize lifecycle invariants (`view===fx && !enabled` or `view!==fx && drawCalls>0`) to reduce misleading stale-failure noise during view switches.
+
+### Latest Implementation Notes (2026-03-06, FX final stabilization proof + visible-set health)
+- Added proof mode in `public/explorer.html` behind `?tilefxProof=1` with `window.captureTileFxProof(reason)` snapshots persisted at `window.__tilefx_proof` (view/liveness counters, visualViewport metrics, and top visible tile rows including rect/data-tex/texture state).
+- Added non-recovering FX liveness assertions (`assertTileFxLiveness`) that record the first failure to `window.__tilefx_dbg.firstLivenessFailure` and emit one high-signal error without automatic re-arm/teardown behavior.
+- Added lockstep rect mismatch probing (`computeTileFxRectLockstep`) to compare DOM tile rects, FX mapped rects, and metadata overlay anchors; mismatches >2px are stored in `window.__tilefx_dbg.rectMismatchRows` with HUD summary.
+- Updated fed-set collection in `collectTileFxTiles()` to deterministic visible-first ordering with bounded overscan promotions while scrolling (`visiblePromotedThisPass`) and retained adaptive `collectOverscan`/`maxFed` telemetry.
+- Added visible painter leak diagnostics and per-card `data-visiblePainterLeakCount`; swapped painter leaks now log once per tile in debug with optional toast only when `tilefxPainterToast=1`.
+- Added compact-by-default HUD mode for non-debug runs, plus visible health telemetry (`visibleReady`, `visibleUploading`, `visibleDomOnly`, `visibleSwapped`) and swap release counters (`swapReleaseBlocked`, `swapReleaseAllowed`).
+- Updated `TileFXRenderer` release gating with `_swapReleaseIdleMs` and idle checks so swap clears are blocked during transient churn, favoring stable visible ownership.
+
+### Latest Implementation Notes (2026-03-06, lifecycle invariant guard + proof summary export)
+- Added a hard disable guard in `public/js/explorer-shaders.mjs`: `TileFXRenderer.disable(reason, { allowInFxView = false })` now blocks illegal disable attempts while `window.__explorer_view === 'fx'`, logs stack traces, and records `illegalDisableBlocked`/`lastIllegalDisable` debug metadata.
+- Added `computeTileFxHealthVerdict()` and `window.exportTileFxProofSummary()` in `public/explorer.html` so physical iPhone runs can export a compact proof payload (liveness, visible-set health, swap counters, cache metrics, viewport metrics, and row-level ownership/mismatch snapshots).
+- Added a debug-only `Capture Proof` button (`fxdebug=1&tilefxProof=1`) that triggers proof capture plus summary export in one tap.
+- Added defensive dead-overlay behavior in `assertTileFxLiveness(...)`: first FX liveness failure now hides `#tilefxCanvas` to avoid stale glow overlays when renderer is disabled.
+- HUD compact/expanded output now includes renderer truth labels and health verdict lines (`health: ...`) to make lifecycle invariant failures explicit during runtime verification.
+
+### Latest Implementation Notes (2026-03-06, physical-proof verdict + lockstep aggregate pass)
+- Added `window.logTileFxProofSummary(reason)` in `public/explorer.html` as a read-only proof workflow helper that chains `captureTileFxProof(...)` + `exportTileFxProofSummary()` and logs `[tilefx-proof-summary]` output.
+- Proof export now reports `proofPass`, `deadOverlayHidden`, `deadOverlayReason`, visible mismatch aggregates (`rectMismatchVisibleCount`, `rectMismatchMaxPx`, `rectMismatchAvgPx`), and visible ownership fields (`visibleReadyButNotSwapped`, `visibleSwappedButNoTexture`, `visibleUploadingCount`).
+- `computeTileFxHealthVerdict()` now treats visible-set settle conditions as first-class (`scrollIdleMs` gate) and fails explicitly on ready-not-swapped / swapped-no-texture ownership anomalies.
+- `computeTileFxRectLockstep()` now records per-axis mismatch components (`fxVsDomX/Y`, `overlayVsDomX/Y`) and aggregate mismatch statistics while preserving >2px mismatch capture semantics.
+- `assertTileFxLiveness(...)` now tracks dead-overlay state (`deadOverlayHidden`/`deadOverlayReason`) and resets those markers automatically when FX liveness is healthy again.
+- Added test assertions for the new proof helper/verdict fields and renderer illegal-disable telemetry in `tests/test_public_explorer_program_monitor.py`.
+
+### Latest Implementation Notes (2026-03-06, lifecycle sync authority follow-up)
+- Centralized FX lifecycle transitions in `public/explorer.html` via `syncTileFxLifecycleToView(...)` so both `setView(...)` and `destroyTileFX(...)` share a single authoritative enable/disable/start/stop/clear/restore path.
+- `destroyTileFX(...)` now syncs lifecycle by current view instead of directly disabling renderer state, preserving FX-view disable guard behavior while still allowing explicit non-FX teardown.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` to check for the lifecycle sync helper + setView callsites instead of the removed direct `tileFX.enable('setView:fx')` / `tileFX.disable('setView:non-fx')` strings.
+
+### Latest Implementation Notes (2026-03-06, lifecycle invariant lock pass)
+- Refactored `syncTileFxLifecycleToView(view, reason, opts)` in `public/explorer.html` to be the single authority for FX lifecycle mutation (enable/disable/start/stop/canvas show-hide/restore+clear paths), with `setView(...)` and `destroyTileFX(...)` both routed through that helper.
+- Added `assertTileFxViewLifecycle(reason)` to run immediately after lifecycle sync calls; it force-corrects mismatched runtime state and contains unrecoverable failures through `containTileFxInvariantFailure(...)` (hide canvas + restore DOM swaps + mark dead-overlay fields).
+- Removed runtime liveness assertions from collect/heartbeat cadence so lifecycle assertion is sync-only rather than per-frame/per-scroll noise.
+- Added explicit viewport contract comment and retained visualViewport handlers as resize/collect only (no lifecycle mutation).
+- Tightened renderer-side illegal disable telemetry in `public/js/explorer-shaders.mjs` by logging one stack-bearing console error per illegal-disable streak while still counting every blocked attempt (`illegalDisableBlocked`, `lastIllegalDisable`).
+- Updated static monitor tests for the new lifecycle helper signatures/containment helpers and for lifecycle-authority string checks.
+
+### Latest Implementation Notes (2026-03-06, visible ownership + scroll stability pass)
+- Added renderer ownership authority helpers in `public/js/explorer-shaders.mjs`: `syncVisibleTileOwnership(activeTiles, drawResults, now)` and `getVisibleOwnershipRows(limit)` so swap decisions are based on draw-truth (`wasDrawnThisPass`, valid rect, texture present) instead of cache presence alone.
+- Added stricter swap-release guards to prevent visible tile unswaps: `_restoreUntrackedSwaps(...)` now accepts visible-tile sets and blocks release for currently visible tiles; new telemetry tracks `visibleSwapReleaseBlocked` and `offscreenSwapReleaseAllowed`.
+- Kept lifecycle untouched in hot paths while tightening ownership behavior: post-draw ownership sync runs once per render commit and does not mutate lifecycle enable/disable/RAF state.
+- Tuned fed-set behavior in `collectTileFxTiles()` for coarse-pointer/mobile scroll stability with smaller scrolling caps (`collectOverscan`, `maxFed`, `maxPromoted`) and added `fedVisibleRatio` telemetry.
+- Added compact ownership probe `window.logVisibleTileOwnership(limit)` in `public/explorer.html` for on-device console truth checks of visible tile owner/state/draw/texture/data-tex fields.
+- Added HUD lifecycle stability line (`lifecycleStable`) and surfaced new ownership counters in expanded rows.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the new ownership helper APIs/telemetry and revised fed-set constants.
+
+### Latest Implementation Notes (2026-03-06, renderer behavior finish pass)
+- Tightened thumbnail ownership authority in `public/js/explorer-shaders.mjs` so FX swap now requires draw truth (`visible && hasTexture && wasDrawnThisPass && rectValid`) instead of cache/READY state alone.
+- Changed active/fed tile behavior to block swap release inside `syncVisibleTileOwnership(...)`; swap release is now restricted to untracked tiles only.
+- Hardened `_restoreUntrackedSwaps(...)` with an additional near-visible guard set so release cannot touch currently visible or near-visible tiles.
+- Re-tuned visible-first feed constants in `collectTileFxTiles()` (`overscan`, `maxFed`, `maxPromoted`) and sorted overscan candidates by viewport distance so near-visible tiles warm first and distant gradual takeover is reduced.
+- Kept lifecycle and diagnostics surface unchanged for this pass; changes are renderer behavior + ownership/release policy only.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the tuned constants and updated untracked-swap call signature.
+
+### Latest Implementation Notes (2026-03-06, lifecycle bootstrap deadlock fix)
+- Fixed FX lifecycle bootstrap false-negative in `assertTileFxViewLifecycle(...)`: RAF is now considered healthy when a frame is scheduled (`tileFX.raf > 0`) even before `tileFxDbg.rafRunning` flips true on the first callback.
+- This prevents immediate containment fallback during valid startup, which was hiding the TileFX canvas and restoring DOM swaps before the first render loop tick.
+- Kept renderer architecture/features unchanged; this patch only corrects startup ordering so the existing scan→feed→upload→draw pipeline can proceed.
+
+### Latest Implementation Notes (2026-03-06, thumb painter leak + ownership snapshot fix)
+- Updated `collectTileFxTiles()` painter extraction in `public/explorer.html` so `thumbPaintEls` always includes `.thumb` alongside `img.asset-thumb`, and includes `.thumb .scrim` when present, ensuring swapped thumbnail suppression targets real paint surfaces (not just `<img>` nodes).
+- Updated painter leak detector in `countVisibleThumbPainters(...)` to treat hidden nodes as non-painting even if they still have CSS background values, eliminating false-positive leak reports from hidden thumb wrappers.
+- Expanded `TileFXRenderer.applyDomSwap(...)` background suppression/restoration in `public/js/explorer-shaders.mjs` to snapshot/restore `backgroundImage/background/backgroundColor` per thumb paint node and aggressively neutralize `.thumb` surface paint while swapped.
+- Updated `TileFXRenderer.getVisibleOwnershipRows(limit)` fallback to return current fed tile ownership rows when no per-frame ownership rows are cached yet, so `window.logVisibleTileOwnership(...)` no longer returns an empty snapshot during active FX startup windows.
+- Added one FX-active guard log in `window.logVisibleTileOwnership(...)` when rows are unexpectedly empty while FX is enabled.
+
+### Latest Implementation Notes (2026-03-06, metadata-safe thumb/body split)
+- Refactored grid tile markup in `public/explorer.html` so `.thumb` now contains sibling layers: `.thumb-body` (thumbnail painters only) and `.asset-ui` (metadata + controls), preventing FX thumbnail suppression from hiding metadata.
+- Moved `.asset-overlay`, badges/title/subtitle, selector UI, play button, and preview pill into `.asset-ui` so DOM metadata remains visible/stable while FX swaps thumbnail body ownership.
+- Updated tile painter collection to target `.thumb-body` surfaces (`img.asset-thumb`, body background, `.thumb-body .scrim`) and removed reliance on suppressing `.thumb` as a whole painter surface.
+- Updated painter leak candidate scanning to include `.thumb-body` so leak detection aligns with the new ownership boundary.
+
+### Latest Implementation Notes (2026-03-06, FX lifecycle runtime-truth alignment)
+- Updated lifecycle/health/HUD runtime checks in `public/explorer.html` to treat renderer state as active when either debug flags or live renderer fields indicate activity (`tileFxDbg.enabled || tileFX.enabled`, `tileFxDbg.rafRunning || tileFX.raf > 0`).
+- This removes false `lifecycle_invariant` states caused by debug-field lag while RAF is already scheduled/running and prevents misleading `enabled:0|raf:0` HUD output during valid FX startup.
+- Kept lifecycle authority path unchanged (`syncTileFxLifecycleToView(...)`) and did not add new proof/hud/recovery surfaces.
+- Updated static monitor expectations for the runtime-truth HUD strings in `tests/test_public_explorer_program_monitor.py`.
+
+### Latest Implementation Notes (2026-03-06, visible batch-gated FX entry phase)
+- Added a TileFX entry-phase tracker in `public/js/explorer-shaders.mjs` (`_fxEntryPhase`, `_fxEntryStartedAt`) and mode-transition handling in `setMode(...)` so entering FX starts in `bootstrap` and non-FX modes reset to `steady`.
+- Added `getFxEntryPhase()` to expose renderer entry state to collector/lifecycle callers without coupling to private fields.
+- Updated `syncVisibleTileOwnership(...)` to compute a visible readiness batch (`visibleReadyRatio`) from draw truth (`visible`, `hasTexture`, `wasDrawnThisPass`, `rectValid`) and auto-promote phase to `steady` only when readiness reaches all-visible or at least 80%.
+- During `bootstrap`, visible tile swap commits are blocked (`blockVisibleSwapCommit`) so DOM→FX ownership transfer no longer occurs incrementally row-by-row; visible swaps are now committed as a synchronized batch after readiness threshold.
+- Kept steady-state ownership logic and swap eligibility rules unchanged after phase promotion; this patch only changes FX entry behavior and first-visible commit timing.
+
+### Latest Implementation Notes (2026-03-07, strict visible-batch FX entry completion)
+- Replaced the single bootstrap phase with explicit phase sequencing in `public/js/explorer-shaders.mjs`: `bootstrap_collect` → `bootstrap_ready` → `bootstrap_commit` → `steady`.
+- Tightened bootstrap exit to require **100% readiness** of the captured visible bootstrap set (`visible + hasTexture + wasDrawnThisPass + rectValid`) before entering commit; removed the prior >=80% ready promotion behavior.
+- Added bootstrap visible-set stabilization (`_bootstrapVisibleTileEls`) and forced DOM ownership reset at bootstrap collect so visible tiles do not partially swap during entry.
+- Implemented grouped visible-batch commit in `bootstrap_commit` (`applyDomSwap(..., true, 'bootstrap:batch-commit')`) so visible ownership switches coherently instead of row-order stagger.
+- Froze offscreen promotion before steady by updating `collectTileFxTiles()` to detect non-steady entry phase and run visible-only collection (`maxPromoted = 0`, overscan loop break, minimal overscan).
+- Protected bootstrap visible tiles from untracked cleanup release by extending `_restoreUntrackedSwaps(...)` with a protected tile set and blocking release while phase is non-steady.
+
+### Latest Implementation Notes (2026-03-07, steady-state visible ownership discipline)
+- Tightened TileFX steady behavior in `public/js/explorer-shaders.mjs` with an explicit visible-lock rule: visible draw-valid tiles in `steady` are force-kept FX-owned (`steady:visible-lock`) and do not drift back to DOM because of offscreen/queue churn.
+- Added steady mismatch correction for visible swapped tiles that lose draw-truth (`steady:draw-truth-lost`) so invalid visible FX ownership is corrected on the next sync pass instead of persisting.
+- Kept ownership sync order visible-first: visible ownership decisions are still applied before `_restoreUntrackedSwaps(...)` cleanup in render commit flow.
+- Hardened swap release policy in `_restoreUntrackedSwaps(...)`: visible release remains blocked, while near-visible release now requires stronger hold windows (`_swapReleaseNearVisibleIdleMs`, `_swapReleaseNearVisibleDelayFrames`, `_swapReleaseNearVisibleDelayMs`) before release is allowed.
+- Reduced steady-state warming churn in `collectTileFxTiles()` with more conservative non-bootstrap feed constants (lower steady overscan/maxFed/maxPromoted, especially for coarse-pointer/mobile) to prioritize visible stability under scroll-stop-scroll patterns.
+
+### Latest Implementation Notes (2026-03-07, visible ownership truth-path repair)
+- Fixed `window.logVisibleTileOwnership(limit)` in `public/explorer.html` to treat empty rows in active FX view with visible DOM cards as an ownership-truth bug (`visibleDomCards > 0 && rows.length === 0`) and return summary flags (`visibleDomCards`, `ownershipTruthBug`) without adding new HUD/diagnostic surfaces.
+- Updated `TileFXRenderer.getVisibleOwnershipRows(limit)` in `public/js/explorer-shaders.mjs` to prefer a current visible DOM-set scan (`_collectVisibleDomOwnershipRows(...)`) before falling back to cached rows, preventing stale/empty cache returns when visible cards are present.
+- Added per-frame draw-truth retention map (`_lastDrawByTileEl`) and wired render-pass updates so visible ownership rows can include current-frame truth even when cache rows are not yet populated.
+- Expanded ownership row shape to include compact inspection fields required for visible truth checks: `fed`, `rectValid`, and `swapState` alongside existing state/owner/texture fields.
+- Kept the fix scoped to ownership truth path only (no new proof exporters/HUD panels/recovery loops), and updated static assertions in `tests/test_public_explorer_program_monitor.py` accordingly.
+
+### Latest Implementation Notes (2026-03-07, dual-owner collapse using live visible ownership truth)
+- Added `_reconcileVisibleOwnerFromTruth(...)` in `public/js/explorer-shaders.mjs` to make visible ownership decisions binary and deterministic from draw-truth, collapsing visible tiles immediately to DOM or FX ownership without lingering mixed states.
+- Updated `syncVisibleTileOwnership(...)` to route visible ownership transitions through the reconcile helper for both steady visible-lock and draw-truth-loss correction paths, preventing mixed visible owner persistence across frames.
+- Tightened bootstrap visible-set stability by removing recapture-on-empty behavior during non-steady phases; bootstrap now keeps the captured visible set intersection and avoids incremental visible claiming resets that can reintroduce top-to-bottom takeover feel.
+- Kept ownership hot-path order unchanged (visible ownership sync before untracked cleanup) and limited this pass to behavior correction using existing ownership truth surfaces.
+- Updated static assertions in `tests/test_public_explorer_program_monitor.py` for the reconcile helper wiring and steady ownership reason markers.
+
+### Latest Implementation Notes (2026-03-07, abstraction compression + visible FX ownership maturation)
+- Compressed lifecycle mental model in `public/js/explorer-shaders.mjs` with `getFxLifecycleStage()` and `_isEnteringPhase()` so runtime behavior reads as `entering` vs `steady` while preserving internal bootstrap sub-phases as implementation detail.
+- Kept bootstrap coherent-batch entry and added a guarded fallback commit path (`>=90% ready` after 1200ms) with inline comment, so one stalled visible tile on iPhone no longer blocks all visible FX ownership forever.
+- Added bootstrap empty-set escape (`bootstrap_ready` with zero captured visible tiles advances to `steady`) to avoid getting stuck in entering state with permanent DOM ownership.
+- Updated debug visible counters (`visibleReady`, `visibleSwapped`, `visibleDomOnly`, `visibleUploading`) to derive from current visible ownership rows rather than global tile-state counts, making ownership health reflect on-screen truth.
+- Preserved DOM metadata ownership (`.asset-ui`) and existing visible ownership reconcile path (`_reconcileVisibleOwnerFromTruth(...)`) while keeping hot-path ordering unchanged (visible ownership resolution before untracked cleanup).
+
+### Latest Implementation Notes (2026-03-07, visible upload/draw pipeline unblock)
+- Identified the first visible FX-maturity blocker in `public/js/explorer-shaders.mjs` as upload-drain gating: `_drainPendingUploads(...)` could early-return when global ready counts looked sufficient even while currently visible tiles still lacked textures.
+- Updated `_drainPendingUploads(...)` to compute `visibleMissingTextures` from the current visible tile set and skip the idle ready-count early-return while visible tiles remain texture-missing.
+- Added `visibleMissingTextures` runtime telemetry in `window.__tilefx_dbg` for existing diagnostics consumption (no new HUD/proof surfaces).
+- Hardened `_resolveTileSource(tile)` with fallback-to-`thumbSrc` when an image node exists but has no usable URL yet, preventing silent source stalls for visible cards that still carry non-img resolved thumb sources.
+- Kept ownership policy/reconcile semantics unchanged for this pass; changes are targeted to source→upload→texture→draw maturation path only.
+- Follow-up in same pass: queued visible tile uploads directly in `_render(...)` before rect-valid draw gating (`if (key && visible && !textureCache.has(key)) _queueTileImageUpload(...)`) so temporarily invalid visible rects no longer block source/upload progression.
+
+### Latest Implementation Notes (2026-03-07, visible FX ownership truth verification + tiny cleanup)
+- Verified the real explorer runtime truth loop (enter FX → settle → short scroll → stop) against `/public/explorer.html` and confirmed visible FX maturation is now occurring (`hasTexture:true`, `wasDrawnThisPass:true`, `owner:"FX"`) from `window.logVisibleTileOwnership(12)` output.
+- Captured proof summary/runtime slice showing `visibleReady:1`, `visibleSwapped:1`, `visibleDomOnly:0`, `visibleMissingTextures:0` for the sampled settled run; no `dual_owner` was observed in the sampled visible rows.
+- Per follow-up cleanup guidance, removed one redundant in-draw `_queueTileImageUpload(tile, key)` call in `_render(...)` now that visible upload-first queueing runs earlier (before rect-valid gating); behavior remains upload-first and texture progression is unchanged.
+- Kept scope narrow: no new abstractions, proof systems, or telemetry surfaces were added in this pass.
+
+### Latest Implementation Notes (2026-03-07, lifecycle dead-state elimination in FX view)
+- Fixed the core contradiction in `public/explorer.html` lifecycle sync: FX view can no longer silently settle with a dead renderer (`enabled:0`, `raf:0`) as a “contained” steady state.
+- Updated `assertTileFxViewLifecycle(...)` to use live runtime truth (`tileFX.enabled`, `tileFX.raf`) for startup checks and to retry one RAF before declaring a fatal lifecycle failure.
+- Kept containment for true failures only and added explicit fatal exit (`forceExitFxAfterFatalLifecycle(...)`) that cleanly switches back to grid/DOM-safe mode instead of leaving `view === 'fx'` while renderer is stopped.
+- Updated `syncTileFxLifecycleToView(...)` to return assertion truth in FX mode, keeping lifecycle authority behavior explicit.
+- Pruned the top of `docs/todo/AGENTS.md` to behavior-first lifecycle tasks and collapsed repeated proof-capture chores into a deferred section.
+
+### Latest Implementation Notes (2026-03-07, visible pending upload starvation fix)
+- Found the next concrete post-lifecycle blocker in the visible pipeline: pending upload drain order could spend frame budget on non-visible work before visible pending keys, leaving visible cards texture-missing/DOM-only under queue pressure.
+- Updated `_drainPendingUploads(...)` in `public/js/explorer-shaders.mjs` to build a visible-first pending work list (`visiblePendingKeys` then `otherPendingKeys`) so visible tiles get upload attempts first each drain cycle.
+- Updated `_queueTileImageUpload(...)` image prep path to prefer preparing the existing DOM `img` element first (including load wait) and only fall back to URL preload when the element prep fails and a URL exists.
+- Kept scope narrow to source→queue→upload→texture maturity; no new proof/HUD/watchdog surfaces were added in this pass.
+
+### Latest Implementation Notes (2026-03-07, single-visible-card source/upload maturity)
+- Narrowed the next blocker to the seeded 1-visible-card path: lifecycle remains alive, but the card could stay DOM-only when image-source prep stalled before texture upload.
+- Adjusted `_queueTileImageUpload(...)` so `img` kind prep is deterministic for visible cards: use DOM image when immediately usable, otherwise preload via URL first and only fall back to DOM image prep if URL preload fails.
+- Retained visible-first pending drain ordering in `_drainPendingUploads(...)` so single visible keys are serviced before non-visible warm items.
+- Added minimal runtime pipeline breadcrumb (`window.__tilefx_dbg.lastVisiblePipeline`) and row `pipeline` reflection for existing ownership rows, without adding new HUD/proof/toast/watchdog surfaces.
+
+### Latest Implementation Notes (2026-03-07, queue-stage fix in collector path)
+- Confirmed the seeded single-card runtime key/source binding is valid (`ingest/originals/img0.jpg` with thumbnail URL/currentSrc) and that prior null diagnostics were caused by detached context, not missing DOM card data.
+- Fixed queue-stage gating by allowing visible upload queueing from `updateTiles(...)` (collector-fed path) so a visible texture-missing tile can enter `_queueTileImageUpload(...)` even when render-loop visibility gating is stale.
+- Triggered `_drainPendingUploads(...)` from `updateTiles(...)` after visible queueing so queued visible work can progress without waiting for later render-loop timing.
+- Kept the patch narrow to queue/drain stage progression; no new HUD/proof/toast/watchdog surfaces were added.
+- Runtime in this container still reports `tileFX.gl` unavailable / renderer failed in headless Firefox (`glReady:false`, `failed:true`), which prevents texture creation/draw ownership confirmation in this environment despite queue-path changes.
+
+### Latest Implementation Notes (2026-03-07, queue truth reflection + null-texturecache guard)
+- Found a concrete queue-path defect after binding to the real visible key: `_queueTileImageUpload(...)` still dereferenced `this.textureCache.has(key)` even when texture cache was unavailable, preventing reliable queue insertion for the seeded visible key path.
+- Fixed `_queueTileImageUpload(...)` guard to use null-safe cache checks (`this.textureCache?.has?.(key)`), allowing queue state to populate even before texture cache initialization.
+- Fixed queue truth reflection for visible ownership rows by adding `queued` from `_pendingUploads.has(key)` in `getVisibleOwnershipRows(...)` / `_collectVisibleDomOwnershipRows(...)` payloads.
+- Fixed render-path pipeline metadata writeback bug (`key` undefined in `_lastDrawByTileEl` snapshot) by binding pipeline stage to `meta.key`.
+- Runtime truth now shows queue as real for the seeded key (`inPendingUploads:true`, `queued:true`), with next blocker moved to downstream drain/texture in this headless environment (`WEBGL_UNAVAILABLE`).
+
+## 2026-03-07 — Seeded drain-stage settlement pass (new)
+- Narrowed the follow-up to the proven next stage (`drain`) for seeded key `ingest/originals/img0.jpg`; avoided lifecycle/bootstrap/ownership policy churn in this pass.
+- Hardened `TileFXRenderer._drainPendingUploads(...)` to settle pending uploads into a terminal failure when FX drain is unavailable (e.g., `WEBGL_UNAVAILABLE`), preventing perpetual in-flight hangs.
+- Added per-key drain trace truth (`drainEvaluated`, `drainAttempted`, `failureReason`) and threaded it into existing ownership/live-state readouts for truthful runtime debugging without adding new HUD/proof systems.
+- Added `getUploadLiveState(key)` to report pending/in-flight/texture terminal truth for the seeded runtime key checks.
+- Seeded runtime check now advances beyond drain in headless run: `inPendingUploads:false`, `inUploadInFlight:false`, `inTextureCache:true`, row shows `hasTexture:true`, `wasDrawnThisPass:true`, `owner:"FX"`.
+
+## 2026-03-07 — Multi-visible entry coherence pass (new)
+- Advanced from seeded single-card proof to multi-visible viewport stability checks using the same runtime truth path (`window.logVisibleTileOwnership(...)`).
+- Updated bootstrap entry behavior in `TileFXRenderer.syncVisibleTileOwnership(...)` to commit only when the captured bootstrap-visible set is fully ready (`bootstrapReady === bootstrapTotal`), removing the partial 90% fallback commit that could leave mixed visible DOM/FX ownership after entry.
+- Verified in-container multi-visible run that multiple visible rows matured to `hasTexture:true`, `wasDrawnThisPass:true`, and `owner:"FX"`, with no persistent `dual_owner` rows after settle.
+- Verified short scroll-stop cycles (down/stop, up/stop) preserved visible FX ownership stability without persistent edge flip-flop rows.
+- Kept scope narrow: no new lifecycle architecture, HUD/proof/toast/watchdog/screenshot tooling added.
+
+## 2026-03-07 — Post-proof cleanup pass (new)
+- Kept scope on device-parity readiness and cleanup only; no new HUD/proof/toast/watchdog/screenshot surfaces were introduced.
+- Removed dead pending-upload cleanup code in `TileFXRenderer.destroy()` that referenced legacy `pending.img/onLoad/onError` listeners no longer attached by the current queue pipeline.
+- Removed unused `pending.promise` field/assignments from `_queueTileImageUpload(...)`; queue prep still runs identically via direct promise chains.
+- Preserved strict bootstrap-visible batch commit (`bootstrapReady === bootstrapTotal`) and re-validated multi-visible scroll-stop stability in-container.
+- Updated `docs/todo/AGENTS.md` top section to a concise post-proof checklist (real iPhone parity + one final concrete visual issue).
+
+## 2026-03-07 — Device parity support handoff (new)
+- Shifted focus from container-only refinement to a physical iPhone Safari parity run using existing truth surfaces only.
+- Locked handoff commands to `window.logVisibleTileOwnership(12)` and `window.exportTileFxProofSummary?.()` before/after a short scroll-stop cycle.
+- Explicitly deferred further renderer changes until one concrete on-device issue is observed, to avoid speculative complexity growth.
+
+## 2026-03-07 — Health verdict + domSwap/leak reconciliation pass (new)
+- Fixed verdict-layer mismatch where healthy visible FX ownership could still show `health: dual_owner` by prioritizing current visible truth in `computeTileFxHealthVerdict()`.
+- Updated DOM swap validity checks to evaluate currently swapped tiles and thumb-body paint leakage instead of unrelated card-shell CSS, reducing stale `domSwapOk` contradictions.
+- Tightened `countVisibleThumbPainters(...)` to count only actual paint contributors (visible media/background with drawable area), reducing false-positive leak noise.
+- Cleared stale leak counters when no swapped tiles are present to prevent historical leak state from contaminating current verdicts.
+- Kept solved layers frozen (lifecycle/queue/drain/texture/draw/ownership pipeline unchanged) and limited this pass to truth reconciliation + detector noise reduction.
+
+## 2026-03-07 — Visible placeholder ownership policy pass (new)
+- Found the remaining visible fallback path in `collectTileFxTiles()` / tile `onTextureReady(...)`: non-ready cards could drop to `data-tex="0"`, exposing full DOM thumbnail bodies during FX mode.
+- Updated policy so FX-visible and FX-near-visible non-ready cards use `data-tex="pending"` (placeholder) instead of full DOM thumb body; only fully culled cards clear back to `0`.
+- Added explicit placeholder CSS for `data-tex="pending"` that hides thumb-body painter nodes and shows a lightweight FX placeholder gradient while keeping `.asset-ui` metadata DOM-owned.
+- Kept solved pipeline/lifecycle layers unchanged and limited this pass to visible ownership paint policy + warm re-entry retention.
+
+## 2026-03-07 — Full visible-window coherence pass (new)
+- Remaining mixed-window issue was a timing gap: some visible cards stayed `data-tex="0"` until collector ownership assignment ran, producing partial top/bottom FX takeover perception.
+- Added `markVisibleFxWindowPending('setView:fx')` in `setView(...)` after render to immediately stamp currently visible cards to `pending` unless already texture-owned.
+- Updated collector visible assignment to set `pending` in FX view without waiting on `window.__tilefx_enabled` timing, ensuring visible cards resolve to placeholder or texture consistently.
+- In-container runtime check now shows immediate coherent visible window on entry (`pending` for all visible cards, `zero` none) before texture maturation.
+
+## 2026-03-08 — Near-visible pre-cull tracking fix (new)
+- Addressed PR #94 review feedback in `public/js/explorer-shaders.mjs`: `nearVisibleTileEls` is now populated before the visible-only cull path returns.
+- Kept ownership semantics tight: `visibleTileEls` still receives only truly visible tiles while near-visible edge tiles remain eligible for `_restoreUntrackedSwaps(...)` hysteresis protection.
+- Preserved existing non-visible render candidate culling (`if (!visible) return;`) so rendering behavior remains unchanged outside this tracking fix.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to assert near-visible registration occurs before the visible-cull return.
+
+## 2026-03-08 — Non-FX disable warning-noise cleanup (new)
+- Investigated console spam path and confirmed `[tilefx] DISABLE sync:setView:non-fx` is a legitimate call from `setView(...)`/startup non-FX transitions, not an illegal lifecycle breach.
+- Updated `TileFXRenderer.disable(...)` logging policy: legal disables are now debug-level (`fxdebug=1` only) and no longer emit warning stack traces; illegal disable attempts while view is still FX continue to emit error-level logs with stack and are blocked.
+- Preserved lifecycle semantics and scope (no ownership/drain/watchdog architecture changes), while retaining `window.__tilefx_dbg.lastDisable` bookkeeping for truth inspection.
+- Removed redundant startup `setView('grid')` invocation when already in grid mode after initial refresh, preventing duplicate legitimate disable calls from polluting console output.
+- Added/updated tests to lock the new policy and startup guard behavior.
+
+## 2026-03-08 — Pending-to-texture pipeline stall fix (new)
+- Investigated the remaining visual defect (cards stuck `data-tex="pending"`) as a texture-readiness pipeline issue, separate from lifecycle/logging.
+- Identified the concrete gate in `public/js/explorer-shaders.mjs`: `tile.onTextureReady(...)` ran only inside the visible+rect-valid draw path, so cards could keep placeholder ownership even when cache texture truth was already ready.
+- Updated renderer ordering so per-tile cache truth (`entry?.texture`) drives `onTextureReady(...)` before visible/rect culls; draw culling and swap eligibility remain unchanged.
+- Resulting behavior: fed visible/near-visible tiles now receive readiness promotion to `data-tex="1"` as soon as texture exists, instead of waiting for draw-eligibility timing.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to lock callback-before-cull ordering.
+
+## 2026-03-08 — Visible thumb-body ownership policy cleanup (new)
+- Followed up after verdict/logging fixes and targeted the remaining patchy visual layer: some visible cards could still show normal DOM thumb bodies during FX mode while neighbors were FX/placeholder.
+- Root cause at policy layer: placeholder painter suppression was keyed only to `data-tex="pending"`, so transient non-texture states in near-visible FX window could leak full DOM thumb body paint.
+- Tightened CSS ownership policy in `public/explorer.html`: any `data-fx-near-visible="1"` card that is not `data-tex="1"` now suppresses thumb-body/thumb-image painters and shows the existing FX placeholder treatment.
+- Kept `.asset-ui` and card structure fully DOM-owned (titles/subtitles/badges/selectors/affordances unchanged); no lifecycle, queue, or renderer architecture changes were made.
+- Added test coverage in `tests/test_public_explorer_program_monitor.py` for the near-visible non-textured placeholder selector.
+
+## 2026-03-08 — Feed pipeline starvation fix after policy stabilization (new)
+- Investigated the “renderer alive but uploads/cache/swap all zero” state as a collect→feed pipeline continuity issue (not lifecycle/logging/UI ownership).
+- Found the blocking gate in `TileFXRenderer._render(...)`: non-null-safe `this.textureCache.has/get` reads could execute before cache bootstrap was guaranteed, tripping render-loop failure and preventing ongoing tile feed progression.
+- Switched render feed/cache reads to null-safe access (`this.textureCache?.has?.(key)`, `this.textureCache?.get?.(key, now)`) so fed tiles still queue and advance while cache initialization catches up.
+- Kept scope minimal: no card overlay changes, no lifecycle architecture changes, no new debug subsystems.
+- Added regression assertions in `tests/test_public_explorer_program_monitor.py` for null-safe texture-cache usage in render path.
+
+## 2026-03-08 — Proof export stale-capture guard (new)
+- Accepted settled runtime evidence that FX feed/upload/cache/swap pipeline is alive; stopped treating renderer pipeline as the active blocker in this pass.
+- Identified remaining contradiction as truth-surface timing: `exportTileFxProofSummary()` could export an older non-settled `window.__tilefx_proof` snapshot while runtime was already FX-enabled and drawing.
+- Added a narrow refresh guard in `exportTileFxProofSummary()` to re-capture proof (`captureTileFxProof('export:refresh')`) when runtime indicates active FX but captured proof indicates non-running/zero-visible state.
+- Kept fix scoped to proof snapshot consistency only (no lifecycle, queue/drain, or UI ownership rewrites).
+- Added regression assertion in `tests/test_public_explorer_program_monitor.py` for the export refresh line.
+
+## 2026-03-08 — Explorer mock asset module + fixture seed (new)
+- Added `public/js/explorer-mock-assets.mjs` with explicit mock activation detection (`?mock=1` or `window.__EXPLORER_MOCK__`), fixture loading, normalization, and deterministic embedded fallback generation.
+- Added `public/fixtures/explorer-mock-assets.json` as a baseline fixture payload for explorer-side mock data workflows.
+- Kept this pass scoped to asset-mock data plumbing only; no API contract or backend storage behavior changes.
+
+## 2026-03-08 — Explorer mock-mode early boot short-circuit (new)
+- Root cause of preview failure: `DOMContentLoaded` always entered API-first `refreshExplorerData()` (`/api/sources`, `/api/projects`) before any mock takeover, so preview/webview hosts surfaced boot error cards and stayed empty.
+- Added early boot mock routing in `public/explorer.html`: explicit mock activation now runs before API boot, with direct mock source/project/media hydration and API boot bypass.
+- Added preview fallback guard for local embedded preview contexts (`window.opener` / iframe + local host) so API boot errors in editor previews reroute to mock hydration instead of showing source/project failure toasts.
+- Expanded mock activation helper in `public/js/explorer-mock-assets.mjs` to include common webview protocols (`vscode-webview:`, `capacitor:`, `ionic:`) in addition to `file:` and explicit flags.
+- Preserved deployed safety by keeping real `http/https` non-preview boot on API path unless explicit mock activation is requested.
+
+## 2026-03-08 — Localhost top-level preview mock fallback widening (new)
+- Addressed remaining preview gap where top-level editor-hosted localhost previews could fail API boot without `?mock=1` and still miss mock fallback because preview detection previously required opener/iframe context.
+- Updated `isLikelyPreviewEnvironment()` in `public/js/explorer-mock-assets.mjs` to classify localhost/loopback/local-test hostnames as preview contexts directly.
+- Maintained production safety: this heuristic is only used in boot error fallback routing, so deployed non-local hosts continue real API behavior unless explicit mock activation is requested.
+- Added regression assertion in `tests/test_public_explorer_program_monitor.py` for direct localhost preview detection branch.
+
+## 2026-03-08 — TileFX bootstrap non-ready timeout safeguard (new)
+- Addressed review feedback on `bootstrap_ready` stalling: entry phase previously required all bootstrap-visible tiles to become ready (`bootstrapReady === bootstrapTotal`), so a single never-ready tile could block steady state indefinitely.
+- Added bounded timeout escape hatch in `public/js/explorer-shaders.mjs` via `tilefxBootstrapReadyMs` (default `1200ms`): once elapsed in `bootstrap_ready`, renderer advances to `bootstrap_commit` so FX entry cannot deadlock on one failed tile.
+- Preserved full-ready fast path and existing batch commit semantics for ready tiles; timeout path is a safety valve, not a behavior rewrite.
+- Added timeout telemetry fields under `window.__tilefx_dbg` (`bootstrapReadyTimedOut`, `bootstrapReadyElapsedMs`, `bootstrapReadyPending`, `bootstrapReadyTimeoutMs`) and regression assertions in `tests/test_public_explorer_program_monitor.py`.
+
+## 2026-03-15 — Explorer delete confirmation + scope-safe refresh (new)
+- Added explicit delete confirmation in `public/explorer.html` (`confirmDeleteAction`) so destructive deletes require user acknowledgment before API calls.
+- Fixed delete target resolution for drawer-initiated deletes by resolving refs from focused item and current media when selection state is empty.
+- Added `reloadMediaForCurrentScope()` and switched delete success flow to scope-aware reload (`loadMedia` for active project, `loadAllMedia` for all-project mode) to avoid post-delete fake-empty/no-project UI drift.
+- Added regression coverage in `tests/test_public_explorer_program_monitor.py` to assert confirmation wiring and scope-aware post-delete reload hooks remain present.
+
+## 2026-03-15 — Explorer custom delete modal (new)
+- Replaced native `window.confirm` in `public/explorer.html` delete flow with a custom Promise-based confirm modal (`#confirmDeleteModal`) to match Explorer styling and avoid blocking the render loop.
+- Added modal interactions for Cancel/Confirm, backdrop-tap cancel, and Escape-key cancel; modal toggles `body.confirm-open` while active and restores listeners/state on cleanup.
+- Updated delete path to `await confirmDeleteAction(...)` while preserving scope-aware post-delete reload behavior (`reloadMediaForCurrentScope`) from the previous fix.
+- Expanded static explorer regression assertions in `tests/test_public_explorer_program_monitor.py` to lock modal markup, async confirmation wiring, and scope-aware reload hooks.
+
+## 2026-03-15 — Explorer delete identity-key hardening (new)
+- Addressed all-project delete collision risk in `public/explorer.html` by replacing path-only delete matching with `assetIdentityKey(...)` lookups.
+- Resolver now prefers explicit asset identity (`asset_uuid`/`asset_id`, else `source+project+relative_path`) and no longer performs `wanted.has(ref.relative_path)` path-only inclusion against selected refs.
+- Updated delete callsites to pass asset objects (`selectedItemsOrdered`, drawer `state.focused`, context-menu `items`) so requested deletes preserve full identity across sources/projects.
+- Kept compatibility for legacy string-path requests with focused/active-project narrowing and retained scope-aware post-delete reload behavior.
+- Expanded regression assertions in `tests/test_public_explorer_program_monitor.py` to lock identity-key matching and guard against relative-path-only regressions.
+
+## 2026-03-15 — Explorer parity checklist matrix in docs/todo AGENTS (new)
+- Added a dedicated parity-buckets matrix under `docs/todo/AGENTS.md` → `## 2026-03-07 — Physical iPhone parity handoff (active)` to keep Static vs Next.js scope tracking consistent for future commits.
+- Matrix rows now cover shell/layout, media behavior, integrations, and data/API with explicit `Static` / `Next.js` / `Parity` checklist columns.
+- Each bucket row includes concrete grep locators in both codepaths (`public/explorer.html` and `docker/packages/Explorer/src/ExplorerApp.tsx` + related JS modules) so parity patches are idempotent and easy to anchor.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer migration slice 1 landed in `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`: topbar brand now mirrors the static explorer title-toggle treatment and the actions trigger/panel positioning was aligned to the fixed topbar behavior.
+- Added/updated migration checkboxes in `docs/todo/AGENTS.md`; keep marking slices complete one-by-one with isolated commits.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer migration slice 2 updated card rendering parity in `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`: grid uses responsive CSS-grid cards, selection uses `.is-selected` affordances with selection-order badges, and list rows now reflect selected state consistently.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer migration slice 3 added inspector parity structure in `docker/packages/Explorer/src/ExplorerApp.tsx`: drawer action pills now include a Tag toggle and a drawer tag panel section for focused manual/AI tags, with matching panel styles in `src/styles.css`.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer migration slice 4 now routes delete triggers through an in-app confirmation modal (context menu, selection bar, and drawer delete pill) and upgraded upload affordances to explicit choose/upload controls in the sidebar panel.
+
+### Latest Implementation Notes (2026-03-15)
+- Next.js Explorer bulk asset actions now call ordered-ref endpoints in `docker/packages/Explorer/src/api.ts` (`/api/assets/bulk/delete|tags|move|compose`) with typed helpers and explicit error extraction.
+- `docker/packages/Explorer/src/ExplorerApp.tsx` now uses a shared ordered asset-ref mapper (`mapOrderedAssetRefs`) that resolves refs from current selection plus drawer-focused assets (including legacy relative-path fallback), then routes delete/move/tag/compose actions through bulk APIs with explicit user-safe toasts.
+- Added targeted package tests in `docker/packages/Explorer/tests/bulk-actions.test.mjs` covering mixed all-project ordered payloads, single-project move payload routing, and explicit empty-selection guardrail/action wiring assertions.
+
+### Latest Implementation Notes (2026-03-15)
+- Explorer package compose parity now uses the existing bulk endpoint (`POST /api/assets/bulk/compose`) with a modal-driven output project/source/name prompt in `docker/packages/Explorer/src/ExplorerApp.tsx`.
+- Compose controls in both the Actions panel and select bar are enabled only when selected assets include at least one video, while payload ordering remains deterministic via ordered asset-ref mapping.
+- Successful compose requests now show artifact summary details and trigger scope-aware media refresh plus project reload; package README + tests were updated for compose guardrails/order/refresh coverage.
+
+### Latest Implementation Notes (2026-03-15)
+- Preview/inspector convergence in the Next.js Explorer now adopts static-parity drawer deltas only: drawer action set includes Program Monitor + OBS affordances with explicit unavailable-state disabling/toasts, preview media sizing adds audio + minimum height parity, and drawer tags stay as an overlay panel in `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`; intentionally deferred this pass are static-only FX/tile renderer/debug controls and full inline tag-editor parity (prompt-based tag edits remain in package explorer).
+
+### Latest Implementation Notes (2026-03-15)
+- Stabilized the Explorer package API client contract in `docker/packages/Explorer/src/api.ts` with a shared error extractor that consistently surfaces actionable `detail`, nested `detail.message`, or `message` text for list/upload/resolve/delete/move and bulk asset endpoints.
+- Added a focused fetch-mocked API contract suite at `docker/packages/Explorer/tests/api-contract.test.mjs` covering request URL/query/body construction for sources/projects/media/upload/resolve/delete/move/bulk-delete/bulk-tags/bulk-move/bulk-compose, including ordered `assets` array invariants.
+- Updated `docs/todo/AGENTS.md` with a completed checklist for this API contract stabilization slice.
+
+### Latest Implementation Notes (2026-03-15)
+- Explorer feature work now follows a dual-track parity protocol: each feature commit must classify scope (shared vs single-path exception), include paired static/package path locators, verify UI + API parity per slice, and record static/package test coverage before marking tasks complete in `docs/todo/AGENTS.md`.
+
+### Latest Implementation Notes (2026-03-15)
+- Added one consolidated preview convergence epic in `docs/todo/AGENTS.md` with phased, non-overlapping execution rows (Phase A baseline inventories + explicit static/package deltas; Phase B primitive-first implementation via `api.ts`/`state.ts`/`utils.ts` before JSX/CSS reshaping; Phase C validation/docs updates across package tests, static regression hooks, and Explorer README updates).
+- Preview delta intent is now explicitly tracked as shared across both stacks (static `public/explorer.html` and package `docker/packages/Explorer/src/ExplorerApp.tsx` + `src/styles.css`) with ordered completion gates to prevent overlap and state-desync regressions.
+
+### Latest Implementation Notes (2026-03-15)
+- Static TileFX (`public/js/explorer-shaders.mjs`) now enforces explicit performance guardrails with frame-time bands (`target/warm/degrade/critical`), bounded adaptive quality profiles (`high/balanced/low/safe`), and coarse-pointer fallback behavior that holds safe quality during sustained critical frame pressure before recovery.
+- TileFX debug telemetry now publishes guardrail policy/runtime fields on `window.__tilefx_dbg` (`perfGuardrails`, `perfFrameEmaMs`, `perfFrameBand`, `perfQuality`, `perfAdaptiveState`, `mobileFallbackActive`, `mobileFallbackReason`) to keep runtime diagnosis deterministic.
+- Next.js Explorer package remains intentionally grid/list-only for FX policy: no package TileFX mode is exposed, and unsupported view tokens must normalize to deterministic grid/list fallback (`normalizeExplorerView` in `docker/packages/Explorer/src/state.ts`) until a future explicit parity migration.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Explorer package bulk parity slice now uses typed bulk request contracts in `src/api.ts`, stable cross-project asset-ref builders in `ExplorerApp.tsx`, and drawer/select-bar wiring for tag/move/delete/compose using source+project+relative_path refs.
+
+### Latest Implementation Notes (2026-03-15)
+- Preview convergence slice upgraded package drawer semantics in `docker/packages/Explorer/src/ExplorerApp.tsx`: opening the drawer now seeds selection context for the focused asset when project-scoped or all-project scope is active; drawer close clears focus-tag input state; tag overlay auto-focuses the drawer tag input when opened.
+- Package preview action cluster now mirrors static interaction grouping with explicit preview action hooks (`data-preview-action` for play/copy/obs/tag/delete) and item-kind visibility guardrails (`getPreviewDrawerActionVisibility`) so Play only renders for video/audio items.
+- Package drawer tag panel now uses an inline typed input flow (`drawerTagInput`) with focused-asset scoped bulk-tag API calls (add/remove), replacing prompt-only behavior for drawer-tag edits while keeping existing API client isolation.
+- Updated `docker/packages/Explorer/src/styles.css` to align drawer visual hierarchy + touch ergonomics with static explorer: action groups, preview framing, non-selectable drawer surfaces, and mobile-safe action button sizing.
+- Added regression coverage for static preview hook contract in `tests/test_public_explorer_program_monitor.py` and package preview kind-visibility invariants in `docker/packages/Explorer/tests/preview-drawer.test.mjs`.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Addressed post-PR regression: updated `tests/test_public_explorer_program_monitor.py` TileFX max texture assertion to match current shader initialization (`_baseMaxTexEdge` followed by `maxTexEdge` assignment), restoring suite pass state.
+- Re-ran static + package preview regression checks and captured fresh browser screenshots with confirmed 200 routes to avoid prior Not Found artifact output when sharing preview results.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Package mock parity upgraded: `docker/packages/Explorer` now ships `public/fixtures/explorer-mock-assets.json` so the Next.js explorer consumes the same fixture corpus used by static explorer mock mode.
+- `loadExplorerMockAssets(...)` in `docker/packages/Explorer/src/utils.ts` now attempts both `/fixtures/explorer-mock-assets.json` and `/public/fixtures/explorer-mock-assets.json` before embedded fallback, keeping preview behavior deterministic across serving contexts.
+- Added regression test coverage in `docker/packages/Explorer/tests/utils-behavior.test.mjs` for fixture-path preference and revalidated the full command chain (`pytest ... && npm ci && npm test`).
+
+
+### Latest Implementation Notes (2026-03-15)
+- Package explorer grid/layout parity update: `docker/packages/Explorer/src/styles.css` now matches static section-header behavior (`.section-h` is non-sticky/relative) and enforces uniform square thumb ratios for oriented assets in grid view to eliminate masonry-like vertical gaps.
+- Added package regression coverage in `docker/packages/Explorer/tests/utils-behavior.test.mjs` to lock section-header parity plus uniform grid-thumb ratio CSS rules.
+- Revalidated full static+package test chain and recaptured static/package screenshots with mock fixtures to confirm aligned non-gapped grid rendering.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Package explorer grid now uses dense masonry-style packing in `docker/packages/Explorer/src/styles.css` (`grid-auto-flow: dense`, `grid-auto-rows: 8px`) with `--asset-span` row spans from `getGridAssetSpan(...)` in `ExplorerApp.tsx`, eliminating vertical hole artifacts while preserving orientation-driven scale differences.
+- Package main layout now pads by `var(--topbar-offset)` so section headers render in conjunction with the fixed top bar instead of tucking behind it.
+- Added/updated package style contract tests in `docker/packages/Explorer/tests/utils-behavior.test.mjs` and revalidated the full static+package test command chain.
+
+### Latest Implementation Notes (2026-03-15)
+- Static TileFX policy durability pass in `public/js/explorer-shaders.mjs`: query-param tuning is now clamped through shared helpers (`readClampedSearchParam` + guardrail `tuningLimits`) for `tilefxMaxTex`, `tilefxIdleReadyMargin`, `fxtileuploads`, `fxtileuploadsframe`, and `tilefxBootstrapReadyMs`.
+- Added repeated-min-tier fallback transitions in TileFX adaptive logic (`_triggerGuardrailFallback`) so sustained critical pressure at minimum quality forces a safe DOM-swap restore + bootstrap re-entry instead of stalling in a degraded lockup state.
+- TileFX debug telemetry now includes fallback/tuning diagnostics (`perfMinTierCriticalStreak`, `perfFallbackTransitions`, `perfFallbackReason`, `perfFallbackCooldownUntil`, `perfQueryTuning`) while keeping existing `perfGuardrails` fields intact.
+- Explorer package view handling now normalizes no-FX policy at every entry point via `normalizeExplorerViewState(...)` in `docker/packages/Explorer/src/state.ts`, with `ExplorerApp.tsx` applying normalization for URL params, persisted localStorage view, and UI view toggles plus user-safe warning toasts on downgraded inputs.
+- Regression coverage updated: static policy contract tests assert clamped query parsing + fallback hooks, and package tests assert deterministic no-FX normalization semantics and absence of FX runtime wiring in the package explorer.
+
+### Latest Implementation Notes (2026-03-15)
+- Updated `docker/packages/Explorer/README.md` testing instructions to use install-first ordering (`npm ci --silent` then `npm test --silent`) so clean checkout validation avoids missing-dev-dependency failures.
+- Revalidated the package test sequence with the new documented command order and kept the static regression command in the same runbook.
+
+### Latest Implementation Notes (2026-03-15)
+- Intake pipeline preview slice adopted a lightweight static preview module (`public/js/asset-preview.mjs`) that exports stable preview action constants plus media-kind play visibility helpers.
+- `public/explorer.html` now imports the preview shim, tags drawer controls with explicit `data-preview-action` hooks, and uses shared visibility logic to hide Play for non audio/video assets.
+- Package parity mirrors the preview action contract via exported `PREVIEW_ACTIONS` in `docker/packages/Explorer/src/ExplorerApp.tsx`, with regression checks in package + static test suites.
+
+### Latest Implementation Notes (2026-03-15)
+- Shader intake slice adopted `readTileFxTuningFromQuery(...)` in `public/js/explorer-shaders.mjs` as a single clamp-safe parser for TileFX runtime query tuning (`tilefxMaxTex`, upload budgets, idle margin, bootstrap timeout).
+- `TileFXRenderer` now initializes its base tuning fields from this helper, keeping constructor wiring explicit and easier to parity-test.
+- Static explorer regression tests now assert helper export and constructor usage to lock the shader query-tuning contract.
+
+### Latest Implementation Notes (2026-03-15)
+- Topbar/section polish intake slice added explicit parity selectors (`data-ui-hook`) to both static and package explorers for app shell, topbar container, and projects section header nodes.
+- Added static + package contract tests to assert these selector hooks remain present, giving merge-safe anchors for compose/topbar UI iterations.
+
+### Latest Implementation Notes (2026-03-16)
+- Added screenshot-route reliability guidance in `docker/packages/Explorer/README.md` to avoid white `Not Found` captures by serving repo root and validating `http://127.0.0.1:8000/public/explorer.html?mock=1` returns `200` before Playwright capture.
+- Added package README contract assertions in `docker/packages/Explorer/tests/utils-behavior.test.mjs` so screenshot URL/status guidance remains stable for future visual QA runs.
+
+### Latest Implementation Notes (2026-03-16)
+- Hardened screenshot QA guidance in `docker/packages/Explorer/README.md` to require both `200` status and route-content verification (`id="brandTitle"` -> `route-content-ok`) before trusting captures.
+- Expanded `docker/packages/Explorer/tests/utils-behavior.test.mjs` README contract assertions so screenshot-route and content-check guardrails remain enforced over future docs edits.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Integration pass kickoff for `me/explorer-shaders-and-compose-api-upgrades`: commit 1 unified preview primitives so static explorer imports `normalizePreviewKind` + `buildPreviewMediaDescriptor` from `public/js/asset-preview.mjs`, and package explorer now mirrors that descriptor helper in `docker/packages/Explorer/src/utils.ts` for typed preview source/title resolution.
+- Added contract-level test coverage in static + package suites to lock the new helper imports/usage before panel wiring commits.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Integration pass commit 2 wired preview rendering to shared descriptor helpers in both explorer implementations: static drawer now uses `buildPreviewMediaDescriptor(...)` + normalized kind handling, and package drawer preview media elements resolve through the same descriptor semantics for video/image/audio source selection.
+- Static contract assertions now lock preview helper imports and descriptor invocation in `public/explorer.html`.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Integration pass commit 3 carried topbar/section visual tokens across both explorers: added shared `--section-surface` and applied it to topbar gradient + section headers in `public/explorer.html` and `docker/packages/Explorer/src/styles.css` to keep style parity deterministic.
+- Added static/package contract assertions to keep the new section-surface token and section header background wiring from drifting.
+- Deferred API-upgrade deltas from `me/explorer-shaders-and-compose-api-upgrades` because that branch reference is not available in this local clone (no remote refs), and current compose API contract is already implemented/tested locally.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Added explicit package visual-QA screenshot guidance in `docker/packages/Explorer/README.md` for `http://127.0.0.1:8790/?mock=1`, including status/content guardrails (`data-ui-hook="explorer-app-shell"`) and a drawer-open preview capture note for style review.
+- Expanded `docker/packages/Explorer/tests/utils-behavior.test.mjs` README contract assertions to lock both static and package screenshot routes plus preview-panel capture instructions.
+- Captured package explorer mock screenshots for closed and open preview-panel states to support style inspection feedback cycles.
+
+### Latest Implementation Notes (2026-03-16)
+- Media API project media payloads now publish `thumbnail_url` as the canonical thumbnail field and keep `thumb_url` as a compatibility alias pointing to the same server thumbnail route.
+- Static and Next.js explorers now resolve thumbnail sources with identical server-first order (`thumbnail_url` -> `thumb_url` -> image `stream_url` fallback) and share stable cache-key semantics (`source|project|relative_path|sha256`).
+- Added regression coverage for API thumbnail-field parity, package thumbnail prioritization/cache keys, and static explorer server-first thumbnail branch wiring.
+

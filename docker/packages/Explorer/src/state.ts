@@ -1,5 +1,11 @@
-import type { MediaItem } from './types';
+import type { ExplorerView, MediaItem } from './types';
 import { normalizeTagList } from './utils';
+
+export interface MediaActionRef {
+  source: string;
+  project: string;
+  relative_path: string;
+}
 
 export type MediaTypeFilter = 'all' | 'video' | 'image' | 'audio' | 'overlay' | 'unknown';
 export type SortKey =
@@ -22,6 +28,49 @@ export interface MediaMeta {
   types: Set<MediaTypeFilter>;
   hasTags: boolean;
   hasSize: boolean;
+}
+
+
+const EXPLORER_VIEW_SET = new Set<ExplorerView>(['grid', 'list']);
+
+export interface ExplorerViewNormalization {
+  view: ExplorerView;
+  changed: boolean;
+  reason: 'ok' | 'fx_disabled' | 'invalid';
+  message: string;
+}
+
+export function normalizeExplorerView(view: unknown, fallback: ExplorerView = 'grid'): ExplorerView {
+  const raw = String(view || '').trim().toLowerCase();
+  if (EXPLORER_VIEW_SET.has(raw as ExplorerView)) return raw as ExplorerView;
+  return fallback;
+}
+
+export function normalizeExplorerViewState(view: unknown, fallback: ExplorerView = 'grid'): ExplorerViewNormalization {
+  const raw = String(view || '').trim().toLowerCase();
+  const normalized = normalizeExplorerView(raw, fallback);
+  if (normalized === raw) {
+    return {
+      view: normalized,
+      changed: false,
+      reason: 'ok',
+      message: '',
+    };
+  }
+  if (raw === 'fx' || raw.includes('fx')) {
+    return {
+      view: normalized,
+      changed: true,
+      reason: 'fx_disabled',
+      message: 'FX view is unavailable in this Explorer build. Switched to Grid/List safely.',
+    };
+  }
+  return {
+    view: normalized,
+    changed: true,
+    reason: 'invalid',
+    message: 'Unsupported view was ignored. Switched to a safe Grid/List mode.',
+  };
 }
 
 export function getMediaType(item: MediaItem): MediaTypeFilter {
@@ -97,6 +146,28 @@ export function extractAiTags(items: MediaItem[]): string[] {
     normalizeTagList(item.ai_tags || item.aiTags).forEach((tag) => tags.add(tag));
   }
   return Array.from(tags).sort();
+}
+
+export function buildMediaIdentity(item: MediaItem): string {
+  const source = String(item.project_source || item.source || 'primary');
+  const project = String(item.project_name || item.project || '');
+  const relativePath = String(item.relative_path || '');
+  return [source, project, relativePath].join('|');
+}
+
+export function getActionRefs(items: MediaItem[]): MediaActionRef[] {
+  const unique = new Map<string, MediaActionRef>();
+  for (const item of items) {
+    const ref = {
+      source: String(item.project_source || item.source || 'primary'),
+      project: String(item.project_name || item.project || ''),
+      relative_path: String(item.relative_path || ''),
+    };
+    if (!ref.project || !ref.relative_path) continue;
+    const key = `${ref.source}|${ref.project}|${ref.relative_path}`;
+    unique.set(key, ref);
+  }
+  return Array.from(unique.values());
 }
 
 const parseTimestamp = (value?: string | null): number => {
