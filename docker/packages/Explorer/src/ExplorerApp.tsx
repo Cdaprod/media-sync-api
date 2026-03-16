@@ -357,6 +357,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
 
+  const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
+    const relativePath = String(item.relative_path || '').trim();
+    if (!relativePath) return '';
+    const projectName = String(item.project_name || item.project || projectOverride?.name || '').trim();
+    const sourceName = String(item.project_source || item.source || projectOverride?.source || '').trim();
+    return `${sourceName}::${projectName}::${relativePath}`;
+  }, []);
+
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
   const filteredMedia = useMemo(() => {
     const filtered = filterMedia(
@@ -364,21 +372,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       {
         query,
         type: typeFilter,
-        selectedOnly,
+        selectedOnly: false,
         untaggedOnly,
         selected,
       },
       mediaMeta,
     );
-    return sortMedia(filtered, sortKey, mediaMeta);
-  }, [media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
-  const itemsByPath = useMemo(() => {
+    const selectedFiltered = selectedOnly
+      ? filtered.filter((item) => selected.has(assetSelectionKey(item, activeProject)))
+      : filtered;
+    return sortMedia(selectedFiltered, sortKey, mediaMeta);
+  }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const itemsBySelectionKey = useMemo(() => {
     const map = new Map<string, MediaItem>();
     media.forEach((item) => {
-      if (item.relative_path) map.set(item.relative_path, item);
+      if (item.relative_path) map.set(assetSelectionKey(item, activeProject), item);
     });
     return map;
-  }, [media]);
+  }, [activeProject, media]);
   const tags = useMemo(() => extractTags(media), [media]);
   const aiTags = useMemo(() => extractAiTags(media), [media]);
   const typeLabel = TYPE_LABELS[typeFilter] ?? TYPE_LABELS.all;
@@ -542,14 +553,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         const items = Array.isArray(payload.media) ? payload.media : [];
         setMedia(sortMediaByRecent(items));
         setMediaScope('project');
-        const existing = new Set(items.map((item) => item.relative_path));
+        const existing = new Set(items.map((item) => assetSelectionKey(item, project)));
         setSelected((current) => pruneSelection(current, existing));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load media';
         addToast('bad', 'Media', message);
       }
     },
-    [api, addToast],
+    [api, addToast, assetSelectionKey],
   );
 
   const loadAllMedia = useCallback(async () => {
@@ -607,11 +618,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   );
 
   const toggleSelected = useCallback(
-    (relPath: string) => {
-      if (!relPath) return;
-      setSelected((current) => toggleSelection(current, relPath));
+    (item: MediaItem) => {
+      const key = assetSelectionKey(item, activeProject);
+      if (!key) return;
+      setSelected((current) => toggleSelection(current, key));
     },
-    [setSelected],
+    [activeProject, assetSelectionKey],
   );
 
   const clearSelection = useCallback(() => {
@@ -669,25 +681,44 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, [activeProject]);
 
-  const resolveItemsForPaths = useCallback((paths: string[]): MediaItem[] => {
-    const resolved = paths
-      .map((path) => itemsByPath.get(path))
+  const resolveItemsForSelection = useCallback((selectionKeys: string[]): MediaItem[] => {
+    const resolved = selectionKeys
+      .map((key) => itemsBySelectionKey.get(key))
       .filter((item): item is MediaItem => Boolean(item));
     if (resolved.length) return resolved;
-    return paths.map((path) => ({
-      relative_path: path,
-      project_name: activeProject?.name,
-      project_source: activeProject?.source || null,
-    }));
-  }, [activeProject, itemsByPath]);
+    return selectionKeys.map((key) => {
+      const [sourceName, projectName, ...rest] = key.split('::');
+      return {
+        relative_path: rest.join('::'),
+        project_name: projectName || activeProject?.name,
+        project_source: sourceName || activeProject?.source || null,
+      };
+    });
+  }, [activeProject, itemsBySelectionKey]);
 
-  const deleteMediaPaths = useCallback(
-    async (paths: string[]) => {
-      if (!paths.length) {
+  const resolveSelectionKeysForItems = useCallback((items: MediaItem[]): string[] => {
+    return items
+      .map((item) => assetSelectionKey(item, activeProject))
+      .filter(Boolean);
+  }, [activeProject, assetSelectionKey]);
+
+  const selectionItems = useMemo(
+    () => resolveItemsForSelection(Array.from(selected)),
+    [resolveItemsForSelection, selected],
+  );
+  const selectedVideoItems = useMemo(
+    () => selectionItems.filter((item) => guessKind(item) === 'video'),
+    [selectionItems],
+  );
+
+  const deleteMediaSelection = useCallback(
+    async (selectionKeys: string[]) => {
+      const items = resolveItemsForSelection(selectionKeys);
+      if (!items.length) {
         addToast('warn', 'Delete', 'Select one or more clips');
         return;
       }
-      const refs = resolveItemsForPaths(paths)
+      const refs = items
         .map((item) => toAssetRef(item))
         .filter((item): item is AssetRef => Boolean(item));
       if (!refs.length) {
@@ -697,14 +728,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       try {
         await api.bulkDeleteMedia(refs);
         addToast('good', 'Delete', 'Removed media from disk and index');
+        const removedKeys = new Set(resolveSelectionKeysForItems(items));
         setSelected((current) => {
           const next = new Set(current);
-          paths.forEach((path) => next.delete(path));
+          removedKeys.forEach((key) => next.delete(key));
           return next;
         });
-        if (focused && paths.includes(focused.relative_path)) {
-          setFocused(null);
-          setInspectorOpen(false);
+        if (focused) {
+          const focusedKey = assetSelectionKey(focused, activeProject);
+          if (removedKeys.has(focusedKey)) {
+            setFocused(null);
+            setInspectorOpen(false);
+          }
         }
         if (mediaScope === 'all' || !activeProject) await loadAllMedia();
         else await loadMedia(activeProject);
@@ -713,12 +748,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         addToast('bad', 'Delete', message);
       }
     },
-    [activeProject, addToast, api, focused, loadAllMedia, loadMedia, mediaScope, resolveItemsForPaths, toAssetRef],
+    [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, mediaScope, resolveItemsForSelection, resolveSelectionKeysForItems, toAssetRef],
   );
 
-  const moveMediaPaths = useCallback(
-    async (paths: string[], targetProject: Project) => {
-      const refs = resolveItemsForPaths(paths)
+  const moveMediaSelection = useCallback(
+    async (selectionKeys: string[], targetProject: Project) => {
+      const refs = resolveItemsForSelection(selectionKeys)
         .map((item) => toAssetRef(item))
         .filter((item): item is AssetRef => Boolean(item));
       if (!refs.length) {
@@ -727,15 +762,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       try {
         await api.bulkMoveMedia(refs, targetProject.name, targetProject.source || null);
-        addToast('good', 'Move', `Moved ${paths.length} item(s) to ${targetProject.name}`);
+        addToast('good', 'Move', `Moved ${refs.length} item(s) to ${targetProject.name}`);
         setSelected((current) => {
           const next = new Set(current);
-          paths.forEach((path) => next.delete(path));
+          selectionKeys.forEach((key) => next.delete(key));
           return next;
         });
-        if (focused && paths.includes(focused.relative_path)) {
-          setFocused(null);
-          setInspectorOpen(false);
+        if (focused) {
+          const focusedKey = assetSelectionKey(focused, activeProject);
+          if (selectionKeys.includes(focusedKey)) {
+            setFocused(null);
+            setInspectorOpen(false);
+          }
         }
         if (mediaScope === 'all' || !activeProject) await loadAllMedia();
         else await loadMedia(activeProject);
@@ -745,7 +783,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         addToast('bad', 'Move', message);
       }
     },
-    [activeProject, addToast, api, focused, loadAllMedia, loadMedia, loadProjects, mediaScope, resolveItemsForPaths, toAssetRef],
+    [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, loadProjects, mediaScope, resolveItemsForSelection, toAssetRef],
   );
 
   const handleBulkTag = useCallback(async () => {
@@ -763,7 +801,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Tags', 'Nothing to add or remove');
       return;
     }
-    const refs = resolveItemsForPaths(Array.from(selected))
+    const refs = selectionItems
       .map((item) => toAssetRef(item))
       .filter((item): item is AssetRef => Boolean(item));
     if (!refs.length) {
@@ -779,7 +817,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const message = err instanceof Error ? err.message : 'Tag update failed';
       addToast('bad', 'Tags', message);
     }
-  }, [activeProject, addToast, api, loadAllMedia, loadMedia, mediaScope, resolveItemsForPaths, selected, toAssetRef]);
+  }, [activeProject, addToast, api, loadAllMedia, loadMedia, mediaScope, selected, selectionItems, toAssetRef]);
 
   const handleComposeSelected = useCallback(async () => {
     if (!selected.size) {
@@ -790,7 +828,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!outputName) return;
     const targetProject = window.prompt('Output project name:', activeProject?.name || '')?.trim();
     if (!targetProject) return;
-    const refs = resolveItemsForPaths(Array.from(selected))
+    if (!selectedVideoItems.length) {
+      addToast('warn', 'Compose', 'Compose supports video clips only');
+      return;
+    }
+    const refs = selectedVideoItems
       .map((item) => toAssetRef(item))
       .filter((item): item is AssetRef => Boolean(item));
     if (!refs.length) {
@@ -804,7 +846,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         output_name: outputName,
         output_source: activeProject?.source || null,
       });
-      addToast('good', 'Compose', `Composed ${refs.length} item(s) into ${outputName}`);
+      addToast('good', 'Compose', `Composed ${refs.length} video item(s) into ${outputName}`);
       await loadProjects();
       if (mediaScope === 'all' || !activeProject) await loadAllMedia();
       else await loadMedia(activeProject);
@@ -812,7 +854,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const message = err instanceof Error ? err.message : 'Compose failed';
       addToast('bad', 'Compose', message);
     }
-  }, [activeProject, addToast, api, loadAllMedia, loadMedia, loadProjects, mediaScope, resolveItemsForPaths, selected, toAssetRef]);
+  }, [activeProject, addToast, api, loadAllMedia, loadMedia, loadProjects, mediaScope, selected, selectedVideoItems, toAssetRef]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -837,7 +879,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const payload = {
       project: projectValue,
       new_project_name: resolveProjectMode === '__new__' ? resolveNewName.trim() || null : null,
-      media_rel_paths: Array.from(selected),
+      media_rel_paths: selectionItems.map((item) => item.relative_path).filter(Boolean),
       mode: resolveMode || 'import',
     };
 
@@ -848,7 +890,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const message = err instanceof Error ? err.message : 'Resolve request failed';
       addToast('bad', 'Resolve', message);
     }
-  }, [activeProject, addToast, api, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName, selected]);
+  }, [activeProject, addToast, api, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName, selected, selectionItems]);
 
   const handleDropUpload = useCallback(
     async (files: FileList) => {
@@ -943,10 +985,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     actions.push({
       id: 'delete',
       label: `Delete ${count} item${count > 1 ? 's' : ''}`,
-      handler: () => deleteMediaPaths(items.map((entry) => entry.relative_path)),
+      handler: () => deleteMediaSelection(resolveSelectionKeysForItems(items)),
     });
     return actions;
-  }, [deleteMediaPaths, handleCopySelectedUrls, handleCopyStream, openDrawer, resolveAssetUrl]);
+  }, [deleteMediaSelection, handleCopySelectedUrls, handleCopyStream, openDrawer, resolveAssetUrl, resolveSelectionKeysForItems]);
 
   const buildAssetPointerHandlers = useCallback(
     (item: MediaItem) => {
@@ -957,6 +999,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       let timer: number | null = null;
       let pressX = 0;
       let pressY = 0;
+      const itemKey = assetSelectionKey(item, activeProject);
 
       const clearTimer = () => {
         if (timer) window.clearTimeout(timer);
@@ -975,9 +1018,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         event.currentTarget.setPointerCapture(pointerId);
         clearTimer();
         timer = window.setTimeout(() => {
-          const selectedItems = selected.has(item.relative_path)
+          const selectedItems = selected.has(itemKey)
             ? Array.from(selected)
-              .map((path) => itemsByPath.get(path))
+              .map((path) => itemsBySelectionKey.get(path))
               .filter((entry): entry is MediaItem => Boolean(entry))
             : [item];
           openContextMenu(pressX, pressY, selectedItems);
@@ -993,9 +1036,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           clearTimer();
           setDragging(true);
           setAssetDragActive(true);
-          dragPathsRef.current = selected.has(item.relative_path)
+          dragPathsRef.current = selected.has(itemKey)
             ? Array.from(selected)
-            : [item.relative_path];
+            : [itemKey];
           if (event.clientY <= 56) setTopbarHidden(false);
         }
       };
@@ -1014,14 +1057,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               proj.name === dropEl.dataset.project
               && String(proj.source || '') === String(dropEl.dataset.source || '')
             ));
-            if (target) void moveMediaPaths(dragPathsRef.current, target);
+            if (target) void moveMediaSelection(dragPathsRef.current, target);
           }
           return;
         }
-        if (selected.has(item.relative_path)) {
+        const selectionEnabled = Boolean(activeProject) || mediaScope === 'all';
+        if (selected.has(itemKey)) {
           openDrawer(item);
-        } else if (activeProject) {
-          toggleSelected(item.relative_path);
+        } else if (selectionEnabled) {
+          toggleSelected(item);
         } else {
           openDrawer(item);
         }
@@ -1037,9 +1081,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const handleContextMenu = (event: React.MouseEvent) => {
         event.preventDefault();
         if (dragging) return;
-        const selectedItems = selected.has(item.relative_path)
+        const itemKey = assetSelectionKey(item, activeProject);
+        const selectedItems = selected.has(itemKey)
           ? Array.from(selected)
-            .map((path) => itemsByPath.get(path))
+            .map((path) => itemsBySelectionKey.get(path))
             .filter((entry): entry is MediaItem => Boolean(entry))
           : [item];
         openContextMenu(event.clientX, event.clientY, selectedItems);
@@ -1053,14 +1098,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onContextMenu: handleContextMenu,
       };
     },
-    [activeProject, dragging, itemsByPath, moveMediaPaths, openContextMenu, openDrawer, projects, selected, toggleSelected],
+    [activeProject, assetSelectionKey, dragging, itemsBySelectionKey, mediaScope, moveMediaSelection, openContextMenu, openDrawer, projects, selected, toggleSelected],
   );
 
   const handlePreviewSelected = useCallback(() => {
-    const first = Array.from(selected)[0];
-    const item = media.find((entry) => entry.relative_path === first);
+    const first = selectionItems[0];
+    const item = first || null;
     if (item) openDrawer(item);
-  }, [media, openDrawer, selected]);
+  }, [openDrawer, selectionItems]);
 
   const handleTypeSelect = useCallback(
     (value: MediaTypeFilter) => (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -1095,8 +1140,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setDragging(false);
     setAssetDragActive(false);
     if (!dragPathsRef.current.length) return;
-    await moveMediaPaths(dragPathsRef.current, project);
-  }, [dragging, moveMediaPaths]);
+    await moveMediaSelection(dragPathsRef.current, project);
+  }, [dragging, moveMediaSelection]);
 
   const pickUpload = useCallback(() => {
     const input = uploadInputRef.current;
@@ -1871,7 +1916,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
-                  const isSelected = selected.has(item.relative_path);
+                  const selectionKey = assetSelectionKey(item, activeProject);
+                  const isSelected = selected.has(selectionKey);
 
                   return (
                     <div
@@ -1905,7 +1951,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                                 aria-label="Select media"
                                 disabled={!canSelect}
                                 onClick={(event) => event.stopPropagation()}
-                                onChange={() => toggleSelected(item.relative_path)}
+                                onChange={() => toggleSelected(item)}
                               />
                             </div>
                           </div>
@@ -1949,7 +1995,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
-                  const isSelected = selected.has(item.relative_path);
+                  const selectionKey = assetSelectionKey(item, activeProject);
+                  const isSelected = selected.has(selectionKey);
 
                   return (
                     <div
@@ -1979,7 +2026,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           checked={isSelected}
                           title="Select"
                           disabled={!canSelect}
-                          onChange={() => toggleSelected(item.relative_path)}
+                          onChange={() => toggleSelected(item)}
                         />
                         <button className="iconbtn" type="button" onClick={() => openDrawer(item)}>
                           Preview
@@ -2029,7 +2076,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <button
           className="btn bad"
           type="button"
-          onClick={() => deleteMediaPaths(Array.from(selected))}
+          onClick={() => deleteMediaSelection(Array.from(selected))}
           disabled={!selectedCount}
         >
           🗑 Delete
@@ -2093,17 +2140,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               ⧉ Copy stream URL
             </button>
             <button
-              className={`btn ${focused && selected.has(focused.relative_path) ? '' : 'primary'}`}
+              className={`btn ${focused && selected.has(assetSelectionKey(focused, activeProject)) ? '' : 'primary'}`}
               type="button"
-              onClick={() => focused && toggleSelected(focused.relative_path)}
+              onClick={() => focused && toggleSelected(focused)}
             >
-              {focused && selected.has(focused.relative_path) ? '− Deselect' : '＋ Select'}
+              {focused && selected.has(assetSelectionKey(focused, activeProject)) ? '− Deselect' : '＋ Select'}
             </button>
             <button
               className="btn bad"
               type="button"
-              onClick={() => focused && deleteMediaPaths([focused.relative_path])}
-              disabled={!activeProject}
+              onClick={() => focused && deleteMediaSelection([assetSelectionKey(focused, activeProject)])}
+              disabled={!focused}
             >
               🗑 Delete
             </button>

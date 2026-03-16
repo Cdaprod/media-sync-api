@@ -1790,3 +1790,5 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-03-16)
 - Completed Explorer package bulk action parity wiring for `/api/assets/bulk/delete|move|tags|compose`, including selection/drawer integration and updated package regression checks for bulk endpoint/action presence.
 - Media listing responses now emit both `thumb_url` and `thumbnail_url` aliases for thumbable assets to keep static and package explorers aligned during thumbnail pipeline convergence.
+- Explorer package selection state now uses identity keys (`source::project::relative_path`) so all-project bulk actions no longer mis-target same-name paths across sources/projects.
+- Compose bulk action now filters selected assets to video items before calling `/api/assets/bulk/compose`, preventing mixed-kind 400 failures in multi-select workflows.
