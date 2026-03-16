@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 
 def test_root_serves_adapter(client):
     response = client.get("/")
@@ -35,3 +37,15 @@ def test_stream_url_copy_includes_origin_helper(client):
     assert "drawerSendOBS" in explorer.text
     assert "obsReplaceAssetMediaUrl" in explorer.text
     assert "obsPassword = '123456'" in explorer.text
+
+
+def test_explorer_screenshot_smoke_script_contract():
+    script = Path("scripts/explorer_screenshot_smoke.sh").read_text(encoding="utf-8")
+    assert "Usage: scripts/explorer_screenshot_smoke.sh <static|package> [url]" in script
+    assert "scripts/explorer_screenshot_smoke.sh static" in script
+    assert "scripts/explorer_screenshot_smoke.sh package" in script
+    assert "id=\"brandTitle\"" in script
+    assert "data-ui-hook=\"explorer-app-shell\"" in script
+    assert "exit 64" in script
+    assert "exit 65" in script
+    assert "exit 66" in script

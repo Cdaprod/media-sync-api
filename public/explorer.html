@@ -30,6 +30,20 @@
       --radius: 18px;
       --radius2: 12px;
       --ring: 0 0 0 3px rgba(124,58,237,0.25);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --panel-elev-1: 0 10px 28px rgba(0,0,0,0.28);
+      --panel-elev-2: 0 18px 46px rgba(0,0,0,0.42);
+      --border-alpha-soft: 0.08;
+      --border-alpha-strong: 0.2;
+      --control-h-sm: 30px;
+      --control-h-md: 36px;
+      --motion-fast: 160ms;
+      --motion-mid: 240ms;
+      --motion-slow: 320ms;
       --topbar-row-height: 56px;
       --topbar-subrow-height: 38px;
       --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
@@ -145,7 +159,7 @@
       background: rgba(6,8,14,0.6);
       opacity:0;
       pointer-events:none;
-      transition: opacity var(--dur-med) var(--ease-settle);
+      transition: opacity var(--motion-mid) var(--ease-settle);
       z-index:65;
     }
     .backdrop.show{ opacity:1; pointer-events:auto; }
@@ -164,7 +178,7 @@
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      transition: transform var(--dur-slow) var(--ease-snappy), opacity var(--dur-med) var(--ease-settle), margin-bottom var(--dur-slow) var(--ease-settle), filter var(--dur-med) var(--ease-settle), -webkit-filter var(--dur-med) var(--ease-settle);
+      transition: transform var(--motion-slow) var(--ease-snappy), opacity var(--motion-mid) var(--ease-settle), margin-bottom var(--motion-slow) var(--ease-settle), filter var(--motion-mid) var(--ease-settle), -webkit-filter var(--motion-mid) var(--ease-settle);
       filter: blur(0px);
       -webkit-filter: blur(0px);
       -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.92) 74%, rgba(0,0,0,0.72) 100%);
@@ -194,8 +208,8 @@
       display:flex;
       align-items:center;
       justify-content: space-between;
-      gap: 16px;
-      padding: 10px 18px;
+      gap: var(--space-4);
+      padding: var(--space-3) calc(var(--space-4) + 2px);
       max-width: 1400px;
       margin: 0 auto;
     }
@@ -286,7 +300,7 @@
       display:flex;
       align-items:center;
       gap: 10px;
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       border-radius: 999px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
@@ -316,7 +330,7 @@
       border-radius: 999px;
       padding: 6px 10px;
       font-size: 12px;
-      min-height: 28px;
+      min-height: var(--control-h-sm);
     }
     select.control{
       appearance: none;
@@ -343,13 +357,13 @@
     .dropdown-menu{
       position: absolute;
       right: 0;
-      top: calc(100% + 6px);
+      top: calc(100% + var(--space-1));
       min-width: 160px;
       background: rgba(11,16,32,0.98);
       border: 1px solid var(--border);
       border-radius: 12px;
-      box-shadow: var(--shadow);
-      padding: 6px;
+      box-shadow: var(--panel-elev-2);
+      padding: var(--space-1);
       display: none;
       flex-direction: column;
       gap: 4px;
@@ -363,7 +377,7 @@
       background: transparent;
       color: var(--text);
       border-radius: 10px;
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       font-size: 12px;
       cursor: pointer;
     }
@@ -407,8 +421,8 @@
       background: rgba(11,16,32,0.96);
       border: 1px solid var(--border);
       border-radius: 14px;
-      box-shadow: var(--shadow);
-      padding: 12px;
+      box-shadow: var(--panel-elev-2);
+      padding: var(--space-3);
       display: none;
       flex-direction: column;
       gap: 10px;
@@ -420,10 +434,10 @@
       background: rgba(255,255,255,0.06);
       color: var(--text);
       border-radius: 999px;
-      padding: 8px 12px;
+      padding: var(--space-2) var(--space-3);
       font-size: 12px;
       cursor:pointer;
-      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+      transition: transform var(--motion-fast) var(--ease-snappy), background var(--motion-fast) var(--ease-settle), border-color var(--motion-fast) var(--ease-settle);
       user-select:none;
       display:flex;
       align-items:center;
@@ -452,7 +466,7 @@
       border: none;
       background: transparent;
       color: var(--muted);
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       font-size: 12px;
       cursor:pointer;
     }
@@ -519,7 +533,7 @@
       max-width: 100%;
       transform: translateX(-105%);
       opacity: 0;
-      transition: transform var(--dur-slow) var(--ease-settle), opacity var(--dur-med) var(--ease-settle);
+      transition: transform var(--motion-slow) var(--ease-settle), opacity var(--motion-mid) var(--ease-settle);
       pointer-events: none;
       z-index: 90;
       will-change: transform, opacity;
@@ -568,7 +582,7 @@
       background: radial-gradient(circle at 50% 40%, rgba(18,24,44,0.75), rgba(10,13,24,0.92));
       opacity: 0;
       pointer-events: none;
-      transition: opacity var(--dur-med) var(--ease-settle);
+      transition: opacity var(--motion-mid) var(--ease-settle);
     }
     .content.is-loading .content-loading{
       opacity: 1;
@@ -590,7 +604,7 @@
     .section-h{
       position: relative;
       z-index: 1;
-      padding: 12px 8px 8px;
+      padding: var(--space-3) var(--space-2) var(--space-2);
       display:flex;
       align-items: center;
       justify-content: space-between;
@@ -683,7 +697,7 @@
 
     /* Project chips */
     .chips{
-      padding: 12px;
+      padding: var(--space-3);
       display:flex;
       flex-wrap: wrap;
       gap: 8px;
@@ -724,7 +738,7 @@
 
     /* Sources */
     .sources{
-      padding: 12px;
+      padding: var(--space-3);
       display:grid;
       grid-template-columns: 1fr;
       gap: 10px;
@@ -733,7 +747,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius2);
       background: rgba(255,255,255,0.05);
-      padding: 10px 10px;
+      padding: var(--space-2) var(--space-2);
     }
     .card strong { font-size: 12px; }
     .card .small { font-size: 11px; color: var(--muted); margin-top: 4px; }
@@ -771,8 +785,8 @@
     .tag.good{ border-color: rgba(34,197,94,0.35); color: rgba(187,247,208,0.85); background: rgba(34,197,94,0.12); }
     .tag.bad{ border-color: rgba(239,68,68,0.35); color: rgba(254,202,202,0.85); background: rgba(239,68,68,0.12); }
     .tag-panel{
-      margin-top: 12px;
-      padding: 10px;
+      margin-top: var(--space-3);
+      padding: var(--space-2) var(--space-3);
       border-radius: 12px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.04);
@@ -781,6 +795,7 @@
       display: none;
     }
     .drawer-tag-panel{
+      border-color: rgba(124,58,237,0.28);
       position: absolute;
       left: 14px;
       right: 14px;
@@ -788,7 +803,7 @@
       z-index: 5;
       margin-top: 0;
       background: rgba(11,16,32,0.96);
-      box-shadow: var(--shadow);
+      box-shadow: var(--panel-elev-2);
       display: none;
     }
     .drawer-tag-panel.open{
@@ -803,6 +818,7 @@
     }
     .drawer-body{
       position: relative;
+      gap: var(--space-3);
     }
     .tag-editor{
       display:flex;
@@ -813,7 +829,7 @@
     }
     .tag-editor input{
       flex: 1 1 180px;
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       border-radius: 10px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.05);
@@ -917,7 +933,7 @@
       right: 10px;
       bottom: 10px;
       z-index: var(--z-hud);
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.14);
       background: rgba(5,8,18,0.88);
@@ -1213,7 +1229,7 @@
       display:flex;
       gap: 10px;
       align-items:center;
-      padding: 10px 10px;
+      padding: var(--space-2) var(--space-2);
       border: 1px solid var(--border);
       border-radius: var(--radius2);
       background: rgba(255,255,255,0.05);
@@ -1240,7 +1256,7 @@
       background: rgba(255,255,255,0.06);
       color: var(--text);
       border-radius: 12px;
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       font-size: 12px;
       cursor:pointer;
     }
@@ -1255,10 +1271,10 @@
       width: min(520px, 100vw);
       background: #0b1020;
       border-left: 1px solid var(--border);
-      box-shadow: var(--shadow);
+      box-shadow: var(--panel-elev-2);
       transform: translateX(110%);
       opacity: 0;
-      transition: transform var(--dur-slow) var(--ease-settle), opacity var(--dur-med) var(--ease-settle);
+      transition: transform var(--motion-slow) var(--ease-settle), opacity var(--motion-mid) var(--ease-settle);
       z-index: var(--z-modal);
       display:flex;
       flex-direction: column;
@@ -1301,7 +1317,7 @@
       background: rgba(255,255,255,0.06);
       color: var(--text);
       border-radius: 12px;
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       cursor:pointer;
     }
     .xbtn:hover{ background: rgba(255,255,255,0.10); }
@@ -1315,7 +1331,8 @@
       min-height: 0;
     }
     .preview{
-      border: 1px solid var(--border);
+      border: 1px solid rgba(255,255,255,var(--border-alpha-strong));
+      box-shadow: var(--panel-elev-1);
       border-radius: var(--radius2);
       background: rgba(255,255,255,0.04);
       overflow:hidden;
@@ -1338,7 +1355,7 @@
     #mediaList,
     .asset,
     .row,
-    .drawer,
+     .drawer,
     .drawer-h,
     .drawer-body,
     .preview{
@@ -1359,7 +1376,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius2);
       background: rgba(255,255,255,0.04);
-      padding: 10px;
+      padding: var(--space-2) var(--space-3);
       display:grid;
       grid-template-columns: 120px 1fr;
       gap: 8px 10px;
@@ -1370,6 +1387,10 @@
     .kv .v{ color: var(--text); overflow-wrap:anywhere; }
 
     .drawer-actions{
+      border: 1px solid rgba(255,255,255,var(--border-alpha-soft));
+      border-radius: 12px;
+      background: rgba(9,14,28,0.72);
+      padding: var(--space-2);
       display:flex;
       gap: 10px;
       flex-wrap: wrap;
@@ -1387,8 +1408,8 @@
       background: rgba(11,16,32,0.75);
       border: 1px solid var(--border);
       border-radius: 18px;
-      padding: 12px;
-      box-shadow: var(--shadow);
+      padding: var(--space-3);
+      box-shadow: var(--panel-elev-2);
       gap: 10px;
       align-items: stretch;
       flex-direction: column;
@@ -1415,7 +1436,7 @@
     }
     .selectbar-panel select{
       flex: 1 1 180px;
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       border-radius: 10px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.05);
@@ -1446,7 +1467,7 @@
       padding: 10px 12px;
       min-width: 260px;
       max-width: 360px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--panel-elev-2);
       font-size: 12px;
       color: var(--text);
     }
@@ -1541,7 +1562,7 @@
       border-radius: 12px;
       border: 1px solid var(--border);
       background: rgba(11,16,32,0.96);
-      box-shadow: var(--shadow);
+      box-shadow: var(--panel-elev-2);
       z-index: 90;
       display: none;
     }
@@ -1549,7 +1570,7 @@
     .context-menu button{
       width: 100%;
       text-align: left;
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       border-radius: 10px;
       border: 0;
       background: transparent;
@@ -1583,7 +1604,7 @@
       border-radius: 16px;
       border: 1px solid var(--border);
       background: rgba(13,18,32,0.96);
-      box-shadow: var(--shadow);
+      box-shadow: var(--panel-elev-2);
       padding: 16px;
     }
     .modal-card h3{
@@ -1793,7 +1814,7 @@
             <h2>Resolve</h2>
             <div class="meta-line"><span class="kbd">/api/resolve/open</span></div>
           </div>
-          <div style="padding: 12px;">
+          <div style="padding: var(--space-3);">
             <div class="card">
               <strong>Mode</strong>
               <div class="small">Queue selected clips, then dispatch.</div>
@@ -1828,7 +1849,7 @@
             <h2>Upload</h2>
             <div class="meta-line"><span class="kbd">/api/projects/*/upload</span></div>
           </div>
-          <div style="padding: 12px;">
+          <div style="padding: var(--space-3);">
             <div class="card">
               <strong>Upload to active project</strong>
               <div class="small" id="uploadCaption">Pick a project first.</div>

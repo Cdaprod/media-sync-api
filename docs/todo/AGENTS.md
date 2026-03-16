@@ -1,3 +1,18 @@
+## 2026-03-16 — Screenshot smoke helper + verified explorer captures (completed)
+- [x] Added shared CLI smoke checker at `scripts/explorer_screenshot_smoke.sh` for `static|package` screenshot routes with status + content probes and explicit exit codes.
+- [x] Updated `docker/packages/Explorer/README.md` to include one-command smoke checks before screenshot capture.
+- [x] Added regression contract coverage for the smoke script usage/probes/error-exit markers in `tests/test_public_index.py`.
+- [x] Captured fresh static and package explorer screenshots after passing route-content checks to avoid another `Not Found` artifact.
+- [ ] Follow-up: wire the smoke helper into an automated screenshot Make target for one-step capture + artifact naming.
+
+## 2026-03-16 — Explorer advanced styling/pattern convergence (active)
+- [x] Classified this slice as **shared behavior** and patched both explorers (`public/explorer.html`, `docker/packages/Explorer/src/styles.css`) with a shared design-token map for spacing/elevation/border alpha/control sizing/motion timings.
+- [x] Converged preview panel chrome hierarchy in both explorers (media stage elevation, drawer action rail treatment, metadata panel grouping, drawer tag panel surface treatment) without changing existing affordance behavior.
+- [x] Ported advanced topbar/section styling language to search/actions/projects chrome while preserving existing responsive + intent/hide mechanics.
+- [x] Kept interaction behavior idempotent: no new event listener wiring paths introduced, and drawer/tag-panel state reducers remain unchanged.
+- [x] Added regression checks for required class hooks/controls + token presence in both static and package test suites.
+- [ ] Follow-up: extract the shared explorer token map into a dedicated shared stylesheet/module to fully eliminate duplicated declarations across static and package implementations.
+
 ## 2026-03-16 — Dual-path thumbnail strategy rollout (completed)
 - [x] Aligned media API payload contract to expose canonical `thumbnail_url` plus backward-compatible `thumb_url` alias.
 - [x] Updated static explorer thumbnail resolution order to prefer backend thumbnails first, then image stream fallback, then SVG placeholder.
