@@ -792,9 +792,9 @@ select.control{
   position: fixed;
   top: 0; right: 0;
   height: 100%;
-  width: min(520px, 100vw);
+  width: min(640px, 100vw);
   background: #0b1020;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid rgba(150, 171, 236, 0.20);
   box-shadow: var(--shadow);
   transform: translateX(110%);
   transition: transform 160ms ease;
@@ -806,8 +806,8 @@ select.control{
 }
 .drawer.open{ transform: translateX(0%); pointer-events: auto; }
 .drawer-h{
-  padding: 14px 14px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid rgba(130, 146, 197, 0.2);
   display:flex;
   align-items:flex-start;
   justify-content: space-between;
@@ -845,23 +845,38 @@ select.control{
 .xbtn:hover{ background: rgba(255,255,255,0.10); }
 
 .drawer-body{
-  padding: 14px;
+  padding: 8px;
   display:flex;
   flex-direction: column;
-  gap: 12px;
-  overflow:auto;
+  gap: 8px;
+  overflow: hidden;
   min-height: 0;
+  flex: 1;
 }
 .preview-shell{
   position: relative;
-  min-height: 220px;
-  max-height: 70vh;
-  height: min(70vh, 640px);
+  min-height: 320px;
+  flex: 1 1 auto;
   display: flex;
   align-items: stretch;
   justify-content: stretch;
   overflow: hidden;
   background: radial-gradient(circle at 50% 20%, rgba(22,31,63,0.7), #070b16 58%);
+  isolation: isolate;
+}
+
+.preview-shell::after{
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(140% 100% at 50% 50%, rgba(8,12,26,0) 58%, rgba(8,12,26,0.38) 100%),
+    linear-gradient(180deg, rgba(172,190,255,0.08), rgba(13,17,33,0.06));
+  box-shadow:
+    inset 0 0 0 1px rgba(160,176,235,0.15),
+    inset 0 0 48px rgba(8,12,24,0.52);
 }
 
 .preview-center-play{
@@ -897,7 +912,6 @@ select.control{
   height: 100%;
   display:block;
   background: rgba(0,0,0,0.30);
-  max-height: 70vh;
   object-fit: contain;
 }
 
@@ -905,6 +919,10 @@ select.control{
   display:flex;
   align-items:center;
   justify-content:center;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .preview-wave{
@@ -914,6 +932,7 @@ select.control{
   height:100%;
   opacity:.8;
   pointer-events:none;
+  z-index: 1;
 }
 
 .preview-overlay{
@@ -925,7 +944,7 @@ select.control{
   pointer-events: auto;
   opacity: 1;
   transition: opacity .24s ease;
-  z-index: 3;
+  z-index: 4;
 }
 
 .preview-overlay.fade{ opacity: 0; pointer-events: none; }
@@ -1286,7 +1305,7 @@ select.control{
 .context-menu button:hover{ background: rgba(255,255,255,0.08); }
 
 @media (max-width: 860px){
-  .preview-shell{ height: min(72vh, 640px); }
+  .preview-shell{ min-height: 260px; }
   .preview-control-row .preview-pill{ min-height: 38px; }
   .preview-details{ max-height: 32vh; }
 }

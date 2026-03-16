@@ -64,6 +64,9 @@ test('preview adapter and panel keep drawer-based preview contract', () => {
   assert.ok(styles.includes('.preview-control-row'));
   assert.ok(styles.includes('.preview-center-play'));
   assert.ok(styles.includes('.preview-obs-row'));
+  assert.ok(styles.includes('width: min(640px, 100vw);'));
+  assert.ok(styles.includes('.preview-shell::after'));
+  assert.ok(!styles.includes('max-height: 70vh;'));
 });
 
 

@@ -1,5 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Drawer media-stage sizing + atmospheric edge pass (active)
+- [x] Expanded package drawer width and tightened drawer-body spacing so the preview stage can use more of the drawer footprint.
+- [x] Removed package preview shell/media hard `70vh` caps and moved to flex-growth sizing so media can fill available drawer space.
+- [x] Added a subtle non-interactive atmospheric edge layer on `.preview-shell::after` to reduce boxed-card feel without shrinking media real estate.
+- [x] Preserved overlay/media/wave z-index + pointer-event behavior so controls remain tappable above media.
+- [x] Added package regression assertions for widened drawer sizing, atmospheric edge selector presence, and removed height-cap guardrail.
+- [ ] Validate on physical iPhone Safari that larger media stage + edge treatment remain responsive across video, image, and audio preview kinds.
+
 ## 2026-03-16 — Wrapperless preview + nav playback polish (active)
 - [x] Removed remaining drawer inner preview-header shell so overlay preview is the direct drawer surface in static/package explorers.
 - [x] Removed center default-play bubble to prevent paused-state control obstruction.
