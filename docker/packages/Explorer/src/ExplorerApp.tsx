@@ -647,6 +647,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setInspectorOpen(false);
   }, []);
 
+  const focusRelative = useCallback((offset: number) => {
+    if (!focused || !filteredMedia.length) return;
+    const currentKey = assetSelectionKey(focused, activeProject);
+    const currentIndex = filteredMedia.findIndex((item) => assetSelectionKey(item, activeProject) === currentKey);
+    if (currentIndex < 0) return;
+    const nextIndex = (currentIndex + offset + filteredMedia.length) % filteredMedia.length;
+    setFocused(filteredMedia[nextIndex] || focused);
+  }, [activeProject, assetSelectionKey, filteredMedia, focused]);
+
   const handleUpload = useCallback(async () => {
     const project = activeProject;
     if (!project) {
@@ -2112,6 +2121,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               onMediaReady={(el) => {
                 drawerMediaRef.current = el;
               }}
+              onPrev={() => focusRelative(-1)}
+              onNext={() => focusRelative(1)}
+              onClose={closeDrawer}
+              onCopy={() => { if (focused) void handleCopyStream(focused); }}
+              onSelect={() => { if (focused) toggleSelected(focused); }}
+              onDelete={() => { if (focused) void deleteMediaSelection([assetSelectionKey(focused, activeProject)]); }}
             />
           </div>
 

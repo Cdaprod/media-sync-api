@@ -74,6 +74,10 @@ def test_explorer_drawer_uses_overlay_preview_renderer_without_fullscreen_takeov
     assert 'preview-overlay' in html
     assert 'preview-wave' in html
     assert 'function attachPreviewOverlayBehavior(preview, mediaElement)' in html
+    assert 'preview-center-play' in html
+    assert 'preview-scrubber' in html
+    assert 'data-preview-prev="1"' in html
+    assert 'function focusNeighborInDrawer(offset)' in html
     assert "setInspectorOpen(true);" in html
     assert "<aside id=\"drawer\" class=\"drawer\"" in html
 

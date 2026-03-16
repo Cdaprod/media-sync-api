@@ -2,6 +2,10 @@
 
 
 ## 2026-03-16 — Drawer inner preview renderer convergence (active)
+- [x] Implemented phase-2 preview convergence in static drawer: top overlay/nav controls, center play affordance, integrated bottom-stack playback controls (time/scrub/volume), and in-preview action pills wired to existing drawer actions.
+- [x] Implemented phase-2 preview convergence in package drawer: `AssetPreviewPanel` now includes center-play, top nav controls, integrated playback controls, and in-preview action pill row while keeping Explorer business logic callbacks in `ExplorerApp`.
+- [x] Added next-slice regression assertions for richer preview control classes/markers in static and package tests.
+- [ ] Follow up by folding OBS fit/slot/exclusive controls into the package in-preview bottom stack with the same adapter/event contract used for drawer actions.
 - [x] Fixed package runtime ordering bug by moving `normalizedPreviewAsset` memo below `resolveAssetUrl` callback declaration in `ExplorerApp` to avoid temporal-dead-zone render crashes.
 - [x] Added package regression assertion to enforce callback-before-memo declaration ordering for the preview adapter wiring.
 - [x] Upgraded static Explorer drawer preview (`public/explorer.html`) to a media-first inner renderer with overlay header/meta chips, playback fade behavior, and audio waveform canvas while preserving existing drawer shell/actions/metadata sections.

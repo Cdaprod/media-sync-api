@@ -50,6 +50,13 @@ test('preview adapter and panel keep drawer-based preview contract', () => {
   assert.ok(panel.includes('preview-wave'));
   assert.ok(styles.includes('.preview-shell'));
   assert.ok(styles.includes('.preview-overlay.fade'));
+  assert.ok(panel.includes('preview-center-play'));
+  assert.ok(panel.includes('preview-scrubber'));
+  assert.ok(panel.includes('preview-icon-btn'));
+  assert.ok(styles.includes('.preview-shell'));
+  assert.ok(styles.includes('.preview-overlay.fade'));
+  assert.ok(styles.includes('.preview-control-row'));
+  assert.ok(styles.includes('.preview-center-play'));
 });
 
 test('normalized preview asset declaration is placed after resolveAssetUrl callback', () => {
