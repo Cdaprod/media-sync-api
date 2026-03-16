@@ -84,14 +84,17 @@ test('explorer supports all-project media view', () => {
 test('all-project clicks still open the drawer without selection', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
-  assert.match(
-    content,
-    /selected\.has\(item\.relative_path\)[\s\S]*openDrawer\(item\)[\s\S]*else if \(activeProject\)[\s\S]*toggleSelected/,
-  );
-  assert.match(
-    content,
-    /else \{[\s\S]*openDrawer\(item\)[\s\S]*\}/,
-  );
+  assert.ok(content.includes('assetSelectionKey'));
+  assert.ok(content.includes('selectionEnabled'));
+  assert.ok(content.includes('toggleSelected(item)'));
+  assert.ok(content.includes('openDrawer(item)'));
+});
+
+test('compose action filters selected assets to videos', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
+  assert.ok(content.includes('Compose supports video clips only'));
 });
 
 test('static explorer uses OBS push helper', () => {

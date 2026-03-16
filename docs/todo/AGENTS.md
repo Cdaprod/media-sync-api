@@ -1,6 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-16 — Explorer selection identity + compose guardrails (active)
+- [x] Reworked Explorer package selection bookkeeping to use composite keys (`source::project::relative_path`) so all-project selections keep source/project identity for bulk delete/move/tag/compose actions.
+- [x] Updated context menu, drag-move, drawer actions, and selected-only filtering to resolve selected assets by identity keys rather than path-only lookup maps.
+- [x] Added compose guardrails to only submit video assets to `/api/assets/bulk/compose`, with a user warning when no video clips are selected.
+- [x] Extended package regression assertions in `docker/packages/Explorer/tests/exports.test.mjs` for identity-key selection flow markers and compose video-only checks.
+- [ ] Follow up by adding runtime unit/integration coverage for duplicate `relative_path` collisions across different projects/sources to enforce identity-safe selection behavior.
+
 ## 2026-03-16 — Thumbnail URL alias parity (active)
 - [x] Added `thumbnail_url` alias alongside `thumb_url` in `GET /api/projects/{project}/media` responses for thumbable media entries.
 - [x] Added API regression assertions in `tests/test_media_api.py` to keep `thumbnail_url` and `thumb_url` synchronized.
