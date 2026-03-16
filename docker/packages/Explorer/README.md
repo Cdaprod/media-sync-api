@@ -23,6 +23,8 @@ Set the API base URL via env:
 NEXT_PUBLIC_MEDIA_SYNC_API_BASE="http://192.168.0.25:8787" npm run dev
 ```
 
+If `NEXT_PUBLIC_MEDIA_SYNC_API_BASE` is empty, the Explorer keeps same-origin on `:8787` but auto-falls back to `http://<current-host>:8787` when the UI is served from a non-`8787` port (for example the standalone Explorer container on `:8790`).
+
 ## Build
 
 ```bash
