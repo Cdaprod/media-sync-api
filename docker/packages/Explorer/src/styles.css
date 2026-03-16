@@ -130,9 +130,15 @@ code { font-family: var(--mono); }
 }
 .brand{
   display:flex;
-  gap:12px;
   align-items:center;
-  min-width: 240px;
+  min-width: 0;
+  max-width: 210px;
+}
+.brand-text{
+  min-width: 0;
+  display:flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .toolbar-toggle{
@@ -147,14 +153,53 @@ code { font-family: var(--mono); }
 }
 .brand h1{
   margin:0;
-  font-size: 16px;
-  letter-spacing: 0.3px;
+  font-size: 14px;
+  letter-spacing: 0.35px;
   font-weight: 750;
+  line-height: 1.1;
+  color: var(--text);
+}
+.brand h1 button{
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  display: inline-flex;
+  align-items: baseline;
+  cursor: pointer;
+}
+.brand-title{
+  display: inline-flex;
+  align-items: baseline;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+.brand-title.is-secondary{
+  margin-left: 0.4ch;
+  opacity: 0;
+  transform: translateY(6px);
+  position: absolute;
+  pointer-events: none;
+}
+.brand.projects-open .brand-title.is-primary{
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.brand.projects-open .brand-title.is-secondary{
+  opacity: 1;
+  transform: translateY(0);
 }
 .brand .sub{
-  margin-top: 2px;
-  font-size: 12px;
+  margin-top: 0;
+  font-size: 11px;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .toolbar{
@@ -169,6 +214,8 @@ code { font-family: var(--mono); }
   display:flex;
   align-items:center;
   gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
   min-width: 0;
 }
 
@@ -1281,20 +1328,36 @@ select.control{
     padding: 10px 12px;
   }
   .brand{
-    min-width: 0;
-    gap: 8px;
+    max-width: 180px;
   }
-  .toolbar-toggle{ justify-content: flex-start; }
+  .brand .sub{ display: none; }
+  .brand-title{
+    max-width: 152px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .brand-title.is-secondary{
+    max-width: 152px;
+  }
+  .toolbar-toggle{ display:none; }
   .toolbar{
     width: auto;
     flex: 1;
     justify-content: flex-end;
+    min-width: 0;
   }
   .topbar-controls{
-    width: 100%;
+    width: auto;
+    min-width: 0;
     justify-content: flex-end;
+    gap: 6px;
   }
-  .search{ max-width: 200px; min-width: 120px; }
+  .search{
+    flex: 1;
+    max-width: min(58vw, 280px);
+    min-width: 0;
+  }
   .btn{ padding: 7px 10px; font-size:11px; }
   .seg button{ padding: 7px 9px; font-size:11px; }
   .search-toolbar .control{ padding: 5px 8px; font-size:11px; }
@@ -1368,4 +1431,12 @@ select.control{
   }
   .preview-control-row .preview-pill{ min-height: 38px; }
   .preview-details{ max-height: 32vh; }
+}
+
+@media (max-width: 540px){
+  .brand{ max-width: 138px; }
+  .brand-title{ max-width: 120px; }
+  .brand-title.is-secondary{ max-width: 120px; }
+  .search .kbd{ display: none; }
+  .search-toolbar .control{ padding: 4px 7px; }
 }

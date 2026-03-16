@@ -245,7 +245,10 @@ test('package explorer topbar layout follows static two-row structure', () => {
   const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(content.includes('<div className="topbar"'));
   assert.ok(content.includes('<div className="section-h">'));
+  assert.ok(content.includes('aria-label="Toggle projects panel"'));
+  assert.ok(!content.includes('className="btn mobile-only"'));
   assert.ok(styles.includes('--topbar-subrow-height'));
+  assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
   assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
   assert.ok(styles.includes('.content .scroll{'));
 });

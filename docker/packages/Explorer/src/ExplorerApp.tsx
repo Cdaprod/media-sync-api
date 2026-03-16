@@ -1639,36 +1639,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       <div className="topbar" ref={topbarRef}>
         <div className="topbar-inner">
           <div
-            className="brand"
+            className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
             title="LAN-only media-sync-api explorer"
             ref={brandRef}
-            role="button"
-            tabIndex={0}
-            onClick={() => setSidebarOpen((prev) => !prev)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                setSidebarOpen((prev) => !prev);
-              }
-            }}
           >
             <div className="logo" aria-hidden="true"></div>
-            <div>
-              <h1>media-sync-api</h1>
-              <div className="sub">Explorer • projects → ingest → index → preview → Resolve</div>
+            <div className="brand-text">
+              <h1>
+                <button type="button" aria-label="Toggle projects panel" onClick={() => setSidebarOpen((prev) => !prev)}>
+                  <span className="brand-title is-primary">Cdaprod's Explorer</span>
+                  <span className="brand-title is-secondary">Cdaprod's Projects</span>
+                </button>
+              </h1>
+              <div className="sub">media-sync-api</div>
             </div>
           </div>
 
           <div className="toolbar">
-            <div className="toolbar-toggle">
-              <button
-                className="btn mobile-only"
-                type="button"
-                onClick={() => setSidebarOpen((prev) => !prev)}
-              >
-                Projects
-              </button>
-            </div>
+            <div className="toolbar-toggle" aria-hidden="true"></div>
             <div className="topbar-controls">
               <div className="search" role="search">
                 <span className="kbd">⌘K</span>

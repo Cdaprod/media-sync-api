@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Explorer package topbar left-control parity + mobile squish fix (active)
+- [x] Removed package-only mobile "Projects" button and made the left brand/title control the single projects-toggle surface (matching static intent).
+- [x] Added package brand primary/secondary title swap states tied to sidebar open state for clearer topbar parity with static Explorer.
+- [x] Tuned mobile portrait topbar sizing/truncation (`brand` max widths, subline hide, search flex caps, compact controls) to stop control-row squishing.
+- [x] Updated package regression assertions for topbar toggle-marker presence and removal of legacy Projects button text.
+- [ ] Validate on physical iPhone Safari portrait that topbar controls remain single-row readable while preserving quick project-toggle access.
+
 ## 2026-03-16 — Explorer package parity follow-up: second-tap open + topbar/layout alignment (active)
 - [x] Added second-tap tile-open gating in package Explorer so first tile tap no longer opens preview accidentally.
 - [x] Fixed selected order badge color parity by restoring package `--asset-accent` token usage for selector numbering.

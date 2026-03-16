@@ -1822,3 +1822,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Package explorer selected-order badge color now explicitly uses the shared green accent token (`--asset-accent`) to match static selected glow/badge tinting.
 - Package tile preview opening now requires a same-asset second tap (within a short window); first tap arms the asset without opening the drawer to reduce accidental preview launches.
 - Package topbar/layout now mirrors static two-row framing (`topbar` + subrow section header) and removes extra main/grid padding so the asset surface uses more viewport real estate.
+- Package topbar left brand/title now fully replaces the legacy mobile Projects button in the package explorer, including projects-open title swap and tighter mobile truncation rules to avoid vertical-portrait control squish.
