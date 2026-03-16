@@ -9,7 +9,7 @@
 //   2. Configure it once after page load:
 //        preview.configure({
 //          streamUrlBuilder : (asset) => `/media/${asset.path}?source=primary`,
-//          obsSlots         : ['Slot 1','Slot 2','Slot 3'],
+//          obsSlots         : ['Slot 1','Slot 2','Slot 3','Slot 4'],
 //          obsCoverModes    : ['Cover','Fit','Fill'],
 //          resolveEnabled   : true,
 //        });
