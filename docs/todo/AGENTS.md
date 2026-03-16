@@ -1,5 +1,28 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Explorer package topbar left-control parity + mobile squish fix (active)
+- [x] Removed package-only mobile "Projects" button and made the left brand/title control the single projects-toggle surface (matching static intent).
+- [x] Added package brand primary/secondary title swap states tied to sidebar open state for clearer topbar parity with static Explorer.
+- [x] Tuned mobile portrait topbar sizing/truncation (`brand` max widths, subline hide, search flex caps, compact controls) to stop control-row squishing.
+- [x] Updated package regression assertions for topbar toggle-marker presence and removal of legacy Projects button text.
+- [ ] Validate on physical iPhone Safari portrait that topbar controls remain single-row readable while preserving quick project-toggle access.
+
+## 2026-03-16 — Explorer package parity follow-up: second-tap open + topbar/layout alignment (active)
+- [x] Added second-tap tile-open gating in package Explorer so first tile tap no longer opens preview accidentally.
+- [x] Fixed selected order badge color parity by restoring package `--asset-accent` token usage for selector numbering.
+- [x] Reworked package topbar/content framing toward static parity (two-row topbar with media meta subrow and reduced grid boxing padding).
+- [x] Updated package regression assertions for second-tap open flow and topbar/layout parity markers.
+- [ ] Validate on physical iPhone Safari that second tap/long-press interactions match static Explorer and that topbar/grid spacing remains comfortable in portrait.
+
+## 2026-03-16 — Explorer package asset interaction/context parity slice (active)
+- [x] Ported static tile pointer semantics so package tile taps open/close preview predictably and selection is limited to explicit selector targets.
+- [x] Added no-preview hit-zone guards for selector chrome to prevent accidental preview/context behavior when toggling selection.
+- [x] Added ordered selection state in package explorer and surfaced numbered selection badges matching static ordering semantics.
+- [x] Updated package styles for static-like selected glow + custom selector shell visuals.
+- [x] Updated package context-menu wiring to suppress browser defaults on tile surfaces and open custom menu with ordered selection context.
+- [x] Expanded package tests for selection-order helpers and static-parity interaction/style/context assertions.
+- [ ] Validate on physical iPhone Safari that second-tap preview/open behavior and long-press context menu feel identical to `public/explorer.html`.
+
 ## 2026-03-16 — Drawer regression hotfix: tap-toggle + close cleanup + mobile edge fallback (active)
 - [x] Restored media-surface tap/click toggle behavior for preview playback while guarding overlay control taps from accidental background toggles.
 - [x] Added drawer preview cleanup hooks so close/unmount/asset-switch always pause/reset active media and stop preview listeners/loops.

@@ -147,13 +147,13 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('buildThumbFallback'));
 });
 
-test('all-project clicks still open the drawer without selection', () => {
+test('asset tile preview open path requires second tap intent', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
-  assert.ok(content.includes('assetSelectionKey'));
-  assert.ok(content.includes('selectionEnabled'));
-  assert.ok(content.includes('toggleSelected(item)'));
-  assert.ok(content.includes('openDrawer(item)'));
+  assert.ok(content.includes('lastTileTapRef'));
+  assert.ok(content.includes('const isSecondTap = prevTap.key === itemKey'));
+  assert.ok(content.includes('if (isSecondTap) {'));
+  assert.ok(content.includes('openDrawer(item);'));
 });
 
 test('compose action filters selected assets to videos', () => {
@@ -204,4 +204,51 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('THUMB_LOAD_TIMEOUT_MS'));
   assert.ok(content.includes('thumbState'));
   assert.ok(content.includes('project_source'));
+});
+
+
+test('package explorer uses static-parity asset interaction semantics', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('data-no-preview="1"'));
+  assert.ok(content.includes('if (inNoPreviewZone(event.target)) return;'));
+  assert.ok(content.includes('if (inspectorOpen) {'));
+  assert.ok(content.includes('closeDrawer();'));
+  assert.ok(content.includes('openDrawer(item);'));
+  assert.ok(content.includes('toggleSelectionWithOrder'));
+  assert.ok(content.includes('selectionOrderIndexMap'));
+  assert.ok(content.includes('selectedOrderMap.get(selectionKey)'));
+});
+
+test('package explorer suppresses default context menu in tile preview zone', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('const handleContextMenu = (event: React.MouseEvent) => {'));
+  assert.ok(content.includes('event.preventDefault();'));
+  assert.ok(content.includes('openContextMenu(event.clientX, event.clientY, resolveContextItems())'));
+});
+
+test('package explorer styles include static-parity selected glow and order badge', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(styles.includes('.asset.is-selected'));
+  assert.ok(styles.includes('rgba(74,240,192,0.92)'));
+  assert.ok(styles.includes('.selector .sel-order'));
+  assert.ok(styles.includes('.asset.is-selected .selector .sel-order'));
+});
+
+
+test('package explorer topbar layout follows static two-row structure', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(content.includes('<div className="topbar"'));
+  assert.ok(content.includes('<div className="section-h">'));
+  assert.ok(content.includes('aria-label="Toggle projects panel"'));
+  assert.ok(!content.includes('className="btn mobile-only"'));
+  assert.ok(styles.includes('--topbar-subrow-height'));
+  assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
+  assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
+  assert.ok(styles.includes('.content .scroll{'));
 });

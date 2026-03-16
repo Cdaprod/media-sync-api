@@ -1817,3 +1817,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Package preview media surface now toggles playback on tap/click via `handleMediaTapToggle`, matching static Explorer tap-to-play affordance for video/audio assets.
 - Package explorer drawer sizing was rebalanced for immersive previews: wider drawer (`min(640px, 100vw)`), tighter body spacing, flex-grown preview shell/media, removed legacy `70vh` preview caps, and a subtle non-interactive atmospheric edge overlay (`.preview-shell::after`) to reduce boxed-card framing while preserving overlay control interactivity.
 - Regression hotfix pass for drawer previews in static/package explorers: restored background tap-to-toggle playback with control-target guards, added close/asset-switch media teardown so hidden drawers cannot keep playing audio, and strengthened a mobile-safe atmospheric edge fallback so iPhone Safari retains visible falloff without heavy effects.
+
+- Selection toggles in package Explorer now respect `data-no-preview`/`.sel-ui` guard zones so selector taps do not trigger drawer open or default context behavior.
+- Package explorer selected-order badge color now explicitly uses the shared green accent token (`--asset-accent`) to match static selected glow/badge tinting.
+- Package tile preview opening now requires a same-asset second tap (within a short window); first tap arms the asset without opening the drawer to reduce accidental preview launches.
+- Package topbar/layout now mirrors static two-row framing (`topbar` + subrow section header) and removes extra main/grid padding so the asset surface uses more viewport real estate.
+- Package topbar left brand/title now fully replaces the legacy mobile Projects button in the package explorer, including projects-open title swap and tighter mobile truncation rules to avoid vertical-portrait control squish.
