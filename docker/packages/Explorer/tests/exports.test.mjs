@@ -202,8 +202,35 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('queueThumbLoads'));
   assert.ok(content.includes('data-thumb-url'));
   assert.ok(content.includes('THUMB_LOAD_TIMEOUT_MS'));
+  assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
+  assert.ok(content.includes('pendingDataLoadOverlay'));
+  assert.ok(content.includes('beginContentLoading'));
+  assert.ok(content.includes('endContentLoading'));
   assert.ok(content.includes('thumbState'));
   assert.ok(content.includes('project_source'));
+});
+
+test('package explorer interaction handlers do not trigger loading overlay state', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const start = content.indexOf('const buildAssetPointerHandlers = useCallback(');
+  const end = content.indexOf('const handlePreviewSelected = useCallback(', start);
+  assert.ok(start >= 0);
+  assert.ok(end > start);
+  const block = content.slice(start, end);
+  assert.ok(block.includes('openDrawer(item);'));
+  assert.ok(block.includes('openContextMenu(event.clientX, event.clientY, resolveContextItems())'));
+  assert.ok(!block.includes('setPendingDataLoadOverlay('));
+  assert.ok(!block.includes('setContentLoading(true)'));
+});
+
+test('package explorer data load paths explicitly request loading overlay ownership', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('setPendingDataLoadOverlay(true);'));
+  assert.ok(content.includes('setPendingDataLoadOverlay(false);'));
+  assert.ok(content.includes('const shouldShowOverlay = pendingDataLoadOverlay;'));
+  assert.ok(content.includes('const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;'));
 });
 
 

@@ -276,6 +276,16 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-16)
+- Next.js/package Explorer now mirrors static thumbnail overlay ownership rules: interaction-driven rerenders no longer trigger loading overlay state.
+- Added delayed package loading helpers plus `pendingDataLoadOverlay` gating so only explicit data-load flows (`loadMedia` / `loadAllMedia`) show “Preparing thumbnails…”.
+- Added package regression coverage in `docker/packages/Explorer/tests/exports.test.mjs` to lock interaction-vs-data loading state separation.
+
+### Latest Implementation Notes (2026-03-16)
+- Static Explorer thumbnail overlay ownership is now split from interaction state: `renderMedia` only shows “Preparing thumbnails…” when callers explicitly set `showLoadingOverlay` for true data loads.
+- Added delayed content-loading gating helpers (`beginContentLoading`/`endContentLoading`) to prevent selection/context/preview/view toggles from flashing data-loading UI.
+- Scoped overlay-enabled rendering to actual dataset reload paths (`loadMedia`, `loadAllMedia`, mock activation) and added regression assertions ensuring interaction handlers do not invoke overlay loading state.
+
+### Latest Implementation Notes (2026-03-16)
 - Removed the remaining drawer inner-header framing for preview in static/package explorers so the immersive preview is the direct drawer surface (close remains in overlay controls).
 - Removed the center default-play bubble so paused previews no longer show the large blocking play affordance.
 - Prev/next overlay navigation now requests immediate video playback (or first-frame seek fallback) to avoid black-screen transitions when stepping assets.

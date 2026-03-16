@@ -241,6 +241,7 @@ const queueThumbLoads = async (
 
 const THUMB_MAX_WORKERS = 3;
 const THUMB_LOAD_TIMEOUT_MS = 8000;
+const CONTENT_LOADING_DELAY_MS = 180;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 
@@ -347,7 +348,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
+  const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
   const dragPathsRef = useRef<string[]>([]);
+  const contentLoadingTokenRef = useRef(0);
+  const contentLoadingTimerRef = useRef<number | null>(null);
 
   const [resolveProjectMode, setResolveProjectMode] = useState('current');
   const [resolveProjectName, setResolveProjectName] = useState('');
@@ -459,6 +463,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     cacheOrientation(cacheKey, orient);
   }, [cacheOrientation]);
 
+  const beginContentLoading = useCallback(() => {
+    contentLoadingTokenRef.current += 1;
+    const token = contentLoadingTokenRef.current;
+    if (contentLoadingTimerRef.current) {
+      window.clearTimeout(contentLoadingTimerRef.current);
+    }
+    contentLoadingTimerRef.current = window.setTimeout(() => {
+      if (token !== contentLoadingTokenRef.current) return;
+      setContentLoading(true);
+    }, CONTENT_LOADING_DELAY_MS);
+    return token;
+  }, []);
+
+  const endContentLoading = useCallback((token: number) => {
+    if (token && token !== contentLoadingTokenRef.current) return;
+    if (contentLoadingTimerRef.current) {
+      window.clearTimeout(contentLoadingTimerRef.current);
+      contentLoadingTimerRef.current = null;
+    }
+    setContentLoading(false);
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const root = mediaScrollRef.current;
@@ -467,22 +493,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ? '.grid img.asset-thumb[data-thumb-url]'
       : '.list img.asset-thumb[data-thumb-url]';
     const targets = Array.from(root.querySelectorAll(selector)) as HTMLImageElement[];
+    const shouldShowOverlay = pendingDataLoadOverlay;
+    const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;
     if (!targets.length) {
-      setContentLoading(false);
+      endContentLoading(loadingToken);
+      if (shouldShowOverlay) setPendingDataLoadOverlay(false);
       return;
     }
     let cancelled = false;
-    setContentLoading(true);
     queueThumbLoads(targets, THUMB_LOAD_TIMEOUT_MS, updateCardOrientation)
       .finally(() => {
         if (!cancelled) {
-          setContentLoading(false);
+          endContentLoading(loadingToken);
+          if (shouldShowOverlay) setPendingDataLoadOverlay(false);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [filteredMedia, updateCardOrientation, view]);
+  }, [beginContentLoading, endContentLoading, filteredMedia, pendingDataLoadOverlay, updateCardOrientation, view]);
+
+  useEffect(() => {
+    return () => {
+      endContentLoading(contentLoadingTokenRef.current);
+    };
+  }, [endContentLoading]);
 
   const buildUploadUrl = useCallback((project: Project) => {
     const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
@@ -598,12 +633,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const loadMedia = useCallback(
     async (project: Project | null) => {
       if (!project) {
+        setPendingDataLoadOverlay(false);
         setMedia([]);
         setMediaScope('project');
         clearSelectionState();
         return;
       }
       try {
+        setPendingDataLoadOverlay(true);
         const payload = await api.listMedia(project.name, project.source);
         const items = Array.isArray(payload.media) ? payload.media : [];
         setMedia(sortMediaByRecent(items));
@@ -615,6 +652,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           return next;
         });
       } catch (err) {
+        setPendingDataLoadOverlay(false);
         const message = err instanceof Error ? err.message : 'Failed to load media';
         addToast('bad', 'Media', message);
       }
@@ -626,8 +664,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearSelectionState();
     setFocused(null);
     setMediaScope('all');
+    setPendingDataLoadOverlay(true);
     if (!projects.length) {
       setMedia([]);
+      setPendingDataLoadOverlay(false);
       return;
     }
     const gathered: MediaItem[] = [];

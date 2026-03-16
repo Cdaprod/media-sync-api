@@ -2119,6 +2119,7 @@
         hasTags: false,
         hasSize: false,
       },
+      loadingReason: '',
     };
 
     window.__explorer_view = state.view;
@@ -3352,10 +3353,36 @@
         .replace(/'/g,'&#039;');
     }
 
+    const CONTENT_LOADING_DELAY_MS = 180;
+    let contentLoadingToken = 0;
+    let contentLoadingTimer = 0;
+
     function setContentLoading(active){
       const content = document.querySelector('.content');
       if (!content) return;
       content.classList.toggle('is-loading', Boolean(active));
+    }
+
+    function beginContentLoading(reason = 'data-load'){
+      contentLoadingToken += 1;
+      const token = contentLoadingToken;
+      state.loadingReason = String(reason || 'data-load');
+      if (contentLoadingTimer) clearTimeout(contentLoadingTimer);
+      contentLoadingTimer = window.setTimeout(() => {
+        if (token !== contentLoadingToken) return;
+        setContentLoading(true);
+      }, CONTENT_LOADING_DELAY_MS);
+      return token;
+    }
+
+    function endContentLoading(token){
+      if (token && token !== contentLoadingToken) return;
+      if (contentLoadingTimer) {
+        clearTimeout(contentLoadingTimer);
+        contentLoadingTimer = 0;
+      }
+      setContentLoading(false);
+      state.loadingReason = '';
     }
 
     function loadOrientationCache(){
@@ -4884,7 +4911,7 @@
       renderSources();
       renderProjects();
       updateMediaMeta();
-      renderMedia();
+      renderMedia({ showLoadingOverlay: true, loadingReason: 'mock-mode' });
       updateTopCounts();
       updateSelectionUI();
       renderMoveTargets();
@@ -4942,7 +4969,7 @@
         for (const s of Array.from(state.selected)){
           if (!existing.has(s)) state.selected.delete(s);
         }
-        renderMedia();
+        renderMedia({ showLoadingOverlay: true, loadingReason: 'project-media-load' });
         updateTopCounts();
         updateSelectionUI();
       }catch(e){
@@ -4958,7 +4985,7 @@
       if (!state.projects.length){
         state.media = [];
         updateMediaMeta();
-        renderMedia();
+        renderMedia({ showLoadingOverlay: true, loadingReason: 'all-media-load' });
         updateTopCounts();
         updateSelectionUI();
         return;
@@ -4983,7 +5010,7 @@
       }
       state.media = sortMediaByRecent(items);
       updateMediaMeta();
-      renderMedia();
+      renderMedia({ showLoadingOverlay: true, loadingReason: 'all-media-load' });
       updateTopCounts();
       updateSelectionUI();
     }
@@ -5048,8 +5075,8 @@
       el('projCount').textContent = `${state.projects.length} total`;
     }
 
-    function renderMedia(){
-      setContentLoading(true);
+    function renderMedia({ showLoadingOverlay = false, loadingReason = 'interaction' } = {}){
+      const loadingToken = showLoadingOverlay ? beginContentLoading(loadingReason) : 0;
       const items = filteredMedia();
       itemsByPath.clear();
       items.forEach((item) => {
@@ -5074,7 +5101,7 @@
         </div>`;
         g.innerHTML = empty;
         l.innerHTML = empty;
-        setContentLoading(false);
+        endContentLoading(loadingToken);
         return;
       }
 
@@ -5086,7 +5113,7 @@
         </div>`;
         g.innerHTML = empty;
         l.innerHTML = empty;
-        setContentLoading(false);
+        endContentLoading(loadingToken);
         return;
       }
 
@@ -5216,7 +5243,7 @@
       const thumbTargets = Array.from(activeContainer.querySelectorAll('img.asset-thumb[data-thumb-url]'));
       void loadThumbQueue(thumbTargets, THUMB_LOAD_TIMEOUT_MS).finally(() => {
         scheduleTileFxCollect('render-media');
-        setContentLoading(false);
+        endContentLoading(loadingToken);
         logLayoutDebug();
       });
     }

@@ -1,3 +1,17 @@
+## 2026-03-16 — Explorer package thumbnail overlay ownership parity fix (active)
+- [x] Separated package thumbnail overlay ownership from interaction state by adding delayed loading helpers and a `pendingDataLoadOverlay` gate.
+- [x] Scoped loading overlay activation to true dataset fetch paths (`loadMedia` / `loadAllMedia`) so tile taps, selection toggles, context menu open, and drawer open/close remain UI-only updates.
+- [x] Preserved thumbnail queue behavior while ensuring interaction-driven rerenders do not force `.content.is-loading` transitions.
+- [x] Added package regression assertions covering interaction-path non-ownership and explicit data-load overlay ownership in `docker/packages/Explorer/tests/exports.test.mjs`.
+- [ ] Validate on physical iPhone Safari that package explorer interactions no longer flash “Preparing thumbnails…” while data refresh still surfaces loading UI.
+
+## 2026-03-16 — Static Explorer thumbnail overlay ownership + interaction stability (active)
+- [x] Split content loading into explicit data-load ownership (`beginContentLoading`/`endContentLoading`) with delayed overlay gating so fast interaction renders do not flash boot/thumbnails overlay.
+- [x] Updated `renderMedia` to accept `showLoadingOverlay` + `loadingReason`, defaulting interaction-only renders to no overlay while keeping data-load callers explicit.
+- [x] Scoped overlay-enabled calls to true dataset reload paths (project media load, all-media load, mock-mode activation), avoiding selection/context/preview/view toggle interactions.
+- [x] Added regression assertions to lock thumbnail overlay ownership away from pointer interaction handlers and toward explicit data loading paths.
+- [ ] Validate on physical iPhone Safari that selecting assets, opening context menus, and opening/closing preview no longer triggers the “Preparing thumbnails…” overlay.
+
 # TODO — FX Mode Stabilization Checklist
 
 ## 2026-03-16 — Explorer package topbar left-control parity + mobile squish fix (active)
