@@ -1,6 +1,11 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-16 — Thumbnail URL alias parity (active)
+- [x] Added `thumbnail_url` alias alongside `thumb_url` in `GET /api/projects/{project}/media` responses for thumbable media entries.
+- [x] Added API regression assertions in `tests/test_media_api.py` to keep `thumbnail_url` and `thumb_url` synchronized.
+- [ ] Follow up by switching package thumbnail rendering to prefer `thumbnail_url` first once branch intake for advanced preview modules lands.
+
 ## 2026-03-16 — Explorer bulk action parity completion (active)
 - [x] Added package API client support for bulk explorer actions (`/api/assets/bulk/delete|move|tags|compose`) with normalized error handling.
 - [x] Updated Next.js Explorer selection/drawer flows to resolve stable asset refs and execute bulk delete/move/tag/compose operations through the shared bulk APIs.

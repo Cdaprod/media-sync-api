@@ -488,7 +488,10 @@ async def list_media(project_name: str, source: str | None = None):
         if _is_thumbable_media(Path(safe_relative)):
             sha = item.get("sha256")
             if isinstance(sha, str):
-                item["thumb_url"] = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
+                thumbnail_url = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
+                item["thumb_url"] = thumbnail_url
+                # Keep a canonical alias for package clients that read `thumbnail_url`.
+                item["thumbnail_url"] = thumbnail_url
         sha = item.get("sha256")
         if isinstance(sha, str):
             item["asset_id"] = _stable_asset_id(sha)

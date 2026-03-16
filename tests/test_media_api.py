@@ -76,6 +76,7 @@ def test_thumbnail_endpoint_serves_cached_file(client: TestClient, env_settings:
     assert listing.status_code == 200
     media_entry = listing.json()["media"][0]
     thumb_url = media_entry.get("thumb_url")
+    assert media_entry.get("thumbnail_url") == thumb_url
     if not thumb_url:
         thumb_url = f"/thumbnails/{project_name}/{media_entry['sha256']}.jpg"
     assert thumb_url.startswith(f"/thumbnails/{project_name}/")
@@ -107,6 +108,7 @@ def test_thumbnail_endpoint_generates_image_thumbnail(client: TestClient, env_se
     media_entry = listing.json()["media"][0]
     thumb_url = media_entry.get("thumb_url")
     assert thumb_url
+    assert media_entry.get("thumbnail_url") == thumb_url
 
     response = client.get(thumb_url)
     assert response.status_code == 200

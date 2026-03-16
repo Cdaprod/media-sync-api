@@ -1789,3 +1789,4 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 
 ### Latest Implementation Notes (2026-03-16)
 - Completed Explorer package bulk action parity wiring for `/api/assets/bulk/delete|move|tags|compose`, including selection/drawer integration and updated package regression checks for bulk endpoint/action presence.
+- Media listing responses now emit both `thumb_url` and `thumbnail_url` aliases for thumbable assets to keep static and package explorers aligned during thumbnail pipeline convergence.
