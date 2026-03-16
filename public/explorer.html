@@ -1668,8 +1668,8 @@
 <body>
   <canvas id="bgImpulseCanvas" class="bg-impulse-canvas" aria-hidden="true"></canvas>
   <div class="topbar-reveal" id="topbarReveal" aria-hidden="true"></div>
-  <div class="app">
-    <div class="topbar">
+  <div class="app" data-ui-hook="explorer-app-shell">
+    <div class="topbar" data-ui-hook="explorer-topbar">
       <div class="topbar-inner">
         <div class="brand" id="brandToggle" title="LAN-only media-sync-api explorer">
           <div class="brand-text">
@@ -1759,7 +1759,7 @@
           </div>
         </div>
       </div>
-      <div class="section-h">
+            <div class="section-h" data-ui-hook="projects-section-header">
         <h2 id="contentTitle">Media</h2>
         <div class="meta-line">
           <span id="mediaCount">0 items</span>
@@ -1899,11 +1899,11 @@
         <div class="preview" id="drawerPreview"></div>
 
         <div class="drawer-actions">
-          <button id="drawerPlay" class="btn" type="button">▶ Play</button>
-          <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
-          <button id="drawerTagToggle" class="btn" type="button">🏷 Tag</button>
-          <button id="drawerSendOBS" class="btn" type="button">📺 Send to OBS</button>
-          <button id="drawerDelete" class="btn bad" type="button">🗑 Delete</button>
+          <button id="drawerPlay" class="btn" type="button" data-preview-action="play">▶ Play</button>
+          <button id="drawerCopy" class="btn" type="button" data-preview-action="copy">⧉ Copy stream URL</button>
+          <button id="drawerTagToggle" class="btn" type="button" data-preview-action="tag">🏷 Tag</button>
+          <button id="drawerSendOBS" class="btn" type="button" data-preview-action="obs">📺 Send to OBS</button>
+          <button id="drawerDelete" class="btn bad" type="button" data-preview-action="delete">🗑 Delete</button>
         </div>
 
         <div class="tag-panel" id="drawerObsPanel">
@@ -1954,6 +1954,7 @@
 
   <script type="module">
     import { AssetFX, ExplorerShaders, TileFXRenderer } from './js/explorer-shaders.mjs';
+    import { PREVIEW_ACTIONS, getPreviewActionVisibility } from './js/asset-preview.mjs';
     import { isLikelyPreviewEnvironment, loadExplorerMockAssets, normalizeExplorerMockAsset, shouldUseExplorerMocks } from './js/explorer-mock-assets.mjs';
 
     void ExplorerShaders;
@@ -5627,6 +5628,14 @@
       }
 
       // actions
+      const previewActionVisibility = getPreviewActionVisibility(kind);
+      el('drawerPlay').hidden = !previewActionVisibility.showPlay;
+      el('drawerPlay').dataset.previewAction = PREVIEW_ACTIONS.play;
+      el('drawerCopy').dataset.previewAction = PREVIEW_ACTIONS.copy;
+      el('drawerTagToggle').dataset.previewAction = PREVIEW_ACTIONS.tag;
+      el('drawerSendOBS').dataset.previewAction = PREVIEW_ACTIONS.obs;
+      el('drawerDelete').dataset.previewAction = PREVIEW_ACTIONS.delete;
+
       el('drawerPlay').onclick = () => {
         const media = preview.querySelector('video, audio');
         if (!media) return;

@@ -94,6 +94,9 @@ def test_explorer_grid_overlay_metadata():
 def test_explorer_topbar_intent_controller():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert 'topbar-reveal' in html
+    assert 'data-ui-hook="explorer-app-shell"' in html
+    assert 'data-ui-hook="explorer-topbar"' in html
+    assert 'data-ui-hook="projects-section-header"' in html
     assert 'createIntentController' in html
     assert 'wireTopbarIntent' in html
     assert 'wireDropdownIntents' in html
@@ -168,6 +171,13 @@ def test_explorer_shader_asset_fx_wiring_present():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
 
     assert "import { AssetFX, ExplorerShaders, TileFXRenderer } from './js/explorer-shaders.mjs';" in html
+    assert "import { PREVIEW_ACTIONS, getPreviewActionVisibility } from './js/asset-preview.mjs';" in html
+    assert 'data-preview-action="play"' in html
+    assert 'data-preview-action="copy"' in html
+    assert 'data-preview-action="tag"' in html
+    assert 'data-preview-action="obs"' in html
+    assert 'data-preview-action="delete"' in html
+    assert 'getPreviewActionVisibility(kind)' in html
     assert 'window.__assetfx_instance instanceof AssetFX' in html
     assert "const gridRoot = el('mediaGridRoot') || document.querySelector('[data-fx-grid-root=\"1\"]') || g;" in html
     assert "cardFX.attachGrid(gridRoot, '.asset');" in html
@@ -262,7 +272,9 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert "this._fxEntryPhase = 'bootstrap_ready';" in shader_module
     assert "this._fxEntryPhase = 'bootstrap_commit';" in shader_module
     assert 'bootstrapReady === bootstrapTotal' in shader_module
-    assert "this._bootstrapReadyTimeoutMs = readClampedSearchParam(queryParams, 'tilefxBootstrapReadyMs', {" in shader_module
+    assert 'export function readTileFxTuningFromQuery(params, {' in shader_module
+    assert 'const queryTuning = readTileFxTuningFromQuery(queryParams, { coarsePointer: coarse });' in shader_module
+    assert 'this._bootstrapReadyTimeoutMs = queryTuning.bootstrapReadyTimeoutMs;' in shader_module
     assert 'const bootstrapReadyTimedOut = bootstrapElapsed >= this._bootstrapReadyTimeoutMs;' in shader_module
     assert 'else if (bootstrapReadyTimedOut) {' in shader_module
     assert 'window.__tilefx_dbg.bootstrapReadyTimedOut = Number(window.__tilefx_dbg.bootstrapReadyTimedOut || 0) + 1;' in shader_module
@@ -346,8 +358,8 @@ def test_explorer_shader_asset_fx_wiring_present():
     assert 'uploadsSucceeded: 0,' in shader_module
     assert 'uploadsFailed: 0,' in shader_module
     assert 'resizeImageForGL(img, maxEdge = 320)' in shader_module
-    assert "readClampedSearchParam(queryParams, 'tilefxMaxTex'" in shader_module
-    assert 'this._baseMaxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));' in shader_module
+    assert "readClampedSearchParam(searchParams, 'tilefxMaxTex'" in shader_module
+    assert 'this._baseMaxTexEdge = queryTuning.maxTexEdge;' in shader_module
     assert 'this.maxTexEdge = this._baseMaxTexEdge;' in shader_module
     assert 'averageTextureSize() {' in shader_module
     assert 'pendingWaitLoad: 0,' in shader_module
@@ -820,11 +832,11 @@ def test_explorer_tilefx_guardrail_policy_contract_present():
     assert 'window.__tilefx_dbg.mobileFallbackActive = this._mobileFxFallback;' in shader_module
     assert "window.__tilefx_dbg.mobileFallbackReason = this._mobileFxFallback ? 'coarse-pointer-critical-frames' : '';" in shader_module
     assert 'tuningLimits: Object.freeze({' in shader_module
-    assert 'readClampedSearchParam(queryParams, \'tilefxMaxTex\'' in shader_module
-    assert 'readClampedSearchParam(queryParams, \'tilefxIdleReadyMargin\'' in shader_module
-    assert 'readClampedSearchParam(queryParams, \'fxtileuploads\'' in shader_module
-    assert 'readClampedSearchParam(queryParams, \'fxtileuploadsframe\'' in shader_module
-    assert 'readClampedSearchParam(queryParams, \'tilefxBootstrapReadyMs\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'tilefxMaxTex\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'tilefxIdleReadyMargin\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'fxtileuploads\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'fxtileuploadsframe\'' in shader_module
+    assert 'readClampedSearchParam(searchParams, \'tilefxBootstrapReadyMs\'' in shader_module
     assert '_triggerGuardrailFallback(\'min-tier-critical-repeat\')' in shader_module
     assert 'this.restoreAllDomSwaps(`fallback:${reason}`);' in shader_module
     assert 'window.__tilefx_dbg.perfFallbackTransitions = this._perfFallbackTransitions;' in shader_module

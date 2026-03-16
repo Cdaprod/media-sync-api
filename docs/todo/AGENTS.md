@@ -1,3 +1,35 @@
+## 2026-03-16 — Screenshot route/content validation hardening (completed)
+- [x] Strengthened static explorer screenshot README runbook with both HTTP status and HTML-content checks before capture.
+- [x] Added explicit `route-content-ok` guard based on `id="brandTitle"` presence to detect false-positive 200 responses from wrong hosts/routes.
+- [x] Updated package README contract test coverage to lock the new guardrails.
+- [ ] Follow-up: add a small scripted screenshot smoke helper that performs these checks then exits non-zero on failure.
+
+## 2026-03-16 — Screenshot route reliability follow-up (completed)
+- [x] Added explicit static explorer screenshot capture instructions to `docker/packages/Explorer/README.md` with a route/status sanity check to prevent white `Not Found` captures.
+- [x] Added package regression coverage to assert README retains the known-good screenshot URL (`http://127.0.0.1:8000/public/explorer.html?mock=1`) and `200` expectation.
+- [x] Captured a fresh explorer screenshot using the validated route.
+- [ ] Follow-up: add a shared script target for screenshot smoke checks so static/package visual captures use one command.
+
+## 2026-03-15 — Intake pipeline: topbar/section polish selector hooks (completed)
+- [x] Added stable `data-ui-hook` selectors in static explorer shell/topbar/projects section header for contract-level UI assertions.
+- [x] Added matching `data-ui-hook` selectors in Next.js Explorer shell/topbar/projects header to preserve dual-track parity.
+- [x] Expanded static + package tests to lock hook presence for compose/topbar migration-safe selectors.
+- [ ] Follow-up: add optional screenshot diff harness keyed by these hooks to detect structural drift automatically.
+
+## 2026-03-15 — Intake pipeline: shader/FX query tuning helper adoption (completed)
+- [x] Adopted a dedicated exported helper (`readTileFxTuningFromQuery`) in `public/js/explorer-shaders.mjs` so TileFX query tuning reads stay centralized and clamp-safe.
+- [x] Updated `TileFXRenderer` constructor to consume the helper for max texture, upload budgets, overscan, and bootstrap-ready timeout.
+- [x] Extended static shader contract tests to assert helper export + constructor wiring so future refactors preserve this intake boundary.
+- [ ] Follow-up: mirror this helper contract into docs for runtime tuning query parameters.
+
+## 2026-03-15 — Intake pipeline: preview module adoption (completed)
+- [x] Pulled branch delta inventory for preview modules/shaders/compose hooks from `me/explorer-shaders-and-compose-api-upgrades` and scoped to static + package targets.
+- [x] Added static preview contract shim at `public/js/asset-preview.mjs` for action constants + media-kind visibility helper.
+- [x] Wired static explorer drawer to consume preview shim + explicit `data-preview-action` hooks.
+- [x] Mirrored preview action constants in package explorer exports and added regression assertions.
+- [x] Added static + package contract tests for preview hooks.
+- [ ] Follow-up: evaluate replacing inline static drawer handlers with a fully componentized preview controller once parity slices settle.
+
 # TODO — FX Mode Stabilization Checklist
 
 ## 2026-03-15 — Explorer package test command reliability note (completed)

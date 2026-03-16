@@ -143,3 +143,19 @@ test('package explorer keeps grid/list-only controls and never wires FX runtime'
   assert.ok(!app.includes('TileFXRenderer'));
   assert.ok(!app.includes('fx-mode'));
 });
+
+test('package explorer exposes topbar/section ui hook selectors for static parity checks', () => {
+  const app = fs.readFileSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx'), 'utf8');
+  assert.match(app, /data-ui-hook=\"explorer-app-shell\"/);
+  assert.match(app, /data-ui-hook=\"explorer-topbar\"/);
+  assert.match(app, /data-ui-hook=\"projects-section-header\"/);
+});
+
+test('README documents static screenshot route to avoid Not Found captures', () => {
+  const readme = fs.readFileSync(path.join(packageRoot, 'README.md'), 'utf8');
+  assert.match(readme, /Visual QA screenshot sanity check/);
+  assert.match(readme, /http:\/\/127\.0\.0\.1:8000\/public\/explorer\.html\?mock=1/);
+  assert.match(readme, /status code:\s*`200`/);
+  assert.match(readme, /route-content-ok/);
+  assert.match(readme, /id="brandTitle"/);
+});

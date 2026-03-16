@@ -129,3 +129,13 @@ test('preview drawer action visibility follows item kind for play affordance', (
   assert.equal(explorer.getPreviewDrawerActionVisibility('other').showPlay, false);
   assert.equal(explorer.getPreviewDrawerActionVisibility(null).showPlay, false);
 });
+
+test('preview action constants expose stable drawer action contract', () => {
+  const explorer = loadTsModule(path.join(packageRoot, 'src', 'ExplorerApp.tsx'));
+  assert.equal(explorer.PREVIEW_ACTIONS.play, 'play');
+  assert.equal(explorer.PREVIEW_ACTIONS.copy, 'copy');
+  assert.equal(explorer.PREVIEW_ACTIONS.tag, 'tag');
+  assert.equal(explorer.PREVIEW_ACTIONS.obs, 'obs');
+  assert.equal(explorer.PREVIEW_ACTIONS.delete, 'delete');
+  assert.equal(explorer.PREVIEW_ACTIONS.compose, 'compose');
+});

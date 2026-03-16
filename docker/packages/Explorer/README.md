@@ -87,3 +87,25 @@ npm test --silent
 ```
 
 Run tests from a clean dependency state (or after dependency changes) so the TypeScript-powered node test harness can resolve local dev dependencies deterministically.
+
+## Visual QA screenshot sanity check (static explorer)
+
+When capturing UI screenshots, serve the **repo root** so the static explorer route resolves correctly and does not return a white `Not Found` page.
+
+```bash
+python -m http.server 8000 --directory /workspace/media-sync-api
+curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8000/public/explorer.html?mock=1"
+curl -fsS "http://127.0.0.1:8000/public/explorer.html?mock=1" | rg -q 'id="brandTitle"' && echo "route-content-ok"
+```
+
+Expected output:
+- status code: `200`
+- content check: `route-content-ok`
+
+If either check fails, do **not** trust screenshot output (it is likely a route/host mismatch).
+
+Use this URL in Playwright/browser tooling:
+
+```text
+http://127.0.0.1:8000/public/explorer.html?mock=1
+```
