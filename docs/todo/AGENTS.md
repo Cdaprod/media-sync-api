@@ -1,3 +1,15 @@
+## 2026-03-16 — Package explorer screenshot parity follow-up (active)
+- [x] Added package screenshot runbook to `docker/packages/Explorer/README.md` with `?mock=1` route + route-content check guardrail.
+- [x] Extended package README contract tests to assert package screenshot URL/content probes and preview-panel capture instruction.
+- [x] Captured package explorer screenshots for both default mock grid and open preview drawer states.
+- [ ] Follow-up: add a tiny reusable script to automate package screenshot boot, route validation, and drawer-open capture in one command.
+
+## 2026-03-16 — Integration pass: explorer shaders/compose preview intake (active)
+- [x] Commit 1/3 landed: preview primitives/helpers unified for static + package (`asset-preview` + package utils descriptor parity).
+- [x] Commit 2/3 landed: preview panel rendering + interactions now consume shared descriptors in static + package drawers.
+- [x] Commit 3/3 landed: topbar/section style carryover tokenized (`--section-surface`) across static + package styles with contract checks.
+- [x] Defer list captured: API-side compose endpoint changes from intake branch deferred (no branch ref available locally; existing `/api/assets/bulk/compose` contract already present + covered, so no speculative API delta was applied).
+
 ## 2026-03-16 — Screenshot route/content validation hardening (completed)
 - [x] Strengthened static explorer screenshot README runbook with both HTTP status and HTML-content checks before capture.
 - [x] Added explicit `route-content-ok` guard based on `id="brandTitle"` presence to detect false-positive 200 responses from wrong hosts/routes.
