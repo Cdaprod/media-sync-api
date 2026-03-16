@@ -194,6 +194,49 @@ function readClampedSearchParam(params, key, {
   return integer ? Math.round(clamped) : clamped;
 }
 
+export function readTileFxTuningFromQuery(params, {
+  coarsePointer = false,
+  guardrails = TILEFX_PERF_GUARDRAILS,
+} = {}) {
+  const searchParams = params instanceof URLSearchParams
+    ? params
+    : new URLSearchParams(String(params || ''));
+  const tuningLimits = guardrails.tuningLimits;
+  const maxTexParam = readClampedSearchParam(searchParams, 'tilefxMaxTex', {
+    min: tuningLimits.maxTexEdge.min,
+    max: tuningLimits.maxTexEdge.max,
+    fallback: 0,
+    integer: true,
+  });
+  return {
+    maxTexEdge: Math.max(64, maxTexParam || (coarsePointer ? 512 : 640)),
+    idleUploadOverscan: readClampedSearchParam(searchParams, 'tilefxIdleReadyMargin', {
+      min: tuningLimits.idleReadyMargin.min,
+      max: tuningLimits.idleReadyMargin.max,
+      fallback: 6,
+      integer: true,
+    }),
+    uploadBudgetPerSecond: readClampedSearchParam(searchParams, 'fxtileuploads', {
+      min: tuningLimits.uploadBudgetPerSecond.min,
+      max: tuningLimits.uploadBudgetPerSecond.max,
+      fallback: 8,
+      integer: true,
+    }),
+    maxUploadsPerFrame: readClampedSearchParam(searchParams, 'fxtileuploadsframe', {
+      min: tuningLimits.uploadsPerFrame.min,
+      max: tuningLimits.uploadsPerFrame.max,
+      fallback: 1,
+      integer: true,
+    }),
+    bootstrapReadyTimeoutMs: readClampedSearchParam(searchParams, 'tilefxBootstrapReadyMs', {
+      min: tuningLimits.bootstrapReadyMs.min,
+      max: tuningLimits.bootstrapReadyMs.max,
+      fallback: 1200,
+      integer: true,
+    }),
+  };
+}
+
 const TILEFX_PERF_GUARDRAILS = Object.freeze({
   frameTimeBands: Object.freeze({
     targetMs: 16.7,
@@ -976,36 +1019,15 @@ export class TileFXRenderer {
     this._srcMissing = 0;
     const coarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
     const queryParams = new URLSearchParams(window.location.search);
-    const tuningLimits = TILEFX_PERF_GUARDRAILS.tuningLimits;
-    const maxTexParam = readClampedSearchParam(queryParams, 'tilefxMaxTex', {
-      min: tuningLimits.maxTexEdge.min,
-      max: tuningLimits.maxTexEdge.max,
-      fallback: 0,
-      integer: true,
-    });
+    const queryTuning = readTileFxTuningFromQuery(queryParams, { coarsePointer: coarse });
     this.isCoarsePointer = Boolean(coarse);
-    this._baseMaxTexEdge = Math.max(64, maxTexParam || (coarse ? 512 : 640));
+    this._baseMaxTexEdge = queryTuning.maxTexEdge;
     this.maxTexEdge = this._baseMaxTexEdge;
-    this._baseIdleUploadOverscan = readClampedSearchParam(queryParams, 'tilefxIdleReadyMargin', {
-      min: tuningLimits.idleReadyMargin.min,
-      max: tuningLimits.idleReadyMargin.max,
-      fallback: 6,
-      integer: true,
-    });
+    this._baseIdleUploadOverscan = queryTuning.idleUploadOverscan;
     this.idleUploadOverscan = this._baseIdleUploadOverscan;
-    this._baseUploadBudgetPerSecond = readClampedSearchParam(queryParams, 'fxtileuploads', {
-      min: tuningLimits.uploadBudgetPerSecond.min,
-      max: tuningLimits.uploadBudgetPerSecond.max,
-      fallback: 8,
-      integer: true,
-    });
+    this._baseUploadBudgetPerSecond = queryTuning.uploadBudgetPerSecond;
     this.uploadBudgetPerSecond = this._baseUploadBudgetPerSecond;
-    this._baseMaxUploadsPerFrame = readClampedSearchParam(queryParams, 'fxtileuploadsframe', {
-      min: tuningLimits.uploadsPerFrame.min,
-      max: tuningLimits.uploadsPerFrame.max,
-      fallback: 1,
-      integer: true,
-    });
+    this._baseMaxUploadsPerFrame = queryTuning.maxUploadsPerFrame;
     this.maxUploadsPerFrame = this._baseMaxUploadsPerFrame;
     this.uploadPauseMs = 250;
     this.backpressureUntil = 0;
@@ -1050,12 +1072,7 @@ export class TileFXRenderer {
     this._lastDrawByTileEl = new WeakMap();
     this._fxEntryPhase = 'steady';
     this._fxEntryStartedAt = 0;
-    this._bootstrapReadyTimeoutMs = readClampedSearchParam(queryParams, 'tilefxBootstrapReadyMs', {
-      min: tuningLimits.bootstrapReadyMs.min,
-      max: tuningLimits.bootstrapReadyMs.max,
-      fallback: 1200,
-      integer: true,
-    });
+    this._bootstrapReadyTimeoutMs = queryTuning.bootstrapReadyTimeoutMs;
     this._bootstrapVisibleTileEls = new Set();
     this._swapLeakLoggedKeys = new Set();
     this._illegalDisableLogged = false;

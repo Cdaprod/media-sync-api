@@ -141,6 +141,15 @@ export function getPreviewDrawerActionVisibility(kind: string | null | undefined
   return { showPlay: normalized === 'video' || normalized === 'audio' };
 }
 
+export const PREVIEW_ACTIONS = Object.freeze({
+  play: 'play',
+  copy: 'copy',
+  tag: 'tag',
+  obs: 'obs',
+  delete: 'delete',
+  compose: 'compose',
+});
+
 
 export function buildSelectionAssetRefs(input: {
   selectedItems: MediaItem[];
@@ -1837,9 +1846,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   };
 
   return (
-    <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`}>
+    <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`} data-ui-hook="explorer-app-shell">
       <div className="topbar-reveal" ref={topbarRevealRef} aria-hidden="true" />
-      <div className="topbar" ref={topbarRef}>
+      <div className="topbar" ref={topbarRef} data-ui-hook="explorer-topbar">
         <div className="topbar-inner">
           <div
             className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
@@ -2088,7 +2097,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
       <div className="main">
         <aside className={`sidebar sidebar-drawer ${sidebarOpen ? 'is-open' : ''}`}>
-          <div className="section-h">
+          <div className="section-h" data-ui-hook="projects-section-header">
             <h2>Projects</h2>
             <div className="meta-line">
               <span>{projects.length} total</span>

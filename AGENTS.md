@@ -1879,3 +1879,25 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 ### Latest Implementation Notes (2026-03-15)
 - Updated `docker/packages/Explorer/README.md` testing instructions to use install-first ordering (`npm ci --silent` then `npm test --silent`) so clean checkout validation avoids missing-dev-dependency failures.
 - Revalidated the package test sequence with the new documented command order and kept the static regression command in the same runbook.
+
+### Latest Implementation Notes (2026-03-15)
+- Intake pipeline preview slice adopted a lightweight static preview module (`public/js/asset-preview.mjs`) that exports stable preview action constants plus media-kind play visibility helpers.
+- `public/explorer.html` now imports the preview shim, tags drawer controls with explicit `data-preview-action` hooks, and uses shared visibility logic to hide Play for non audio/video assets.
+- Package parity mirrors the preview action contract via exported `PREVIEW_ACTIONS` in `docker/packages/Explorer/src/ExplorerApp.tsx`, with regression checks in package + static test suites.
+
+### Latest Implementation Notes (2026-03-15)
+- Shader intake slice adopted `readTileFxTuningFromQuery(...)` in `public/js/explorer-shaders.mjs` as a single clamp-safe parser for TileFX runtime query tuning (`tilefxMaxTex`, upload budgets, idle margin, bootstrap timeout).
+- `TileFXRenderer` now initializes its base tuning fields from this helper, keeping constructor wiring explicit and easier to parity-test.
+- Static explorer regression tests now assert helper export and constructor usage to lock the shader query-tuning contract.
+
+### Latest Implementation Notes (2026-03-15)
+- Topbar/section polish intake slice added explicit parity selectors (`data-ui-hook`) to both static and package explorers for app shell, topbar container, and projects section header nodes.
+- Added static + package contract tests to assert these selector hooks remain present, giving merge-safe anchors for compose/topbar UI iterations.
+
+### Latest Implementation Notes (2026-03-16)
+- Added screenshot-route reliability guidance in `docker/packages/Explorer/README.md` to avoid white `Not Found` captures by serving repo root and validating `http://127.0.0.1:8000/public/explorer.html?mock=1` returns `200` before Playwright capture.
+- Added package README contract assertions in `docker/packages/Explorer/tests/utils-behavior.test.mjs` so screenshot URL/status guidance remains stable for future visual QA runs.
+
+### Latest Implementation Notes (2026-03-16)
+- Hardened screenshot QA guidance in `docker/packages/Explorer/README.md` to require both `200` status and route-content verification (`id="brandTitle"` -> `route-content-ok`) before trusting captures.
+- Expanded `docker/packages/Explorer/tests/utils-behavior.test.mjs` README contract assertions so screenshot-route and content-check guardrails remain enforced over future docs edits.
