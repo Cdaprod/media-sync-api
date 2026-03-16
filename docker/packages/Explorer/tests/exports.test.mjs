@@ -52,7 +52,8 @@ test('api base inference keeps LAN host reachable', () => {
   assert.ok(content.includes('inferApiBaseUrl'));
   assert.ok(content.includes('media-sync-api'));
   assert.ok(content.includes(':8787'));
-  assert.ok(content.includes("if (!trimmed) return ''"));
+  assert.ok(content.includes("if (!trimmed) {"));
+  assert.ok(content.includes("currentPort !== '8787'"));
 });
 
 test('clipboard helper includes fallback copy behavior', () => {

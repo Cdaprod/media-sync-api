@@ -1,6 +1,13 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-16 — Explorer API base fallback for split-origin deploys (active)
+- [x] Confirmed package Explorer boot failures were caused by same-origin API resolution when served from non-API ports (for example `:8790`), while static explorer on `:8787` remained healthy.
+- [x] Updated package API-base inference to auto-target `http://<current-host>:8787` when no explicit base URL is configured and the browser origin is not already `:8787`.
+- [x] Updated package regression assertions to lock in the non-`8787` fallback guard.
+- [x] Documented the split-origin fallback behavior in `docker/packages/Explorer/README.md` so container/standalone usage is copy-paste clear.
+- [ ] Validate on physical iPhone Safari that the Next.js Explorer running from the Explorer container now lists sources/projects/media without manual `NEXT_PUBLIC_MEDIA_SYNC_API_BASE` overrides.
+
 ## 2026-03-16 — Explorer selection identity + compose guardrails (active)
 - [x] Reworked Explorer package selection bookkeeping to use composite keys (`source::project::relative_path`) so all-project selections keep source/project identity for bulk delete/move/tag/compose actions.
 - [x] Updated context menu, drag-move, drawer actions, and selected-only filtering to resolve selected assets by identity keys rather than path-only lookup maps.
