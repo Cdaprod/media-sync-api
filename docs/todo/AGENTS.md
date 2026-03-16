@@ -1,6 +1,22 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-16 — Drawer inner preview renderer convergence (active)
+- [x] Implemented phase-2 preview convergence in static drawer: top overlay/nav controls, center play affordance, integrated bottom-stack playback controls (time/scrub/volume), and in-preview action pills wired to existing drawer actions.
+- [x] Implemented phase-2 preview convergence in package drawer: `AssetPreviewPanel` now includes center-play, top nav controls, integrated playback controls, and in-preview action pill row while keeping Explorer business logic callbacks in `ExplorerApp`.
+- [x] Added next-slice regression assertions for richer preview control classes/markers in static and package tests.
+- [ ] Follow up by folding OBS fit/slot/exclusive controls into the package in-preview bottom stack with the same adapter/event contract used for drawer actions.
+- [x] Fixed package runtime ordering bug by moving `normalizedPreviewAsset` memo below `resolveAssetUrl` callback declaration in `ExplorerApp` to avoid temporal-dead-zone render crashes.
+- [x] Added package regression assertion to enforce callback-before-memo declaration ordering for the preview adapter wiring.
+- [x] Upgraded static Explorer drawer preview (`public/explorer.html`) to a media-first inner renderer with overlay header/meta chips, playback fade behavior, and audio waveform canvas while preserving existing drawer shell/actions/metadata sections.
+- [x] Added preview normalization helpers in package Explorer (`docker/packages/Explorer/src/previewAdapter.ts`) to keep preview data contract explicit (id/name/path/kind/src/duration/quick/obs/raw).
+- [x] Added `AssetPreviewPanel` component in package Explorer (`docker/packages/Explorer/src/AssetPreviewPanel.tsx`) and integrated it into `ExplorerApp` drawer without changing right-side drawer semantics.
+- [x] Updated package/static styles to support immersive preview shell classes (`preview-shell`, `preview-overlay`, `preview-wave`) while retaining existing inspector details and action rows.
+- [x] Added regression assertions in `tests/test_public_explorer_program_monitor.py` and `docker/packages/Explorer/tests/exports.test.mjs` for preview adapter wiring and drawer contract preservation.
+- [ ] Follow up by pulling the full `asset-preview.mjs` branch delta once branch refs are available locally so sticker-layer/edit-mode controls can be adapted into the same drawer contract.
+- [ ] Follow up with richer OBS settings parity in package drawer (cover/fit/fill + slot/exclusive controls) mapped through the normalized preview action contract.
+
+
 ## 2026-03-16 — API CORS support for Explorer split-origin UI (active)
 - [x] Added FastAPI CORS middleware in `app/main.py` so `/api/*` routes can be called from the Explorer UI on `:8790` while the API runs on `:8787`.
 - [x] Added LAN defaults for Explorer origins (`192.168.0.25:8790`, `localhost:8790`, `127.0.0.1:8790`) and merged them with `MEDIA_SYNC_CORS_ORIGINS` when configured.
