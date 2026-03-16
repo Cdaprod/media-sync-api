@@ -13,7 +13,7 @@ services:
     ports:
       - "8790:3000"
     environment:
-      - NEXT_PUBLIC_MEDIA_SYNC_API_BASE=http://media-sync-api:8787
+      - NEXT_PUBLIC_MEDIA_SYNC_API_BASE=http://192.168.0.25:8787
       - NEXT_TELEMETRY_DISABLED=1
     volumes:
       - "B:/Video/Projects:/data/projects"
