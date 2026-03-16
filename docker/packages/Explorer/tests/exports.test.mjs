@@ -29,6 +29,21 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('resolveAssetUrl'));
   assert.ok(content.includes('formatListValue'));
   assert.ok(content.includes('buildUploadUrl'));
+  assert.ok(content.includes('handleBulkTag'));
+  assert.ok(content.includes('handleComposeSelected'));
+});
+
+test('explorer api client includes bulk media action endpoints', () => {
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const content = fs.readFileSync(apiPath, 'utf8');
+  assert.ok(content.includes('bulkDeleteMedia'));
+  assert.ok(content.includes("/api/assets/bulk/delete"));
+  assert.ok(content.includes('bulkMoveMedia'));
+  assert.ok(content.includes("/api/assets/bulk/move"));
+  assert.ok(content.includes('bulkTagMedia'));
+  assert.ok(content.includes("/api/assets/bulk/tags"));
+  assert.ok(content.includes('bulkComposeMedia'));
+  assert.ok(content.includes("/api/assets/bulk/compose"));
 });
 
 test('api base inference keeps LAN host reachable', () => {

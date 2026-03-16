@@ -1781,3 +1781,11 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Updated delete callsites to pass asset objects (`selectedItemsOrdered`, drawer `state.focused`, context-menu `items`) so requested deletes preserve full identity across sources/projects.
 - Kept compatibility for legacy string-path requests with focused/active-project narrowing and retained scope-aware post-delete reload behavior.
 - Expanded regression assertions in `tests/test_public_explorer_program_monitor.py` to lock identity-key matching and guard against relative-path-only regressions.
+
+
+### Latest Implementation Notes (2026-03-15)
+- Added a direct implementation plan for full `/public` → `/docker/packages/Explorer` parity in `docs/todo/AGENTS.md`, including ordered, idempotent task stubs for parity matrix capture, style/token migration, behavior porting, and regression QA.
+
+
+### Latest Implementation Notes (2026-03-16)
+- Completed Explorer package bulk action parity wiring for `/api/assets/bulk/delete|move|tags|compose`, including selection/drawer integration and updated package regression checks for bulk endpoint/action presence.

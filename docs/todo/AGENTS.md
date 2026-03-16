@@ -1,6 +1,24 @@
 # TODO — FX Mode Stabilization Checklist
 
 
+## 2026-03-16 — Explorer bulk action parity completion (active)
+- [x] Added package API client support for bulk explorer actions (`/api/assets/bulk/delete|move|tags|compose`) with normalized error handling.
+- [x] Updated Next.js Explorer selection/drawer flows to resolve stable asset refs and execute bulk delete/move/tag/compose operations through the shared bulk APIs.
+- [x] Expanded selection-bar controls with tag + compose actions and removed project-scope-only guardrails for delete/select in all-project media mode.
+- [x] Added package regression assertions for bulk API endpoint wiring and action handlers in `docker/packages/Explorer/tests/exports.test.mjs`.
+- [ ] Follow up with richer non-prompt tag/compose UI panels matching the advanced static preview design language once branch delta intake lands.
+
+
+## 2026-03-15 — Public → Explorer parity implementation plan (active)
+- [x] Audited current `/public` explorer assets (`public/explorer.html`, `public/index.html`, `public/js/*`) against `/docker/packages/Explorer` structure to define copy boundaries for HTML/CSS/JS parity.
+- [x] Drafted a phased migration sequence that keeps the Next.js Explorer shippable between commits: baseline capture, shared primitive extraction, component parity passes, and final regression sweep.
+- [x] Defined idempotent task stubs grouped by dependency order so CSS/token work lands before behavior ports and avoids cross-stub collisions.
+- [ ] Capture a DOM/API parity matrix (static explorer vs Next.js Explorer) covering topbar, drawers, action menus, media cards, inspector, and upload/OBS/program-monitor flows.
+- [ ] Port static style tokens/layout primitives into `docker/packages/Explorer/src/styles.css` with one-way mapping notes from `public/explorer.html` CSS blocks.
+- [ ] Port remaining static interaction helpers into typed Explorer modules (`api/state/components`) while preserving existing endpoint contracts.
+- [ ] Add/extend package tests for copied behaviors (sorting/filtering/copy/upload/tag/move/delete/program-monitor/OBS guardrails) and keep static regression assertions passing.
+- [ ] Run final visual parity QA (desktop + iPhone Safari) and document any intentional deltas before closing the parity epic.
+
 
 ## 2026-03-15 — Delete identity collision guard (active)
 - [x] Reworked explorer delete resolver matching to use stable asset identity keys (`asset_uuid`/`asset_id` fallback, then `source+project+relative_path`) instead of `relative_path` alone.

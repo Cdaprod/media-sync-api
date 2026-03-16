@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { createApiClient } from './api';
+import type { AssetRef } from './api';
 import {
   collectMediaMeta,
   extractAiTags,
@@ -608,10 +609,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toggleSelected = useCallback(
     (relPath: string) => {
       if (!relPath) return;
-      if (!activeProject) return;
       setSelected((current) => toggleSelection(current, relPath));
     },
-    [activeProject, setSelected],
+    [setSelected],
   );
 
   const clearSelection = useCallback(() => {
@@ -656,19 +656,46 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [activeProject, addToast, api, buildUploadUrl, loadMedia]);
 
+  const toAssetRef = useCallback((item: MediaItem): AssetRef | null => {
+    const relativePath = String(item.relative_path || '').trim();
+    if (!relativePath) return null;
+    const projectName = String(item.project_name || item.project || activeProject?.name || '').trim();
+    if (!projectName) return null;
+    const sourceName = String(item.project_source || item.source || activeProject?.source || '').trim();
+    return {
+      relative_path: relativePath,
+      project: projectName,
+      source: sourceName || null,
+    };
+  }, [activeProject]);
+
+  const resolveItemsForPaths = useCallback((paths: string[]): MediaItem[] => {
+    const resolved = paths
+      .map((path) => itemsByPath.get(path))
+      .filter((item): item is MediaItem => Boolean(item));
+    if (resolved.length) return resolved;
+    return paths.map((path) => ({
+      relative_path: path,
+      project_name: activeProject?.name,
+      project_source: activeProject?.source || null,
+    }));
+  }, [activeProject, itemsByPath]);
+
   const deleteMediaPaths = useCallback(
     async (paths: string[]) => {
-      const project = activeProject;
-      if (!project) {
-        addToast('warn', 'Delete', 'Select a project first');
-        return;
-      }
       if (!paths.length) {
         addToast('warn', 'Delete', 'Select one or more clips');
         return;
       }
+      const refs = resolveItemsForPaths(paths)
+        .map((item) => toAssetRef(item))
+        .filter((item): item is AssetRef => Boolean(item));
+      if (!refs.length) {
+        addToast('warn', 'Delete', 'Unable to resolve selected media paths');
+        return;
+      }
       try {
-        await api.deleteMedia(project.name, paths, project.source);
+        await api.bulkDeleteMedia(refs);
         addToast('good', 'Delete', 'Removed media from disk and index');
         setSelected((current) => {
           const next = new Set(current);
@@ -679,27 +706,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           setFocused(null);
           setInspectorOpen(false);
         }
-        await loadMedia(project);
+        if (mediaScope === 'all' || !activeProject) await loadAllMedia();
+        else await loadMedia(activeProject);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Delete failed';
         addToast('bad', 'Delete', message);
       }
     },
-    [activeProject, addToast, api, focused, loadMedia],
+    [activeProject, addToast, api, focused, loadAllMedia, loadMedia, mediaScope, resolveItemsForPaths, toAssetRef],
   );
 
   const moveMediaPaths = useCallback(
     async (paths: string[], targetProject: Project) => {
-      const project = activeProject;
-      if (!project) return;
+      const refs = resolveItemsForPaths(paths)
+        .map((item) => toAssetRef(item))
+        .filter((item): item is AssetRef => Boolean(item));
+      if (!refs.length) {
+        addToast('warn', 'Move', 'Unable to resolve selected media paths');
+        return;
+      }
       try {
-        await api.moveMedia(
-          project.name,
-          paths,
-          targetProject.name,
-          project.source,
-          targetProject.source,
-        );
+        await api.bulkMoveMedia(refs, targetProject.name, targetProject.source || null);
         addToast('good', 'Move', `Moved ${paths.length} item(s) to ${targetProject.name}`);
         setSelected((current) => {
           const next = new Set(current);
@@ -710,15 +737,82 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           setFocused(null);
           setInspectorOpen(false);
         }
-        await loadMedia(project);
+        if (mediaScope === 'all' || !activeProject) await loadAllMedia();
+        else await loadMedia(activeProject);
         await loadProjects();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Move failed';
         addToast('bad', 'Move', message);
       }
     },
-    [activeProject, addToast, api, focused, loadMedia, loadProjects],
+    [activeProject, addToast, api, focused, loadAllMedia, loadMedia, loadProjects, mediaScope, resolveItemsForPaths, toAssetRef],
   );
+
+  const handleBulkTag = useCallback(async () => {
+    if (!selected.size) {
+      addToast('warn', 'Tags', 'Select one or more clips first');
+      return;
+    }
+    const addInput = window.prompt('Tags to add (comma separated):', '');
+    if (addInput == null) return;
+    const removeInput = window.prompt('Tags to remove (comma separated):', '');
+    if (removeInput == null) return;
+    const addTags = addInput.split(',').map((tag) => tag.trim()).filter(Boolean);
+    const removeTags = removeInput.split(',').map((tag) => tag.trim()).filter(Boolean);
+    if (!addTags.length && !removeTags.length) {
+      addToast('warn', 'Tags', 'Nothing to add or remove');
+      return;
+    }
+    const refs = resolveItemsForPaths(Array.from(selected))
+      .map((item) => toAssetRef(item))
+      .filter((item): item is AssetRef => Boolean(item));
+    if (!refs.length) {
+      addToast('warn', 'Tags', 'Unable to resolve selected media paths');
+      return;
+    }
+    try {
+      await api.bulkTagMedia(refs, addTags, removeTags);
+      addToast('good', 'Tags', `Updated tags for ${refs.length} item(s)`);
+      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
+      else await loadMedia(activeProject);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Tag update failed';
+      addToast('bad', 'Tags', message);
+    }
+  }, [activeProject, addToast, api, loadAllMedia, loadMedia, mediaScope, resolveItemsForPaths, selected, toAssetRef]);
+
+  const handleComposeSelected = useCallback(async () => {
+    if (!selected.size) {
+      addToast('warn', 'Compose', 'Select one or more clips first');
+      return;
+    }
+    const outputName = window.prompt('Output file name (mp4):', 'compiled.mp4')?.trim();
+    if (!outputName) return;
+    const targetProject = window.prompt('Output project name:', activeProject?.name || '')?.trim();
+    if (!targetProject) return;
+    const refs = resolveItemsForPaths(Array.from(selected))
+      .map((item) => toAssetRef(item))
+      .filter((item): item is AssetRef => Boolean(item));
+    if (!refs.length) {
+      addToast('warn', 'Compose', 'Unable to resolve selected media paths');
+      return;
+    }
+    try {
+      await api.bulkComposeMedia({
+        assets: refs,
+        output_project: targetProject,
+        output_name: outputName,
+        output_source: activeProject?.source || null,
+      });
+      addToast('good', 'Compose', `Composed ${refs.length} item(s) into ${outputName}`);
+      await loadProjects();
+      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
+      else await loadMedia(activeProject);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Compose failed';
+      addToast('bad', 'Compose', message);
+    }
+  }, [activeProject, addToast, api, loadAllMedia, loadMedia, loadProjects, mediaScope, resolveItemsForPaths, selected, toAssetRef]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -1250,7 +1344,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const uploadCaption = activeProject
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
-  const canSelect = Boolean(activeProject);
+  const canSelect = Boolean(activeProject) || mediaScope === 'all';
   const projectLabel = (item: MediaItem) => {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
@@ -1917,10 +2011,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ⇢ Send to Resolve
         </button>
         <button
+          className="btn"
+          type="button"
+          onClick={handleBulkTag}
+          disabled={!selectedCount}
+        >
+          🏷 Tag
+        </button>
+        <button
+          className="btn"
+          type="button"
+          onClick={handleComposeSelected}
+          disabled={!selectedCount}
+        >
+          🎬 Compose
+        </button>
+        <button
           className="btn bad"
           type="button"
           onClick={() => deleteMediaPaths(Array.from(selected))}
-          disabled={!activeProject || !selectedCount}
+          disabled={!selectedCount}
         >
           🗑 Delete
         </button>
@@ -1986,7 +2096,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               className={`btn ${focused && selected.has(focused.relative_path) ? '' : 'primary'}`}
               type="button"
               onClick={() => focused && toggleSelected(focused.relative_path)}
-              disabled={!activeProject}
             >
               {focused && selected.has(focused.relative_path) ? '− Deselect' : '＋ Select'}
             </button>

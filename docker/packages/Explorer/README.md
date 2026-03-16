@@ -2,6 +2,8 @@
 
 Embedded Explorer UI for `media-sync-api`. This package mirrors `/public/explorer.html` behavior while making the UI reusable inside other Next.js apps.
 
+Recent parity updates include bulk asset actions backed by `/api/assets/*` endpoints (delete/move/tag/compose) so multi-select workflows stay aligned with the static explorer.
+
 ## Requirements
 
 - Node.js 18+
