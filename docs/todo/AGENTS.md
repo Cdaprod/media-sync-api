@@ -1,5 +1,23 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Package overlay action + OBS parity pass (active)
+- [x] Added package preview overlay semantic action callbacks for OBS, tag, resolve, and program-monitor handoff while keeping ExplorerApp as logic owner.
+- [x] Added in-overlay OBS settings controls (mode cover/fit/fill, slot, exclusive) and wired values through package preview state/action flow.
+- [x] Kept drawer-contained preview contract with no reintroduced legacy lower control rows.
+- [x] Added package regression assertions for overlay callback wiring and OBS control presence/state mapping.
+- [x] Added mobile comfort tweaks for overlay control target sizing and details height constraints in package styles.
+- [ ] Validate on physical iPhone Safari for overlay reveal/hide comfort and accidental-tap resilience after the new package overlay action rows.
+- [ ] Intake `asset-preview.mjs` branch delta once `me/explorer-shaders-and-compose-api-upgrades` refs are available locally (currently unavailable in this workspace).
+
+## 2026-03-16 — Drawer preview ownership transfer takeover (active)
+- [x] Mapped old drawer controls to overlay replacements and migrated behavior ownership to overlay actions.
+- [x] Removed duplicated legacy drawer button row / metadata table from both static and package explorers after behavior transfer.
+- [x] Wired overlay prev/next to explorer ordering state (package `filteredMedia`, static `filteredMedia()`) so adjacent navigation loads real previous/next assets.
+- [x] Moved preview metadata/details into overlay detail panels so media occupies most of the drawer preview height.
+- [x] Added overlay skip ±10s controls and kept scrub/time/volume/play/pause behavior fully functional in overlay transport.
+- [ ] Follow up by porting OBS/tag/resolve/program-monitor overlay buttons into the Next.js package preview surface for full static/package action parity.
+- [ ] Validate on iPhone Safari that overlay details reveal/hide interaction remains comfortable during playback + scroll.
+
 
 ## 2026-03-16 — Drawer inner preview renderer convergence (active)
 - [x] Implemented phase-2 preview convergence in static drawer: top overlay/nav controls, center play affordance, integrated bottom-stack playback controls (time/scrub/volume), and in-preview action pills wired to existing drawer actions.

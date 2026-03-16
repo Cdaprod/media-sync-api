@@ -1330,14 +1330,14 @@
       max-width: 100%;
       display:block;
       background: rgba(0,0,0,0.30);
-      max-height: 52vh;
+      max-height: 70vh;
       object-fit: contain;
     }
     .preview-shell{
       position: relative;
       min-height: 220px;
-      max-height: 52vh;
-      height: min(52vh, 420px);
+      max-height: 70vh;
+      height: min(70vh, 640px);
       display: flex;
       align-items: stretch;
       justify-content: stretch;
@@ -1494,6 +1494,21 @@
       font-size: 12px;
     }
     .preview-volume input{ width: 96px; accent-color: #9ca8ff; }
+    .preview-details{
+      display:none;
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(1,5,16,.72);
+      border-radius:12px;
+      padding:10px;
+      grid-template-columns:112px 1fr;
+      gap:6px 10px;
+      font-size:12px;
+      max-height:36vh;
+      overflow:auto;
+    }
+    .preview-details.open{ display:grid; }
+    .preview-details .k{ color: var(--muted); }
+    .preview-details .v{ color: var(--text); overflow-wrap:anywhere; }
     .preview-empty{
       display:flex;
       align-items:center;
@@ -1523,27 +1538,6 @@
       user-select: text;
       -webkit-user-select: text;
       -webkit-touch-callout: default;
-    }
-
-    .kv{
-      border: 1px solid var(--border);
-      border-radius: var(--radius2);
-      background: rgba(255,255,255,0.04);
-      padding: 10px;
-      display:grid;
-      grid-template-columns: 120px 1fr;
-      gap: 8px 10px;
-      font-size: 12px;
-      align-items:center;
-    }
-    .kv .k{ color: var(--muted); }
-    .kv .v{ color: var(--text); overflow-wrap:anywhere; }
-
-    .drawer-actions{
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items:center;
     }
 
     /* Bottom selection bar */
@@ -2069,14 +2063,6 @@
       <div class="drawer-body">
         <div class="preview" id="drawerPreview"></div>
 
-        <div class="drawer-actions">
-          <button id="drawerPlay" class="btn" type="button">▶ Play</button>
-          <button id="drawerCopy" class="btn" type="button">⧉ Copy stream URL</button>
-          <button id="drawerTagToggle" class="btn" type="button">🏷 Tag</button>
-          <button id="drawerSendOBS" class="btn" type="button">📺 Send to OBS</button>
-          <button id="drawerDelete" class="btn bad" type="button">🗑 Delete</button>
-        </div>
-
         <div class="tag-panel" id="drawerObsPanel">
           <div class="small">OBS Send settings</div>
           <div class="tag-editor">
@@ -2108,7 +2094,6 @@
           </div>
         </div>
 
-        <div class="kv" id="drawerKV"></div>
       </div>
     </aside>
 
@@ -4530,9 +4515,6 @@
         setSelectPanel('selTagPanel', false);
         setSelectPanel('selMovePanel', false);
       }
-      el('drawerDelete').disabled = !state.focused;
-      const obsUrl = state.focused?.stream_url || state.focused?.streamUrl || '';
-      el('drawerSendOBS').disabled = !state.focused || !obsUrl;
     }
 
     function updateTagButtons(){
@@ -4549,7 +4531,6 @@
       el('batchTagRemove').disabled = !hasSelection || !batchHasValue;
       el('drawerTagAdd').disabled = !hasFocused || !drawerHasValue;
       el('drawerTagRemove').disabled = !hasFocused || !drawerHasValue;
-      el('drawerTagToggle').disabled = !hasFocused;
       el('selTagAdd').disabled = !hasSelection || !selHasValue;
       el('selTagRemove').disabled = !hasSelection || !selHasValue;
     }
@@ -5725,13 +5706,13 @@
       audioEl.addEventListener('emptied', () => cancelAnimationFrame(raf), { once: true });
     }
 
-    function renderDrawerPreview(preview, item){
+    function renderDrawerPreview(preview, item, handlers = {}){
       const model = buildPreviewModel(item);
       const playable = model.kind === 'video' || model.kind === 'audio';
       const mediaHtml = model.kind === 'audio'
-        ? `<audio class="preview-player" controls preload="metadata" src="${escapeHtml(model.src)}"></audio><canvas class="preview-wave"></canvas>`
+        ? `<audio class="preview-player" preload="metadata" src="${escapeHtml(model.src)}"></audio><canvas class="preview-wave"></canvas>`
         : model.kind === 'video'
-          ? `<video class="preview-player" controls preload="metadata" playsinline src="${escapeHtml(model.src)}"></video>`
+          ? `<video class="preview-player" preload="metadata" playsinline src="${escapeHtml(model.src)}"></video>`
           : model.kind === 'image'
             ? `<img class="preview-player" src="${escapeHtml(model.src || model.poster)}" alt="${escapeHtml(model.title)}">`
             : `<div class="preview-empty">No native preview for this type.<span class="kbd">${escapeHtml(model.kind)}</span></div>`;
@@ -5766,13 +5747,18 @@
                 <input class="preview-scrubber" data-preview-scrubber="1" type="range" min="0" max="1" step="0.01" value="0">
               ` : ''}
               <div class="preview-control-row">
+                ${playable ? '<button class="preview-pill" type="button" data-preview-back="1">↺ 10s</button>' : ''}
                 ${playable ? '<button class="preview-pill primary" type="button" data-preview-play="1">▶ Play</button>' : ''}
+                ${playable ? '<button class="preview-pill" type="button" data-preview-forward="1">10s ↻</button>' : ''}
                 <button class="preview-pill" type="button" data-preview-copy="1">⧉ Copy stream URL</button>
                 <button class="preview-pill" type="button" data-preview-tag="1">🏷 Tag</button>
                 <button class="preview-pill" type="button" data-preview-obs="1">📺 OBS</button>
+                <button class="preview-pill" type="button" data-preview-select="1">± Select</button>
                 <button class="preview-pill danger" type="button" data-preview-delete="1">🗑 Delete</button>
+                <button class="preview-pill" type="button" data-preview-details="1">Show details</button>
                 ${playable ? '<label class="preview-volume">🔊<input data-preview-volume="1" type="range" min="0" max="1" step="0.01" value="0.8"></label>' : ''}
               </div>
+              <div class="preview-details" data-preview-details-panel="1"></div>
             </div>
           </div>
         </div>
@@ -5828,16 +5814,80 @@
           });
         }
       }
-      return media;
+
+      preview.querySelectorAll('[data-preview-play]').forEach((btn) => btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onPlay?.(media);
+      }));
+      preview.querySelector('[data-preview-copy]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onCopy?.();
+      });
+      preview.querySelector('[data-preview-tag]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onTag?.();
+      });
+      preview.querySelector('[data-preview-obs]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onObs?.();
+      });
+      preview.querySelector('[data-preview-select]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onSelect?.();
+      });
+      preview.querySelector('[data-preview-delete]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onDelete?.();
+      });
+      preview.querySelector('[data-preview-close]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onClose?.();
+      });
+      preview.querySelector('[data-preview-prev]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onPrev?.();
+      });
+      preview.querySelector('[data-preview-next]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        handlers.onNext?.();
+      });
+      preview.querySelector('[data-preview-back]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (media) media.currentTime = Math.max(0, (media.currentTime || 0) - 10);
+      });
+      preview.querySelector('[data-preview-forward]')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!media) return;
+        const cap = Number.isFinite(media.duration) ? media.duration : Number.MAX_SAFE_INTEGER;
+        media.currentTime = Math.min((media.currentTime || 0) + 10, cap);
+      });
+
+      const detailsBtn = preview.querySelector('[data-preview-details]');
+      const detailsPanel = preview.querySelector('[data-preview-details-panel]');
+      detailsBtn?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        detailsPanel?.classList.toggle('open');
+        detailsBtn.textContent = detailsPanel?.classList.contains('open') ? 'Hide details' : 'Show details';
+      });
+
+      return {
+        media,
+        detailsPanel,
+        setSelectLabel: (isSelected) => {
+          const selectBtn = preview.querySelector('[data-preview-select]');
+          if (selectBtn) selectBtn.textContent = isSelected ? '− Deselect' : '+ Select';
+        },
+      };
     }
 
     function focusNeighborInDrawer(offset){
-      if (!state.focused || !state.media.length) return;
+      const ordered = filteredMedia();
+      if (!state.focused || !ordered.length) return;
       const currentKey = selectionKey(state.focused);
-      const idx = state.media.findIndex((entry) => selectionKey(entry) === currentKey);
+      const idx = ordered.findIndex((entry) => selectionKey(entry) === currentKey);
       if (idx < 0) return;
-      const nextIndex = (idx + offset + state.media.length) % state.media.length;
-      const next = state.media[nextIndex];
+      const nextIndex = (idx + offset + ordered.length) % ordered.length;
+      const next = ordered[nextIndex];
       if (next) openDrawer(next);
     }
 
@@ -5861,12 +5911,6 @@
       el('drawerTitle').textContent = title;
       el('drawerSub').textContent = item.relative_path || '';
 
-      // preview
-      const preview = el('drawerPreview');
-      renderDrawerPreview(preview, item);
-
-      // metadata table (show what you have; hides gracefully if missing)
-      const kv = el('drawerKV');
       const activeProjectName = state.activeProject?.name || item.project_name || '';
       const activeSource = state.activeProject?.source || item.project_source || '';
       const rows = [
@@ -5876,7 +5920,6 @@
         ['Source', activeSource || '(primary)'],
         ['Project', activeProjectName || '(none)'],
         ['Relative', item.relative_path || '(none)'],
-        // Optional fields if your API provides them:
         ['MIME', item.mime || item.content_type || ''],
         ['Hash', item.sha256 || item.hash || ''],
         ['Created', item.created_at || item.createdAt || ''],
@@ -5889,22 +5932,83 @@
         ['Audio channels', item.audio_channels ? `${item.audio_channels}ch` : 'unknown'],
       ].filter(([_, v]) => String(v || '').trim().length > 0);
 
-      const detailSections = {
-        primary: rows,
-        facts: [],
-        registry: [],
-      };
+      const detailSections = { primary: rows, facts: [], registry: [] };
+
+      const preview = el('drawerPreview');
+      const previewApi = renderDrawerPreview(preview, item, {
+        onPlay: (media) => {
+          if (!media) return;
+          const stream = item.stream_url || item.streamUrl || media.getAttribute('src') || '';
+          if (stream) media.src = stream;
+          media.load?.();
+          if (media.paused) media.play?.().catch(() => {});
+          else media.pause?.();
+        },
+        onCopy: async () => {
+          const u = toAbsoluteUrl(item.stream_url);
+          const ok = await copyTextWithFallback(u);
+          if (ok) toast('good','Copied', 'Stream URL copied to clipboard');
+          else toast('warn','Clipboard', 'Copy failed — please copy manually.');
+        },
+        onTag: () => {
+          const panel = el('drawerTagPanel');
+          panel?.classList.toggle('open');
+          if (panel?.classList.contains('open')) el('drawerTagInput')?.focus();
+        },
+        onObs: async () => {
+          const assetUrl = toAbsoluteUrl(item.stream_url);
+          if (!assetUrl){
+            toast('warn','OBS', 'No stream URL available for this asset.');
+            return;
+          }
+          try{
+            const fit = el('obsFitMode')?.value || 'cover';
+            const slot = parseInt(el('obsSlotSelect')?.value || '1', 10) || 1;
+            const ensureExclusiveScene = !!el('obsExclusiveToggle')?.checked;
+            await obsReplaceAssetMediaUrl({
+              obsHost: '192.168.0.187',
+              sceneName: 'ASSET_MEDIA',
+              inputName: 'ASSET_MEDIA',
+              fit,
+              ensureExclusiveScene,
+              muted: false,
+              slot,
+              assetUrl,
+            });
+            toast('good','OBS', 'Browser source updated.');
+          }catch(e){
+            console.error('[OBS] push failed:', e);
+            toast('bad','OBS', e.message || 'OBS push failed.');
+          }
+        },
+        onSelect: () => {
+          const key = selectionKey(item);
+          if (!key) return;
+          if (state.selected.has(key)) {
+            state.selected.delete(key);
+            state.selectedOrder = state.selectedOrder.filter((entry) => entry !== key);
+          } else {
+            state.selected.add(key);
+            state.selectedOrder.push(key);
+          }
+          previewApi?.setSelectLabel(state.selected.has(key));
+          updateSelectionUI();
+          updateTagButtons();
+        },
+        onDelete: () => deletePaths([item]),
+        onClose: closeDrawer,
+        onPrev: () => focusNeighborInDrawer(-1),
+        onNext: () => focusNeighborInDrawer(1),
+      });
+      previewApi?.setSelectLabel(state.selected.has(selectionKey(item)));
 
       function renderDetails(){
         if (inspectorToken !== inspectorRequestToken) return;
         const currentKey = String(state.focused?.sha256 || state.focused?.relative_path || state.focused?.stream_url || '');
         if (currentKey !== currentInspectorKey) return;
-        const merged = [
-          ...detailSections.facts,
-          ...detailSections.primary,
-          ...detailSections.registry,
-        ];
-        kv.innerHTML = merged.map(([k,v]) => `
+        const merged = [...detailSections.facts, ...detailSections.primary, ...detailSections.registry];
+        if (!previewApi?.detailsPanel) return;
+        previewApi.detailsPanel.innerHTML = merged.map(([k,v]) => `
           <div class="k">${escapeHtml(k)}</div>
           <div class="v">${escapeHtml(v)}</div>
         `).join('');
@@ -5922,7 +6026,7 @@
           .then((payload) => {
             if (!payload || !payload.facts) return;
             const facts = payload.facts;
-            const factRows = [
+            detailSections.facts = [
               ['Duration', typeof facts.duration_s === 'number' ? `${facts.duration_s.toFixed(3)}s` : 'unknown'],
               ['Resolution', (facts.width && facts.height) ? `${facts.width}×${facts.height}` : 'unknown'],
               ['FPS', typeof facts.fps === 'number' ? String(facts.fps) : 'unknown'],
@@ -5930,7 +6034,6 @@
               ['Audio codec', facts.audio_codec || 'unknown'],
               ['Audio channels', facts.audio_channels ? `${facts.audio_channels}ch` : 'unknown'],
             ];
-            detailSections.facts = factRows;
             renderDetails();
           })
           .catch(() => {});
@@ -5963,76 +6066,6 @@
           .catch(() => {});
       }
 
-      // actions
-      el('drawerPlay').onclick = () => {
-        const media = preview.querySelector('video, audio');
-        if (!media) return;
-        const stream = item.stream_url || item.streamUrl || media.getAttribute('src') || '';
-        if (stream){
-          media.src = stream;
-        }
-        media.load?.();
-        media.play?.().catch(() => {});
-      };
-
-      el('drawerCopy').onclick = async () => {
-        const u = toAbsoluteUrl(item.stream_url);
-        const ok = await copyTextWithFallback(u);
-        if (ok){
-          toast('good','Copied', 'Stream URL copied to clipboard');
-        }else{
-          toast('warn','Clipboard', 'Copy failed — please copy manually.');
-        }
-      };
-
-      el('drawerTagToggle').onclick = () => {
-        const panel = el('drawerTagPanel');
-        panel?.classList.toggle('open');
-        if (panel?.classList.contains('open')){
-          el('drawerTagInput')?.focus();
-        }
-      };
-
-      el('drawerSendOBS').onclick = async () => {
-        const assetUrl = toAbsoluteUrl(item.stream_url);
-        if (!assetUrl){
-          toast('warn','OBS', 'No stream URL available for this asset.');
-          return;
-        }
-
-        const btn = el('drawerSendOBS');
-        const prevText = btn.textContent;
-        btn.textContent = '📡 Sending…';
-        btn.disabled = true;
-
-        try{
-          const fit = el('obsFitMode')?.value || 'cover';
-          const slot = parseInt(el('obsSlotSelect')?.value || '1', 10) || 1;
-          const ensureExclusiveScene = !!el('obsExclusiveToggle')?.checked;
-          await obsReplaceAssetMediaUrl({
-            obsHost: '192.168.0.187',
-            sceneName: 'ASSET_MEDIA',
-            inputName: 'ASSET_MEDIA',
-            fit,
-            ensureExclusiveScene,
-            muted: false,
-            slot,
-            assetUrl,
-          });
-          toast('good','OBS', 'Browser source updated.');
-          btn.textContent = '✅ Sent';
-          setTimeout(() => {
-            btn.textContent = prevText;
-          }, 900);
-        }catch(e){
-          console.error('[OBS] push failed:', e);
-          toast('bad','OBS', e.message || 'OBS push failed.');
-          btn.textContent = prevText;
-        }finally{
-          btn.disabled = false;
-        }
-      };
-
       el('drawerTagAdd').onclick = () => {
         const tags = parseTagInput(el('drawerTagInput').value);
         applyTagsToPaths([item.relative_path], tags, []);
@@ -6046,42 +6079,6 @@
         updateTagButtons();
       };
 
-      preview.querySelectorAll('[data-preview-play]').forEach((btn) => {
-        btn.addEventListener('click', (event) => {
-          event.stopPropagation();
-          el('drawerPlay').click();
-        });
-      });
-      preview.querySelector('[data-preview-copy]')?.addEventListener('click', (event) => {
-        event.stopPropagation();
-        el('drawerCopy').click();
-      });
-      preview.querySelector('[data-preview-tag]')?.addEventListener('click', (event) => {
-        event.stopPropagation();
-        el('drawerTagToggle').click();
-      });
-      preview.querySelector('[data-preview-obs]')?.addEventListener('click', (event) => {
-        event.stopPropagation();
-        el('drawerSendOBS').click();
-      });
-      preview.querySelector('[data-preview-delete]')?.addEventListener('click', (event) => {
-        event.stopPropagation();
-        el('drawerDelete').click();
-      });
-      preview.querySelector('[data-preview-close]')?.addEventListener('click', (event) => {
-        event.stopPropagation();
-        closeDrawer();
-      });
-      preview.querySelector('[data-preview-prev]')?.addEventListener('click', (event) => {
-        event.stopPropagation();
-        focusNeighborInDrawer(-1);
-      });
-      preview.querySelector('[data-preview-next]')?.addEventListener('click', (event) => {
-        event.stopPropagation();
-        focusNeighborInDrawer(1);
-      });
-
-      // open
       el('drawerTagPanel').classList.toggle('is-hidden', !item);
       loadDrawerTags(item);
       setInspectorOpen(true);
@@ -6366,10 +6363,6 @@
 
     // Drawer close
     el('drawerClose').addEventListener('click', closeDrawer);
-    el('drawerDelete').addEventListener('click', () => {
-      if (!state.focused) return;
-      deletePaths([state.focused]);
-    });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape'){
         if (ui.inspectorOpen){

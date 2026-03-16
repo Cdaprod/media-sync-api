@@ -864,8 +864,8 @@ select.control{
 .preview-shell{
   position: relative;
   min-height: 220px;
-  max-height: 52vh;
-  height: min(52vh, 420px);
+  max-height: 70vh;
+  height: min(70vh, 640px);
   display: flex;
   align-items: stretch;
   justify-content: stretch;
@@ -906,7 +906,7 @@ select.control{
   height: 100%;
   display:block;
   background: rgba(0,0,0,0.30);
-  max-height: 52vh;
+  max-height: 70vh;
   object-fit: contain;
 }
 
@@ -969,8 +969,8 @@ select.control{
   border: 1px solid rgba(255,255,255,0.2);
   background: rgba(0,0,0,0.36);
   color: rgba(255,255,255,0.9);
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
   cursor: pointer;
 }
@@ -1069,6 +1069,55 @@ select.control{
   accent-color: #9ca8ff;
 }
 
+.preview-obs-row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.preview-obs-row label{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.preview-obs-row select{
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(2,7,20,0.84);
+  color: var(--text);
+  padding: 4px 8px;
+}
+
+.preview-obs-check input{
+  width: 16px;
+  height: 16px;
+}
+
+.preview-details{
+  display: none;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(1,5,16,.72);
+  border-radius: 12px;
+  padding: 10px;
+  grid-template-columns: 112px 1fr;
+  gap: 6px 10px;
+  font-size: 12px;
+  max-height: 36vh;
+  overflow: auto;
+}
+
+.preview-details.open{
+  display: grid;
+}
+
+.preview-details .k{ color: var(--muted); }
+.preview-details .v{ color: var(--text); overflow-wrap:anywhere; }
+
 .preview-empty{
   display:flex;
   align-items:center;
@@ -1079,26 +1128,6 @@ select.control{
   font-size: 12px;
 }
 
-.kv{
-  border: 1px solid var(--border);
-  border-radius: var(--radius2);
-  background: rgba(255,255,255,0.04);
-  padding: 10px;
-  display:grid;
-  grid-template-columns: 120px 1fr;
-  gap: 8px 10px;
-  font-size: 12px;
-  align-items:center;
-}
-.kv .k{ color: var(--muted); }
-.kv .v{ color: var(--text); overflow-wrap:anywhere; }
-
-.drawer-actions{
-  display:flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items:center;
-}
 
 /* Bottom selection bar */
 .selectbar{
@@ -1264,3 +1293,9 @@ select.control{
   cursor: pointer;
 }
 .context-menu button:hover{ background: rgba(255,255,255,0.08); }
+
+@media (max-width: 860px){
+  .preview-shell{ height: min(72vh, 640px); }
+  .preview-control-row .preview-pill{ min-height: 38px; }
+  .preview-details{ max-height: 32vh; }
+}

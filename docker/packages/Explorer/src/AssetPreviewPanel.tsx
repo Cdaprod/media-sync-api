@@ -18,6 +18,24 @@ export function AssetPreviewPanel({
   onPrev,
   onNext,
   onClose,
+  metadataRows = [],
+  detailsOpen = false,
+  onDetailsToggle,
+  selected = false,
+  onSkipBack,
+  onSkipForward,
+  onObs,
+  onTag,
+  onResolve,
+  onProgramMonitor,
+  showResolve = false,
+  showProgramMonitor = false,
+  obsMode = 'cover',
+  obsSlot = '1',
+  obsExclusive = false,
+  onObsModeChange,
+  onObsSlotChange,
+  onObsExclusiveChange,
 }: {
   asset: PreviewAsset | null;
   onMediaReady?: (el: HTMLVideoElement | HTMLAudioElement | null) => void;
@@ -27,6 +45,24 @@ export function AssetPreviewPanel({
   onPrev?: () => void;
   onNext?: () => void;
   onClose?: () => void;
+  metadataRows?: Array<[string, string]>;
+  detailsOpen?: boolean;
+  onDetailsToggle?: () => void;
+  selected?: boolean;
+  onSkipBack?: () => void;
+  onSkipForward?: () => void;
+  onObs?: () => void;
+  onTag?: () => void;
+  onResolve?: () => void;
+  onProgramMonitor?: () => void;
+  showResolve?: boolean;
+  showProgramMonitor?: boolean;
+  obsMode?: 'cover' | 'fit' | 'fill';
+  obsSlot?: string;
+  obsExclusive?: boolean;
+  onObsModeChange?: (value: 'cover' | 'fit' | 'fill') => void;
+  onObsSlotChange?: (value: string) => void;
+  onObsExclusiveChange?: (value: boolean) => void;
 }) {
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -75,9 +111,9 @@ export function AssetPreviewPanel({
       }
     };
     const scheduleHide = () => {
-      if (media.paused) return;
+      if (media.paused || detailsOpen) return;
       if (hideTimer) window.clearTimeout(hideTimer);
-      hideTimer = window.setTimeout(() => setOverlayVisible(false), 2200);
+      hideTimer = window.setTimeout(() => setOverlayVisible(false), 2400);
     };
 
     media.addEventListener('loadedmetadata', onLoadedMetadata);
@@ -98,7 +134,12 @@ export function AssetPreviewPanel({
       media.removeEventListener('ended', onEnded);
       if (hideTimer) window.clearTimeout(hideTimer);
     };
-  }, [asset?.duration, asset?.id, volume]);
+  }, [asset?.duration, asset?.id, detailsOpen, volume]);
+
+  useEffect(() => {
+    if (!detailsOpen) return;
+    setOverlayVisible(true);
+  }, [detailsOpen]);
 
   useEffect(() => {
     if (asset?.kind !== 'audio') return;
@@ -155,6 +196,15 @@ export function AssetPreviewPanel({
     if (!media) return;
     media.currentTime = value;
     setCurrentTime(value);
+  };
+
+  const seekBy = (offset: number) => {
+    const media = mediaRef.current;
+    if (!media) return;
+    const cap = Number.isFinite(media.duration) ? media.duration : duration;
+    const next = Math.min(Math.max((media.currentTime || 0) + offset, 0), Math.max(cap, 0));
+    media.currentTime = next;
+    setCurrentTime(next);
   };
 
   const mediaNode = useMemo(() => {
@@ -225,10 +275,17 @@ export function AssetPreviewPanel({
             </>
           ) : null}
           <div className="preview-control-row">
+            {playable ? <button className="preview-pill" type="button" onClick={onSkipBack || (() => seekBy(-10))}>↺ 10s</button> : null}
             {playable ? <button className="preview-pill primary" type="button" onClick={handleTogglePlay}>{isPlaying ? '❚❚ Pause' : '▶ Play'}</button> : null}
+            {playable ? <button className="preview-pill" type="button" onClick={onSkipForward || (() => seekBy(10))}>10s ↻</button> : null}
             {onCopy ? <button className="preview-pill" type="button" onClick={onCopy}>⧉ Copy stream URL</button> : null}
-            {onSelect ? <button className="preview-pill" type="button" onClick={onSelect}>± Select</button> : null}
+            {onSelect ? <button className="preview-pill" type="button" onClick={onSelect}>{selected ? '− Deselect' : '+ Select'}</button> : null}
             {onDelete ? <button className="preview-pill danger" type="button" onClick={onDelete}>🗑 Delete</button> : null}
+            {onTag ? <button className="preview-pill" type="button" onClick={onTag}>🏷 Tag</button> : null}
+            {onObs ? <button className="preview-pill" type="button" onClick={onObs}>📺 OBS</button> : null}
+            {showResolve && onResolve ? <button className="preview-pill" type="button" onClick={onResolve}>⇢ Resolve</button> : null}
+            {showProgramMonitor && onProgramMonitor ? <button className="preview-pill" type="button" onClick={onProgramMonitor}>➕ Program</button> : null}
+            {onDetailsToggle ? <button className="preview-pill" type="button" onClick={onDetailsToggle}>{detailsOpen ? 'Hide details' : 'Show details'}</button> : null}
             {playable ? (
               <label className="preview-volume">
                 🔊
@@ -236,6 +293,41 @@ export function AssetPreviewPanel({
               </label>
             ) : null}
           </div>
+          {onObsModeChange || onObsSlotChange || onObsExclusiveChange ? (
+            <div className="preview-obs-row">
+              <label>
+                OBS mode
+                <select value={obsMode} onChange={(event) => onObsModeChange?.(event.target.value as 'cover' | 'fit' | 'fill')}>
+                  <option value="cover">Cover</option>
+                  <option value="fit">Fit</option>
+                  <option value="fill">Fill</option>
+                </select>
+              </label>
+              <label>
+                Slot
+                <select value={obsSlot} onChange={(event) => onObsSlotChange?.(event.target.value)}>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </label>
+              <label className="preview-obs-check">
+                <input type="checkbox" checked={obsExclusive} onChange={(event) => onObsExclusiveChange?.(event.target.checked)} />
+                Exclusive
+              </label>
+            </div>
+          ) : null}
+          {metadataRows.length ? (
+            <div className={`preview-details ${detailsOpen ? 'open' : ''}`}>
+              {metadataRows.map(([key, value]) => (
+                <React.Fragment key={`${key}:${value}`}>
+                  <div className="k">{key}</div>
+                  <div className="v">{value}</div>
+                </React.Fragment>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

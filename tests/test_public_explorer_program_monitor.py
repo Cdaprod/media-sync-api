@@ -69,7 +69,7 @@ def test_explorer_ios_touch_guards_and_play_handler():
 def test_explorer_drawer_uses_overlay_preview_renderer_without_fullscreen_takeover():
     html = Path('public/explorer.html').read_text(encoding='utf-8')
     assert 'function buildPreviewModel(item)' in html
-    assert 'function renderDrawerPreview(preview, item)' in html
+    assert 'function renderDrawerPreview(preview, item, handlers = {})' in html
     assert 'preview-shell' in html
     assert 'preview-overlay' in html
     assert 'preview-wave' in html
@@ -166,7 +166,7 @@ def test_explorer_delete_requires_confirm_and_scope_aware_reload():
     assert 'wanted.has(ref.relative_path)' not in html
     assert "deletePaths(items)" in html
     assert "deletePaths(selectedItemsOrdered())" in html
-    assert "deletePaths([state.focused]);" in html
+    assert "onDelete: () => deletePaths([item])," in html
     assert 'function reloadMediaForCurrentScope()' in html
     assert "else if (state.mediaScope === 'all') await loadAllMedia();" in html
     assert 'await reloadMediaForCurrentScope();' in html

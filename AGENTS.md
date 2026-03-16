@@ -275,6 +275,14 @@ If anything conflicts:
 - Container filesystem is disposable.
 - LAN-only first. Everything else is secondary.
 
+### Latest Implementation Notes (2026-03-16)
+- Preview drawer convergence pass completed for both static and Next.js explorers: overlay controls now own play/pause, seek, volume, prev/next, copy/select/delete actions, and old duplicate control rows were removed.
+- Drawer metadata/details were migrated into overlay-capable preview detail sections so media can use most of the drawer height while preserving existing metadata fetch/merge behavior.
+- Static explorer prev/next navigation now follows current filtered ordering (`filteredMedia()`) to stay aligned with on-screen explorer ordering semantics.
+- Next.js/package preview overlay now exposes real action callbacks for OBS, tag, resolve, and program-monitor handoff via ExplorerApp-owned handlers (no legacy row reintroduction).
+- Package overlay bottom stack now includes functional OBS settings controls (mode cover/fit/fill, slot, exclusive toggle) wired into preview action flow.
+- Branch-delta intake from `me/explorer-shaders-and-compose-api-upgrades` remains deferred because no local/remote refs are present in this workspace; keep integration pending once refs are available.
+
 ### Latest Implementation Notes (2024-06-06)
 - FastAPI app lives under `app/` with routers for projects, upload, and reindex.
 - Dedupe uses sqlite stored at `<project>/_manifest/manifest.db` with sha256 primary key.

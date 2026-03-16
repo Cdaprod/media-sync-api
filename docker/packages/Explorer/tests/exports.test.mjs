@@ -53,10 +53,33 @@ test('preview adapter and panel keep drawer-based preview contract', () => {
   assert.ok(panel.includes('preview-center-play'));
   assert.ok(panel.includes('preview-scrubber'));
   assert.ok(panel.includes('preview-icon-btn'));
+  assert.ok(panel.includes('onObs'));
+  assert.ok(panel.includes('onTag'));
+  assert.ok(panel.includes('onResolve'));
+  assert.ok(panel.includes('onProgramMonitor'));
+  assert.ok(panel.includes('preview-obs-row'));
+  assert.ok(panel.includes('obsMode'));
   assert.ok(styles.includes('.preview-shell'));
   assert.ok(styles.includes('.preview-overlay.fade'));
   assert.ok(styles.includes('.preview-control-row'));
   assert.ok(styles.includes('.preview-center-play'));
+  assert.ok(styles.includes('.preview-obs-row'));
+});
+
+
+test('package preview overlay wires semantic action callbacks from ExplorerApp', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('handleFocusedObs'));
+  assert.ok(content.includes('handleFocusedTag'));
+  assert.ok(content.includes('handleFocusedResolve'));
+  assert.ok(content.includes('handleFocusedProgramMonitor'));
+  assert.ok(content.includes('onObs={() => { void handleFocusedObs(); }}'));
+  assert.ok(content.includes('onTag={() => { void handleFocusedTag(); }}'));
+  assert.ok(content.includes('onResolve={() => { void handleFocusedResolve(); }}'));
+  assert.ok(content.includes('onProgramMonitor={() => { void handleFocusedProgramMonitor(); }}'));
+  assert.ok(content.includes('obsMode={previewObsMode}'));
+  assert.ok(content.includes('onObsModeChange={setPreviewObsMode}'));
 });
 
 test('normalized preview asset declaration is placed after resolveAssetUrl callback', () => {
