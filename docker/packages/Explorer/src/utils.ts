@@ -71,10 +71,31 @@ export function buildPreviewMediaDescriptor(item: MediaItem, kind: string | null
 } {
   const normalizedKind = normalizePreviewKind(kind);
   const streamUrl = String(item.stream_url || (item as MediaItem & { streamUrl?: string }).streamUrl || '');
-  const thumbUrl = String(item.thumb_url || item.thumbnail_url || '');
+  const thumbUrl = resolveThumbnailUrl(item);
   const source = normalizedKind === 'image' ? (streamUrl || thumbUrl) : streamUrl;
   const title = String(item.relative_path || 'unnamed').split('/').pop() || 'unnamed';
   return { kind: normalizedKind, source, title };
+}
+
+
+
+export function buildThumbCacheKey(item: MediaItem): string {
+  const project = item.project_name || item.project || '';
+  const source = item.project_source || item.source || '';
+  const rel = item.relative_path || '';
+  const sha = item.sha256 || item.hash || '';
+  return [source, project, rel, sha].filter(Boolean).join('|');
+}
+
+export function resolveThumbnailUrl(item: MediaItem): string {
+  const preferred = String(item.thumbnail_url || '').trim();
+  if (preferred) return preferred;
+  const legacy = String(item.thumb_url || '').trim();
+  if (legacy) return legacy;
+  const kind = guessKind(item);
+  return kind === 'image'
+    ? String(item.stream_url || (item as MediaItem & { streamUrl?: string }).streamUrl || '').trim()
+    : '';
 }
 
 export function kindBadgeClass(kind: string): string {

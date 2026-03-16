@@ -21,6 +21,7 @@ import {
   buildPreviewMediaDescriptor,
   buildProgramMonitorDescriptor,
   buildStreamPathFromItem,
+  buildThumbCacheKey,
   canUseObsIntegration,
   canUseProgramMonitorIntegration,
   copyTextWithFallback,
@@ -28,6 +29,7 @@ import {
   formatBytes,
   guessKind,
   normalizePreviewKind,
+  resolveThumbnailUrl,
   inferApiBaseUrl,
   kindBadgeClass,
   loadExplorerMockAssets,
@@ -492,14 +494,6 @@ const SORT_LABELS: Record<SortKey, string> = {
   'name-desc': 'Name Z→A',
   'size-desc': 'Size big→small',
   'size-asc': 'Size small→big',
-};
-
-const getThumbCacheKey = (item: MediaItem) => {
-  const project = item.project_name || item.project || '';
-  const source = item.project_source || item.source || '';
-  const rel = item.relative_path || '';
-  const sha = item.sha256 || item.hash || '';
-  return [source, project, rel, sha].filter(Boolean).join('|');
 };
 
 function useToastQueue() {
@@ -2365,14 +2359,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
-                  const thumbKey = getThumbCacheKey(item);
+                  const thumbKey = buildThumbCacheKey(item);
                   const cachedOrient = getCachedOrientation(thumbKey || item.relative_path || '');
                   const itemOrient = inferOrientationFromItem(item);
                   const orient = itemOrient || cachedOrient || 'square';
                   const orientLocked = Boolean(itemOrient || cachedOrient);
-                  const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-                    || item.thumbnail_url
-                    || (kind === 'image' ? item.stream_url : undefined));
+                  const rawThumbUrl = normalizeThumbUrl(resolveThumbnailUrl(item));
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;
@@ -2466,9 +2458,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
-                  const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-                    || item.thumbnail_url
-                    || (kind === 'image' ? item.stream_url : undefined));
+                  const rawThumbUrl = normalizeThumbUrl(resolveThumbnailUrl(item));
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
                   const safeThumbUrl = fallbackThumb;

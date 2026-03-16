@@ -1,3 +1,11 @@
+## 2026-03-16 — Dual-path thumbnail strategy rollout (completed)
+- [x] Aligned media API payload contract to expose canonical `thumbnail_url` plus backward-compatible `thumb_url` alias.
+- [x] Updated static explorer thumbnail resolution order to prefer backend thumbnails first, then image stream fallback, then SVG placeholder.
+- [x] Updated Explorer package thumbnail resolution + cache-key semantics to match static behavior (`source|project|relative_path|sha256`).
+- [x] Added/updated regression tests for API thumbnail contract, package thumbnail prioritization/cache keys, and static server-first thumbnail branching.
+- [x] Documented server-first thumbnail behavior in `docker/packages/Explorer/README.md`.
+- [ ] Follow-up: persist thumbnail state cache to Cache Storage for static explorer to survive full reloads while keeping memory usage bounded.
+
 ## 2026-03-16 — Package explorer screenshot parity follow-up (active)
 - [x] Added package screenshot runbook to `docker/packages/Explorer/README.md` with `?mock=1` route + route-content check guardrail.
 - [x] Extended package README contract tests to assert package screenshot URL/content probes and preview-panel capture instruction.

@@ -104,6 +104,46 @@ test('preview descriptor helper normalizes kind and resolves image fallback sour
   assert.equal(descriptor.title, 'clip.jpg');
 });
 
+
+
+test('thumbnail resolver prefers canonical backend field and stable cache key shape', () => {
+  const utils = loadTsModule(path.join(packageRoot, 'src', 'utils.ts'));
+  const item = {
+    project_name: 'P10-Thumbs',
+    project_source: 'nas-a',
+    relative_path: 'ingest/originals/shot.mov',
+    sha256: 'b'.repeat(64),
+    thumb_url: '/thumbnails/legacy.jpg',
+    thumbnail_url: '/thumbnails/canonical.jpg',
+    stream_url: '/media/P10-Thumbs/ingest/originals/shot.mov',
+  };
+  assert.equal(utils.resolveThumbnailUrl(item), '/thumbnails/canonical.jpg');
+  assert.equal(
+    utils.buildThumbCacheKey(item),
+    `nas-a|P10-Thumbs|ingest/originals/shot.mov|${'b'.repeat(64)}`,
+  );
+});
+
+test('thumbnail resolver falls back safely when server thumbnail is absent', () => {
+  const utils = loadTsModule(path.join(packageRoot, 'src', 'utils.ts'));
+  assert.equal(
+    utils.resolveThumbnailUrl({
+      relative_path: 'ingest/originals/still.jpg',
+      stream_url: '/media/P1/ingest/originals/still.jpg',
+      kind: 'image',
+    }),
+    '/media/P1/ingest/originals/still.jpg',
+  );
+  assert.equal(
+    utils.resolveThumbnailUrl({
+      relative_path: 'ingest/originals/clip.mov',
+      stream_url: '/media/P1/ingest/originals/clip.mov',
+      kind: 'video',
+    }),
+    '',
+  );
+});
+
 test('mock asset loader prefers fixture paths before embedded fallback', async () => {
   const utils = loadTsModule(path.join(packageRoot, 'src', 'utils.ts'));
   const calls = [];

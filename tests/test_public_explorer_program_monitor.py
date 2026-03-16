@@ -914,3 +914,13 @@ def test_explorer_preview_drawer_hook_cluster_and_tag_panel_contract_present():
     assert "panel?.classList.toggle('open');" in html
     assert "el('drawerTagInput')?.focus();" in html
     assert "el('drawerBackdrop').addEventListener('click', closeDrawer);" in html
+
+
+def test_explorer_server_thumbnail_priority_contract_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'function resolveThumbnailUrl(item, kind){' in html
+    assert "const canonical = String(item?.thumbnail_url || '').trim();" in html
+    assert "const legacy = String(item?.thumb_url || '').trim();" in html
+    assert "return kind === 'image' ? String(item?.stream_url || item?.streamUrl || '').trim() : '';" in html
+    assert 'const thumbUrl = normalizeThumbUrl(resolveThumbnailUrl(it, kind));' in html
+    assert 'const thumbKey = thumbCacheKey(it);' in html
