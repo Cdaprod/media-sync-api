@@ -79,6 +79,21 @@ The Explorer Actions panel and selection bar now include a **Compose** flow that
 - The compose modal reuses existing in-app modal patterns to collect output project/source/name.
 - On success, Explorer shows the created artifact summary in toast feedback and reloads media using existing scope-aware logic (`current project` or `all projects`).
 
+
+## Thumbnail strategy (server-first with safe fallback)
+
+Both explorer implementations now use the same deterministic thumbnail order:
+
+1. `thumbnail_url` (canonical backend field)
+2. `thumb_url` (legacy alias)
+3. image-only fallback to `stream_url`
+4. local SVG placeholder when loading fails
+
+Notes:
+- API payloads include both `thumbnail_url` and `thumb_url` so older clients remain compatible while newer clients use the canonical field.
+- Thumbnail cache/orientation keys are stable across sessions and use `source|project|relative_path|sha256`.
+- Frame extraction remains a safe fallback behavior only when no server thumbnail URL is available.
+
 ## Testing
 
 ```bash

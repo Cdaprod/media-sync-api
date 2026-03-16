@@ -3327,6 +3327,14 @@
       return rawUrl;
     }
 
+    function resolveThumbnailUrl(item, kind){
+      const canonical = String(item?.thumbnail_url || '').trim();
+      if (canonical) return canonical;
+      const legacy = String(item?.thumb_url || '').trim();
+      if (legacy) return legacy;
+      return kind === 'image' ? String(item?.stream_url || item?.streamUrl || '').trim() : '';
+    }
+
     const THUMB_APPLY_PER_FRAME = 48;
     let thumbApplyScheduled = false;
     const thumbApplyQueue = [];
@@ -5010,7 +5018,7 @@
         const orient = itemOrient || cachedOrient || 'square';
         const orientLocked = Boolean(itemOrient || cachedOrient);
         const fallbackThumb = buildThumbFallback(kind);
-        const thumbUrl = normalizeThumbUrl(it.thumb_url || it.thumbnail_url || (kind === 'image' ? it.stream_url : null));
+        const thumbUrl = normalizeThumbUrl(resolveThumbnailUrl(it, kind));
         const safeThumbUrl = (cachedThumbState?.state === 'loaded' && cachedThumbState.src)
           ? cachedThumbState.src
           : (thumbUrl || fallbackThumb);

@@ -30,6 +30,8 @@ def test_list_media_and_stream(client: TestClient, env_settings: Path) -> None:
     assert len(data["media"]) == 1
     media_entry = data["media"][0]
     assert media_entry["relative_path"] == "ingest/originals/sample.mov"
+    assert media_entry["thumbnail_url"].startswith(f"/thumbnails/{project_name}/")
+    assert media_entry["thumb_url"] == media_entry["thumbnail_url"]
     stream_url = media_entry["stream_url"]
 
     streamed = client.get(stream_url)
@@ -75,9 +77,9 @@ def test_thumbnail_endpoint_serves_cached_file(client: TestClient, env_settings:
     listing = client.get(f"/api/projects/{project_name}/media")
     assert listing.status_code == 200
     media_entry = listing.json()["media"][0]
-    thumb_url = media_entry.get("thumb_url")
-    if not thumb_url:
-        thumb_url = f"/thumbnails/{project_name}/{media_entry['sha256']}.jpg"
+    thumb_url = media_entry.get("thumbnail_url")
+    assert thumb_url
+    assert media_entry.get("thumb_url") == thumb_url
     assert thumb_url.startswith(f"/thumbnails/{project_name}/")
 
     sha = media_entry["sha256"]

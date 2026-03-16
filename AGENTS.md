@@ -1923,3 +1923,9 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Added explicit package visual-QA screenshot guidance in `docker/packages/Explorer/README.md` for `http://127.0.0.1:8790/?mock=1`, including status/content guardrails (`data-ui-hook="explorer-app-shell"`) and a drawer-open preview capture note for style review.
 - Expanded `docker/packages/Explorer/tests/utils-behavior.test.mjs` README contract assertions to lock both static and package screenshot routes plus preview-panel capture instructions.
 - Captured package explorer mock screenshots for closed and open preview-panel states to support style inspection feedback cycles.
+
+### Latest Implementation Notes (2026-03-16)
+- Media API project media payloads now publish `thumbnail_url` as the canonical thumbnail field and keep `thumb_url` as a compatibility alias pointing to the same server thumbnail route.
+- Static and Next.js explorers now resolve thumbnail sources with identical server-first order (`thumbnail_url` -> `thumb_url` -> image `stream_url` fallback) and share stable cache-key semantics (`source|project|relative_path|sha256`).
+- Added regression coverage for API thumbnail-field parity, package thumbnail prioritization/cache keys, and static explorer server-first thumbnail branch wiring.
+

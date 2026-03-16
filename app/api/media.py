@@ -245,6 +245,22 @@ def _build_thumbnail_url(project: str, sha256: str, source: str | None) -> str:
     return f"/thumbnails/{quote(project)}/{encoded_name}" + suffix
 
 
+def _apply_thumbnail_fields(item: Dict[str, object], project: str, source: str | None) -> None:
+    """Normalize media payload thumbnail fields.
+
+    Contract:
+    - `thumbnail_url` is the canonical field for explorer clients.
+    - `thumb_url` is retained as a backward-compatible alias.
+    """
+
+    sha = item.get("sha256")
+    if not isinstance(sha, str):
+        return
+    url = _build_thumbnail_url(project, sha, source)
+    item["thumbnail_url"] = url
+    item["thumb_url"] = url
+
+
 def _is_thumbable_media(path: Path) -> bool:
     return path.suffix.lower() in THUMBNAIL_EXTENSIONS
 
@@ -486,9 +502,7 @@ async def list_media(project_name: str, source: str | None = None):
         item["stream_url"] = _build_stream_url(resolved.name, safe_relative, resolved.source_name)
         item["download_url"] = _build_download_url(resolved.name, safe_relative, resolved.source_name)
         if _is_thumbable_media(Path(safe_relative)):
-            sha = item.get("sha256")
-            if isinstance(sha, str):
-                item["thumb_url"] = _build_thumbnail_url(resolved.name, sha, resolved.source_name)
+            _apply_thumbnail_fields(item, resolved.name, resolved.source_name)
         sha = item.get("sha256")
         if isinstance(sha, str):
             item["asset_id"] = _stable_asset_id(sha)
