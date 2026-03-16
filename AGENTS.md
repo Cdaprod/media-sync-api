@@ -275,6 +275,22 @@ If anything conflicts:
 - Container filesystem is disposable.
 - LAN-only first. Everything else is secondary.
 
+### Latest Implementation Notes (2026-03-16)
+- Removed the remaining drawer inner-header framing for preview in static/package explorers so the immersive preview is the direct drawer surface (close remains in overlay controls).
+- Removed the center default-play bubble so paused previews no longer show the large blocking play affordance.
+- Prev/next overlay navigation now requests immediate video playback (or first-frame seek fallback) to avoid black-screen transitions when stepping assets.
+- Fixed overlay hit-testing in both static and package explorers by making `.preview-overlay` the interactive layer (`pointer-events: auto`) while keeping hidden-state passthrough (`.fade` disables pointer events).
+- Removed the legacy inner preview wrapper container (`.preview`) so the immersive black preview shell is now the direct drawer preview surface rather than a nested boxed child.
+- Increased overlay nav button hit targets to improve iPhone Safari tap reliability and revalidated package build/tests after DOM/CSS simplification.
+- Fixed Next.js package build/type regression in `handleFocusedResolve` by passing `sourceName` as `string | undefined` (not `null`) and narrowing `media_rel_paths` to `string[]` with an explicit type predicate.
+- Verified package production build (`npm run build`) now completes successfully and reran package/static regression checks.
+- Preview drawer convergence pass completed for both static and Next.js explorers: overlay controls now own play/pause, seek, volume, prev/next, copy/select/delete actions, and old duplicate control rows were removed.
+- Drawer metadata/details were migrated into overlay-capable preview detail sections so media can use most of the drawer height while preserving existing metadata fetch/merge behavior.
+- Static explorer prev/next navigation now follows current filtered ordering (`filteredMedia()`) to stay aligned with on-screen explorer ordering semantics.
+- Next.js/package preview overlay now exposes real action callbacks for OBS, tag, resolve, and program-monitor handoff via ExplorerApp-owned handlers (no legacy row reintroduction).
+- Package overlay bottom stack now includes functional OBS settings controls (mode cover/fit/fill, slot, exclusive toggle) wired into preview action flow.
+- Branch-delta intake from `me/explorer-shaders-and-compose-api-upgrades` remains deferred because no local/remote refs are present in this workspace; keep integration pending once refs are available.
+
 ### Latest Implementation Notes (2024-06-06)
 - FastAPI app lives under `app/` with routers for projects, upload, and reindex.
 - Dedupe uses sqlite stored at `<project>/_manifest/manifest.db` with sha256 primary key.
@@ -1798,3 +1814,6 @@ The matching **README.md skeleton** and a correct **docker-compose.yml + Dockerf
 - Package Explorer now uses `normalizePreviewAsset` + `AssetPreviewPanel` modules to keep preview rendering maintainable and adapter-oriented; drawer business actions remain owned by `ExplorerApp`.
 - Fixed a package Explorer runtime ordering bug: `normalizedPreviewAsset` now initializes after `resolveAssetUrl` callback declaration to prevent TDZ render failures in `ExplorerApp`.
 - Continued preview phase-2 convergence: static and package drawers now include center-play affordances, top overlay nav controls (prev/next/close), integrated bottom-stack playback controls (time/scrubber/volume), and in-preview action pills mapped back to existing drawer business logic.
+- Package preview media surface now toggles playback on tap/click via `handleMediaTapToggle`, matching static Explorer tap-to-play affordance for video/audio assets.
+- Package explorer drawer sizing was rebalanced for immersive previews: wider drawer (`min(640px, 100vw)`), tighter body spacing, flex-grown preview shell/media, removed legacy `70vh` preview caps, and a subtle non-interactive atmospheric edge overlay (`.preview-shell::after`) to reduce boxed-card framing while preserving overlay control interactivity.
+- Regression hotfix pass for drawer previews in static/package explorers: restored background tap-to-toggle playback with control-target guards, added close/asset-switch media teardown so hidden drawers cannot keep playing audio, and strengthened a mobile-safe atmospheric edge fallback so iPhone Safari retains visible falloff without heavy effects.

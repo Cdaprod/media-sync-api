@@ -336,6 +336,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
@@ -351,13 +352,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [resolveNewName, setResolveNewName] = useState('');
   const [resolveMode, setResolveMode] = useState('import');
 
+  const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');
+  const [previewObsSlot, setPreviewObsSlot] = useState('1');
+  const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
+  const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
+
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const mediaScrollRef = useRef<HTMLDivElement | null>(null);
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
-  const drawerMediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
 
   const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
@@ -479,6 +484,30 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!focused) return null;
     return normalizePreviewAsset(focused, resolveAssetUrl);
   }, [focused, resolveAssetUrl]);
+
+  const previewMetadataRows = useMemo<Array<[string, string]>>(() => {
+    if (!focused) return [];
+    const kind = guessKind(focused);
+    const projectName = activeProject?.name || focused.project_name || '(none)';
+    const projectSource = activeProject?.source || focused.project_source || '(primary)';
+    const rows = [
+      ['Kind', kind],
+      ['Size', formatBytes(focused.size)],
+      ['Stream', resolveAssetUrl(focused.stream_url) || '(none)'],
+      ['Source', projectSource],
+      ['Project', projectName],
+      ['Relative', focused.relative_path || '(none)'],
+      ['MIME', focused.mime || focused.content_type || ''],
+      ['Hash', focused.sha256 || focused.hash || ''],
+      ['Created', focused.created_at || focused.createdAt || ''],
+      ['Modified', focused.updated_at || focused.updatedAt || ''],
+      ['Duration', focused.duration ? `${focused.duration}s` : ''],
+      ['Resolution', focused.width && focused.height ? `${focused.width}×${focused.height}` : ''],
+      ['Tags', formatListValue(focused.tags)],
+      ['AI Tags', formatListValue(focused.ai_tags ?? focused.aiTags)],
+    ] satisfies Array<[string, string]>;
+    return rows.filter((row): row is [string, string] => String(row[1] || '').trim().length > 0);
+  }, [activeProject?.name, activeProject?.source, focused, resolveAssetUrl]);
 
   const updateSidebarMode = useCallback(() => {
     const mobile = window.matchMedia('(max-width: 860px)').matches;
@@ -640,11 +669,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const openDrawer = useCallback((item: MediaItem) => {
     setFocused(item);
+    setPreviewDetailsOpen(false);
     setInspectorOpen(true);
   }, []);
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
+    setFocused(null);
+    setPreviewDetailsOpen(false);
   }, []);
 
   const focusRelative = useCallback((offset: number) => {
@@ -654,6 +686,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (currentIndex < 0) return;
     const nextIndex = (currentIndex + offset + filteredMedia.length) % filteredMedia.length;
     setFocused(filteredMedia[nextIndex] || focused);
+    setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, filteredMedia, focused]);
 
   const handleUpload = useCallback(async () => {
@@ -908,6 +941,140 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('bad', 'Resolve', message);
     }
   }, [activeProject, addToast, api, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName, selected, selectionItems]);
+
+
+  const handleFocusedTag = useCallback(async () => {
+    if (!focused) {
+      addToast('warn', 'Tag', 'Open a preview first');
+      return;
+    }
+    const addInput = window.prompt('Tags to add (comma separated):', '');
+    if (addInput == null) return;
+    const removeInput = window.prompt('Tags to remove (comma separated):', '');
+    if (removeInput == null) return;
+    const addTags = addInput.split(',').map((tag) => tag.trim()).filter(Boolean);
+    const removeTags = removeInput.split(',').map((tag) => tag.trim()).filter(Boolean);
+    if (!addTags.length && !removeTags.length) {
+      addToast('warn', 'Tag', 'Nothing to add or remove');
+      return;
+    }
+    const ref = toAssetRef(focused);
+    if (!ref) {
+      addToast('warn', 'Tag', 'Unable to resolve focused media path');
+      return;
+    }
+    try {
+      await api.bulkTagMedia([ref], addTags, removeTags);
+      addToast('good', 'Tag', 'Updated tags for focused asset');
+      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
+      else await loadMedia(activeProject);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Tag update failed';
+      addToast('bad', 'Tag', message);
+    }
+  }, [activeProject, addToast, api, focused, loadAllMedia, loadMedia, mediaScope, toAssetRef]);
+
+  const handleFocusedResolve = useCallback(async () => {
+    if (!focused) {
+      addToast('warn', 'Resolve', 'Open a preview first');
+      return;
+    }
+    const projectName = activeProject?.name || focused.project_name;
+    if (!projectName) {
+      addToast('warn', 'Resolve', 'Select a project first');
+      return;
+    }
+    const sourceName = activeProject?.source || focused.project_source || undefined;
+    let projectValue = projectName;
+    if (resolveProjectMode === '__new__') projectValue = '__new__';
+    else if (resolveProjectMode === '__select__') projectValue = '__select__';
+    else if (resolveProjectName.trim()) projectValue = resolveProjectName.trim();
+    try {
+      const result = await api.sendResolve({
+        project: projectValue,
+        new_project_name: resolveProjectMode === '__new__' ? resolveNewName.trim() || null : null,
+        media_rel_paths: [focused.relative_path].filter((value): value is string => Boolean(value)),
+        mode: resolveMode || 'import',
+      }, sourceName);
+      addToast('good', 'Resolve', `Sent. Job: ${result.job_id || 'ok'}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Resolve request failed';
+      addToast('bad', 'Resolve', message);
+    }
+  }, [activeProject?.name, activeProject?.source, addToast, api, focused, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName]);
+
+  const handleFocusedProgramMonitor = useCallback(async () => {
+    if (!focused) {
+      addToast('warn', 'Program Monitor', 'Open a preview first');
+      return;
+    }
+    const streamUrl = resolveAssetUrl(focused.stream_url);
+    if (!streamUrl) {
+      addToast('warn', 'Program Monitor', 'No stream URL available');
+      return;
+    }
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const absoluteStream = toAbsoluteUrl(streamUrl, origin);
+    const monitorUrl = new URL('/program-monitor/index.html', origin).toString();
+    const payload = {
+      type: 'media-sync/program-monitor/import',
+      items: [absoluteStream],
+      source: 'explorer-overlay',
+      sent_at: new Date().toISOString(),
+    };
+    const target = window.open(monitorUrl, '_blank', 'noopener,noreferrer');
+    if (!target) {
+      addToast('warn', 'Program Monitor', 'Allow popups to hand off media');
+      return;
+    }
+    const targetOrigin = new URL(monitorUrl).origin;
+    window.setTimeout(() => {
+      try {
+        target.postMessage(payload, targetOrigin);
+      } catch {
+        addToast('warn', 'Program Monitor', 'Unable to deliver handoff payload');
+      }
+    }, 220);
+    addToast('good', 'Program Monitor', 'Sent focused asset to monitor');
+  }, [addToast, focused, resolveAssetUrl]);
+
+  const handleFocusedObs = useCallback(async () => {
+    if (!focused) {
+      addToast('warn', 'OBS', 'Open a preview first');
+      return;
+    }
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const assetUrl = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
+    if (!assetUrl) {
+      addToast('warn', 'OBS', 'No stream URL available for this asset');
+      return;
+    }
+    const obsPush = (window as Window & {
+      obsPushBrowserMedia?: (opts: {
+        assetUrl: string;
+        fit?: string;
+        slot?: number;
+        ensureExclusiveScene?: boolean;
+      }) => Promise<void>;
+    }).obsPushBrowserMedia;
+    if (!obsPush) {
+      addToast('warn', 'OBS', 'OBS push helper is unavailable in this surface');
+      return;
+    }
+    const fit = previewObsMode === 'fit' ? 'contain' : (previewObsMode === 'fill' ? 'fill' : 'cover');
+    try {
+      await obsPush({
+        assetUrl,
+        fit,
+        slot: Number.parseInt(previewObsSlot, 10) || 1,
+        ensureExclusiveScene: previewObsExclusive,
+      });
+      addToast('good', 'OBS', 'Browser source updated');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'OBS push failed';
+      addToast('bad', 'OBS', message);
+    }
+  }, [addToast, focused, previewObsExclusive, previewObsMode, previewObsSlot, resolveAssetUrl]);
 
   const handleDropUpload = useCallback(
     async (files: FileList) => {
@@ -2104,96 +2271,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       </div>
 
       <aside className={`drawer ${inspectorOpen ? 'open' : ''}`} aria-hidden={!inspectorOpen}>
-        <div className="drawer-h">
-          <div className="title">
-            <h3>{focused?.relative_path?.split('/').pop() || focused?.relative_path || '—'}</h3>
-            <div className="sub">{focused?.relative_path || '—'}</div>
-          </div>
-          <button className="xbtn" type="button" aria-label="Close inspector" onClick={closeDrawer}>
-            ✕
-          </button>
-        </div>
-
         <div className="drawer-body">
-          <div className="preview">
-            <AssetPreviewPanel
+          <AssetPreviewPanel
               asset={normalizedPreviewAsset}
-              onMediaReady={(el) => {
-                drawerMediaRef.current = el;
-              }}
               onPrev={() => focusRelative(-1)}
               onNext={() => focusRelative(1)}
               onClose={closeDrawer}
               onCopy={() => { if (focused) void handleCopyStream(focused); }}
               onSelect={() => { if (focused) toggleSelected(focused); }}
               onDelete={() => { if (focused) void deleteMediaSelection([assetSelectionKey(focused, activeProject)]); }}
+              onTag={() => { void handleFocusedTag(); }}
+              onObs={() => { void handleFocusedObs(); }}
+              onResolve={() => { void handleFocusedResolve(); }}
+              onProgramMonitor={() => { void handleFocusedProgramMonitor(); }}
+              showResolve={Boolean(activeProject || focused?.project_name)}
+              showProgramMonitor
+              obsMode={previewObsMode}
+              obsSlot={previewObsSlot}
+              obsExclusive={previewObsExclusive}
+              onObsModeChange={setPreviewObsMode}
+              onObsSlotChange={setPreviewObsSlot}
+              onObsExclusiveChange={setPreviewObsExclusive}
+              metadataRows={previewMetadataRows}
+              detailsOpen={previewDetailsOpen}
+              onDetailsToggle={() => setPreviewDetailsOpen((prev) => !prev)}
+              selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}
+              playOnAssetChangeToken={previewAutoPlayToken}
             />
-          </div>
-
-          <div className="drawer-actions">
-            <button
-              className="btn"
-              type="button"
-              onClick={() => {
-                drawerMediaRef.current?.play?.();
-              }}
-            >
-              ▶ Play
-            </button>
-            <button className="btn" type="button" onClick={() => focused && handleCopyStream(focused)}>
-              ⧉ Copy stream URL
-            </button>
-            <button
-              className={`btn ${focused && selected.has(assetSelectionKey(focused, activeProject)) ? '' : 'primary'}`}
-              type="button"
-              onClick={() => focused && toggleSelected(focused)}
-            >
-              {focused && selected.has(assetSelectionKey(focused, activeProject)) ? '− Deselect' : '＋ Select'}
-            </button>
-            <button
-              className="btn bad"
-              type="button"
-              onClick={() => focused && deleteMediaSelection([assetSelectionKey(focused, activeProject)])}
-              disabled={!focused}
-            >
-              🗑 Delete
-            </button>
-          </div>
-
-          <div className="kv">
-            {(() => {
-              if (!focused) return null;
-              const kind = guessKind(focused);
-              const projectName = activeProject?.name || focused.project_name || '(none)';
-              const projectSource = activeProject?.source || focused.project_source || '(primary)';
-              const rows = [
-                ['Kind', kind],
-                ['Size', formatBytes(focused.size)],
-                ['Stream', resolveAssetUrl(focused.stream_url) || '(none)'],
-                ['Source', projectSource],
-                ['Project', projectName],
-                ['Relative', focused.relative_path || '(none)'],
-                ['MIME', focused.mime || focused.content_type || ''],
-                ['Hash', focused.sha256 || focused.hash || ''],
-                ['Created', focused.created_at || focused.createdAt || ''],
-                ['Modified', focused.updated_at || focused.updatedAt || ''],
-                ['Duration', focused.duration ? `${focused.duration}s` : ''],
-                ['Resolution', focused.width && focused.height ? `${focused.width}×${focused.height}` : ''],
-                ['Tags', formatListValue(focused.tags)],
-                ['AI Tags', formatListValue(focused.ai_tags ?? focused.aiTags)],
-              ] satisfies Array<[string, string]>;
-              const filteredRows = rows.filter(
-                (row): row is [string, string] => String(row[1] || '').trim().length > 0,
-              );
-
-              return filteredRows.map(([key, value]) => (
-                <React.Fragment key={key}>
-                  <div className="k">{key}</div>
-                  <div className="v">{value}</div>
-                </React.Fragment>
-              ));
-            })()}
-          </div>
         </div>
       </aside>
 

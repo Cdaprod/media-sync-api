@@ -1,5 +1,61 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Drawer regression hotfix: tap-toggle + close cleanup + mobile edge fallback (active)
+- [x] Restored media-surface tap/click toggle behavior for preview playback while guarding overlay control taps from accidental background toggles.
+- [x] Added drawer preview cleanup hooks so close/unmount/asset-switch always pause/reset active media and stop preview listeners/loops.
+- [x] Preserved prev/next autoplay while keeping manual play/pause controls functional after navigation.
+- [x] Added mobile-safe atmospheric edge fallback tuning so preview falloff remains visible on iPhone Safari without heavy effects.
+- [x] Updated package/static regression assertions for tap-toggle hooks, cleanup helpers, and edge fallback markers.
+- [ ] Validate on physical iPhone Safari that close always silences media immediately and edge falloff remains visible under low-brightness conditions.
+
+## 2026-03-16 — Drawer media-stage sizing + atmospheric edge pass (active)
+- [x] Expanded package drawer width and tightened drawer-body spacing so the preview stage can use more of the drawer footprint.
+- [x] Removed package preview shell/media hard `70vh` caps and moved to flex-growth sizing so media can fill available drawer space.
+- [x] Added a subtle non-interactive atmospheric edge layer on `.preview-shell::after` to reduce boxed-card feel without shrinking media real estate.
+- [x] Preserved overlay/media/wave z-index + pointer-event behavior so controls remain tappable above media.
+- [x] Added package regression assertions for widened drawer sizing, atmospheric edge selector presence, and removed height-cap guardrail.
+- [ ] Validate on physical iPhone Safari that larger media stage + edge treatment remain responsive across video, image, and audio preview kinds.
+
+## 2026-03-16 — Wrapperless preview + nav playback polish (active)
+- [x] Removed remaining drawer inner preview-header shell so overlay preview is the direct drawer surface in static/package explorers.
+- [x] Removed center default-play bubble to prevent paused-state control obstruction.
+- [x] Added prev/next autoplay-or-first-frame fallback to reduce black-screen asset transitions.
+- [x] Updated preview regression assertions for removed center-play marker and wrapperless drawer preview contract.
+- [ ] Validate on physical iPhone Safari that prev/next no longer lands on black frames for common clip formats.
+
+## 2026-03-16 — Overlay hit-layer + wrapper removal pass (active)
+- [x] Fixed overlay hit testing in static/package preview by promoting overlay to interactive pointer layer.
+- [x] Disabled pointer hit interception when overlay fades so hidden controls do not block media taps.
+- [x] Removed legacy inner `.preview` wrapper framing so the immersive preview shell is now the direct drawer preview surface.
+- [x] Increased top-nav tap target sizes for iPhone Safari comfort.
+- [x] Re-ran package build/typecheck and preview regression suites after DOM/CSS simplification.
+- [ ] Verify on physical iPhone Safari that overlay controls are now consistently tappable during playback.
+
+## 2026-03-16 — Package build/type regression fix (active)
+- [x] Fixed package `next build` type failure in focused resolve flow by aligning source argument to `string | undefined`.
+- [x] Narrowed focused resolve `media_rel_paths` to strict `string[]` with an explicit type predicate.
+- [x] Verified `npm run build` completes for `docker/packages/Explorer` after the fix.
+- [x] Re-ran package + static regression suites to catch additional type/runtime drift.
+- [ ] Keep watching for additional strict-mode type issues as preview convergence continues.
+
+## 2026-03-16 — Package overlay action + OBS parity pass (active)
+- [x] Added package preview overlay semantic action callbacks for OBS, tag, resolve, and program-monitor handoff while keeping ExplorerApp as logic owner.
+- [x] Added in-overlay OBS settings controls (mode cover/fit/fill, slot, exclusive) and wired values through package preview state/action flow.
+- [x] Kept drawer-contained preview contract with no reintroduced legacy lower control rows.
+- [x] Added package regression assertions for overlay callback wiring and OBS control presence/state mapping.
+- [x] Added mobile comfort tweaks for overlay control target sizing and details height constraints in package styles.
+- [ ] Validate on physical iPhone Safari for overlay reveal/hide comfort and accidental-tap resilience after the new package overlay action rows.
+- [ ] Intake `asset-preview.mjs` branch delta once `me/explorer-shaders-and-compose-api-upgrades` refs are available locally (currently unavailable in this workspace).
+
+## 2026-03-16 — Drawer preview ownership transfer takeover (active)
+- [x] Mapped old drawer controls to overlay replacements and migrated behavior ownership to overlay actions.
+- [x] Removed duplicated legacy drawer button row / metadata table from both static and package explorers after behavior transfer.
+- [x] Wired overlay prev/next to explorer ordering state (package `filteredMedia`, static `filteredMedia()`) so adjacent navigation loads real previous/next assets.
+- [x] Moved preview metadata/details into overlay detail panels so media occupies most of the drawer preview height.
+- [x] Added overlay skip ±10s controls and kept scrub/time/volume/play/pause behavior fully functional in overlay transport.
+- [ ] Follow up by porting OBS/tag/resolve/program-monitor overlay buttons into the Next.js package preview surface for full static/package action parity.
+- [ ] Validate on iPhone Safari that overlay details reveal/hide interaction remains comfortable during playback + scroll.
+
 
 ## 2026-03-16 — Drawer inner preview renderer convergence (active)
 - [x] Implemented phase-2 preview convergence in static drawer: top overlay/nav controls, center play affordance, integrated bottom-stack playback controls (time/scrub/volume), and in-preview action pills wired to existing drawer actions.
