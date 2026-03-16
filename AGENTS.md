@@ -276,6 +276,9 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-16)
+- Removed the remaining drawer inner-header framing for preview in static/package explorers so the immersive preview is the direct drawer surface (close remains in overlay controls).
+- Removed the center default-play bubble so paused previews no longer show the large blocking play affordance.
+- Prev/next overlay navigation now requests immediate video playback (or first-frame seek fallback) to avoid black-screen transitions when stepping assets.
 - Fixed overlay hit-testing in both static and package explorers by making `.preview-overlay` the interactive layer (`pointer-events: auto`) while keeping hidden-state passthrough (`.fade` disables pointer events).
 - Removed the legacy inner preview wrapper container (`.preview`) so the immersive black preview shell is now the direct drawer preview surface rather than a nested boxed child.
 - Increased overlay nav button hit targets to improve iPhone Safari tap reliability and revalidated package build/tests after DOM/CSS simplification.

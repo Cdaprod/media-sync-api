@@ -1,5 +1,12 @@
 # TODO — FX Mode Stabilization Checklist
 
+## 2026-03-16 — Wrapperless preview + nav playback polish (active)
+- [x] Removed remaining drawer inner preview-header shell so overlay preview is the direct drawer surface in static/package explorers.
+- [x] Removed center default-play bubble to prevent paused-state control obstruction.
+- [x] Added prev/next autoplay-or-first-frame fallback to reduce black-screen asset transitions.
+- [x] Updated preview regression assertions for removed center-play marker and wrapperless drawer preview contract.
+- [ ] Validate on physical iPhone Safari that prev/next no longer lands on black frames for common clip formats.
+
 ## 2026-03-16 — Overlay hit-layer + wrapper removal pass (active)
 - [x] Fixed overlay hit testing in static/package preview by promoting overlay to interactive pointer layer.
 - [x] Disabled pointer hit interception when overlay fades so hidden controls do not block media taps.

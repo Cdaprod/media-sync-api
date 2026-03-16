@@ -50,7 +50,7 @@ test('preview adapter and panel keep drawer-based preview contract', () => {
   assert.ok(panel.includes('preview-wave'));
   assert.ok(styles.includes('.preview-shell'));
   assert.ok(styles.includes('.preview-overlay.fade'));
-  assert.ok(panel.includes('preview-center-play'));
+  assert.ok(!panel.includes('preview-center-play'));
   assert.ok(panel.includes('preview-scrubber'));
   assert.ok(panel.includes('preview-icon-btn'));
   assert.ok(panel.includes('onObs'));

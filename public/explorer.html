@@ -1266,44 +1266,6 @@
       will-change: transform, opacity;
     }
     .drawer.open{ transform: translateX(0%); opacity: 1; pointer-events: auto; }
-    .drawer-h{
-      padding: 14px 14px 10px;
-      border-bottom: 1px solid var(--border);
-      display:flex;
-      align-items:flex-start;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .drawer-h .title{
-      min-width:0;
-    }
-    .drawer-h .title h3{
-      margin:0;
-      font-size: 14px;
-      font-weight: 780;
-      overflow:hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 360px;
-    }
-    .drawer-h .title .sub{
-      margin-top: 4px;
-      font-size: 12px;
-      color: var(--muted);
-      overflow:hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 420px;
-    }
-    .xbtn{
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.06);
-      color: var(--text);
-      border-radius: 12px;
-      padding: 8px 10px;
-      cursor:pointer;
-    }
-    .xbtn:hover{ background: rgba(255,255,255,0.10); }
 
     .drawer-body{
       padding: 14px;
@@ -1336,26 +1298,6 @@
       overflow: hidden;
       background: radial-gradient(circle at 50% 20%, rgba(22,31,63,0.7), #070b16 58%);
     }
-    .preview-center-play{
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: 78px;
-      height: 78px;
-      border-radius: 999px;
-      border: 2px solid rgba(255,255,255,0.3);
-      background: rgba(0,0,0,0.55);
-      color: #fff;
-      font-size: 30px;
-      line-height: 1;
-      display: grid;
-      place-items: center;
-      z-index: 4;
-      cursor: pointer;
-      transition: opacity .18s ease, transform .18s ease;
-    }
-    .preview-center-play.hidden{ opacity: 0; pointer-events: none; }
     .preview-media{
       display:flex;
       align-items:center;
@@ -1517,7 +1459,6 @@
     .asset,
     .row,
     .drawer,
-    .drawer-h,
     .drawer-body{
       user-select: none;
       -webkit-user-select: none;
@@ -2044,14 +1985,6 @@
 
     <!-- Inspector drawer -->
     <aside id="drawer" class="drawer" aria-hidden="true">
-      <div class="drawer-h">
-        <div class="title">
-          <h3 id="drawerTitle">—</h3>
-          <div id="drawerSub" class="sub">—</div>
-        </div>
-        <button id="drawerClose" class="xbtn" type="button" aria-label="Close inspector">✕</button>
-      </div>
-
       <div class="drawer-body">
         <div id="drawerPreview"></div>
 
@@ -5712,7 +5645,7 @@
       preview.innerHTML = `
         <div class="preview-shell">
           <div class="preview-media">${mediaHtml}</div>
-          ${playable ? '<button type="button" class="preview-center-play" data-preview-play="1">▶</button>' : ''}
+          
           <div class="preview-overlay">
             <div class="preview-top">
               <div class="preview-top-row">
@@ -5757,7 +5690,6 @@
       `;
 
       const media = preview.querySelector('video, audio');
-      const centerPlay = preview.querySelector('.preview-center-play');
       const playPills = preview.querySelectorAll('[data-preview-play]');
       attachPreviewOverlayBehavior(preview, media);
       const waveCanvas = preview.querySelector('.preview-wave');
@@ -5781,7 +5713,6 @@
         };
         const syncPlay = () => {
           const playing = !media.paused;
-          if (centerPlay) centerPlay.classList.toggle('hidden', playing);
           playPills.forEach((btn) => {
             btn.textContent = playing ? '❚❚ Pause' : '▶ Play';
           });
@@ -5880,12 +5811,12 @@
       if (idx < 0) return;
       const nextIndex = (idx + offset + ordered.length) % ordered.length;
       const next = ordered[nextIndex];
-      if (next) openDrawer(next);
+      if (next) openDrawer(next, { autoPlay: true });
     }
 
     // Drawer / inspector
     // -------------------------
-    function openDrawer(item){
+    function openDrawer(item, options = {}){
       state.focused = item;
       if (item?.relative_path && (state.activeProject || state.mediaScope === 'all')){
         const key = selectionKey(item);
@@ -5900,8 +5831,6 @@
       const title = previewModel.title;
       currentInspectorKey = String(item.sha256 || item.relative_path || item.stream_url || title || '');
       const inspectorToken = ++inspectorRequestToken;
-      el('drawerTitle').textContent = title;
-      el('drawerSub').textContent = item.relative_path || '';
 
       const activeProjectName = state.activeProject?.name || item.project_name || '';
       const activeSource = state.activeProject?.source || item.project_source || '';
@@ -5993,6 +5922,20 @@
         onNext: () => focusNeighborInDrawer(1),
       });
       previewApi?.setSelectLabel(state.selected.has(selectionKey(item)));
+      const previewMedia = previewApi?.media;
+      if (options.autoPlay && previewMedia?.tagName === 'VIDEO') {
+        previewMedia.currentTime = 0;
+        previewMedia.play?.().catch(() => {
+          const onLoadedData = () => {
+            try {
+              previewMedia.currentTime = 0.01;
+            } catch {
+              // ignore
+            }
+          };
+          previewMedia.addEventListener('loadeddata', onLoadedData, { once: true });
+        });
+      }
 
       function renderDetails(){
         if (inspectorToken !== inspectorRequestToken) return;
@@ -6354,7 +6297,6 @@
     });
 
     // Drawer close
-    el('drawerClose').addEventListener('click', closeDrawer);
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape'){
         if (ui.inspectorOpen){

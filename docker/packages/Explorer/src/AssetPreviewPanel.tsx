@@ -36,6 +36,7 @@ export function AssetPreviewPanel({
   onObsModeChange,
   onObsSlotChange,
   onObsExclusiveChange,
+  playOnAssetChangeToken = 0,
 }: {
   asset: PreviewAsset | null;
   onMediaReady?: (el: HTMLVideoElement | HTMLAudioElement | null) => void;
@@ -63,6 +64,7 @@ export function AssetPreviewPanel({
   onObsModeChange?: (value: 'cover' | 'fit' | 'fill') => void;
   onObsSlotChange?: (value: string) => void;
   onObsExclusiveChange?: (value: boolean) => void;
+  playOnAssetChangeToken?: number;
 }) {
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -140,6 +142,28 @@ export function AssetPreviewPanel({
     if (!detailsOpen) return;
     setOverlayVisible(true);
   }, [detailsOpen]);
+
+
+  useEffect(() => {
+    const media = mediaRef.current;
+    if (!media || !asset || asset.kind !== 'video') return;
+    const tryStart = () => {
+      media.currentTime = 0;
+      media.play().catch(() => {
+        const onLoadedData = () => {
+          if (!Number.isFinite(media.currentTime) || media.currentTime <= 0) {
+            try {
+              media.currentTime = 0.01;
+            } catch {
+              // ignore seek failures for codecs that disallow tiny offsets
+            }
+          }
+        };
+        media.addEventListener('loadeddata', onLoadedData, { once: true });
+      });
+    };
+    tryStart();
+  }, [asset?.id, asset?.kind, playOnAssetChangeToken]);
 
   useEffect(() => {
     if (asset?.kind !== 'audio') return;
@@ -233,11 +257,6 @@ export function AssetPreviewPanel({
     <div className="preview-shell" onPointerMove={() => setOverlayVisible(true)} onPointerDown={() => setOverlayVisible(true)}>
       <div className="preview-media">{mediaNode}</div>
       {asset.kind === 'audio' ? <canvas ref={canvasRef} className="preview-wave" /> : null}
-      {playable ? (
-        <button className={`preview-center-play ${isPlaying ? 'hidden' : ''}`} type="button" onClick={handleTogglePlay}>
-          ▶
-        </button>
-      ) : null}
       <div className={`preview-overlay ${overlayVisible ? '' : 'fade'}`}>
         <div className="preview-top">
           <div className="preview-top-row">

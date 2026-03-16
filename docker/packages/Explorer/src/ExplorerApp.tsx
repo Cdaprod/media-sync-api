@@ -355,6 +355,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');
   const [previewObsSlot, setPreviewObsSlot] = useState('1');
   const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
+  const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -683,6 +684,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (currentIndex < 0) return;
     const nextIndex = (currentIndex + offset + filteredMedia.length) % filteredMedia.length;
     setFocused(filteredMedia[nextIndex] || focused);
+    setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, filteredMedia, focused]);
 
   const handleUpload = useCallback(async () => {
@@ -2267,16 +2269,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       </div>
 
       <aside className={`drawer ${inspectorOpen ? 'open' : ''}`} aria-hidden={!inspectorOpen}>
-        <div className="drawer-h">
-          <div className="title">
-            <h3>{focused?.relative_path?.split('/').pop() || focused?.relative_path || '—'}</h3>
-            <div className="sub">{focused?.relative_path || '—'}</div>
-          </div>
-          <button className="xbtn" type="button" aria-label="Close inspector" onClick={closeDrawer}>
-            ✕
-          </button>
-        </div>
-
         <div className="drawer-body">
           <AssetPreviewPanel
               asset={normalizedPreviewAsset}
@@ -2302,6 +2294,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               detailsOpen={previewDetailsOpen}
               onDetailsToggle={() => setPreviewDetailsOpen((prev) => !prev)}
               selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}
+              playOnAssetChangeToken={previewAutoPlayToken}
             />
         </div>
       </aside>
