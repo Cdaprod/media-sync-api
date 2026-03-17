@@ -1783,6 +1783,94 @@
     .confirm-actions .btn.bad{
       box-shadow: 0 0 0 1px rgba(255,90,120,0.08) inset;
     }
+
+    .compose-modal{
+      position: fixed;
+      inset: 0;
+      z-index: calc(var(--z-modal) + 12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(3, 8, 18, 0.58);
+      backdrop-filter: blur(10px) saturate(1.06);
+      -webkit-backdrop-filter: blur(10px) saturate(1.06);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--dur-fast) var(--ease-settle);
+    }
+
+    .compose-modal.open{
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .compose-card{
+      width: min(460px, 94vw);
+      border-radius: 16px;
+      border: 1px solid rgba(120,170,255,0.24);
+      background: linear-gradient(180deg, rgba(14, 22, 44, 0.98), rgba(8, 14, 32, 0.98));
+      box-shadow: 0 24px 70px rgba(0,0,0,0.48), inset 0 0 0 1px rgba(255,255,255,0.02);
+      padding: 18px;
+    }
+
+    .compose-title{
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .compose-body{
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .compose-fields{
+      display: grid;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .compose-field{
+      display: grid;
+      gap: 6px;
+    }
+
+    .compose-field label{
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .compose-field input,
+    .compose-field select{
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(120,170,255,0.28);
+      background: rgba(7, 14, 30, 0.92);
+      color: var(--text);
+      padding: 11px 12px;
+      font-size: 14px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .compose-field input:focus,
+    .compose-field select:focus{
+      border-color: rgba(64,146,255,0.8);
+      box-shadow: 0 0 0 2px rgba(64,146,255,0.22);
+    }
+
+    .compose-actions{
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 
@@ -4540,8 +4628,101 @@
         if (!r.ok) return null;
         return await r.json();
       }catch{
-        return null;
+      return null;
+    }
+
+    function buildComposeTimestampName(){
+      const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+      return `compose-${stamp}.mp4`;
+    }
+
+    function defaultComposeProject(projects){
+      const list = Array.isArray(projects) ? projects : [];
+      const preferred = list.find((entry) => entry?.name === 'P5-Exported-Media');
+      if (preferred) return preferred;
+      return list[0] || null;
+    }
+
+    function openComposeModal({ projects = [], defaultName = '', defaultProjectName = 'P5-Exported-Media' } = {}){
+      const modal = el('composeModal');
+      const nameInput = el('composeOutputName');
+      const projectSelect = el('composeOutputProject');
+      const cancelBtn = el('composeCancel');
+      const submitBtn = el('composeSubmit');
+      if (!modal || !nameInput || !projectSelect || !cancelBtn || !submitBtn){
+        return Promise.resolve(null);
       }
+      const options = Array.isArray(projects) ? projects.filter((entry) => entry?.name) : [];
+      projectSelect.innerHTML = '';
+      options.forEach((entry) => {
+        const option = document.createElement('option');
+        option.value = entry.name;
+        option.textContent = entry.name;
+        option.dataset.source = entry.source || 'primary';
+        projectSelect.appendChild(option);
+      });
+
+      const fallbackProject = defaultComposeProject(options);
+      const selectedName = options.some((entry) => entry.name === defaultProjectName)
+        ? defaultProjectName
+        : (fallbackProject?.name || '');
+
+      nameInput.value = defaultName || buildComposeTimestampName();
+      projectSelect.value = selectedName;
+
+      document.body.classList.add('confirm-open');
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+
+      return new Promise((resolve) => {
+        let settled = false;
+        const cleanup = (result) => {
+          if (settled) return;
+          settled = true;
+          modal.classList.remove('open');
+          modal.setAttribute('aria-hidden', 'true');
+          document.body.classList.remove('confirm-open');
+          cancelBtn.removeEventListener('click', onCancel);
+          submitBtn.removeEventListener('click', onSubmit);
+          modal.removeEventListener('click', onBackdrop);
+          nameInput.removeEventListener('keydown', onKeydown);
+          resolve(result);
+        };
+        const onCancel = () => cleanup(null);
+        const onBackdrop = (event) => {
+          if (event.target === modal) cleanup(null);
+        };
+        const onSubmit = () => {
+          const outputName = (nameInput.value || '').trim() || buildComposeTimestampName();
+          const outputProject = (projectSelect.value || '').trim() || selectedName;
+          if (!outputProject){
+            cleanup(null);
+            return;
+          }
+          const selectedOption = projectSelect.options[projectSelect.selectedIndex];
+          cleanup({
+            outputName,
+            outputProject,
+            outputSource: selectedOption?.dataset?.source || 'primary',
+          });
+        };
+        const onKeydown = (event) => {
+          if (event.key === 'Escape'){
+            event.preventDefault();
+            cleanup(null);
+            return;
+          }
+          if (event.key === 'Enter'){
+            event.preventDefault();
+            onSubmit();
+          }
+        };
+        cancelBtn.addEventListener('click', onCancel);
+        submitBtn.addEventListener('click', onSubmit);
+        modal.addEventListener('click', onBackdrop);
+        nameInput.addEventListener('keydown', onKeydown);
+        window.requestAnimationFrame(() => nameInput.focus({ preventScroll: true }));
+      });
     }
 
     function renderTagList(container, tags, onRemove){
@@ -5534,22 +5715,27 @@
         return;
       }
 
-      const outputCtx = selectedProjectContextIfSingle() || state.activeProject;
-      if (!outputCtx?.name){
-        toast('warn','Compose','Choose an output project, or select clips from one project.');
+      if (!state.projects.length){
+        toast('warn','Compose','No projects available for compose output.');
         return;
       }
 
-      const outputBase = `compose-${Date.now()}.mp4`;
+      const preferredProject = defaultComposeProject(state.projects);
+      const composeConfig = await openComposeModal({
+        projects: state.projects,
+        defaultName: buildComposeTimestampName(),
+        defaultProjectName: preferredProject?.name || 'P5-Exported-Media',
+      });
+      if (!composeConfig) return;
       try{
         const r = await fetch(`${API}/api/assets/bulk/compose`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             assets: videos,
-            output_project: outputCtx.name,
-            output_source: outputCtx.source || 'primary',
-            output_name: outputBase,
+            output_project: composeConfig.outputProject,
+            output_source: composeConfig.outputSource || 'primary',
+            output_name: composeConfig.outputName,
             target_dir: 'exports',
             mode: 'auto',
             allow_overwrite: false,
@@ -5557,7 +5743,7 @@
         });
         const payload = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(payload.detail || payload.message || 'Compose failed');
-        toast('good','Compose', `Created ${payload.path || outputBase}`);
+        toast('good','Compose', `Created ${payload.path || composeConfig.outputName}`);
         await loadMedia();
       }catch(e){
         toast('bad','Compose', e.message);
@@ -6748,6 +6934,26 @@
       <div class="confirm-actions">
         <button id="confirmDeleteCancel" class="btn" type="button">Cancel</button>
         <button id="confirmDeleteSubmit" class="btn bad" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+  <div id="composeModal" class="compose-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="composeTitle" aria-describedby="composeBody">
+    <div class="compose-card custom-ui-surface">
+      <h3 id="composeTitle" class="compose-title">Compose video output</h3>
+      <p id="composeBody" class="compose-body">Choose the output filename and destination project.</p>
+      <div class="compose-fields">
+        <div class="compose-field">
+          <label for="composeOutputName">Output file name (mp4)</label>
+          <input id="composeOutputName" type="text" inputmode="text" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="compose-field">
+          <label for="composeOutputProject">Output project</label>
+          <select id="composeOutputProject" data-compose-project-picker="1"></select>
+        </div>
+      </div>
+      <div class="compose-actions">
+        <button id="composeCancel" class="btn" type="button">Cancel</button>
+        <button id="composeSubmit" class="btn good" type="button">Compose</button>
       </div>
     </div>
   </div>

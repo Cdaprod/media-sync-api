@@ -258,6 +258,17 @@ const GRID_COL_WIDTH_FALLBACK = 180;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 
+const buildComposeTimestampName = () => {
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+  return `compose-${stamp}.mp4`;
+};
+
+const defaultComposeProject = (projects: Project[]): Project | null => {
+  const preferred = projects.find((entry) => entry?.name === 'P5-Exported-Media');
+  if (preferred) return preferred;
+  return projects[0] || null;
+};
+
 const readOrientationCache = (): Map<string, string> => {
   if (typeof window === 'undefined') return new Map();
   try {
@@ -377,6 +388,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewObsSlot, setPreviewObsSlot] = useState('1');
   const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
   const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
+  const [composeModalOpen, setComposeModalOpen] = useState(false);
+  const [composeOutputName, setComposeOutputName] = useState('');
+  const [composeOutputProject, setComposeOutputProject] = useState('');
+  const composeNameInputRef = useRef<HTMLInputElement | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -1032,12 +1047,35 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Compose', 'Select one or more clips first');
       return;
     }
-    const outputName = window.prompt('Output file name (mp4):', 'compiled.mp4')?.trim();
-    if (!outputName) return;
-    const targetProject = window.prompt('Output project name:', activeProject?.name || '')?.trim();
-    if (!targetProject) return;
     if (!selectedVideoItems.length) {
       addToast('warn', 'Compose', 'Compose supports video clips only');
+      return;
+    }
+    if (!projects.length) {
+      addToast('warn', 'Compose', 'No projects available for compose output.');
+      return;
+    }
+    const preferredProject = defaultComposeProject(projects);
+    setComposeOutputName(buildComposeTimestampName());
+    setComposeOutputProject(preferredProject?.name || 'P5-Exported-Media');
+    setComposeModalOpen(true);
+  }, [addToast, projects, selected, selectedVideoItems]);
+
+  const handleComposeConfirm = useCallback(async () => {
+    if (!selectedVideoItems.length) {
+      addToast('warn', 'Compose', 'Compose supports video clips only');
+      setComposeModalOpen(false);
+      return;
+    }
+    const outputName = composeOutputName.trim() || buildComposeTimestampName();
+    const targetProjectName = composeOutputProject.trim() || defaultComposeProject(projects)?.name || '';
+    if (!targetProjectName) {
+      addToast('warn', 'Compose', 'Choose an output project.');
+      return;
+    }
+    const targetProject = projects.find((entry) => entry.name === targetProjectName) || null;
+    if (!targetProject) {
+      addToast('warn', 'Compose', 'Selected output project is unavailable.');
       return;
     }
     const refs = selectedVideoItems
@@ -1050,11 +1088,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     try {
       await api.bulkComposeMedia({
         assets: refs,
-        output_project: targetProject,
+        output_project: targetProject.name,
         output_name: outputName,
-        output_source: activeProject?.source || null,
+        output_source: targetProject.source || null,
       });
       addToast('good', 'Compose', `Composed ${refs.length} video item(s) into ${outputName}`);
+      setComposeModalOpen(false);
       await loadProjects();
       if (mediaScope === 'all' || !activeProject) await loadAllMedia();
       else await loadMedia(activeProject);
@@ -1062,7 +1101,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const message = err instanceof Error ? err.message : 'Compose failed';
       addToast('bad', 'Compose', message);
     }
-  }, [activeProject, addToast, api, loadAllMedia, loadMedia, loadProjects, mediaScope, selected, selectedVideoItems, toAssetRef]);
+  }, [activeProject, addToast, api, composeOutputName, composeOutputProject, loadAllMedia, loadMedia, loadProjects, mediaScope, projects, selectedVideoItems, toAssetRef]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -1765,6 +1804,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     () => (contextMenu ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
   );
+
+  useEffect(() => {
+    if (!composeModalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setComposeModalOpen(false);
+        return;
+      }
+      if (event.key === 'Enter') {
+        const target = event.target as HTMLElement | null;
+        if (target?.tagName === 'SELECT') return;
+        event.preventDefault();
+        void handleComposeConfirm();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.requestAnimationFrame(() => composeNameInputRef.current?.focus());
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [composeModalOpen, handleComposeConfirm]);
+
   const uploadCaption = activeProject
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
@@ -2549,6 +2609,51 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ))}
         </div>
       ) : null}
+
+      <div
+        className={`compose-modal ${composeModalOpen ? 'open' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!composeModalOpen}
+        aria-labelledby="composeModalTitle"
+        onClick={() => setComposeModalOpen(false)}
+      >
+        <div className="compose-card custom-ui-surface" onClick={(event) => event.stopPropagation()}>
+          <h3 id="composeModalTitle" className="compose-title">Compose video output</h3>
+          <p className="compose-body">Choose the output filename and destination project.</p>
+          <div className="compose-fields">
+            <label className="compose-field">
+              <span>Output file name (mp4)</span>
+              <input
+                ref={composeNameInputRef}
+                value={composeOutputName}
+                onChange={(event) => setComposeOutputName(event.target.value)}
+                placeholder="compose-YYYYMMDDHHMMSS.mp4"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="compose-field">
+              <span>Output project</span>
+              <select
+                value={composeOutputProject}
+                onChange={(event) => setComposeOutputProject(event.target.value)}
+                data-compose-project-picker="1"
+              >
+                {projects.map((project) => (
+                  <option key={`${project.source || 'primary'}::${project.name}`} value={project.name}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="compose-actions">
+            <button className="btn" type="button" onClick={() => setComposeModalOpen(false)}>Cancel</button>
+            <button className="btn good" type="button" onClick={() => { void handleComposeConfirm(); }}>Compose</button>
+          </div>
+        </div>
+      </div>
 
       <div className="toasts">
         {toasts.map((toast) => (

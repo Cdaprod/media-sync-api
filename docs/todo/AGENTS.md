@@ -1,3 +1,19 @@
+## 2026-03-17 — Static + package compose modal parity (active)
+- [x] Upgraded package Explorer compose flow from native prompts to an app-owned compose modal that matches Explorer UI surface styling.
+- [x] Added package compose defaults for timestamped output naming and project dropdown selection (default `P5-Exported-Media`, fallback first project).
+- [x] Added package keyboard-safe modal behavior (`Escape` cancel, `Enter` submit except on select control) and focus-on-open input handling.
+- [x] Added parity marker `data-compose-project-picker="1"` to static + package project selectors for regression-lock consistency.
+- [x] Expanded static/package regression coverage to assert modal compose markers, no `window.prompt` in compose path, and compose style selectors.
+- [ ] Validate on physical iPhone Safari that package compose modal/dropdown interaction is comfortable with on-screen keyboard and project switching.
+
+## 2026-03-17 — Static Explorer compose modal UX convergence (active)
+- [x] Replaced compose filename/project native prompt flow with a single Explorer-owned compose modal (in-app dialog, no browser prompt wizard).
+- [x] Added timestamp-based default output naming (`compose-YYYYMMDDHHMMSS.mp4`) so confirm-without-typing uses sane defaults.
+- [x] Switched output project capture to a project dropdown seeded from loaded project state with preferred default `P5-Exported-Media` and first-project fallback.
+- [x] Kept bulk compose API wiring unchanged (`/api/assets/bulk/compose`) while passing modal-selected/default output settings.
+- [x] Added regression checks to assert compose modal markers/default path and absence of `window.prompt` in compose action flow.
+- [ ] Validate on physical iPhone Safari that keyboard-safe modal positioning and dropdown interaction feel native to Explorer UX.
+
 ## 2026-03-17 — Package Explorer context-menu trigger + style stability pass (active)
 - [x] Tightened long-press activation to touch/pen hold only, with stronger delay and explicit move-cancel threshold so ordinary taps do not open the custom menu.
 - [x] Added shared pending long-press cleanup for scroll/drag/pointer-leave/context-capture paths to prevent hair-trigger menu opens during grid interaction.
