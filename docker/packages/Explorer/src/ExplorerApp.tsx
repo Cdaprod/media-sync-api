@@ -35,7 +35,8 @@ interface ExplorerAppProps {
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 const POINTER_THRESHOLD = 8;
-const LONG_PRESS_MS = 480;
+const LONG_PRESS_MOVE_CANCEL_PX = 12;
+const LONG_PRESS_MS = 620;
 
 const suppressNativeContextMenu = (event: React.MouseEvent<HTMLElement>) => {
   event.preventDefault();
@@ -386,6 +387,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const selectedOrderRef = useRef<string[]>([]);
   const lastTileTapRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressPointerRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+
+  const clearPendingLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+    }
+    longPressTimerRef.current = null;
+    longPressPointerRef.current = null;
+    longPressFiredRef.current = false;
+  }, []);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
     const itemOrient = inferOrientationFromItem(item);
@@ -1325,15 +1338,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       let startX = 0;
       let startY = 0;
       let moved = false;
-      let timer: number | null = null;
       let pressX = 0;
       let pressY = 0;
       const itemKey = assetSelectionKey(item, activeProject);
-
-      const clearTimer = () => {
-        if (timer) window.clearTimeout(timer);
-        timer = null;
-      };
 
       const resolveContextItems = () => (selected.has(itemKey)
         ? selectedKeysOrdered
@@ -1351,21 +1358,35 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         pressX = event.clientX;
         pressY = event.clientY;
         moved = false;
-        event.currentTarget.setPointerCapture(pointerId);
-        clearTimer();
-        timer = window.setTimeout(() => {
-          openContextMenu(pressX, pressY, resolveContextItems());
-        }, LONG_PRESS_MS);
+        clearPendingLongPress();
+        if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+          longPressPointerRef.current = pointerId;
+          longPressTimerRef.current = window.setTimeout(() => {
+            if (longPressPointerRef.current !== pointerId || moved || dragging || assetDragActive) return;
+            longPressFiredRef.current = true;
+            openContextMenu(pressX, pressY, resolveContextItems());
+          }, LONG_PRESS_MS);
+        }
       };
 
       const handlePointerMove = (event: React.PointerEvent) => {
         if (pointerId !== event.pointerId) return;
-        if (inNoPreviewZone(event.target)) return;
+        if (inNoPreviewZone(event.target)) {
+          clearPendingLongPress();
+          return;
+        }
         const dx = event.clientX - startX;
         const dy = event.clientY - startY;
-        if (!moved && (dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
+        const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;
+        if (movedFar) {
           moved = true;
-          clearTimer();
+          clearPendingLongPress();
+        }
+        if (!moved) return;
+        if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+          return;
+        }
+        if ((dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
           setDragging(true);
           setAssetDragActive(true);
           dragPathsRef.current = selected.has(itemKey)
@@ -1377,11 +1398,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
       const handlePointerUp = (event: React.PointerEvent) => {
         if (pointerId !== event.pointerId) return;
-        clearTimer();
-        if (event.currentTarget.hasPointerCapture(pointerId)) {
-          event.currentTarget.releasePointerCapture(pointerId);
-        }
+        const longPressFired = longPressFiredRef.current;
+        clearPendingLongPress();
         pointerId = null;
+        if (longPressFired) {
+          return;
+        }
         if (moved) {
           setDragging(false);
           setAssetDragActive(false);
@@ -1412,7 +1434,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       };
 
       const handlePointerCancel = () => {
-        clearTimer();
+        clearPendingLongPress();
         pointerId = null;
         setDragging(false);
         setAssetDragActive(false);
@@ -1440,7 +1462,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     },
     [
       activeProject,
+      assetDragActive,
       assetSelectionKey,
+      clearPendingLongPress,
       closeDrawer,
       dragging,
       inNoPreviewZone,
@@ -2210,17 +2234,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           onContextMenuCapture={(event) => {
             const target = event.target as HTMLElement | null;
             if (!target?.closest('.asset, .row')) return;
+            clearPendingLongPress();
             event.preventDefault();
             event.stopPropagation();
           }}
+          onPointerLeave={clearPendingLongPress}
           onDragOver={(event) => {
             if (event.dataTransfer?.types.includes('Files')) {
+              clearPendingLongPress();
               event.preventDefault();
               event.dataTransfer.dropEffect = 'copy';
               setDragActive(true);
             }
           }}
-          onDragLeave={() => setDragActive(false)}
+          onDragLeave={() => {
+            clearPendingLongPress();
+            setDragActive(false);
+          }}
           onDrop={(event) => {
             if (event.dataTransfer?.files?.length) {
               event.preventDefault();
@@ -2233,7 +2263,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <div className="spinner"></div>
             <div>Preparing thumbnails…</div>
           </div>
-          <div className="scroll">
+          <div className="scroll" onScroll={clearPendingLongPress}>
             <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
               {!activeProject && mediaScope !== 'all' ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>

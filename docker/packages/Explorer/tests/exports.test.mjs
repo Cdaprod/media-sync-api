@@ -239,6 +239,27 @@ test('package explorer interaction handlers do not trigger loading overlay state
   assert.ok(!block.includes('setContentLoading(true)'));
 });
 
+test('package explorer context menu opens only on deliberate long press or context click', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const start = content.indexOf('const buildAssetPointerHandlers = useCallback(');
+  const end = content.indexOf('const handlePreviewSelected = useCallback(', start);
+  assert.ok(start >= 0);
+  assert.ok(end > start);
+  const block = content.slice(start, end);
+  assert.ok(content.includes('const LONG_PRESS_MS = 620;'));
+  assert.ok(content.includes('const LONG_PRESS_MOVE_CANCEL_PX = 12;'));
+  assert.ok(block.includes("if (event.pointerType === 'touch' || event.pointerType === 'pen')"));
+  assert.ok(block.includes('longPressTimerRef.current = window.setTimeout(() => {'));
+  assert.ok(block.includes('longPressFiredRef.current = true;'));
+  assert.ok(block.includes('const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;'));
+  assert.ok(block.includes('if (movedFar) {'));
+  assert.ok(block.includes('if (longPressFired) {'));
+  assert.ok(block.includes('if (event.pointerType === \'touch\' || event.pointerType === \'pen\') {'));
+  assert.ok(block.includes('if (event.pointerType === \'mouse\' && event.button !== 0) return;'));
+  assert.ok(content.includes('onScroll={clearPendingLongPress}'));
+});
+
 test('package explorer grid capture suppresses native context menu in asset zones', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
@@ -281,6 +302,19 @@ test('package explorer keeps form controls usable while suppressing native selec
   assert.ok(styles.includes('.custom-ui-surface button,'));
   assert.ok(preview.includes('draggable={false}'));
   assert.ok(preview.includes('onDragStart={(event) => event.preventDefault()}'));
+});
+
+test('package explorer context menu styles are explicit and stable', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(styles.includes('.context-menu{'));
+  assert.ok(styles.includes('font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;'));
+  assert.ok(styles.includes('font-size: 17px;'));
+  assert.ok(styles.includes('line-height: 1.3;'));
+  assert.ok(styles.includes('-webkit-text-size-adjust: 100%;'));
+  assert.ok(styles.includes('text-size-adjust: 100%;'));
+  assert.ok(styles.includes('width: min(320px, calc(100vw - 24px));'));
+  assert.ok(styles.includes('.context-menu button:focus-visible'));
 });
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {

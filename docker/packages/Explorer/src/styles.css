@@ -1471,28 +1471,41 @@ select.control{
 /* Context menu */
 .context-menu{
   position: fixed;
-  min-width: 180px;
+  width: min(320px, calc(100vw - 24px));
+  min-width: 214px;
   padding: 8px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(11,16,32,0.96);
+  border: 1px solid rgba(132, 152, 214, 0.34);
+  background: rgba(6, 12, 30, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
   z-index: 90;
   display: none;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: rgba(239, 244, 255, 0.96);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 .context-menu.open{ display: block; }
 .context-menu button{
   width: 100%;
   text-align: left;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 10px;
   border: 0;
   background: transparent;
-  color: var(--text);
-  font-size: 12px;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: 500;
   cursor: pointer;
 }
-.context-menu button:hover{ background: rgba(255,255,255,0.08); }
+.context-menu button:hover,
+.context-menu button:focus-visible{ background: rgba(118, 172, 255, 0.16); }
 
 @media (max-width: 860px){
   .preview-shell{ min-height: 260px; }

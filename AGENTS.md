@@ -276,6 +276,12 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-17)
+- Package Explorer context-menu triggering now requires deliberate touch/pen hold (`LONG_PRESS_MS=620`) and cancels on movement threshold (`LONG_PRESS_MOVE_CANCEL_PX=12`), with no long-press menu path for ordinary mouse left-click taps.
+- Added centralized pending-long-press cleanup on scroll/drag/pointer-leave/context-capture paths so grid scrolling and incidental movement do not pop the menu.
+- Custom menu styling now uses explicit typography/layout tokens (font stack, size, line-height, width, text-size-adjust, hover/focus states) to keep appearance consistent across open states.
+- Package tests now assert long-press threshold/cancel wiring and explicit context-menu style markers.
+
+### Latest Implementation Notes (2026-03-17)
 - Package Explorer now applies a shared `.custom-ui-surface` anti-selection contract to content/tile surfaces, context menus, drawer preview shell, and selection bar to suppress browser-native text/tap highlight artifacts.
 - Added scoped control opt-outs so real form controls (`input`, `textarea`, `select`, editable targets) retain expected text/edit/select behavior inside those custom surfaces.
 - Preview image rendering now disables native drag ghosting (`draggable={false}` + drag-prevent) and package tests assert both anti-selection markers and form-control usability guards.

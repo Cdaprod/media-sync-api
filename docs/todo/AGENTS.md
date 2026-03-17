@@ -1,3 +1,11 @@
+## 2026-03-17 — Package Explorer context-menu trigger + style stability pass (active)
+- [x] Tightened long-press activation to touch/pen hold only, with stronger delay and explicit move-cancel threshold so ordinary taps do not open the custom menu.
+- [x] Added shared pending long-press cleanup for scroll/drag/pointer-leave/context-capture paths to prevent hair-trigger menu opens during grid interaction.
+- [x] Kept right-click/contextmenu ownership for desktop while preserving second-tap preview and selection interactions.
+- [x] Normalized `.context-menu` typography/layout with explicit font stack, size, line-height, width, text-size-adjust, and hover/focus states for consistent rendering.
+- [x] Expanded package regression coverage for long-press gating/cancel behavior and explicit menu style markers.
+- [ ] Validate on physical iPhone Safari that short taps never open the menu, long-press always does, and menu typography stays stable across repeated opens.
+
 ## 2026-03-17 — Package Explorer anti-selection surface polish (active)
 - [x] Scoped a reusable `.custom-ui-surface` anti-native-selection contract across package content, context menu, drawer body, and selection bar.
 - [x] Preserved real control usability by explicitly restoring text/select behavior for `input`, `textarea`, `select`, and editable targets inside custom surfaces.
