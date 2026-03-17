@@ -926,3 +926,26 @@ def test_explorer_overlay_sanitizer_inert_contract_present():
     assert '[data-overlay-sanitized="1"]{' in html
     assert "setNodeStyleSafe(node, 'pointerEvents', 'none');" in html
     assert "setNodeDataSafe(node, 'overlaySanitized', '1');" in html
+
+
+def test_explorer_project_chip_selection_toggle_logic_present():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'const alreadySelected = !!state.activeProject' in html
+    assert "state.activeProject.name === p.name" in html
+    assert "state.activeProject = null;" in html
+    assert "state.mediaScope = 'all';" in html
+    assert "await loadAllMedia();" in html
+    assert "toast('good', 'Project', 'Showing all projects');" in html
+
+
+def test_explorer_project_chip_toggle_preserves_normal_selection_path():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    select_start = html.index('async function selectProject(p){')
+    upload_start = html.index('async function uploadActive()', select_start)
+    select_block = html[select_start:upload_start]
+
+    assert "if (alreadySelected){" in select_block
+    assert "state.activeProject = p;" in select_block
+    assert "state.mediaScope = 'project';" in select_block
+    assert "await loadMedia();" in select_block
+    assert "renderProjects();" in select_block

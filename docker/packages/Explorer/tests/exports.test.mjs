@@ -392,3 +392,25 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
   assert.ok(styles.includes('.content .scroll{'));
 });
+
+
+test('package explorer project chips toggle selected project off to restore all-projects scope', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('const alreadySelected = Boolean(activeProject)'));
+  assert.ok(content.includes("activeProject?.name === project.name"));
+  assert.ok(content.includes("setActiveProject(null);"));
+  assert.ok(content.includes("setMediaScope('all');"));
+  assert.ok(content.includes("addToast('good', 'Project', 'Showing all projects');"));
+  assert.ok(content.includes("setActiveProject(project);"));
+  assert.ok(content.includes("setMediaScope('project');"));
+});
+
+test('package explorer sidebar scroll keeps touch scrolling enabled for project panel', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(styles.includes('.sidebar .scroll{'));
+  assert.ok(styles.includes('-webkit-overflow-scrolling: touch;'));
+  assert.ok(styles.includes('overscroll-behavior: contain;'));
+  assert.ok(styles.includes('touch-action: pan-y;'));
+});

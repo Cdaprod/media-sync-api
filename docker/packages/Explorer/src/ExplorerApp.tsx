@@ -803,6 +803,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const selectProject = useCallback(
     (project: Project) => {
+      const alreadySelected = Boolean(activeProject)
+        && activeProject?.name === project.name
+        && (activeProject?.source || 'primary') === (project.source || 'primary');
+
+      if (alreadySelected) {
+        setActiveProject(null);
+        setMediaScope('all');
+        clearSelectionState();
+        setFocused(null);
+        setResolveProjectMode('current');
+        setResolveProjectName('');
+        setResolveNewName('');
+        setUploadStatus('');
+        addToast('good', 'Project', 'Showing all projects');
+        return;
+      }
+
       setActiveProject(project);
       setMediaScope('project');
       clearSelectionState();
@@ -813,7 +830,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setUploadStatus('');
       addToast('good', 'Project', `Selected ${project.name}`);
     },
-    [addToast, clearSelectionState],
+    [activeProject, addToast, clearSelectionState],
   );
 
   const toggleSelected = useCallback(
