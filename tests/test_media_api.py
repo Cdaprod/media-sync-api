@@ -976,11 +976,15 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
     assert client.post(f"/api/projects/{first}/reindex").status_code == 200
     assert client.post(f"/api/projects/{second}/reindex").status_code == 200
 
-    def _fake_concat(inputs, output, mode, *, allow_overwrite):
-        output.write_bytes(b"joined")
-        return "copy"
+    captured: dict[str, object] = {}
 
-    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
+    def _fake_compose_staged_paths(ctx, spec, staged_paths, request, *, work_dir):
+        captured["project"] = ctx.project_name
+        captured["output_name"] = spec.output_name
+        captured["count"] = len(staged_paths)
+        return {"status": "stored", "path": "exports/bulk-cut-0001.mp4"}
+
+    monkeypatch.setattr("app.api.compose._compose_service.compose_staged_paths", _fake_compose_staged_paths)
 
     assets = [
         {"source": "primary", "project": first, "relative_path": "ingest/originals/compose-a.mov"},
@@ -1002,6 +1006,9 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
     payload = response.json()
     assert payload["status"] in {"stored", "duplicate"}
     assert payload["path"].startswith("exports/")
+    assert captured["project"] == output_project
+    assert captured["output_name"] == "bulk-cut.mp4"
+    assert captured["count"] == 2
 
 
 def test_bulk_delete_accepts_asset_id_without_relative_path(client: TestClient, env_settings: Path) -> None:
@@ -1076,11 +1083,13 @@ def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClien
     listing = client.get(f"/api/projects/{source}/media").json()["media"]
     asset_uuid = listing[0]["asset_uuid"]
 
-    def _fake_concat(inputs, output, mode, *, allow_overwrite):
-        output.write_bytes(b"joined")
-        return "copy"
+    def _fake_compose_staged_paths(ctx, spec, staged_paths, request, *, work_dir):
+        assert ctx.project_name == output_project
+        assert spec.output_name == "uuid-cut.mp4"
+        assert len(staged_paths) == 1
+        return {"status": "stored", "path": "exports/uuid-cut-0001.mp4"}
 
-    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
+    monkeypatch.setattr("app.api.compose._compose_service.compose_staged_paths", _fake_compose_staged_paths)
 
     response = client.post(
         "/api/assets/bulk/compose",
@@ -1093,3 +1102,25 @@ def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClien
     )
     assert response.status_code == 200
     assert response.json()["path"].startswith("exports/")
+
+
+def test_bulk_compose_rejects_allow_overwrite(client: TestClient, env_settings: Path) -> None:
+    source = _create_project(client)
+    output_project = _create_project(client)
+    ingest = env_settings / source / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    (ingest / "overwrite.mov").write_bytes(b"overwrite")
+
+    assert client.post(f"/api/projects/{source}/reindex").status_code == 200
+
+    response = client.post(
+        "/api/assets/bulk/compose",
+        json={
+            "assets": [{"source": "primary", "project": source, "relative_path": "ingest/originals/overwrite.mov"}],
+            "output_project": output_project,
+            "output_name": "overwrite-cut.mp4",
+            "allow_overwrite": True,
+        },
+    )
+    assert response.status_code == 400
+    assert "no longer supports fixed-path overwrite" in response.json()["detail"]

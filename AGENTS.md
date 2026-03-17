@@ -2,6 +2,38 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-17)
+- Package Explorer compose modal now has an in-flight submit lock (`composeSubmitting`) so repeated taps/Enter presses cannot queue duplicate `/api/assets/bulk/compose` requests.
+- Compose modal controls now disable while submit is active (filename input, project select, cancel button, compose button) and expose `aria-busy` state for accessibility.
+- Compose CTA now shows `Composing...` during in-flight requests and resets through a `finally` path to prevent sticky busy states after success or error.
+- Removed duplicate-enter submission risk by relying on the form submit path with a guarded handler; Escape/backdrop close is now blocked during in-flight compose.
+- Added package regression assertions for submit-lock markers (`composeSubmitting`, busy disable state, `Composing...`, and finally reset) to prevent duplicate-output regressions.
+
+### Latest Implementation Notes (2026-03-17)
+- Fixed `/api/assets/bulk/compose` regression caused by stale imports from pre-refactor compose helpers; bulk compose now routes through the refactored compose service (`_compose_service.compose_staged_paths`) instead of removed `_concat_files`-era functions.
+- Added `ComposeService.compose_staged_paths(...)` to provide a first-class staged-path execution seam reused by bulk asset compose while preserving existing planner/preprocessor/executor/registrar architecture.
+- Bulk compose now validates compose environment through compose module guards and uses a dedicated temporary work dir under `MEDIA_SYNC_TEMP_ROOT` for normalization artifacts with guaranteed cleanup.
+- Bulk compose now returns explicit HTTP 400 when `allow_overwrite=true` is requested (fixed-path overwrite no longer supported in the refactored compose pipeline), avoiding dropped transport failures.
+- Updated media API regression tests to target compose-service integration seam and added explicit guard coverage for unsupported `allow_overwrite` in bulk compose.
+
+### Latest Implementation Notes (2026-03-17)
+- Package Explorer compose flow now mirrors static `composeSelectedVideos` warning semantics (`Select one or more clips` / `Select one or more video clips`) to keep validation feedback parity.
+- Removed modal auto-close on no-video validation in package compose confirm path so validation warnings no longer dismiss the dialog unexpectedly.
+- Kept package compose submit wired to the same success/error toast lifecycle while preserving form-submit + Enter execution path.
+- Added regression assertions to ensure the no-video warning path does not reintroduce modal-close side effects.
+
+### Latest Implementation Notes (2026-03-17)
+- Package Explorer compose modal regression fixed by reconnecting submit wiring to the existing bulk compose action path through a real `<form onSubmit>` handler so both Enter and the green Compose button invoke `handleComposeConfirm`.
+- Compose success notifications now use the prior completion semantics (`Created <path>`) and modal-close behavior on success; API/validation failures keep the modal open and surface toast errors instead of silent no-ops.
+- Package compose request payload now explicitly includes `target_dir: 'exports'`, `mode: 'auto'`, and `allow_overwrite: false` to match the known working compose flow contract.
+- Package compose default output project preference now selects `P5-SHARED-Exported-Media` first (with `P5-Exported-Media` fallback) instead of defaulting to the first project.
+
+### Latest Implementation Notes (2026-03-17)
+- Compose pipeline now supports mixed ordered visual inputs (`video` + `image`) by allowing image kinds through planner validation while continuing to reject audio.
+- Added image segment preprocessing in `app/api/compose.py` (`_normalize_image_segment`) so still photos are converted into fixed-duration H.264 MP4 segments (`IMAGE_FREEZE_SECONDS = 2.0`) with scale/pad-to-canvas normalization.
+- Compose preprocessor target canvas selection now uses the first visual asset in request order (video or image) and preserves exact input order when generating `PreparedSegment` outputs.
+- Added compose regression tests covering mixed-media order preservation and explicit audio rejection guard behavior.
+
+### Latest Implementation Notes (2026-03-17)
 - Static Explorer project pills now toggle cleanly: clicking an already-selected project clears `activeProject`, restores all-projects media scope, refreshes counts, and resets upload/resolve project-bound UI state.
 - Added static regression checks ensuring selected-project repeated clicks follow explicit `selectedProject === clickedProject ? clear : set` logic and still preserve normal select/load behavior.
 

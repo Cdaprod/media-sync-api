@@ -69,12 +69,12 @@ logger = logging.getLogger("media_sync_api.compose")
 COMPOSE_SESSION_PREFIX = "compose_session_"
 SESSION_MAX_AGE_SECONDS = 3600
 
-# Media-kind policy: only these kinds are supported for direct concat today.
-# Extend this set when image/audio preprocessing is implemented.
-SUPPORTED_DIRECT_COMPOSE_KINDS: frozenset[str] = frozenset({"video"})
+# Media-kind policy for compose preprocessing.
+# Audio remains unsupported for now.
+SUPPORTED_DIRECT_COMPOSE_KINDS: frozenset[str] = frozenset({"video", "image"})
 
-# Future: duration for image freeze-frame segments when image preprocessing is enabled.
-IMAGE_FREEZE_SECONDS: float = 3.0
+# Duration used when converting still images into temporary MP4 segments.
+IMAGE_FREEZE_SECONDS: float = 2.0
 
 
 # =============================================================================
@@ -282,7 +282,7 @@ def _assets_compatible_for_copy(assets: Sequence[InputAsset]) -> bool:
 
 
 def _validate_supported_inputs(input_assets: Sequence[InputAsset]) -> None:
-    """Reject non-video inputs until preprocessing is implemented."""
+    """Reject media kinds that are not currently implemented in the compose preprocessor."""
     unsupported = [a for a in input_assets if a.kind not in SUPPORTED_DIRECT_COMPOSE_KINDS]
     if not unsupported:
         return
@@ -331,25 +331,16 @@ def _build_absolute_media_url(
     return f"{base_url.rstrip('/')}{path}{suffix}"
 
 
-# Added to compute "display"
 def _display_geometry_from_probe(probe: dict[str, int]) -> tuple[int, int]:
     width = int(probe.get("width") or 0)
     height = int(probe.get("height") or 0)
     rotate = int(probe.get("rotate") or 0)
-    logger.info(
-        "normalize_video_segment input=%s rotate=%s target=%sx%s",
-        input_path.name,
-        rotate,
-        target_width,
-        target_height,
-    )
-    
+
     if rotate in {90, 270}:
         return height, width
     return width, height
 
 
-# Added for video dimensions and rotation
 def _probe_video_geometry(path: Path) -> dict[str, int]:
     """
     Return decoded geometry hints for a video file.
@@ -421,7 +412,46 @@ def _probe_video_geometry(path: Path) -> dict[str, int]:
     }
 
 
-# Added for orientation normalization
+def _probe_image_geometry(path: Path) -> dict[str, int]:
+    """Return width/height for an image file using ffprobe stream metadata."""
+    command = [
+        "ffprobe",
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height",
+        "-of", "json",
+        str(path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        return {"width": 0, "height": 0, "rotate": 0}
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {"width": 0, "height": 0, "rotate": 0}
+
+    streams = payload.get("streams", [])
+    if not streams:
+        return {"width": 0, "height": 0, "rotate": 0}
+
+    stream = streams[0]
+    return {
+        "width": int(stream.get("width") or 0),
+        "height": int(stream.get("height") or 0),
+        "rotate": 0,
+    }
+
+
+def _display_geometry_for_asset(asset: InputAsset) -> tuple[int, int]:
+    """Return display width/height for either video or image assets."""
+    if asset.kind == "video":
+        return _display_geometry_from_probe(_probe_video_geometry(asset.path))
+    if asset.kind == "image":
+        return _display_geometry_from_probe(_probe_image_geometry(asset.path))
+    return 0, 0
+
+
 def _normalize_video_segment(
     input_path: Path,
     output_path: Path,
@@ -490,6 +520,46 @@ def _normalize_video_segment(
             ),
         )
 
+    return output_path
+
+
+def _normalize_image_segment(
+    input_path: Path,
+    output_path: Path,
+    *,
+    target_width: int,
+    target_height: int,
+    duration_seconds: float,
+) -> Path:
+    """Convert one image into a fixed-duration MP4 segment."""
+    vf = (
+        f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
+        f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
+    )
+    command = [
+        "ffmpeg",
+        "-y",
+        "-loop", "1",
+        "-i", str(input_path),
+        "-t", str(duration_seconds),
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-vf", vf,
+        "-movflags", "+faststart",
+        str(output_path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr_tail = _error_tail(result.stderr)
+        stdout_tail = _error_tail(result.stdout)
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "image normalization failed; "
+                f"stderr_tail={stderr_tail or '<empty>'}; "
+                f"stdout_tail={stdout_tail or '<empty>'}"
+            ),
+        )
     return output_path
 
 
@@ -1196,10 +1266,12 @@ class ComposePreprocessor:
     Sole owner of PreparedSegment production.
 
     Policy:
-    - first video clip decides orientation family
+    - first visual clip (video/image) decides orientation family
     - portrait jobs normalize to 1080x1920
     - landscape jobs normalize to 1920x1080
-    - image/audio preprocessing is still not enabled
+    - videos are normalized into upright temp mp4 segments
+    - images are converted into fixed-duration temp mp4 segments
+    - audio preprocessing is not enabled
     """
 
     def prepare(self, assets: Sequence[InputAsset], work_dir: Path) -> list[PreparedSegment]:
@@ -1208,17 +1280,17 @@ class ComposePreprocessor:
         normalized_dir = work_dir / "normalized"
         normalized_dir.mkdir(parents=True, exist_ok=True)
 
-        video_assets = [asset for asset in assets if asset.kind == "video"]
-        if not video_assets:
-            raise HTTPException(status_code=400, detail="No video assets available for compose")
+        visual_assets = [asset for asset in assets if asset.kind in {"video", "image"}]
+        if not visual_assets:
+            raise HTTPException(status_code=400, detail="No visual assets available for compose")
 
-        first_probe = _probe_video_geometry(video_assets[0].path)
-        display_width, display_height = _display_geometry_from_probe(first_probe)
+        first_visual = visual_assets[0]
+        display_width, display_height = _display_geometry_for_asset(first_visual)
 
         if display_width <= 0 or display_height <= 0:
             raise HTTPException(
                 status_code=500,
-                detail=f"Could not determine target canvas from first clip: {video_assets[0].path.name}",
+                detail=f"Could not determine target canvas from first visual input: {first_visual.path.name}",
             )
 
         if display_height >= display_width:
@@ -1244,11 +1316,29 @@ class ComposePreprocessor:
                 )
                 continue
 
+            if asset.kind == "image":
+                out_path = normalized_dir / f"segment_{idx:04d}.mp4"
+                normalized_path = _normalize_image_segment(
+                    asset.path,
+                    out_path,
+                    target_width=target_width,
+                    target_height=target_height,
+                    duration_seconds=IMAGE_FREEZE_SECONDS,
+                )
+                prepared.append(
+                    PreparedSegment(
+                        path=normalized_path,
+                        source_kind="image",
+                        generated=True,
+                    )
+                )
+                continue
+
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Unsupported compose asset kind '{asset.kind}' for '{asset.path.name}'. "
-                    "Image/audio preprocessing is not yet enabled."
+                    "Audio preprocessing is not yet enabled."
                 ),
             )
 
@@ -1281,6 +1371,36 @@ class ComposeService:
             input_assets=plan.input_assets,
             prepared_segments=prepared,
         )
+
+    # ------------------------------------------------------------------
+    # Flow A0: Compose pre-resolved staged paths (used by bulk asset compose)
+    # ------------------------------------------------------------------
+
+    def compose_staged_paths(
+        self,
+        ctx: ProjectContext,
+        spec: ComposeSpec,
+        staged_paths: Sequence[Path],
+        request: Request,
+        *,
+        work_dir: Path,
+    ) -> dict[str, Any]:
+        if not staged_paths:
+            raise HTTPException(status_code=400, detail="No staged inputs available for compose")
+
+        plan = self.planner.build_staged_plan(ctx, list(staged_paths), spec)
+        prepared = self.preprocessor.prepare(plan.input_assets, work_dir)
+        plan = self._with_prepared_segments(plan, prepared)
+        result = self.executor.execute(plan)
+        logger.info(
+            "compose_staged_paths_complete project=%s source=%s inputs=%s output=%s mode=%s",
+            ctx.project_name,
+            ctx.source_name,
+            len(plan.input_paths),
+            result.output_path.relative_to(ctx.project_root).as_posix(),
+            result.mode_used,
+        )
+        return self.registrar.register(ctx, result, request)
 
     # ------------------------------------------------------------------
     # Flow A: Compose existing indexed clips

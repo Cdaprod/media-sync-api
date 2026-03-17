@@ -160,18 +160,35 @@ test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
-  assert.ok(content.includes('Compose supports video clips only'));
+  assert.ok(content.includes('Select one or more video clips'));
+  assert.ok(content.includes("addToast('warn', 'Compose', 'Select one or more clips')"));
   assert.ok(content.includes('const buildComposeTimestampName = () => {'));
-  assert.ok(content.includes("entry?.name === 'P5-Exported-Media'"));
+  assert.ok(content.includes("entry?.name === 'P5-SHARED-Exported-Media'"));
   assert.ok(content.includes('setComposeModalOpen(true);'));
   assert.ok(content.includes('className={`compose-modal ${composeModalOpen ? \'open\' : \'\'}`}'));
+  assert.ok(content.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
   assert.ok(content.includes('data-compose-project-picker="1"'));
+  assert.ok(content.includes('onSubmit={(event) => {'));
+  assert.ok(content.includes('className="btn good" type="submit" disabled={composeSubmitting}'));
+  assert.ok(content.includes("addToast('good', 'Compose', `Created ${composedPath}`)"));
+  assert.ok(content.includes('target_dir: \'exports\''));
+  assert.ok(content.includes('allow_overwrite: false,'));
+  assert.ok(content.includes('if (composeSubmitting) {'));
+  assert.ok(content.includes('setComposeSubmitting(true);'));
+  assert.ok(content.includes('setComposeSubmitting(false);'));
+  assert.ok(content.includes("{composeSubmitting ? 'Composing...' : 'Compose'}"));
+  assert.ok(content.includes('disabled={composeSubmitting}'));
+  assert.ok(content.includes('aria-busy={composeSubmitting}'));
   const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
   const composeEnd = content.indexOf('const handleComposeConfirm = useCallback(async () => {', composeStart);
   assert.ok(composeStart >= 0);
   assert.ok(composeEnd > composeStart);
   const composeBlock = content.slice(composeStart, composeEnd);
   assert.ok(!composeBlock.includes('window.prompt('));
+  const confirmEnd = content.indexOf('const handleResolve = useCallback(async () => {', composeEnd);
+  const confirmBlock = content.slice(composeEnd, confirmEnd);
+  assert.ok(!confirmBlock.includes("Select one or more video clips');\n      setComposeModalOpen(false);"));
+  assert.ok(confirmBlock.includes('} finally {'));
 });
 
 test('package explorer compose modal styles are present', () => {

@@ -1,3 +1,38 @@
+## 2026-03-17 — Package compose repeat-submit lock (iPhone Safari)
+- [x] Added `composeSubmitting` in package Explorer compose modal flow and hard-guarded `handleComposeConfirm` against re-entry.
+- [x] Disabled compose modal controls while submit is active and added busy UI state (`Composing...`, `aria-busy`).
+- [x] Prevented in-flight modal dismissal via Escape/backdrop to avoid accidental duplicate submits from rapid tap retries.
+- [x] Added regression assertions for submit-lock, busy-label, disable-state, and finally-reset markers.
+- [ ] Validate on physical iPhone Safari that rapid repeated taps on Compose now produce exactly one output artifact per compose action.
+
+## 2026-03-17 — Bulk compose API transport-failure regression fix
+- [x] Replaced stale bulk-compose imports from removed compose helpers with calls into the refactored compose service staged-path flow.
+- [x] Added `ComposeService.compose_staged_paths(...)` so bulk asset compose can reuse planner/preprocessor/executor/registrar without route-level ffmpeg wiring.
+- [x] Added explicit bulk-compose guard for unsupported `allow_overwrite=true` requests to return deterministic JSON errors.
+- [x] Added/updated media API tests for bulk compose staged-path delegation and overwrite guard behavior.
+- [ ] Validate from physical iPhone Safari that `/api/assets/bulk/compose` now returns HTTP JSON responses (no status-0 `Load failed`) for both success and failure cases.
+
+## 2026-03-17 — Package compose static-flow parity follow-up
+- [x] Aligned package compose empty-selection/no-video warning copy with static explorer compose flow.
+- [x] Removed package compose modal auto-close on no-video validation so warning states keep dialog context.
+- [x] Added regression assertion guarding against reintroducing no-video modal-close behavior in confirm path.
+- [ ] Validate on iPhone Safari that warning-to-correction flow remains smooth when users adjust selection while compose modal is open.
+
+## 2026-03-17 — Package compose modal submit regression restore
+- [x] Traced compose modal submit path and reconnected it to the existing compose action/toast flow via form submit wiring.
+- [x] Ensured both Enter and Compose button trigger `handleComposeConfirm` instead of visual-only button press behavior.
+- [x] Restored compose success behavior to close modal + show success toast and kept modal open for validation/API errors.
+- [x] Updated package compose default project preference to `P5-SHARED-Exported-Media` with `P5-Exported-Media` fallback.
+- [x] Added/updated package regression assertions for preferred project marker, form-submit wiring, and compose success/payload markers.
+- [ ] Validate on physical iPhone Safari that compose submit now consistently dispatches request + success toast under real network/API latency.
+
+## 2026-03-17 — Compose mixed-media (video+image) preprocessing enablement
+- [x] Expanded compose supported input policy to include `image` alongside `video` while keeping audio rejected.
+- [x] Added image normalization helper to convert still assets into temporary fixed-duration MP4 segments for concat pipeline compatibility.
+- [x] Updated compose preprocessor canvas selection to use the first visual input (video/image) and keep prepared segment order aligned to request order.
+- [x] Added compose regression tests for mixed-media ordering and audio-rejection guardrail behavior.
+- [ ] Add endpoint-level compose tests that exercise real ffprobe/ffmpeg mixed-media staging when CI/runtime media tooling is available.
+
 ## 2026-03-17 — Package Explorer project-pill toggle + sidebar scroll follow-up
 - [x] Patched `docker/packages/Explorer/src/ExplorerApp.tsx` project-chip clicks to toggle off when the selected chip is tapped again (restore all-projects scope).
 - [x] Kept project selection state resets aligned with static explorer behavior (clear selection/focus + reset resolve/upload project-bound fields).
