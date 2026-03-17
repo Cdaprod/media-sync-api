@@ -1,3 +1,9 @@
+## 2026-03-17 — Package compose static-flow parity follow-up
+- [x] Aligned package compose empty-selection/no-video warning copy with static explorer compose flow.
+- [x] Removed package compose modal auto-close on no-video validation so warning states keep dialog context.
+- [x] Added regression assertion guarding against reintroducing no-video modal-close behavior in confirm path.
+- [ ] Validate on iPhone Safari that warning-to-correction flow remains smooth when users adjust selection while compose modal is open.
+
 ## 2026-03-17 — Package compose modal submit regression restore
 - [x] Traced compose modal submit path and reconnected it to the existing compose action/toast flow via form submit wiring.
 - [x] Ensured both Enter and Compose button trigger `handleComposeConfirm` instead of visual-only button press behavior.

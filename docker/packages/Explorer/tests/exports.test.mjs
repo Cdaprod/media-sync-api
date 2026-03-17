@@ -160,7 +160,8 @@ test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
-  assert.ok(content.includes('Compose supports video clips only'));
+  assert.ok(content.includes('Select one or more video clips'));
+  assert.ok(content.includes("addToast('warn', 'Compose', 'Select one or more clips')"));
   assert.ok(content.includes('const buildComposeTimestampName = () => {'));
   assert.ok(content.includes("entry?.name === 'P5-SHARED-Exported-Media'"));
   assert.ok(content.includes('setComposeModalOpen(true);'));
@@ -177,6 +178,9 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(composeEnd > composeStart);
   const composeBlock = content.slice(composeStart, composeEnd);
   assert.ok(!composeBlock.includes('window.prompt('));
+  const confirmEnd = content.indexOf('const handleResolve = useCallback(async () => {', composeEnd);
+  const confirmBlock = content.slice(composeEnd, confirmEnd);
+  assert.ok(!confirmBlock.includes("Select one or more video clips');\n      setComposeModalOpen(false);"));
 });
 
 test('package explorer compose modal styles are present', () => {

@@ -2,6 +2,12 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-17)
+- Package Explorer compose flow now mirrors static `composeSelectedVideos` warning semantics (`Select one or more clips` / `Select one or more video clips`) to keep validation feedback parity.
+- Removed modal auto-close on no-video validation in package compose confirm path so validation warnings no longer dismiss the dialog unexpectedly.
+- Kept package compose submit wired to the same success/error toast lifecycle while preserving form-submit + Enter execution path.
+- Added regression assertions to ensure the no-video warning path does not reintroduce modal-close side effects.
+
+### Latest Implementation Notes (2026-03-17)
 - Package Explorer compose modal regression fixed by reconnecting submit wiring to the existing bulk compose action path through a real `<form onSubmit>` handler so both Enter and the green Compose button invoke `handleComposeConfirm`.
 - Compose success notifications now use the prior completion semantics (`Created <path>`) and modal-close behavior on success; API/validation failures keep the modal open and surface toast errors instead of silent no-ops.
 - Package compose request payload now explicitly includes `target_dir: 'exports'`, `mode: 'auto'`, and `allow_overwrite: false` to match the known working compose flow contract.

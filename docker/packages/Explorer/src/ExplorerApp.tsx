@@ -1062,11 +1062,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const handleComposeSelected = useCallback(async () => {
     if (!selected.size) {
-      addToast('warn', 'Compose', 'Select one or more clips first');
+      addToast('warn', 'Compose', 'Select one or more clips');
       return;
     }
     if (!selectedVideoItems.length) {
-      addToast('warn', 'Compose', 'Compose supports video clips only');
+      addToast('warn', 'Compose', 'Select one or more video clips');
       return;
     }
     if (!projects.length) {
@@ -1081,8 +1081,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const handleComposeConfirm = useCallback(async () => {
     if (!selectedVideoItems.length) {
-      addToast('warn', 'Compose', 'Compose supports video clips only');
-      setComposeModalOpen(false);
+      addToast('warn', 'Compose', 'Select one or more video clips');
       return;
     }
     const outputName = composeOutputName.trim() || buildComposeTimestampName();
