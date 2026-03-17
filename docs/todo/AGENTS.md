@@ -1,3 +1,11 @@
+## 2026-03-17 — Package compose modal submit regression restore
+- [x] Traced compose modal submit path and reconnected it to the existing compose action/toast flow via form submit wiring.
+- [x] Ensured both Enter and Compose button trigger `handleComposeConfirm` instead of visual-only button press behavior.
+- [x] Restored compose success behavior to close modal + show success toast and kept modal open for validation/API errors.
+- [x] Updated package compose default project preference to `P5-SHARED-Exported-Media` with `P5-Exported-Media` fallback.
+- [x] Added/updated package regression assertions for preferred project marker, form-submit wiring, and compose success/payload markers.
+- [ ] Validate on physical iPhone Safari that compose submit now consistently dispatches request + success toast under real network/API latency.
+
 ## 2026-03-17 — Compose mixed-media (video+image) preprocessing enablement
 - [x] Expanded compose supported input policy to include `image` alongside `video` while keeping audio rejected.
 - [x] Added image normalization helper to convert still assets into temporary fixed-duration MP4 segments for concat pipeline compatibility.

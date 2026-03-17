@@ -2,6 +2,12 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-17)
+- Package Explorer compose modal regression fixed by reconnecting submit wiring to the existing bulk compose action path through a real `<form onSubmit>` handler so both Enter and the green Compose button invoke `handleComposeConfirm`.
+- Compose success notifications now use the prior completion semantics (`Created <path>`) and modal-close behavior on success; API/validation failures keep the modal open and surface toast errors instead of silent no-ops.
+- Package compose request payload now explicitly includes `target_dir: 'exports'`, `mode: 'auto'`, and `allow_overwrite: false` to match the known working compose flow contract.
+- Package compose default output project preference now selects `P5-SHARED-Exported-Media` first (with `P5-Exported-Media` fallback) instead of defaulting to the first project.
+
+### Latest Implementation Notes (2026-03-17)
 - Compose pipeline now supports mixed ordered visual inputs (`video` + `image`) by allowing image kinds through planner validation while continuing to reject audio.
 - Added image segment preprocessing in `app/api/compose.py` (`_normalize_image_segment`) so still photos are converted into fixed-duration H.264 MP4 segments (`IMAGE_FREEZE_SECONDS = 2.0`) with scale/pad-to-canvas normalization.
 - Compose preprocessor target canvas selection now uses the first visual asset in request order (video or image) and preserves exact input order when generating `PreparedSegment` outputs.

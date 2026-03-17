@@ -264,7 +264,8 @@ const buildComposeTimestampName = () => {
 };
 
 const defaultComposeProject = (projects: Project[]): Project | null => {
-  const preferred = projects.find((entry) => entry?.name === 'P5-Exported-Media');
+  const preferred = projects.find((entry) => entry?.name === 'P5-SHARED-Exported-Media')
+    || projects.find((entry) => entry?.name === 'P5-Exported-Media');
   if (preferred) return preferred;
   return projects[0] || null;
 };
@@ -1074,7 +1075,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     const preferredProject = defaultComposeProject(projects);
     setComposeOutputName(buildComposeTimestampName());
-    setComposeOutputProject(preferredProject?.name || 'P5-Exported-Media');
+    setComposeOutputProject(preferredProject?.name || 'P5-SHARED-Exported-Media');
     setComposeModalOpen(true);
   }, [addToast, projects, selected, selectedVideoItems]);
 
@@ -1103,13 +1104,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
     try {
-      await api.bulkComposeMedia({
+      const response = await api.bulkComposeMedia({
         assets: refs,
         output_project: targetProject.name,
         output_name: outputName,
         output_source: targetProject.source || null,
+        target_dir: 'exports',
+        mode: 'auto',
+        allow_overwrite: false,
       });
-      addToast('good', 'Compose', `Composed ${refs.length} video item(s) into ${outputName}`);
+      const composedPath = typeof response.path === 'string' && response.path.trim()
+        ? response.path
+        : outputName;
+      addToast('good', 'Compose', `Created ${composedPath}`);
       setComposeModalOpen(false);
       await loadProjects();
       if (mediaScope === 'all' || !activeProject) await loadAllMedia();
@@ -1832,7 +1839,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       if (event.key === 'Enter') {
         const target = event.target as HTMLElement | null;
-        if (target?.tagName === 'SELECT') return;
+        if (target?.tagName === 'SELECT' || target?.tagName === 'TEXTAREA') return;
         event.preventDefault();
         void handleComposeConfirm();
       }
@@ -2635,7 +2642,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         aria-labelledby="composeModalTitle"
         onClick={() => setComposeModalOpen(false)}
       >
-        <div className="compose-card custom-ui-surface" onClick={(event) => event.stopPropagation()}>
+        <form
+          className="compose-card custom-ui-surface"
+          onClick={(event) => event.stopPropagation()}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleComposeConfirm();
+          }}
+        >
           <h3 id="composeModalTitle" className="compose-title">Compose video output</h3>
           <p className="compose-body">Choose the output filename and destination project.</p>
           <div className="compose-fields">
@@ -2667,9 +2681,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </div>
           <div className="compose-actions">
             <button className="btn" type="button" onClick={() => setComposeModalOpen(false)}>Cancel</button>
-            <button className="btn good" type="button" onClick={() => { void handleComposeConfirm(); }}>Compose</button>
+            <button className="btn good" type="submit">Compose</button>
           </div>
-        </div>
+        </form>
       </div>
 
       <div className="toasts">
