@@ -2,6 +2,13 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-17)
+- Package Explorer compose modal now has an in-flight submit lock (`composeSubmitting`) so repeated taps/Enter presses cannot queue duplicate `/api/assets/bulk/compose` requests.
+- Compose modal controls now disable while submit is active (filename input, project select, cancel button, compose button) and expose `aria-busy` state for accessibility.
+- Compose CTA now shows `Composing...` during in-flight requests and resets through a `finally` path to prevent sticky busy states after success or error.
+- Removed duplicate-enter submission risk by relying on the form submit path with a guarded handler; Escape/backdrop close is now blocked during in-flight compose.
+- Added package regression assertions for submit-lock markers (`composeSubmitting`, busy disable state, `Composing...`, and finally reset) to prevent duplicate-output regressions.
+
+### Latest Implementation Notes (2026-03-17)
 - Fixed `/api/assets/bulk/compose` regression caused by stale imports from pre-refactor compose helpers; bulk compose now routes through the refactored compose service (`_compose_service.compose_staged_paths`) instead of removed `_concat_files`-era functions.
 - Added `ComposeService.compose_staged_paths(...)` to provide a first-class staged-path execution seam reused by bulk asset compose while preserving existing planner/preprocessor/executor/registrar architecture.
 - Bulk compose now validates compose environment through compose module guards and uses a dedicated temporary work dir under `MEDIA_SYNC_TEMP_ROOT` for normalization artifacts with guaranteed cleanup.

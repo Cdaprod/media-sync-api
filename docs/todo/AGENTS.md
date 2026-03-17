@@ -1,3 +1,10 @@
+## 2026-03-17 — Package compose repeat-submit lock (iPhone Safari)
+- [x] Added `composeSubmitting` in package Explorer compose modal flow and hard-guarded `handleComposeConfirm` against re-entry.
+- [x] Disabled compose modal controls while submit is active and added busy UI state (`Composing...`, `aria-busy`).
+- [x] Prevented in-flight modal dismissal via Escape/backdrop to avoid accidental duplicate submits from rapid tap retries.
+- [x] Added regression assertions for submit-lock, busy-label, disable-state, and finally-reset markers.
+- [ ] Validate on physical iPhone Safari that rapid repeated taps on Compose now produce exactly one output artifact per compose action.
+
 ## 2026-03-17 — Bulk compose API transport-failure regression fix
 - [x] Replaced stale bulk-compose imports from removed compose helpers with calls into the refactored compose service staged-path flow.
 - [x] Added `ComposeService.compose_staged_paths(...)` so bulk asset compose can reuse planner/preprocessor/executor/registrar without route-level ffmpeg wiring.

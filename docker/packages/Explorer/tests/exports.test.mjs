@@ -166,12 +166,19 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes("entry?.name === 'P5-SHARED-Exported-Media'"));
   assert.ok(content.includes('setComposeModalOpen(true);'));
   assert.ok(content.includes('className={`compose-modal ${composeModalOpen ? \'open\' : \'\'}`}'));
+  assert.ok(content.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
   assert.ok(content.includes('data-compose-project-picker="1"'));
   assert.ok(content.includes('onSubmit={(event) => {'));
-  assert.ok(content.includes('type="submit">Compose</button>'));
+  assert.ok(content.includes('className="btn good" type="submit" disabled={composeSubmitting}'));
   assert.ok(content.includes("addToast('good', 'Compose', `Created ${composedPath}`)"));
   assert.ok(content.includes('target_dir: \'exports\''));
   assert.ok(content.includes('allow_overwrite: false,'));
+  assert.ok(content.includes('if (composeSubmitting) {'));
+  assert.ok(content.includes('setComposeSubmitting(true);'));
+  assert.ok(content.includes('setComposeSubmitting(false);'));
+  assert.ok(content.includes("{composeSubmitting ? 'Composing...' : 'Compose'}"));
+  assert.ok(content.includes('disabled={composeSubmitting}'));
+  assert.ok(content.includes('aria-busy={composeSubmitting}'));
   const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
   const composeEnd = content.indexOf('const handleComposeConfirm = useCallback(async () => {', composeStart);
   assert.ok(composeStart >= 0);
@@ -181,6 +188,7 @@ test('compose action filters selected assets to videos', () => {
   const confirmEnd = content.indexOf('const handleResolve = useCallback(async () => {', composeEnd);
   const confirmBlock = content.slice(composeEnd, confirmEnd);
   assert.ok(!confirmBlock.includes("Select one or more video clips');\n      setComposeModalOpen(false);"));
+  assert.ok(confirmBlock.includes('} finally {'));
 });
 
 test('package explorer compose modal styles are present', () => {

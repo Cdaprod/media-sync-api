@@ -390,6 +390,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
   const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
+  const [composeSubmitting, setComposeSubmitting] = useState(false);
   const [composeOutputName, setComposeOutputName] = useState('');
   const [composeOutputProject, setComposeOutputProject] = useState('');
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
@@ -1076,10 +1077,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const preferredProject = defaultComposeProject(projects);
     setComposeOutputName(buildComposeTimestampName());
     setComposeOutputProject(preferredProject?.name || 'P5-SHARED-Exported-Media');
+    setComposeSubmitting(false);
     setComposeModalOpen(true);
   }, [addToast, projects, selected, selectedVideoItems]);
 
   const handleComposeConfirm = useCallback(async () => {
+    if (composeSubmitting) {
+      return;
+    }
     if (!selectedVideoItems.length) {
       addToast('warn', 'Compose', 'Select one or more video clips');
       return;
@@ -1102,6 +1107,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Compose', 'Unable to resolve selected media paths');
       return;
     }
+    setComposeSubmitting(true);
     try {
       const response = await api.bulkComposeMedia({
         assets: refs,
@@ -1117,14 +1123,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         : outputName;
       addToast('good', 'Compose', `Created ${composedPath}`);
       setComposeModalOpen(false);
+      setComposeSubmitting(false);
       await loadProjects();
       if (mediaScope === 'all' || !activeProject) await loadAllMedia();
       else await loadMedia(activeProject);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Compose failed';
       addToast('bad', 'Compose', message);
+    } finally {
+      setComposeSubmitting(false);
     }
-  }, [activeProject, addToast, api, composeOutputName, composeOutputProject, loadAllMedia, loadMedia, loadProjects, mediaScope, projects, selectedVideoItems, toAssetRef]);
+  }, [activeProject, addToast, api, composeOutputName, composeOutputProject, composeSubmitting, loadAllMedia, loadMedia, loadProjects, mediaScope, projects, selectedVideoItems, toAssetRef]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -1832,21 +1841,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!composeModalOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (composeSubmitting) return;
         event.preventDefault();
         setComposeModalOpen(false);
-        return;
-      }
-      if (event.key === 'Enter') {
-        const target = event.target as HTMLElement | null;
-        if (target?.tagName === 'SELECT' || target?.tagName === 'TEXTAREA') return;
-        event.preventDefault();
-        void handleComposeConfirm();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     window.requestAnimationFrame(() => composeNameInputRef.current?.focus());
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [composeModalOpen, handleComposeConfirm]);
+  }, [composeModalOpen, composeSubmitting]);
 
   const uploadCaption = activeProject
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
@@ -2638,11 +2641,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         role="dialog"
         aria-modal="true"
         aria-hidden={!composeModalOpen}
+        aria-busy={composeSubmitting}
         aria-labelledby="composeModalTitle"
-        onClick={() => setComposeModalOpen(false)}
+        onClick={() => {
+          if (composeSubmitting) return;
+          setComposeModalOpen(false);
+        }}
       >
         <form
           className="compose-card custom-ui-surface"
+          aria-busy={composeSubmitting}
           onClick={(event) => event.stopPropagation()}
           onSubmit={(event) => {
             event.preventDefault();
@@ -2661,6 +2669,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 placeholder="compose-YYYYMMDDHHMMSS.mp4"
                 autoComplete="off"
                 spellCheck={false}
+                disabled={composeSubmitting}
               />
             </label>
             <label className="compose-field">
@@ -2669,6 +2678,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 value={composeOutputProject}
                 onChange={(event) => setComposeOutputProject(event.target.value)}
                 data-compose-project-picker="1"
+                disabled={composeSubmitting}
               >
                 {projects.map((project) => (
                   <option key={`${project.source || 'primary'}::${project.name}`} value={project.name}>
@@ -2679,8 +2689,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             </label>
           </div>
           <div className="compose-actions">
-            <button className="btn" type="button" onClick={() => setComposeModalOpen(false)}>Cancel</button>
-            <button className="btn good" type="submit">Compose</button>
+            <button className="btn" type="button" disabled={composeSubmitting} onClick={() => setComposeModalOpen(false)}>Cancel</button>
+            <button className="btn good" type="submit" disabled={composeSubmitting}>{composeSubmitting ? 'Composing...' : 'Compose'}</button>
           </div>
         </form>
       </div>
