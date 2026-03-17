@@ -2,6 +2,13 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-17)
+- Fixed `/api/assets/bulk/compose` regression caused by stale imports from pre-refactor compose helpers; bulk compose now routes through the refactored compose service (`_compose_service.compose_staged_paths`) instead of removed `_concat_files`-era functions.
+- Added `ComposeService.compose_staged_paths(...)` to provide a first-class staged-path execution seam reused by bulk asset compose while preserving existing planner/preprocessor/executor/registrar architecture.
+- Bulk compose now validates compose environment through compose module guards and uses a dedicated temporary work dir under `MEDIA_SYNC_TEMP_ROOT` for normalization artifacts with guaranteed cleanup.
+- Bulk compose now returns explicit HTTP 400 when `allow_overwrite=true` is requested (fixed-path overwrite no longer supported in the refactored compose pipeline), avoiding dropped transport failures.
+- Updated media API regression tests to target compose-service integration seam and added explicit guard coverage for unsupported `allow_overwrite` in bulk compose.
+
+### Latest Implementation Notes (2026-03-17)
 - Package Explorer compose flow now mirrors static `composeSelectedVideos` warning semantics (`Select one or more clips` / `Select one or more video clips`) to keep validation feedback parity.
 - Removed modal auto-close on no-video validation in package compose confirm path so validation warnings no longer dismiss the dialog unexpectedly.
 - Kept package compose submit wired to the same success/error toast lifecycle while preserving form-submit + Enter execution path.

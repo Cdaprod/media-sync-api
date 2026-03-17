@@ -1,3 +1,10 @@
+## 2026-03-17 — Bulk compose API transport-failure regression fix
+- [x] Replaced stale bulk-compose imports from removed compose helpers with calls into the refactored compose service staged-path flow.
+- [x] Added `ComposeService.compose_staged_paths(...)` so bulk asset compose can reuse planner/preprocessor/executor/registrar without route-level ffmpeg wiring.
+- [x] Added explicit bulk-compose guard for unsupported `allow_overwrite=true` requests to return deterministic JSON errors.
+- [x] Added/updated media API tests for bulk compose staged-path delegation and overwrite guard behavior.
+- [ ] Validate from physical iPhone Safari that `/api/assets/bulk/compose` now returns HTTP JSON responses (no status-0 `Load failed`) for both success and failure cases.
+
 ## 2026-03-17 — Package compose static-flow parity follow-up
 - [x] Aligned package compose empty-selection/no-video warning copy with static explorer compose flow.
 - [x] Removed package compose modal auto-close on no-video validation so warning states keep dialog context.

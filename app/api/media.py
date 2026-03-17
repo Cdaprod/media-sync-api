@@ -15,6 +15,7 @@ import re
 import json
 import shutil
 import subprocess
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -810,14 +811,7 @@ async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
     if not payload.assets:
         raise HTTPException(status_code=400, detail="assets is required")
 
-    from app.api.compose import (
-        _concat_files,
-        _prepare_overwrite,
-        _register_output,
-        _resolve_project,
-        _resolve_within_project,
-        _safe_filename_or_400,
-    )
+    from app.api.compose import ComposeSpec, _compose_service, _resolve_project_context, _validate_compose_environment
 
     input_paths: list[Path] = []
     for asset in payload.assets:
@@ -831,32 +825,35 @@ async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
             raise HTTPException(status_code=404, detail=f"Media not found: {asset.project}/{safe_relative}")
         input_paths.append(absolute)
 
-    name, active_source, output_project_root = _resolve_project(payload.output_project, payload.output_source)
-    target_dir = _resolve_within_project(output_project_root, payload.target_dir.strip() or "exports", require_exists=False)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    output_name = _safe_filename_or_400(payload.output_name, default="compiled.mp4")
-    if not output_name.lower().endswith(".mp4"):
-        output_name = f"{output_name}.mp4"
-    output_abs = _resolve_within_project(
-        output_project_root,
-        f"{target_dir.relative_to(output_project_root).as_posix()}/{output_name}",
-        require_exists=False,
-    )
-    if output_abs.exists() and not payload.allow_overwrite:
-        raise HTTPException(status_code=409, detail="Output already exists. Set allow_overwrite=true or provide a unique output_name.")
-    if output_abs.exists() and payload.allow_overwrite:
-        _prepare_overwrite(output_project_root, output_abs.relative_to(output_project_root).as_posix())
+    _validate_compose_environment()
+    output_ctx, _ = _resolve_project_context(payload.output_project, payload.output_source)
+
+    if payload.allow_overwrite:
+        raise HTTPException(
+            status_code=400,
+            detail="Bulk compose no longer supports fixed-path overwrite; use unique output_name values.",
+        )
 
     compose_mode = payload.mode if payload.mode in {"auto", "copy", "encode"} else "auto"
-    mode_used = _concat_files(input_paths, output_abs, compose_mode, allow_overwrite=payload.allow_overwrite)
-    return _register_output(
-        project=output_project_root,
-        project_name=name,
-        active_source=active_source,
-        output_abs=output_abs,
-        request=request,
-        mode_used=mode_used,
+    spec = ComposeSpec(
+        inputs=[],
+        output_name=payload.output_name,
+        target_dir=payload.target_dir,
+        mode=compose_mode,
     )
+
+    settings = get_settings()
+    work_dir = Path(tempfile.mkdtemp(prefix="compose_bulk_", dir=settings.temp_root))
+    try:
+        return _compose_service.compose_staged_paths(
+            output_ctx,
+            spec,
+            input_paths,
+            request,
+            work_dir=work_dir,
+        )
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 
 @router.post("/{project_name}/media/delete")

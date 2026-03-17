@@ -1373,6 +1373,36 @@ class ComposeService:
         )
 
     # ------------------------------------------------------------------
+    # Flow A0: Compose pre-resolved staged paths (used by bulk asset compose)
+    # ------------------------------------------------------------------
+
+    def compose_staged_paths(
+        self,
+        ctx: ProjectContext,
+        spec: ComposeSpec,
+        staged_paths: Sequence[Path],
+        request: Request,
+        *,
+        work_dir: Path,
+    ) -> dict[str, Any]:
+        if not staged_paths:
+            raise HTTPException(status_code=400, detail="No staged inputs available for compose")
+
+        plan = self.planner.build_staged_plan(ctx, list(staged_paths), spec)
+        prepared = self.preprocessor.prepare(plan.input_assets, work_dir)
+        plan = self._with_prepared_segments(plan, prepared)
+        result = self.executor.execute(plan)
+        logger.info(
+            "compose_staged_paths_complete project=%s source=%s inputs=%s output=%s mode=%s",
+            ctx.project_name,
+            ctx.source_name,
+            len(plan.input_paths),
+            result.output_path.relative_to(ctx.project_root).as_posix(),
+            result.mode_used,
+        )
+        return self.registrar.register(ctx, result, request)
+
+    # ------------------------------------------------------------------
     # Flow A: Compose existing indexed clips
     # ------------------------------------------------------------------
 
