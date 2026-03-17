@@ -2206,7 +2206,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
         <section
           ref={mediaScrollRef}
-          className={`content ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''}`}
+          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''}`}
           onContextMenuCapture={(event) => {
             const target = event.target as HTMLElement | null;
             if (!target?.closest('.asset, .row')) return;
@@ -2422,7 +2422,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </section>
       </div>
 
-      <div className={`selectbar ${selectedCount ? 'show' : ''}`} role="status" aria-live="polite">
+      <div className={`selectbar custom-ui-surface ${selectedCount ? 'show' : ''}`} role="status" aria-live="polite">
         <div className="count">
           <span>{selectedCount}</span> selected
         </div>
@@ -2468,7 +2468,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       </div>
 
       <aside className={`drawer ${inspectorOpen ? 'open' : ''}`} aria-hidden={!inspectorOpen}>
-        <div className="drawer-body">
+        <div className="drawer-body custom-ui-surface">
           <AssetPreviewPanel
               asset={normalizedPreviewAsset}
               onPrev={() => focusRelative(-1)}
@@ -2500,7 +2500,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
       {contextMenu ? (
         <div
-          className="context-menu open"
+          className="context-menu open custom-ui-surface"
           ref={contextMenuRef}
           role="menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}

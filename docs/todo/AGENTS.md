@@ -1,3 +1,10 @@
+## 2026-03-17 — Package Explorer anti-selection surface polish (active)
+- [x] Scoped a reusable `.custom-ui-surface` anti-native-selection contract across package content, context menu, drawer body, and selection bar.
+- [x] Preserved real control usability by explicitly restoring text/select behavior for `input`, `textarea`, `select`, and editable targets inside custom surfaces.
+- [x] Hardened preview media anti-ghost behavior by disabling image drag in preview media rendering and surface styles.
+- [x] Expanded package regression tests for anti-selection markers plus control-usability guardrails.
+- [ ] Validate on physical iPhone Safari that long-press/tap interactions on tiles, badges, and preview labels show no native highlight/callout artifacts while search and dropdown controls remain usable.
+
 ## 2026-03-17 — Package Explorer custom interaction surface polish (active)
 - [x] Hardened package tile/list interaction surfaces to suppress browser-native context menu fallback and drag ghosting by centralizing preventDefault/stopPropagation handlers on media thumbs.
 - [x] Scoped anti-native callout/highlight/user-select protections to asset interaction surfaces (`.asset`, `.row`, overlays, labels) so custom gestures own tile UX without globally disabling accessibility.

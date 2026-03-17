@@ -276,6 +276,11 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-17)
+- Package Explorer now applies a shared `.custom-ui-surface` anti-selection contract to content/tile surfaces, context menus, drawer preview shell, and selection bar to suppress browser-native text/tap highlight artifacts.
+- Added scoped control opt-outs so real form controls (`input`, `textarea`, `select`, editable targets) retain expected text/edit/select behavior inside those custom surfaces.
+- Preview image rendering now disables native drag ghosting (`draggable={false}` + drag-prevent) and package tests assert both anti-selection markers and form-control usability guards.
+
+### Latest Implementation Notes (2026-03-17)
 - Package Explorer now treats asset tiles/rows as explicit custom interaction surfaces with native context-menu suppression at capture + thumb levels and centralized drag-ghost prevention for media thumbnails.
 - Added targeted anti-native interaction styling (`-webkit-touch-callout: none`, `user-select: none`, `-webkit-tap-highlight-color: transparent`) to tile overlays/labels/surfaces so long-press and tap UX feels app-like without globally disabling page behavior.
 - Added package regression coverage to lock suppression helpers, non-draggable thumbnail wiring, and custom-surface class/style markers.

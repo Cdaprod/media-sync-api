@@ -272,7 +272,7 @@ export function AssetPreviewPanel({
       return <video ref={(el) => { mediaRef.current = el; }} preload="metadata" playsInline src={asset.src} />;
     }
     if (asset.kind === 'image') {
-      return <img src={asset.src} alt={asset.name} />;
+      return <img src={asset.src} alt={asset.name} draggable={false} onDragStart={(event) => event.preventDefault()} />;
     }
     if (asset.kind === 'audio') {
       return <audio ref={(el) => { mediaRef.current = el; }} preload="metadata" src={asset.src} />;

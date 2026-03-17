@@ -914,6 +914,33 @@ select.control{
   -webkit-user-select: none;
   user-select: none;
 }
+.custom-ui-surface,
+.custom-ui-surface *{
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.custom-ui-surface input,
+.custom-ui-surface textarea,
+.custom-ui-surface select,
+.custom-ui-surface option,
+.custom-ui-surface [contenteditable="true"],
+.custom-ui-surface .allow-user-select{
+  -webkit-user-select: text;
+  user-select: text;
+}
+.custom-ui-surface input,
+.custom-ui-surface textarea,
+.custom-ui-surface select,
+.custom-ui-surface button,
+.custom-ui-surface label{
+  -webkit-touch-callout: default;
+}
+.custom-ui-surface img,
+.custom-ui-surface video{
+  -webkit-user-drag: none;
+}
 .row .actions{ display:flex; align-items:center; gap: 8px; }
 .iconbtn{
   border: 1px solid var(--border);
@@ -1048,6 +1075,7 @@ select.control{
 .preview-media video,
 .preview-media img,
 .preview-media audio{
+  -webkit-user-drag: none;
   width: 100%;
   height: 100%;
   display:block;
@@ -1142,6 +1170,8 @@ select.control{
 .preview-kind.kind-image{ color: #ffb26b; border-color: rgba(255,178,107,.45); background: rgba(255,178,107,.14); }
 
 .preview-title{
+  -webkit-user-select: none;
+  user-select: none;
   font-size: 12px;
   font-weight: 650;
   margin-top: 4px;
@@ -1151,6 +1181,8 @@ select.control{
 }
 
 .preview-path{
+  -webkit-user-select: none;
+  user-select: none;
   font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
@@ -1159,6 +1191,8 @@ select.control{
 }
 
 .preview-chip{
+  -webkit-user-select: none;
+  user-select: none;
   font-size: 10px;
   padding: 3px 8px;
   border-radius: 999px;
@@ -1265,8 +1299,8 @@ select.control{
   display: grid;
 }
 
-.preview-details .k{ color: var(--muted); }
-.preview-details .v{ color: var(--text); overflow-wrap:anywhere; }
+.preview-details .k{ color: var(--muted); -webkit-user-select: none; user-select: none; }
+.preview-details .v{ color: var(--text); overflow-wrap:anywhere; -webkit-user-select: none; user-select: none; }
 
 .preview-empty{
   display:flex;

@@ -254,10 +254,33 @@ test('package explorer grid capture suppresses native context menu in asset zone
   assert.ok(content.includes('onDragStart={suppressNativeDragGhost}'));
   assert.ok(content.includes('draggable={false}'));
   assert.ok(content.includes('asset-interactive-surface'));
+  assert.ok(content.includes('custom-ui-surface'));
   assert.ok(styles.includes('.asset-interactive-surface,'));
+  assert.ok(styles.includes('.custom-ui-surface,'));
   assert.ok(styles.includes('-webkit-touch-callout: none;'));
   assert.ok(styles.includes('-webkit-tap-highlight-color: transparent;'));
   assert.ok(styles.includes('.tile-ui-text{'));
+});
+
+
+test('package explorer keeps form controls usable while suppressing native selection on custom surfaces', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const previewPath = path.join(packageRoot, 'src', 'AssetPreviewPanel.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const preview = fs.readFileSync(previewPath, 'utf8');
+  assert.ok(content.includes('className={`content custom-ui-surface'));
+  assert.ok(content.includes('className={`selectbar custom-ui-surface'));
+  assert.ok(content.includes('className="context-menu open custom-ui-surface"'));
+  assert.ok(styles.includes('.custom-ui-surface input,'));
+  assert.ok(styles.includes('.custom-ui-surface textarea,'));
+  assert.ok(styles.includes('.custom-ui-surface select,'));
+  assert.ok(styles.includes('.custom-ui-surface [contenteditable="true"],'));
+  assert.ok(styles.includes('-webkit-user-select: text;'));
+  assert.ok(styles.includes('.custom-ui-surface button,'));
+  assert.ok(preview.includes('draggable={false}'));
+  assert.ok(preview.includes('onDragStart={(event) => event.preventDefault()}'));
 });
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {
