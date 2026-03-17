@@ -198,12 +198,63 @@ test('OBS websocket helper includes browser source defaults', () => {
 
 test('explorer queues thumbnail loads from server urls', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const statePath = path.join(packageRoot, 'src', 'state.ts');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const stateContent = fs.readFileSync(statePath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(content.includes('queueThumbLoads'));
   assert.ok(content.includes('data-thumb-url'));
   assert.ok(content.includes('THUMB_LOAD_TIMEOUT_MS'));
+  assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
+  assert.ok(content.includes('pendingDataLoadOverlay'));
+  assert.ok(content.includes('dynamicOrientations'));
+  assert.ok(content.includes('resolveItemOrientation'));
+  assert.ok(content.includes('buildMasonryColumns'));
+  assert.ok(content.includes('masonryColumns.map((column, columnIndex) => ('));
+  assert.ok(content.includes('--masonry-column-count'));
+  assert.ok(stateContent.includes('export function buildMasonryColumns'));
+  assert.ok(styles.includes('.masonry-columns{'));
+  assert.ok(styles.includes('.masonry-column{'));
+  assert.ok(styles.includes('-webkit-touch-callout: none;'));
+  assert.ok(!styles.includes('column-fill: balance;'));
+  assert.ok(content.includes('beginContentLoading'));
+  assert.ok(content.includes('endContentLoading'));
   assert.ok(content.includes('thumbState'));
   assert.ok(content.includes('project_source'));
+});
+
+test('package explorer interaction handlers do not trigger loading overlay state', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const start = content.indexOf('const buildAssetPointerHandlers = useCallback(');
+  const end = content.indexOf('const handlePreviewSelected = useCallback(', start);
+  assert.ok(start >= 0);
+  assert.ok(end > start);
+  const block = content.slice(start, end);
+  assert.ok(block.includes('openDrawer(item);'));
+  assert.ok(block.includes('openContextMenu(event.clientX, event.clientY, resolveContextItems())'));
+  assert.ok(block.includes('event.stopPropagation();'));
+  assert.ok(!block.includes('setPendingDataLoadOverlay('));
+  assert.ok(!block.includes('setContentLoading(true)'));
+});
+
+test('package explorer grid capture suppresses native context menu in asset zones', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('onContextMenuCapture={(event) => {'));
+  assert.ok(content.includes("if (!target?.closest('.asset, .row')) return;"));
+  assert.ok(content.includes('event.preventDefault();'));
+  assert.ok(content.includes('onContextMenu={(event) => event.preventDefault()}'));
+});
+
+test('package explorer data load paths explicitly request loading overlay ownership', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('setPendingDataLoadOverlay(true);'));
+  assert.ok(content.includes('setPendingDataLoadOverlay(false);'));
+  assert.ok(content.includes('const shouldShowOverlay = pendingDataLoadOverlay;'));
+  assert.ok(content.includes('const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;'));
 });
 
 

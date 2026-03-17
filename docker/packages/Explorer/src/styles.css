@@ -654,9 +654,17 @@ select.control{
 /* Grid/List */
 .grid{
   padding: 4px;
-  column-width: var(--grid-col-width);
-  column-gap: var(--grid-gap);
-  column-fill: balance;
+}
+.masonry-columns{
+  display: grid;
+  grid-template-columns: repeat(var(--masonry-column-count, 1), minmax(0, 1fr));
+  gap: var(--grid-gap);
+  align-items: start;
+}
+.masonry-column{
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
 }
 .list{
   padding: 10px 12px;
@@ -666,10 +674,8 @@ select.control{
 }
 
 .asset{
-  display: inline-block;
+  display: block;
   width: 100%;
-  break-inside: avoid;
-  margin-bottom: var(--grid-gap);
   border: 1px solid rgba(255,255,255,0);
   background: transparent;
   border-radius: 4px;
@@ -705,6 +711,9 @@ select.control{
   object-fit: cover;
   display:block;
   filter: saturate(1.05) contrast(1.03);
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 .thumb .fallback{
   font-size: 12px;

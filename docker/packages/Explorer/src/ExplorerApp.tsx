@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
 import {
+  buildMasonryColumns,
   collectMediaMeta,
   extractAiTags,
   extractTags,
@@ -241,6 +242,9 @@ const queueThumbLoads = async (
 
 const THUMB_MAX_WORKERS = 3;
 const THUMB_LOAD_TIMEOUT_MS = 8000;
+const CONTENT_LOADING_DELAY_MS = 180;
+const GRID_GAP_FALLBACK = 6;
+const GRID_COL_WIDTH_FALLBACK = 180;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 
@@ -347,7 +351,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
+  const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
+  const [gridColumnCount, setGridColumnCount] = useState(1);
+  const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const dragPathsRef = useRef<string[]>([]);
+  const contentLoadingTokenRef = useRef(0);
+  const contentLoadingTimerRef = useRef<number | null>(null);
 
   const [resolveProjectMode, setResolveProjectMode] = useState('current');
   const [resolveProjectName, setResolveProjectName] = useState('');
@@ -368,6 +377,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const selectedOrderRef = useRef<string[]>([]);
   const lastTileTapRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
+
+  const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
+    const itemOrient = inferOrientationFromItem(item);
+    if (itemOrient) return itemOrient;
+    const key = thumbKey || getThumbCacheKey(item) || item.relative_path || '';
+    const dynamicOrient = dynamicOrientations[key];
+    if (dynamicOrient) return dynamicOrient;
+    const cachedOrient = orientationCacheRef.current.get(key);
+    if (cachedOrient) return cachedOrient;
+    const kind = guessKind(item);
+    if (kind === 'video') return 'landscape';
+    return 'square';
+  }, [dynamicOrientations]);
+
+  const estimateTileHeight = useCallback((item: MediaItem) => {
+    const orient = resolveItemOrientation(item);
+    const kind = guessKind(item);
+    if (kind === 'audio') return 1;
+    if (orient === 'portrait') return 1.34;
+    if (orient === 'landscape') return 0.84;
+    if (orient === 'square') return 1;
+    return kind === 'video' ? 1.05 : 1;
+  }, [resolveItemOrientation]);
 
   const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
     const relativePath = String(item.relative_path || '').trim();
@@ -395,6 +427,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       : filtered;
     return sortMedia(selectedFiltered, sortKey, mediaMeta);
   }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const masonryColumns = useMemo(
+    () => buildMasonryColumns(filteredMedia, gridColumnCount, (item) => estimateTileHeight(item)),
+    [estimateTileHeight, filteredMedia, gridColumnCount],
+  );
   const itemsBySelectionKey = useMemo(() => {
     const map = new Map<string, MediaItem>();
     media.forEach((item) => {
@@ -457,7 +493,35 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     card.dataset.orient = orient;
     const cacheKey = card.dataset.thumbKey || card.dataset.relative || '';
     cacheOrientation(cacheKey, orient);
+    if (cacheKey) {
+      setDynamicOrientations((current) => {
+        if (current[cacheKey] === orient) return current;
+        return { ...current, [cacheKey]: orient };
+      });
+    }
   }, [cacheOrientation]);
+
+  const beginContentLoading = useCallback(() => {
+    contentLoadingTokenRef.current += 1;
+    const token = contentLoadingTokenRef.current;
+    if (contentLoadingTimerRef.current) {
+      window.clearTimeout(contentLoadingTimerRef.current);
+    }
+    contentLoadingTimerRef.current = window.setTimeout(() => {
+      if (token !== contentLoadingTokenRef.current) return;
+      setContentLoading(true);
+    }, CONTENT_LOADING_DELAY_MS);
+    return token;
+  }, []);
+
+  const endContentLoading = useCallback((token: number) => {
+    if (token && token !== contentLoadingTokenRef.current) return;
+    if (contentLoadingTimerRef.current) {
+      window.clearTimeout(contentLoadingTimerRef.current);
+      contentLoadingTimerRef.current = null;
+    }
+    setContentLoading(false);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -467,22 +531,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ? '.grid img.asset-thumb[data-thumb-url]'
       : '.list img.asset-thumb[data-thumb-url]';
     const targets = Array.from(root.querySelectorAll(selector)) as HTMLImageElement[];
+    const shouldShowOverlay = pendingDataLoadOverlay;
+    const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;
     if (!targets.length) {
-      setContentLoading(false);
+      endContentLoading(loadingToken);
+      if (shouldShowOverlay) setPendingDataLoadOverlay(false);
       return;
     }
     let cancelled = false;
-    setContentLoading(true);
     queueThumbLoads(targets, THUMB_LOAD_TIMEOUT_MS, updateCardOrientation)
       .finally(() => {
         if (!cancelled) {
-          setContentLoading(false);
+          endContentLoading(loadingToken);
+          if (shouldShowOverlay) setPendingDataLoadOverlay(false);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [filteredMedia, updateCardOrientation, view]);
+  }, [beginContentLoading, endContentLoading, filteredMedia, pendingDataLoadOverlay, updateCardOrientation, view]);
+
+  useEffect(() => {
+    return () => {
+      endContentLoading(contentLoadingTokenRef.current);
+    };
+  }, [endContentLoading]);
 
   const buildUploadUrl = useCallback((project: Project) => {
     const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
@@ -534,6 +607,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setSidebarOpen(false);
     }
   }, []);
+
+  const updateGridColumnCount = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const hostWidth = mediaScrollRef.current?.clientWidth || window.innerWidth || 0;
+    const rootStyles = window.getComputedStyle(document.documentElement);
+    const gridGap = parseFloat(rootStyles.getPropertyValue('--grid-gap')) || GRID_GAP_FALLBACK;
+    const gridColWidth = parseFloat(rootStyles.getPropertyValue('--grid-col-width')) || GRID_COL_WIDTH_FALLBACK;
+    const count = Math.max(1, Math.floor((hostWidth + gridGap) / (gridColWidth + gridGap)));
+    setGridColumnCount(count);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    updateGridColumnCount();
+    const host = mediaScrollRef.current;
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => updateGridColumnCount())
+      : null;
+    if (host && observer) observer.observe(host);
+    window.addEventListener('resize', updateGridColumnCount, { passive: true });
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateGridColumnCount);
+    };
+  }, [updateGridColumnCount]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -598,12 +696,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const loadMedia = useCallback(
     async (project: Project | null) => {
       if (!project) {
+        setPendingDataLoadOverlay(false);
         setMedia([]);
         setMediaScope('project');
         clearSelectionState();
         return;
       }
       try {
+        setPendingDataLoadOverlay(true);
         const payload = await api.listMedia(project.name, project.source);
         const items = Array.isArray(payload.media) ? payload.media : [];
         setMedia(sortMediaByRecent(items));
@@ -615,6 +715,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           return next;
         });
       } catch (err) {
+        setPendingDataLoadOverlay(false);
         const message = err instanceof Error ? err.message : 'Failed to load media';
         addToast('bad', 'Media', message);
       }
@@ -626,8 +727,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearSelectionState();
     setFocused(null);
     setMediaScope('all');
+    setPendingDataLoadOverlay(true);
     if (!projects.length) {
       setMedia([]);
+      setPendingDataLoadOverlay(false);
       return;
     }
     const gathered: MediaItem[] = [];
@@ -1307,8 +1410,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       };
 
       const handleContextMenu = (event: React.MouseEvent) => {
-        if (inNoPreviewZone(event.target)) return;
+        if (inNoPreviewZone(event.target)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         event.preventDefault();
+        event.stopPropagation();
         if (dragging) return;
         openContextMenu(event.clientX, event.clientY, resolveContextItems());
       };
@@ -2090,6 +2198,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <section
           ref={mediaScrollRef}
           className={`content ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''}`}
+          onContextMenuCapture={(event) => {
+            const target = event.target as HTMLElement | null;
+            if (!target?.closest('.asset, .row')) return;
+            event.preventDefault();
+          }}
           onDragOver={(event) => {
             if (event.dataTransfer?.types.includes('Files')) {
               event.preventDefault();
@@ -2123,7 +2236,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
                 </div>
               ) : (
-                filteredMedia.map((item) => {
+                <div className="masonry-columns" style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}>
+                  {masonryColumns.map((column, columnIndex) => (
+                    <div className="masonry-column" key={`masonry-column-${columnIndex}`}>
+                      {column.map((item) => {
                   const kind = guessKind(item);
                   const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
                   const proj = projectLabel(item);
@@ -2131,10 +2247,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
                   const thumbKey = getThumbCacheKey(item);
-                  const cachedOrient = getCachedOrientation(thumbKey || item.relative_path || '');
+                  const orientationKey = thumbKey || item.relative_path || '';
                   const itemOrient = inferOrientationFromItem(item);
-                  const orient = itemOrient || cachedOrient || 'square';
-                  const orientLocked = Boolean(itemOrient || cachedOrient);
+                  const dynamicOrient = dynamicOrientations[orientationKey];
+                  const cachedOrient = getCachedOrientation(orientationKey);
+                  const orient = resolveItemOrientation(item, orientationKey);
+                  const orientLocked = Boolean(itemOrient || dynamicOrient || cachedOrient);
                   const rawThumbUrl = normalizeThumbUrl(item.thumb_url
                     || item.thumbnail_url
                     || (kind === 'image' ? item.stream_url : undefined));
@@ -2162,6 +2280,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
+                          onContextMenu={(event) => event.preventDefault()}
                           data-thumb-url={thumbUrl}
                           data-thumb-fallback={fallbackThumb}
                         />
@@ -2209,7 +2328,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       </div>
                     </div>
                   );
-                })
+                })}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
@@ -2254,6 +2376,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
+                          onContextMenu={(event) => event.preventDefault()}
                           data-thumb-url={thumbUrl}
                           data-thumb-fallback={fallbackThumb}
                         />

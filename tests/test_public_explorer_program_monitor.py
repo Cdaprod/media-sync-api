@@ -605,6 +605,36 @@ def test_explorer_selection_toggle_does_not_full_rerender():
     assert 'loadThumbQueue' not in toggle_block
 
 
+
+
+def test_explorer_thumbnail_overlay_is_scoped_to_data_loading_only():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert 'const CONTENT_LOADING_DELAY_MS = 180;' in html
+    assert "function beginContentLoading(reason = 'data-load')" in html
+    assert 'function endContentLoading(token)' in html
+    assert "function renderMedia({ showLoadingOverlay = false, loadingReason = 'interaction' } = {}){" in html
+    assert "const loadingToken = showLoadingOverlay ? beginContentLoading(loadingReason) : 0;" in html
+    assert 'endContentLoading(loadingToken);' in html
+
+
+def test_explorer_interaction_paths_do_not_enable_thumbnail_overlay():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    wire_idx = html.index('function wireAssetPointerHandlers(target, item){')
+    guess_idx = html.index('function guessKind(item){', wire_idx)
+    block = html[wire_idx:guess_idx]
+    assert 'openDrawer(item);' in block
+    assert 'openContextMenu({ clientX: event.clientX, clientY: event.clientY }, selectedItemsForMenu);' in block
+    assert 'setContentLoading(true);' not in block
+    assert 'beginContentLoading(' not in block
+
+
+def test_explorer_data_load_paths_request_thumbnail_overlay_explicitly():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    assert "renderMedia({ showLoadingOverlay: true, loadingReason: 'project-media-load' });" in html
+    assert "renderMedia({ showLoadingOverlay: true, loadingReason: 'all-media-load' });" in html
+    assert "renderMedia({ showLoadingOverlay: true, loadingReason: 'mock-mode' });" in html
+
+
 def test_explorer_shared_renderer_singleton_symbols_present():
     shader_module = Path('public/js/explorer-shaders.mjs').read_text(encoding='utf-8')
     assert "if (this.container && RENDERERS.has(this.container))" in shader_module
