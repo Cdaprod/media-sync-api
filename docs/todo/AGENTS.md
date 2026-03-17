@@ -1,3 +1,10 @@
+## 2026-03-16 — Explorer package masonry row-major ordering fix (active)
+- [x] Replaced package CSS multi-column masonry flow with JS-driven masonry column buckets so visual ordering no longer fills top-to-bottom per column.
+- [x] Added deterministic `buildMasonryColumns` helper in package state to keep filtered/source list order canonical while assigning tiles by shortest column.
+- [x] Updated package grid rendering and styles to use explicit `.masonry-columns` / `.masonry-column` containers and removed `column-fill`-based layout behavior.
+- [x] Added regression coverage for masonry helper/wiring and ordering expectations in package Node tests.
+- [ ] Validate on physical iPhone Safari that package Explorer now reads left-to-right row progression while preserving masonry stagger and stable interactions.
+
 ## 2026-03-16 — Explorer package thumbnail overlay ownership parity fix (active)
 - [x] Separated package thumbnail overlay ownership from interaction state by adding delayed loading helpers and a `pendingDataLoadOverlay` gate.
 - [x] Scoped loading overlay activation to true dataset fetch paths (`loadMedia` / `loadAllMedia`) so tile taps, selection toggles, context menu open, and drawer open/close remain UI-only updates.

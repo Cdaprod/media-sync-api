@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
 import {
+  buildMasonryColumns,
   collectMediaMeta,
   extractAiTags,
   extractTags,
@@ -242,6 +243,8 @@ const queueThumbLoads = async (
 const THUMB_MAX_WORKERS = 3;
 const THUMB_LOAD_TIMEOUT_MS = 8000;
 const CONTENT_LOADING_DELAY_MS = 180;
+const GRID_GAP_FALLBACK = 6;
+const GRID_COL_WIDTH_FALLBACK = 180;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 
@@ -349,6 +352,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
+  const [gridColumnCount, setGridColumnCount] = useState(1);
   const dragPathsRef = useRef<string[]>([]);
   const contentLoadingTokenRef = useRef(0);
   const contentLoadingTimerRef = useRef<number | null>(null);
@@ -372,6 +376,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const selectedOrderRef = useRef<string[]>([]);
   const lastTileTapRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
+
+  const estimateTileHeight = useCallback((item: MediaItem) => {
+    const orient = inferOrientationFromItem(item);
+    const kind = guessKind(item);
+    if (kind === 'audio') return 1;
+    if (orient === 'portrait') return 1.34;
+    if (orient === 'landscape') return 0.84;
+    if (orient === 'square') return 1;
+    return kind === 'video' ? 1.05 : 1;
+  }, []);
 
   const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
     const relativePath = String(item.relative_path || '').trim();
@@ -399,6 +413,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       : filtered;
     return sortMedia(selectedFiltered, sortKey, mediaMeta);
   }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const masonryColumns = useMemo(
+    () => buildMasonryColumns(filteredMedia, gridColumnCount, (item) => estimateTileHeight(item)),
+    [estimateTileHeight, filteredMedia, gridColumnCount],
+  );
   const itemsBySelectionKey = useMemo(() => {
     const map = new Map<string, MediaItem>();
     media.forEach((item) => {
@@ -569,6 +587,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setSidebarOpen(false);
     }
   }, []);
+
+  const updateGridColumnCount = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const hostWidth = mediaScrollRef.current?.clientWidth || window.innerWidth || 0;
+    const rootStyles = window.getComputedStyle(document.documentElement);
+    const gridGap = parseFloat(rootStyles.getPropertyValue('--grid-gap')) || GRID_GAP_FALLBACK;
+    const gridColWidth = parseFloat(rootStyles.getPropertyValue('--grid-col-width')) || GRID_COL_WIDTH_FALLBACK;
+    const count = Math.max(1, Math.floor((hostWidth + gridGap) / (gridColWidth + gridGap)));
+    setGridColumnCount(count);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    updateGridColumnCount();
+    const host = mediaScrollRef.current;
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => updateGridColumnCount())
+      : null;
+    if (host && observer) observer.observe(host);
+    window.addEventListener('resize', updateGridColumnCount, { passive: true });
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateGridColumnCount);
+    };
+  }, [updateGridColumnCount]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2163,7 +2206,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
                 </div>
               ) : (
-                filteredMedia.map((item) => {
+                <div className="masonry-columns" style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}>
+                  {masonryColumns.map((column, columnIndex) => (
+                    <div className="masonry-column" key={`masonry-column-${columnIndex}`}>
+                      {column.map((item) => {
                   const kind = guessKind(item);
                   const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
                   const proj = projectLabel(item);
@@ -2249,7 +2295,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       </div>
                     </div>
                   );
-                })
+                })}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 

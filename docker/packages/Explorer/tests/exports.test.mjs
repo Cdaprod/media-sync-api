@@ -198,12 +198,23 @@ test('OBS websocket helper includes browser source defaults', () => {
 
 test('explorer queues thumbnail loads from server urls', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const statePath = path.join(packageRoot, 'src', 'state.ts');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const stateContent = fs.readFileSync(statePath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(content.includes('queueThumbLoads'));
   assert.ok(content.includes('data-thumb-url'));
   assert.ok(content.includes('THUMB_LOAD_TIMEOUT_MS'));
   assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
   assert.ok(content.includes('pendingDataLoadOverlay'));
+  assert.ok(content.includes('buildMasonryColumns'));
+  assert.ok(content.includes('masonryColumns.map((column, columnIndex) => ('));
+  assert.ok(content.includes('--masonry-column-count'));
+  assert.ok(stateContent.includes('export function buildMasonryColumns'));
+  assert.ok(styles.includes('.masonry-columns{'));
+  assert.ok(styles.includes('.masonry-column{'));
+  assert.ok(!styles.includes('column-fill: balance;'));
   assert.ok(content.includes('beginContentLoading'));
   assert.ok(content.includes('endContentLoading'));
   assert.ok(content.includes('thumbState'));

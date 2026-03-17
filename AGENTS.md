@@ -276,6 +276,11 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-16)
+- Package Explorer masonry layout no longer uses CSS multi-column flow; grid cards are now assigned through JS masonry buckets for row-major reading progression.
+- Added `buildMasonryColumns` in package state and wired ExplorerApp grid rendering to explicit `.masonry-columns`/`.masonry-column` containers with shortest-column placement.
+- Package regression tests now assert masonry helper wiring and guard against reintroducing `column-fill` based column-major ordering.
+
+### Latest Implementation Notes (2026-03-16)
 - Next.js/package Explorer now mirrors static thumbnail overlay ownership rules: interaction-driven rerenders no longer trigger loading overlay state.
 - Added delayed package loading helpers plus `pendingDataLoadOverlay` gating so only explicit data-load flows (`loadMedia` / `loadAllMedia`) show “Preparing thumbnails…”.
 - Added package regression coverage in `docker/packages/Explorer/tests/exports.test.mjs` to lock interaction-vs-data loading state separation.

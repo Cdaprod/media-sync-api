@@ -24,6 +24,30 @@ export interface MediaMeta {
   hasSize: boolean;
 }
 
+export function buildMasonryColumns<T>(
+  items: T[],
+  columnCount: number,
+  estimateHeight: (item: T, index: number) => number,
+): T[][] {
+  const count = Math.max(1, Math.floor(Number(columnCount) || 1));
+  const columns: T[][] = Array.from({ length: count }, () => []);
+  const heights = Array.from({ length: count }, () => 0);
+  items.forEach((item, index) => {
+    let shortestIndex = 0;
+    let shortestHeight = heights[0] ?? 0;
+    for (let i = 1; i < heights.length; i += 1) {
+      if (heights[i] < shortestHeight) {
+        shortestHeight = heights[i];
+        shortestIndex = i;
+      }
+    }
+    columns[shortestIndex].push(item);
+    const estimate = Number(estimateHeight(item, index));
+    heights[shortestIndex] += Number.isFinite(estimate) && estimate > 0 ? estimate : 1;
+  });
+  return columns;
+}
+
 export function getMediaType(item: MediaItem): MediaTypeFilter {
   const raw = (item.kind || item.type || '').toLowerCase();
   if (raw.includes('overlay')) return 'overlay';

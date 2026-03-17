@@ -135,3 +135,33 @@ test('toggleSelectionWithOrder tracks selection order and deselection cleanup', 
   assert.equal(orderMap.get('c'), 2);
   assert.equal(orderMap.get('b'), 3);
 });
+
+test('buildMasonryColumns keeps source order stable while balancing columns', () => {
+  const { buildMasonryColumns } = loadTsModule(statePath);
+  const items = [
+    { id: '1', h: 1.1 },
+    { id: '2', h: 1.3 },
+    { id: '3', h: 0.8 },
+    { id: '4', h: 1.0 },
+    { id: '5', h: 1.2 },
+    { id: '6', h: 0.9 },
+  ];
+
+  const columns = buildMasonryColumns(items, 3, (item) => item.h);
+  assert.equal(columns.length, 3);
+
+  const flattened = columns.flat().map((item) => item.id);
+  assert.deepEqual(flattened.slice().sort(), ['1', '2', '3', '4', '5', '6']);
+
+  const placement = new Map();
+  columns.forEach((column, columnIndex) => {
+    column.forEach((item, rowIndex) => {
+      placement.set(item.id, { columnIndex, rowIndex });
+    });
+  });
+
+  assert.equal(placement.get('1').columnIndex, 0);
+  assert.equal(placement.get('2').columnIndex, 1);
+  assert.equal(placement.get('3').columnIndex, 2);
+  assert.ok(placement.get('4').rowIndex >= 1);
+});
