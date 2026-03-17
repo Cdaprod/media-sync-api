@@ -5433,6 +5433,29 @@
     // Project selection + upload
     // -------------------------
     async function selectProject(p){
+      const alreadySelected = !!state.activeProject
+        && state.activeProject.name === p.name
+        && (state.activeProject.source || 'primary') === (p.source || 'primary');
+
+      if (alreadySelected){
+        state.activeProject = null;
+        state.mediaScope = 'all';
+        clearSelectionState();
+        state.focused = null;
+        el('uploadCaption').textContent = 'Pick a project first.';
+        el('uploadBtn').disabled = true;
+        el('resolveProjectMode').value = 'current';
+        el('resolveProjectName').value = '';
+        el('resolveNewName').value = '';
+        renderProjects();
+        updateTopCounts();
+        renderMoveTargets();
+        updateSelectionUI();
+        toast('good', 'Project', 'Showing all projects');
+        await loadAllMedia();
+        return;
+      }
+
       state.activeProject = p;
       state.mediaScope = 'project';
       clearSelectionState();

@@ -1,6 +1,15 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-17)
+- Static Explorer project pills now toggle cleanly: clicking an already-selected project clears `activeProject`, restores all-projects media scope, refreshes counts, and resets upload/resolve project-bound UI state.
+- Added static regression checks ensuring selected-project repeated clicks follow explicit `selectedProject === clickedProject ? clear : set` logic and still preserve normal select/load behavior.
+
+### Latest Implementation Notes (2026-03-17)
+- Package Explorer project chips now mirror static toggle UX: tapping an already-selected chip clears `activeProject`, returns to all-projects scope, and resets project-bound resolve/upload state via the same selection codepath.
+- Package Explorer sidebar scroll behavior now explicitly enables touch-safe panel scrolling (`-webkit-overflow-scrolling: touch`, `overscroll-behavior: contain`, `touch-action: pan-y`) to avoid stuck project panel scrolling on mobile Safari.
+- Added package regression checks for project-chip deselect toggle behavior and sidebar scroll CSS markers to prevent regressions.
+
 ## Mission
 Build and maintain a **LAN-only**, **low-overhead**, **containerized Python API** that acts as a *middleman* between:
 - **iPhone Shortcuts** (Photos UI/UX for selecting videos)

@@ -1,3 +1,16 @@
+## 2026-03-17 — Package Explorer project-pill toggle + sidebar scroll follow-up
+- [x] Patched `docker/packages/Explorer/src/ExplorerApp.tsx` project-chip clicks to toggle off when the selected chip is tapped again (restore all-projects scope).
+- [x] Kept project selection state resets aligned with static explorer behavior (clear selection/focus + reset resolve/upload project-bound fields).
+- [x] Added package sidebar scroll hardening for mobile (`-webkit-overflow-scrolling`, `overscroll-behavior`, `touch-action`) to address stuck projects panel scroll behavior.
+- [x] Added package regression tests for project-chip toggle deselect and sidebar scroll CSS contract markers.
+- [ ] Validate on physical iPhone Safari that package projects panel scrolling remains responsive while drawer is open and long lists are present.
+
+## 2026-03-17 — Static Explorer project-pill toggle behavior
+- [x] Implemented project pill toggle in `public/explorer.html` so clicking the active pill clears selection and returns to all-projects media view.
+- [x] Reset project-scoped UI state on deselect (upload caption/button + resolve target fields) and refreshed related counts/renderers through existing codepaths.
+- [x] Added/updated static regression coverage for project-pill toggle + no-regression on normal single-click project selection behavior.
+- [ ] Capture physical iPhone Safari verification clip for selected-pill deselect flow and attach to next PR notes.
+
 ## 2026-03-17 — Static + package compose modal parity (active)
 - [x] Upgraded package Explorer compose flow from native prompts to an app-owned compose modal that matches Explorer UI surface styling.
 - [x] Added package compose defaults for timestamped output naming and project dropdown selection (default `P5-Exported-Media`, fallback first project).

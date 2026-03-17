@@ -1459,6 +1459,9 @@ select.control{
   flex: 1;
   min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 .sidebar select,
 .sidebar option,
