@@ -1507,7 +1507,91 @@ select.control{
 .context-menu button:hover,
 .context-menu button:focus-visible{ background: rgba(118, 172, 255, 0.16); }
 
+.compose-modal{
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(3, 8, 18, 0.58);
+  backdrop-filter: blur(10px) saturate(1.06);
+  -webkit-backdrop-filter: blur(10px) saturate(1.06);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.compose-modal.open{
+  opacity: 1;
+  pointer-events: auto;
+}
+.compose-card{
+  width: min(460px, 94vw);
+  border-radius: 16px;
+  border: 1px solid rgba(120,170,255,0.24);
+  background: linear-gradient(180deg, rgba(14, 22, 44, 0.98), rgba(8, 14, 32, 0.98));
+  box-shadow: 0 24px 70px rgba(0,0,0,0.48), inset 0 0 0 1px rgba(255,255,255,0.02);
+  padding: 18px;
+}
+.compose-title{
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.compose-body{
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.compose-fields{
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.compose-field{
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.compose-field input,
+.compose-field select{
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(120,170,255,0.28);
+  background: rgba(7, 14, 30, 0.92);
+  color: var(--text);
+  padding: 11px 12px;
+  font-size: 14px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.compose-field input:focus,
+.compose-field select:focus{
+  border-color: rgba(64,146,255,0.8);
+  box-shadow: 0 0 0 2px rgba(64,146,255,0.22);
+}
+.compose-actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 860px){
+  .compose-modal{
+    align-items: flex-start;
+    padding: max(12px, env(safe-area-inset-top)) 12px 12px;
+  }
+  .compose-card{
+    width: min(98vw, 460px);
+    margin-top: 18px;
+  }
   .preview-shell{ min-height: 260px; }
   .preview-shell::after{
     background: radial-gradient(130% 98% at 50% 50%, rgba(5,8,20,0) 52%, rgba(5,8,20,0.54) 100%);

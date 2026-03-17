@@ -276,6 +276,18 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-17)
+- Package Explorer compose action now mirrors static Explorer with an in-app compose modal (no native prompt flow), including styled filename/project controls and keyboard-safe cancel/confirm handling.
+- Package compose defaults now use timestamped naming (`compose-YYYYMMDDHHMMSS.mp4`) and a project dropdown seeded from known projects with preferred default `P5-Exported-Media` + first-project fallback.
+- Static Explorer compose project picker now carries explicit `data-compose-project-picker="1"` marker for regression coverage parity with package Explorer.
+- Added package regression coverage for compose modal wiring/style markers and explicit no-`window.prompt` compose path guarantees.
+
+### Latest Implementation Notes (2026-03-17)
+- Static Explorer compose action now uses a first-class in-app compose modal (`#composeModal`) instead of native prompt dialogs, with Explorer-matched dark/glass styling and mobile-safe controls.
+- Compose defaults now auto-generate timestamped filenames via `buildComposeTimestampName()` (e.g., `compose-YYYYMMDDHHMMSS.mp4`) so confirm-without-typing is supported.
+- Compose output project is now chosen from existing project options using a modal `<select>`, defaulting to `P5-Exported-Media` when available and gracefully falling back to the first project.
+- Added static regression assertions to lock modal compose markers/default handling and to ensure compose path no longer uses `window.prompt`.
+
+### Latest Implementation Notes (2026-03-17)
 - Package Explorer context-menu triggering now requires deliberate touch/pen hold (`LONG_PRESS_MS=620`) and cancels on movement threshold (`LONG_PRESS_MOVE_CANCEL_PX=12`), with no long-press menu path for ordinary mouse left-click taps.
 - Added centralized pending-long-press cleanup on scroll/drag/pointer-leave/context-capture paths so grid scrolling and incidental movement do not pop the menu.
 - Custom menu styling now uses explicit typography/layout tokens (font stack, size, line-height, width, text-size-adjust, hover/focus states) to keep appearance consistent across open states.

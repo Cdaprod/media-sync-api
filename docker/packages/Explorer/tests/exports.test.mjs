@@ -161,6 +161,26 @@ test('compose action filters selected assets to videos', () => {
   const content = fs.readFileSync(explorerPath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
   assert.ok(content.includes('Compose supports video clips only'));
+  assert.ok(content.includes('const buildComposeTimestampName = () => {'));
+  assert.ok(content.includes("entry?.name === 'P5-Exported-Media'"));
+  assert.ok(content.includes('setComposeModalOpen(true);'));
+  assert.ok(content.includes('className={`compose-modal ${composeModalOpen ? \'open\' : \'\'}`}'));
+  assert.ok(content.includes('data-compose-project-picker="1"'));
+  const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
+  const composeEnd = content.indexOf('const handleComposeConfirm = useCallback(async () => {', composeStart);
+  assert.ok(composeStart >= 0);
+  assert.ok(composeEnd > composeStart);
+  const composeBlock = content.slice(composeStart, composeEnd);
+  assert.ok(!composeBlock.includes('window.prompt('));
+});
+
+test('package explorer compose modal styles are present', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(styles.includes('.compose-modal{'));
+  assert.ok(styles.includes('.compose-card{'));
+  assert.ok(styles.includes('.compose-field select{'));
+  assert.ok(styles.includes('env(safe-area-inset-top)'));
 });
 
 test('static explorer uses OBS push helper', () => {

@@ -147,7 +147,7 @@ def test_explorer_selection_keys_support_all_projects_scope():
     assert 'function selectedAssetRefsOrdered()' in html
     assert 'asset_uuid: item.asset_uuid || null' in html
     assert 'const canProjectScopedAction = true;' in html
-    assert "toast('warn','Compose','Choose an output project, or select clips from one project.');" in html
+    assert "toast('warn','Compose','No projects available for compose output.');" in html
     assert '/api/assets/bulk/delete' in html
     assert '/api/assets/bulk/tags' in html
     assert '/api/assets/bulk/move' in html
@@ -185,6 +185,27 @@ def test_explorer_selection_bar_compose_action_present():
     assert 'Compose Video(s)' in html
     assert 'async function composeSelectedVideos()' in html
     assert '/compose' in html
+
+
+def test_explorer_compose_uses_custom_modal_defaults_instead_of_native_prompts():
+    html = Path('public/explorer.html').read_text(encoding='utf-8')
+    compose_start = html.index('async function composeSelectedVideos()')
+    compose_end = html.index('async function sendToResolve()', compose_start)
+    compose_block = html[compose_start:compose_end]
+
+    assert 'openComposeModal({' in compose_block
+    assert 'defaultComposeProject(state.projects)' in compose_block
+    assert 'buildComposeTimestampName()' in compose_block
+    assert 'output_project: composeConfig.outputProject' in compose_block
+    assert 'output_source: composeConfig.outputSource || \'primary\'' in compose_block
+    assert 'output_name: composeConfig.outputName' in compose_block
+    assert 'window.prompt(' not in compose_block
+
+    assert 'id="composeModal" class="compose-modal"' in html
+    assert 'id="composeOutputProject"' in html
+    assert 'data-compose-project-picker="1"' in html
+    assert 'Output file name (mp4)' in html
+    assert "entry?.name === 'P5-Exported-Media'" in html
 
 
 def test_explorer_shader_asset_fx_wiring_present():
