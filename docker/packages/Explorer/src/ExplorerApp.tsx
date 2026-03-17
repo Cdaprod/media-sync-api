@@ -37,6 +37,15 @@ const DEFAULT_VIEW: ExplorerView = 'grid';
 const POINTER_THRESHOLD = 8;
 const LONG_PRESS_MS = 480;
 
+const suppressNativeContextMenu = (event: React.MouseEvent<HTMLElement>) => {
+  event.preventDefault();
+  event.stopPropagation();
+};
+
+const suppressNativeDragGhost = (event: React.DragEvent<HTMLElement>) => {
+  event.preventDefault();
+};
+
 const formatListValue = (value: string | string[] | null | undefined) => {
   if (Array.isArray(value)) {
     return value.filter((entry) => entry.trim().length > 0).join(', ');
@@ -2202,6 +2211,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             const target = event.target as HTMLElement | null;
             if (!target?.closest('.asset, .row')) return;
             event.preventDefault();
+            event.stopPropagation();
           }}
           onDragOver={(event) => {
             if (event.dataTransfer?.types.includes('Files')) {
@@ -2265,7 +2275,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   return (
                     <div
                       key={`${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
-                      className={`asset ${isSelected ? 'is-selected' : ''}`}
+                      className={`asset asset-interactive-surface ${isSelected ? 'is-selected' : ''}`}
                       data-kind={kind}
                       data-orient={orient}
                       data-orient-locked={orientLocked ? 'true' : 'false'}
@@ -2280,13 +2290,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
-                          onContextMenu={(event) => event.preventDefault()}
+                          draggable={false}
+                          onDragStart={suppressNativeDragGhost}
+                          onContextMenu={suppressNativeContextMenu}
                           data-thumb-url={thumbUrl}
                           data-thumb-fallback={fallbackThumb}
                         />
                         <div className="asset-overlay">
                           <div className="asset-ol-tl">
-                            <span className={`badge ${kindBadgeClass(kind)}`}>{kind}</span>
+                            <span className={`badge ${kindBadgeClass(kind)} tile-ui-text`}>{kind}</span>
                           </div>
                           <div className="asset-ol-tr">
                             <div
@@ -2318,11 +2330,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             </div>
                           </div>
                           <div className="asset-ol-bl">
-                            <span className="badge">{size}</span>
+                            <span className="badge tile-ui-text">{size}</span>
                           </div>
                           <div className="asset-ol-bottom">
-                            <div className="asset-title">{title}</div>
-                            <div className="asset-subtitle">{sub}</div>
+                            <div className="asset-title tile-ui-text">{title}</div>
+                            <div className="asset-subtitle tile-ui-text">{sub}</div>
                           </div>
                         </div>
                       </div>
@@ -2365,7 +2377,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
                   return (
                     <div
-                      className={`row ${isSelected ? 'is-selected' : ''}`}
+                      className={`row asset-interactive-surface ${isSelected ? 'is-selected' : ''}`}
                       key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
                       data-select-key={selectionKey}
                       {...pointerHandlers}
@@ -2376,14 +2388,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
-                          onContextMenu={(event) => event.preventDefault()}
+                          draggable={false}
+                          onDragStart={suppressNativeDragGhost}
+                          onContextMenu={suppressNativeContextMenu}
                           data-thumb-url={thumbUrl}
                           data-thumb-fallback={fallbackThumb}
                         />
                       </div>
                       <div className="info">
-                        <div className="t">{title}</div>
-                        <div className="s">
+                        <div className="t tile-ui-text">{title}</div>
+                        <div className="s tile-ui-text">
                           {sub} • {size} • {kind}
                         </div>
                       </div>

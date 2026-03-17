@@ -241,11 +241,23 @@ test('package explorer interaction handlers do not trigger loading overlay state
 
 test('package explorer grid capture suppresses native context menu in asset zones', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(content.includes('const suppressNativeContextMenu = (event: React.MouseEvent<HTMLElement>) => {'));
+  assert.ok(content.includes('const suppressNativeDragGhost = (event: React.DragEvent<HTMLElement>) => {'));
   assert.ok(content.includes('onContextMenuCapture={(event) => {'));
   assert.ok(content.includes("if (!target?.closest('.asset, .row')) return;"));
   assert.ok(content.includes('event.preventDefault();'));
-  assert.ok(content.includes('onContextMenu={(event) => event.preventDefault()}'));
+  assert.ok(content.includes('event.stopPropagation();'));
+  assert.ok(content.includes('onContextMenu={suppressNativeContextMenu}'));
+  assert.ok(content.includes('onDragStart={suppressNativeDragGhost}'));
+  assert.ok(content.includes('draggable={false}'));
+  assert.ok(content.includes('asset-interactive-surface'));
+  assert.ok(styles.includes('.asset-interactive-surface,'));
+  assert.ok(styles.includes('-webkit-touch-callout: none;'));
+  assert.ok(styles.includes('-webkit-tap-highlight-color: transparent;'));
+  assert.ok(styles.includes('.tile-ui-text{'));
 });
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {

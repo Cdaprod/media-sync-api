@@ -275,6 +275,11 @@ If anything conflicts:
 - Container filesystem is disposable.
 - LAN-only first. Everything else is secondary.
 
+### Latest Implementation Notes (2026-03-17)
+- Package Explorer now treats asset tiles/rows as explicit custom interaction surfaces with native context-menu suppression at capture + thumb levels and centralized drag-ghost prevention for media thumbnails.
+- Added targeted anti-native interaction styling (`-webkit-touch-callout: none`, `user-select: none`, `-webkit-tap-highlight-color: transparent`) to tile overlays/labels/surfaces so long-press and tap UX feels app-like without globally disabling page behavior.
+- Added package regression coverage to lock suppression helpers, non-draggable thumbnail wiring, and custom-surface class/style markers.
+
 ### Latest Implementation Notes (2026-03-16)
 - Restored aspect-aware package masonry rendering by combining JS row-major masonry columns with runtime orientation updates from loaded thumbnails (no forced square tiles).
 - Package grid now suppresses native browser context menus in asset zones via capture-level prevention and per-thumb context suppression, while preserving custom menu behavior.

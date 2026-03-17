@@ -1,3 +1,10 @@
+## 2026-03-17 — Package Explorer custom interaction surface polish (active)
+- [x] Hardened package tile/list interaction surfaces to suppress browser-native context menu fallback and drag ghosting by centralizing preventDefault/stopPropagation handlers on media thumbs.
+- [x] Scoped anti-native callout/highlight/user-select protections to asset interaction surfaces (`.asset`, `.row`, overlays, labels) so custom gestures own tile UX without globally disabling accessibility.
+- [x] Marked interactive tile surfaces with explicit classes and non-draggable thumbs to reduce iOS long-press callouts and selection artifacts while preserving second-tap preview + selection flows.
+- [x] Expanded package regression assertions to lock context suppression helpers, drag suppression wiring, and anti-highlight style markers.
+- [ ] Validate on physical iPhone Safari that long-press on tile/thumb surfaces consistently opens custom context menu without native iOS callout/highlight artifacts.
+
 ## 2026-03-16 — Package masonry aspect-ratio + context-menu regression fix (active)
 - [x] Restored aspect-aware tile presentation in package masonry by feeding runtime orientation updates back into render/layout estimation.
 - [x] Kept row-major JS masonry ordering while avoiding square-card fallback and preserving staggered packing.
