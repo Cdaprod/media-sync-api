@@ -2,6 +2,12 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-17)
+- Compose pipeline now supports mixed ordered visual inputs (`video` + `image`) by allowing image kinds through planner validation while continuing to reject audio.
+- Added image segment preprocessing in `app/api/compose.py` (`_normalize_image_segment`) so still photos are converted into fixed-duration H.264 MP4 segments (`IMAGE_FREEZE_SECONDS = 2.0`) with scale/pad-to-canvas normalization.
+- Compose preprocessor target canvas selection now uses the first visual asset in request order (video or image) and preserves exact input order when generating `PreparedSegment` outputs.
+- Added compose regression tests covering mixed-media order preservation and explicit audio rejection guard behavior.
+
+### Latest Implementation Notes (2026-03-17)
 - Static Explorer project pills now toggle cleanly: clicking an already-selected project clears `activeProject`, restores all-projects media scope, refreshes counts, and resets upload/resolve project-bound UI state.
 - Added static regression checks ensuring selected-project repeated clicks follow explicit `selectedProject === clickedProject ? clear : set` logic and still preserve normal select/load behavior.
 

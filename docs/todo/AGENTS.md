@@ -1,3 +1,10 @@
+## 2026-03-17 — Compose mixed-media (video+image) preprocessing enablement
+- [x] Expanded compose supported input policy to include `image` alongside `video` while keeping audio rejected.
+- [x] Added image normalization helper to convert still assets into temporary fixed-duration MP4 segments for concat pipeline compatibility.
+- [x] Updated compose preprocessor canvas selection to use the first visual input (video/image) and keep prepared segment order aligned to request order.
+- [x] Added compose regression tests for mixed-media ordering and audio-rejection guardrail behavior.
+- [ ] Add endpoint-level compose tests that exercise real ffprobe/ffmpeg mixed-media staging when CI/runtime media tooling is available.
+
 ## 2026-03-17 — Package Explorer project-pill toggle + sidebar scroll follow-up
 - [x] Patched `docker/packages/Explorer/src/ExplorerApp.tsx` project-chip clicks to toggle off when the selected chip is tapped again (restore all-projects scope).
 - [x] Kept project selection state resets aligned with static explorer behavior (clear selection/focus + reset resolve/upload project-bound fields).

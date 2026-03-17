@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from fastapi import HTTPException
+
+from app.api.compose import ComposePreprocessor, InputAsset, _validate_supported_inputs
+
 
 def _fake_concat(input_paths: list[Path], output_path: Path, mode: str, *, allow_overwrite: bool = False) -> str:
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -251,3 +256,46 @@ def test_compose_upload_invalid_output_name_returns_400(client):
         files=[("files", ("one.mp4", b"111", "video/mp4"))],
     )
     assert response.status_code == 400
+
+
+def test_preprocessor_preserves_mixed_media_order(monkeypatch, tmp_path: Path):
+    preprocessor = ComposePreprocessor()
+    a_video = tmp_path / "a.mp4"
+    an_image = tmp_path / "b.png"
+    b_video = tmp_path / "c.mov"
+    a_video.write_bytes(b"video-a")
+    an_image.write_bytes(b"image-b")
+    b_video.write_bytes(b"video-c")
+
+    monkeypatch.setattr("app.api.compose._display_geometry_for_asset", lambda _asset: (1920, 1080))
+
+    def _fake_normalize_video(input_path: Path, output_path: Path, **_kwargs) -> Path:
+        output_path.write_text(f"video:{input_path.name}", encoding="utf-8")
+        return output_path
+
+    def _fake_normalize_image(input_path: Path, output_path: Path, **_kwargs) -> Path:
+        output_path.write_text(f"image:{input_path.name}", encoding="utf-8")
+        return output_path
+
+    monkeypatch.setattr("app.api.compose._normalize_video_segment", _fake_normalize_video)
+    monkeypatch.setattr("app.api.compose._normalize_image_segment", _fake_normalize_image)
+
+    prepared = preprocessor.prepare(
+        [
+            InputAsset(path=a_video, kind="video"),
+            InputAsset(path=an_image, kind="image"),
+            InputAsset(path=b_video, kind="video"),
+        ],
+        tmp_path,
+    )
+
+    assert [segment.source_kind for segment in prepared] == ["video", "image", "video"]
+    assert [segment.path.name for segment in prepared] == ["segment_0000.mp4", "segment_0001.mp4", "segment_0002.mp4"]
+    assert [segment.generated for segment in prepared] == [True, True, True]
+
+
+def test_supported_inputs_still_reject_audio(tmp_path: Path):
+    audio = InputAsset(path=tmp_path / "tone.wav", kind="audio")
+    with pytest.raises(HTTPException) as exc:
+        _validate_supported_inputs([audio])
+    assert "Unsupported inputs" in exc.value.detail
