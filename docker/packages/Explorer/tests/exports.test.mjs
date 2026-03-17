@@ -239,13 +239,82 @@ test('package explorer interaction handlers do not trigger loading overlay state
   assert.ok(!block.includes('setContentLoading(true)'));
 });
 
-test('package explorer grid capture suppresses native context menu in asset zones', () => {
+test('package explorer context menu opens only on deliberate long press or context click', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const start = content.indexOf('const buildAssetPointerHandlers = useCallback(');
+  const end = content.indexOf('const handlePreviewSelected = useCallback(', start);
+  assert.ok(start >= 0);
+  assert.ok(end > start);
+  const block = content.slice(start, end);
+  assert.ok(content.includes('const LONG_PRESS_MS = 620;'));
+  assert.ok(content.includes('const LONG_PRESS_MOVE_CANCEL_PX = 12;'));
+  assert.ok(block.includes("if (event.pointerType === 'touch' || event.pointerType === 'pen')"));
+  assert.ok(block.includes('longPressTimerRef.current = window.setTimeout(() => {'));
+  assert.ok(block.includes('longPressFiredRef.current = true;'));
+  assert.ok(block.includes('const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;'));
+  assert.ok(block.includes('if (movedFar) {'));
+  assert.ok(block.includes('if (longPressFired) {'));
+  assert.ok(block.includes('if (event.pointerType === \'touch\' || event.pointerType === \'pen\') {'));
+  assert.ok(block.includes('if (event.pointerType === \'mouse\' && event.button !== 0) return;'));
+  assert.ok(content.includes('onScroll={clearPendingLongPress}'));
+});
+
+test('package explorer grid capture suppresses native context menu in asset zones', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(content.includes('const suppressNativeContextMenu = (event: React.MouseEvent<HTMLElement>) => {'));
+  assert.ok(content.includes('const suppressNativeDragGhost = (event: React.DragEvent<HTMLElement>) => {'));
   assert.ok(content.includes('onContextMenuCapture={(event) => {'));
   assert.ok(content.includes("if (!target?.closest('.asset, .row')) return;"));
   assert.ok(content.includes('event.preventDefault();'));
-  assert.ok(content.includes('onContextMenu={(event) => event.preventDefault()}'));
+  assert.ok(content.includes('event.stopPropagation();'));
+  assert.ok(content.includes('onContextMenu={suppressNativeContextMenu}'));
+  assert.ok(content.includes('onDragStart={suppressNativeDragGhost}'));
+  assert.ok(content.includes('draggable={false}'));
+  assert.ok(content.includes('asset-interactive-surface'));
+  assert.ok(content.includes('custom-ui-surface'));
+  assert.ok(styles.includes('.asset-interactive-surface,'));
+  assert.ok(styles.includes('.custom-ui-surface,'));
+  assert.ok(styles.includes('-webkit-touch-callout: none;'));
+  assert.ok(styles.includes('-webkit-tap-highlight-color: transparent;'));
+  assert.ok(styles.includes('.tile-ui-text{'));
+});
+
+
+test('package explorer keeps form controls usable while suppressing native selection on custom surfaces', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const previewPath = path.join(packageRoot, 'src', 'AssetPreviewPanel.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const preview = fs.readFileSync(previewPath, 'utf8');
+  assert.ok(content.includes('className={`content custom-ui-surface'));
+  assert.ok(content.includes('className={`selectbar custom-ui-surface'));
+  assert.ok(content.includes('className="context-menu open custom-ui-surface"'));
+  assert.ok(styles.includes('.custom-ui-surface input,'));
+  assert.ok(styles.includes('.custom-ui-surface textarea,'));
+  assert.ok(styles.includes('.custom-ui-surface select,'));
+  assert.ok(styles.includes('.custom-ui-surface [contenteditable="true"],'));
+  assert.ok(styles.includes('-webkit-user-select: text;'));
+  assert.ok(styles.includes('.custom-ui-surface button,'));
+  assert.ok(preview.includes('draggable={false}'));
+  assert.ok(preview.includes('onDragStart={(event) => event.preventDefault()}'));
+});
+
+test('package explorer context menu styles are explicit and stable', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(styles.includes('.context-menu{'));
+  assert.ok(styles.includes('font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;'));
+  assert.ok(styles.includes('font-size: 17px;'));
+  assert.ok(styles.includes('line-height: 1.3;'));
+  assert.ok(styles.includes('-webkit-text-size-adjust: 100%;'));
+  assert.ok(styles.includes('text-size-adjust: 100%;'));
+  assert.ok(styles.includes('width: min(320px, calc(100vw - 24px));'));
+  assert.ok(styles.includes('.context-menu button:focus-visible'));
 });
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {

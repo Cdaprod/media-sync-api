@@ -275,6 +275,22 @@ If anything conflicts:
 - Container filesystem is disposable.
 - LAN-only first. Everything else is secondary.
 
+### Latest Implementation Notes (2026-03-17)
+- Package Explorer context-menu triggering now requires deliberate touch/pen hold (`LONG_PRESS_MS=620`) and cancels on movement threshold (`LONG_PRESS_MOVE_CANCEL_PX=12`), with no long-press menu path for ordinary mouse left-click taps.
+- Added centralized pending-long-press cleanup on scroll/drag/pointer-leave/context-capture paths so grid scrolling and incidental movement do not pop the menu.
+- Custom menu styling now uses explicit typography/layout tokens (font stack, size, line-height, width, text-size-adjust, hover/focus states) to keep appearance consistent across open states.
+- Package tests now assert long-press threshold/cancel wiring and explicit context-menu style markers.
+
+### Latest Implementation Notes (2026-03-17)
+- Package Explorer now applies a shared `.custom-ui-surface` anti-selection contract to content/tile surfaces, context menus, drawer preview shell, and selection bar to suppress browser-native text/tap highlight artifacts.
+- Added scoped control opt-outs so real form controls (`input`, `textarea`, `select`, editable targets) retain expected text/edit/select behavior inside those custom surfaces.
+- Preview image rendering now disables native drag ghosting (`draggable={false}` + drag-prevent) and package tests assert both anti-selection markers and form-control usability guards.
+
+### Latest Implementation Notes (2026-03-17)
+- Package Explorer now treats asset tiles/rows as explicit custom interaction surfaces with native context-menu suppression at capture + thumb levels and centralized drag-ghost prevention for media thumbnails.
+- Added targeted anti-native interaction styling (`-webkit-touch-callout: none`, `user-select: none`, `-webkit-tap-highlight-color: transparent`) to tile overlays/labels/surfaces so long-press and tap UX feels app-like without globally disabling page behavior.
+- Added package regression coverage to lock suppression helpers, non-draggable thumbnail wiring, and custom-surface class/style markers.
+
 ### Latest Implementation Notes (2026-03-16)
 - Restored aspect-aware package masonry rendering by combining JS row-major masonry columns with runtime orientation updates from loaded thumbnails (no forced square tiles).
 - Package grid now suppresses native browser context menus in asset zones via capture-level prevention and per-thumb context suppression, while preserving custom menu behavior.
