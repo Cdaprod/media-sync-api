@@ -276,6 +276,11 @@ If anything conflicts:
 - LAN-only first. Everything else is secondary.
 
 ### Latest Implementation Notes (2026-03-16)
+- Restored aspect-aware package masonry rendering by combining JS row-major masonry columns with runtime orientation updates from loaded thumbnails (no forced square tiles).
+- Package grid now suppresses native browser context menus in asset zones via capture-level prevention and per-thumb context suppression, while preserving custom menu behavior.
+- Masonry orientation estimates now adapt as thumbnail dimensions resolve, improving staggered packing without reverting to CSS column-flow ordering.
+
+### Latest Implementation Notes (2026-03-16)
 - Package Explorer masonry layout no longer uses CSS multi-column flow; grid cards are now assigned through JS masonry buckets for row-major reading progression.
 - Added `buildMasonryColumns` in package state and wired ExplorerApp grid rendering to explicit `.masonry-columns`/`.masonry-column` containers with shortest-column placement.
 - Package regression tests now assert masonry helper wiring and guard against reintroducing `column-fill` based column-major ordering.

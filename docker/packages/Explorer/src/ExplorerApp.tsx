@@ -353,6 +353,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [contentLoading, setContentLoading] = useState(false);
   const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
   const [gridColumnCount, setGridColumnCount] = useState(1);
+  const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const dragPathsRef = useRef<string[]>([]);
   const contentLoadingTokenRef = useRef(0);
   const contentLoadingTimerRef = useRef<number | null>(null);
@@ -377,15 +378,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const selectedOrderRef = useRef<string[]>([]);
   const lastTileTapRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
 
+  const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
+    const itemOrient = inferOrientationFromItem(item);
+    if (itemOrient) return itemOrient;
+    const key = thumbKey || getThumbCacheKey(item) || item.relative_path || '';
+    const dynamicOrient = dynamicOrientations[key];
+    if (dynamicOrient) return dynamicOrient;
+    const cachedOrient = orientationCacheRef.current.get(key);
+    if (cachedOrient) return cachedOrient;
+    const kind = guessKind(item);
+    if (kind === 'video') return 'landscape';
+    return 'square';
+  }, [dynamicOrientations]);
+
   const estimateTileHeight = useCallback((item: MediaItem) => {
-    const orient = inferOrientationFromItem(item);
+    const orient = resolveItemOrientation(item);
     const kind = guessKind(item);
     if (kind === 'audio') return 1;
     if (orient === 'portrait') return 1.34;
     if (orient === 'landscape') return 0.84;
     if (orient === 'square') return 1;
     return kind === 'video' ? 1.05 : 1;
-  }, []);
+  }, [resolveItemOrientation]);
 
   const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
     const relativePath = String(item.relative_path || '').trim();
@@ -479,6 +493,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     card.dataset.orient = orient;
     const cacheKey = card.dataset.thumbKey || card.dataset.relative || '';
     cacheOrientation(cacheKey, orient);
+    if (cacheKey) {
+      setDynamicOrientations((current) => {
+        if (current[cacheKey] === orient) return current;
+        return { ...current, [cacheKey]: orient };
+      });
+    }
   }, [cacheOrientation]);
 
   const beginContentLoading = useCallback(() => {
@@ -1390,8 +1410,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       };
 
       const handleContextMenu = (event: React.MouseEvent) => {
-        if (inNoPreviewZone(event.target)) return;
+        if (inNoPreviewZone(event.target)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         event.preventDefault();
+        event.stopPropagation();
         if (dragging) return;
         openContextMenu(event.clientX, event.clientY, resolveContextItems());
       };
@@ -2173,6 +2198,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         <section
           ref={mediaScrollRef}
           className={`content ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''}`}
+          onContextMenuCapture={(event) => {
+            const target = event.target as HTMLElement | null;
+            if (!target?.closest('.asset, .row')) return;
+            event.preventDefault();
+          }}
           onDragOver={(event) => {
             if (event.dataTransfer?.types.includes('Files')) {
               event.preventDefault();
@@ -2217,10 +2247,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
                   const thumbKey = getThumbCacheKey(item);
-                  const cachedOrient = getCachedOrientation(thumbKey || item.relative_path || '');
+                  const orientationKey = thumbKey || item.relative_path || '';
                   const itemOrient = inferOrientationFromItem(item);
-                  const orient = itemOrient || cachedOrient || 'square';
-                  const orientLocked = Boolean(itemOrient || cachedOrient);
+                  const dynamicOrient = dynamicOrientations[orientationKey];
+                  const cachedOrient = getCachedOrientation(orientationKey);
+                  const orient = resolveItemOrientation(item, orientationKey);
+                  const orientLocked = Boolean(itemOrient || dynamicOrient || cachedOrient);
                   const rawThumbUrl = normalizeThumbUrl(item.thumb_url
                     || item.thumbnail_url
                     || (kind === 'image' ? item.stream_url : undefined));
@@ -2248,6 +2280,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
+                          onContextMenu={(event) => event.preventDefault()}
                           data-thumb-url={thumbUrl}
                           data-thumb-fallback={fallbackThumb}
                         />
@@ -2343,6 +2376,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           src={safeThumbUrl}
                           alt={title}
                           loading="lazy"
+                          onContextMenu={(event) => event.preventDefault()}
                           data-thumb-url={thumbUrl}
                           data-thumb-fallback={fallbackThumb}
                         />

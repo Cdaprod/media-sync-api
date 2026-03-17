@@ -711,6 +711,9 @@ select.control{
   object-fit: cover;
   display:block;
   filter: saturate(1.05) contrast(1.03);
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 .thumb .fallback{
   font-size: 12px;

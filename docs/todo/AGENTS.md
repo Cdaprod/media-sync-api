@@ -1,3 +1,10 @@
+## 2026-03-16 — Package masonry aspect-ratio + context-menu regression fix (active)
+- [x] Restored aspect-aware tile presentation in package masonry by feeding runtime orientation updates back into render/layout estimation.
+- [x] Kept row-major JS masonry ordering while avoiding square-card fallback and preserving staggered packing.
+- [x] Added stronger package context-menu suppression (capture-level + thumb-level) so native browser menu no longer steals asset interactions.
+- [x] Expanded package regression assertions for orientation/masonry wiring and context suppression hooks.
+- [ ] Validate on physical iPhone Safari that portrait/landscape ratios remain correct and native share/context menus are no longer shown over asset long-press/right-click zones.
+
 ## 2026-03-16 — Explorer package masonry row-major ordering fix (active)
 - [x] Replaced package CSS multi-column masonry flow with JS-driven masonry column buckets so visual ordering no longer fills top-to-bottom per column.
 - [x] Added deterministic `buildMasonryColumns` helper in package state to keep filtered/source list order canonical while assigning tiles by shortest column.
