@@ -14,6 +14,8 @@ test('package exports include entrypoints', () => {
   assert.ok(pkg.exports['.']);
   assert.equal(pkg.exports['./styles.css'], './src/styles.css');
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'thumbnailLoader.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useThumbnailQueue.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -274,14 +276,19 @@ test('OBS websocket helper includes browser source defaults', () => {
 
 test('explorer queues thumbnail loads from server urls', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
+  const hookPath = path.join(packageRoot, 'src', 'useThumbnailQueue.ts');
   const statePath = path.join(packageRoot, 'src', 'state.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const loaderContent = fs.readFileSync(loaderPath, 'utf8');
+  const hookContent = fs.readFileSync(hookPath, 'utf8');
   const stateContent = fs.readFileSync(statePath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
-  assert.ok(content.includes('queueThumbLoads'));
+  assert.ok(content.includes('useThumbnailQueue({'));
+  assert.ok(content.includes('thumbDatasetSignature'));
+  assert.ok(content.includes('buildThumbJobKey('));
   assert.ok(content.includes('data-thumb-url'));
-  assert.ok(content.includes('THUMB_LOAD_TIMEOUT_MS'));
   assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
   assert.ok(content.includes('pendingDataLoadOverlay'));
   assert.ok(content.includes('dynamicOrientations'));
@@ -296,7 +303,11 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(!styles.includes('column-fill: balance;'));
   assert.ok(content.includes('beginContentLoading'));
   assert.ok(content.includes('endContentLoading'));
-  assert.ok(content.includes('thumbState'));
+  assert.ok(loaderContent.includes('export const THUMB_LOAD_TIMEOUT_MS = 8000;'));
+  assert.ok(loaderContent.includes('thumbLoadStateCache'));
+  assert.ok(loaderContent.includes('thumbLoadedKey'));
+  assert.ok(hookContent.includes('requiresThumbNodeSync'));
+  assert.ok(hookContent.includes('hasPendingThumbNetworkLoad'));
   assert.ok(content.includes('project_source'));
 });
 
@@ -395,11 +406,14 @@ test('package explorer context menu styles are explicit and stable', () => {
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const hookPath = path.join(packageRoot, 'src', 'useThumbnailQueue.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const hookContent = fs.readFileSync(hookPath, 'utf8');
   assert.ok(content.includes('setPendingDataLoadOverlay(true);'));
   assert.ok(content.includes('setPendingDataLoadOverlay(false);'));
-  assert.ok(content.includes('const shouldShowOverlay = pendingDataLoadOverlay;'));
-  assert.ok(content.includes('const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;'));
+  assert.ok(hookContent.includes('const shouldShowOverlay = pendingDataLoadOverlay && syncTargets.some((target) => hasPendingThumbNetworkLoad(target));'));
+  assert.ok(hookContent.includes('const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;'));
+  assert.ok(hookContent.includes('clearPendingDataLoadOverlay();'));
 });
 
 
@@ -447,6 +461,8 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
   assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
   assert.ok(styles.includes('.content .scroll{'));
+  assert.ok(styles.includes('will-change: transform, opacity;'));
+  assert.ok(styles.includes('transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);'));
 });
 
 

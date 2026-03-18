@@ -2,6 +2,13 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-18)
+- Package Explorer thumbnail loading is now split out of `ExplorerApp.tsx` into `src/thumbnailLoader.ts` and `src/useThumbnailQueue.ts`, reducing app-file bloat and isolating DOM-thumb queue behavior for future extraction passes.
+- Thumbnail queueing now keys work off a stable per-render thumb dataset signature (`view` + `gridColumnCount` + thumb job keys) so selection, focus, context-menu, and drawer churn no longer retrigger full visible-thumb scans/load attempts.
+- Added per-thumb job caching/in-flight dedupe (`thumbLoadStateCache`, `thumbLoadedKey`, `thumbJobKey`) so already-resolved thumbs remount without new network work and overlay ownership is limited to unresolved thumb jobs only.
+- Grid/list asset render keys now reuse a single canonical asset identity path, reducing remount churn across masonry/list rendering and keeping selection/thumb identity aligned.
+- Tuned package Explorer compositor hints for topbar/content scroll surfaces (`translate3d`/`translateZ`, `will-change`, touch scroll containment) to reduce hide/reveal and asset-scroll jank.
+
+### Latest Implementation Notes (2026-03-18)
 - Restored Explorer delete-confirm parity after compose/modal regressions by routing package Explorer delete actions (preview overlay, drawer, context menu, bulk delete) through an app-owned confirmation modal before any `/api/assets/bulk/delete` request fires.
 - Package delete flow now keeps selection/focus/drawer state untouched on cancel, only clears removed selection/focus after confirmed delete success, and preserves existing toast + scope-aware refresh behavior on confirm.
 - Static Explorer delete confirm no longer falls back to native `window.confirm`; if modal wiring is unavailable it now surfaces a toast and aborts delete instead of bypassing the app-owned modal contract.

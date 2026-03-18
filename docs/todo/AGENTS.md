@@ -1,3 +1,13 @@
+## 2026-03-18 — Package Explorer thumbnail queue + scroll smoothness pass
+- [x] Extracted package thumbnail queue helpers out of `ExplorerApp.tsx` into `src/thumbnailLoader.ts` and `src/useThumbnailQueue.ts` to start reducing file size without changing UX semantics.
+- [x] Re-keyed thumbnail work off a stable rendered dataset signature (`view`, `gridColumnCount`, thumb job identity) so selection/context/preview churn does not rescan/reload every visible thumb.
+- [x] Added thumb job cache/in-flight dedupe markers (`thumbLoadStateCache`, `thumbLoadedKey`, `thumbJobKey`) so remounted tiles can sync from cache without new overlay/network work.
+- [x] Restricted “Preparing thumbnails…” ownership to actual unresolved thumb loads for the current rendered dataset instead of broad rerender churn.
+- [x] Centralized package grid/list render identity on the same canonical asset key and added compositor/touch-scroll polish for topbar + content scroll surfaces.
+- [x] Updated package regression assertions for the new thumbnail modules, thumb job markers, and topbar compositor style markers.
+- [ ] Validate on physical iPhone Safari that repeated scroll-away / scroll-back passes no longer flash the thumbnail overlay or blank/reload already-seen thumbs.
+- [ ] Continue the file-splitting pass by extracting asset interaction handlers from `ExplorerApp.tsx` into a dedicated `useAssetInteractions` module without changing gesture semantics.
+
 ## 2026-03-18 — Explorer delete confirmation modal parity restore
 - [x] Restored package Explorer delete actions to route preview/drawer/context-menu/bulk deletes through a dedicated app-owned confirm modal before delete requests fire.
 - [x] Preserved cancel-path state safety (no delete request, no selection corruption, no drawer corruption) while keeping confirm-path toast + refresh semantics intact.

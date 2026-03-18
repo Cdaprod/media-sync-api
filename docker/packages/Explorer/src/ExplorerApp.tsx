@@ -28,6 +28,8 @@ import {
 } from './utils';
 import { AssetPreviewPanel } from './AssetPreviewPanel';
 import { normalizePreviewAsset } from './previewAdapter';
+import { buildThumbJobKey, getThumbCacheKey, normalizeThumbUrl } from './thumbnailLoader';
+import { useThumbnailQueue } from './useThumbnailQueue';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -162,96 +164,6 @@ const buildThumbFallback = (label: string) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
-const normalizeThumbUrl = (rawUrl?: string): string | undefined => {
-  if (!rawUrl) return undefined;
-  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
-    try {
-      const parsed = new URL(rawUrl);
-      if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
-        return `${window.location.origin}${parsed.pathname}${parsed.search}`;
-      }
-      return parsed.href;
-    } catch {
-      return rawUrl;
-    }
-  }
-  return rawUrl;
-};
-
-const queueThumbLoads = async (
-  targets: HTMLImageElement[],
-  timeoutMs: number,
-  onOrientation: (node: HTMLImageElement) => void,
-): Promise<void> => {
-  if (!targets.length) return;
-  const jobs = targets
-    .map((target) => ({
-      target,
-      url: target.dataset.thumbUrl,
-      fallback: target.dataset.thumbFallback,
-    }))
-    .filter((job) => Boolean(job.url));
-  if (!jobs.length) return;
-  let active = 0;
-  let index = 0;
-  let settled = false;
-  await new Promise<void>((resolve) => {
-    const timer = window.setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    }, timeoutMs);
-    const startNext = () => {
-      while (active < THUMB_MAX_WORKERS && index < jobs.length) {
-        const job = jobs[index++];
-        if (!job.url) continue;
-        active += 1;
-        const loader = new Image();
-        loader.onload = () => {
-          job.target.src = job.url as string;
-          job.target.dataset.thumbState = 'loaded';
-          if (job.target.complete) {
-            onOrientation(job.target);
-          } else {
-            job.target.addEventListener('load', () => onOrientation(job.target), { once: true });
-          }
-          active -= 1;
-          if (index >= jobs.length && active === 0 && !settled) {
-            settled = true;
-            window.clearTimeout(timer);
-            resolve();
-          } else {
-            startNext();
-          }
-        };
-        loader.onerror = () => {
-          if (job.fallback) {
-            job.target.src = job.fallback as string;
-          }
-          job.target.dataset.thumbState = 'error';
-          active -= 1;
-          if (index >= jobs.length && active === 0 && !settled) {
-            settled = true;
-            window.clearTimeout(timer);
-            resolve();
-          } else {
-            startNext();
-          }
-        };
-        loader.src = job.url as string;
-      }
-      if (index >= jobs.length && active === 0 && !settled) {
-        settled = true;
-        window.clearTimeout(timer);
-        resolve();
-      }
-    };
-    startNext();
-  });
-};
-
-const THUMB_MAX_WORKERS = 3;
-const THUMB_LOAD_TIMEOUT_MS = 8000;
 const CONTENT_LOADING_DELAY_MS = 180;
 const GRID_GAP_FALLBACK = 6;
 const GRID_COL_WIDTH_FALLBACK = 180;
@@ -308,14 +220,6 @@ const SORT_LABELS: Record<SortKey, string> = {
   'name-desc': 'Name Z→A',
   'size-desc': 'Size big→small',
   'size-asc': 'Size small→big',
-};
-
-const getThumbCacheKey = (item: MediaItem) => {
-  const project = item.project_name || item.project || '';
-  const source = item.project_source || item.source || '';
-  const rel = item.relative_path || '';
-  const sha = item.sha256 || item.hash || '';
-  return [source, project, rel, sha].filter(Boolean).join('|');
 };
 
 function useToastQueue() {
@@ -451,6 +355,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const sourceName = String(item.project_source || item.source || projectOverride?.source || '').trim();
     return `${sourceName}::${projectName}::${relativePath}`;
   }, []);
+  const assetRenderKey = assetSelectionKey;
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
   const filteredMedia = useMemo(() => {
@@ -566,33 +471,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setContentLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const root = mediaScrollRef.current;
-    if (!root) return;
-    const selector = view === 'grid'
-      ? '.grid img.asset-thumb[data-thumb-url]'
-      : '.list img.asset-thumb[data-thumb-url]';
-    const targets = Array.from(root.querySelectorAll(selector)) as HTMLImageElement[];
-    const shouldShowOverlay = pendingDataLoadOverlay;
-    const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;
-    if (!targets.length) {
-      endContentLoading(loadingToken);
-      if (shouldShowOverlay) setPendingDataLoadOverlay(false);
-      return;
-    }
-    let cancelled = false;
-    queueThumbLoads(targets, THUMB_LOAD_TIMEOUT_MS, updateCardOrientation)
-      .finally(() => {
-        if (!cancelled) {
-          endContentLoading(loadingToken);
-          if (shouldShowOverlay) setPendingDataLoadOverlay(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [beginContentLoading, endContentLoading, filteredMedia, pendingDataLoadOverlay, updateCardOrientation, view]);
+  const clearPendingDataLoadOverlay = useCallback(() => {
+    setPendingDataLoadOverlay(false);
+  }, []);
+
+  const thumbDatasetSignature = useMemo(() => {
+    const dataset = filteredMedia.map((item) => {
+      const kind = guessKind(item);
+      const thumbKey = getThumbCacheKey(item) || assetRenderKey(item, activeProject);
+      const rawThumbUrl = normalizeThumbUrl(item.thumb_url
+        || item.thumbnail_url
+        || (kind === 'image' ? item.stream_url : undefined));
+      const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : '';
+      return buildThumbJobKey(thumbKey, thumbUrl);
+    });
+    return `${view}:${view === 'grid' ? gridColumnCount : 'list'}:${dataset.join('\n')}`;
+  }, [activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, view]);
+
+  useThumbnailQueue({
+    beginContentLoading,
+    clearPendingDataLoadOverlay,
+    endContentLoading,
+    pendingDataLoadOverlay,
+    rootRef: mediaScrollRef,
+    thumbDatasetSignature,
+    updateCardOrientation,
+    view,
+  });
 
   useEffect(() => {
     return () => {
@@ -2435,7 +2340,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
-                  const thumbKey = getThumbCacheKey(item);
+                  const renderKey = assetRenderKey(item, activeProject);
+                  const thumbKey = getThumbCacheKey(item) || renderKey;
                   const orientationKey = thumbKey || item.relative_path || '';
                   const itemOrient = inferOrientationFromItem(item);
                   const dynamicOrient = dynamicOrientations[orientationKey];
@@ -2447,18 +2353,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     || (kind === 'image' ? item.stream_url : undefined));
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
+                  const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
                   const safeThumbUrl = fallbackThumb;
-                  const selectionKey = assetSelectionKey(item, activeProject);
+                  const selectionKey = renderKey;
                   const isSelected = selected.has(selectionKey);
 
                   return (
                     <div
-                      key={`${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
+                      key={renderKey}
                       className={`asset asset-interactive-surface ${isSelected ? 'is-selected' : ''}`}
                       data-kind={kind}
                       data-orient={orient}
                       data-orient-locked={orientLocked ? 'true' : 'false'}
                       data-thumb-key={thumbKey}
+                      data-thumb-job-key={thumbJobKey}
                       data-relative={item.relative_path || ''}
                       data-select-key={selectionKey}
                       {...pointerHandlers}
@@ -2474,6 +2382,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           onContextMenu={suppressNativeContextMenu}
                           data-thumb-url={thumbUrl}
                           data-thumb-fallback={fallbackThumb}
+                          data-thumb-job-key={thumbJobKey}
                         />
                         <div className="asset-overlay">
                           <div className="asset-ol-tl">
@@ -2545,19 +2454,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
                   const size = formatBytes(item.size);
                   const pointerHandlers = buildAssetPointerHandlers(item);
+                  const renderKey = assetRenderKey(item, activeProject);
                   const rawThumbUrl = normalizeThumbUrl(item.thumb_url
                     || item.thumbnail_url
                     || (kind === 'image' ? item.stream_url : undefined));
                   const fallbackThumb = buildThumbFallback(kind);
                   const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
+                  const thumbKey = getThumbCacheKey(item) || renderKey;
+                  const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
                   const safeThumbUrl = fallbackThumb;
-                  const selectionKey = assetSelectionKey(item, activeProject);
+                  const selectionKey = renderKey;
                   const isSelected = selected.has(selectionKey);
 
                   return (
                     <div
                       className={`row asset-interactive-surface ${isSelected ? 'is-selected' : ''}`}
-                      key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
+                      key={`row-${renderKey}`}
                       data-select-key={selectionKey}
                       {...pointerHandlers}
                     >
@@ -2572,6 +2484,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           onContextMenu={suppressNativeContextMenu}
                           data-thumb-url={thumbUrl}
                           data-thumb-fallback={fallbackThumb}
+                          data-thumb-job-key={thumbJobKey}
                         />
                       </div>
                       <div className="info">
