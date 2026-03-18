@@ -393,7 +393,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [composeSubmitting, setComposeSubmitting] = useState(false);
   const [composeOutputName, setComposeOutputName] = useState('');
   const [composeOutputProject, setComposeOutputProject] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
+  const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -953,7 +957,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [selectionItems],
   );
 
-  const deleteMediaSelection = useCallback(
+  const performDeleteMediaSelection = useCallback(
     async (selectionKeys: string[]) => {
       const items = resolveItemsForSelection(selectionKeys);
       if (!items.length) {
@@ -967,6 +971,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         addToast('warn', 'Delete', 'Unable to resolve selected media paths');
         return;
       }
+      setDeleteSubmitting(true);
       try {
         await api.bulkDeleteMedia(refs);
         addToast('good', 'Delete', 'Removed media from disk and index');
@@ -988,10 +993,47 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Delete failed';
         addToast('bad', 'Delete', message);
+      } finally {
+        setDeleteSubmitting(false);
       }
     },
     [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, mediaScope, resolveItemsForSelection, resolveSelectionKeysForItems, toAssetRef],
   );
+
+  const deleteMediaSelection = useCallback((selectionKeys: string[]) => {
+    const items = resolveItemsForSelection(selectionKeys);
+    if (!items.length) {
+      addToast('warn', 'Delete', 'Select one or more clips');
+      return;
+    }
+    const refs = items
+      .map((item) => toAssetRef(item))
+      .filter((item): item is AssetRef => Boolean(item));
+    if (!refs.length) {
+      addToast('warn', 'Delete', 'Unable to resolve selected media paths');
+      return;
+    }
+    setPendingDeleteSelectionKeys(resolveSelectionKeysForItems(items));
+    setDeleteModalOpen(true);
+  }, [addToast, resolveItemsForSelection, resolveSelectionKeysForItems, toAssetRef]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (deleteSubmitting) return;
+    const selectionKeys = pendingDeleteSelectionKeys.slice();
+    if (!selectionKeys.length) {
+      setDeleteModalOpen(false);
+      return;
+    }
+    setDeleteModalOpen(false);
+    setPendingDeleteSelectionKeys([]);
+    await performDeleteMediaSelection(selectionKeys);
+  }, [deleteSubmitting, pendingDeleteSelectionKeys, performDeleteMediaSelection]);
+
+  const handleDeleteCancel = useCallback(() => {
+    if (deleteSubmitting) return;
+    setDeleteModalOpen(false);
+    setPendingDeleteSelectionKeys([]);
+  }, [deleteSubmitting]);
 
   const moveMediaSelection = useCallback(
     async (selectionKeys: string[], targetProject: Project) => {
@@ -1838,6 +1880,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   );
 
   useEffect(() => {
+    const body = document.body;
+    if (composeModalOpen || deleteModalOpen) body.classList.add('confirm-open');
+    else body.classList.remove('confirm-open');
+    return () => body.classList.remove('confirm-open');
+  }, [composeModalOpen, deleteModalOpen]);
+
+  useEffect(() => {
     if (!composeModalOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -1850,6 +1899,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     window.requestAnimationFrame(() => composeNameInputRef.current?.focus());
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [composeModalOpen, composeSubmitting]);
+
+  useEffect(() => {
+    if (!deleteModalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (deleteSubmitting) return;
+        event.preventDefault();
+        handleDeleteCancel();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.requestAnimationFrame(() => deleteConfirmButtonRef.current?.focus());
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deleteModalOpen, deleteSubmitting, handleDeleteCancel]);
 
   const uploadCaption = activeProject
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
@@ -2635,6 +2698,37 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ))}
         </div>
       ) : null}
+
+      <div
+        className={`confirm-modal ${deleteModalOpen ? 'open' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!deleteModalOpen}
+        aria-busy={deleteSubmitting}
+        aria-labelledby="confirmDeleteTitle"
+        aria-describedby="confirmDeleteBody"
+        onClick={() => {
+          if (deleteSubmitting) return;
+          handleDeleteCancel();
+        }}
+      >
+        <div className="confirm-card custom-ui-surface" onClick={(event) => event.stopPropagation()}>
+          <h3 id="confirmDeleteTitle" className="confirm-title">{pendingDeleteSelectionKeys.length === 1 ? 'Delete this asset?' : `Delete ${Math.max(1, pendingDeleteSelectionKeys.length)} assets?`}</h3>
+          <p id="confirmDeleteBody" className="confirm-body">This removes the media file from disk and updates the project index.</p>
+          <div className="confirm-actions">
+            <button className="btn" type="button" disabled={deleteSubmitting} onClick={handleDeleteCancel}>Cancel</button>
+            <button
+              ref={deleteConfirmButtonRef}
+              className="btn bad"
+              type="button"
+              disabled={deleteSubmitting}
+              onClick={() => { void handleDeleteConfirm(); }}
+            >
+              {deleteSubmitting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div
         className={`compose-modal ${composeModalOpen ? 'open' : ''}`}

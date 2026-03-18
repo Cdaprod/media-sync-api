@@ -1729,7 +1729,7 @@
     .confirm-modal{
       position: fixed;
       inset: 0;
-      z-index: calc(var(--z-modal) + 10);
+      z-index: calc(var(--z-modal) + 14);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1740,6 +1740,7 @@
       opacity: 0;
       pointer-events: none;
       transition: opacity var(--dur-fast) var(--ease-settle);
+      touch-action: none;
     }
 
     .confirm-modal.open{
@@ -1754,6 +1755,8 @@
       background: linear-gradient(180deg, rgba(14, 22, 44, 0.98), rgba(8, 14, 32, 0.98));
       box-shadow: 0 24px 70px rgba(0,0,0,0.48), inset 0 0 0 1px rgba(255,255,255,0.02);
       padding: 18px;
+      pointer-events: auto;
+      touch-action: manipulation;
     }
 
     .confirm-title{
@@ -3386,7 +3389,8 @@
       const body = 'This removes the media file from disk and updates the project index.';
 
       if (!modal || !titleEl || !bodyEl || !cancelBtn || !confirmBtn){
-        return Promise.resolve(window.confirm(`${title}\n\n${body}`));
+        toast('bad', 'Delete', 'Delete confirmation modal is unavailable.');
+        return Promise.resolve(false);
       }
 
       titleEl.textContent = title;

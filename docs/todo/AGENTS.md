@@ -1,3 +1,11 @@
+## 2026-03-18 — Explorer delete confirmation modal parity restore
+- [x] Restored package Explorer delete actions to route preview/drawer/context-menu/bulk deletes through a dedicated app-owned confirm modal before delete requests fire.
+- [x] Preserved cancel-path state safety (no delete request, no selection corruption, no drawer corruption) while keeping confirm-path toast + refresh semantics intact.
+- [x] Removed static Explorer delete fallback to native `window.confirm` so delete now aborts safely if the custom modal is unavailable.
+- [x] Hardened delete modal layering/touch behavior for iPhone Safari (`z-index`, `pointer-events`, `touch-action`) in static/package explorers.
+- [x] Added regression assertions for preview/bulk confirm routing, confirm/cancel markers, and no-`window.confirm` usage in delete flows.
+- [ ] Validate on physical iPhone Safari that delete confirm stays tappable above all overlays and that cancel/confirm behave correctly from preview, drawer, context menu, and bulk selection entrypoints.
+
 ## 2026-03-17 — Package compose repeat-submit lock (iPhone Safari)
 - [x] Added `composeSubmitting` in package Explorer compose modal flow and hard-guarded `handleComposeConfirm` against re-entry.
 - [x] Disabled compose modal controls while submit is active and added busy UI state (`Composing...`, `aria-busy`).

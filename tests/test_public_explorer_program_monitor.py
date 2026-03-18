@@ -163,6 +163,8 @@ def test_explorer_delete_requires_confirm_and_scope_aware_reload():
     assert "return new Promise((resolve) => {" in html
     assert "modal.classList.add('open');" in html
     assert "if (event.target === modal) cleanup(false);" in html
+    assert "toast('bad', 'Delete', 'Delete confirmation modal is unavailable.');" in html
+    assert 'window.confirm' not in html
     assert 'const confirmed = await confirmDeleteAction(assets.length);' in html
     assert 'if (!confirmed) return;' in html
     assert 'id="confirmDeleteModal" class="confirm-modal"' in html
@@ -178,6 +180,9 @@ def test_explorer_delete_requires_confirm_and_scope_aware_reload():
     assert 'function reloadMediaForCurrentScope()' in html
     assert "else if (state.mediaScope === 'all') await loadAllMedia();" in html
     assert 'await reloadMediaForCurrentScope();' in html
+    assert 'z-index: calc(var(--z-modal) + 14);' in html
+    assert 'touch-action: none;' in html
+    assert 'touch-action: manipulation;' in html
 
 def test_explorer_selection_bar_compose_action_present():
     html = Path('public/explorer.html').read_text(encoding='utf-8')

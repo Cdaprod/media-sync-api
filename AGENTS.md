@@ -1,6 +1,13 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-18)
+- Restored Explorer delete-confirm parity after compose/modal regressions by routing package Explorer delete actions (preview overlay, drawer, context menu, bulk delete) through an app-owned confirmation modal before any `/api/assets/bulk/delete` request fires.
+- Package delete flow now keeps selection/focus/drawer state untouched on cancel, only clears removed selection/focus after confirmed delete success, and preserves existing toast + scope-aware refresh behavior on confirm.
+- Static Explorer delete confirm no longer falls back to native `window.confirm`; if modal wiring is unavailable it now surfaces a toast and aborts delete instead of bypassing the app-owned modal contract.
+- Raised delete confirm modal layering/touch behavior above compose/other overlays (`z-index`, `pointer-events`, `touch-action`) in static/package explorers to keep confirmation controls tappable on iPhone Safari.
+- Added static/package regression assertions locking confirm-before-delete routing, confirm/cancel path markers, delete modal styling/layering, and no-`window.confirm` usage in Explorer delete flows.
+
 ### Latest Implementation Notes (2026-03-17)
 - Package Explorer compose modal now has an in-flight submit lock (`composeSubmitting`) so repeated taps/Enter presses cannot queue duplicate `/api/assets/bulk/compose` requests.
 - Compose modal controls now disable while submit is active (filename input, project select, cancel button, compose button) and expose `aria-busy` state for accessibility.
