@@ -191,6 +191,45 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(confirmBlock.includes('} finally {'));
 });
 
+test('package explorer delete actions route through custom confirmation modal', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
+  assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
+  assert.ok(content.includes('const performDeleteMediaSelection = useCallback('));
+  assert.ok(content.includes('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {'));
+  assert.ok(content.includes('setPendingDeleteSelectionKeys(resolveSelectionKeysForItems(items));'));
+  assert.ok(content.includes('setDeleteModalOpen(true);'));
+  assert.ok(content.includes('const handleDeleteConfirm = useCallback(async () => {'));
+  assert.ok(content.includes('await performDeleteMediaSelection(selectionKeys);'));
+  assert.ok(content.includes('const handleDeleteCancel = useCallback(() => {'));
+  assert.ok(content.includes('setPendingDeleteSelectionKeys([]);'));
+  assert.ok(content.includes("className={`confirm-modal ${deleteModalOpen ? 'open' : ''}`}"));
+  assert.ok(content.includes('id="confirmDeleteTitle" className="confirm-title"'));
+  assert.ok(content.includes("pendingDeleteSelectionKeys.length === 1 ? 'Delete this asset?' : `Delete ${Math.max(1, pendingDeleteSelectionKeys.length)} assets?`"));
+  assert.ok(content.includes('onClick={() => deleteMediaSelection(selectedKeysOrdered)}'));
+  assert.ok(content.includes("handler: () => deleteMediaSelection(resolveSelectionKeysForItems(items)),"));
+  assert.ok(content.includes("onDelete={() => { if (focused) void deleteMediaSelection([assetSelectionKey(focused, activeProject)]); }}"));
+  assert.ok(content.includes('if (deleteSubmitting) return;'));
+  assert.ok(content.includes("{deleteSubmitting ? 'Deleting...' : 'Delete'}"));
+  assert.ok(!content.includes('window.confirm'));
+  const deleteStart = content.indexOf('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {');
+  const confirmStart = content.indexOf('const handleDeleteConfirm = useCallback(async () => {', deleteStart);
+  assert.ok(deleteStart >= 0);
+  assert.ok(confirmStart > deleteStart);
+  const deleteBlock = content.slice(deleteStart, confirmStart);
+  assert.ok(!deleteBlock.includes('await api.bulkDeleteMedia(refs);'));
+  const confirmEnd = content.indexOf('const handleDeleteCancel = useCallback(() => {', confirmStart);
+  const confirmBlock = content.slice(confirmStart, confirmEnd);
+  assert.ok(confirmBlock.includes('await performDeleteMediaSelection(selectionKeys);'));
+  assert.ok(styles.includes('.confirm-modal{'));
+  assert.ok(styles.includes('.confirm-card{'));
+  assert.ok(styles.includes('z-index: 126;'));
+  assert.ok(styles.includes('pointer-events: auto;'));
+});
+
 test('package explorer compose modal styles are present', () => {
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const styles = fs.readFileSync(stylesPath, 'utf8');
