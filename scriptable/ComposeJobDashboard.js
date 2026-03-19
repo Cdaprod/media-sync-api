@@ -1,4 +1,5 @@
 // /scriptable/ComposeJobDashboard.js
+// Name in Scriptable iOS: `ComposeJobDashboard 2.js`
 //
 // WebView queue UI for media compose/upload jobs.
 // Designed for Scriptable + Shortcuts share sheet.
