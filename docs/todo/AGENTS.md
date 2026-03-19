@@ -1,3 +1,10 @@
+## 2026-03-19 — Package Explorer default App Router not-found hardening
+- [x] Installed `docker/packages/Explorer/app/not-found.tsx` as the root App Router 404 surface for unmatched package routes.
+- [x] Moved the 404 fonts into package app layout via `next/font/google` so the shader page no longer depends on page-local Google Fonts imports.
+- [x] Hardened the WebGL page for production with history fallback routing, reduced-motion throttling, visibility/resize safety, and context loss/restore cleanup plus a WebGL-unavailable message.
+- [x] Added package regression assertions for root not-found ownership, font wiring, fallback routing markers, and WebGL safety markers.
+- [ ] Validate on physical iPhone Safari that the shader tunnel remains smooth, the Surface CTA returns correctly from direct-entry 404s, and WebGL fallback messaging stays unobtrusive on lower-power devices.
+
 ## 2026-03-19 — Package Explorer passive-tile playback + brand toggle follow-up
 - [x] Prevented first-tap active/focus intent from mounting hidden preview playback by gating preview asset ownership on `inspectorOpen`.
 - [x] Kept second-tap preview, long-press context menu, and checkbox-only selection behavior intact while returning tiles to passive display surfaces.

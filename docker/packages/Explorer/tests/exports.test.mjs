@@ -26,6 +26,25 @@ test('package exports include entrypoints', () => {
 test('standalone app entry exists', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'page.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'layout.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'not-found.tsx')));
+});
+
+test('package app layout owns default App Router not-found fonts and wiring', () => {
+  const layoutPath = path.join(packageRoot, 'app', 'layout.tsx');
+  const notFoundPath = path.join(packageRoot, 'app', 'not-found.tsx');
+  const layout = fs.readFileSync(layoutPath, 'utf8');
+  const notFound = fs.readFileSync(notFoundPath, 'utf8');
+  assert.ok(layout.includes("from 'next/font/google'"));
+  assert.ok(layout.includes("--font-void-display"));
+  assert.ok(layout.includes("--font-void-mono"));
+  assert.ok(notFound.includes('data-explorer-default-not-found="true"'));
+  assert.ok(notFound.includes('window.history.length > 1'));
+  assert.ok(notFound.includes("router.replace('/')"));
+  assert.ok(notFound.includes('webglcontextrestored'));
+  assert.ok(notFound.includes('prefers-reduced-motion: reduce'));
+  assert.ok(notFound.includes('data-webgl-fallback="true"'));
+  assert.ok(notFound.includes('data-webgl-canvas="tunnel"'));
+  assert.ok(!notFound.includes("@import url('https://fonts.googleapis.com"));
 });
 
 test('explorer resolves media urls against api base', () => {

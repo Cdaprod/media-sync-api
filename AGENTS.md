@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-19)
+- Installed the package Explorer App Router default 404 at `docker/packages/Explorer/app/not-found.tsx`, keeping the shader tunnel/HUD aesthetic while making the root `app/` segment own unmatched-route rendering for the standalone package app.
+- Moved the not-found fonts into `app/layout.tsx` with `next/font/google` (`Bebas Neue` + `DM Mono`) so the 404 page no longer injects page-local Google Fonts `@import` rules during render.
+- Hardened the 404 client page for production with history-back fallback to `/`, reduced-motion aware frame throttling, WebGL context loss/restore handling, visibility/resize safety, and a no-WebGL fallback notice plus regression assertions covering the new routing/font/runtime contract.
+
+### Latest Implementation Notes (2026-03-19)
 - Fixed the immediate post-focus regression where first tile taps mounted the hidden preview player and could start audio/video before the drawer was open; preview asset + metadata now gate on `inspectorOpen` so grid/list tiles remain passive display surfaces.
 - Restored the whole package Explorer brand/logo region as the projects-panel toggle by wiring the outer `.brand` surface back to `sidebarOpen` with click + Enter/Space keyboard semantics instead of limiting the control to the inner title text button.
 - Added regression assertions ensuring first-tap focus does not hand media to preview ownership early and that the brand surface remains the tappable, unblocked projects toggle while the topbar reveal layer is non-intercepting when visible.
