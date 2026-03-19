@@ -24,6 +24,7 @@ interface UseAssetInteractionsOptions {
   activeProject: Project | null;
   assetSelectionKey: (item: MediaItem, projectOverride?: Project | null) => string;
   closeDrawer: () => void;
+  focusAsset: (item: MediaItem, itemKey: string) => void;
   inNoPreviewZone: (target: EventTarget | null) => boolean;
   inspectorOpen: boolean;
   itemsBySelectionKey: Map<string, MediaItem>;
@@ -40,6 +41,7 @@ export function useAssetInteractions({
   activeProject,
   assetSelectionKey,
   closeDrawer,
+  focusAsset,
   inNoPreviewZone,
   inspectorOpen,
   itemsBySelectionKey,
@@ -105,6 +107,7 @@ export function useAssetInteractions({
           longPressTimerRef.current = window.setTimeout(() => {
             if (longPressPointerRef.current !== pointerId || moved || dragging || assetDragActive) return;
             longPressFiredRef.current = true;
+            focusAsset(item, itemKey);
             openContextMenu(pressX, pressY, resolveContextItems());
           }, LONG_PRESS_MS);
         }
@@ -159,12 +162,14 @@ export function useAssetInteractions({
         }
         const now = Date.now();
         if (inspectorOpen) {
+          focusAsset(item, itemKey);
           closeDrawer();
           lastTileTapRef.current = { key: '', at: 0 };
           return;
         }
         const prevTap = lastTileTapRef.current;
         const isSecondTap = prevTap.key === itemKey && (now - prevTap.at) <= 900;
+        focusAsset(item, itemKey);
         if (isSecondTap) {
           openDrawer(item);
           lastTileTapRef.current = { key: '', at: 0 };
@@ -205,6 +210,7 @@ export function useAssetInteractions({
       assetSelectionKey,
       clearPendingLongPress,
       closeDrawer,
+      focusAsset,
       dragging,
       inNoPreviewZone,
       inspectorOpen,

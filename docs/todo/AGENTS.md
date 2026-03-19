@@ -1,3 +1,11 @@
+## 2026-03-19 — Package Explorer interaction/stacking/scroll regression restore
+- [x] Restored package Explorer tile tap semantics so first body tap only focuses the active tile, second tap opens preview, and checkbox selection remains isolated to selector controls.
+- [x] Reintroduced an explicit active asset identity separate from selection order so rerenders/masonry/list switches do not break second-tap preview intent.
+- [x] Removed the topbar paint-containment regression and re-established dropdown/actions-panel painting above asset surfaces without z-index spray.
+- [x] Restored sidebar pane scroll ownership on mobile by giving the drawer scroll region explicit height/overflow/touch containment and by preventing body/main from stealing those gestures.
+- [x] Added regression assertions for active-vs-selected tile markers, topbar clipping guards, and sidebar scroll-ownership markers.
+- [ ] Validate on physical iPhone Safari that second-tap preview, topbar menus, and project-panel scrolling all behave correctly together under real touch latency.
+
 ## 2026-03-19 — Package Explorer TDZ/type-order hardening
 - [x] Fixed the `resolveAssetUrl` before declaration regression in `ExplorerApp.tsx` by moving the callback above `thumbDatasetSignature` and `useThumbnailQueue(...)`.
 - [x] Tightened extracted hook type surfaces with explicit result interfaces where helpful to make declaration/usage contracts clearer during future refactors.

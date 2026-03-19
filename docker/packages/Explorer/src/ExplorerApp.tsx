@@ -257,6 +257,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [untaggedOnly, setUntaggedOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
+  const [activeAssetKey, setActiveAssetKey] = useState('');
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -382,6 +383,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const clearSelectionState = useCallback(() => {
     setSelected(new Set());
     setSelectedOrder([]);
+  }, []);
+
+  const clearActiveAsset = useCallback(() => {
+    setActiveAssetKey('');
+    setFocused(null);
+    setPreviewDetailsOpen(false);
   }, []);
 
   const inNoPreviewZone = useCallback((target: EventTarget | null) => {
@@ -627,6 +634,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setMedia([]);
         setMediaScope('project');
         clearSelectionState();
+        clearActiveAsset();
         return;
       }
       try {
@@ -647,12 +655,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         addToast('bad', 'Media', message);
       }
     },
-    [api, addToast, assetSelectionKey, clearSelectionState],
+    [api, addToast, assetSelectionKey, clearActiveAsset, clearSelectionState],
   );
 
   const loadAllMedia = useCallback(async () => {
     clearSelectionState();
-    setFocused(null);
+    clearActiveAsset();
     setMediaScope('all');
     setPendingDataLoadOverlay(true);
     if (!projects.length) {
@@ -678,7 +686,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     }
     setMedia(sortMediaByRecent(gathered));
-  }, [addToast, api, clearSelectionState, projects]);
+  }, [addToast, api, clearActiveAsset, clearSelectionState, projects]);
 
   const refreshAll = useCallback(async () => {
     await loadSources();
@@ -701,7 +709,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setActiveProject(null);
         setMediaScope('all');
         clearSelectionState();
-        setFocused(null);
+        clearActiveAsset();
         setResolveProjectMode('current');
         setResolveProjectName('');
         setResolveNewName('');
@@ -713,14 +721,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setActiveProject(project);
       setMediaScope('project');
       clearSelectionState();
-      setFocused(null);
+      clearActiveAsset();
       setResolveProjectMode('current');
       setResolveProjectName(project.name || '');
       setResolveNewName('');
       setUploadStatus('');
       addToast('good', 'Project', `Selected ${project.name}`);
     },
-    [activeProject, addToast, clearSelectionState],
+    [activeProject, addToast, clearActiveAsset, clearSelectionState],
   );
 
   const toggleSelected = useCallback(
@@ -741,11 +749,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearSelectionState();
   }, [clearSelectionState]);
 
-  const openDrawer = useCallback((item: MediaItem) => {
+  const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {
+    const nextKey = itemKey || assetSelectionKey(item, activeProject);
+    if (!nextKey) return;
+    setActiveAssetKey(nextKey);
     setFocused(item);
+  }, [activeProject, assetSelectionKey]);
+
+  const openDrawer = useCallback((item: MediaItem) => {
+    focusAsset(item);
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
-  }, []);
+  }, [focusAsset]);
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
@@ -759,7 +774,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const currentIndex = filteredMedia.findIndex((item) => assetSelectionKey(item, activeProject) === currentKey);
     if (currentIndex < 0) return;
     const nextIndex = (currentIndex + offset + filteredMedia.length) % filteredMedia.length;
-    setFocused(filteredMedia[nextIndex] || focused);
+    const nextItem = filteredMedia[nextIndex] || focused;
+    setFocused(nextItem);
+    setActiveAssetKey(assetSelectionKey(nextItem, activeProject));
     setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, filteredMedia, focused]);
 
@@ -840,6 +857,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     () => selectionItems.filter((item) => guessKind(item) === 'video'),
     [selectionItems],
   );
+
+  useEffect(() => {
+    if (!activeAssetKey) return;
+    if (itemsBySelectionKey.has(activeAssetKey)) return;
+    setActiveAssetKey('');
+    if (!inspectorOpen) {
+      setFocused(null);
+    }
+  }, [activeAssetKey, inspectorOpen, itemsBySelectionKey]);
 
   const performDeleteMediaSelection = useCallback(
     async (selectionKeys: string[]) => {
@@ -1347,6 +1373,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     onRevealTopbar: () => topbarIntentRef.current?.setOpen(true),
     openContextMenu,
     openDrawer,
+    focusAsset,
     projects,
     selected,
     selectedKeysOrdered,
@@ -1712,10 +1739,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const safeThumbUrl = fallbackThumb;
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
+    const isActive = activeAssetKey === selectionKey;
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
 
     return {
       fallbackThumb,
+      isActive,
       isSelected,
       item,
       kind,
@@ -1735,6 +1764,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       title,
     };
   }, [
+    activeAssetKey,
     activeProject,
     assetRenderKey,
     buildAssetPointerHandlers,

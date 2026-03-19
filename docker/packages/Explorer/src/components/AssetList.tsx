@@ -25,9 +25,10 @@ function AssetListComponent({
 
         return (
           <div
-            className={`row asset-interactive-surface ${viewModel.isSelected ? 'is-selected' : ''}`}
+            className={`row asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
             key={`row-${viewModel.renderKey}`}
             data-select-key={viewModel.selectionKey}
+            data-active={viewModel.isActive ? 'true' : 'false'}
             {...viewModel.pointerHandlers}
           >
             <div className="mini">
@@ -53,15 +54,16 @@ function AssetListComponent({
                 {viewModel.sub} • {viewModel.size} • {viewModel.kind}
               </div>
             </div>
-            <div className="actions">
+            <div className="actions" data-no-preview="1">
               <input
                 type="checkbox"
                 checked={viewModel.isSelected}
                 title="Select"
+                data-no-preview="1"
                 disabled={!canSelect}
                 onChange={() => onToggleSelected(item)}
               />
-              <button className="iconbtn" type="button" onClick={() => onOpenDrawer(item)}>
+              <button className="iconbtn" type="button" data-no-preview="1" onClick={() => onOpenDrawer(item)}>
                 Preview
               </button>
             </div>

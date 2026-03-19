@@ -2,6 +2,13 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-19)
+- Restored package Explorer tap semantics after the extraction regression by introducing an explicit active asset key separate from checkbox selection, so first tile taps only focus/arm second-tap preview while checkbox state and ordered selection badges still come solely from selector toggles.
+- Long-press/context ownership now reuses that same canonical asset identity (`assetSelectionKey`) to keep second-tap preview and context activation stable across rerenders, masonry/list rendering, and drawer close/reopen flows.
+- Fixed topbar menu clipping by removing the topbar paint-containment regression and switching the topbar surface to `isolation: isolate` + visible overflow, so Actions/dropdown panels can paint above transformed asset layers without z-index inflation.
+- Restored sidebar scroll ownership on mobile by keeping body/main overflow locked to the app shell and making the drawer/sidebar scroll region own its height, overscroll containment, and touch pan routing.
+- Added package regression assertions for active-vs-selected tile markers, topbar clipping guards, and sidebar scroll-ownership CSS markers, then reran `npm test`, `npm run build`, and `git diff --check` locally.
+
+### Latest Implementation Notes (2026-03-19)
 - Fixed the package Explorer build TDZ regression by moving `resolveAssetUrl` above `thumbDatasetSignature`/`useThumbnailQueue(...)`, restoring the same declaration-order safety contract previously enforced for `normalizedPreviewAsset`.
 - Ran a focused package Explorer type/order hardening pass after the TDZ fix: extracted hooks now declare explicit return interfaces where helpful (`useAssetInteractions`, `useTopbarScrollState`), and regression coverage now asserts `resolveAssetUrl` appears before `thumbDatasetSignature` to catch future block-scope ordering slips.
 - Verified package Explorer now passes both `npm test` and `npm run build` locally after the stabilization refactors, so the earlier build-only branch regression is closed.

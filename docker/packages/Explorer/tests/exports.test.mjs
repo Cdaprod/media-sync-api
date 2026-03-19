@@ -155,13 +155,27 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('buildThumbFallback'));
 });
 
-test('asset tile preview open path requires second tap intent', () => {
+test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
   const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
-  const content = fs.readFileSync(hookPath, 'utf8');
-  assert.ok(content.includes('lastTileTapRef'));
-  assert.ok(content.includes('const isSecondTap = prevTap.key === itemKey'));
-  assert.ok(content.includes('if (isSecondTap) {'));
-  assert.ok(content.includes('openDrawer(item);'));
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
+  const hookContent = fs.readFileSync(hookPath, 'utf8');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+  const list = fs.readFileSync(listPath, 'utf8');
+  assert.ok(hookContent.includes('lastTileTapRef'));
+  assert.ok(hookContent.includes('const isSecondTap = prevTap.key === itemKey'));
+  assert.ok(hookContent.includes('focusAsset(item, itemKey);'));
+  assert.ok(hookContent.includes('if (isSecondTap) {'));
+  assert.ok(hookContent.includes('openDrawer(item);'));
+  assert.ok(explorer.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
+  assert.ok(explorer.includes('const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {'));
+  assert.ok(explorer.includes('const isActive = activeAssetKey === selectionKey;'));
+  assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
+  assert.ok(grid.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
+  assert.ok(list.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
+  assert.ok(list.includes('data-no-preview="1"'));
 });
 
 test('compose action filters selected assets to videos', () => {
@@ -245,6 +259,23 @@ test('package explorer compose modal styles are present', () => {
   assert.ok(styles.includes('.compose-card{'));
   assert.ok(styles.includes('.compose-field select{'));
   assert.ok(styles.includes('env(safe-area-inset-top)'));
+});
+
+test('topbar dropdown and sidebar scroll contracts avoid clipping and preserve pane-owned scrolling', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(styles.includes('.topbar{'));
+  assert.ok(styles.includes('isolation: isolate;'));
+  assert.ok(styles.includes('overflow: visible;'));
+  assert.ok(!styles.includes('contain: paint;'));
+  assert.ok(styles.includes('.sidebar.sidebar-drawer{'));
+  assert.ok(styles.includes('touch-action: pan-y;'));
+  assert.ok(styles.includes('.sidebar .scroll{'));
+  assert.ok(styles.includes('height: 100%;'));
+  assert.ok(styles.includes('overflow-y: auto;'));
+  assert.ok(styles.includes('overscroll-behavior-y: contain;'));
+  assert.ok(styles.includes(`@media (max-width: 860px){
+  body{ overflow:hidden; }`));
 });
 
 test('static explorer uses OBS push helper', () => {

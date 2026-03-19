@@ -10,6 +10,7 @@ export interface ExplorerAssetViewModel {
   orientLocked: boolean;
   renderKey: string;
   selectionKey: string;
+  isActive: boolean;
   isSelected: boolean;
   size: string;
   sub: string;
@@ -49,7 +50,7 @@ function AssetGridComponent({
             return (
               <div
                 key={viewModel.renderKey}
-                className={`asset asset-interactive-surface ${viewModel.isSelected ? 'is-selected' : ''}`}
+                className={`asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
                 data-kind={viewModel.kind}
                 data-orient={viewModel.orient}
                 data-orient-locked={viewModel.orientLocked ? 'true' : 'false'}
@@ -57,6 +58,7 @@ function AssetGridComponent({
                 data-thumb-job-key={viewModel.thumbJobKey}
                 data-relative={viewModel.item.relative_path || ''}
                 data-select-key={viewModel.selectionKey}
+                data-active={viewModel.isActive ? 'true' : 'false'}
                 {...viewModel.pointerHandlers}
               >
                 <div className="thumb">
