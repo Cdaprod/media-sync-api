@@ -1,3 +1,44 @@
+## 2026-03-19 — Package Explorer passive-tile playback + brand toggle follow-up
+- [x] Prevented first-tap active/focus intent from mounting hidden preview playback by gating preview asset ownership on `inspectorOpen`.
+- [x] Kept second-tap preview, long-press context menu, and checkbox-only selection behavior intact while returning tiles to passive display surfaces.
+- [x] Restored the full brand/logo region as the projects panel toggle with click + keyboard activation semantics.
+- [x] Added regression assertions for passive tiles, preview gating, brand toggle wiring, and non-blocking topbar reveal behavior.
+- [ ] Validate on physical iPhone Safari that tapping the logo opens/closes the project drawer reliably and that first tile taps never leak background audio.
+
+## 2026-03-19 — Package Explorer interaction/stacking/scroll regression restore
+- [x] Restored package Explorer tile tap semantics so first body tap only focuses the active tile, second tap opens preview, and checkbox selection remains isolated to selector controls.
+- [x] Reintroduced an explicit active asset identity separate from selection order so rerenders/masonry/list switches do not break second-tap preview intent.
+- [x] Removed the topbar paint-containment regression and re-established dropdown/actions-panel painting above asset surfaces without z-index spray.
+- [x] Restored sidebar pane scroll ownership on mobile by giving the drawer scroll region explicit height/overflow/touch containment and by preventing body/main from stealing those gestures.
+- [x] Added regression assertions for active-vs-selected tile markers, topbar clipping guards, and sidebar scroll-ownership markers.
+- [ ] Validate on physical iPhone Safari that second-tap preview, topbar menus, and project-panel scrolling all behave correctly together under real touch latency.
+
+## 2026-03-19 — Package Explorer TDZ/type-order hardening
+- [x] Fixed the `resolveAssetUrl` before declaration regression in `ExplorerApp.tsx` by moving the callback above `thumbDatasetSignature` and `useThumbnailQueue(...)`.
+- [x] Tightened extracted hook type surfaces with explicit result interfaces where helpful to make declaration/usage contracts clearer during future refactors.
+- [x] Added regression coverage ensuring `resolveAssetUrl` is declared before `thumbDatasetSignature` so this TDZ class does not silently return.
+- [x] Verified package Explorer now passes `npm test` and `npm run build` after the stabilization refactors.
+- [ ] Keep watching for additional declaration-order regressions when splitting more `ExplorerApp.tsx` logic into modules/components.
+
+## 2026-03-19 — Package Explorer interactions/topbar/component split
+- [x] Extracted package asset pointer/gesture ownership into `src/useAssetInteractions.ts` without changing second-tap preview, long-press menu, or drag/drop selection semantics.
+- [x] Added `src/useTopbarScrollState.ts` to coalesce scroll-driven topbar visibility updates behind RAF + delta thresholds instead of raw scroll churn.
+- [x] Split package grid/list tile markup into memoized `src/components/AssetGrid.tsx` and `src/components/AssetList.tsx` while preserving stable render keys, thumb job markers, and selection-order UI.
+- [x] Reduced `ExplorerApp.tsx` coupling by centralizing per-item render data in `buildAssetViewModel(...)` and keeping topbar/context/modal state out of the inline tile render path.
+- [x] Updated package regression assertions to cover the new hooks/components and topbar scroll contract markers.
+- [ ] Validate on physical iPhone Safari that topbar hide/reveal no longer flip-flops on tiny scroll deltas and that drag-near-top still reveals the bar predictably.
+- [ ] Continue the file-splitting pass by isolating drawer-preview state and/or context-menu rendering if further rerender churn is still visible after this pass.
+
+## 2026-03-18 — Package Explorer thumbnail queue + scroll smoothness pass
+- [x] Extracted package thumbnail queue helpers out of `ExplorerApp.tsx` into `src/thumbnailLoader.ts` and `src/useThumbnailQueue.ts` to start reducing file size without changing UX semantics.
+- [x] Re-keyed thumbnail work off a stable rendered dataset signature (`view`, `gridColumnCount`, thumb job identity) so selection/context/preview churn does not rescan/reload every visible thumb.
+- [x] Added thumb job cache/in-flight dedupe markers (`thumbLoadStateCache`, `thumbLoadedKey`, `thumbJobKey`) so remounted tiles can sync from cache without new overlay/network work.
+- [x] Restricted “Preparing thumbnails…” ownership to actual unresolved thumb loads for the current rendered dataset instead of broad rerender churn.
+- [x] Centralized package grid/list render identity on the same canonical asset key and added compositor/touch-scroll polish for topbar + content scroll surfaces.
+- [x] Updated package regression assertions for the new thumbnail modules, thumb job markers, and topbar compositor style markers.
+- [ ] Validate on physical iPhone Safari that repeated scroll-away / scroll-back passes no longer flash the thumbnail overlay or blank/reload already-seen thumbs.
+- [ ] Continue the file-splitting pass by extracting asset interaction handlers from `ExplorerApp.tsx` into a dedicated `useAssetInteractions` module without changing gesture semantics.
+
 ## 2026-03-18 — Explorer delete confirmation modal parity restore
 - [x] Restored package Explorer delete actions to route preview/drawer/context-menu/bulk deletes through a dedicated app-owned confirm modal before delete requests fire.
 - [x] Preserved cancel-path state safety (no delete request, no selection corruption, no drawer corruption) while keeping confirm-path toast + refresh semantics intact.

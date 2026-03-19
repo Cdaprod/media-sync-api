@@ -1,6 +1,37 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-19)
+- Fixed the immediate post-focus regression where first tile taps mounted the hidden preview player and could start audio/video before the drawer was open; preview asset + metadata now gate on `inspectorOpen` so grid/list tiles remain passive display surfaces.
+- Restored the whole package Explorer brand/logo region as the projects-panel toggle by wiring the outer `.brand` surface back to `sidebarOpen` with click + Enter/Space keyboard semantics instead of limiting the control to the inner title text button.
+- Added regression assertions ensuring first-tap focus does not hand media to preview ownership early and that the brand surface remains the tappable, unblocked projects toggle while the topbar reveal layer is non-intercepting when visible.
+
+### Latest Implementation Notes (2026-03-19)
+- Restored package Explorer tap semantics after the extraction regression by introducing an explicit active asset key separate from checkbox selection, so first tile taps only focus/arm second-tap preview while checkbox state and ordered selection badges still come solely from selector toggles.
+- Long-press/context ownership now reuses that same canonical asset identity (`assetSelectionKey`) to keep second-tap preview and context activation stable across rerenders, masonry/list rendering, and drawer close/reopen flows.
+- Fixed topbar menu clipping by removing the topbar paint-containment regression and switching the topbar surface to `isolation: isolate` + visible overflow, so Actions/dropdown panels can paint above transformed asset layers without z-index inflation.
+- Restored sidebar scroll ownership on mobile by keeping body/main overflow locked to the app shell and making the drawer/sidebar scroll region own its height, overscroll containment, and touch pan routing.
+- Added package regression assertions for active-vs-selected tile markers, topbar clipping guards, and sidebar scroll-ownership CSS markers, then reran `npm test`, `npm run build`, and `git diff --check` locally.
+
+### Latest Implementation Notes (2026-03-19)
+- Fixed the package Explorer build TDZ regression by moving `resolveAssetUrl` above `thumbDatasetSignature`/`useThumbnailQueue(...)`, restoring the same declaration-order safety contract previously enforced for `normalizedPreviewAsset`.
+- Ran a focused package Explorer type/order hardening pass after the TDZ fix: extracted hooks now declare explicit return interfaces where helpful (`useAssetInteractions`, `useTopbarScrollState`), and regression coverage now asserts `resolveAssetUrl` appears before `thumbDatasetSignature` to catch future block-scope ordering slips.
+- Verified package Explorer now passes both `npm test` and `npm run build` locally after the stabilization refactors, so the earlier build-only branch regression is closed.
+
+### Latest Implementation Notes (2026-03-19)
+- Package Explorer asset interaction logic is now extracted into `src/useAssetInteractions.ts`, including long-press gating, second-tap preview intent, drag-threshold handling, and custom context-menu ownership, so `ExplorerApp.tsx` no longer embeds the full pointer-state machine.
+- Package Explorer topbar hide/reveal state is now driven through `src/useTopbarScrollState.ts`, which coalesces scroll updates with `requestAnimationFrame`, accumulates delta budgets, and only toggles visibility after meaningful direction/threshold changes instead of raw scroll noise.
+- Grid/list render markup now lives in memoized `src/components/AssetGrid.tsx` and `src/components/AssetList.tsx`, while `ExplorerApp.tsx` provides a shared `buildAssetViewModel(...)` for stable render keys, thumb job markers, selection ordering, and parity styling.
+- This pass reduces rerender coupling between tile surfaces and unrelated UI state (context menu, topbar visibility, modal state) without changing masonry ordering, selection glow/order badges, thumbnail job markers, or preview/context semantics.
+- Added package regression assertions for the new interaction/topbar/components split so existing gesture and topbar contract markers stay locked during future refactors.
+
+### Latest Implementation Notes (2026-03-18)
+- Package Explorer thumbnail loading is now split out of `ExplorerApp.tsx` into `src/thumbnailLoader.ts` and `src/useThumbnailQueue.ts`, reducing app-file bloat and isolating DOM-thumb queue behavior for future extraction passes.
+- Thumbnail queueing now keys work off a stable per-render thumb dataset signature (`view` + `gridColumnCount` + thumb job keys) so selection, focus, context-menu, and drawer churn no longer retrigger full visible-thumb scans/load attempts.
+- Added per-thumb job caching/in-flight dedupe (`thumbLoadStateCache`, `thumbLoadedKey`, `thumbJobKey`) so already-resolved thumbs remount without new network work and overlay ownership is limited to unresolved thumb jobs only.
+- Grid/list asset render keys now reuse a single canonical asset identity path, reducing remount churn across masonry/list rendering and keeping selection/thumb identity aligned.
+- Tuned package Explorer compositor hints for topbar/content scroll surfaces (`translate3d`/`translateZ`, `will-change`, touch scroll containment) to reduce hide/reveal and asset-scroll jank.
+
 ### Latest Implementation Notes (2026-03-18)
 - Restored Explorer delete-confirm parity after compose/modal regressions by routing package Explorer delete actions (preview overlay, drawer, context menu, bulk delete) through an app-owned confirmation modal before any `/api/assets/bulk/delete` request fires.
 - Package delete flow now keeps selection/focus/drawer state untouched on cancel, only clears removed selection/focus after confirmed delete success, and preserves existing toast + scope-aware refresh behavior on confirm.

@@ -27,25 +27,19 @@ import {
   toAbsoluteUrl,
 } from './utils';
 import { AssetPreviewPanel } from './AssetPreviewPanel';
+import { AssetGrid } from './components/AssetGrid';
+import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
+import { buildThumbJobKey, getThumbCacheKey, normalizeThumbUrl } from './thumbnailLoader';
+import { useAssetInteractions } from './useAssetInteractions';
+import { useThumbnailQueue } from './useThumbnailQueue';
+import { useTopbarScrollState } from './useTopbarScrollState';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
 }
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
-const POINTER_THRESHOLD = 8;
-const LONG_PRESS_MOVE_CANCEL_PX = 12;
-const LONG_PRESS_MS = 620;
-
-const suppressNativeContextMenu = (event: React.MouseEvent<HTMLElement>) => {
-  event.preventDefault();
-  event.stopPropagation();
-};
-
-const suppressNativeDragGhost = (event: React.DragEvent<HTMLElement>) => {
-  event.preventDefault();
-};
 
 const formatListValue = (value: string | string[] | null | undefined) => {
   if (Array.isArray(value)) {
@@ -162,96 +156,6 @@ const buildThumbFallback = (label: string) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
-const normalizeThumbUrl = (rawUrl?: string): string | undefined => {
-  if (!rawUrl) return undefined;
-  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
-    try {
-      const parsed = new URL(rawUrl);
-      if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
-        return `${window.location.origin}${parsed.pathname}${parsed.search}`;
-      }
-      return parsed.href;
-    } catch {
-      return rawUrl;
-    }
-  }
-  return rawUrl;
-};
-
-const queueThumbLoads = async (
-  targets: HTMLImageElement[],
-  timeoutMs: number,
-  onOrientation: (node: HTMLImageElement) => void,
-): Promise<void> => {
-  if (!targets.length) return;
-  const jobs = targets
-    .map((target) => ({
-      target,
-      url: target.dataset.thumbUrl,
-      fallback: target.dataset.thumbFallback,
-    }))
-    .filter((job) => Boolean(job.url));
-  if (!jobs.length) return;
-  let active = 0;
-  let index = 0;
-  let settled = false;
-  await new Promise<void>((resolve) => {
-    const timer = window.setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    }, timeoutMs);
-    const startNext = () => {
-      while (active < THUMB_MAX_WORKERS && index < jobs.length) {
-        const job = jobs[index++];
-        if (!job.url) continue;
-        active += 1;
-        const loader = new Image();
-        loader.onload = () => {
-          job.target.src = job.url as string;
-          job.target.dataset.thumbState = 'loaded';
-          if (job.target.complete) {
-            onOrientation(job.target);
-          } else {
-            job.target.addEventListener('load', () => onOrientation(job.target), { once: true });
-          }
-          active -= 1;
-          if (index >= jobs.length && active === 0 && !settled) {
-            settled = true;
-            window.clearTimeout(timer);
-            resolve();
-          } else {
-            startNext();
-          }
-        };
-        loader.onerror = () => {
-          if (job.fallback) {
-            job.target.src = job.fallback as string;
-          }
-          job.target.dataset.thumbState = 'error';
-          active -= 1;
-          if (index >= jobs.length && active === 0 && !settled) {
-            settled = true;
-            window.clearTimeout(timer);
-            resolve();
-          } else {
-            startNext();
-          }
-        };
-        loader.src = job.url as string;
-      }
-      if (index >= jobs.length && active === 0 && !settled) {
-        settled = true;
-        window.clearTimeout(timer);
-        resolve();
-      }
-    };
-    startNext();
-  });
-};
-
-const THUMB_MAX_WORKERS = 3;
-const THUMB_LOAD_TIMEOUT_MS = 8000;
 const CONTENT_LOADING_DELAY_MS = 180;
 const GRID_GAP_FALLBACK = 6;
 const GRID_COL_WIDTH_FALLBACK = 180;
@@ -310,14 +214,6 @@ const SORT_LABELS: Record<SortKey, string> = {
   'size-asc': 'Size small→big',
 };
 
-const getThumbCacheKey = (item: MediaItem) => {
-  const project = item.project_name || item.project || '';
-  const source = item.project_source || item.source || '';
-  const rel = item.relative_path || '';
-  const sha = item.sha256 || item.hash || '';
-  return [source, project, rel, sha].filter(Boolean).join('|');
-};
-
 function useToastQueue() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const timeouts = useRef<number[]>([]);
@@ -361,6 +257,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [untaggedOnly, setUntaggedOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
+  const [activeAssetKey, setActiveAssetKey] = useState('');
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -369,14 +266,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [dragActive, setDragActive] = useState(false);
-  const [assetDragActive, setAssetDragActive] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
   const [gridColumnCount, setGridColumnCount] = useState(1);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
-  const dragPathsRef = useRef<string[]>([]);
   const contentLoadingTokenRef = useRef(0);
   const contentLoadingTimerRef = useRef<number | null>(null);
 
@@ -407,19 +301,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const selectedOrderRef = useRef<string[]>([]);
-  const lastTileTapRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressPointerRef = useRef<number | null>(null);
-  const longPressFiredRef = useRef(false);
-
-  const clearPendingLongPress = useCallback(() => {
-    if (longPressTimerRef.current) {
-      window.clearTimeout(longPressTimerRef.current);
-    }
-    longPressTimerRef.current = null;
-    longPressPointerRef.current = null;
-    longPressFiredRef.current = false;
-  }, []);
+  const topbarRef = useRef<HTMLDivElement | null>(null);
+  const topbarRevealRef = useRef<HTMLDivElement | null>(null);
+  const topbarIntentRef = useRef<IntentController | null>(null);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
     const itemOrient = inferOrientationFromItem(item);
@@ -451,6 +335,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const sourceName = String(item.project_source || item.source || projectOverride?.source || '').trim();
     return `${sourceName}::${projectName}::${relativePath}`;
   }, []);
+  const assetRenderKey = assetSelectionKey;
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
   const filteredMedia = useMemo(() => {
@@ -498,6 +383,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const clearSelectionState = useCallback(() => {
     setSelected(new Set());
     setSelectedOrder([]);
+  }, []);
+
+  const clearActiveAsset = useCallback(() => {
+    setActiveAssetKey('');
+    setFocused(null);
+    setPreviewDetailsOpen(false);
   }, []);
 
   const inNoPreviewZone = useCallback((target: EventTarget | null) => {
@@ -566,33 +457,42 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setContentLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const root = mediaScrollRef.current;
-    if (!root) return;
-    const selector = view === 'grid'
-      ? '.grid img.asset-thumb[data-thumb-url]'
-      : '.list img.asset-thumb[data-thumb-url]';
-    const targets = Array.from(root.querySelectorAll(selector)) as HTMLImageElement[];
-    const shouldShowOverlay = pendingDataLoadOverlay;
-    const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;
-    if (!targets.length) {
-      endContentLoading(loadingToken);
-      if (shouldShowOverlay) setPendingDataLoadOverlay(false);
-      return;
-    }
-    let cancelled = false;
-    queueThumbLoads(targets, THUMB_LOAD_TIMEOUT_MS, updateCardOrientation)
-      .finally(() => {
-        if (!cancelled) {
-          endContentLoading(loadingToken);
-          if (shouldShowOverlay) setPendingDataLoadOverlay(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [beginContentLoading, endContentLoading, filteredMedia, pendingDataLoadOverlay, updateCardOrientation, view]);
+  const clearPendingDataLoadOverlay = useCallback(() => {
+    setPendingDataLoadOverlay(false);
+  }, []);
+
+  const resolveAssetUrl = useCallback(
+    (path?: string) => {
+      if (!path) return '';
+      if (path.startsWith('data:')) return path;
+      return api.buildUrl(path);
+    },
+    [api],
+  );
+
+  const thumbDatasetSignature = useMemo(() => {
+    const dataset = filteredMedia.map((item) => {
+      const kind = guessKind(item);
+      const thumbKey = getThumbCacheKey(item) || assetRenderKey(item, activeProject);
+      const rawThumbUrl = normalizeThumbUrl(item.thumb_url
+        || item.thumbnail_url
+        || (kind === 'image' ? item.stream_url : undefined));
+      const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : '';
+      return buildThumbJobKey(thumbKey, thumbUrl);
+    });
+    return `${view}:${view === 'grid' ? gridColumnCount : 'list'}:${dataset.join('\n')}`;
+  }, [activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, view]);
+
+  useThumbnailQueue({
+    beginContentLoading,
+    clearPendingDataLoadOverlay,
+    endContentLoading,
+    pendingDataLoadOverlay,
+    rootRef: mediaScrollRef,
+    thumbDatasetSignature,
+    updateCardOrientation,
+    view,
+  });
 
   useEffect(() => {
     return () => {
@@ -605,22 +505,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return project.upload_url || `/api/projects/${encodeURIComponent(project.name)}/upload${query}`;
   }, []);
 
-  const resolveAssetUrl = useCallback(
-    (path?: string) => {
-      if (!path) return '';
-      if (path.startsWith('data:')) return path;
-      return api.buildUrl(path);
-    },
-    [api],
-  );
-
   const normalizedPreviewAsset = useMemo(() => {
-    if (!focused) return null;
+    if (!inspectorOpen || !focused) return null;
     return normalizePreviewAsset(focused, resolveAssetUrl);
-  }, [focused, resolveAssetUrl]);
+  }, [focused, inspectorOpen, resolveAssetUrl]);
 
   const previewMetadataRows = useMemo<Array<[string, string]>>(() => {
-    if (!focused) return [];
+    if (!inspectorOpen || !focused) return [];
     const kind = guessKind(focused);
     const projectName = activeProject?.name || focused.project_name || '(none)';
     const projectSource = activeProject?.source || focused.project_source || '(primary)';
@@ -641,7 +532,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ['AI Tags', formatListValue(focused.ai_tags ?? focused.aiTags)],
     ] satisfies Array<[string, string]>;
     return rows.filter((row): row is [string, string] => String(row[1] || '').trim().length > 0);
-  }, [activeProject?.name, activeProject?.source, focused, resolveAssetUrl]);
+  }, [activeProject?.name, activeProject?.source, focused, inspectorOpen, resolveAssetUrl]);
 
   const updateSidebarMode = useCallback(() => {
     const mobile = window.matchMedia('(max-width: 860px)').matches;
@@ -743,6 +634,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setMedia([]);
         setMediaScope('project');
         clearSelectionState();
+        clearActiveAsset();
         return;
       }
       try {
@@ -763,12 +655,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         addToast('bad', 'Media', message);
       }
     },
-    [api, addToast, assetSelectionKey, clearSelectionState],
+    [api, addToast, assetSelectionKey, clearActiveAsset, clearSelectionState],
   );
 
   const loadAllMedia = useCallback(async () => {
     clearSelectionState();
-    setFocused(null);
+    clearActiveAsset();
     setMediaScope('all');
     setPendingDataLoadOverlay(true);
     if (!projects.length) {
@@ -794,7 +686,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     }
     setMedia(sortMediaByRecent(gathered));
-  }, [addToast, api, clearSelectionState, projects]);
+  }, [addToast, api, clearActiveAsset, clearSelectionState, projects]);
 
   const refreshAll = useCallback(async () => {
     await loadSources();
@@ -817,7 +709,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setActiveProject(null);
         setMediaScope('all');
         clearSelectionState();
-        setFocused(null);
+        clearActiveAsset();
         setResolveProjectMode('current');
         setResolveProjectName('');
         setResolveNewName('');
@@ -829,14 +721,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setActiveProject(project);
       setMediaScope('project');
       clearSelectionState();
-      setFocused(null);
+      clearActiveAsset();
       setResolveProjectMode('current');
       setResolveProjectName(project.name || '');
       setResolveNewName('');
       setUploadStatus('');
       addToast('good', 'Project', `Selected ${project.name}`);
     },
-    [activeProject, addToast, clearSelectionState],
+    [activeProject, addToast, clearActiveAsset, clearSelectionState],
   );
 
   const toggleSelected = useCallback(
@@ -857,11 +749,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearSelectionState();
   }, [clearSelectionState]);
 
+  const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {
+    const nextKey = itemKey || assetSelectionKey(item, activeProject);
+    if (!nextKey) return;
+    setActiveAssetKey(nextKey);
+  }, [activeProject, assetSelectionKey]);
+
   const openDrawer = useCallback((item: MediaItem) => {
+    focusAsset(item);
     setFocused(item);
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
-  }, []);
+  }, [focusAsset]);
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
@@ -875,7 +774,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const currentIndex = filteredMedia.findIndex((item) => assetSelectionKey(item, activeProject) === currentKey);
     if (currentIndex < 0) return;
     const nextIndex = (currentIndex + offset + filteredMedia.length) % filteredMedia.length;
-    setFocused(filteredMedia[nextIndex] || focused);
+    const nextItem = filteredMedia[nextIndex] || focused;
+    setFocused(nextItem);
+    setActiveAssetKey(assetSelectionKey(nextItem, activeProject));
     setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, filteredMedia, focused]);
 
@@ -956,6 +857,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     () => selectionItems.filter((item) => guessKind(item) === 'video'),
     [selectionItems],
   );
+
+  useEffect(() => {
+    if (!activeAssetKey) return;
+    if (itemsBySelectionKey.has(activeAssetKey)) return;
+    setActiveAssetKey('');
+    if (!inspectorOpen) {
+      setFocused(null);
+    }
+  }, [activeAssetKey, inspectorOpen, itemsBySelectionKey]);
 
   const performDeleteMediaSelection = useCallback(
     async (selectionKeys: string[]) => {
@@ -1445,152 +1355,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return actions;
   }, [deleteMediaSelection, handleCopySelectedUrls, handleCopyStream, openDrawer, resolveAssetUrl, resolveSelectionKeysForItems]);
 
-  const buildAssetPointerHandlers = useCallback(
-    (item: MediaItem) => {
-      let pointerId: number | null = null;
-      let startX = 0;
-      let startY = 0;
-      let moved = false;
-      let pressX = 0;
-      let pressY = 0;
-      const itemKey = assetSelectionKey(item, activeProject);
-
-      const resolveContextItems = () => (selected.has(itemKey)
-        ? selectedKeysOrdered
-          .map((path) => itemsBySelectionKey.get(path))
-          .filter((entry): entry is MediaItem => Boolean(entry))
-        : [item]);
-
-      const handlePointerDown = (event: React.PointerEvent) => {
-        if (event.pointerType === 'mouse' && event.button !== 0) return;
-        if (inNoPreviewZone(event.target)) return;
-        if ((event.target as HTMLElement).closest('input, button, a, summary')) return;
-        pointerId = event.pointerId;
-        startX = event.clientX;
-        startY = event.clientY;
-        pressX = event.clientX;
-        pressY = event.clientY;
-        moved = false;
-        clearPendingLongPress();
-        if (event.pointerType === 'touch' || event.pointerType === 'pen') {
-          longPressPointerRef.current = pointerId;
-          longPressTimerRef.current = window.setTimeout(() => {
-            if (longPressPointerRef.current !== pointerId || moved || dragging || assetDragActive) return;
-            longPressFiredRef.current = true;
-            openContextMenu(pressX, pressY, resolveContextItems());
-          }, LONG_PRESS_MS);
-        }
-      };
-
-      const handlePointerMove = (event: React.PointerEvent) => {
-        if (pointerId !== event.pointerId) return;
-        if (inNoPreviewZone(event.target)) {
-          clearPendingLongPress();
-          return;
-        }
-        const dx = event.clientX - startX;
-        const dy = event.clientY - startY;
-        const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;
-        if (movedFar) {
-          moved = true;
-          clearPendingLongPress();
-        }
-        if (!moved) return;
-        if (event.pointerType === 'touch' || event.pointerType === 'pen') {
-          return;
-        }
-        if ((dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
-          setDragging(true);
-          setAssetDragActive(true);
-          dragPathsRef.current = selected.has(itemKey)
-            ? selectedKeysOrdered
-            : [itemKey];
-          if (event.clientY <= 56) setTopbarHidden(false);
-        }
-      };
-
-      const handlePointerUp = (event: React.PointerEvent) => {
-        if (pointerId !== event.pointerId) return;
-        const longPressFired = longPressFiredRef.current;
-        clearPendingLongPress();
-        pointerId = null;
-        if (longPressFired) {
-          return;
-        }
-        if (moved) {
-          setDragging(false);
-          setAssetDragActive(false);
-          const dropEl = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.chip') as HTMLElement | null;
-          if (dropEl?.dataset?.project) {
-            const target = projects.find((proj) => (
-              proj.name === dropEl.dataset.project
-              && String(proj.source || '') === String(dropEl.dataset.source || '')
-            ));
-            if (target) void moveMediaSelection(dragPathsRef.current, target);
-          }
-          return;
-        }
-        const now = Date.now();
-        if (inspectorOpen) {
-          closeDrawer();
-          lastTileTapRef.current = { key: '', at: 0 };
-          return;
-        }
-        const prevTap = lastTileTapRef.current;
-        const isSecondTap = prevTap.key === itemKey && (now - prevTap.at) <= 900;
-        if (isSecondTap) {
-          openDrawer(item);
-          lastTileTapRef.current = { key: '', at: 0 };
-          return;
-        }
-        lastTileTapRef.current = { key: itemKey, at: now };
-      };
-
-      const handlePointerCancel = () => {
-        clearPendingLongPress();
-        pointerId = null;
-        setDragging(false);
-        setAssetDragActive(false);
-      };
-
-      const handleContextMenu = (event: React.MouseEvent) => {
-        if (inNoPreviewZone(event.target)) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        if (dragging) return;
-        openContextMenu(event.clientX, event.clientY, resolveContextItems());
-      };
-
-      return {
-        onPointerDown: handlePointerDown,
-        onPointerMove: handlePointerMove,
-        onPointerUp: handlePointerUp,
-        onPointerCancel: handlePointerCancel,
-        onContextMenu: handleContextMenu,
-      };
-    },
-    [
-      activeProject,
-      assetDragActive,
-      assetSelectionKey,
-      clearPendingLongPress,
-      closeDrawer,
-      dragging,
-      inNoPreviewZone,
-      inspectorOpen,
-      itemsBySelectionKey,
-      moveMediaSelection,
-      openContextMenu,
-      openDrawer,
-      projects,
-      selected,
-      selectedKeysOrdered,
-    ],
-  );
+  const {
+    assetDragActive,
+    buildAssetPointerHandlers,
+    clearPendingLongPress,
+    dragPathsRef,
+    dragging,
+    stopAssetDrag,
+  } = useAssetInteractions({
+    activeProject,
+    assetSelectionKey,
+    closeDrawer,
+    inNoPreviewZone,
+    inspectorOpen,
+    itemsBySelectionKey,
+    moveMediaSelection,
+    onRevealTopbar: () => topbarIntentRef.current?.setOpen(true),
+    openContextMenu,
+    openDrawer,
+    focusAsset,
+    projects,
+    selected,
+    selectedKeysOrdered,
+  });
 
   const handlePreviewSelected = useCallback(() => {
     const first = selectionItems[0];
@@ -1628,11 +1415,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const handleProjectDrop = useCallback(async (project: Project) => {
     if (!dragging) return;
-    setDragging(false);
-    setAssetDragActive(false);
+    stopAssetDrag();
     if (!dragPathsRef.current.length) return;
     await moveMediaSelection(dragPathsRef.current, project);
-  }, [dragging, moveMediaSelection]);
+  }, [dragPathsRef, dragging, moveMediaSelection, stopAssetDrag]);
 
   const pickUpload = useCallback(() => {
     const input = uploadInputRef.current;
@@ -1693,14 +1479,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     menu.style.top = `${top}px`;
   }, [contextMenu]);
 
+  const {
+    revealTopbar,
+    setTopbarHidden,
+    topbarHidden,
+  } = useTopbarScrollState({
+    disabled: sidebarOpen || composeModalOpen || deleteModalOpen,
+    scrollRef: mediaScrollRef,
+  });
+
   useEffect(() => {
     if (!dragging) return;
     const handleMove = (event: PointerEvent) => {
-      if (event.clientY <= 56) setTopbarHidden(false);
+      if (event.clientY <= 56) revealTopbar();
     };
     window.addEventListener('pointermove', handleMove);
     return () => window.removeEventListener('pointermove', handleMove);
-  }, [dragging]);
+  }, [dragging, revealTopbar]);
 
   useEffect(() => {
     addToast('good', 'Boot', 'Loading sources + projects…');
@@ -1741,11 +1536,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [closeDrawer, inspectorOpen, sidebarOpen]);
 
-  const [topbarHidden, setTopbarHidden] = useState(false);
-  const topbarRef = useRef<HTMLDivElement | null>(null);
-  const topbarRevealRef = useRef<HTMLDivElement | null>(null);
-  const topbarIntentRef = useRef<IntentController | null>(null);
-
   useEffect(() => {
     const topbar = topbarRef.current;
     const reveal = topbarRevealRef.current;
@@ -1753,7 +1543,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const supportsHover = window.matchMedia('(hover: hover)').matches;
 
     const intent = createIntentController({
-      onOpen: () => setTopbarHidden(false),
+      onOpen: () => revealTopbar(),
       onClose: () => setTopbarHidden(true),
       closeDelay: 600,
     });
@@ -1782,9 +1572,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     reveal.addEventListener('pointerenter', handleEnter);
     reveal.addEventListener('pointerleave', handleLeave);
     reveal.addEventListener('pointerdown', handleEnter);
-    reveal.addEventListener('pointermove', () => {
+    const handleRevealMove = () => {
       if (dragging) intent.scheduleOpen(0);
-    });
+    };
+    reveal.addEventListener('pointermove', handleRevealMove);
 
     const handleOutside = (event: PointerEvent) => {
       if (intent.isPinned()) return;
@@ -1801,9 +1592,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       reveal.removeEventListener('pointerenter', handleEnter);
       reveal.removeEventListener('pointerleave', handleLeave);
       reveal.removeEventListener('pointerdown', handleEnter);
+      reveal.removeEventListener('pointermove', handleRevealMove);
       document.removeEventListener('pointerdown', handleOutside);
     };
-  }, []);
+  }, [dragging, revealTopbar, setTopbarHidden, sidebarOpen]);
 
   useEffect(() => {
     const brand = brandRef.current;
@@ -1918,10 +1710,76 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
   const canSelect = Boolean(activeProject) || mediaScope === 'all';
-  const projectLabel = (item: MediaItem) => {
+  const projectLabel = useCallback((item: MediaItem) => {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
-  };
+  }, []);
+
+  const buildAssetViewModel = useCallback((item: MediaItem) => {
+    const kind = guessKind(item);
+    const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
+    const proj = projectLabel(item);
+    const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
+    const size = formatBytes(item.size);
+    const pointerHandlers = buildAssetPointerHandlers(item);
+    const renderKey = assetRenderKey(item, activeProject);
+    const thumbKey = getThumbCacheKey(item) || renderKey;
+    const orientationKey = thumbKey || item.relative_path || '';
+    const itemOrient = inferOrientationFromItem(item);
+    const dynamicOrient = dynamicOrientations[orientationKey];
+    const cachedOrient = getCachedOrientation(orientationKey);
+    const orient = resolveItemOrientation(item, orientationKey);
+    const orientLocked = Boolean(itemOrient || dynamicOrient || cachedOrient);
+    const rawThumbUrl = normalizeThumbUrl(item.thumb_url
+      || item.thumbnail_url
+      || (kind === 'image' ? item.stream_url : undefined));
+    const fallbackThumb = buildThumbFallback(kind);
+    const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
+    const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
+    const safeThumbUrl = fallbackThumb;
+    const selectionKey = renderKey;
+    const isSelected = selected.has(selectionKey);
+    const isActive = activeAssetKey === selectionKey;
+    const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
+
+    return {
+      fallbackThumb,
+      isActive,
+      isSelected,
+      item,
+      kind,
+      kindBadgeClassName: kindBadgeClass(kind),
+      orient,
+      orientLocked,
+      pointerHandlers,
+      renderKey,
+      safeThumbUrl,
+      selectionKey,
+      selectionOrderLabel: selectionOrderIndex ? String(Math.min(selectionOrderIndex, 99)) : '',
+      size,
+      sub,
+      thumbJobKey,
+      thumbKey,
+      thumbUrl,
+      title,
+    };
+  }, [
+    activeAssetKey,
+    activeProject,
+    assetRenderKey,
+    buildAssetPointerHandlers,
+    dynamicOrientations,
+    getCachedOrientation,
+    projectLabel,
+    resolveAssetUrl,
+    resolveItemOrientation,
+    selected,
+    selectedOrderMap,
+  ]);
+
+  const toggleSidebarOpen = useCallback(() => {
+    setSidebarOpen((prev) => !prev);
+  }, []);
 
   return (
     <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`}>
@@ -1932,14 +1790,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
             title="LAN-only media-sync-api explorer"
             ref={brandRef}
+            role="button"
+            tabIndex={0}
+            aria-label="Toggle projects panel"
+            onClick={toggleSidebarOpen}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              toggleSidebarOpen();
+            }}
           >
             <div className="logo" aria-hidden="true"></div>
             <div className="brand-text">
               <h1>
-                <button type="button" aria-label="Toggle projects panel" onClick={() => setSidebarOpen((prev) => !prev)}>
-                  <span className="brand-title is-primary">Cdaprod's Explorer</span>
-                  <span className="brand-title is-secondary">Cdaprod's Projects</span>
-                </button>
+                <span className="brand-title is-primary">Cdaprod's Explorer</span>
+                <span className="brand-title is-secondary">Cdaprod's Projects</span>
               </h1>
               <div className="sub">media-sync-api</div>
             </div>
@@ -2425,104 +2290,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
                 </div>
               ) : (
-                <div className="masonry-columns" style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}>
-                  {masonryColumns.map((column, columnIndex) => (
-                    <div className="masonry-column" key={`masonry-column-${columnIndex}`}>
-                      {column.map((item) => {
-                  const kind = guessKind(item);
-                  const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
-                  const proj = projectLabel(item);
-                  const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
-                  const size = formatBytes(item.size);
-                  const pointerHandlers = buildAssetPointerHandlers(item);
-                  const thumbKey = getThumbCacheKey(item);
-                  const orientationKey = thumbKey || item.relative_path || '';
-                  const itemOrient = inferOrientationFromItem(item);
-                  const dynamicOrient = dynamicOrientations[orientationKey];
-                  const cachedOrient = getCachedOrientation(orientationKey);
-                  const orient = resolveItemOrientation(item, orientationKey);
-                  const orientLocked = Boolean(itemOrient || dynamicOrient || cachedOrient);
-                  const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-                    || item.thumbnail_url
-                    || (kind === 'image' ? item.stream_url : undefined));
-                  const fallbackThumb = buildThumbFallback(kind);
-                  const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
-                  const safeThumbUrl = fallbackThumb;
-                  const selectionKey = assetSelectionKey(item, activeProject);
-                  const isSelected = selected.has(selectionKey);
-
-                  return (
-                    <div
-                      key={`${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
-                      className={`asset asset-interactive-surface ${isSelected ? 'is-selected' : ''}`}
-                      data-kind={kind}
-                      data-orient={orient}
-                      data-orient-locked={orientLocked ? 'true' : 'false'}
-                      data-thumb-key={thumbKey}
-                      data-relative={item.relative_path || ''}
-                      data-select-key={selectionKey}
-                      {...pointerHandlers}
-                    >
-                      <div className="thumb">
-                        <img
-                          className="asset-thumb"
-                          src={safeThumbUrl}
-                          alt={title}
-                          loading="lazy"
-                          draggable={false}
-                          onDragStart={suppressNativeDragGhost}
-                          onContextMenu={suppressNativeContextMenu}
-                          data-thumb-url={thumbUrl}
-                          data-thumb-fallback={fallbackThumb}
-                        />
-                        <div className="asset-overlay">
-                          <div className="asset-ol-tl">
-                            <span className={`badge ${kindBadgeClass(kind)} tile-ui-text`}>{kind}</span>
-                          </div>
-                          <div className="asset-ol-tr">
-                            <div
-                              className="selector sel-ui"
-                              title="Select"
-                              data-no-preview="1"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                if (!canSelect) return;
-                                const target = event.target as HTMLElement;
-                                if (!target.closest('.sel-shell, .sel-order, input[type="checkbox"]')) return;
-                                toggleSelected(item);
-                              }}
-                            >
-                              <span className="sel-shell" data-no-preview="1">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  aria-label="Select media"
-                                  disabled={!canSelect}
-                                  data-no-preview="1"
-                                  onClick={(event) => event.stopPropagation()}
-                                  onChange={() => toggleSelected(item)}
-                                />
-                                <span className="sel-order" data-no-preview="1" aria-hidden="true">
-                                  {selectedOrderMap.get(selectionKey) ? String(Math.min(selectedOrderMap.get(selectionKey) ?? 0, 99)) : ''}
-                                </span>
-                              </span>
-                            </div>
-                          </div>
-                          <div className="asset-ol-bl">
-                            <span className="badge tile-ui-text">{size}</span>
-                          </div>
-                          <div className="asset-ol-bottom">
-                            <div className="asset-title tile-ui-text">{title}</div>
-                            <div className="asset-subtitle tile-ui-text">{sub}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                    </div>
-                  ))}
-                </div>
+                <AssetGrid
+                  buildAssetViewModel={buildAssetViewModel}
+                  canSelect={canSelect}
+                  gridColumnCount={gridColumnCount}
+                  masonryColumns={masonryColumns}
+                  onToggleSelected={toggleSelected}
+                />
               )}
             </div>
 
@@ -2538,63 +2312,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
                 </div>
               ) : (
-                filteredMedia.map((item) => {
-                  const kind = guessKind(item);
-                  const title = item.relative_path?.split('/').pop() || item.relative_path || 'unnamed';
-                  const proj = projectLabel(item);
-                  const sub = proj ? `${item.relative_path || ''} • ${proj}` : (item.relative_path || '');
-                  const size = formatBytes(item.size);
-                  const pointerHandlers = buildAssetPointerHandlers(item);
-                  const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-                    || item.thumbnail_url
-                    || (kind === 'image' ? item.stream_url : undefined));
-                  const fallbackThumb = buildThumbFallback(kind);
-                  const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
-                  const safeThumbUrl = fallbackThumb;
-                  const selectionKey = assetSelectionKey(item, activeProject);
-                  const isSelected = selected.has(selectionKey);
-
-                  return (
-                    <div
-                      className={`row asset-interactive-surface ${isSelected ? 'is-selected' : ''}`}
-                      key={`row-${item.project_name || activeProject?.name || 'project'}-${item.project_source || 'primary'}-${item.relative_path}`}
-                      data-select-key={selectionKey}
-                      {...pointerHandlers}
-                    >
-                      <div className="mini">
-                        <img
-                          className="asset-thumb"
-                          src={safeThumbUrl}
-                          alt={title}
-                          loading="lazy"
-                          draggable={false}
-                          onDragStart={suppressNativeDragGhost}
-                          onContextMenu={suppressNativeContextMenu}
-                          data-thumb-url={thumbUrl}
-                          data-thumb-fallback={fallbackThumb}
-                        />
-                      </div>
-                      <div className="info">
-                        <div className="t tile-ui-text">{title}</div>
-                        <div className="s tile-ui-text">
-                          {sub} • {size} • {kind}
-                        </div>
-                      </div>
-                      <div className="actions">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          title="Select"
-                          disabled={!canSelect}
-                          onChange={() => toggleSelected(item)}
-                        />
-                        <button className="iconbtn" type="button" onClick={() => openDrawer(item)}>
-                          Preview
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
+                <AssetList
+                  buildAssetViewModel={buildAssetViewModel}
+                  canSelect={canSelect}
+                  items={filteredMedia}
+                  onOpenDrawer={openDrawer}
+                  onToggleSelected={toggleSelected}
+                />
               )}
             </div>
           </div>

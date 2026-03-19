@@ -98,9 +98,14 @@ code { font-family: var(--mono); }
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   transition: transform 160ms ease, opacity 160ms ease, margin-bottom 160ms ease;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  isolation: isolate;
+  overflow: visible;
 }
 .app.topbar-hidden .topbar{
-  transform: translateY(calc(-1 * var(--topbar-height)));
+  transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);
   opacity: 0;
   pointer-events: none;
   margin-bottom: calc(-1 * var(--topbar-height));
@@ -113,6 +118,7 @@ code { font-family: var(--mono); }
   height: var(--topbar-height);
   z-index: 45;
   pointer-events: auto;
+  transform: translateZ(0);
 }
 .app:not(.topbar-hidden) .topbar-reveal{
   pointer-events: none;
@@ -133,6 +139,13 @@ code { font-family: var(--mono); }
   align-items:center;
   min-width: 0;
   max-width: 210px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.brand:focus-visible{
+  outline: 2px solid rgba(124,58,237,0.75);
+  outline-offset: 4px;
+  border-radius: 14px;
 }
 .brand-text{
   min-width: 0;
@@ -159,19 +172,10 @@ code { font-family: var(--mono); }
   line-height: 1.1;
   color: var(--text);
 }
-.brand h1 button{
-  border: 0;
-  background: transparent;
-  color: inherit;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  letter-spacing: inherit;
-  line-height: inherit;
-  font-weight: inherit;
+.brand h1{
   display: inline-flex;
   align-items: baseline;
-  cursor: pointer;
+  gap: 0;
 }
 .brand-title{
   display: inline-flex;
@@ -568,6 +572,8 @@ select.control{
 .content .scroll{
   overflow: auto;
   padding: 4px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
 .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
@@ -688,6 +694,9 @@ select.control{
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  contain: layout paint style;
+  transform: translateZ(0);
+  will-change: transform;
 }
 .asset:hover{ transform: translateY(-1px) scale(1.005); filter: brightness(1.03); border-color: rgba(255,255,255,0.12); }
 
@@ -863,6 +872,11 @@ select.control{
   transform: scale(1);
 }
 
+.asset.is-active:not(.is-selected){
+  border-color: rgba(124,58,237,0.62);
+  box-shadow: 0 0 0 1px rgba(124,58,237,0.28), 0 10px 28px rgba(124,58,237,0.16);
+}
+
 .asset.is-selected{
   border-color: rgba(74,240,192,0.92);
   box-shadow: 0 0 0 1px rgba(74,240,192,0.85), 0 0 28px rgba(74,240,192,0.34), 0 12px 44px rgba(74,240,192,0.22);
@@ -882,8 +896,14 @@ select.control{
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  contain: layout paint style;
+  transform: translateZ(0);
 }
 .row:hover{ border-color: rgba(255,255,255,0.16); background: rgba(255,255,255,0.07); }
+.row.is-active:not(.is-selected){
+  border-color: rgba(124,58,237,0.52);
+  box-shadow: 0 0 0 1px rgba(124,58,237,0.22);
+}
 .row.is-selected{
   border-color: rgba(74,240,192,0.72);
   box-shadow: 0 0 0 1px rgba(74,240,192,0.35), 0 0 18px rgba(74,240,192,0.16);
@@ -1389,8 +1409,8 @@ select.control{
   .sidebar{ width: 320px; }
 }
 @media (max-width: 860px){
-  body{ overflow:auto; }
-  .main{ flex-direction: column; overflow:auto; }
+  body{ overflow:hidden; }
+  .main{ flex-direction: column; overflow:hidden; }
   .sidebar{ display:block; width: 100%; }
   .content{ width: 100%; }
   .drawer{ width: 100vw; }
@@ -1454,13 +1474,20 @@ select.control{
 }
 .sidebar{
   background: rgba(11,16,32,0.92);
+  overscroll-behavior: contain;
+}
+.sidebar.sidebar-drawer{
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 .sidebar .scroll{
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   touch-action: pan-y;
 }
 .sidebar select,
