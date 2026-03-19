@@ -99,8 +99,10 @@ test('normalized preview asset declaration is placed after resolveAssetUrl callb
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const resolveIndex = content.indexOf('const resolveAssetUrl = useCallback');
+  const thumbSignatureIndex = content.indexOf('const thumbDatasetSignature = useMemo');
   const normalizedIndex = content.indexOf('const normalizedPreviewAsset = useMemo');
   assert.ok(resolveIndex >= 0);
+  assert.ok(thumbSignatureIndex > resolveIndex);
   assert.ok(normalizedIndex > resolveIndex);
 });
 

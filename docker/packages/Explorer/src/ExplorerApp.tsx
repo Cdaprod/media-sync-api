@@ -454,6 +454,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setPendingDataLoadOverlay(false);
   }, []);
 
+  const resolveAssetUrl = useCallback(
+    (path?: string) => {
+      if (!path) return '';
+      if (path.startsWith('data:')) return path;
+      return api.buildUrl(path);
+    },
+    [api],
+  );
+
   const thumbDatasetSignature = useMemo(() => {
     const dataset = filteredMedia.map((item) => {
       const kind = guessKind(item);
@@ -488,15 +497,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const query = project.source ? `?source=${encodeURIComponent(project.source)}` : '';
     return project.upload_url || `/api/projects/${encodeURIComponent(project.name)}/upload${query}`;
   }, []);
-
-  const resolveAssetUrl = useCallback(
-    (path?: string) => {
-      if (!path) return '';
-      if (path.startsWith('data:')) return path;
-      return api.buildUrl(path);
-    },
-    [api],
-  );
 
   const normalizedPreviewAsset = useMemo(() => {
     if (!focused) return null;

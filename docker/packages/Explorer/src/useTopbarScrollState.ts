@@ -11,7 +11,16 @@ interface UseTopbarScrollStateOptions {
   scrollRef: RefObject<HTMLDivElement>;
 }
 
-export function useTopbarScrollState({ disabled = false, scrollRef }: UseTopbarScrollStateOptions) {
+interface UseTopbarScrollStateResult {
+  hideTopbar: () => void;
+  revealTopbar: () => void;
+  setTopbarHidden: (next: boolean) => void;
+  topbarHidden: boolean;
+}
+
+export function useTopbarScrollState(
+  { disabled = false, scrollRef }: UseTopbarScrollStateOptions,
+): UseTopbarScrollStateResult {
   const [topbarHidden, setTopbarHiddenState] = useState(false);
   const hiddenRef = useRef(false);
   const scrollRafRef = useRef<number | null>(null);

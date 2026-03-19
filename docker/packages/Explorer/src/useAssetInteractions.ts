@@ -11,6 +11,15 @@ export type AssetPointerHandlers = Pick<
   'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'onContextMenu'
 >;
 
+interface UseAssetInteractionsResult {
+  assetDragActive: boolean;
+  buildAssetPointerHandlers: (item: MediaItem) => AssetPointerHandlers;
+  clearPendingLongPress: () => void;
+  dragPathsRef: React.MutableRefObject<string[]>;
+  dragging: boolean;
+  stopAssetDrag: () => void;
+}
+
 interface UseAssetInteractionsOptions {
   activeProject: Project | null;
   assetSelectionKey: (item: MediaItem, projectOverride?: Project | null) => string;
@@ -41,7 +50,7 @@ export function useAssetInteractions({
   projects,
   selected,
   selectedKeysOrdered,
-}: UseAssetInteractionsOptions) {
+}: UseAssetInteractionsOptions): UseAssetInteractionsResult {
   const [dragging, setDragging] = useState(false);
   const [assetDragActive, setAssetDragActive] = useState(false);
   const dragPathsRef = useRef<string[]>([]);

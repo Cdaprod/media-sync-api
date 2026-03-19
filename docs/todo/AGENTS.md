@@ -1,3 +1,10 @@
+## 2026-03-19 — Package Explorer TDZ/type-order hardening
+- [x] Fixed the `resolveAssetUrl` before declaration regression in `ExplorerApp.tsx` by moving the callback above `thumbDatasetSignature` and `useThumbnailQueue(...)`.
+- [x] Tightened extracted hook type surfaces with explicit result interfaces where helpful to make declaration/usage contracts clearer during future refactors.
+- [x] Added regression coverage ensuring `resolveAssetUrl` is declared before `thumbDatasetSignature` so this TDZ class does not silently return.
+- [x] Verified package Explorer now passes `npm test` and `npm run build` after the stabilization refactors.
+- [ ] Keep watching for additional declaration-order regressions when splitting more `ExplorerApp.tsx` logic into modules/components.
+
 ## 2026-03-19 — Package Explorer interactions/topbar/component split
 - [x] Extracted package asset pointer/gesture ownership into `src/useAssetInteractions.ts` without changing second-tap preview, long-press menu, or drag/drop selection semantics.
 - [x] Added `src/useTopbarScrollState.ts` to coalesce scroll-driven topbar visibility updates behind RAF + delta thresholds instead of raw scroll churn.

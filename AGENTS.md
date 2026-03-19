@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-19)
+- Fixed the package Explorer build TDZ regression by moving `resolveAssetUrl` above `thumbDatasetSignature`/`useThumbnailQueue(...)`, restoring the same declaration-order safety contract previously enforced for `normalizedPreviewAsset`.
+- Ran a focused package Explorer type/order hardening pass after the TDZ fix: extracted hooks now declare explicit return interfaces where helpful (`useAssetInteractions`, `useTopbarScrollState`), and regression coverage now asserts `resolveAssetUrl` appears before `thumbDatasetSignature` to catch future block-scope ordering slips.
+- Verified package Explorer now passes both `npm test` and `npm run build` locally after the stabilization refactors, so the earlier build-only branch regression is closed.
+
+### Latest Implementation Notes (2026-03-19)
 - Package Explorer asset interaction logic is now extracted into `src/useAssetInteractions.ts`, including long-press gating, second-tap preview intent, drag-threshold handling, and custom context-menu ownership, so `ExplorerApp.tsx` no longer embeds the full pointer-state machine.
 - Package Explorer topbar hide/reveal state is now driven through `src/useTopbarScrollState.ts`, which coalesces scroll updates with `requestAnimationFrame`, accumulates delta budgets, and only toggles visibility after meaningful direction/threshold changes instead of raw scroll noise.
 - Grid/list render markup now lives in memoized `src/components/AssetGrid.tsx` and `src/components/AssetList.tsx`, while `ExplorerApp.tsx` provides a shared `buildAssetViewModel(...)` for stable render keys, thumb job markers, selection ordering, and parity styling.
