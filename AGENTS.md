@@ -1,6 +1,13 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-19)
+- Package Explorer asset interaction logic is now extracted into `src/useAssetInteractions.ts`, including long-press gating, second-tap preview intent, drag-threshold handling, and custom context-menu ownership, so `ExplorerApp.tsx` no longer embeds the full pointer-state machine.
+- Package Explorer topbar hide/reveal state is now driven through `src/useTopbarScrollState.ts`, which coalesces scroll updates with `requestAnimationFrame`, accumulates delta budgets, and only toggles visibility after meaningful direction/threshold changes instead of raw scroll noise.
+- Grid/list render markup now lives in memoized `src/components/AssetGrid.tsx` and `src/components/AssetList.tsx`, while `ExplorerApp.tsx` provides a shared `buildAssetViewModel(...)` for stable render keys, thumb job markers, selection ordering, and parity styling.
+- This pass reduces rerender coupling between tile surfaces and unrelated UI state (context menu, topbar visibility, modal state) without changing masonry ordering, selection glow/order badges, thumbnail job markers, or preview/context semantics.
+- Added package regression assertions for the new interaction/topbar/components split so existing gesture and topbar contract markers stay locked during future refactors.
+
 ### Latest Implementation Notes (2026-03-18)
 - Package Explorer thumbnail loading is now split out of `ExplorerApp.tsx` into `src/thumbnailLoader.ts` and `src/useThumbnailQueue.ts`, reducing app-file bloat and isolating DOM-thumb queue behavior for future extraction passes.
 - Thumbnail queueing now keys work off a stable per-render thumb dataset signature (`view` + `gridColumnCount` + thumb job keys) so selection, focus, context-menu, and drawer churn no longer retrigger full visible-thumb scans/load attempts.

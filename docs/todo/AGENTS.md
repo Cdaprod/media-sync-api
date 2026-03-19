@@ -1,3 +1,12 @@
+## 2026-03-19 — Package Explorer interactions/topbar/component split
+- [x] Extracted package asset pointer/gesture ownership into `src/useAssetInteractions.ts` without changing second-tap preview, long-press menu, or drag/drop selection semantics.
+- [x] Added `src/useTopbarScrollState.ts` to coalesce scroll-driven topbar visibility updates behind RAF + delta thresholds instead of raw scroll churn.
+- [x] Split package grid/list tile markup into memoized `src/components/AssetGrid.tsx` and `src/components/AssetList.tsx` while preserving stable render keys, thumb job markers, and selection-order UI.
+- [x] Reduced `ExplorerApp.tsx` coupling by centralizing per-item render data in `buildAssetViewModel(...)` and keeping topbar/context/modal state out of the inline tile render path.
+- [x] Updated package regression assertions to cover the new hooks/components and topbar scroll contract markers.
+- [ ] Validate on physical iPhone Safari that topbar hide/reveal no longer flip-flops on tiny scroll deltas and that drag-near-top still reveals the bar predictably.
+- [ ] Continue the file-splitting pass by isolating drawer-preview state and/or context-menu rendering if further rerender churn is still visible after this pass.
+
 ## 2026-03-18 — Package Explorer thumbnail queue + scroll smoothness pass
 - [x] Extracted package thumbnail queue helpers out of `ExplorerApp.tsx` into `src/thumbnailLoader.ts` and `src/useThumbnailQueue.ts` to start reducing file size without changing UX semantics.
 - [x] Re-keyed thumbnail work off a stable rendered dataset signature (`view`, `gridColumnCount`, thumb job identity) so selection/context/preview churn does not rescan/reload every visible thumb.

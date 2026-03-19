@@ -16,6 +16,10 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'thumbnailLoader.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useThumbnailQueue.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useAssetInteractions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useTopbarScrollState.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -150,8 +154,8 @@ test('explorer supports all-project media view', () => {
 });
 
 test('asset tile preview open path requires second tap intent', () => {
-  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const content = fs.readFileSync(explorerPath, 'utf8');
+  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const content = fs.readFileSync(hookPath, 'utf8');
   assert.ok(content.includes('lastTileTapRef'));
   assert.ok(content.includes('const isSecondTap = prevTap.key === itemKey'));
   assert.ok(content.includes('if (isSecondTap) {'));
@@ -276,11 +280,13 @@ test('OBS websocket helper includes browser source defaults', () => {
 
 test('explorer queues thumbnail loads from server urls', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
   const hookPath = path.join(packageRoot, 'src', 'useThumbnailQueue.ts');
   const statePath = path.join(packageRoot, 'src', 'state.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const gridContent = fs.readFileSync(gridPath, 'utf8');
   const loaderContent = fs.readFileSync(loaderPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const stateContent = fs.readFileSync(statePath, 'utf8');
@@ -288,14 +294,14 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('useThumbnailQueue({'));
   assert.ok(content.includes('thumbDatasetSignature'));
   assert.ok(content.includes('buildThumbJobKey('));
-  assert.ok(content.includes('data-thumb-url'));
+  assert.ok(gridContent.includes('data-thumb-url'));
   assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
   assert.ok(content.includes('pendingDataLoadOverlay'));
   assert.ok(content.includes('dynamicOrientations'));
   assert.ok(content.includes('resolveItemOrientation'));
   assert.ok(content.includes('buildMasonryColumns'));
-  assert.ok(content.includes('masonryColumns.map((column, columnIndex) => ('));
-  assert.ok(content.includes('--masonry-column-count'));
+  assert.ok(gridContent.includes('masonryColumns.map((column, columnIndex) => ('));
+  assert.ok(gridContent.includes('--masonry-column-count'));
   assert.ok(stateContent.includes('export function buildMasonryColumns'));
   assert.ok(styles.includes('.masonry-columns{'));
   assert.ok(styles.includes('.masonry-column{'));
@@ -312,10 +318,10 @@ test('explorer queues thumbnail loads from server urls', () => {
 });
 
 test('package explorer interaction handlers do not trigger loading overlay state', () => {
-  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const content = fs.readFileSync(explorerPath, 'utf8');
+  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const content = fs.readFileSync(hookPath, 'utf8');
   const start = content.indexOf('const buildAssetPointerHandlers = useCallback(');
-  const end = content.indexOf('const handlePreviewSelected = useCallback(', start);
+  const end = content.indexOf('return {', start);
   assert.ok(start >= 0);
   assert.ok(end > start);
   const block = content.slice(start, end);
@@ -328,9 +334,11 @@ test('package explorer interaction handlers do not trigger loading overlay state
 
 test('package explorer context menu opens only on deliberate long press or context click', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const content = fs.readFileSync(explorerPath, 'utf8');
+  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const explorerContent = fs.readFileSync(explorerPath, 'utf8');
+  const content = fs.readFileSync(hookPath, 'utf8');
   const start = content.indexOf('const buildAssetPointerHandlers = useCallback(');
-  const end = content.indexOf('const handlePreviewSelected = useCallback(', start);
+  const end = content.indexOf('return {', start);
   assert.ok(start >= 0);
   assert.ok(end > start);
   const block = content.slice(start, end);
@@ -344,24 +352,29 @@ test('package explorer context menu opens only on deliberate long press or conte
   assert.ok(block.includes('if (longPressFired) {'));
   assert.ok(block.includes('if (event.pointerType === \'touch\' || event.pointerType === \'pen\') {'));
   assert.ok(block.includes('if (event.pointerType === \'mouse\' && event.button !== 0) return;'));
-  assert.ok(content.includes('onScroll={clearPendingLongPress}'));
+  assert.ok(explorerContent.includes('onScroll={clearPendingLongPress}'));
 });
 
 test('package explorer grid capture suppresses native context menu in asset zones', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const gridContent = fs.readFileSync(gridPath, 'utf8');
+  const listContent = fs.readFileSync(listPath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
-  assert.ok(content.includes('const suppressNativeContextMenu = (event: React.MouseEvent<HTMLElement>) => {'));
-  assert.ok(content.includes('const suppressNativeDragGhost = (event: React.DragEvent<HTMLElement>) => {'));
   assert.ok(content.includes('onContextMenuCapture={(event) => {'));
   assert.ok(content.includes("if (!target?.closest('.asset, .row')) return;"));
   assert.ok(content.includes('event.preventDefault();'));
   assert.ok(content.includes('event.stopPropagation();'));
-  assert.ok(content.includes('onContextMenu={suppressNativeContextMenu}'));
-  assert.ok(content.includes('onDragStart={suppressNativeDragGhost}'));
-  assert.ok(content.includes('draggable={false}'));
-  assert.ok(content.includes('asset-interactive-surface'));
+  assert.ok(gridContent.includes('onContextMenu={(event) => {'));
+  assert.ok(gridContent.includes('onDragStart={(event) => event.preventDefault()}'));
+  assert.ok(gridContent.includes('draggable={false}'));
+  assert.ok(listContent.includes('onContextMenu={(event) => {'));
+  assert.ok(listContent.includes('onDragStart={(event) => event.preventDefault()}'));
+  assert.ok(gridContent.includes('asset-interactive-surface'));
+  assert.ok(listContent.includes('asset-interactive-surface'));
   assert.ok(content.includes('custom-ui-surface'));
   assert.ok(styles.includes('.asset-interactive-surface,'));
   assert.ok(styles.includes('.custom-ui-surface,'));
@@ -419,21 +432,25 @@ test('package explorer data load paths explicitly request loading overlay owners
 
 test('package explorer uses static-parity asset interaction semantics', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
-  assert.ok(content.includes('data-no-preview="1"'));
-  assert.ok(content.includes('if (inNoPreviewZone(event.target)) return;'));
-  assert.ok(content.includes('if (inspectorOpen) {'));
-  assert.ok(content.includes('closeDrawer();'));
-  assert.ok(content.includes('openDrawer(item);'));
+  const hookContent = fs.readFileSync(hookPath, 'utf8');
+  const gridContent = fs.readFileSync(gridPath, 'utf8');
+  assert.ok(gridContent.includes('data-no-preview="1"'));
+  assert.ok(hookContent.includes('if (inNoPreviewZone(event.target)) return;'));
+  assert.ok(hookContent.includes('if (inspectorOpen) {'));
+  assert.ok(hookContent.includes('closeDrawer();'));
+  assert.ok(hookContent.includes('openDrawer(item);'));
   assert.ok(content.includes('toggleSelectionWithOrder'));
   assert.ok(content.includes('selectionOrderIndexMap'));
   assert.ok(content.includes('selectedOrderMap.get(selectionKey)'));
 });
 
 test('package explorer suppresses default context menu in tile preview zone', () => {
-  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const content = fs.readFileSync(explorerPath, 'utf8');
-  assert.ok(content.includes('const handleContextMenu = (event: React.MouseEvent) => {'));
+  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const content = fs.readFileSync(hookPath, 'utf8');
+  assert.ok(content.includes('const handleContextMenu = (event: React.MouseEvent<HTMLElement>) => {'));
   assert.ok(content.includes('event.preventDefault();'));
   assert.ok(content.includes('openContextMenu(event.clientX, event.clientY, resolveContextItems())'));
 });
@@ -450,8 +467,10 @@ test('package explorer styles include static-parity selected glow and order badg
 
 test('package explorer topbar layout follows static two-row structure', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const hookPath = path.join(packageRoot, 'src', 'useTopbarScrollState.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const hookContent = fs.readFileSync(hookPath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(content.includes('<div className="topbar"'));
   assert.ok(content.includes('<div className="section-h">'));
@@ -461,6 +480,11 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
   assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
   assert.ok(styles.includes('.content .scroll{'));
+  assert.ok(content.includes('useTopbarScrollState({'));
+  assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
+  assert.ok(hookContent.includes('scrollDeltaBudgetRef.current += delta;'));
+  assert.ok(hookContent.includes('TOPBAR_HIDE_DELTA_PX'));
+  assert.ok(hookContent.includes('TOPBAR_REVEAL_DELTA_PX'));
   assert.ok(styles.includes('will-change: transform, opacity;'));
   assert.ok(styles.includes('transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);'));
 });
