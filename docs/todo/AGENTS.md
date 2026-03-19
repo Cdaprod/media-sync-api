@@ -1,3 +1,10 @@
+## 2026-03-19 — Package Explorer passive-tile playback + brand toggle follow-up
+- [x] Prevented first-tap active/focus intent from mounting hidden preview playback by gating preview asset ownership on `inspectorOpen`.
+- [x] Kept second-tap preview, long-press context menu, and checkbox-only selection behavior intact while returning tiles to passive display surfaces.
+- [x] Restored the full brand/logo region as the projects panel toggle with click + keyboard activation semantics.
+- [x] Added regression assertions for passive tiles, preview gating, brand toggle wiring, and non-blocking topbar reveal behavior.
+- [ ] Validate on physical iPhone Safari that tapping the logo opens/closes the project drawer reliably and that first tile taps never leak background audio.
+
 ## 2026-03-19 — Package Explorer interaction/stacking/scroll regression restore
 - [x] Restored package Explorer tile tap semantics so first body tap only focuses the active tile, second tap opens preview, and checkbox selection remains isolated to selector controls.
 - [x] Reintroduced an explicit active asset identity separate from selection order so rerenders/masonry/list switches do not break second-tap preview intent.

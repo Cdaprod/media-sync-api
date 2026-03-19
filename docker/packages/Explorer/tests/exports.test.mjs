@@ -171,8 +171,20 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(hookContent.includes('openDrawer(item);'));
   assert.ok(explorer.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
   assert.ok(explorer.includes('const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {'));
+  assert.ok(explorer.includes('setActiveAssetKey(nextKey);'));
+  assert.ok(!explorer.includes(`const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {
+    const nextKey = itemKey || assetSelectionKey(item, activeProject);
+    if (!nextKey) return;
+    setActiveAssetKey(nextKey);
+    setFocused(item);`));
+  assert.ok(explorer.includes('if (!inspectorOpen || !focused) return null;'));
+  assert.ok(explorer.includes('if (!inspectorOpen || !focused) return [];'));
   assert.ok(explorer.includes('const isActive = activeAssetKey === selectionKey;'));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
+  assert.ok(grid.includes('<img'));
+  assert.ok(!grid.includes('<video'));
+  assert.ok(list.includes('<img'));
+  assert.ok(!list.includes('<video'));
   assert.ok(grid.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
   assert.ok(list.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
   assert.ok(list.includes('data-no-preview="1"'));
@@ -276,6 +288,24 @@ test('topbar dropdown and sidebar scroll contracts avoid clipping and preserve p
   assert.ok(styles.includes('overscroll-behavior-y: contain;'));
   assert.ok(styles.includes(`@media (max-width: 860px){
   body{ overflow:hidden; }`));
+});
+
+test('brand area still toggles the project panel and is not blocked by reveal layers', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(explorer.includes('const toggleSidebarOpen = useCallback(() => {'));
+  assert.ok(explorer.includes("className={`brand ${sidebarOpen ? 'projects-open' : ''}`}"));
+  assert.ok(explorer.includes('role="button"'));
+  assert.ok(explorer.includes('tabIndex={0}'));
+  assert.ok(explorer.includes('onClick={toggleSidebarOpen}'));
+  assert.ok(explorer.includes("if (event.key !== 'Enter' && event.key !== ' ') return;"));
+  assert.ok(styles.includes('.brand{'));
+  assert.ok(styles.includes('cursor: pointer;'));
+  assert.ok(styles.includes('pointer-events: auto;'));
+  assert.ok(styles.includes('.app:not(.topbar-hidden) .topbar-reveal{'));
+  assert.ok(styles.includes('pointer-events: none;'));
 });
 
 test('static explorer uses OBS push helper', () => {

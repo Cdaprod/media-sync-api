@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-19)
+- Fixed the immediate post-focus regression where first tile taps mounted the hidden preview player and could start audio/video before the drawer was open; preview asset + metadata now gate on `inspectorOpen` so grid/list tiles remain passive display surfaces.
+- Restored the whole package Explorer brand/logo region as the projects-panel toggle by wiring the outer `.brand` surface back to `sidebarOpen` with click + Enter/Space keyboard semantics instead of limiting the control to the inner title text button.
+- Added regression assertions ensuring first-tap focus does not hand media to preview ownership early and that the brand surface remains the tappable, unblocked projects toggle while the topbar reveal layer is non-intercepting when visible.
+
+### Latest Implementation Notes (2026-03-19)
 - Restored package Explorer tap semantics after the extraction regression by introducing an explicit active asset key separate from checkbox selection, so first tile taps only focus/arm second-tap preview while checkbox state and ordered selection badges still come solely from selector toggles.
 - Long-press/context ownership now reuses that same canonical asset identity (`assetSelectionKey`) to keep second-tap preview and context activation stable across rerenders, masonry/list rendering, and drawer close/reopen flows.
 - Fixed topbar menu clipping by removing the topbar paint-containment regression and switching the topbar surface to `isolation: isolate` + visible overflow, so Actions/dropdown panels can paint above transformed asset layers without z-index inflation.

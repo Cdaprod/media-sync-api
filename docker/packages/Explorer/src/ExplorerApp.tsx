@@ -506,12 +506,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const normalizedPreviewAsset = useMemo(() => {
-    if (!focused) return null;
+    if (!inspectorOpen || !focused) return null;
     return normalizePreviewAsset(focused, resolveAssetUrl);
-  }, [focused, resolveAssetUrl]);
+  }, [focused, inspectorOpen, resolveAssetUrl]);
 
   const previewMetadataRows = useMemo<Array<[string, string]>>(() => {
-    if (!focused) return [];
+    if (!inspectorOpen || !focused) return [];
     const kind = guessKind(focused);
     const projectName = activeProject?.name || focused.project_name || '(none)';
     const projectSource = activeProject?.source || focused.project_source || '(primary)';
@@ -532,7 +532,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ['AI Tags', formatListValue(focused.ai_tags ?? focused.aiTags)],
     ] satisfies Array<[string, string]>;
     return rows.filter((row): row is [string, string] => String(row[1] || '').trim().length > 0);
-  }, [activeProject?.name, activeProject?.source, focused, resolveAssetUrl]);
+  }, [activeProject?.name, activeProject?.source, focused, inspectorOpen, resolveAssetUrl]);
 
   const updateSidebarMode = useCallback(() => {
     const mobile = window.matchMedia('(max-width: 860px)').matches;
@@ -753,11 +753,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const nextKey = itemKey || assetSelectionKey(item, activeProject);
     if (!nextKey) return;
     setActiveAssetKey(nextKey);
-    setFocused(item);
   }, [activeProject, assetSelectionKey]);
 
   const openDrawer = useCallback((item: MediaItem) => {
     focusAsset(item);
+    setFocused(item);
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
   }, [focusAsset]);
@@ -1777,6 +1777,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     selectedOrderMap,
   ]);
 
+  const toggleSidebarOpen = useCallback(() => {
+    setSidebarOpen((prev) => !prev);
+  }, []);
+
   return (
     <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`}>
       <div className="topbar-reveal" ref={topbarRevealRef} aria-hidden="true" />
@@ -1786,14 +1790,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
             title="LAN-only media-sync-api explorer"
             ref={brandRef}
+            role="button"
+            tabIndex={0}
+            aria-label="Toggle projects panel"
+            onClick={toggleSidebarOpen}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              toggleSidebarOpen();
+            }}
           >
             <div className="logo" aria-hidden="true"></div>
             <div className="brand-text">
               <h1>
-                <button type="button" aria-label="Toggle projects panel" onClick={() => setSidebarOpen((prev) => !prev)}>
-                  <span className="brand-title is-primary">Cdaprod's Explorer</span>
-                  <span className="brand-title is-secondary">Cdaprod's Projects</span>
-                </button>
+                <span className="brand-title is-primary">Cdaprod's Explorer</span>
+                <span className="brand-title is-secondary">Cdaprod's Projects</span>
               </h1>
               <div className="sub">media-sync-api</div>
             </div>

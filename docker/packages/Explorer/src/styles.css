@@ -139,6 +139,13 @@ code { font-family: var(--mono); }
   align-items:center;
   min-width: 0;
   max-width: 210px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.brand:focus-visible{
+  outline: 2px solid rgba(124,58,237,0.75);
+  outline-offset: 4px;
+  border-radius: 14px;
 }
 .brand-text{
   min-width: 0;
@@ -165,19 +172,10 @@ code { font-family: var(--mono); }
   line-height: 1.1;
   color: var(--text);
 }
-.brand h1 button{
-  border: 0;
-  background: transparent;
-  color: inherit;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  letter-spacing: inherit;
-  line-height: inherit;
-  font-weight: inherit;
+.brand h1{
   display: inline-flex;
   align-items: baseline;
-  cursor: pointer;
+  gap: 0;
 }
 .brand-title{
   display: inline-flex;
