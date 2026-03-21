@@ -1,3 +1,12 @@
+## 2026-03-21 — Backend compose job flow / non-blocking API responsiveness
+- [x] Converted project compose submission routes and bulk asset compose to return `202 Accepted` job envelopes instead of waiting for full compose completion inline.
+- [x] Added an in-process background compose runner with persisted job snapshots plus `GET /api/projects/{project}/compose/jobs/{job_id}` polling for queued/running/completed/failed status.
+- [x] Scoped compose refresh metadata to the affected project + target_dir branch so clients can invalidate only the relevant exports subtree after a job settles.
+- [x] Moved existing-asset normalization work into temp-root job dirs outside discoverable project roots and kept incremental upload sessions retryable on background failure.
+- [x] Updated backend tests and README/API notes for the compose jobs contract.
+- [ ] Decide whether compose jobs need durable restart-resume semantics or a dedicated worker process beyond the current in-process runner/interrupted-job fallback.
+- [ ] Add a lightweight compose jobs listing/cancellation API if operators need visibility beyond direct `job_id` polling.
+
 ## 2026-03-19 — Package Explorer passive-tile playback + brand toggle follow-up
 - [x] Prevented first-tap active/focus intent from mounting hidden preview playback by gating preview asset ownership on `inspectorOpen`.
 - [x] Kept second-tap preview, long-press context menu, and checkbox-only selection behavior intact while returning tiles to passive display surfaces.

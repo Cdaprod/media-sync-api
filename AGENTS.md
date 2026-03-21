@@ -1,6 +1,13 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-21)
+- Refactored backend compose submission into a job-based flow: `POST /api/projects/{project}/compose`, `POST /api/projects/{project}/compose/upload`, and `POST /api/assets/bulk/compose` now return `202 Accepted` with a compose `job_id` instead of holding the request open through preprocessing/ffmpeg/registration.
+- Added in-process background compose execution with persisted job snapshots under `MEDIA_SYNC_TEMP_ROOT/compose_jobs`, project-scoped status polling at `GET /api/projects/{project}/compose/jobs/{job_id}`, and restart-safe interruption marking for any queued/running jobs left behind by process shutdown.
+- Existing-asset compose now stages normalization work in temp dirs outside project roots, upload-batch compose defers heavy work until after request acceptance, and incremental upload compose now queues background execution only after the last staged clip arrives while still keeping failed sessions on disk for retry.
+- Compose job responses now include a narrow `refresh_scope` for the affected project/target_dir branch so callers can refresh only the relevant exports subtree after completion instead of broad media reloads.
+- Added backend regression coverage for accepted compose jobs, background status polling, incremental-upload job handoff, failure reporting, and bulk-compose async behavior; updated README compose API notes to document the new contract.
+
 ### Latest Implementation Notes (2026-03-19)
 - Fixed the immediate post-focus regression where first tile taps mounted the hidden preview player and could start audio/video before the drawer was open; preview asset + metadata now gate on `inspectorOpen` so grid/list tiles remain passive display surfaces.
 - Restored the whole package Explorer brand/logo region as the projects-panel toggle by wiring the outer `.brand` surface back to `sidebarOpen` with click + Enter/Space keyboard semantics instead of limiting the control to the inner title text button.
