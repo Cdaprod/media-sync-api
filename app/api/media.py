@@ -811,7 +811,14 @@ async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
     if not payload.assets:
         raise HTTPException(status_code=400, detail="assets is required")
 
-    from app.api.compose import ComposeSpec, _compose_service, _resolve_project_context, _validate_compose_environment
+    from app.api.compose import (
+        ComposeSpec,
+        _compose_service,
+        _resolve_project_context,
+        _submit_compose_job,
+        _validate_compose_submission,
+        _validate_compose_environment,
+    )
 
     input_paths: list[Path] = []
     for asset in payload.assets:
@@ -841,19 +848,32 @@ async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
         target_dir=payload.target_dir,
         mode=compose_mode,
     )
+    _validate_compose_submission(output_ctx, spec)
 
-    settings = get_settings()
-    work_dir = Path(tempfile.mkdtemp(prefix="compose_bulk_", dir=settings.temp_root))
-    try:
-        return _compose_service.compose_staged_paths(
-            output_ctx,
-            spec,
-            input_paths,
-            request,
-            work_dir=work_dir,
-        )
-    finally:
-        shutil.rmtree(work_dir, ignore_errors=True)
+    base_url = str(request.base_url)
+
+    def _task() -> dict[str, Any]:
+        settings = get_settings()
+        work_dir = Path(tempfile.mkdtemp(prefix="compose_bulk_", dir=settings.temp_root))
+        try:
+            return _compose_service.compose_staged_paths(
+                output_ctx,
+                spec,
+                input_paths,
+                base_url,
+                work_dir=work_dir,
+            )
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+    return _submit_compose_job(
+        output_ctx,
+        flow="bulk",
+        output_name=spec.output_name,
+        target_dir=spec.target_dir,
+        base_url=base_url,
+        task=_task,
+    )
 
 
 @router.post("/{project_name}/media/delete")

@@ -35,7 +35,11 @@ import logging
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Sequence
+import threading
+import time
+import uuid
+from collections.abc import Callable, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,7 +71,10 @@ router = APIRouter(prefix="/api/projects", tags=["compose"])
 logger = logging.getLogger("media_sync_api.compose")
 
 COMPOSE_SESSION_PREFIX = "compose_session_"
+COMPOSE_JOB_PREFIX = "compose_job_"
 SESSION_MAX_AGE_SECONDS = 3600
+JOB_MAX_AGE_SECONDS = 86400
+JOB_MAX_WORKERS = 2
 
 # Media-kind policy for compose preprocessing.
 # Audio remains unsupported for now.
@@ -166,6 +173,44 @@ class ComposeResult:
     registration_mode: Literal["preserve_runs", "collapse_duplicates", "replace_path"] = "preserve_runs"
 
 
+@dataclass
+class ComposeJob:
+    """Background compose job snapshot persisted under MEDIA_SYNC_TEMP_ROOT."""
+
+    id: str
+    project_name: str
+    source_name: str
+    flow: Literal["existing", "upload_batch", "upload_incremental", "bulk"]
+    target_dir: str
+    output_name: str
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    status: Literal["queued", "running", "completed", "failed"] = "queued"
+    started_at: str | None = None
+    finished_at: str | None = None
+    error: str | None = None
+    error_status_code: int | None = None
+    result: dict[str, Any] | None = None
+    refresh_scope: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "project_name": self.project_name,
+            "source_name": self.source_name,
+            "flow": self.flow,
+            "target_dir": self.target_dir,
+            "output_name": self.output_name,
+            "created_at": self.created_at,
+            "status": self.status,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "error": self.error,
+            "error_status_code": self.error_status_code,
+            "result": self.result,
+            "refresh_scope": self.refresh_scope,
+        }
+
+
 # =============================================================================
 # 4. PURE HELPERS
 # =============================================================================
@@ -194,7 +239,10 @@ def _ffmpeg_indicates_existing_output(result: subprocess.CompletedProcess[str]) 
 def _probe_signature(path: Path) -> dict[str, str]:
     """Collect stream compatibility facts for concat-copy safety checks."""
     command = ["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(path)]
-    result = subprocess.run(command, capture_output=True, text=True)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError:
+        return {}
     if result.returncode != 0:
         return {}
     try:
@@ -652,6 +700,196 @@ def _indexed_path_set(ctx: ProjectContext) -> set[str]:
     return result
 
 
+def _compose_job_root() -> Path:
+    root = Path(get_settings().temp_root) / "compose_jobs"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _compose_job_path(job_id: str) -> Path:
+    return _compose_job_root() / f"{COMPOSE_JOB_PREFIX}{job_id}.json"
+
+
+def _serialize_compose_job(job: ComposeJob, *, base_url: str | None = None) -> dict[str, Any]:
+    payload = {
+        "status": job.status,
+        "job_id": job.id,
+        "project": job.project_name,
+        "source": job.source_name,
+        "flow": job.flow,
+        "output_name": job.output_name,
+        "target_dir": job.target_dir,
+        "created_at": job.created_at,
+        "started_at": job.started_at,
+        "finished_at": job.finished_at,
+        "refresh_scope": job.refresh_scope,
+    }
+    if base_url:
+        payload["job_url"] = (
+            f"{base_url.rstrip('/')}/api/projects/{quote(job.project_name)}/compose/jobs/{quote(job.id)}"
+            f"?source={quote(job.source_name)}"
+        )
+    if job.error is not None:
+        payload["error"] = job.error
+        payload["error_status_code"] = job.error_status_code
+    if job.result is not None:
+        payload["result"] = job.result
+    return payload
+
+
+def _validate_compose_submission(ctx: ProjectContext, spec: ComposeSpec) -> None:
+    """Reject obvious request-shape/path errors before background job submission."""
+
+    _safe_filename_or_400(spec.output_name, default="compiled.mp4")
+    _resolve_path_within_project(ctx, spec.target_dir.strip() or "exports", require_exists=False)
+
+
+class ComposeJobRunner:
+    """Simple in-process background runner with persisted compose job snapshots."""
+
+    def __init__(self) -> None:
+        self._executor: ThreadPoolExecutor | None = ThreadPoolExecutor(
+            max_workers=JOB_MAX_WORKERS,
+            thread_name_prefix="compose-job",
+        )
+        self._lock = threading.Lock()
+        self._jobs: dict[str, ComposeJob] = {}
+        self._futures: dict[str, Future[None]] = {}
+        self._hydrated_root: str | None = None
+
+    def _ensure_executor(self) -> ThreadPoolExecutor:
+        with self._lock:
+            if self._executor is None:
+                self._executor = ThreadPoolExecutor(max_workers=JOB_MAX_WORKERS, thread_name_prefix="compose-job")
+            return self._executor
+
+    def _hydrate_if_needed(self) -> None:
+        root = str(_compose_job_root().resolve())
+        with self._lock:
+            if self._hydrated_root == root:
+                return
+            self._jobs.clear()
+            self._futures.clear()
+            now = time.time()
+            for path in _compose_job_root().glob(f"{COMPOSE_JOB_PREFIX}*.json"):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    job = ComposeJob(**payload)
+                except Exception:
+                    path.unlink(missing_ok=True)
+                    continue
+                if job.status in {"queued", "running"}:
+                    job.status = "failed"
+                    job.finished_at = _now_iso()
+                    job.error_status_code = 503
+                    job.error = "Compose job was interrupted before completion (service restarted or worker stopped)."
+                    self._persist_locked(job)
+                created_dt = datetime.fromisoformat(job.created_at)
+                if (now - created_dt.timestamp()) > JOB_MAX_AGE_SECONDS:
+                    path.unlink(missing_ok=True)
+                    continue
+                self._jobs[job.id] = job
+            self._hydrated_root = root
+
+    def _persist_locked(self, job: ComposeJob) -> None:
+        target = _compose_job_path(job.id)
+        temp = target.with_suffix(".tmp")
+        temp.write_text(json.dumps(job.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        temp.replace(target)
+
+    def submit(
+        self,
+        job: ComposeJob,
+        task: Callable[[], dict[str, Any]],
+    ) -> ComposeJob:
+        self._hydrate_if_needed()
+        with self._lock:
+            self._jobs[job.id] = job
+            self._persist_locked(job)
+        future = self._ensure_executor().submit(self._run, job.id, task)
+        with self._lock:
+            self._futures[job.id] = future
+        return job
+
+    def _run(self, job_id: str, task: Callable[[], dict[str, Any]]) -> None:
+        self._hydrate_if_needed()
+        with self._lock:
+            job = self._jobs[job_id]
+            job.status = "running"
+            job.started_at = _now_iso()
+            self._persist_locked(job)
+
+        try:
+            result = task()
+        except HTTPException as exc:
+            with self._lock:
+                job = self._jobs[job_id]
+                job.status = "failed"
+                job.finished_at = _now_iso()
+                job.error_status_code = exc.status_code
+                job.error = str(exc.detail)
+                self._persist_locked(job)
+            logger.warning(
+                "compose_job_failed job_id=%s project=%s source=%s status=%s detail=%s",
+                job_id,
+                job.project_name,
+                job.source_name,
+                exc.status_code,
+                exc.detail,
+            )
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            with self._lock:
+                job = self._jobs[job_id]
+                job.status = "failed"
+                job.finished_at = _now_iso()
+                job.error_status_code = 500
+                job.error = f"Unexpected compose job failure: {exc}"
+                self._persist_locked(job)
+            logger.exception("compose_job_unexpected_failure job_id=%s", job_id)
+        else:
+            with self._lock:
+                job = self._jobs[job_id]
+                job.status = "completed"
+                job.finished_at = _now_iso()
+                job.result = result
+                self._persist_locked(job)
+            logger.info(
+                "compose_job_completed job_id=%s project=%s source=%s path=%s",
+                job_id,
+                job.project_name,
+                job.source_name,
+                (result or {}).get("path"),
+            )
+        finally:
+            with self._lock:
+                self._futures.pop(job_id, None)
+
+    def get(self, job_id: str) -> ComposeJob | None:
+        self._hydrate_if_needed()
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None:
+                return ComposeJob(**job.to_dict())
+        path = _compose_job_path(job_id)
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            job = ComposeJob(**payload)
+        except Exception:
+            return None
+        with self._lock:
+            self._jobs[job.id] = job
+        return ComposeJob(**job.to_dict())
+
+    def shutdown(self) -> None:
+        with self._lock:
+            executor = self._executor
+            self._executor = None
+        if executor is not None:
+            executor.shutdown(wait=False, cancel_futures=False)
+
+
 # =============================================================================
 # 6. COMPOSE SESSION
 # =============================================================================
@@ -1086,11 +1324,10 @@ class ComposeRegistrar:
         self,
         ctx: ProjectContext,
         result: ComposeResult,
-        request: Request,
+        base_url: str,
     ) -> dict[str, Any]:
         output_rel = result.output_path.relative_to(ctx.project_root).as_posix()
         sha256 = compute_sha256_from_path(result.output_path)
-        base_url = str(request.base_url)
 
         if result.registration_mode == "preserve_runs":
             return self._handle_preserve_run(ctx, output_rel, sha256, result, base_url)
@@ -1381,7 +1618,7 @@ class ComposeService:
         ctx: ProjectContext,
         spec: ComposeSpec,
         staged_paths: Sequence[Path],
-        request: Request,
+        base_url: str,
         *,
         work_dir: Path,
     ) -> dict[str, Any]:
@@ -1400,7 +1637,7 @@ class ComposeService:
             result.output_path.relative_to(ctx.project_root).as_posix(),
             result.mode_used,
         )
-        return self.registrar.register(ctx, result, request)
+        return self.registrar.register(ctx, result, base_url)
 
     # ------------------------------------------------------------------
     # Flow A: Compose existing indexed clips
@@ -1410,10 +1647,12 @@ class ComposeService:
         self,
         ctx: ProjectContext,
         spec: ComposeSpec,
-        request: Request,
+        base_url: str,
+        *,
+        work_dir: Path,
     ) -> dict[str, Any]:
         plan = self.planner.build_existing_plan(ctx, spec)
-        prepared = self.preprocessor.prepare(plan.input_assets, ctx.project_root / "_manifest")
+        prepared = self.preprocessor.prepare(plan.input_assets, work_dir)
         plan = self._with_prepared_segments(plan, prepared)
         result = self.executor.execute(plan)
         logger.info(
@@ -1423,7 +1662,7 @@ class ComposeService:
             result.output_path.relative_to(ctx.project_root).as_posix(),
             result.mode_used,
         )
-        return self.registrar.register(ctx, result, request)
+        return self.registrar.register(ctx, result, base_url)
 
     # ------------------------------------------------------------------
     # Flow B: Upload batch (all files in one POST)
@@ -1434,9 +1673,8 @@ class ComposeService:
         ctx: ProjectContext,
         spec: ComposeSpec,
         files: list[UploadFile],
-        request: Request,
         settings: Any,
-    ) -> dict[str, Any]:
+    ) -> list[Path]:
         max_bytes = settings.max_upload_mb * 1024 * 1024
         temp_dir = Path(tempfile.mkdtemp(prefix="compose_", dir=settings.temp_root))
         try:
@@ -1446,19 +1684,10 @@ class ComposeService:
                 target = temp_dir / f"{index:04d}_{safe_name}"
                 await _write_upload(upload, target, max_bytes)
                 staged.append(target)
-
-            plan = self.planner.build_staged_plan(ctx, staged, spec)
-            prepared = self.preprocessor.prepare(plan.input_assets, temp_dir)
-            plan = self._with_prepared_segments(plan, prepared)
-            result = self.executor.execute(plan)
-            response = self.registrar.register(ctx, result, request)
-            logger.info(
-                "compose_upload_batch_complete project=%s source=%s staged=%s output=%s mode=%s",
-                ctx.project_name, ctx.source_name, len(staged), response.get("path"), result.mode_used,
-            )
-            return response
-        finally:
+            return staged
+        except Exception:
             shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
 
     # ------------------------------------------------------------------
     # Flow C: Incremental upload (one clip per POST, X-Compose-* headers)
@@ -1469,12 +1698,11 @@ class ComposeService:
         ctx: ProjectContext,
         spec: ComposeSpec,
         upload: UploadFile,
-        request: Request,
         settings: Any,
         run_id: str,
         idx: int,
         total: int,
-    ) -> JSONResponse | dict[str, Any]:
+    ) -> JSONResponse | tuple[ComposeSession, list[Path]]:
         if total <= 0:
             raise HTTPException(status_code=400, detail="Invalid X-Compose-Count (must be > 0)")
 
@@ -1524,38 +1752,62 @@ class ComposeService:
             raise HTTPException(status_code=409, detail=f"Last clip received but session missing indices: {missing[:50]}")
 
         staged_inputs = session.ordered_inputs()
-        plan = self.planner.build_staged_plan(ctx, staged_inputs, spec)
-        prepared = self.preprocessor.prepare(plan.input_assets, session.session_dir)
-        plan = self._with_prepared_segments(plan, prepared)
-
-        try:
-            result = self.executor.execute(plan)
-        except HTTPException as exc:
-            # Compose failed. Session stays open on disk for potential retry.
-            # Caller may repost the final clip to trigger another attempt.
-            logger.warning(
-                "compose_upload_incremental_failed project=%s run_id=%s status=%s detail=%s",
-                ctx.project_name, run_id, exc.status_code, exc.detail,
-            )
-            raise
-
-        response = self.registrar.register(ctx, result, request)
-        session.close()
-        session.cleanup()
-
-        logger.info(
-            "compose_upload_incremental_complete project=%s source=%s run_id=%s received=%s output=%s mode=%s",
-            ctx.project_name, ctx.source_name, run_id, len(session.received), response.get("path"), result.mode_used,
-        )
-        return response
+        return session, staged_inputs
 
 
 # =============================================================================
-# 12. FASTAPI ROUTES
+# 12. COMPOSE JOB SUBMISSION HELPERS
 # =============================================================================
 
 # Module-level singleton — ComposeService is stateless, no reason to rebuild per request.
 _compose_service = ComposeService()
+_compose_job_runner = ComposeJobRunner()
+
+
+def _build_refresh_scope(ctx: ProjectContext, target_dir: str) -> dict[str, Any]:
+    normalized = (target_dir or "exports").replace("\\", "/").strip("/") or "exports"
+    return {
+        "project": ctx.project_name,
+        "source": ctx.source_name,
+        "paths": [normalized],
+    }
+
+
+def _submit_compose_job(
+    ctx: ProjectContext,
+    *,
+    flow: Literal["existing", "upload_batch", "upload_incremental", "bulk"],
+    output_name: str,
+    target_dir: str,
+    base_url: str,
+    task: Callable[[], dict[str, Any]],
+) -> JSONResponse:
+    job = ComposeJob(
+        id=str(uuid.uuid4()),
+        project_name=ctx.project_name,
+        source_name=ctx.source_name,
+        flow=flow,
+        target_dir=target_dir,
+        output_name=output_name,
+        refresh_scope=_build_refresh_scope(ctx, target_dir),
+    )
+    _compose_job_runner.submit(job, task)
+    payload = _serialize_compose_job(job, base_url=base_url)
+    payload["status"] = "accepted"
+    payload["job_status"] = job.status
+    payload["instructions"] = "Poll job_url for status; completed jobs register outputs into the affected project path scope."
+    return JSONResponse(status_code=202, content=payload)
+
+
+def shutdown_compose_jobs() -> None:
+    """Stop the in-process compose job runner on application shutdown."""
+
+    _compose_job_runner.shutdown()
+
+
+# =============================================================================
+# 13. FASTAPI ROUTES
+# =============================================================================
 
 
 @router.post("/{project_name}/compose")
@@ -1580,8 +1832,25 @@ async def compose_existing(
         target_dir=payload.target_dir,
         mode=payload.mode,
     )
+    _validate_compose_submission(ctx, spec)
+    base_url = str(request.base_url)
 
-    return _compose_service.compose_existing(ctx, spec, request)
+    def _task() -> dict[str, Any]:
+        settings = get_settings()
+        work_dir = Path(tempfile.mkdtemp(prefix="compose_existing_", dir=settings.temp_root))
+        try:
+            return _compose_service.compose_existing(ctx, spec, base_url, work_dir=work_dir)
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+    return _submit_compose_job(
+        ctx,
+        flow="existing",
+        output_name=spec.output_name,
+        target_dir=spec.target_dir,
+        base_url=base_url,
+        task=_task,
+    )
 
 
 @router.post("/{project_name}/compose/upload")
@@ -1633,11 +1902,92 @@ async def compose_upload(
         target_dir=target_dir,
         mode=mode,
     )
+    _validate_compose_submission(ctx, spec)
+    base_url = str(request.base_url)
 
     if is_incremental:
-        return await _compose_service.compose_upload_incremental(
-            ctx, spec, files[0], request, settings,
+        incremental_result = await _compose_service.compose_upload_incremental(
+            ctx, spec, files[0], settings,
             run_id=run_id, idx=idx, total=total,
         )
+        if isinstance(incremental_result, JSONResponse):
+            return incremental_result
+        session, staged_inputs = incremental_result
 
-    return await _compose_service.compose_upload_batch(ctx, spec, files, request, settings)
+        def _incremental_task() -> dict[str, Any]:
+            try:
+                result = _compose_service.compose_staged_paths(
+                    ctx,
+                    spec,
+                    staged_inputs,
+                    base_url,
+                    work_dir=session.session_dir,
+                )
+            except HTTPException as exc:
+                logger.warning(
+                    "compose_upload_incremental_failed project=%s run_id=%s status=%s detail=%s",
+                    ctx.project_name, run_id, exc.status_code, exc.detail,
+                )
+                raise
+            session.close()
+            session.cleanup()
+            logger.info(
+                "compose_upload_incremental_complete project=%s source=%s run_id=%s received=%s output=%s",
+                ctx.project_name, ctx.source_name, run_id, len(session.received), result.get("path"),
+            )
+            return result
+
+        return _submit_compose_job(
+            ctx,
+            flow="upload_incremental",
+            output_name=spec.output_name,
+            target_dir=spec.target_dir,
+            base_url=base_url,
+            task=_incremental_task,
+        )
+    staged_paths = await _compose_service.compose_upload_batch(ctx, spec, files, settings)
+    batch_dir = staged_paths[0].parent if staged_paths else None
+
+    def _batch_task() -> dict[str, Any]:
+        try:
+            return _compose_service.compose_staged_paths(
+                ctx,
+                spec,
+                staged_paths,
+                base_url,
+                work_dir=batch_dir or Path(settings.temp_root),
+            )
+        finally:
+            if batch_dir is not None:
+                shutil.rmtree(batch_dir, ignore_errors=True)
+
+    return _submit_compose_job(
+        ctx,
+        flow="upload_batch",
+        output_name=spec.output_name,
+        target_dir=spec.target_dir,
+        base_url=base_url,
+        task=_batch_task,
+    )
+
+
+@router.get("/{project_name}/compose/jobs/{job_id}")
+async def compose_job_status(
+    project_name: str,
+    job_id: str,
+    request: Request,
+    source: str | None = Query(default=None),
+):
+    """Fetch background compose job status for a project-scoped compose request.
+
+    Example:
+        curl "http://localhost:8787/api/projects/demo/compose/jobs/<job_id>?source=primary"
+    """
+
+    ctx, _ = _resolve_project_context(project_name, source)
+    job = _compose_job_runner.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Compose job not found")
+    if job.project_name != ctx.project_name or job.source_name != ctx.source_name:
+        raise HTTPException(status_code=404, detail="Compose job not found for the requested project/source")
+    return _serialize_compose_job(job, base_url=str(request.base_url))

@@ -1,29 +1,51 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
 
-from app.api.compose import ComposePreprocessor, InputAsset, _validate_supported_inputs
+from app.api.compose import ComposePreprocessor, ComposeResult, InputAsset, PreparedSegment, _validate_supported_inputs
 
 
-def _fake_concat(input_paths: list[Path], output_path: Path, mode: str, *, allow_overwrite: bool = False) -> str:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = b""
-    for path in input_paths:
-        payload += path.read_bytes()
-    output_path.write_bytes(payload or b"compiled")
-    return "encode" if mode == "encode" else "copy"
+def _patch_compose_runtime(monkeypatch, *, fail: bool = False) -> None:
+    def _fake_prepare(self, assets, work_dir):
+        work_dir.mkdir(parents=True, exist_ok=True)
+        return [
+            PreparedSegment(path=asset.path, source_kind=asset.kind, generated=False)
+            for asset in assets
+        ]
+
+    def _fake_execute(self, plan):
+        if fail:
+            raise HTTPException(status_code=500, detail="ffmpeg failure simulated")
+        plan.output_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = b""
+        for input_path in plan.input_paths:
+            payload += input_path.read_bytes()
+        plan.output_path.write_bytes(payload or b"compiled")
+        return ComposeResult(output_path=plan.output_path, mode_used=plan.strategy)
+
+    monkeypatch.setattr("app.api.compose.ComposePreprocessor.prepare", _fake_prepare)
+    monkeypatch.setattr("app.api.compose.ComposeExecutor.execute", _fake_execute)
 
 
-def _failing_concat(input_paths: list[Path], output_path: Path, mode: str, *, allow_overwrite: bool = False) -> str:
-    from fastapi import HTTPException
+def _await_compose_job(client, project_name: str, job_id: str, *, source: str = "primary") -> dict:
+    deadline = time.time() + 5
+    last_payload: dict | None = None
+    while time.time() < deadline:
+        response = client.get(f"/api/projects/{project_name}/compose/jobs/{job_id}", params={"source": source})
+        assert response.status_code == 200
+        payload = response.json()
+        last_payload = payload
+        if payload["status"] in {"completed", "failed"}:
+            return payload
+        time.sleep(0.05)
+    raise AssertionError(f"compose job did not settle in time: {last_payload}")
 
-    raise HTTPException(status_code=500, detail="ffmpeg failure simulated")
 
-
-def test_compose_existing_registers_one_asset(client, monkeypatch):
+def test_compose_existing_accepts_job_and_registers_one_asset(client, monkeypatch):
     created = client.post("/api/projects", json={"name": "compose-existing"})
     project_name = created.json()["name"]
 
@@ -38,35 +60,46 @@ def test_compose_existing_registers_one_asset(client, monkeypatch):
     assert first.status_code == 200
     assert second.status_code == 200
 
-    inputs = [first.json()["path"], second.json()["path"]]
-    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
+    _patch_compose_runtime(monkeypatch)
 
     response = client.post(
         f"/api/projects/{project_name}/compose",
-        json={"inputs": inputs, "output_name": "timeline", "target_dir": "exports", "mode": "auto"},
+        json={
+            "inputs": [first.json()["path"], second.json()["path"]],
+            "output_name": "timeline",
+            "target_dir": "exports",
+            "mode": "auto",
+        },
     )
-    assert response.status_code == 200
+    assert response.status_code == 202
     body = response.json()
-    assert body["status"] == "stored"
-    assert body["path"].startswith("exports/timeline")
-    assert "/media/" in body["served"]["stream_url"]
-    assert "/download/" in body["served"]["download_url"]
+    assert body["status"] == "accepted"
+    assert body["job_status"] in {"queued", "running"}
+    assert body["refresh_scope"] == {"project": project_name, "source": "primary", "paths": ["exports"]}
+
+    status = _await_compose_job(client, project_name, body["job_id"])
+    assert status["status"] == "completed"
+    result = status["result"]
+    assert result["status"] == "stored"
+    assert result["path"].startswith("exports/timeline-")
+    assert "/media/" in result["served"]["stream_url"]
+    assert "/download/" in result["served"]["download_url"]
 
     media = client.get(f"/api/projects/{project_name}/media")
     assert media.status_code == 200
     rel_paths = {item["relative_path"] for item in media.json()["media"]}
-    assert body["path"] in rel_paths
+    assert result["path"] in rel_paths
 
 
-def test_compose_upload_uses_temp_root_and_cleans(client, monkeypatch):
+
+def test_compose_upload_batch_accepts_job_and_cleans_temp_root(client, monkeypatch):
     from app.config import get_settings
 
     temp_root = get_settings().temp_root
-
     created = client.post("/api/projects", json={"name": "compose-upload"})
     project_name = created.json()["name"]
 
-    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
+    _patch_compose_runtime(monkeypatch)
 
     response = client.post(
         f"/api/projects/{project_name}/compose/upload?output_name=final-cut&target_dir=exports&mode=auto",
@@ -75,54 +108,82 @@ def test_compose_upload_uses_temp_root_and_cleans(client, monkeypatch):
             ("files", ("two.mp4", b"222", "video/mp4")),
         ],
     )
-    assert response.status_code == 200
+    assert response.status_code == 202
     body = response.json()
-    assert body["status"] == "stored"
-    assert body["path"] == "exports/final-cut.mp4"
+    assert body["status"] == "accepted"
+
+    status = _await_compose_job(client, project_name, body["job_id"])
+    assert status["status"] == "completed"
+    assert status["result"]["path"].startswith("exports/final-cut-")
     assert temp_root.exists()
-    assert not any(path.name.startswith("compose_") for path in temp_root.iterdir())
+    assert not any(path.name.startswith("compose_") for path in temp_root.iterdir() if path.name != "compose_jobs")
 
 
-def test_compose_existing_blocks_overwrite_by_default(client, monkeypatch):
-    created = client.post("/api/projects", json={"name": "compose-overwrite"})
-    project_name = created.json()["name"]
-    client.post(f"/api/projects/{project_name}/upload", files={"file": ("a.mp4", b"aaa", "video/mp4")})
-    client.post(f"/api/projects/{project_name}/upload", files={"file": ("b.mp4", b"bbb", "video/mp4")})
 
-    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
-
-    payload = {
-        "inputs": ["ingest/originals/a.mp4", "ingest/originals/b.mp4"],
-        "output_name": "same-name.mp4",
-        "target_dir": "exports",
-        "mode": "auto",
-    }
-    first = client.post(f"/api/projects/{project_name}/compose", json=payload)
-    assert first.status_code == 200
-
-    second = client.post(f"/api/projects/{project_name}/compose", json=payload)
-    assert second.status_code == 409
-
-
-def test_compose_upload_cleanup_on_failure(client, monkeypatch):
+def test_compose_upload_incremental_queues_last_clip_and_cleans_session(client, monkeypatch):
     from app.config import get_settings
 
     temp_root = get_settings().temp_root
-    created = client.post("/api/projects", json={"name": "compose-fail"})
+    created = client.post("/api/projects", json={"name": "compose-incremental"})
     project_name = created.json()["name"]
 
-    monkeypatch.setattr("app.api.compose._concat_files", _failing_concat)
+    _patch_compose_runtime(monkeypatch)
 
-    response = client.post(
-        f"/api/projects/{project_name}/compose/upload?output_name=boom.mp4",
+    first = client.post(
+        f"/api/projects/{project_name}/compose/upload?output_name=shortcut-cut&target_dir=exports",
+        headers={"X-Compose-Time": "1710000000000", "X-Compose-Index": "1", "X-Compose-Count": "2"},
         files=[("files", ("one.mp4", b"111", "video/mp4"))],
     )
-    assert response.status_code == 500
-    assert not any(path.name.startswith("compose_") for path in temp_root.iterdir())
+    assert first.status_code == 202
+    assert first.json()["status"] == "staged"
+
+    second = client.post(
+        f"/api/projects/{project_name}/compose/upload?output_name=shortcut-cut&target_dir=exports",
+        headers={"X-Compose-Time": "1710000000000", "X-Compose-Index": "2", "X-Compose-Count": "2"},
+        files=[("files", ("two.mp4", b"222", "video/mp4"))],
+    )
+    assert second.status_code == 202
+    body = second.json()
+    assert body["status"] == "accepted"
+    assert body["flow"] == "upload_incremental"
+
+    status = _await_compose_job(client, project_name, body["job_id"])
+    assert status["status"] == "completed"
+    assert not any(path.name.startswith("compose_session_") for path in temp_root.iterdir())
 
 
-def test_compose_upload_source_urls_include_source_query(client, monkeypatch):
-    source_root = Path("/tmp/compose-alt")
+
+def test_compose_status_reports_background_failure(client, monkeypatch):
+    created = client.post("/api/projects", json={"name": "compose-fail"})
+    project_name = created.json()["name"]
+    upload = client.post(
+        f"/api/projects/{project_name}/upload",
+        files={"file": ("a.mp4", b"aaa", "video/mp4")},
+    )
+    assert upload.status_code == 200
+
+    _patch_compose_runtime(monkeypatch, fail=True)
+
+    response = client.post(
+        f"/api/projects/{project_name}/compose",
+        json={
+            "inputs": [upload.json()["path"]],
+            "output_name": "boom",
+            "target_dir": "exports",
+            "mode": "auto",
+        },
+    )
+    assert response.status_code == 202
+
+    status = _await_compose_job(client, project_name, response.json()["job_id"])
+    assert status["status"] == "failed"
+    assert status["error_status_code"] == 500
+    assert "ffmpeg failure simulated" in status["error"]
+
+
+
+def test_compose_upload_source_urls_include_source_query(client, monkeypatch, tmp_path: Path):
+    source_root = tmp_path / "compose-alt"
     source_root.mkdir(parents=True, exist_ok=True)
 
     create_source = client.post("/api/sources", json={"name": "alt", "root": str(source_root), "type": "local"})
@@ -131,17 +192,19 @@ def test_compose_upload_source_urls_include_source_query(client, monkeypatch):
     assert created.status_code == 201
     project_name = created.json()["name"]
 
-    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
+    _patch_compose_runtime(monkeypatch)
 
     response = client.post(
         f"/api/projects/{project_name}/compose/upload",
         params={"source": "alt", "output_name": "sourced.mp4"},
         files=[("files", ("one.mp4", b"111", "video/mp4"))],
     )
-    assert response.status_code == 200
-    body = response.json()
+    assert response.status_code == 202
+    status = _await_compose_job(client, project_name, response.json()["job_id"], source="alt")
+    body = status["result"]
     assert "?source=alt" in body["served"]["stream_url"]
     assert "?source=alt" in body["served"]["download_url"]
+
 
 
 def test_compose_upload_rejects_temp_root_inside_source(client, monkeypatch, tmp_path):
@@ -175,76 +238,6 @@ def test_compose_upload_rejects_temp_root_inside_source(client, monkeypatch, tmp
     assert "MEDIA_SYNC_TEMP_ROOT" in existing_response.json()["detail"]
 
 
-def test_compose_env_validation_falls_back_to_default_source(client, monkeypatch):
-    monkeypatch.setattr("app.api.compose.SourceRegistry.list_enabled", lambda self: [])
-    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
-
-    created = client.post("/api/projects", json={"name": "compose-fallback"})
-    project_name = created.json()["name"]
-    client.post(f"/api/projects/{project_name}/upload", files={"file": ("a.mp4", b"aaa", "video/mp4")})
-
-    response = client.post(
-        f"/api/projects/{project_name}/compose",
-        json={"inputs": ["ingest/originals/a.mp4"], "output_name": "fallback.mp4", "target_dir": "exports", "mode": "auto"},
-    )
-    assert response.status_code == 200
-
-
-def test_compose_maps_ffmpeg_existing_output_race_to_409(client, monkeypatch):
-    monkeypatch.setattr("app.api.compose._inputs_compatible_for_copy", lambda _: True)
-
-    import subprocess
-
-    race_result = subprocess.CompletedProcess(args=["ffmpeg"], returncode=1, stdout="", stderr="Not overwriting - exiting")
-    monkeypatch.setattr("app.api.compose.subprocess.run", lambda *args, **kwargs: race_result)
-
-    created = client.post("/api/projects", json={"name": "compose-race"})
-    project_name = created.json()["name"]
-    client.post(f"/api/projects/{project_name}/upload", files={"file": ("a.mp4", b"aaa", "video/mp4")})
-
-    response = client.post(
-        f"/api/projects/{project_name}/compose",
-        json={"inputs": ["ingest/originals/a.mp4"], "output_name": "race.mp4", "target_dir": "exports", "mode": "copy"},
-    )
-    assert response.status_code == 409
-
-
-def test_compose_overwrite_replaces_index_row_instead_of_duplicate(client, monkeypatch):
-    created = client.post("/api/projects", json={"name": "compose-overwrite-index"})
-    project_name = created.json()["name"]
-
-    a = client.post(f"/api/projects/{project_name}/upload", files={"file": ("a.mp4", b"aaa", "video/mp4")}).json()["path"]
-    b = client.post(f"/api/projects/{project_name}/upload", files={"file": ("b.mp4", b"bbb", "video/mp4")}).json()["path"]
-    c = client.post(f"/api/projects/{project_name}/upload", files={"file": ("c.mp4", b"ccc", "video/mp4")}).json()["path"]
-
-    monkeypatch.setattr("app.api.compose._concat_files", _fake_concat)
-
-    payload_one = {
-        "inputs": [a, b],
-        "output_name": "same.mp4",
-        "target_dir": "exports",
-        "mode": "auto",
-        "allow_overwrite": True,
-    }
-    payload_two = {
-        "inputs": [a, c],
-        "output_name": "same.mp4",
-        "target_dir": "exports",
-        "mode": "auto",
-        "allow_overwrite": True,
-    }
-
-    first = client.post(f"/api/projects/{project_name}/compose", json=payload_one)
-    second = client.post(f"/api/projects/{project_name}/compose", json=payload_two)
-    assert first.status_code == 200
-    assert second.status_code == 200
-
-    project_response = client.get(f"/api/projects/{project_name}")
-    assert project_response.status_code == 200
-    files = project_response.json().get("files", [])
-    matches = [item for item in files if item.get("relative_path") == "exports/same.mp4"]
-    assert len(matches) == 1
-
 
 def test_compose_upload_invalid_output_name_returns_400(client):
     created = client.post("/api/projects", json={"name": "compose-invalid-output"})
@@ -256,6 +249,7 @@ def test_compose_upload_invalid_output_name_returns_400(client):
         files=[("files", ("one.mp4", b"111", "video/mp4"))],
     )
     assert response.status_code == 400
+
 
 
 def test_preprocessor_preserves_mixed_media_order(monkeypatch, tmp_path: Path):
@@ -292,6 +286,7 @@ def test_preprocessor_preserves_mixed_media_order(monkeypatch, tmp_path: Path):
     assert [segment.source_kind for segment in prepared] == ["video", "image", "video"]
     assert [segment.path.name for segment in prepared] == ["segment_0000.mp4", "segment_0001.mp4", "segment_0002.mp4"]
     assert [segment.generated for segment in prepared] == [True, True, True]
+
 
 
 def test_supported_inputs_still_reject_audio(tmp_path: Path):

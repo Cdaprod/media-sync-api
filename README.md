@@ -158,8 +158,9 @@ Path alignment for Resolve:
 - `POST /api/projects/{project}/upload?op=start` – start a batch session for Shortcut repeats
 - `POST /api/projects/{project}/upload?op=finalize` – finalize batch and return aggregated served URLs
 - `POST /api/projects/{project}/upload?op=snapshot` – fetch batch snapshot
-- `POST /api/projects/{project}/compose` – concatenate existing indexed project assets into one final output (defaults to `exports/compiled.mp4`)
-- `POST /api/projects/{project}/compose/upload` – upload multiple clips into a temp cache outside project roots, compose one final asset, then clean temp files (set `allow_overwrite=true` to replace existing output names)
+- `POST /api/projects/{project}/compose` – accept an existing-assets compose job quickly and return `202 Accepted` with a `job_id`; poll `GET /api/projects/{project}/compose/jobs/{job_id}` for `queued|running|completed|failed` state and final registration details
+- `POST /api/projects/{project}/compose/upload` – upload clips into temp staging outside project roots, then return `202 Accepted` with a background compose `job_id` instead of holding the request open through ffmpeg/finalization
+- `GET /api/projects/{project}/compose/jobs/{job_id}` – fetch compose job state, scoped refresh metadata, error details, and the final stored asset payload once background compose finishes
 - `MEDIA_SYNC_TEMP_ROOT` controls compose staging and must resolve outside every enabled SourceRegistry root; compose returns HTTP 503 when this is misconfigured to prevent Explorer indexing of temp clips.
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/media/normalize-orientation` – normalize rotated videos in place (`dry_run` supported)
@@ -301,4 +302,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSES.md) 
   </p>
   <p><strong>Built with ❤️ by <a href="https://github.com/Cdaprod">David Cannan</a></strong><br/>Transforming how we discover, process, and manage digital media through AI.</p>
 </div>
-

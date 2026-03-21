@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.compose import router as compose_router
+from app.api.compose import shutdown_compose_jobs
 from app.api.media import bulk_router as assets_bulk_router
 from app.api.media import global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
 from app.api.projects import router as projects_router
@@ -61,6 +62,7 @@ async def lifespan(_: FastAPI):
     reindexer.start()
     yield
     reindexer.stop()
+    shutdown_compose_jobs()
 
 
 def _resolve_cors_settings() -> tuple[list[str], bool]:

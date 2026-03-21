@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -978,7 +979,7 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
 
     captured: dict[str, object] = {}
 
-    def _fake_compose_staged_paths(ctx, spec, staged_paths, request, *, work_dir):
+    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir):
         captured["project"] = ctx.project_name
         captured["output_name"] = spec.output_name
         captured["count"] = len(staged_paths)
@@ -1002,10 +1003,25 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
             "allow_overwrite": False,
         },
     )
-    assert response.status_code == 200
+    assert response.status_code == 202
     payload = response.json()
-    assert payload["status"] in {"stored", "duplicate"}
-    assert payload["path"].startswith("exports/")
+    assert payload["status"] == "accepted"
+    job_id = payload["job_id"]
+    deadline = time.time() + 5
+    status_payload = None
+    while time.time() < deadline:
+        status_response = client.get(
+            f"/api/projects/{output_project}/compose/jobs/{job_id}",
+            params={"source": "primary"},
+        )
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        if status_payload["status"] == "completed":
+            break
+        time.sleep(0.05)
+    assert status_payload is not None
+    assert status_payload["status"] == "completed"
+    assert status_payload["result"]["path"].startswith("exports/")
     assert captured["project"] == output_project
     assert captured["output_name"] == "bulk-cut.mp4"
     assert captured["count"] == 2
@@ -1083,7 +1099,7 @@ def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClien
     listing = client.get(f"/api/projects/{source}/media").json()["media"]
     asset_uuid = listing[0]["asset_uuid"]
 
-    def _fake_compose_staged_paths(ctx, spec, staged_paths, request, *, work_dir):
+    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir):
         assert ctx.project_name == output_project
         assert spec.output_name == "uuid-cut.mp4"
         assert len(staged_paths) == 1
@@ -1100,8 +1116,23 @@ def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClien
             "target_dir": "exports",
         },
     )
-    assert response.status_code == 200
-    assert response.json()["path"].startswith("exports/")
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+    deadline = time.time() + 5
+    status_payload = None
+    while time.time() < deadline:
+        status_response = client.get(
+            f"/api/projects/{output_project}/compose/jobs/{job_id}",
+            params={"source": "primary"},
+        )
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        if status_payload["status"] == "completed":
+            break
+        time.sleep(0.05)
+    assert status_payload is not None
+    assert status_payload["status"] == "completed"
+    assert status_payload["result"]["path"].startswith("exports/")
 
 
 def test_bulk_compose_rejects_allow_overwrite(client: TestClient, env_settings: Path) -> None:
