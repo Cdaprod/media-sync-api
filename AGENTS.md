@@ -1,6 +1,11 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-21)
+- Replaced the package Explorer root `app/not-found.tsx` with a multi-phase shader scene (`idle` → `warp` → `arrival` → `exit`) that keeps App Router 404 ownership while turning the page into a contained cinematic handoff back into Explorer.
+- Swapped package-level 404 font loading from `next/font/google` to shared layout `<head>` links for `Bebas Neue` + `DM Mono` after the build-time Bebas fetch proved brittle in the replacement scene flow; the page still avoids page-local `@import` usage.
+- Hardened the new scene with an effect-backed reduced-motion preference hook, guarded `router.push('/')` handoff, named WebGL context loss/restore listeners with rebuild cleanup, opacity-based phase layering instead of abrupt `display:none`, and cached per-frame DOM writes to reduce avoidable Safari jank.
+
 ### Latest Implementation Notes (2026-03-19)
 - Fixed the Explorer package 404 framing regression by re-centering the tunnel in shader space with an explicit `u_center` uniform and by applying drift before aspect correction so portrait screens no longer push the vanishing point off to the right.
 - Reduced the not-found tunnel sway/nod amplitudes to preserve subtle motion without compositionally dislodging the 404/title/CTA stack on tall mobile viewports.

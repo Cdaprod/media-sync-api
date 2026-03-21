@@ -1,3 +1,10 @@
+## 2026-03-21 — Package Explorer multi-phase 404 scene replacement
+- [x] Replaced the previous static 404 tunnel with the new single-route multi-phase shader scene (`idle`, `warp`, `arrival`, `exit`) while keeping root App Router not-found ownership.
+- [x] Moved package-level 404 font loading to layout `<head>` links after the Bebas Neue `next/font` path proved brittle during replacement builds.
+- [x] Hardened reduced-motion handling, guarded route handoff, named WebGL context loss/restore listeners, and softened phase switching to opacity-based overlap instead of abrupt removal.
+- [x] Added regression assertions for the new phase machine, shader uniforms, layout font wiring, and runtime guards.
+- [ ] Validate on physical desktop + iPhone browsers that the new purple-to-amber environment fills the viewport correctly and the arrival phase feels smooth before route handoff.
+
 ## 2026-03-19 — Package Explorer 404 tunnel framing recenter
 - [x] Investigated the not-found composition regression as shader/camera framing drift rather than App Router ownership.
 - [x] Re-centered the tunnel by introducing a dedicated shader center uniform and moving drift application ahead of aspect correction.

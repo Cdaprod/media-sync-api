@@ -1,31 +1,29 @@
 import './globals.css';
-import type { Metadata } from 'next';
-import { Bebas_Neue, DM_Mono } from 'next/font/google';
-
-const bebasNeue = Bebas_Neue({
-  weight: '400',
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-void-display',
-});
-
-const dmMono = DM_Mono({
-  weight: '300',
-  style: ['normal', 'italic'],
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-void-mono',
-});
+import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
   title: 'media-sync-api — Explorer',
   description: 'LAN-only media-sync-api explorer UI',
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${bebasNeue.variable} ${dmMono.variable}`}>{children}</body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;1,300&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
