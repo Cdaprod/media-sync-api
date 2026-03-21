@@ -41,7 +41,13 @@ test('package app layout owns default App Router not-found fonts and wiring', ()
   assert.ok(notFound.includes('window.history.length > 1'));
   assert.ok(notFound.includes("router.replace('/')"));
   assert.ok(notFound.includes('webglcontextrestored'));
+  assert.ok(notFound.includes('uniform vec2  u_center;'));
+  assert.ok(notFound.includes('vec2 centeredUv = v_uv * 2.0 - 1.0 - u_center;'));
+  assert.ok(notFound.includes('centeredUv -= vec2(sway, nod);'));
+  assert.ok(notFound.includes('gl.uniform2f(uCenter, 0, 0);'));
   assert.ok(notFound.includes('prefers-reduced-motion: reduce'));
+  assert.ok(notFound.includes('float sway = sin(u_time * 0.19) * 0.028;'));
+  assert.ok(notFound.includes('float nod  = cos(u_time * 0.14) * 0.018;'));
   assert.ok(notFound.includes('data-webgl-fallback="true"'));
   assert.ok(notFound.includes('data-webgl-canvas="tunnel"'));
   assert.ok(!notFound.includes("@import url('https://fonts.googleapis.com"));

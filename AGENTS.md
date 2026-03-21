@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-19)
+- Fixed the Explorer package 404 framing regression by re-centering the tunnel in shader space with an explicit `u_center` uniform and by applying drift before aspect correction so portrait screens no longer push the vanishing point off to the right.
+- Reduced the not-found tunnel sway/nod amplitudes to preserve subtle motion without compositionally dislodging the 404/title/CTA stack on tall mobile viewports.
+- Extended package not-found regression assertions to lock the new center uniform, reduced drift amplitudes, and centered-uniform wiring while keeping the earlier WebGL hardening contract intact.
+
+### Latest Implementation Notes (2026-03-19)
 - Installed the package Explorer App Router default 404 at `docker/packages/Explorer/app/not-found.tsx`, keeping the shader tunnel/HUD aesthetic while making the root `app/` segment own unmatched-route rendering for the standalone package app.
 - Moved the not-found fonts into `app/layout.tsx` with `next/font/google` (`Bebas Neue` + `DM Mono`) so the 404 page no longer injects page-local Google Fonts `@import` rules during render.
 - Hardened the 404 client page for production with history-back fallback to `/`, reduced-motion aware frame throttling, WebGL context loss/restore handling, visibility/resize safety, and a no-WebGL fallback notice plus regression assertions covering the new routing/font/runtime contract.

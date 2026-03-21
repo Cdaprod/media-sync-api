@@ -1,3 +1,10 @@
+## 2026-03-19 — Package Explorer 404 tunnel framing recenter
+- [x] Investigated the not-found composition regression as shader/camera framing drift rather than App Router ownership.
+- [x] Re-centered the tunnel by introducing a dedicated shader center uniform and moving drift application ahead of aspect correction.
+- [x] Reduced sway/nod amplitudes so portrait mobile keeps the vanishing point visually aligned with the 404 composition.
+- [x] Updated regression assertions to lock the center-uniform wiring and reduced motion amplitudes without dropping existing WebGL hardening checks.
+- [ ] Validate on physical iPhone Safari that the tunnel focal point now sits behind the 404/tagline/Surface stack across portrait and desktop-sized viewports.
+
 ## 2026-03-19 — Package Explorer default App Router not-found hardening
 - [x] Installed `docker/packages/Explorer/app/not-found.tsx` as the root App Router 404 surface for unmatched package routes.
 - [x] Moved the 404 fonts into package app layout via `next/font/google` so the shader page no longer depends on page-local Google Fonts imports.

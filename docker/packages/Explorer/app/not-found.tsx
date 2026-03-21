@@ -17,6 +17,7 @@ const FRAG = `
   precision highp float;
   varying vec2 v_uv;
   uniform vec2  u_res;
+  uniform vec2  u_center;
   uniform float u_time;
 
   #define PI  3.14159265358979
@@ -37,12 +38,15 @@ const FRAG = `
   }
 
   void main(){
-    vec2 uv = v_uv * 2.0 - 1.0;
-    uv.x *= u_res.x / u_res.y;
+    float aspect = u_res.x / u_res.y;
+    vec2 centeredUv = v_uv * 2.0 - 1.0 - u_center;
 
-    float sway = sin(u_time * 0.19) * 0.10;
-    float nod  = cos(u_time * 0.14) * 0.07;
-    uv -= vec2(sway, nod);
+    float sway = sin(u_time * 0.19) * 0.028;
+    float nod  = cos(u_time * 0.14) * 0.018;
+    centeredUv -= vec2(sway, nod);
+
+    vec2 uv = centeredUv;
+    uv.x *= aspect;
 
     float radius = length(uv);
     float angle  = atan(uv.y, uv.x);
@@ -194,6 +198,7 @@ function TunnelCanvas({ onUnavailable }: { onUnavailable: () => void }) {
     let gl: WebGLRenderingContext | null = null;
     let resources: RenderResources = { ...EMPTY_RESOURCES };
     let uRes: WebGLUniformLocation | null = null;
+    let uCenter: WebGLUniformLocation | null = null;
     let uTime: WebGLUniformLocation | null = null;
     let scale = 0.85;
     let frameMs = 1000 / 60;
@@ -212,6 +217,7 @@ function TunnelCanvas({ onUnavailable }: { onUnavailable: () => void }) {
       if (!gl) {
         resources = { ...EMPTY_RESOURCES };
         uRes = null;
+        uCenter = null;
         uTime = null;
         return;
       }
@@ -223,6 +229,7 @@ function TunnelCanvas({ onUnavailable }: { onUnavailable: () => void }) {
       }
       resources = { ...EMPTY_RESOURCES };
       uRes = null;
+      uCenter = null;
       uTime = null;
     };
 
@@ -281,6 +288,7 @@ function TunnelCanvas({ onUnavailable }: { onUnavailable: () => void }) {
         gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
         uRes = gl.getUniformLocation(program, 'u_res');
+        uCenter = gl.getUniformLocation(program, 'u_center');
         uTime = gl.getUniformLocation(program, 'u_time');
         gl.clearColor(0, 0, 0, 1);
         resize();
@@ -296,7 +304,7 @@ function TunnelCanvas({ onUnavailable }: { onUnavailable: () => void }) {
     const render = (now: number) => {
       if (disposed) return;
       raf = requestAnimationFrame(render);
-      if (!gl || !resources.program || !uRes || !uTime || document.hidden) {
+      if (!gl || !resources.program || !uRes || !uCenter || !uTime || document.hidden) {
         return;
       }
       if (now - lastFrame < frameMs * 0.9) {
@@ -305,6 +313,7 @@ function TunnelCanvas({ onUnavailable }: { onUnavailable: () => void }) {
       lastFrame = now;
       resize();
       gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.uniform2f(uCenter, 0, 0);
       gl.uniform1f(uTime, (now - t0) / 1000);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
