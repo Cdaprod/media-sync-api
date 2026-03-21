@@ -2,6 +2,19 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-21)
+- Replaced the package Explorer root `app/not-found.tsx` with a multi-phase shader scene (`idle` → `warp` → `arrival` → `exit`) that keeps App Router 404 ownership while turning the page into a contained cinematic handoff back into Explorer.
+- Swapped package-level 404 font loading from `next/font/google` to shared layout `<head>` links for `Bebas Neue` + `DM Mono` after the build-time Bebas fetch proved brittle in the replacement scene flow; the page still avoids page-local `@import` usage.
+- Hardened the new scene with an effect-backed reduced-motion preference hook, guarded `router.push('/')` handoff, named WebGL context loss/restore listeners with rebuild cleanup, opacity-based phase layering instead of abrupt `display:none`, and cached per-frame DOM writes to reduce avoidable Safari jank.
+
+### Latest Implementation Notes (2026-03-19)
+- Fixed the Explorer package 404 framing regression by re-centering the tunnel in shader space with an explicit `u_center` uniform and by applying drift before aspect correction so portrait screens no longer push the vanishing point off to the right.
+- Reduced the not-found tunnel sway/nod amplitudes to preserve subtle motion without compositionally dislodging the 404/title/CTA stack on tall mobile viewports.
+- Extended package not-found regression assertions to lock the new center uniform, reduced drift amplitudes, and centered-uniform wiring while keeping the earlier WebGL hardening contract intact.
+
+### Latest Implementation Notes (2026-03-19)
+- Installed the package Explorer App Router default 404 at `docker/packages/Explorer/app/not-found.tsx`, keeping the shader tunnel/HUD aesthetic while making the root `app/` segment own unmatched-route rendering for the standalone package app.
+- Moved the not-found fonts into `app/layout.tsx` with `next/font/google` (`Bebas Neue` + `DM Mono`) so the 404 page no longer injects page-local Google Fonts `@import` rules during render.
+- Hardened the 404 client page for production with history-back fallback to `/`, reduced-motion aware frame throttling, WebGL context loss/restore handling, visibility/resize safety, and a no-WebGL fallback notice plus regression assertions covering the new routing/font/runtime contract.
 - Refactored backend compose submission into a job-based flow: `POST /api/projects/{project}/compose`, `POST /api/projects/{project}/compose/upload`, and `POST /api/assets/bulk/compose` now return `202 Accepted` with a compose `job_id` instead of holding the request open through preprocessing/ffmpeg/registration.
 - Added in-process background compose execution with persisted job snapshots under `MEDIA_SYNC_TEMP_ROOT/compose_jobs`, project-scoped status polling at `GET /api/projects/{project}/compose/jobs/{job_id}`, and restart-safe interruption marking for any queued/running jobs left behind by process shutdown.
 - Existing-asset compose now stages normalization work in temp dirs outside project roots, upload-batch compose defers heavy work until after request acceptance, and incremental upload compose now queues background execution only after the last staged clip arrives while still keeping failed sessions on disk for retry.

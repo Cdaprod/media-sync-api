@@ -71,3 +71,9 @@ export default function ExplorerPage() {
 ```bash
 npm run test
 ```
+
+## Routing / default 404 ownership
+
+This package uses the Next.js App Router from `docker/packages/Explorer/app/`. The root-level `app/not-found.tsx` is the package-wide default 404 UI for unmatched routes and for any route segment that calls `notFound()` without a more deeply nested override.
+
+The shader-based not-found page keeps its WebGL tunnel client-side, while fonts are loaded once at the app layout level through shared `<head>` font links so the 404 UI avoids page-local `@import` font injection and no longer depends on `next/font` build-time fetching.

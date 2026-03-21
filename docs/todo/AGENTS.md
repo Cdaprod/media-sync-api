@@ -1,3 +1,23 @@
+## 2026-03-21 — Package Explorer multi-phase 404 scene replacement
+- [x] Replaced the previous static 404 tunnel with the new single-route multi-phase shader scene (`idle`, `warp`, `arrival`, `exit`) while keeping root App Router not-found ownership.
+- [x] Moved package-level 404 font loading to layout `<head>` links after the Bebas Neue `next/font` path proved brittle during replacement builds.
+- [x] Hardened reduced-motion handling, guarded route handoff, named WebGL context loss/restore listeners, and softened phase switching to opacity-based overlap instead of abrupt removal.
+- [x] Added regression assertions for the new phase machine, shader uniforms, layout font wiring, and runtime guards.
+- [ ] Validate on physical desktop + iPhone browsers that the new purple-to-amber environment fills the viewport correctly and the arrival phase feels smooth before route handoff.
+
+## 2026-03-19 — Package Explorer 404 tunnel framing recenter
+- [x] Investigated the not-found composition regression as shader/camera framing drift rather than App Router ownership.
+- [x] Re-centered the tunnel by introducing a dedicated shader center uniform and moving drift application ahead of aspect correction.
+- [x] Reduced sway/nod amplitudes so portrait mobile keeps the vanishing point visually aligned with the 404 composition.
+- [x] Updated regression assertions to lock the center-uniform wiring and reduced motion amplitudes without dropping existing WebGL hardening checks.
+- [ ] Validate on physical iPhone Safari that the tunnel focal point now sits behind the 404/tagline/Surface stack across portrait and desktop-sized viewports.
+
+## 2026-03-19 — Package Explorer default App Router not-found hardening
+- [x] Installed `docker/packages/Explorer/app/not-found.tsx` as the root App Router 404 surface for unmatched package routes.
+- [x] Moved the 404 fonts into package app layout via `next/font/google` so the shader page no longer depends on page-local Google Fonts imports.
+- [x] Hardened the WebGL page for production with history fallback routing, reduced-motion throttling, visibility/resize safety, and context loss/restore cleanup plus a WebGL-unavailable message.
+- [x] Added package regression assertions for root not-found ownership, font wiring, fallback routing markers, and WebGL safety markers.
+- [ ] Validate on physical iPhone Safari that the shader tunnel remains smooth, the Surface CTA returns correctly from direct-entry 404s, and WebGL fallback messaging stays unobtrusive on lower-power devices.
 ## 2026-03-21 — Backend compose job flow / non-blocking API responsiveness
 - [x] Converted project compose submission routes and bulk asset compose to return `202 Accepted` job envelopes instead of waiting for full compose completion inline.
 - [x] Added an in-process background compose runner with persisted job snapshots plus `GET /api/projects/{project}/compose/jobs/{job_id}` polling for queued/running/completed/failed status.

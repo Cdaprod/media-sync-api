@@ -26,6 +26,37 @@ test('package exports include entrypoints', () => {
 test('standalone app entry exists', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'page.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'layout.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'app', 'not-found.tsx')));
+});
+
+test('package app layout owns default App Router not-found fonts and wiring', () => {
+  const layoutPath = path.join(packageRoot, 'app', 'layout.tsx');
+  const notFoundPath = path.join(packageRoot, 'app', 'not-found.tsx');
+  const layout = fs.readFileSync(layoutPath, 'utf8');
+  const notFound = fs.readFileSync(notFoundPath, 'utf8');
+  assert.ok(layout.includes('fonts.googleapis.com'));
+  assert.ok(layout.includes('fonts.gstatic.com'));
+  assert.ok(layout.includes("viewportFit: 'cover'"));
+  assert.ok(!layout.includes("from 'next/font/google'"));
+  assert.ok(notFound.includes('data-explorer-default-not-found="true"'));
+  assert.ok(notFound.includes('data-explorer-not-found-scene="multi-phase"'));
+  assert.ok(notFound.includes("type Phase = 'idle' | 'warp' | 'arrival' | 'exit';"));
+  assert.ok(notFound.includes('uniform float u_envMix;'));
+  assert.ok(notFound.includes('uniform float u_warp;'));
+  assert.ok(notFound.includes('uniform float u_camZ;'));
+  assert.ok(notFound.includes('const didNavigateRef = useRef(false);'));
+  assert.ok(notFound.includes("const prefersReducedMotion = useReducedMotionPreference();"));
+  assert.ok(notFound.includes("phaseRef.current = 'warp'"));
+  assert.ok(notFound.includes("phaseRef.current = 'arrival'"));
+  assert.ok(notFound.includes("phaseRef.current = 'exit'"));
+  assert.ok(notFound.includes("router.push('/')"));
+  assert.ok(notFound.includes("canvas.addEventListener('webglcontextrestored', handleContextRestored);"));
+  assert.ok(notFound.includes("arrivalWrap?.classList.add('show');"));
+  assert.ok(notFound.includes("voidWrap?.classList.add('arrival-ready');"));
+  assert.ok(notFound.includes('requestAnimationFrame(renderScene)'));
+  assert.ok(notFound.includes('data-webgl-fallback="true"'));
+  assert.ok(notFound.includes('data-webgl-canvas="phase-scene"'));
+  assert.ok(!notFound.includes("@import url('https://fonts.googleapis.com"));
 });
 
 test('explorer resolves media urls against api base', () => {
