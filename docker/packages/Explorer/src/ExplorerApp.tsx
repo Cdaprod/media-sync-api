@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
+import type { ComposeJobEnvelope, PendingComposeItem } from './composeJobs';
 import {
   buildMasonryColumns,
   collectMediaMeta,
@@ -31,6 +32,7 @@ import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
 import { buildThumbJobKey, getThumbCacheKey, normalizeThumbUrl } from './thumbnailLoader';
+import { usePendingComposeJobs } from './usePendingComposeJobs';
 import { useAssetInteractions } from './useAssetInteractions';
 import { useThumbnailQueue } from './useThumbnailQueue';
 import { useTopbarScrollState } from './useTopbarScrollState';
@@ -292,6 +294,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
+  const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -355,10 +358,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       : filtered;
     return sortMedia(selectedFiltered, sortKey, mediaMeta);
   }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
-  const masonryColumns = useMemo(
-    () => buildMasonryColumns(filteredMedia, gridColumnCount, (item) => estimateTileHeight(item)),
-    [estimateTileHeight, filteredMedia, gridColumnCount],
-  );
   const itemsBySelectionKey = useMemo(() => {
     const map = new Map<string, MediaItem>();
     media.forEach((item) => {
@@ -688,6 +687,73 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setMedia(sortMediaByRecent(gathered));
   }, [addToast, api, clearActiveAsset, clearSelectionState, projects]);
 
+  const refreshMediaForScope = useCallback(async (
+    refreshScope: {
+      project?: string;
+      source?: string;
+      paths?: string[];
+    } | null | undefined,
+  ) => {
+    const projectName = String(refreshScope?.project || '').trim();
+    if (!projectName) return;
+    const sourceName = String(refreshScope?.source || '').trim();
+    const refreshedProject = projects.find((entry) => (
+      entry.name === projectName
+      && (entry.source || 'primary') === (sourceName || 'primary')
+    )) || {
+      name: projectName,
+      source: sourceName || null,
+    };
+    const payload = await api.listMedia(refreshedProject.name, refreshedProject.source || undefined);
+    const items = Array.isArray(payload.media) ? payload.media : [];
+
+    if (mediaScope === 'all' || !activeProject) {
+      setMedia((current) => {
+        const retained = current.filter((item) => {
+          const itemProject = String(item.project_name || item.project || '').trim();
+          const itemSource = String(item.project_source || item.source || '').trim() || 'primary';
+          return itemProject !== refreshedProject.name || itemSource !== (refreshedProject.source || 'primary');
+        });
+        const nextItems = items.map((item) => ({
+          ...item,
+          project_name: refreshedProject.name,
+          project_source: refreshedProject.source || null,
+        }));
+        return sortMediaByRecent([...retained, ...nextItems]);
+      });
+      return;
+    }
+
+    if (
+      activeProject.name === refreshedProject.name
+      && (activeProject.source || 'primary') === (refreshedProject.source || 'primary')
+    ) {
+      setMedia(sortMediaByRecent(items));
+    }
+  }, [activeProject, api, mediaScope, projects]);
+
+  const fetchComposeJobJson = useCallback(async (url: string) => {
+    const response = await fetch(api.buildUrl(url));
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(String(payload?.detail || payload?.message || 'Failed to poll compose job'));
+    }
+    return payload;
+  }, [api]);
+
+  const {
+    pendingComposeItems,
+    pendingItemsByProjectAndDir,
+    registerAcceptedJob,
+  } = usePendingComposeJobs({
+    pollIntervalMs: 2000,
+    fetchJson: fetchComposeJobJson,
+    onCompletedRefreshScope: async (refreshScope) => {
+      await refreshMediaForScope(refreshScope);
+      addToast('good', 'Compose', 'Compose completed');
+    },
+  });
+
   const refreshAll = useCallback(async () => {
     await loadSources();
     await loadProjects();
@@ -698,6 +764,71 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     addToast('good', 'Refresh', 'Reloaded projects + media');
   }, [activeProject, addToast, loadAllMedia, loadMedia, loadProjects, loadSources]);
+
+  useEffect(() => {
+    const previous = pendingStatusSnapshotRef.current;
+    const next = new Map<string, PendingComposeItem['status']>();
+    pendingComposeItems.forEach((item) => {
+      next.set(item.jobId, item.status);
+      const previousStatus = previous.get(item.jobId);
+      if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
+        addToast('bad', 'Compose', 'Compose failed');
+      }
+    });
+    pendingStatusSnapshotRef.current = next;
+  }, [addToast, pendingComposeItems]);
+
+  const pendingBucketKeyForProjectAndDir = useCallback((projectName: string, targetDir: string) => {
+    return `${projectName}::${targetDir}`;
+  }, []);
+
+  const pendingBucketKeyForItem = useCallback((item: MediaItem) => {
+    const projectName = String(item.project_name || item.project || activeProject?.name || '').trim();
+    const targetDir = String(item.relative_path || '').split('/')[0] || '';
+    return pendingBucketKeyForProjectAndDir(projectName, targetDir);
+  }, [activeProject, pendingBucketKeyForProjectAndDir]);
+
+  const renderedMediaEntries = useMemo(() => {
+    const entries: Array<
+      | { kind: 'asset'; item: MediaItem }
+      | { kind: 'pending'; pendingItem: PendingComposeItem }
+    > = [];
+    const insertedPendingKeys = new Set<string>();
+
+    filteredMedia.forEach((item) => {
+      const pendingKey = pendingBucketKeyForItem(item);
+      const pendingItems = pendingItemsByProjectAndDir.get(pendingKey);
+      if (pendingItems?.length && !insertedPendingKeys.has(pendingKey)) {
+        pendingItems.forEach((pendingItem) => {
+          entries.push({ kind: 'pending', pendingItem });
+        });
+        insertedPendingKeys.add(pendingKey);
+      }
+      entries.push({ kind: 'asset', item });
+    });
+
+    pendingItemsByProjectAndDir.forEach((pendingItems, pendingKey) => {
+      if (insertedPendingKeys.has(pendingKey)) return;
+      const [pendingProject] = pendingKey.split('::');
+      const shouldRender = mediaScope === 'all'
+        || (activeProject && activeProject.name === pendingProject);
+      if (!shouldRender) return;
+      pendingItems.forEach((pendingItem) => {
+        entries.push({ kind: 'pending', pendingItem });
+      });
+    });
+
+    return entries;
+  }, [activeProject, filteredMedia, mediaScope, pendingBucketKeyForItem, pendingItemsByProjectAndDir]);
+
+  const masonryRenderColumns = useMemo(
+    () => buildMasonryColumns(
+      renderedMediaEntries,
+      gridColumnCount,
+      (entry) => entry.kind === 'pending' ? 1.16 : estimateTileHeight(entry.item),
+    ),
+    [estimateTileHeight, gridColumnCount, renderedMediaEntries],
+  );
 
   const selectProject = useCallback(
     (project: Project) => {
@@ -1070,22 +1201,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         mode: 'encode',
         allow_overwrite: false,
       });
-      const composedPath = typeof response.path === 'string' && response.path.trim()
-        ? response.path
-        : outputName;
-      addToast('good', 'Compose', `Created ${composedPath}`);
+      registerAcceptedJob({ envelope: response as ComposeJobEnvelope });
+      addToast('good', 'Compose', 'Compose started');
       setComposeModalOpen(false);
-      setComposeSubmitting(false);
-      await loadProjects();
-      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-      else await loadMedia(activeProject);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Compose failed';
       addToast('bad', 'Compose', message);
     } finally {
       setComposeSubmitting(false);
     }
-  }, [activeProject, addToast, api, composeOutputName, composeOutputProject, composeSubmitting, loadAllMedia, loadMedia, loadProjects, mediaScope, projects, selectedVideoItems, toAssetRef]);
+  }, [addToast, api, composeOutputName, composeOutputProject, composeSubmitting, projects, registerAcceptedJob, selectedVideoItems, toAssetRef]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -2283,7 +2408,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   Select a project to view media.
                 </div>
-              ) : filteredMedia.length === 0 ? (
+              ) : renderedMediaEntries.length === 0 ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   {mediaScope === 'all'
                     ? 'No indexed files yet across all projects.'
@@ -2294,7 +2419,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   buildAssetViewModel={buildAssetViewModel}
                   canSelect={canSelect}
                   gridColumnCount={gridColumnCount}
-                  masonryColumns={masonryColumns}
+                  masonryColumns={masonryRenderColumns}
                   onToggleSelected={toggleSelected}
                 />
               )}
@@ -2305,7 +2430,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   Select a project to view media.
                 </div>
-              ) : filteredMedia.length === 0 ? (
+              ) : renderedMediaEntries.length === 0 ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   {mediaScope === 'all'
                     ? 'No indexed files yet across all projects.'
@@ -2315,7 +2440,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <AssetList
                   buildAssetViewModel={buildAssetViewModel}
                   canSelect={canSelect}
-                  items={filteredMedia}
+                  items={renderedMediaEntries}
                   onOpenDrawer={openDrawer}
                   onToggleSelected={toggleSelected}
                 />

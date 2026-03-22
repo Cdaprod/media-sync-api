@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Package Explorer now keeps compose-job placeholders in local in-memory UI state keyed by project + target dir, inserting a pending compose card immediately on `202 Accepted` instead of waiting for backend asset registration or a full page refresh.
+- Added modular pending compose UI files in the Explorer package (`PendingComposeAssetCard`, `composeJobs`, and `usePendingComposeJobs`) with exact cyan/blue active states, amber `running_long` after 45 seconds, red failed state, and no fake percentage/fill-progress semantics.
+- Compose polling now runs every 2 seconds from the returned `job_url`; completion triggers a refresh-scope-targeted media refresh plus `Compose completed` toast, while failed jobs stay visible with backend error text and optional debug-artifact notice.
+
+### Latest Implementation Notes (2026-03-22)
 - Added optional compose debug preservation across existing/upload/bulk flows via `debug_keep_intermediates`, with preserved work dirs copied under `MEDIA_SYNC_TEMP_ROOT/compose_debug/<job_id>` and surfaced back in compose results as `debug_artifacts`.
 - Hardened the repro harness log harvesting path with a broader two-pass scan (`recent` then full service log) so job-scoped lifecycle lines are much less likely to come back empty during real operator runs.
 - Expanded tests to cover both the preserved-debug-artifacts path and the harness’s full-log fallback behavior so these operator workflows remain dependable.

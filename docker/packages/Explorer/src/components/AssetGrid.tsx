@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 
+import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';
 import type { AssetPointerHandlers } from '../useAssetInteractions';
 import type { MediaItem } from '../types';
 
@@ -29,7 +30,10 @@ interface AssetGridProps {
   buildAssetViewModel: (item: MediaItem) => ExplorerAssetViewModel;
   canSelect: boolean;
   gridColumnCount: number;
-  masonryColumns: MediaItem[][];
+  masonryColumns: Array<Array<
+    | { kind: 'asset'; item: MediaItem }
+    | { kind: 'pending'; pendingItem: PendingComposeAsset }
+  >>;
   onToggleSelected: (item: MediaItem) => void;
 }
 
@@ -44,7 +48,16 @@ function AssetGridComponent({
     <div className="masonry-columns" style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}>
       {masonryColumns.map((column, columnIndex) => (
         <div className="masonry-column" key={`masonry-column-${columnIndex}`}>
-          {column.map((item) => {
+          {column.map((entry) => {
+            if (entry.kind === 'pending') {
+              return (
+                <PendingComposeAssetCard
+                  key={`pending-${entry.pendingItem.jobId}`}
+                  item={entry.pendingItem}
+                />
+              );
+            }
+            const item = entry.item;
             const viewModel = buildAssetViewModel(item);
 
             return (

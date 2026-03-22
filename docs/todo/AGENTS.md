@@ -1,3 +1,10 @@
+## 2026-03-22 — Explorer pending compose placeholder UI
+- [x] Added modular pending compose Explorer files (`PendingComposeAssetCard`, `composeJobs`, `usePendingComposeJobs`) instead of inlining another large compose-status state machine inside `ExplorerApp.tsx`.
+- [x] Wired package Explorer compose submit to insert a local pending placeholder immediately from the `202 Accepted` envelope, poll `job_url` every 2 seconds, and render the placeholder before matching real assets for the same project/target-dir bucket.
+- [x] Kept pending placeholders UI-only (no fake assets), removed them on completion after refresh-scope-targeted media refresh, and preserved failed placeholders with backend error text plus debug-artifact notice when available.
+- [x] Added focused Explorer package regression coverage for pending compose module existence, accepted-job registration wiring, long-running status derivation, and pending-card render integration.
+- [ ] Validate on physical Safari/iPhone that pending compose cards feel immediate and that completed jobs swap cleanly into real exports without a full-page reload.
+
 ## 2026-03-22 — Harness reliability + preserved intermediates debug path
 - [x] Added compose-level `debug_keep_intermediates` support so operators can preserve per-job work dirs/intermediates for existing/upload/bulk compose runs without changing the main compose architecture.
 - [x] Surfaced preserved debug artifacts back through compose results and documented the stable temp-root location for those artifacts.

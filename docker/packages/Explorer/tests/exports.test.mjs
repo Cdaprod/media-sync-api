@@ -20,6 +20,9 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useTopbarScrollState.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'composeJobs.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'usePendingComposeJobs.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -235,7 +238,10 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('data-compose-project-picker="1"'));
   assert.ok(content.includes('onSubmit={(event) => {'));
   assert.ok(content.includes('className="btn good" type="submit" disabled={composeSubmitting}'));
-  assert.ok(content.includes("addToast('good', 'Compose', `Created ${composedPath}`)"));
+  assert.ok(content.includes("registerAcceptedJob({ envelope: response as ComposeJobEnvelope });"));
+  assert.ok(content.includes("addToast('good', 'Compose', 'Compose started');"));
+  assert.ok(content.includes("addToast('good', 'Compose', 'Compose completed');"));
+  assert.ok(content.includes("addToast('bad', 'Compose', 'Compose failed');"));
   assert.ok(content.includes('target_dir: \'exports\''));
   assert.ok(content.includes("mode: 'encode'"));
   assert.ok(content.includes('allow_overwrite: false,'));
@@ -245,6 +251,9 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes("{composeSubmitting ? 'Composing...' : 'Compose'}"));
   assert.ok(content.includes('disabled={composeSubmitting}'));
   assert.ok(content.includes('aria-busy={composeSubmitting}'));
+  assert.ok(content.includes("pollIntervalMs: 2000,"));
+  assert.ok(content.includes("const pendingKey = pendingBucketKeyForItem(item);"));
+  assert.ok(content.includes("entries.push({ kind: 'pending', pendingItem });"));
   const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
   const composeEnd = content.indexOf('const handleComposeConfirm = useCallback(async () => {', composeStart);
   assert.ok(composeStart >= 0);
@@ -255,8 +264,46 @@ test('compose action filters selected assets to videos', () => {
   const confirmBlock = content.slice(composeEnd, confirmEnd);
   assert.ok(confirmBlock.includes("mode: 'encode'"));
   assert.ok(!confirmBlock.includes("mode: 'auto'"));
-  assert.ok(!confirmBlock.includes("Select one or more video clips');\n      setComposeModalOpen(false);"));
+  assert.ok(confirmBlock.includes("registerAcceptedJob({ envelope: response as ComposeJobEnvelope });"));
+  assert.ok(!confirmBlock.includes('await loadProjects();'));
+  assert.ok(!confirmBlock.includes('await loadAllMedia();'));
+  assert.ok(!confirmBlock.includes('await loadMedia(activeProject);'));
   assert.ok(confirmBlock.includes('} finally {'));
+});
+
+test('pending compose modules and render wiring are present', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
+  const cardPath = path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx');
+  const hookPath = path.join(packageRoot, 'src', 'usePendingComposeJobs.ts');
+  const jobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+  const list = fs.readFileSync(listPath, 'utf8');
+  const card = fs.readFileSync(cardPath, 'utf8');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const jobs = fs.readFileSync(jobsPath, 'utf8');
+
+  assert.ok(explorer.includes("const {\n    pendingComposeItems,\n    pendingItemsByProjectAndDir,\n    registerAcceptedJob,\n  } = usePendingComposeJobs({"));
+  assert.ok(explorer.includes("fetchJson: fetchComposeJobJson,"));
+  assert.ok(explorer.includes("onCompletedRefreshScope: async (refreshScope) => {"));
+  assert.ok(explorer.includes("masonryColumns={masonryRenderColumns}"));
+  assert.ok(explorer.includes("items={renderedMediaEntries}"));
+  assert.ok(grid.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
+  assert.ok(grid.includes("if (entry.kind === 'pending') {"));
+  assert.ok(list.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
+  assert.ok(list.includes("if (entry.kind === 'pending') {"));
+  assert.ok(card.includes('data-pending-compose-card="true"'));
+  assert.ok(card.includes('badge: "QUEUED"'));
+  assert.ok(card.includes('badge: "TAKING LONGER"'));
+  assert.ok(card.includes('badge: "FAILED"'));
+  assert.ok(card.includes('debug artifacts preserved'));
+  assert.ok(hook.includes('pollIntervalMs = 2000'));
+  assert.ok(hook.includes('const active = current.filter('));
+  assert.ok(hook.includes('if (nextStatus === "completed") {'));
+  assert.ok(hook.includes('status: "failed"'));
+  assert.ok(jobs.includes('if (elapsedMs > 45_000) return "running_long";'));
 });
 
 test('package explorer delete actions route through custom confirmation modal', () => {

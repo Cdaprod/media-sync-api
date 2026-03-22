@@ -40,6 +40,7 @@ const loadTsModule = (filePath) => {
 };
 
 const statePath = path.join(packageRoot, 'src', 'state.ts');
+const composeJobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
 
 test('filterMedia composes query, type, selection, and untagged filters', () => {
   const { filterMedia, collectMediaMeta } = loadTsModule(statePath);
@@ -164,4 +165,80 @@ test('buildMasonryColumns keeps source order stable while balancing columns', ()
   assert.equal(placement.get('2').columnIndex, 1);
   assert.equal(placement.get('3').columnIndex, 2);
   assert.ok(placement.get('4').rowIndex >= 1);
+});
+
+test('compose job helpers derive pending item fields and long-running status from job envelopes', () => {
+  const { buildPendingComposeItemFromEnvelope, derivePendingComposeStatus } = loadTsModule(composeJobsPath);
+  const originalNow = Date.now;
+  Date.now = () => new Date('2026-03-22T00:01:00.000Z').getTime();
+
+  try {
+    const pending = buildPendingComposeItemFromEnvelope({
+      job_id: 'job-123',
+      status: 'accepted',
+      job_status: 'running',
+      project: 'Demo',
+      source: 'primary',
+      output_name: 'exports/reel.mp4',
+      target_dir: 'exports',
+      created_at: '2026-03-22T00:00:00.000Z',
+      mode_requested: 'encode',
+      input_count: 2,
+      input_preview: ['a.mov', 'b.mov'],
+      job_url: '/api/projects/Demo/compose/jobs/job-123',
+      refresh_scope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      result: {
+        debug_artifacts: {
+          files: ['normalized/segment_0000.mp4'],
+        },
+      },
+    });
+
+    assert.deepEqual(pending, {
+      jobId: 'job-123',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'exports/reel.mp4',
+      modeRequested: 'encode',
+      inputCount: 2,
+      inputPreview: ['a.mov', 'b.mov'],
+      createdAt: '2026-03-22T00:00:00.000Z',
+      status: 'running',
+      error: undefined,
+      jobUrl: '/api/projects/Demo/compose/jobs/job-123',
+      refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      debugArtifacts: ['normalized/segment_0000.mp4'],
+    });
+
+    assert.equal(derivePendingComposeStatus({
+      job_id: 'job-123',
+      status: 'running',
+      project: 'Demo',
+      source: 'primary',
+      output_name: 'exports/reel.mp4',
+      target_dir: 'exports',
+      started_at: '2026-03-22T00:00:10.000Z',
+    }), 'running_long');
+
+    assert.equal(derivePendingComposeStatus({
+      job_id: 'job-123',
+      status: 'queued',
+      project: 'Demo',
+      source: 'primary',
+      output_name: 'exports/reel.mp4',
+      target_dir: 'exports',
+    }), 'queued');
+
+    assert.equal(derivePendingComposeStatus({
+      job_id: 'job-123',
+      status: 'completed',
+      project: 'Demo',
+      source: 'primary',
+      output_name: 'exports/reel.mp4',
+      target_dir: 'exports',
+    }), 'completed');
+  } finally {
+    Date.now = originalNow;
+  }
 });
