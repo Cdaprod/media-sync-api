@@ -1496,16 +1496,17 @@ class ComposeExecutor:
     def _concat_list_path(self, plan: ComposePlan) -> Path:
         return plan.output_path.parent / f".{plan.output_path.stem}.concat.txt"
 
-    def _write_concat_list(self, plan: ComposePlan) -> Path:
+    def _write_concat_list(self, plan: ComposePlan, *, source_paths: Sequence[Path] | None = None) -> Path:
         list_path = self._concat_list_path(plan)
-        if not plan.prepared_segments:
+        paths = list(source_paths or [segment.path for segment in plan.prepared_segments])
+        if not paths:
             raise HTTPException(
                 status_code=500,
                 detail="Compose plan is missing prepared_segments. All flows must run through ComposePreprocessor.",
             )
         with list_path.open("w", encoding="utf-8") as handle:
-            for segment in plan.prepared_segments:
-                safe = str(segment.path).replace("'", "'\\''")
+            for path in paths:
+                safe = str(path).replace("'", "'\\''")
                 handle.write(f"file '{safe}'\n")
         return list_path
 
@@ -1555,6 +1556,51 @@ class ComposeExecutor:
         return ComposeResult(output_path=plan.output_path, mode_used="copy", registration_mode="preserve_runs")
 
     def _run_encode(self, plan: ComposePlan, *, job_id: str | None = None) -> ComposeResult:
+        if not plan.prepared_segments:
+            raise HTTPException(status_code=500, detail="Encode pipeline requires prepared_segments")
+
+        list_path = self._write_concat_list(plan, source_paths=[segment.path for segment in plan.prepared_segments])
+        try:
+            command = [
+                "ffmpeg", "-n",
+                "-fflags", "+genpts",
+                "-avoid_negative_ts", "make_zero",
+                "-f", "concat", "-safe", "0",
+                "-i", str(list_path),
+                "-c", "copy",
+                "-movflags", "+faststart",
+                str(plan.output_path),
+            ]
+            _log_compose(
+                "info",
+                "compose_concat_started",
+                job_id=job_id,
+                requested_mode=plan.requested_mode,
+                selected_strategy=plan.strategy,
+                mechanism="concat_demuxer_copy_normalized",
+                list_path=list_path.name,
+                normalized_inputs=[segment.path.name for segment in plan.prepared_segments],
+                command=_format_command(command),
+            )
+            result = subprocess.run(command, capture_output=True, text=True)
+            if result.returncode == 0:
+                return ComposeResult(output_path=plan.output_path, mode_used="encode", registration_mode="preserve_runs")
+            if _ffmpeg_indicates_existing_output(result):
+                self._raise_error("ffmpeg normalized concat blocked existing output", result, status_code=409)
+            _log_compose(
+                "warning",
+                "compose_normalized_concat_fallback",
+                job_id=job_id,
+                requested_mode=plan.requested_mode,
+                output=plan.output_path.name,
+                stderr_tail=_error_tail(result.stderr),
+            )
+        finally:
+            list_path.unlink(missing_ok=True)
+
+        return self._run_filter_concat_encode(plan, job_id=job_id)
+
+    def _run_filter_concat_encode(self, plan: ComposePlan, *, job_id: str | None = None) -> ComposeResult:
         if not plan.prepared_segments:
             raise HTTPException(status_code=500, detail="Encode pipeline requires prepared_segments")
 

@@ -489,7 +489,7 @@ def test_copy_executor_uses_concat_demuxer_and_logs_command(tmp_path: Path, monk
     assert "job_id=job-copy" in caplog.text
 
 
-def test_encode_executor_uses_filter_concat_for_normalized_segments(tmp_path: Path, monkeypatch, caplog):
+def test_encode_executor_prefers_concat_demuxer_copy_for_normalized_segments(tmp_path: Path, monkeypatch, caplog):
     first = tmp_path / "segment_0000.mp4"
     second = tmp_path / "segment_0001.mp4"
     output = tmp_path / "out.mp4"
@@ -526,16 +526,57 @@ def test_encode_executor_uses_filter_concat_for_normalized_segments(tmp_path: Pa
     assert result.mode_used == "encode"
     assert calls
     command = calls[0]
-    assert "-filter_complex" in command
-    filter_index = command.index("-filter_complex")
-    filter_graph = command[filter_index + 1]
-    assert "concat=n=2:v=1:a=1" in filter_graph
-    assert "settb=1001/30000" in filter_graph
-    assert "asetpts=N/SR/TB" in filter_graph
-    assert "fps=30000/1001:round=near" in filter_graph
-    assert "-fps_mode" in command
-    assert command[command.index("-fps_mode") + 1] == "cfr"
+    assert command[:8] == ["ffmpeg", "-n", "-fflags", "+genpts", "-avoid_negative_ts", "make_zero", "-f", "concat"]
+    assert "-c" in command
+    assert command[command.index("-c") + 1] == "copy"
+    assert "-filter_complex" not in command
     assert "compose_concat_started" in caplog.text
+    assert "mechanism=concat_demuxer_copy_normalized" in caplog.text
+
+
+def test_encode_executor_falls_back_to_filter_concat_when_normalized_copy_join_fails(tmp_path: Path, monkeypatch, caplog):
+    first = tmp_path / "segment_0000.mp4"
+    second = tmp_path / "segment_0001.mp4"
+    output = tmp_path / "out.mp4"
+    first.write_bytes(b"a")
+    second.write_bytes(b"b")
+
+    calls: list[list[str]] = []
+
+    def _fake_run(command, capture_output=True, text=True):
+        calls.append(command)
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(command, 1, "", "copy join failed")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("app.api.compose.subprocess.run", _fake_run)
+
+    plan = ComposePlan(
+        input_paths=[first, second],
+        output_path=output,
+        strategy="encode",
+        requested_mode="encode",
+        strategy_reasons=["requested_encode"],
+        input_assets=[
+            InputAsset(path=first, kind="video", signature={"format_name": "mov,mp4"}),
+            InputAsset(path=second, kind="video", signature={"format_name": "mov,mp4"}),
+        ],
+        prepared_segments=[
+            PreparedSegment(path=first, source_kind="video", generated=True),
+            PreparedSegment(path=second, source_kind="video", generated=True),
+        ],
+    )
+
+    with caplog.at_level("INFO", logger="media_sync_api.compose"):
+        result = ComposeExecutor().execute(plan, job_id="job-encode-fallback")
+
+    assert result.mode_used == "encode"
+    assert len(calls) == 2
+    assert "-filter_complex" in calls[1]
+    filter_index = calls[1].index("-filter_complex")
+    filter_graph = calls[1][filter_index + 1]
+    assert "concat=n=2:v=1:a=1" in filter_graph
+    assert "compose_normalized_concat_fallback" in caplog.text
     assert "mechanism=filter_concat_encode" in caplog.text
 
 

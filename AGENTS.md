@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Encode-mode finalization now prefers concat-demuxer copy over the already-normalized intermediate MP4s, using the heavier filter-concat re-encode only as a logged fallback when the normalized join itself fails.
+- This narrows the remaining iPhone boundary investigation toward whether the freeze is introduced before final join or only in the fallback path, while keeping the faster/more deterministic normalized-join path reviewable in logs via `mechanism=concat_demuxer_copy_normalized`.
+- Added regression coverage for normalized-join preference and explicit fallback back into the filter-concat encode path so the executor’s chosen final-join mechanism stays observable.
+
+### Latest Implementation Notes (2026-03-22)
 - Fixed `scripts/compose_repro.py` to match the current existing-assets compose API contract by sending `inputs` (not stale `relative_paths`), closing the immediate 422 that blocked real compose repro runs.
 - Hardened encode-mode timeline normalization for the reproduced iPhone HEVC/Dolby Vision portrait case by rebasing normalized video/audio onto explicit canonical timebases, forcing CFR-oriented output args, and re-normalizing streams again inside the final concat filtergraph before encode.
 - Expanded compose probe validation with per-stream duration summaries plus `av_duration_delta_seconds` so normalized/final encode artifacts can fail fast when audio/video drift exceeds tolerance instead of silently registering a boundary-broken output.

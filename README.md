@@ -203,6 +203,8 @@ The script prints the submit envelope, polls `GET /api/projects/{project}/compos
 
 The harness now submits the current backend request contract (`inputs`) and the backend encode path additionally records per-stream normalized/output durations (`video_duration_seconds`, `audio_duration_seconds`, `av_duration_delta_seconds`) so reproduced iPhone boundary A/V drift can be correlated with stricter validation and timing behavior on this branch.
 
+Encode mode now also prefers a concat-demuxer copy over the already-normalized intermediates (`mechanism=concat_demuxer_copy_normalized`) and only falls back to the heavier filter-concat re-encode when that normalized join fails, making it easier to tell from logs whether the remaining bug lives in normalization or the old final concat path.
+
 
 
 ### Registry contract examples

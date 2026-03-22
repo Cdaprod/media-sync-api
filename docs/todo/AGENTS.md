@@ -1,3 +1,9 @@
+## 2026-03-22 — Normalized-segment final join strategy follow-up
+- [x] Switched encode-mode final join to prefer concat-demuxer copy over already-normalized intermediates so the default path avoids the final filter-concat stage that still appeared suspect in the real iPhone repro.
+- [x] Kept the old filter-concat encode path as a logged fallback (`compose_normalized_concat_fallback`) when normalized concat-copy fails, preserving a reviewable escape hatch instead of deleting tooling.
+- [x] Added regression coverage for normalized-join preference plus fallback behavior so future refactors do not silently revert to the heavier final join path.
+- [ ] Re-run the exact real repro and confirm logs show `mechanism=concat_demuxer_copy_normalized` with no boundary freeze; if it still fails, inspect whether normalized segment 2 is already broken before join.
+
 ## 2026-03-22 — Encode-mode iPhone boundary A/V drift hardening
 - [x] Fixed `scripts/compose_repro.py` to send `inputs` so the existing-assets repro harness matches the live `POST /api/projects/{project}/compose` request model.
 - [x] Added per-stream normalized/output probe duration summaries plus `av_duration_delta_seconds` validation to catch audio/video drift that can cause second-segment audio to run ahead of video.
