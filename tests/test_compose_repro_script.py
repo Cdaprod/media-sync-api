@@ -60,12 +60,14 @@ def test_extract_compose_job_log_lines_filters_to_single_job_and_known_events():
         "media-sync-api | INFO compose_request_received job_id=job-1 project=demo",
         "media-sync-api | INFO unrelated_event job_id=job-1",
         "media-sync-api | INFO compose_output_probe job_id=job-2 path=wrong",
+        'media-sync-api | INFO compose_normalized_probe {"job_id":"job-1","path":"segment_0001.mp4"}',
         "media-sync-api | INFO compose_output_probe job_id=job-1 path=correct",
         "media-sync-api | INFO compose_job_completed job_id=job-1 status=completed",
     ]
 
     assert module.extract_compose_job_log_lines(lines, "job-1") == [
         "media-sync-api | INFO compose_request_received job_id=job-1 project=demo",
+        'media-sync-api | INFO compose_normalized_probe {"job_id":"job-1","path":"segment_0001.mp4"}',
         "media-sync-api | INFO compose_output_probe job_id=job-1 path=correct",
         "media-sync-api | INFO compose_job_completed job_id=job-1 status=completed",
     ]

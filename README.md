@@ -205,6 +205,8 @@ The harness now submits the current backend request contract (`inputs`) and the 
 
 Encode mode now also prefers a concat-demuxer copy over the already-normalized intermediates (`mechanism=concat_demuxer_copy_normalized`) and only falls back to the heavier filter-concat re-encode when that normalized join fails, making it easier to tell from logs whether the remaining bug lives in normalization or the old final concat path.
 
+For the current iPhone HEVC portrait repro follow-up, normalized probe logs now expose both `video_avg_frame_rate` and `video_r_frame_rate`, and the harness log filter matches any lifecycle line containing the `job_id` so JSON-shaped logger output is still captured during failures that occur before final output registration.
+
 
 
 ### Registry contract examples

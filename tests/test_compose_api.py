@@ -613,6 +613,7 @@ def test_normalize_video_segment_without_audio_adds_silent_track(tmp_path: Path,
     assert "setpts=N/(30000/1001*TB)" in vf_arg
     af_arg = command[command.index("-af") + 1]
     assert "asettb=1/48000" in af_arg
+    assert command[command.index("-r") + 1] == "30000/1001"
     assert command[command.index("-fps_mode") + 1] == "cfr"
 
 
@@ -638,6 +639,31 @@ def test_validate_encode_probe_rejects_audio_video_duration_drift():
     issues = _validate_encode_probe(summary, target_width=1080, target_height=1920)
 
     assert "av_duration_delta_seconds:0.3" in issues
+
+
+def test_validate_encode_probe_accepts_canonical_real_frame_rate_when_avg_is_noisy():
+    summary = {
+        "video_codec": "h264",
+        "video_pix_fmt": "yuv420p",
+        "video_width": 1080,
+        "video_height": 1920,
+        "video_avg_frame_rate": "25/1",
+        "video_r_frame_rate": "30000/1001",
+        "rotate": 0,
+        "audio_codec": "aac",
+        "audio_sample_rate": "48000",
+        "audio_channels": "2",
+        "video_start_time": "0.0",
+        "audio_start_time": "0.0",
+        "video_duration_seconds": 4.0,
+        "audio_duration_seconds": 4.02,
+        "av_duration_delta_seconds": 0.02,
+        "duration_seconds": 4.02,
+    }
+
+    issues = _validate_encode_probe(summary, target_width=1080, target_height=1920)
+
+    assert not any(issue.startswith("video_frame_rate:") for issue in issues)
 
 
 def test_preprocessor_logs_normalized_probe_and_validates(monkeypatch, tmp_path: Path, caplog):

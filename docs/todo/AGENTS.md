@@ -1,3 +1,9 @@
+## 2026-03-22 — Normalized FPS canonicalization + harness log capture follow-up
+- [x] Treated the new real repro failure (`Normalized segment validation failed ... video_avg_frame_rate:25/1`) as an upstream normalization/validation issue rather than continuing to focus only on the final join.
+- [x] Expanded normalized/output probe summaries to include both avg and real frame-rate fields, and loosened validation to accept canonical normalized outputs when `video_r_frame_rate` is correct even if `video_avg_frame_rate` is noisy.
+- [x] Added explicit `-r 30000/1001` stamping to normalized outputs and widened harness log filtering so job-scoped lifecycle lines are still captured when the logger renders JSON-style `job_id` fields.
+- [ ] Re-run the exact repro and capture whether normalization now passes; if playback still freezes after normalization succeeds, compare `compose_normalized_probe` vs final output behavior to decide whether the remaining bug is back in the final join.
+
 ## 2026-03-22 — Normalized-segment final join strategy follow-up
 - [x] Switched encode-mode final join to prefer concat-demuxer copy over already-normalized intermediates so the default path avoids the final filter-concat stage that still appeared suspect in the real iPhone repro.
 - [x] Kept the old filter-concat encode path as a logged fallback (`compose_normalized_concat_fallback`) when normalized concat-copy fails, preserving a reviewable escape hatch instead of deleting tooling.

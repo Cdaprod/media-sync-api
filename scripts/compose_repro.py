@@ -78,10 +78,9 @@ def compose_job_status_url(base_url: str, project: str, job_id: str, *, source: 
 
 def extract_compose_job_log_lines(lines: Iterable[str], job_id: str) -> list[str]:
     """Filter raw logs down to lines for a single compose job lifecycle."""
-    token = f"job_id={job_id}"
     selected: list[str] = []
     for line in lines:
-        if token not in line:
+        if job_id not in line:
             continue
         if any(event in line for event in COMPOSE_LIFECYCLE_EVENTS):
             selected.append(line)

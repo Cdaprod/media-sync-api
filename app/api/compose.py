@@ -359,6 +359,7 @@ def _probe_media_summary(path: Path) -> dict[str, Any]:
         "video_width": int(signature.get("video_width") or 0),
         "video_height": int(signature.get("video_height") or 0),
         "video_avg_frame_rate": signature.get("video_avg_frame_rate") or "",
+        "video_r_frame_rate": signature.get("video_r_frame_rate") or "",
         "video_time_base": signature.get("video_time_base") or "",
         "video_start_time": signature.get("video_start_time") or "",
         "video_duration_seconds": video_duration,
@@ -410,9 +411,16 @@ def _validate_encode_probe(summary: dict[str, Any], *, target_width: int, target
         issues.append(f"video_width:{summary.get('video_width')}")
     if int(summary.get("video_height") or 0) != target_height:
         issues.append(f"video_height:{summary.get('video_height')}")
-    fps = _rate_to_float(summary.get("video_avg_frame_rate"))
-    if fps is None or abs(fps - ENCODE_TARGET_FPS) > 0.05:
-        issues.append(f"video_avg_frame_rate:{summary.get('video_avg_frame_rate') or '<missing>'}")
+    avg_fps = _rate_to_float(summary.get("video_avg_frame_rate"))
+    real_fps = _rate_to_float(summary.get("video_r_frame_rate"))
+    avg_matches = avg_fps is not None and abs(avg_fps - ENCODE_TARGET_FPS) <= 0.05
+    real_matches = real_fps is not None and abs(real_fps - ENCODE_TARGET_FPS) <= 0.05
+    if not avg_matches and not real_matches:
+        issues.append(
+            "video_frame_rate:"
+            f"avg={summary.get('video_avg_frame_rate') or '<missing>'},"
+            f"real={summary.get('video_r_frame_rate') or '<missing>'}"
+        )
     if int(summary.get("rotate") or 0) != 0:
         issues.append(f"rotate:{summary.get('rotate')}")
     if summary.get("audio_codec") != "aac":
@@ -786,6 +794,7 @@ def _normalize_video_segment(
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-vf", vf,
+        "-r", ENCODE_TARGET_FPS_ARG,
         "-fps_mode", "cfr",
         "-video_track_timescale", "30000",
         "-c:a", "aac",
@@ -841,6 +850,9 @@ def _normalize_image_segment(
         "-map", "1:a:0",
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
+        "-r", ENCODE_TARGET_FPS_ARG,
+        "-fps_mode", "cfr",
+        "-video_track_timescale", "30000",
         "-c:a", "aac",
         "-ar", "48000",
         "-ac", "2",

@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Real repro evidence then localized the next failure earlier in the pipeline: normalized segment validation rejected `segment_0000.mp4` on `video_avg_frame_rate:25/1`, so this branch now treats normalized FPS canonicalization/validation as the active bottleneck instead of only the final join.
+- Compose probe summaries now include both `video_avg_frame_rate` and `video_r_frame_rate`, and encode validation accepts canonical intermediates when the real stream rate is correct even if `avg_frame_rate` is noisy for these iPhone-derived normalized outputs.
+- Normalization now also stamps an explicit output `-r 30000/1001` on generated intermediates/images, and the repro harness log filter was widened from strict `job_id=...` matching to any lifecycle line containing the job id so JSON-shaped log fields are still captured.
+
+### Latest Implementation Notes (2026-03-22)
 - Encode-mode finalization now prefers concat-demuxer copy over the already-normalized intermediate MP4s, using the heavier filter-concat re-encode only as a logged fallback when the normalized join itself fails.
 - This narrows the remaining iPhone boundary investigation toward whether the freeze is introduced before final join or only in the fallback path, while keeping the faster/more deterministic normalized-join path reviewable in logs via `mechanism=concat_demuxer_copy_normalized`.
 - Added regression coverage for normalized-join preference and explicit fallback back into the filter-concat encode path so the executor’s chosen final-join mechanism stays observable.
