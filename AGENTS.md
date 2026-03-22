@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Added `scripts/compose_repro.py` as the branch-follow-up validation harness for existing-assets compose repros so operators can submit a real clip set, poll the async `job_id`, and capture only the correlated lifecycle log block from `docker compose logs`.
+- Documented a copy-paste real-compose repro workflow in README and added regression coverage for payload-building, job-status URL shaping, and `job_id` log filtering so the validation helper stays stable across future compose changes.
+- Updated the todo handoff with a dedicated real-clip validation task stub that points future agents/operators at the new harness instead of another no-op alignment pass.
+
+### Latest Implementation Notes (2026-03-22)
 - Added normalized-intermediate probe logging (`compose_normalized_probe`) plus fail-fast validation for normalized segments and final outputs so broken compose artifacts are rejected before registration instead of silently landing in project indexes.
 - Encode/output validation now enforces canonical expectations around codec, pixel format, dimensions, fps, audio shape, rotation reset, and non-zero duration, with explicit validation-failure log events for forensics.
 - Expanded compose regression coverage for normalized-probe visibility and output-validation registration guards while preserving the earlier explicit copy/encode pipeline split.

@@ -165,6 +165,7 @@ Path alignment for Resolve:
 - Compose API logs now emit end-to-end lifecycle events (`compose_request_received`, `compose_probe_*`, `compose_strategy_*`, `compose_normalize_*`, `compose_concat_started`, `compose_output_probe`, `compose_job_*`) so requested mode, selected strategy, normalization, concat path, and output validation are visible in server logs.
 - Encode jobs now emit `compose_normalized_probe` events for each intermediate and fail before registration when normalized segments or final outputs violate canonical expectations (codec/pix_fmt/dimensions/fps/audio/timestamp invariants).
 - `MEDIA_SYNC_TEMP_ROOT` controls compose staging and must resolve outside every enabled SourceRegistry root; compose returns HTTP 503 when this is misconfigured to prevent Explorer indexing of temp clips.
+
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/media/normalize-orientation` – normalize rotated videos in place (`dry_run` supported)
 - `POST /api/projects/{project}/media/reconcile` – classify origin + rotation, plan/apply canonical renames, and persist aliases (`dry_run` + `apply` flags)
@@ -183,6 +184,23 @@ Path alignment for Resolve:
 - `GET /media/{project}/{relative_path}` – stream a stored media file directly (respects `?source=`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)
 - Resolve bridge endpoints: `POST /api/resolve/open`, `POST /api/resolve/jobs/next`, `POST /api/resolve/jobs/{id}/complete`, `POST /api/resolve/jobs/{id}/fail`
+
+### Real compose repro harness
+Use `scripts/compose_repro.py` to submit a known-bad existing-assets compose set, poll the background `job_id`, and optionally save only the correlated lifecycle lines from `docker compose logs`. This is the recommended next-step validation path for the remaining real-device failure shapes (repeated first clip, frozen later video, audio continuing after video freeze, rotation/orientation mismatches).
+
+```bash
+python scripts/compose_repro.py \
+  --project P1-Demo \
+  --output-name repro-portrait-set.mp4 \
+  --mode encode \
+  --relative-path ingest/originals/clip-a.mov \
+  --relative-path ingest/originals/clip-b.mov \
+  --docker-service media-sync-api \
+  --save-log-block /tmp/compose-repro.log
+```
+
+The script prints the submit envelope, polls `GET /api/projects/{project}/compose/jobs/{job_id}`, and when `--docker-service` is provided filters the log stream down to lifecycle entries for that exact `job_id` (`compose_request_received`, `compose_probe_*`, `compose_strategy_*`, `compose_normalize_*`, `compose_normalized_probe`, `compose_concat_started`, `compose_output_probe`, and terminal `compose_job_*`).
+
 
 
 ### Registry contract examples

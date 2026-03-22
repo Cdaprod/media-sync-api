@@ -1,3 +1,9 @@
+## 2026-03-22 — Real compose repro harness + evidence capture
+- [x] Added `scripts/compose_repro.py` to submit an existing-assets compose request, poll the background `job_id`, and optionally filter `docker compose logs` to only the lifecycle lines for that job.
+- [x] Documented a copy-paste repro command in `README.md` so real problematic clip sets can be re-run consistently on this branch.
+- [x] Added regression coverage for the helper's payload normalization, status URL generation, and `job_id` log filtering.
+- [ ] Run the harness against at least one known-bad portrait iPhone set, one mixed-orientation set, and one known-safe copy-compatible set; save the filtered log blocks for comparison/merge evidence.
+
 ## 2026-03-22 — Compose intermediate/output validation guards
 - [x] Added normalized-intermediate probe logging so each prepared encode segment now has a recorded canonical summary before concat.
 - [x] Added fail-fast validation for normalized segments and final outputs so invalid artifacts are rejected before registration and removed from disk when final output validation fails.
