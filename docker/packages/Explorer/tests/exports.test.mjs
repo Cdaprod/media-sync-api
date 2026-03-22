@@ -237,6 +237,7 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('className="btn good" type="submit" disabled={composeSubmitting}'));
   assert.ok(content.includes("addToast('good', 'Compose', `Created ${composedPath}`)"));
   assert.ok(content.includes('target_dir: \'exports\''));
+  assert.ok(content.includes("mode: 'encode'"));
   assert.ok(content.includes('allow_overwrite: false,'));
   assert.ok(content.includes('if (composeSubmitting) {'));
   assert.ok(content.includes('setComposeSubmitting(true);'));
@@ -252,6 +253,8 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(!composeBlock.includes('window.prompt('));
   const confirmEnd = content.indexOf('const handleResolve = useCallback(async () => {', composeEnd);
   const confirmBlock = content.slice(composeEnd, confirmEnd);
+  assert.ok(confirmBlock.includes("mode: 'encode'"));
+  assert.ok(!confirmBlock.includes("mode: 'auto'"));
   assert.ok(!confirmBlock.includes("Select one or more video clips');\n      setComposeModalOpen(false);"));
   assert.ok(confirmBlock.includes('} finally {'));
 });

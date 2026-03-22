@@ -1,6 +1,11 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-22)
+- Explorer multi-select compose in both the static UI and package Explorer now submits `mode: 'encode'` for the human-driven ordered-stitch workflow, avoiding unsafe concat-copy selection for selected assets.
+- Hardened backend compose auto-mode selection with more conservative copy-compatibility checks (matching container suffixes plus expanded ffprobe stream/container signature fields) and added explicit `compose_strategy_selected` / auto-copy-fallback logging for easier verification in logs.
+- Added regression coverage for the frontend compose payload policy and backend conservative auto/copy decision reasons, and documented the correctness-first Explorer compose policy in README.
+
 ### Latest Implementation Notes (2026-03-21)
 - Replaced the package Explorer root `app/not-found.tsx` with a multi-phase shader scene (`idle` → `warp` → `arrival` → `exit`) that keeps App Router 404 ownership while turning the page into a contained cinematic handoff back into Explorer.
 - Swapped package-level 404 font loading from `next/font/google` to shared layout `<head>` links for `Bebas Neue` + `DM Mono` after the build-time Bebas fetch proved brittle in the replacement scene flow; the page still avoids page-local `@import` usage.

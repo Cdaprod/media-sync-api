@@ -1,3 +1,10 @@
+## 2026-03-22 — Compose mode safety hardening
+- [x] Confirmed Explorer selected-assets compose flows were still sending `mode: 'auto'` in both `public/explorer.html` and `docker/packages/Explorer/src/ExplorerApp.tsx`.
+- [x] Switched Explorer multi-select compose requests to `mode: 'encode'` so human-driven ordered stitch jobs prefer correctness over concat-copy speed.
+- [x] Hardened backend `auto`/`copy` compose strategy checks with stricter stream + container signature matching and explicit compose-strategy logging/fallback breadcrumbs.
+- [x] Added regression coverage for frontend compose payload policy plus backend conservative auto/copy rejection reasons.
+- [ ] Validate against a real problematic multi-clip Explorer selection and confirm logs now show `requested=encode selected=encode` (or conservative `requested=auto selected=encode` for direct API callers) with no chopped output.
+
 ## 2026-03-21 — Package Explorer multi-phase 404 scene replacement
 - [x] Replaced the previous static 404 tunnel with the new single-route multi-phase shader scene (`idle`, `warp`, `arrival`, `exit`) while keeping root App Router not-found ownership.
 - [x] Moved package-level 404 font loading to layout `<head>` links after the Bebas Neue `next/font` path proved brittle during replacement builds.

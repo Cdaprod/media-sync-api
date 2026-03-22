@@ -237,8 +237,8 @@ def _ffmpeg_indicates_existing_output(result: subprocess.CompletedProcess[str]) 
 
 
 def _probe_signature(path: Path) -> dict[str, str]:
-    """Collect stream compatibility facts for concat-copy safety checks."""
-    command = ["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(path)]
+    """Collect conservative stream/container facts for concat-copy safety checks."""
+    command = ["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(path)]
     try:
         result = subprocess.run(command, capture_output=True, text=True)
     except FileNotFoundError:
@@ -251,9 +251,12 @@ def _probe_signature(path: Path) -> dict[str, str]:
         return {}
 
     streams = payload.get("streams", [])
+    fmt = payload.get("format", {})
     v = next((s for s in streams if s.get("codec_type") == "video"), {})
     a = next((s for s in streams if s.get("codec_type") == "audio"), {})
     return {
+        "format_name": str(fmt.get("format_name", "")),
+        "format_long_name": str(fmt.get("format_long_name", "")),
         "video_codec": str(v.get("codec_name", "")),
         "video_profile": str(v.get("profile", "")),
         "video_pix_fmt": str(v.get("pix_fmt", "")),
@@ -261,10 +264,21 @@ def _probe_signature(path: Path) -> dict[str, str]:
         "video_height": str(v.get("height", "")),
         "video_sar": str(v.get("sample_aspect_ratio", "")),
         "video_dar": str(v.get("display_aspect_ratio", "")),
+        "video_avg_frame_rate": str(v.get("avg_frame_rate", "")),
+        "video_r_frame_rate": str(v.get("r_frame_rate", "")),
+        "video_time_base": str(v.get("time_base", "")),
+        "video_codec_tag": str(v.get("codec_tag_string", "")),
+        "video_field_order": str(v.get("field_order", "")),
+        "video_has_b_frames": str(v.get("has_b_frames", "")),
+        "video_level": str(v.get("level", "")),
+        "video_start_time": str(v.get("start_time", "")),
         "audio_codec": str(a.get("codec_name", "")),
+        "audio_profile": str(a.get("profile", "")),
         "audio_sample_rate": str(a.get("sample_rate", "")),
         "audio_channels": str(a.get("channels", "")),
         "audio_channel_layout": str(a.get("channel_layout", "")),
+        "audio_time_base": str(a.get("time_base", "")),
+        "audio_start_time": str(a.get("start_time", "")),
     }
 
 
@@ -321,12 +335,43 @@ def _classify_inputs(input_paths: Sequence[Path]) -> list[InputAsset]:
     return assets
 
 
+def _analyze_copy_compatibility(assets: Sequence[InputAsset]) -> tuple[bool, list[str]]:
+    """Return whether concat-copy is safe enough, plus conservative rejection reasons."""
+    reasons: list[str] = []
+    if not assets:
+        return False, ["no_assets"]
+    if len(assets) < 2:
+        reasons.append("copy_requires_multiple_assets")
+
+    suffixes = {asset.path.suffix.lower() for asset in assets}
+    if len(suffixes) != 1:
+        reasons.append("mixed_container_suffixes")
+
+    non_video_kinds = sorted({asset.kind for asset in assets if asset.kind != "video"})
+    if non_video_kinds:
+        reasons.append(f"non_video_inputs:{','.join(non_video_kinds)}")
+
+    sigs = [asset.signature for asset in assets]
+    if any(not sig for sig in sigs):
+        reasons.append("missing_probe_signature")
+    else:
+        baseline = sigs[0]
+        mismatch_fields = sorted({
+            key
+            for signature in sigs[1:]
+            for key, value in baseline.items()
+            if signature.get(key, "") != value
+        })
+        if mismatch_fields:
+            reasons.append(f"signature_mismatch:{','.join(mismatch_fields)}")
+
+    return (not reasons), reasons
+
+
 def _assets_compatible_for_copy(assets: Sequence[InputAsset]) -> bool:
     """Check stream-copy compatibility using pre-probed signatures — no extra ffprobe calls."""
-    sigs = [a.signature for a in assets]
-    if not sigs or any(not s for s in sigs):
-        return False
-    return all(s == sigs[0] for s in sigs[1:])
+    compatible, _ = _analyze_copy_compatibility(assets)
+    return compatible
 
 
 def _validate_supported_inputs(input_assets: Sequence[InputAsset]) -> None:
@@ -1155,11 +1200,31 @@ class ComposePlanner:
         assets: list[InputAsset],
     ) -> Literal["copy", "encode"]:
         if mode == "encode":
+            logger.info(
+                "compose_strategy_selected requested=%s selected=encode asset_count=%s reasons=%s",
+                mode,
+                len(assets),
+                ["requested_encode"],
+            )
             return "encode"
-        compatible = _assets_compatible_for_copy(assets)
+        compatible, reasons = _analyze_copy_compatibility(assets)
+        selected: Literal["copy", "encode"] = "copy" if compatible else "encode"
+        logger.info(
+            "compose_strategy_selected requested=%s selected=%s asset_count=%s reasons=%s",
+            mode,
+            selected,
+            len(assets),
+            reasons or ["copy_safe"],
+        )
         if mode == "copy" and not compatible:
-            raise HTTPException(status_code=400, detail="Inputs are incompatible for concat copy mode")
-        return "copy" if compatible else "encode"
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Inputs are incompatible for concat copy mode: "
+                    f"{', '.join(reasons) or 'unknown_reason'}"
+                ),
+            )
+        return selected
 
     def _resolve_output_path(self, ctx: ProjectContext, spec: ComposeSpec) -> Path:
         target_dir = _resolve_path_within_project(ctx, spec.target_dir.strip() or "exports", require_exists=False)
@@ -1263,6 +1328,12 @@ class ComposeExecutor:
                 self._raise_error("ffmpeg copy blocked existing output", result, status_code=409)
             if plan.requested_mode == "copy":
                 self._raise_error("ffmpeg copy failed", result)
+            logger.warning(
+                "compose_copy_fallback requested=%s output=%s stderr_tail=%s",
+                plan.requested_mode,
+                plan.output_path.name,
+                _error_tail(result.stderr),
+            )
             # auto mode: fall through to encode using the same list_path
             return self._run_encode(plan, list_path)
         return ComposeResult(output_path=plan.output_path, mode_used="copy", registration_mode="preserve_runs")

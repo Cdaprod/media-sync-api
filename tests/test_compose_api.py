@@ -6,7 +6,15 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from app.api.compose import ComposePreprocessor, ComposeResult, InputAsset, PreparedSegment, _validate_supported_inputs
+from app.api.compose import (
+    ComposePlanner,
+    ComposePreprocessor,
+    ComposeResult,
+    InputAsset,
+    PreparedSegment,
+    _analyze_copy_compatibility,
+    _validate_supported_inputs,
+)
 
 
 def _patch_compose_runtime(monkeypatch, *, fail: bool = False) -> None:
@@ -294,3 +302,102 @@ def test_supported_inputs_still_reject_audio(tmp_path: Path):
     with pytest.raises(HTTPException) as exc:
         _validate_supported_inputs([audio])
     assert "Unsupported inputs" in exc.value.detail
+
+
+def test_auto_mode_rejects_conservative_copy_mismatch_reasons():
+    assets = [
+        InputAsset(
+            path=Path('one.mov'),
+            kind='video',
+            signature={
+                'format_name': 'mov,mp4,m4a,3gp,3g2,mj2',
+                'video_codec': 'h264',
+                'video_profile': 'High',
+                'video_pix_fmt': 'yuv420p',
+                'video_width': '1920',
+                'video_height': '1080',
+                'video_sar': '1:1',
+                'video_dar': '16:9',
+                'video_avg_frame_rate': '30000/1001',
+                'video_r_frame_rate': '30000/1001',
+                'video_time_base': '1/600',
+                'video_codec_tag': 'avc1',
+                'video_field_order': 'progressive',
+                'video_has_b_frames': '2',
+                'video_level': '40',
+                'video_start_time': '0.000000',
+                'audio_codec': 'aac',
+                'audio_profile': 'LC',
+                'audio_sample_rate': '48000',
+                'audio_channels': '2',
+                'audio_channel_layout': 'stereo',
+                'audio_time_base': '1/48000',
+                'audio_start_time': '0.000000',
+            },
+        ),
+        InputAsset(
+            path=Path('two.mov'),
+            kind='video',
+            signature={
+                'format_name': 'mov,mp4,m4a,3gp,3g2,mj2',
+                'video_codec': 'h264',
+                'video_profile': 'High',
+                'video_pix_fmt': 'yuv420p',
+                'video_width': '1920',
+                'video_height': '1080',
+                'video_sar': '1:1',
+                'video_dar': '16:9',
+                'video_avg_frame_rate': '60000/1001',
+                'video_r_frame_rate': '60000/1001',
+                'video_time_base': '1/1200',
+                'video_codec_tag': 'avc1',
+                'video_field_order': 'progressive',
+                'video_has_b_frames': '2',
+                'video_level': '40',
+                'video_start_time': '0.033367',
+                'audio_codec': 'aac',
+                'audio_profile': 'LC',
+                'audio_sample_rate': '48000',
+                'audio_channels': '2',
+                'audio_channel_layout': 'stereo',
+                'audio_time_base': '1/48000',
+                'audio_start_time': '0.000000',
+            },
+        ),
+    ]
+
+    compatible, reasons = _analyze_copy_compatibility(assets)
+
+    assert compatible is False
+    assert reasons == ['signature_mismatch:video_avg_frame_rate,video_r_frame_rate,video_start_time,video_time_base']
+
+
+def test_auto_mode_logs_selected_encode_when_copy_is_not_safe(caplog):
+    planner = ComposePlanner()
+    assets = [
+        InputAsset(path=Path('one.mov'), kind='video', signature={'format_name': 'mov,mp4,m4a,3gp,3g2,mj2'}),
+        InputAsset(path=Path('two.mp4'), kind='video', signature={'format_name': 'mov,mp4,m4a,3gp,3g2,mj2'}),
+    ]
+
+    with caplog.at_level('INFO', logger='media_sync_api.compose'):
+        selected = planner._select_strategy('auto', assets)
+
+    assert selected == 'encode'
+    assert 'compose_strategy_selected requested=auto selected=encode' in caplog.text
+    assert 'mixed_container_suffixes' in caplog.text
+
+
+def test_copy_mode_rejection_includes_reason_details():
+    planner = ComposePlanner()
+
+    with pytest.raises(HTTPException) as exc:
+        planner._select_strategy(
+            'copy',
+            [
+                InputAsset(path=Path('one.mp4'), kind='video', signature={'format_name': 'mov,mp4'}),
+                InputAsset(path=Path('two.png'), kind='image', signature={'format_name': 'image2'}),
+            ],
+        )
+
+    assert exc.value.status_code == 400
+    assert 'non_video_inputs:image' in exc.value.detail

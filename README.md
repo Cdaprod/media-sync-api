@@ -161,6 +161,7 @@ Path alignment for Resolve:
 - `POST /api/projects/{project}/compose` – accept an existing-assets compose job quickly and return `202 Accepted` with a `job_id`; poll `GET /api/projects/{project}/compose/jobs/{job_id}` for `queued|running|completed|failed` state and final registration details
 - `POST /api/projects/{project}/compose/upload` – upload clips into temp staging outside project roots, then return `202 Accepted` with a background compose `job_id` instead of holding the request open through ffmpeg/finalization
 - `GET /api/projects/{project}/compose/jobs/{job_id}` – fetch compose job state, scoped refresh metadata, error details, and the final stored asset payload once background compose finishes
+- Explorer multi-select compose now submits `mode: "encode"` for correctness-first ordered output; backend `auto` remains available for API callers but now falls back away from concat-copy much more conservatively.
 - `MEDIA_SYNC_TEMP_ROOT` controls compose staging and must resolve outside every enabled SourceRegistry root; compose returns HTTP 503 when this is misconfigured to prevent Explorer indexing of temp clips.
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/media/normalize-orientation` – normalize rotated videos in place (`dry_run` supported)
