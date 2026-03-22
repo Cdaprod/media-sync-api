@@ -163,6 +163,7 @@ Path alignment for Resolve:
 - `GET /api/projects/{project}/compose/jobs/{job_id}` – fetch compose job state, scoped refresh metadata, error details, and the final stored asset payload once background compose finishes
 - Explorer multi-select compose now submits `mode: "encode"` for correctness-first ordered output; backend `auto` remains available for API callers but now falls back away from concat-copy much more conservatively.
 - Compose API logs now emit end-to-end lifecycle events (`compose_request_received`, `compose_probe_*`, `compose_strategy_*`, `compose_normalize_*`, `compose_concat_started`, `compose_output_probe`, `compose_job_*`) so requested mode, selected strategy, normalization, concat path, and output validation are visible in server logs.
+- Encode jobs now emit `compose_normalized_probe` events for each intermediate and fail before registration when normalized segments or final outputs violate canonical expectations (codec/pix_fmt/dimensions/fps/audio/timestamp invariants).
 - `MEDIA_SYNC_TEMP_ROOT` controls compose staging and must resolve outside every enabled SourceRegistry root; compose returns HTTP 503 when this is misconfigured to prevent Explorer indexing of temp clips.
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/media/normalize-orientation` – normalize rotated videos in place (`dry_run` supported)

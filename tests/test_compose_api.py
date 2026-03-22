@@ -42,6 +42,25 @@ def _patch_compose_runtime(monkeypatch, *, fail: bool = False) -> None:
 
     monkeypatch.setattr("app.api.compose.ComposePreprocessor.prepare", _fake_prepare)
     monkeypatch.setattr("app.api.compose.ComposeExecutor.execute", _fake_execute)
+    monkeypatch.setattr("app.api.compose._display_geometry_for_asset", lambda _asset: (1920, 1080))
+    monkeypatch.setattr(
+        "app.api.compose._probe_media_summary",
+        lambda path: {
+            "path": Path(path).name,
+            "video_codec": "h264",
+            "video_pix_fmt": "yuv420p",
+            "video_width": 1920,
+            "video_height": 1080,
+            "video_avg_frame_rate": "30000/1001",
+            "rotate": 0,
+            "audio_codec": "aac",
+            "audio_sample_rate": "48000",
+            "audio_channels": "2",
+            "audio_start_time": "0.0",
+            "video_start_time": "0.0",
+            "duration_seconds": 1.0,
+        },
+    )
 
 
 def _await_compose_job(client, project_name: str, job_id: str, *, source: str = "primary") -> dict:
@@ -286,6 +305,24 @@ def test_preprocessor_preserves_mixed_media_order(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr("app.api.compose._normalize_video_segment", _fake_normalize_video)
     monkeypatch.setattr("app.api.compose._normalize_image_segment", _fake_normalize_image)
+    monkeypatch.setattr(
+        "app.api.compose._probe_media_summary",
+        lambda path: {
+            "path": Path(path).name,
+            "video_codec": "h264",
+            "video_pix_fmt": "yuv420p",
+            "video_width": 1920,
+            "video_height": 1080,
+            "video_avg_frame_rate": "30000/1001",
+            "rotate": 0,
+            "audio_codec": "aac",
+            "audio_sample_rate": "48000",
+            "audio_channels": "2",
+            "audio_start_time": "0.0",
+            "video_start_time": "0.0",
+            "duration_seconds": 1.0,
+        },
+    )
 
     prepared = preprocessor.prepare(
         [
@@ -527,6 +564,50 @@ def test_normalize_video_segment_without_audio_adds_silent_track(tmp_path: Path,
     assert "setpts=PTS-STARTPTS" in vf_arg
 
 
+def test_preprocessor_logs_normalized_probe_and_validates(monkeypatch, tmp_path: Path, caplog):
+    preprocessor = ComposePreprocessor()
+    clip = tmp_path / "clip.mov"
+    clip.write_bytes(b"clip")
+
+    monkeypatch.setattr("app.api.compose._display_geometry_for_asset", lambda _asset: (1920, 1080))
+
+    def _fake_normalize_video(input_path: Path, output_path: Path, **_kwargs) -> Path:
+        output_path.write_bytes(f"normalized:{input_path.name}".encode("utf-8"))
+        return output_path
+
+    monkeypatch.setattr("app.api.compose._normalize_video_segment", _fake_normalize_video)
+    monkeypatch.setattr(
+        "app.api.compose._probe_media_summary",
+        lambda path: {
+            "path": Path(path).name,
+            "video_codec": "h264",
+            "video_pix_fmt": "yuv420p",
+            "video_width": 1920,
+            "video_height": 1080,
+            "video_avg_frame_rate": "30000/1001",
+            "rotate": 0,
+            "audio_codec": "aac",
+            "audio_sample_rate": "48000",
+            "audio_channels": "2",
+            "audio_start_time": "0.0",
+            "video_start_time": "0.0",
+            "duration_seconds": 1.0,
+        },
+    )
+
+    with caplog.at_level("INFO", logger="media_sync_api.compose"):
+        prepared = preprocessor.prepare(
+            [InputAsset(path=clip, kind="video", signature={"audio_codec": "aac"})],
+            tmp_path,
+            job_id="job-norm",
+        )
+
+    assert len(prepared) == 1
+    assert prepared[0].generated is True
+    assert "compose_normalized_probe" in caplog.text
+    assert "job_id=job-norm" in caplog.text
+
+
 def test_compose_service_logs_probe_strategy_and_output_validation(monkeypatch, tmp_path: Path, caplog):
     first = tmp_path / "a.mov"
     second = tmp_path / "b.mov"
@@ -561,7 +642,25 @@ def test_compose_service_logs_probe_strategy_and_output_validation(monkeypatch, 
     ])
     monkeypatch.setattr(service.executor, "execute", lambda plan, job_id=None: ComposeResult(output_path=output, mode_used=plan.strategy))
     monkeypatch.setattr(service.registrar, "register", lambda _ctx, result, _base_url: {"path": result.output_path.name})
-    monkeypatch.setattr("app.api.compose._probe_media_summary", lambda path: {"path": Path(path).name, "video_codec": "h264"})
+    monkeypatch.setattr(
+        "app.api.compose._probe_media_summary",
+        lambda path: {
+            "path": Path(path).name,
+            "video_codec": "h264",
+            "video_pix_fmt": "yuv420p",
+            "video_width": 1920,
+            "video_height": 1080,
+            "video_avg_frame_rate": "30000/1001",
+            "rotate": 0,
+            "audio_codec": "aac",
+            "audio_sample_rate": "48000",
+            "audio_channels": "2",
+            "audio_start_time": "0.0",
+            "video_start_time": "0.0",
+            "duration_seconds": 2.0,
+        },
+    )
+    monkeypatch.setattr("app.api.compose._display_geometry_for_asset", lambda _asset: (1920, 1080))
 
     with caplog.at_level("INFO", logger="media_sync_api.compose"):
         result = service.compose_staged_paths(ctx, spec, [first, second], "http://localhost:8787", work_dir=tmp_path, job_id="job-observe")
@@ -572,3 +671,83 @@ def test_compose_service_logs_probe_strategy_and_output_validation(monkeypatch, 
     assert "compose_strategy_confirmed" in caplog.text
     assert "compose_output_probe" in caplog.text
     assert "job_id=job-observe" in caplog.text
+
+
+def test_compose_service_blocks_registration_when_output_probe_invalid(monkeypatch, tmp_path: Path):
+    first = tmp_path / "a.mov"
+    second = tmp_path / "b.mov"
+    output = tmp_path / "compiled-0001.mp4"
+    first.write_bytes(b"a")
+    second.write_bytes(b"b")
+    output.write_bytes(b"broken")
+
+    service = ComposeService()
+    ctx = type("Ctx", (), {
+        "project_name": "demo",
+        "source_name": "primary",
+        "project_root": tmp_path,
+    })()
+    spec = type("Spec", (), {"mode": "encode"})()
+    plan = ComposePlan(
+        input_paths=[first, second],
+        output_path=output,
+        strategy="encode",
+        requested_mode="encode",
+        strategy_reasons=["requested_encode"],
+        input_assets=[
+            InputAsset(path=first, kind="video", signature={"format_name": "mov,mp4"}),
+            InputAsset(path=second, kind="video", signature={"format_name": "mov,mp4"}),
+        ],
+    )
+
+    monkeypatch.setattr(service.planner, "build_staged_plan", lambda _ctx, _paths, _spec: plan)
+    monkeypatch.setattr(service.preprocessor, "prepare", lambda assets, work_dir, job_id=None: [
+        PreparedSegment(path=first, source_kind="video", generated=True),
+        PreparedSegment(path=second, source_kind="video", generated=True),
+    ])
+    monkeypatch.setattr(service.executor, "execute", lambda plan, job_id=None: ComposeResult(output_path=output, mode_used=plan.strategy))
+    register_calls: list[str] = []
+    monkeypatch.setattr(service.registrar, "register", lambda _ctx, result, _base_url: register_calls.append(result.output_path.name))
+    monkeypatch.setattr("app.api.compose._display_geometry_for_asset", lambda _asset: (1920, 1080))
+
+    def _fake_probe(path: Path):
+        if Path(path) == output:
+            return {
+                "path": output.name,
+                "video_codec": "",
+                "video_pix_fmt": "",
+                "video_width": 0,
+                "video_height": 0,
+                "video_avg_frame_rate": "",
+                "rotate": 0,
+                "audio_codec": "",
+                "audio_sample_rate": "",
+                "audio_channels": "",
+                "audio_start_time": "",
+                "video_start_time": "",
+                "duration_seconds": 0,
+            }
+        return {
+            "path": Path(path).name,
+            "video_codec": "h264",
+            "video_pix_fmt": "yuv420p",
+            "video_width": 1920,
+            "video_height": 1080,
+            "video_avg_frame_rate": "30000/1001",
+            "rotate": 0,
+            "audio_codec": "aac",
+            "audio_sample_rate": "48000",
+            "audio_channels": "2",
+            "audio_start_time": "0.0",
+            "video_start_time": "0.0",
+            "duration_seconds": 1.0,
+        }
+
+    monkeypatch.setattr("app.api.compose._probe_media_summary", _fake_probe)
+
+    with pytest.raises(HTTPException) as exc:
+        service.compose_staged_paths(ctx, spec, [first, second], "http://localhost:8787", work_dir=tmp_path, job_id="job-invalid")
+
+    assert "Compose output validation failed" in exc.value.detail
+    assert register_calls == []
+    assert output.exists() is False

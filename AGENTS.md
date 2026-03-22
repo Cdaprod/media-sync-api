@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Added normalized-intermediate probe logging (`compose_normalized_probe`) plus fail-fast validation for normalized segments and final outputs so broken compose artifacts are rejected before registration instead of silently landing in project indexes.
+- Encode/output validation now enforces canonical expectations around codec, pixel format, dimensions, fps, audio shape, rotation reset, and non-zero duration, with explicit validation-failure log events for forensics.
+- Expanded compose regression coverage for normalized-probe visibility and output-validation registration guards while preserving the earlier explicit copy/encode pipeline split.
+
+### Latest Implementation Notes (2026-03-22)
 - Refactored backend compose execution into explicit mode-specific paths: direct concat-demuxer copy for conservative copy-safe inputs, canonical normalize-then-filter-concat encode for correctness-first jobs, and auto-mode delegation that logs the requested-vs-selected strategy per job.
 - Compose jobs now emit structured lifecycle breadcrumbs across request receipt, per-input probes, strategy confirmation, normalization, concat execution, output validation, and completion/failure so API logs can explain which path actually ran.
 - Encode normalization now resets timestamps, normalizes fps/audio layout, and injects silent stereo tracks where needed before concat; added regression tests for concat command selection, normalization audio fallback, and observability markers.

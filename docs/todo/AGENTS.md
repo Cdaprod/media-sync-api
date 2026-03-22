@@ -1,3 +1,9 @@
+## 2026-03-22 — Compose intermediate/output validation guards
+- [x] Added normalized-intermediate probe logging so each prepared encode segment now has a recorded canonical summary before concat.
+- [x] Added fail-fast validation for normalized segments and final outputs so invalid artifacts are rejected before registration and removed from disk when final output validation fails.
+- [x] Added regression coverage for normalized probe logging and registration-blocking output validation failures.
+- [ ] Run a real problematic iPhone multi-clip encode on this branch and capture `compose_normalized_probe` plus `compose_output_probe` logs to confirm whether rotation mapping or remaining timestamp issues still need adjustment.
+
 ## 2026-03-22 — Compose execution observability + mode-specific correctness
 - [x] Split backend compose execution into explicit copy / encode / auto pipelines so each mode is debuggable independently instead of sharing one lightly branched path.
 - [x] Added structured compose lifecycle logs for request receipt, per-input probes, strategy confirmation, normalization, concat execution, output validation, and job completion/failure.

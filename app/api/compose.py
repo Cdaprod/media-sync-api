@@ -83,6 +83,8 @@ SUPPORTED_DIRECT_COMPOSE_KINDS: frozenset[str] = frozenset({"video", "image"})
 
 # Duration used when converting still images into temporary MP4 segments.
 IMAGE_FREEZE_SECONDS: float = 2.0
+ENCODE_TARGET_FPS = 30000 / 1001
+ENCODE_TARGET_FPS_ARG = "30000/1001"
 COPY_COMPATIBILITY_FIELDS: tuple[str, ...] = (
     "format_name",
     "video_codec",
@@ -357,6 +359,81 @@ def _probe_media_summary(path: Path) -> dict[str, Any]:
         "audio_start_time": signature.get("audio_start_time") or "",
         "duration_seconds": duration,
     }
+
+
+def _rate_to_float(value: str | None) -> float | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        if "/" in raw:
+            num_s, den_s = raw.split("/", 1)
+            den = float(den_s)
+            if den == 0:
+                return None
+            return float(num_s) / den
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _validate_encode_probe(summary: dict[str, Any], *, target_width: int, target_height: int) -> list[str]:
+    """Validate that a normalized/encoded summary matches canonical compose expectations."""
+    issues: list[str] = []
+    if summary.get("video_codec") != "h264":
+        issues.append(f"video_codec:{summary.get('video_codec') or '<missing>'}")
+    if summary.get("video_pix_fmt") != "yuv420p":
+        issues.append(f"video_pix_fmt:{summary.get('video_pix_fmt') or '<missing>'}")
+    if int(summary.get("video_width") or 0) != target_width:
+        issues.append(f"video_width:{summary.get('video_width')}")
+    if int(summary.get("video_height") or 0) != target_height:
+        issues.append(f"video_height:{summary.get('video_height')}")
+    fps = _rate_to_float(summary.get("video_avg_frame_rate"))
+    if fps is None or abs(fps - ENCODE_TARGET_FPS) > 0.05:
+        issues.append(f"video_avg_frame_rate:{summary.get('video_avg_frame_rate') or '<missing>'}")
+    if int(summary.get("rotate") or 0) != 0:
+        issues.append(f"rotate:{summary.get('rotate')}")
+    if summary.get("audio_codec") != "aac":
+        issues.append(f"audio_codec:{summary.get('audio_codec') or '<missing>'}")
+    if str(summary.get("audio_sample_rate") or "") != "48000":
+        issues.append(f"audio_sample_rate:{summary.get('audio_sample_rate') or '<missing>'}")
+    if str(summary.get("audio_channels") or "") != "2":
+        issues.append(f"audio_channels:{summary.get('audio_channels') or '<missing>'}")
+    video_start = _float_or_none(summary.get("video_start_time"))
+    if video_start is not None and abs(video_start) > 0.25:
+        issues.append(f"video_start_time:{summary.get('video_start_time')}")
+    audio_start = _float_or_none(summary.get("audio_start_time"))
+    if audio_start is not None and abs(audio_start) > 0.25:
+        issues.append(f"audio_start_time:{summary.get('audio_start_time')}")
+    duration = _float_or_none(summary.get("duration_seconds"))
+    if duration is None or duration <= 0:
+        issues.append(f"duration_seconds:{summary.get('duration_seconds')}")
+    return issues
+
+
+def _validate_output_probe(summary: dict[str, Any], *, mode_used: Literal["copy", "encode"], target_width: int | None = None, target_height: int | None = None) -> list[str]:
+    """Validate final output before registration; encode mode is held to canonical expectations."""
+    issues: list[str] = []
+    if not summary.get("video_codec"):
+        issues.append("missing_video_codec")
+    duration = _float_or_none(summary.get("duration_seconds"))
+    if duration is None or duration <= 0:
+        issues.append(f"duration_seconds:{summary.get('duration_seconds')}")
+    if mode_used == "encode":
+        if target_width is None or target_height is None:
+            issues.append("missing_encode_target_dimensions")
+        else:
+            issues.extend(_validate_encode_probe(summary, target_width=target_width, target_height=target_height))
+    return sorted(set(issues))
 
 
 def _inputs_compatible_for_copy(input_paths: list[Path]) -> bool:
@@ -660,7 +737,7 @@ def _normalize_video_segment(
     vf_parts.append(
         f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black"
     )
-    vf_parts.append("fps=30000/1001")
+    vf_parts.append(f"fps={ENCODE_TARGET_FPS_ARG}")
     vf_parts.append("setsar=1")
     vf_parts.append("setpts=PTS-STARTPTS")
 
@@ -1793,6 +1870,29 @@ class ComposePreprocessor:
                     kind=asset.kind,
                     output_path=normalized_path.name,
                 )
+                normalized_summary = _probe_media_summary(normalized_path)
+                _log_compose(
+                    "info",
+                    "compose_normalized_probe",
+                    job_id=job_id,
+                    index=idx,
+                    kind=asset.kind,
+                    summary=normalized_summary,
+                )
+                issues = _validate_encode_probe(normalized_summary, target_width=target_width, target_height=target_height)
+                if issues:
+                    _log_compose(
+                        "error",
+                        "compose_normalized_validation_failed",
+                        job_id=job_id,
+                        index=idx,
+                        output_path=normalized_path.name,
+                        issues=issues,
+                    )
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Normalized segment validation failed for {normalized_path.name}: {issues}",
+                    )
                 continue
 
             if asset.kind == "image":
@@ -1829,6 +1929,29 @@ class ComposePreprocessor:
                     kind=asset.kind,
                     output_path=normalized_path.name,
                 )
+                normalized_summary = _probe_media_summary(normalized_path)
+                _log_compose(
+                    "info",
+                    "compose_normalized_probe",
+                    job_id=job_id,
+                    index=idx,
+                    kind=asset.kind,
+                    summary=normalized_summary,
+                )
+                issues = _validate_encode_probe(normalized_summary, target_width=target_width, target_height=target_height)
+                if issues:
+                    _log_compose(
+                        "error",
+                        "compose_normalized_validation_failed",
+                        job_id=job_id,
+                        index=idx,
+                        output_path=normalized_path.name,
+                        issues=issues,
+                    )
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Normalized segment validation failed for {normalized_path.name}: {issues}",
+                    )
                 continue
 
             raise HTTPException(
@@ -1897,15 +2020,29 @@ class ComposeService:
                 summary=_probe_media_summary(asset.path),
             )
 
-    def _log_output_validation(self, result: ComposeResult, *, job_id: str | None = None) -> None:
+    @staticmethod
+    def _encode_target_dimensions(plan: ComposePlan) -> tuple[int | None, int | None]:
+        visual_assets = [asset for asset in plan.input_assets if asset.kind in {"video", "image"}]
+        if not visual_assets:
+            return None, None
+        display_width, display_height = _display_geometry_for_asset(visual_assets[0])
+        if display_width <= 0 or display_height <= 0:
+            return None, None
+        if display_height >= display_width:
+            return 1080, 1920
+        return 1920, 1080
+
+    def _log_output_validation(self, result: ComposeResult, *, job_id: str | None = None) -> dict[str, Any]:
+        summary = _probe_media_summary(result.output_path)
         _log_compose(
             "info",
             "compose_output_probe",
             job_id=job_id,
             output_path=result.output_path.name,
             mode_used=result.mode_used,
-            summary=_probe_media_summary(result.output_path),
+            summary=summary,
         )
+        return summary
 
     def _run_copy_compose(self, plan: ComposePlan, *, job_id: str | None = None) -> ComposeResult:
         direct_plan = self._with_prepared_segments(plan, self._build_direct_segments(plan))
@@ -1937,7 +2074,25 @@ class ComposeService:
             result = self._run_encode_compose(plan, work_dir, job_id=job_id)
         else:
             result = self._run_auto_compose(plan, work_dir, job_id=job_id)
-        self._log_output_validation(result, job_id=job_id)
+        output_summary = self._log_output_validation(result, job_id=job_id)
+        target_width, target_height = self._encode_target_dimensions(plan)
+        issues = _validate_output_probe(
+            output_summary,
+            mode_used=result.mode_used,
+            target_width=target_width,
+            target_height=target_height,
+        )
+        if issues:
+            _log_compose(
+                "error",
+                "compose_output_validation_failed",
+                job_id=job_id,
+                output_path=result.output_path.name,
+                mode_used=result.mode_used,
+                issues=issues,
+            )
+            result.output_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=500, detail=f"Compose output validation failed: {issues}")
         return result
 
     # ------------------------------------------------------------------
