@@ -1,3 +1,10 @@
+## 2026-03-22 — Backend normalized rotate/pix_fmt canonicalization follow-up
+- [x] Reproduced the concrete failing shape from real logs: normalized segment validation still saw `rotate:90` and `video_pix_fmt:yuvj420p` on `segment_0000.mp4`.
+- [x] Hardened normalization to clear inherited input display rotation metadata and to stamp limited-range `yuv420p` intent more explicitly in both video and image intermediate generation.
+- [x] Expanded probe summaries with `video_color_range` and refined validation so only limited-range `yuvj420p` can pass as effectively canonical, while full-range `yuvj420p` still fails.
+- [x] Added focused backend regression coverage for the new normalization flags and the limited-vs-full-range `yuvj420p` acceptance rule.
+- [ ] Re-run the real failing clip set and verify the next `compose_normalized_probe` now reports either `yuv420p` or limited-range `yuvj420p` with `rotate:0`; if not, inspect whether ffmpeg is still writing a display matrix despite the input-side override.
+
 ## 2026-03-22 — Explorer pending compose placeholder UI
 - [x] Added modular pending compose Explorer files (`PendingComposeAssetCard`, `composeJobs`, `usePendingComposeJobs`) instead of inlining another large compose-status state machine inside `ExplorerApp.tsx`.
 - [x] Wired package Explorer compose submit to insert a local pending placeholder immediately from the `202 Accepted` envelope, poll `job_url` every 2 seconds, and render the placeholder before matching real assets for the same project/target-dir bucket.

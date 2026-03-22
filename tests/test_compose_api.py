@@ -622,12 +622,16 @@ def test_normalize_video_segment_without_audio_adds_silent_track(tmp_path: Path,
     assert commands
     command = commands[0]
     assert "anullsrc=channel_layout=stereo:sample_rate=48000" in command
+    assert command[command.index("-display_rotation:v:0") + 1] == "0"
     vf_arg = command[command.index("-vf") + 1]
+    assert "format=yuv420p" in vf_arg
     assert "fps=30000/1001:round=near" in vf_arg
+    assert "setparams=range=tv" in vf_arg
     assert "settb=1001/30000" in vf_arg
     assert "setpts=N/(30000/1001*TB)" in vf_arg
     af_arg = command[command.index("-af") + 1]
     assert "asettb=1/48000" in af_arg
+    assert command[command.index("-color_range") + 1] == "tv"
     assert command[command.index("-r") + 1] == "30000/1001"
     assert command[command.index("-fps_mode") + 1] == "cfr"
 
@@ -679,6 +683,58 @@ def test_validate_encode_probe_accepts_canonical_real_frame_rate_when_avg_is_noi
     issues = _validate_encode_probe(summary, target_width=1080, target_height=1920)
 
     assert not any(issue.startswith("video_frame_rate:") for issue in issues)
+
+
+def test_validate_encode_probe_accepts_limited_range_yuvj420p_when_otherwise_canonical():
+    summary = {
+        "video_codec": "h264",
+        "video_pix_fmt": "yuvj420p",
+        "video_color_range": "tv",
+        "video_width": 1080,
+        "video_height": 1920,
+        "video_avg_frame_rate": "30000/1001",
+        "video_r_frame_rate": "30000/1001",
+        "rotate": 0,
+        "audio_codec": "aac",
+        "audio_sample_rate": "48000",
+        "audio_channels": "2",
+        "video_start_time": "0.0",
+        "audio_start_time": "0.0",
+        "video_duration_seconds": 4.0,
+        "audio_duration_seconds": 4.0,
+        "av_duration_delta_seconds": 0.0,
+        "duration_seconds": 4.0,
+    }
+
+    issues = _validate_encode_probe(summary, target_width=1080, target_height=1920)
+
+    assert not any(issue.startswith("video_pix_fmt:") for issue in issues)
+
+
+def test_validate_encode_probe_rejects_full_range_yuvj420p():
+    summary = {
+        "video_codec": "h264",
+        "video_pix_fmt": "yuvj420p",
+        "video_color_range": "pc",
+        "video_width": 1080,
+        "video_height": 1920,
+        "video_avg_frame_rate": "30000/1001",
+        "video_r_frame_rate": "30000/1001",
+        "rotate": 0,
+        "audio_codec": "aac",
+        "audio_sample_rate": "48000",
+        "audio_channels": "2",
+        "video_start_time": "0.0",
+        "audio_start_time": "0.0",
+        "video_duration_seconds": 4.0,
+        "audio_duration_seconds": 4.0,
+        "av_duration_delta_seconds": 0.0,
+        "duration_seconds": 4.0,
+    }
+
+    issues = _validate_encode_probe(summary, target_width=1080, target_height=1920)
+
+    assert "video_pix_fmt:yuvj420p" in issues
 
 
 def test_preprocessor_logs_normalized_probe_and_validates(monkeypatch, tmp_path: Path, caplog):

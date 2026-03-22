@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Real compose evidence showed normalized segment validation still failing on `rotate:90` and `video_pix_fmt:yuvj420p`, so normalization now explicitly clears inherited input display rotation (`-display_rotation:v:0 0`) while forcing limited-range `yuv420p` through `format=yuv420p`, `setparams=range=tv`, and `-color_range tv`.
+- Probe summaries now include `video_color_range`, and encode validation only tolerates `yuvj420p` when ffprobe simultaneously reports limited-range color semantics (`limited`/`tv`/`mpeg`) instead of blindly accepting or rejecting all `yuvj420p` outputs.
+- Added focused backend regression coverage for the exact failure shape: normalize command flags now assert rotation/color-range hardening, limited-range `yuvj420p` is accepted when otherwise canonical, and full-range `yuvj420p` continues to fail validation.
+
+### Latest Implementation Notes (2026-03-22)
 - Package Explorer now keeps compose-job placeholders in local in-memory UI state keyed by project + target dir, inserting a pending compose card immediately on `202 Accepted` instead of waiting for backend asset registration or a full page refresh.
 - Added modular pending compose UI files in the Explorer package (`PendingComposeAssetCard`, `composeJobs`, and `usePendingComposeJobs`) with exact cyan/blue active states, amber `running_long` after 45 seconds, red failed state, and no fake percentage/fill-progress semantics.
 - Compose polling now runs every 2 seconds from the returned `job_url`; completion triggers a refresh-scope-targeted media refresh plus `Compose completed` toast, while failed jobs stay visible with backend error text and optional debug-artifact notice.

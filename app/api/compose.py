@@ -325,6 +325,7 @@ def _probe_signature(path: Path) -> dict[str, str]:
         "video_codec": str(v.get("codec_name", "")),
         "video_profile": str(v.get("profile", "")),
         "video_pix_fmt": str(v.get("pix_fmt", "")),
+        "video_color_range": str(v.get("color_range", "")),
         "video_width": str(v.get("width", "")),
         "video_height": str(v.get("height", "")),
         "video_sar": str(v.get("sample_aspect_ratio", "")),
@@ -370,6 +371,7 @@ def _probe_media_summary(path: Path) -> dict[str, Any]:
         "video_codec": signature.get("video_codec") or "",
         "video_profile": signature.get("video_profile") or "",
         "video_pix_fmt": signature.get("video_pix_fmt") or "",
+        "video_color_range": signature.get("video_color_range") or "",
         "video_width": int(signature.get("video_width") or 0),
         "video_height": int(signature.get("video_height") or 0),
         "video_avg_frame_rate": signature.get("video_avg_frame_rate") or "",
@@ -419,7 +421,12 @@ def _validate_encode_probe(summary: dict[str, Any], *, target_width: int, target
     issues: list[str] = []
     if summary.get("video_codec") != "h264":
         issues.append(f"video_codec:{summary.get('video_codec') or '<missing>'}")
-    if summary.get("video_pix_fmt") != "yuv420p":
+    pix_fmt = str(summary.get("video_pix_fmt") or "")
+    color_range = str(summary.get("video_color_range") or "").lower()
+    pix_fmt_canonical = pix_fmt == "yuv420p" or (
+        pix_fmt == "yuvj420p" and color_range in {"limited", "tv", "mpeg"}
+    )
+    if not pix_fmt_canonical:
         issues.append(f"video_pix_fmt:{summary.get('video_pix_fmt') or '<missing>'}")
     if int(summary.get("video_width") or 0) != target_width:
         issues.append(f"video_width:{summary.get('video_width')}")
@@ -769,6 +776,7 @@ def _normalize_video_segment(
     elif rotate == 180:
         vf_parts.append("hflip,vflip")
 
+    vf_parts.append("format=yuv420p")
     vf_parts.append(
         f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease"
     )
@@ -777,6 +785,7 @@ def _normalize_video_segment(
     )
     vf_parts.append(f"fps={ENCODE_TARGET_FPS_ARG}:round=near")
     vf_parts.append("setsar=1")
+    vf_parts.append("setparams=range=tv")
     vf_parts.append(f"settb={ENCODE_VIDEO_TIME_BASE}")
     vf_parts.append(f"setpts=N/({ENCODE_TARGET_FPS_ARG}*TB)")
 
@@ -788,6 +797,7 @@ def _normalize_video_segment(
         "-fflags", "+genpts",
         "-avoid_negative_ts", "make_zero",
         "-noautorotate",
+        "-display_rotation:v:0", "0",
         "-i", str(input_path),
         "-map_metadata", "-1",
         "-map", "0:v:0",
@@ -807,6 +817,7 @@ def _normalize_video_segment(
         "-af", f"aresample=48000:async=1:first_pts=0,asettb={ENCODE_AUDIO_TIME_BASE},asetpts=N/SR/TB",
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
+        "-color_range", "tv",
         "-vf", vf,
         "-r", ENCODE_TARGET_FPS_ARG,
         "-fps_mode", "cfr",
@@ -845,8 +856,10 @@ def _normalize_image_segment(
 ) -> Path:
     """Convert one image into a fixed-duration MP4 segment."""
     vf = (
+        f"format=yuv420p,"
         f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
-        f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
+        f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,"
+        f"setparams=range=tv"
     )
     command = [
         "ffmpeg",
@@ -864,6 +877,7 @@ def _normalize_image_segment(
         "-map", "1:a:0",
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
+        "-color_range", "tv",
         "-r", ENCODE_TARGET_FPS_ARG,
         "-fps_mode", "cfr",
         "-video_track_timescale", "30000",
