@@ -85,6 +85,9 @@ SUPPORTED_DIRECT_COMPOSE_KINDS: frozenset[str] = frozenset({"video", "image"})
 IMAGE_FREEZE_SECONDS: float = 2.0
 ENCODE_TARGET_FPS = 30000 / 1001
 ENCODE_TARGET_FPS_ARG = "30000/1001"
+ENCODE_VIDEO_TIME_BASE = "1001/30000"
+ENCODE_AUDIO_TIME_BASE = "1/48000"
+ENCODE_AV_DRIFT_MAX_SECONDS = 0.125
 COPY_COMPATIBILITY_FIELDS: tuple[str, ...] = (
     "format_name",
     "video_codec",
@@ -320,6 +323,7 @@ def _probe_signature(path: Path) -> dict[str, str]:
         "video_has_b_frames": str(v.get("has_b_frames", "")),
         "video_level": str(v.get("level", "")),
         "video_start_time": str(v.get("start_time", "")),
+        "video_duration": str(v.get("duration", "")),
         "audio_codec": str(a.get("codec_name", "")),
         "audio_profile": str(a.get("profile", "")),
         "audio_sample_rate": str(a.get("sample_rate", "")),
@@ -327,6 +331,7 @@ def _probe_signature(path: Path) -> dict[str, str]:
         "audio_channel_layout": str(a.get("channel_layout", "")),
         "audio_time_base": str(a.get("time_base", "")),
         "audio_start_time": str(a.get("start_time", "")),
+        "audio_duration": str(a.get("duration", "")),
     }
 
 
@@ -339,6 +344,11 @@ def _probe_media_summary(path: Path) -> dict[str, Any]:
         duration = round(float(duration_raw), 3) if duration_raw else None
     except (TypeError, ValueError):
         duration = None
+    video_duration = _float_or_none(signature.get("video_duration"))
+    audio_duration = _float_or_none(signature.get("audio_duration"))
+    av_duration_delta = None
+    if video_duration is not None and audio_duration is not None:
+        av_duration_delta = round(abs(video_duration - audio_duration), 3)
     return {
         "path": path.name,
         "suffix": path.suffix.lower(),
@@ -351,12 +361,15 @@ def _probe_media_summary(path: Path) -> dict[str, Any]:
         "video_avg_frame_rate": signature.get("video_avg_frame_rate") or "",
         "video_time_base": signature.get("video_time_base") or "",
         "video_start_time": signature.get("video_start_time") or "",
+        "video_duration_seconds": video_duration,
         "rotate": int(video_probe.get("rotate") or 0),
         "audio_codec": signature.get("audio_codec") or "",
         "audio_sample_rate": signature.get("audio_sample_rate") or "",
         "audio_channels": signature.get("audio_channels") or "",
         "audio_channel_layout": signature.get("audio_channel_layout") or "",
         "audio_start_time": signature.get("audio_start_time") or "",
+        "audio_duration_seconds": audio_duration,
+        "av_duration_delta_seconds": av_duration_delta,
         "duration_seconds": duration,
     }
 
@@ -414,6 +427,9 @@ def _validate_encode_probe(summary: dict[str, Any], *, target_width: int, target
     audio_start = _float_or_none(summary.get("audio_start_time"))
     if audio_start is not None and abs(audio_start) > 0.25:
         issues.append(f"audio_start_time:{summary.get('audio_start_time')}")
+    av_duration_delta = _float_or_none(summary.get("av_duration_delta_seconds"))
+    if av_duration_delta is not None and av_duration_delta > ENCODE_AV_DRIFT_MAX_SECONDS:
+        issues.append(f"av_duration_delta_seconds:{summary.get('av_duration_delta_seconds')}")
     duration = _float_or_none(summary.get("duration_seconds"))
     if duration is None or duration <= 0:
         issues.append(f"duration_seconds:{summary.get('duration_seconds')}")
@@ -737,9 +753,10 @@ def _normalize_video_segment(
     vf_parts.append(
         f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black"
     )
-    vf_parts.append(f"fps={ENCODE_TARGET_FPS_ARG}")
+    vf_parts.append(f"fps={ENCODE_TARGET_FPS_ARG}:round=near")
     vf_parts.append("setsar=1")
-    vf_parts.append("setpts=PTS-STARTPTS")
+    vf_parts.append(f"settb={ENCODE_VIDEO_TIME_BASE}")
+    vf_parts.append(f"setpts=N/({ENCODE_TARGET_FPS_ARG}*TB)")
 
     vf = ",".join(vf_parts)
 
@@ -756,7 +773,6 @@ def _normalize_video_segment(
     if has_audio:
         command.extend([
             "-map", "0:a:0",
-            "-af", "aresample=48000:async=1:first_pts=0,asetpts=N/SR/TB",
         ])
     else:
         command.extend([
@@ -766,9 +782,12 @@ def _normalize_video_segment(
             "-shortest",
         ])
     command.extend([
+        "-af", f"aresample=48000:async=1:first_pts=0,asettb={ENCODE_AUDIO_TIME_BASE},asetpts=N/SR/TB",
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-vf", vf,
+        "-fps_mode", "cfr",
+        "-video_track_timescale", "30000",
         "-c:a", "aac",
         "-ar", "48000",
         "-ac", "2",
@@ -1540,11 +1559,26 @@ class ComposeExecutor:
             raise HTTPException(status_code=500, detail="Encode pipeline requires prepared_segments")
 
         command: list[str] = ["ffmpeg", "-n", "-fflags", "+genpts", "-avoid_negative_ts", "make_zero"]
+        filter_parts: list[str] = []
         concat_inputs: list[str] = []
         for segment in plan.prepared_segments:
             command.extend(["-i", str(segment.path)])
-            concat_inputs.append(f"[{len(concat_inputs)}:v:0][{len(concat_inputs)}:a:0]")
-        filter_complex = f"{''.join(concat_inputs)}concat=n={len(plan.prepared_segments)}:v=1:a=1[outv][outa]"
+            input_index = len(concat_inputs)
+            filter_parts.append(
+                f"[{input_index}:v:0]settb={ENCODE_VIDEO_TIME_BASE},setpts=N/({ENCODE_TARGET_FPS_ARG}*TB)[v{input_index}]"
+            )
+            filter_parts.append(
+                f"[{input_index}:a:0]aresample=48000:async=1:first_pts=0,asettb={ENCODE_AUDIO_TIME_BASE},asetpts=N/SR/TB[a{input_index}]"
+            )
+            concat_inputs.append(f"[v{input_index}][a{input_index}]")
+        filter_parts.append(
+            f"{''.join(concat_inputs)}concat=n={len(plan.prepared_segments)}:v=1:a=1[vcat][acat]"
+        )
+        filter_parts.append(f"[vcat]fps={ENCODE_TARGET_FPS_ARG}:round=near,settb={ENCODE_VIDEO_TIME_BASE}[outv]")
+        filter_parts.append(
+            f"[acat]aresample=48000:async=1:first_pts=0,asettb={ENCODE_AUDIO_TIME_BASE},asetpts=N/SR/TB[outa]"
+        )
+        filter_complex = ";".join(filter_parts)
         command.extend([
             "-filter_complex", filter_complex,
             "-map", "[outv]",
@@ -1552,6 +1586,8 @@ class ComposeExecutor:
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-r", "30000/1001",
+            "-fps_mode", "cfr",
+            "-video_track_timescale", "30000",
             "-c:a", "aac",
             "-ar", "48000",
             "-ac", "2",

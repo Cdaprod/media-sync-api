@@ -201,6 +201,8 @@ python scripts/compose_repro.py \
 
 The script prints the submit envelope, polls `GET /api/projects/{project}/compose/jobs/{job_id}`, and when `--docker-service` is provided filters the log stream down to lifecycle entries for that exact `job_id` (`compose_request_received`, `compose_probe_*`, `compose_strategy_*`, `compose_normalize_*`, `compose_normalized_probe`, `compose_concat_started`, `compose_output_probe`, and terminal `compose_job_*`).
 
+The harness now submits the current backend request contract (`inputs`) and the backend encode path additionally records per-stream normalized/output durations (`video_duration_seconds`, `audio_duration_seconds`, `av_duration_delta_seconds`) so reproduced iPhone boundary A/V drift can be correlated with stricter validation and timing behavior on this branch.
+
 
 
 ### Registry contract examples

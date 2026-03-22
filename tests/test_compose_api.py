@@ -18,6 +18,7 @@ from app.api.compose import (
     PreparedSegment,
     _analyze_copy_compatibility,
     _normalize_video_segment,
+    _validate_encode_probe,
     _validate_supported_inputs,
 )
 
@@ -527,7 +528,13 @@ def test_encode_executor_uses_filter_concat_for_normalized_segments(tmp_path: Pa
     command = calls[0]
     assert "-filter_complex" in command
     filter_index = command.index("-filter_complex")
-    assert "concat=n=2:v=1:a=1" in command[filter_index + 1]
+    filter_graph = command[filter_index + 1]
+    assert "concat=n=2:v=1:a=1" in filter_graph
+    assert "settb=1001/30000" in filter_graph
+    assert "asetpts=N/SR/TB" in filter_graph
+    assert "fps=30000/1001:round=near" in filter_graph
+    assert "-fps_mode" in command
+    assert command[command.index("-fps_mode") + 1] == "cfr"
     assert "compose_concat_started" in caplog.text
     assert "mechanism=filter_concat_encode" in caplog.text
 
@@ -560,8 +567,36 @@ def test_normalize_video_segment_without_audio_adds_silent_track(tmp_path: Path,
     command = commands[0]
     assert "anullsrc=channel_layout=stereo:sample_rate=48000" in command
     vf_arg = command[command.index("-vf") + 1]
-    assert "fps=30000/1001" in vf_arg
-    assert "setpts=PTS-STARTPTS" in vf_arg
+    assert "fps=30000/1001:round=near" in vf_arg
+    assert "settb=1001/30000" in vf_arg
+    assert "setpts=N/(30000/1001*TB)" in vf_arg
+    af_arg = command[command.index("-af") + 1]
+    assert "asettb=1/48000" in af_arg
+    assert command[command.index("-fps_mode") + 1] == "cfr"
+
+
+def test_validate_encode_probe_rejects_audio_video_duration_drift():
+    summary = {
+        "video_codec": "h264",
+        "video_pix_fmt": "yuv420p",
+        "video_width": 1080,
+        "video_height": 1920,
+        "video_avg_frame_rate": "30000/1001",
+        "rotate": 0,
+        "audio_codec": "aac",
+        "audio_sample_rate": "48000",
+        "audio_channels": "2",
+        "video_start_time": "0.0",
+        "audio_start_time": "0.0",
+        "video_duration_seconds": 4.0,
+        "audio_duration_seconds": 4.3,
+        "av_duration_delta_seconds": 0.3,
+        "duration_seconds": 4.3,
+    }
+
+    issues = _validate_encode_probe(summary, target_width=1080, target_height=1920)
+
+    assert "av_duration_delta_seconds:0.3" in issues
 
 
 def test_preprocessor_logs_normalized_probe_and_validates(monkeypatch, tmp_path: Path, caplog):

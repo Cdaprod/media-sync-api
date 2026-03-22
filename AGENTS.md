@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Fixed `scripts/compose_repro.py` to match the current existing-assets compose API contract by sending `inputs` (not stale `relative_paths`), closing the immediate 422 that blocked real compose repro runs.
+- Hardened encode-mode timeline normalization for the reproduced iPhone HEVC/Dolby Vision portrait case by rebasing normalized video/audio onto explicit canonical timebases, forcing CFR-oriented output args, and re-normalizing streams again inside the final concat filtergraph before encode.
+- Expanded compose probe validation with per-stream duration summaries plus `av_duration_delta_seconds` so normalized/final encode artifacts can fail fast when audio/video drift exceeds tolerance instead of silently registering a boundary-broken output.
+
+### Latest Implementation Notes (2026-03-22)
 - Added `scripts/compose_repro.py` as the branch-follow-up validation harness for existing-assets compose repros so operators can submit a real clip set, poll the async `job_id`, and capture only the correlated lifecycle log block from `docker compose logs`.
 - Documented a copy-paste real-compose repro workflow in README and added regression coverage for payload-building, job-status URL shaping, and `job_id` log filtering so the validation helper stays stable across future compose changes.
 - Updated the todo handoff with a dedicated real-clip validation task stub that points future agents/operators at the new harness instead of another no-op alignment pass.

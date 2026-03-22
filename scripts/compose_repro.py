@@ -61,7 +61,7 @@ def build_existing_compose_payload(
     if mode not in {"auto", "copy", "encode"}:
         raise ValueError(f"Unsupported mode '{mode}'")
     return {
-        "relative_paths": cleaned_paths,
+        "inputs": cleaned_paths,
         "output_name": output_name.strip(),
         "target_dir": target_dir.strip() or "exports",
         "mode": mode,

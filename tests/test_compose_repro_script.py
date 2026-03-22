@@ -26,7 +26,7 @@ def test_build_existing_compose_payload_trims_and_preserves_order():
     )
 
     assert payload == {
-        "relative_paths": ["ingest/originals/a.mov", "exports/../ignored", "ingest/originals/b.mov"],
+        "inputs": ["ingest/originals/a.mov", "exports/../ignored", "ingest/originals/b.mov"],
         "output_name": "repro-output.mp4",
         "target_dir": "exports",
         "mode": "encode",

@@ -1,3 +1,9 @@
+## 2026-03-22 — Encode-mode iPhone boundary A/V drift hardening
+- [x] Fixed `scripts/compose_repro.py` to send `inputs` so the existing-assets repro harness matches the live `POST /api/projects/{project}/compose` request model.
+- [x] Added per-stream normalized/output probe duration summaries plus `av_duration_delta_seconds` validation to catch audio/video drift that can cause second-segment audio to run ahead of video.
+- [x] Hardened encode normalization and final concat filtergraph timing with explicit video/audio timebase rebasing and CFR-oriented output flags aimed at the reproduced iPhone HEVC portrait drift case.
+- [ ] Re-run the exact repro (`job_id=d9c3e090-56ec-4613-a732-56a1ce813371` source pair / same project inputs) on this branch and compare the saved lifecycle log block plus resulting playback against the previous boundary-freeze artifact.
+
 ## 2026-03-22 — Real compose repro harness + evidence capture
 - [x] Added `scripts/compose_repro.py` to submit an existing-assets compose request, poll the background `job_id`, and optionally filter `docker compose logs` to only the lifecycle lines for that job.
 - [x] Documented a copy-paste repro command in `README.md` so real problematic clip sets can be re-run consistently on this branch.
