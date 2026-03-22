@@ -979,7 +979,7 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
 
     captured: dict[str, object] = {}
 
-    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir):
+    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir, job_id=None):
         captured["project"] = ctx.project_name
         captured["output_name"] = spec.output_name
         captured["count"] = len(staged_paths)
@@ -1099,7 +1099,7 @@ def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClien
     listing = client.get(f"/api/projects/{source}/media").json()["media"]
     asset_uuid = listing[0]["asset_uuid"]
 
-    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir):
+    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir, job_id=None):
         assert ctx.project_name == output_project
         assert spec.output_name == "uuid-cut.mp4"
         assert len(staged_paths) == 1

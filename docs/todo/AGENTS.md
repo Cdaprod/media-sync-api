@@ -1,3 +1,10 @@
+## 2026-03-22 — Compose execution observability + mode-specific correctness
+- [x] Split backend compose execution into explicit copy / encode / auto pipelines so each mode is debuggable independently instead of sharing one lightly branched path.
+- [x] Added structured compose lifecycle logs for request receipt, per-input probes, strategy confirmation, normalization, concat execution, output validation, and job completion/failure.
+- [x] Made encode path canonical by normalizing clips before concat with reset timestamps, stable fps/audio policy, and silent-track injection for inputs that lack audio.
+- [x] Added regression tests covering concat command selection, normalization audio fallback, strategy/log visibility, and job/task compatibility with the richer executor signatures.
+- [ ] Reproduce one of the real failing iPhone clip cases end-to-end and capture the new lifecycle logs plus output probe summary to confirm the repeated-first-clip / frozen-video symptoms are resolved.
+
 ## 2026-03-22 — Compose mode safety hardening
 - [x] Confirmed Explorer selected-assets compose flows were still sending `mode: 'auto'` in both `public/explorer.html` and `docker/packages/Explorer/src/ExplorerApp.tsx`.
 - [x] Switched Explorer multi-select compose requests to `mode: 'encode'` so human-driven ordered stitch jobs prefer correctness over concat-copy speed.

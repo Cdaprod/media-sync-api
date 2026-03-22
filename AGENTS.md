@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Refactored backend compose execution into explicit mode-specific paths: direct concat-demuxer copy for conservative copy-safe inputs, canonical normalize-then-filter-concat encode for correctness-first jobs, and auto-mode delegation that logs the requested-vs-selected strategy per job.
+- Compose jobs now emit structured lifecycle breadcrumbs across request receipt, per-input probes, strategy confirmation, normalization, concat execution, output validation, and completion/failure so API logs can explain which path actually ran.
+- Encode normalization now resets timestamps, normalizes fps/audio layout, and injects silent stereo tracks where needed before concat; added regression tests for concat command selection, normalization audio fallback, and observability markers.
+
+### Latest Implementation Notes (2026-03-22)
 - Explorer multi-select compose in both the static UI and package Explorer now submits `mode: 'encode'` for the human-driven ordered-stitch workflow, avoiding unsafe concat-copy selection for selected assets.
 - Hardened backend compose auto-mode selection with more conservative copy-compatibility checks (matching container suffixes plus expanded ffprobe stream/container signature fields) and added explicit `compose_strategy_selected` / auto-copy-fallback logging for easier verification in logs.
 - Added regression coverage for the frontend compose payload policy and backend conservative auto/copy decision reasons, and documented the correctness-first Explorer compose policy in README.

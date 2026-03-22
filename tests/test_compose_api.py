@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import time
 from pathlib import Path
 
@@ -7,25 +8,29 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.compose import (
+    ComposeExecutor,
+    ComposePlan,
     ComposePlanner,
     ComposePreprocessor,
     ComposeResult,
+    ComposeService,
     InputAsset,
     PreparedSegment,
     _analyze_copy_compatibility,
+    _normalize_video_segment,
     _validate_supported_inputs,
 )
 
 
 def _patch_compose_runtime(monkeypatch, *, fail: bool = False) -> None:
-    def _fake_prepare(self, assets, work_dir):
+    def _fake_prepare(self, assets, work_dir, job_id=None):
         work_dir.mkdir(parents=True, exist_ok=True)
         return [
             PreparedSegment(path=asset.path, source_kind=asset.kind, generated=False)
             for asset in assets
         ]
 
-    def _fake_execute(self, plan):
+    def _fake_execute(self, plan, job_id=None):
         if fail:
             raise HTTPException(status_code=500, detail="ffmpeg failure simulated")
         plan.output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -380,10 +385,11 @@ def test_auto_mode_logs_selected_encode_when_copy_is_not_safe(caplog):
     ]
 
     with caplog.at_level('INFO', logger='media_sync_api.compose'):
-        selected = planner._select_strategy('auto', assets)
+        selected, reasons = planner._select_strategy('auto', assets)
 
     assert selected == 'encode'
-    assert 'compose_strategy_selected requested=auto selected=encode' in caplog.text
+    assert reasons == ['mixed_container_suffixes']
+    assert 'compose_strategy_selected requested_mode=auto selected_strategy=encode' in caplog.text
     assert 'mixed_container_suffixes' in caplog.text
 
 
@@ -401,3 +407,168 @@ def test_copy_mode_rejection_includes_reason_details():
 
     assert exc.value.status_code == 400
     assert 'non_video_inputs:image' in exc.value.detail
+
+
+def test_copy_executor_uses_concat_demuxer_and_logs_command(tmp_path: Path, monkeypatch, caplog):
+    first = tmp_path / "a.mp4"
+    second = tmp_path / "b.mp4"
+    output = tmp_path / "out.mp4"
+    first.write_bytes(b"a")
+    second.write_bytes(b"b")
+
+    calls: list[list[str]] = []
+
+    def _fake_run(command, capture_output=True, text=True):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("app.api.compose.subprocess.run", _fake_run)
+
+    plan = ComposePlan(
+        input_paths=[first, second],
+        output_path=output,
+        strategy="copy",
+        requested_mode="copy",
+        strategy_reasons=["copy_safe"],
+        input_assets=[
+            InputAsset(path=first, kind="video", signature={"format_name": "mov,mp4"}),
+            InputAsset(path=second, kind="video", signature={"format_name": "mov,mp4"}),
+        ],
+        prepared_segments=[
+            PreparedSegment(path=first, source_kind="video", generated=False),
+            PreparedSegment(path=second, source_kind="video", generated=False),
+        ],
+    )
+
+    with caplog.at_level("INFO", logger="media_sync_api.compose"):
+        result = ComposeExecutor().execute(plan, job_id="job-copy")
+
+    assert result.mode_used == "copy"
+    assert calls
+    assert calls[0][:5] == ["ffmpeg", "-n", "-f", "concat", "-safe"]
+    assert "compose_concat_started" in caplog.text
+    assert "mechanism=concat_demuxer_copy" in caplog.text
+    assert "job_id=job-copy" in caplog.text
+
+
+def test_encode_executor_uses_filter_concat_for_normalized_segments(tmp_path: Path, monkeypatch, caplog):
+    first = tmp_path / "segment_0000.mp4"
+    second = tmp_path / "segment_0001.mp4"
+    output = tmp_path / "out.mp4"
+    first.write_bytes(b"a")
+    second.write_bytes(b"b")
+
+    calls: list[list[str]] = []
+
+    def _fake_run(command, capture_output=True, text=True):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("app.api.compose.subprocess.run", _fake_run)
+
+    plan = ComposePlan(
+        input_paths=[first, second],
+        output_path=output,
+        strategy="encode",
+        requested_mode="encode",
+        strategy_reasons=["requested_encode"],
+        input_assets=[
+            InputAsset(path=first, kind="video", signature={"format_name": "mov,mp4"}),
+            InputAsset(path=second, kind="video", signature={"format_name": "mov,mp4"}),
+        ],
+        prepared_segments=[
+            PreparedSegment(path=first, source_kind="video", generated=True),
+            PreparedSegment(path=second, source_kind="video", generated=True),
+        ],
+    )
+
+    with caplog.at_level("INFO", logger="media_sync_api.compose"):
+        result = ComposeExecutor().execute(plan, job_id="job-encode")
+
+    assert result.mode_used == "encode"
+    assert calls
+    command = calls[0]
+    assert "-filter_complex" in command
+    filter_index = command.index("-filter_complex")
+    assert "concat=n=2:v=1:a=1" in command[filter_index + 1]
+    assert "compose_concat_started" in caplog.text
+    assert "mechanism=filter_concat_encode" in caplog.text
+
+
+def test_normalize_video_segment_without_audio_adds_silent_track(tmp_path: Path, monkeypatch):
+    input_path = tmp_path / "clip.mov"
+    output_path = tmp_path / "normalized.mp4"
+    input_path.write_bytes(b"video")
+
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr("app.api.compose._probe_video_geometry", lambda _path: {"width": 1920, "height": 1080, "rotate": 0})
+
+    def _fake_run(command, capture_output=True, text=True):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("app.api.compose.subprocess.run", _fake_run)
+
+    normalized = _normalize_video_segment(
+        input_path,
+        output_path,
+        has_audio=False,
+        target_width=1920,
+        target_height=1080,
+    )
+
+    assert normalized == output_path
+    assert commands
+    command = commands[0]
+    assert "anullsrc=channel_layout=stereo:sample_rate=48000" in command
+    vf_arg = command[command.index("-vf") + 1]
+    assert "fps=30000/1001" in vf_arg
+    assert "setpts=PTS-STARTPTS" in vf_arg
+
+
+def test_compose_service_logs_probe_strategy_and_output_validation(monkeypatch, tmp_path: Path, caplog):
+    first = tmp_path / "a.mov"
+    second = tmp_path / "b.mov"
+    output = tmp_path / "compiled-0001.mp4"
+    first.write_bytes(b"a")
+    second.write_bytes(b"b")
+    output.write_bytes(b"out")
+
+    service = ComposeService()
+    ctx = type("Ctx", (), {
+        "project_name": "demo",
+        "source_name": "primary",
+        "project_root": tmp_path,
+    })()
+    spec = type("Spec", (), {"mode": "auto"})()
+    plan = ComposePlan(
+        input_paths=[first, second],
+        output_path=output,
+        strategy="encode",
+        requested_mode="auto",
+        strategy_reasons=["signature_mismatch:video_time_base"],
+        input_assets=[
+            InputAsset(path=first, kind="video", signature={"format_name": "mov,mp4"}),
+            InputAsset(path=second, kind="video", signature={"format_name": "mov,mp4"}),
+        ],
+    )
+
+    monkeypatch.setattr(service.planner, "build_staged_plan", lambda _ctx, _paths, _spec: plan)
+    monkeypatch.setattr(service.preprocessor, "prepare", lambda assets, work_dir, job_id=None: [
+        PreparedSegment(path=first, source_kind="video", generated=True),
+        PreparedSegment(path=second, source_kind="video", generated=True),
+    ])
+    monkeypatch.setattr(service.executor, "execute", lambda plan, job_id=None: ComposeResult(output_path=output, mode_used=plan.strategy))
+    monkeypatch.setattr(service.registrar, "register", lambda _ctx, result, _base_url: {"path": result.output_path.name})
+    monkeypatch.setattr("app.api.compose._probe_media_summary", lambda path: {"path": Path(path).name, "video_codec": "h264"})
+
+    with caplog.at_level("INFO", logger="media_sync_api.compose"):
+        result = service.compose_staged_paths(ctx, spec, [first, second], "http://localhost:8787", work_dir=tmp_path, job_id="job-observe")
+
+    assert result == {"path": output.name}
+    assert "compose_probe_started" in caplog.text
+    assert "compose_probe_input" in caplog.text
+    assert "compose_strategy_confirmed" in caplog.text
+    assert "compose_output_probe" in caplog.text
+    assert "job_id=job-observe" in caplog.text
