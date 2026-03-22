@@ -1067,7 +1067,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         output_name: outputName,
         output_source: targetProject.source || null,
         target_dir: 'exports',
-        mode: 'auto',
+        mode: 'encode',
         allow_overwrite: false,
       });
       const composedPath = typeof response.path === 'string' && response.path.trim()

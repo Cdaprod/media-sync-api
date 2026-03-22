@@ -1,6 +1,51 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-22)
+- Added optional compose debug preservation across existing/upload/bulk flows via `debug_keep_intermediates`, with preserved work dirs copied under `MEDIA_SYNC_TEMP_ROOT/compose_debug/<job_id>` and surfaced back in compose results as `debug_artifacts`.
+- Hardened the repro harness log harvesting path with a broader two-pass scan (`recent` then full service log) so job-scoped lifecycle lines are much less likely to come back empty during real operator runs.
+- Expanded tests to cover both the preserved-debug-artifacts path and the harness’s full-log fallback behavior so these operator workflows remain dependable.
+
+### Latest Implementation Notes (2026-03-22)
+- All compose job entrypoints now serialize the same operator-facing job envelope fields (`mode_requested`, `input_count`, `input_preview`, and status-specific `instructions`) so existing/upload/incremental/bulk compose all expose the same polling/debug contract.
+- README now documents the mode semantics explicitly (`encode` correctness-first, `copy` strict fast-path, `auto` deterministic selection) instead of leaving that policy implied by compose internals and Explorer defaults.
+- Updated regression coverage across project and bulk compose job responses so these envelope fields stay aligned with the now-verified encode pipeline rather than drifting by route.
+
+### Latest Implementation Notes (2026-03-22)
+- Real repro evidence then localized the next failure earlier in the pipeline: normalized segment validation rejected `segment_0000.mp4` on `video_avg_frame_rate:25/1`, so this branch now treats normalized FPS canonicalization/validation as the active bottleneck instead of only the final join.
+- Compose probe summaries now include both `video_avg_frame_rate` and `video_r_frame_rate`, and encode validation accepts canonical intermediates when the real stream rate is correct even if `avg_frame_rate` is noisy for these iPhone-derived normalized outputs.
+- Normalization now also stamps an explicit output `-r 30000/1001` on generated intermediates/images, and the repro harness log filter was widened from strict `job_id=...` matching to any lifecycle line containing the job id so JSON-shaped log fields are still captured.
+
+### Latest Implementation Notes (2026-03-22)
+- Encode-mode finalization now prefers concat-demuxer copy over the already-normalized intermediate MP4s, using the heavier filter-concat re-encode only as a logged fallback when the normalized join itself fails.
+- This narrows the remaining iPhone boundary investigation toward whether the freeze is introduced before final join or only in the fallback path, while keeping the faster/more deterministic normalized-join path reviewable in logs via `mechanism=concat_demuxer_copy_normalized`.
+- Added regression coverage for normalized-join preference and explicit fallback back into the filter-concat encode path so the executor’s chosen final-join mechanism stays observable.
+
+### Latest Implementation Notes (2026-03-22)
+- Fixed `scripts/compose_repro.py` to match the current existing-assets compose API contract by sending `inputs` (not stale `relative_paths`), closing the immediate 422 that blocked real compose repro runs.
+- Hardened encode-mode timeline normalization for the reproduced iPhone HEVC/Dolby Vision portrait case by rebasing normalized video/audio onto explicit canonical timebases, forcing CFR-oriented output args, and re-normalizing streams again inside the final concat filtergraph before encode.
+- Expanded compose probe validation with per-stream duration summaries plus `av_duration_delta_seconds` so normalized/final encode artifacts can fail fast when audio/video drift exceeds tolerance instead of silently registering a boundary-broken output.
+
+### Latest Implementation Notes (2026-03-22)
+- Added `scripts/compose_repro.py` as the branch-follow-up validation harness for existing-assets compose repros so operators can submit a real clip set, poll the async `job_id`, and capture only the correlated lifecycle log block from `docker compose logs`.
+- Documented a copy-paste real-compose repro workflow in README and added regression coverage for payload-building, job-status URL shaping, and `job_id` log filtering so the validation helper stays stable across future compose changes.
+- Updated the todo handoff with a dedicated real-clip validation task stub that points future agents/operators at the new harness instead of another no-op alignment pass.
+
+### Latest Implementation Notes (2026-03-22)
+- Added normalized-intermediate probe logging (`compose_normalized_probe`) plus fail-fast validation for normalized segments and final outputs so broken compose artifacts are rejected before registration instead of silently landing in project indexes.
+- Encode/output validation now enforces canonical expectations around codec, pixel format, dimensions, fps, audio shape, rotation reset, and non-zero duration, with explicit validation-failure log events for forensics.
+- Expanded compose regression coverage for normalized-probe visibility and output-validation registration guards while preserving the earlier explicit copy/encode pipeline split.
+
+### Latest Implementation Notes (2026-03-22)
+- Refactored backend compose execution into explicit mode-specific paths: direct concat-demuxer copy for conservative copy-safe inputs, canonical normalize-then-filter-concat encode for correctness-first jobs, and auto-mode delegation that logs the requested-vs-selected strategy per job.
+- Compose jobs now emit structured lifecycle breadcrumbs across request receipt, per-input probes, strategy confirmation, normalization, concat execution, output validation, and completion/failure so API logs can explain which path actually ran.
+- Encode normalization now resets timestamps, normalizes fps/audio layout, and injects silent stereo tracks where needed before concat; added regression tests for concat command selection, normalization audio fallback, and observability markers.
+
+### Latest Implementation Notes (2026-03-22)
+- Explorer multi-select compose in both the static UI and package Explorer now submits `mode: 'encode'` for the human-driven ordered-stitch workflow, avoiding unsafe concat-copy selection for selected assets.
+- Hardened backend compose auto-mode selection with more conservative copy-compatibility checks (matching container suffixes plus expanded ffprobe stream/container signature fields) and added explicit `compose_strategy_selected` / auto-copy-fallback logging for easier verification in logs.
+- Added regression coverage for the frontend compose payload policy and backend conservative auto/copy decision reasons, and documented the correctness-first Explorer compose policy in README.
+
 ### Latest Implementation Notes (2026-03-21)
 - Replaced the package Explorer root `app/not-found.tsx` with a multi-phase shader scene (`idle` → `warp` → `arrival` → `exit`) that keeps App Router 404 ownership while turning the page into a contained cinematic handoff back into Explorer.
 - Swapped package-level 404 font loading from `next/font/google` to shared layout `<head>` links for `Bebas Neue` + `DM Mono` after the build-time Bebas fetch proved brittle in the replacement scene flow; the page still avoids page-local `@import` usage.

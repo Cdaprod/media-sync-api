@@ -160,8 +160,12 @@ Path alignment for Resolve:
 - `POST /api/projects/{project}/upload?op=snapshot` – fetch batch snapshot
 - `POST /api/projects/{project}/compose` – accept an existing-assets compose job quickly and return `202 Accepted` with a `job_id`; poll `GET /api/projects/{project}/compose/jobs/{job_id}` for `queued|running|completed|failed` state and final registration details
 - `POST /api/projects/{project}/compose/upload` – upload clips into temp staging outside project roots, then return `202 Accepted` with a background compose `job_id` instead of holding the request open through ffmpeg/finalization
-- `GET /api/projects/{project}/compose/jobs/{job_id}` – fetch compose job state, scoped refresh metadata, error details, and the final stored asset payload once background compose finishes
+- `GET /api/projects/{project}/compose/jobs/{job_id}` – fetch compose job state, scoped refresh metadata, `mode_requested`, `input_count`, `input_preview`, status-specific instructions, error details, and the final stored asset payload once background compose finishes
+- Explorer multi-select compose now submits `mode: "encode"` for correctness-first ordered output; backend `auto` remains available for API callers but now falls back away from concat-copy much more conservatively.
+- Compose API logs now emit end-to-end lifecycle events (`compose_request_received`, `compose_probe_*`, `compose_strategy_*`, `compose_normalize_*`, `compose_concat_started`, `compose_output_probe`, `compose_job_*`) so requested mode, selected strategy, normalization, concat path, and output validation are visible in server logs.
+- Encode jobs now emit `compose_normalized_probe` events for each intermediate and fail before registration when normalized segments or final outputs violate canonical expectations (codec/pix_fmt/dimensions/fps/audio/timestamp invariants).
 - `MEDIA_SYNC_TEMP_ROOT` controls compose staging and must resolve outside every enabled SourceRegistry root; compose returns HTTP 503 when this is misconfigured to prevent Explorer indexing of temp clips.
+
 - `POST /api/projects/{project}/sync-album` – record audit event
 - `POST /api/projects/{project}/media/normalize-orientation` – normalize rotated videos in place (`dry_run` supported)
 - `POST /api/projects/{project}/media/reconcile` – classify origin + rotation, plan/apply canonical renames, and persist aliases (`dry_run` + `apply` flags)
@@ -180,6 +184,36 @@ Path alignment for Resolve:
 - `GET /media/{project}/{relative_path}` – stream a stored media file directly (respects `?source=`)
 - `GET /public/index.html` – static adapter/reference page (also served at `/`)
 - Resolve bridge endpoints: `POST /api/resolve/open`, `POST /api/resolve/jobs/next`, `POST /api/resolve/jobs/{id}/complete`, `POST /api/resolve/jobs/{id}/fail`
+
+### Real compose repro harness
+Use `scripts/compose_repro.py` to submit a known-bad existing-assets compose set, poll the background `job_id`, and optionally save only the correlated lifecycle lines from `docker compose logs`. This is the recommended next-step validation path for the remaining real-device failure shapes (repeated first clip, frozen later video, audio continuing after video freeze, rotation/orientation mismatches).
+
+```bash
+python scripts/compose_repro.py \
+  --project P1-Demo \
+  --output-name repro-portrait-set.mp4 \
+  --mode encode \
+  --relative-path ingest/originals/clip-a.mov \
+  --relative-path ingest/originals/clip-b.mov \
+  --docker-service media-sync-api \
+  --save-log-block /tmp/compose-repro.log
+```
+
+The script prints the submit envelope, polls `GET /api/projects/{project}/compose/jobs/{job_id}`, and when `--docker-service` is provided filters the log stream down to lifecycle entries for that exact `job_id` (`compose_request_received`, `compose_probe_*`, `compose_strategy_*`, `compose_normalize_*`, `compose_normalized_probe`, `compose_concat_started`, `compose_output_probe`, and terminal `compose_job_*`).
+
+The harness now submits the current backend request contract (`inputs`) and the backend encode path additionally records per-stream normalized/output durations (`video_duration_seconds`, `audio_duration_seconds`, `av_duration_delta_seconds`) so reproduced iPhone boundary A/V drift can be correlated with stricter validation and timing behavior on this branch.
+
+Encode mode now also prefers a concat-demuxer copy over the already-normalized intermediates (`mechanism=concat_demuxer_copy_normalized`) and only falls back to the heavier filter-concat re-encode when that normalized join fails, making it easier to tell from logs whether the remaining bug lives in normalization or the old final concat path.
+
+For the current iPhone HEVC portrait repro follow-up, normalized probe logs now expose both `video_avg_frame_rate` and `video_r_frame_rate`, and the harness log filter matches any lifecycle line containing the `job_id` so JSON-shaped logger output is still captured during failures that occur before final output registration.
+
+Add `--debug-keep-intermediates` when you want the backend to preserve that job’s temp work dir under `MEDIA_SYNC_TEMP_ROOT/compose_debug/<job_id>`; successful and failed job payloads now surface `debug_keep_intermediates` and include `result.debug_artifacts` when preserved intermediates are available.
+
+### Compose mode semantics
+- `encode` — correctness-first path for user-facing multi-asset timelines. Inputs are normalized into canonical intermediates, validated, and then joined with observable final-join strategy logging.
+- `copy` — strict fast-path only for genuinely copy-safe inputs. If a caller explicitly requests `copy`, incompatibilities surface as errors instead of silently acting like `encode`.
+- `auto` — deterministic strategy selection. The backend logs why it chose `copy` or `encode`, and all compose job envelopes now echo `mode_requested`, `input_count`, and `input_preview` so operators and UIs can reason about the same request contract.
+
 
 
 ### Registry contract examples

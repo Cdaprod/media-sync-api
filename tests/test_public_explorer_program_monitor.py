@@ -204,6 +204,8 @@ def test_explorer_compose_uses_custom_modal_defaults_instead_of_native_prompts()
     assert 'output_project: composeConfig.outputProject' in compose_block
     assert 'output_source: composeConfig.outputSource || \'primary\'' in compose_block
     assert 'output_name: composeConfig.outputName' in compose_block
+    assert "mode: 'encode'" in compose_block
+    assert "mode: 'auto'" not in compose_block
     assert 'window.prompt(' not in compose_block
 
     assert 'id="composeModal" class="compose-modal"' in html
