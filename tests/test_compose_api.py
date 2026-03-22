@@ -108,10 +108,16 @@ def test_compose_existing_accepts_job_and_registers_one_asset(client, monkeypatc
     body = response.json()
     assert body["status"] == "accepted"
     assert body["job_status"] in {"queued", "running"}
+    assert body["mode_requested"] == "auto"
+    assert body["input_count"] == 2
+    assert body["input_preview"] == [first.json()["path"], second.json()["path"]]
     assert body["refresh_scope"] == {"project": project_name, "source": "primary", "paths": ["exports"]}
 
     status = _await_compose_job(client, project_name, body["job_id"])
     assert status["status"] == "completed"
+    assert status["mode_requested"] == "auto"
+    assert status["input_count"] == 2
+    assert status["instructions"] == "Refresh only refresh_scope paths; result contains the validated registered output."
     result = status["result"]
     assert result["status"] == "stored"
     assert result["path"].startswith("exports/timeline-")
@@ -144,6 +150,8 @@ def test_compose_upload_batch_accepts_job_and_cleans_temp_root(client, monkeypat
     assert response.status_code == 202
     body = response.json()
     assert body["status"] == "accepted"
+    assert body["mode_requested"] == "auto"
+    assert body["input_count"] == 2
 
     status = _await_compose_job(client, project_name, body["job_id"])
     assert status["status"] == "completed"
@@ -179,6 +187,8 @@ def test_compose_upload_incremental_queues_last_clip_and_cleans_session(client, 
     body = second.json()
     assert body["status"] == "accepted"
     assert body["flow"] == "upload_incremental"
+    assert body["mode_requested"] == "auto"
+    assert body["input_count"] == 2
 
     status = _await_compose_job(client, project_name, body["job_id"])
     assert status["status"] == "completed"
@@ -210,8 +220,10 @@ def test_compose_status_reports_background_failure(client, monkeypatch):
 
     status = _await_compose_job(client, project_name, response.json()["job_id"])
     assert status["status"] == "failed"
+    assert status["mode_requested"] == "auto"
     assert status["error_status_code"] == 500
     assert "ffmpeg failure simulated" in status["error"]
+    assert status["instructions"] == "Inspect error and correlated compose lifecycle logs for this job_id; failed jobs do not register outputs."
 
 
 

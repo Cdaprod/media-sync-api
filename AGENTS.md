@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- All compose job entrypoints now serialize the same operator-facing job envelope fields (`mode_requested`, `input_count`, `input_preview`, and status-specific `instructions`) so existing/upload/incremental/bulk compose all expose the same polling/debug contract.
+- README now documents the mode semantics explicitly (`encode` correctness-first, `copy` strict fast-path, `auto` deterministic selection) instead of leaving that policy implied by compose internals and Explorer defaults.
+- Updated regression coverage across project and bulk compose job responses so these envelope fields stay aligned with the now-verified encode pipeline rather than drifting by route.
+
+### Latest Implementation Notes (2026-03-22)
 - Real repro evidence then localized the next failure earlier in the pipeline: normalized segment validation rejected `segment_0000.mp4` on `video_avg_frame_rate:25/1`, so this branch now treats normalized FPS canonicalization/validation as the active bottleneck instead of only the final join.
 - Compose probe summaries now include both `video_avg_frame_rate` and `video_r_frame_rate`, and encode validation accepts canonical intermediates when the real stream rate is correct even if `avg_frame_rate` is noisy for these iPhone-derived normalized outputs.
 - Normalization now also stamps an explicit output `-r 30000/1001` on generated intermediates/images, and the repro harness log filter was widened from strict `job_id=...` matching to any lifecycle line containing the job id so JSON-shaped log fields are still captured.

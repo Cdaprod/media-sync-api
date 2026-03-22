@@ -160,7 +160,7 @@ Path alignment for Resolve:
 - `POST /api/projects/{project}/upload?op=snapshot` – fetch batch snapshot
 - `POST /api/projects/{project}/compose` – accept an existing-assets compose job quickly and return `202 Accepted` with a `job_id`; poll `GET /api/projects/{project}/compose/jobs/{job_id}` for `queued|running|completed|failed` state and final registration details
 - `POST /api/projects/{project}/compose/upload` – upload clips into temp staging outside project roots, then return `202 Accepted` with a background compose `job_id` instead of holding the request open through ffmpeg/finalization
-- `GET /api/projects/{project}/compose/jobs/{job_id}` – fetch compose job state, scoped refresh metadata, error details, and the final stored asset payload once background compose finishes
+- `GET /api/projects/{project}/compose/jobs/{job_id}` – fetch compose job state, scoped refresh metadata, `mode_requested`, `input_count`, `input_preview`, status-specific instructions, error details, and the final stored asset payload once background compose finishes
 - Explorer multi-select compose now submits `mode: "encode"` for correctness-first ordered output; backend `auto` remains available for API callers but now falls back away from concat-copy much more conservatively.
 - Compose API logs now emit end-to-end lifecycle events (`compose_request_received`, `compose_probe_*`, `compose_strategy_*`, `compose_normalize_*`, `compose_concat_started`, `compose_output_probe`, `compose_job_*`) so requested mode, selected strategy, normalization, concat path, and output validation are visible in server logs.
 - Encode jobs now emit `compose_normalized_probe` events for each intermediate and fail before registration when normalized segments or final outputs violate canonical expectations (codec/pix_fmt/dimensions/fps/audio/timestamp invariants).
@@ -206,6 +206,11 @@ The harness now submits the current backend request contract (`inputs`) and the 
 Encode mode now also prefers a concat-demuxer copy over the already-normalized intermediates (`mechanism=concat_demuxer_copy_normalized`) and only falls back to the heavier filter-concat re-encode when that normalized join fails, making it easier to tell from logs whether the remaining bug lives in normalization or the old final concat path.
 
 For the current iPhone HEVC portrait repro follow-up, normalized probe logs now expose both `video_avg_frame_rate` and `video_r_frame_rate`, and the harness log filter matches any lifecycle line containing the `job_id` so JSON-shaped logger output is still captured during failures that occur before final output registration.
+
+### Compose mode semantics
+- `encode` — correctness-first path for user-facing multi-asset timelines. Inputs are normalized into canonical intermediates, validated, and then joined with observable final-join strategy logging.
+- `copy` — strict fast-path only for genuinely copy-safe inputs. If a caller explicitly requests `copy`, incompatibilities surface as errors instead of silently acting like `encode`.
+- `auto` — deterministic strategy selection. The backend logs why it chose `copy` or `encode`, and all compose job envelopes now echo `mode_requested`, `input_count`, and `input_preview` so operators and UIs can reason about the same request contract.
 
 
 

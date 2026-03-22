@@ -1006,6 +1006,8 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
     assert response.status_code == 202
     payload = response.json()
     assert payload["status"] == "accepted"
+    assert payload["mode_requested"] == "auto"
+    assert payload["input_count"] == 2
     job_id = payload["job_id"]
     deadline = time.time() + 5
     status_payload = None
@@ -1021,6 +1023,7 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
         time.sleep(0.05)
     assert status_payload is not None
     assert status_payload["status"] == "completed"
+    assert status_payload["mode_requested"] == "auto"
     assert status_payload["result"]["path"].startswith("exports/")
     assert captured["project"] == output_project
     assert captured["output_name"] == "bulk-cut.mp4"
@@ -1117,7 +1120,10 @@ def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClien
         },
     )
     assert response.status_code == 202
-    job_id = response.json()["job_id"]
+    payload = response.json()
+    assert payload["mode_requested"] == "auto"
+    assert payload["input_count"] == 1
+    job_id = payload["job_id"]
     deadline = time.time() + 5
     status_payload = None
     while time.time() < deadline:

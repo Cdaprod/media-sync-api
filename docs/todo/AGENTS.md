@@ -1,3 +1,9 @@
+## 2026-03-22 — Compose entrypoint/job-envelope alignment
+- [x] Unified compose job envelopes across existing/upload/incremental/bulk flows so polling responses now all include `mode_requested`, `input_count`, `input_preview`, and status-specific `instructions`.
+- [x] Documented the real compose mode semantics (`encode`, `copy`, `auto`) in `README.md` so caller behavior is explicit instead of inferred from route internals and Explorer defaults.
+- [x] Added regression coverage for the aligned job-envelope fields in both project-scoped and bulk compose tests.
+- [ ] Audit any remaining UI/operator consumers against the richer job envelope and confirm they use `refresh_scope` plus the new mode/input metadata instead of older assumptions.
+
 ## 2026-03-22 — Normalized FPS canonicalization + harness log capture follow-up
 - [x] Treated the new real repro failure (`Normalized segment validation failed ... video_avg_frame_rate:25/1`) as an upstream normalization/validation issue rather than continuing to focus only on the final join.
 - [x] Expanded normalized/output probe summaries to include both avg and real frame-rate fields, and loosened validation to accept canonical normalized outputs when `video_r_frame_rate` is correct even if `video_avg_frame_rate` is noisy.

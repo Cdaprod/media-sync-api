@@ -215,6 +215,9 @@ class ComposeJob:
     flow: Literal["existing", "upload_batch", "upload_incremental", "bulk"]
     target_dir: str
     output_name: str
+    mode_requested: Literal["auto", "copy", "encode"]
+    input_count: int
+    input_preview: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     status: Literal["queued", "running", "completed", "failed"] = "queued"
     started_at: str | None = None
@@ -232,6 +235,9 @@ class ComposeJob:
             "flow": self.flow,
             "target_dir": self.target_dir,
             "output_name": self.output_name,
+            "mode_requested": self.mode_requested,
+            "input_count": self.input_count,
+            "input_preview": list(self.input_preview),
             "created_at": self.created_at,
             "status": self.status,
             "started_at": self.started_at,
@@ -982,6 +988,9 @@ def _serialize_compose_job(job: ComposeJob, *, base_url: str | None = None) -> d
         "flow": job.flow,
         "output_name": job.output_name,
         "target_dir": job.target_dir,
+        "mode_requested": job.mode_requested,
+        "input_count": job.input_count,
+        "input_preview": list(job.input_preview),
         "created_at": job.created_at,
         "started_at": job.started_at,
         "finished_at": job.finished_at,
@@ -997,6 +1006,12 @@ def _serialize_compose_job(job: ComposeJob, *, base_url: str | None = None) -> d
         payload["error_status_code"] = job.error_status_code
     if job.result is not None:
         payload["result"] = job.result
+    if job.status in {"queued", "running"}:
+        payload["instructions"] = "Poll job_url for status; completed jobs register outputs into the affected project path scope."
+    elif job.status == "completed":
+        payload["instructions"] = "Refresh only refresh_scope paths; result contains the validated registered output."
+    elif job.status == "failed":
+        payload["instructions"] = "Inspect error and correlated compose lifecycle logs for this job_id; failed jobs do not register outputs."
     return payload
 
 
@@ -2370,6 +2385,9 @@ def _submit_compose_job(
         flow=flow,
         target_dir=target_dir,
         output_name=output_name,
+        mode_requested=mode_requested,
+        input_count=input_count,
+        input_preview=list(input_preview or [])[:10],
         refresh_scope=_build_refresh_scope(ctx, target_dir),
     )
     _compose_job_runner.submit(job, lambda: task(job.id))
@@ -2389,7 +2407,6 @@ def _submit_compose_job(
     payload = _serialize_compose_job(job, base_url=base_url)
     payload["status"] = "accepted"
     payload["job_status"] = job.status
-    payload["instructions"] = "Poll job_url for status; completed jobs register outputs into the affected project path scope."
     return JSONResponse(status_code=202, content=payload)
 
 
