@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Tightened the Explorer topbar follow-up by narrowing document-level outside-dismiss handling to topbar-owned targets only (`data-topbar-root/control/panel/reveal`) instead of exempting every interactive control in the app, so unrelated chips/buttons can still collapse the revealed bar correctly.
+- Kept the generic `isInteractiveTarget(...)` helper for asset/card interaction routing, but split topbar ownership into its own helper to avoid coupling shell-dismiss behavior to unrelated UI controls.
+- Expanded the focused package regression assertions to lock the new topbar-owned marker/helper contract and prevent future regressions back to app-wide interactive dismiss exemptions.
+
+### Latest Implementation Notes (2026-03-23)
 - Tightened Explorer topbar interaction boundaries so shell-level dismiss logic now respects a shared interactive-target guard (`data-interactive`, native form controls, summaries, selector zones) instead of collapsing while users work inside the header or on nearby selector controls.
 - Reduced the hidden-topbar reveal hotspot from the full header height down to a dedicated 24px strip, preventing first-row asset taps/checkboxes from being intercepted by the reveal layer when the topbar is collapsed.
 - Updated package Explorer asset selector controls to consume `pointerdown` and stop propagation, and expanded package regression coverage to lock the new interactive-target guard plus narrowed reveal-strip contract.

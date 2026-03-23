@@ -239,12 +239,18 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   const styles = fs.readFileSync(stylesPath, 'utf8');
 
   assert.ok(utils.includes('export function isInteractiveTarget'));
+  assert.ok(utils.includes('export function isTopbarOwnedTarget'));
+  assert.ok(utils.includes("'[data-topbar-control=\"true\"]'"));
   assert.ok(utils.includes("'summary'"));
   assert.ok(utils.includes("'[data-interactive=\"true\"]'"));
-  assert.ok(explorer.includes('if (isInteractiveTarget(event.target)) return;'));
+  assert.ok(explorer.includes('if (isTopbarOwnedTarget(event.target)) return;'));
+  assert.ok(explorer.includes('data-topbar-root="true"'));
+  assert.ok(explorer.includes('data-topbar-panel="true"'));
+  assert.ok(explorer.includes('data-topbar-reveal="true"'));
+  assert.ok(explorer.includes('data-topbar-control="true"'));
   assert.ok(explorer.includes('data-interactive="true"'));
-  assert.ok(explorer.includes('<div className="search" role="search" data-interactive="true">'));
-  assert.ok(explorer.includes('className={`actions-panel ${actionsOpen ? \'open\' : \'\'}`} role="region" aria-label="Explorer actions" data-interactive="true"'));
+  assert.ok(explorer.includes('<div className="search" role="search" data-interactive="true" data-topbar-control="true">'));
+  assert.ok(explorer.includes('className={`actions-panel ${actionsOpen ? \'open\' : \'\'}`} role="region" aria-label="Explorer actions" data-interactive="true" data-topbar-panel="true"'));
   assert.ok(hook.includes('if (isInteractiveTarget(event.target)) return;'));
   assert.ok(grid.includes('onPointerDown={handleTogglePointerDown}'));
   assert.ok(grid.includes('event.stopPropagation();'));

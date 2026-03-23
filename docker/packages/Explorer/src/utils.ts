@@ -96,9 +96,21 @@ const INTERACTIVE_TARGET_SELECTOR = [
   '[contenteditable="true"]',
 ].join(', ');
 
+const TOPBAR_OWNED_TARGET_SELECTOR = [
+  '[data-topbar-root="true"]',
+  '[data-topbar-control="true"]',
+  '[data-topbar-panel="true"]',
+  '[data-topbar-reveal="true"]',
+].join(', ');
+
 export function isInteractiveTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   return Boolean(target.closest(INTERACTIVE_TARGET_SELECTOR));
+}
+
+export function isTopbarOwnedTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest(TOPBAR_OWNED_TARGET_SELECTOR));
 }
 
 export async function copyTextWithFallback(text: string): Promise<boolean> {

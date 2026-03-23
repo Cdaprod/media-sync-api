@@ -1,3 +1,9 @@
+## 2026-03-23 — Explorer topbar outside-dismiss scope correction
+- [x] Replaced the document-level topbar outside-dismiss bailout’s app-wide interactive check with a topbar-owned target contract so unrelated project chips and bulk-action buttons can still collapse the revealed topbar.
+- [x] Added explicit topbar ownership markers (`data-topbar-root/control/panel/reveal`) while preserving the generic interactive helper for asset/card routing only.
+- [x] Extended focused package regressions to assert the new topbar-owned helper/marker split instead of the earlier over-broad dismiss exemption.
+- [ ] Validate on physical iPhone Safari that tapping project chips, bulk-action controls, and first-row asset controls closes or preserves the topbar only when expected.
+
 ## 2026-03-23 — Explorer topbar interaction-boundary repair
 - [x] Narrowed the hidden-topbar reveal hotspot to a dedicated strip so first-row asset taps no longer get intercepted by the reveal layer.
 - [x] Added a shared interactive-target guard for topbar dismiss/asset gesture code so search, type/sort dropdowns, and selector controls no longer collapse the shell during valid interaction.
