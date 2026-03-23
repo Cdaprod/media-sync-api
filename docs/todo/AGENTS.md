@@ -1,3 +1,10 @@
+## 2026-03-23 — Explorer topbar touch-only close model + stable hidden offset
+- [x] Disabled document-level topbar outside-tap dismissal for touch/coarse-pointer environments so mobile portrait now relies on scroll-away behavior instead of tap-away collapse.
+- [x] Kept the Explorer content offset stable while the fixed topbar hides, eliminating the upward first-row jump that previously moved checkboxes/assets under the user’s finger.
+- [x] Increased mobile hide/reveal tolerance, added temporary topbar pinning on dropdown/action pointer-down, and widened the portrait seam spacing with extra mobile padding ahead of the first grid row.
+- [x] Expanded focused Explorer package regressions to lock the touch-only dismiss gate, stable hidden offset, stronger scroll thresholds, and temporary topbar pinning contract.
+- [ ] Validate on physical iPhone portrait Safari that first-row asset checkboxes no longer shift after the topbar closes and that ordinary taps outside the topbar do not dismiss it unless scroll-away intent is clear.
+
 ## 2026-03-23 — Explorer stale compose recovery cleanup + topbar touch fix
 - [x] Added bounded reconciliation for startup-restored pending compose jobs so missing/unconfirmable records self-clear instead of lingering forever as reconnecting placeholders.
 - [x] Made restored pending jobs remove themselves immediately when a matching real asset is already present and preserved failed-job persistence with richer serialized status/error/debug fields.

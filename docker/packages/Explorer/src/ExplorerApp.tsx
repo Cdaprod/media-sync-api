@@ -314,6 +314,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const topbarPinTimeoutRef = useRef<number | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const selectedOrderRef = useRef<string[]>([]);
   const topbarRef = useRef<HTMLDivElement | null>(null);
@@ -1537,6 +1538,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (item) openDrawer(item);
   }, [openDrawer, selectionItems]);
 
+  const pinTopbarTemporarily = useCallback((ms = 900) => {
+    if (topbarPinTimeoutRef.current) {
+      window.clearTimeout(topbarPinTimeoutRef.current);
+    }
+    topbarIntentRef.current?.setPinned(true);
+    topbarPinTimeoutRef.current = window.setTimeout(() => {
+      topbarIntentRef.current?.setPinned(false);
+      topbarPinTimeoutRef.current = null;
+    }, ms);
+  }, []);
+
   const handleTypeSelect = useCallback(
     (value: MediaTypeFilter) => (event: React.MouseEvent<HTMLButtonElement>) => {
       setTypeFilter(value);
@@ -1692,7 +1704,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const topbar = topbarRef.current;
     const reveal = topbarRevealRef.current;
     if (!topbar || !reveal) return;
-    const supportsHover = window.matchMedia('(hover: hover)').matches;
+    const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    const isTouchPrimary = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
     const intent = createIntentController({
       onOpen: () => revealTopbar(),
@@ -1730,23 +1743,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     reveal.addEventListener('pointermove', handleRevealMove);
 
     const handleOutside = (event: PointerEvent) => {
+      if (isTouchPrimary) return;
       if (isTopbarOwnedTarget(event.target)) return;
       if (intent.isPinned()) return;
       if (topbar.contains(event.target as Node) || reveal.contains(event.target as Node)) return;
       if (!shouldKeepOpen()) intent.scheduleClose(120);
     };
-    document.addEventListener('pointerdown', handleOutside);
+    if (!isTouchPrimary) {
+      document.addEventListener('pointerdown', handleOutside);
+    }
 
     intent.setOpen(true);
 
     return () => {
+      if (topbarPinTimeoutRef.current) {
+        window.clearTimeout(topbarPinTimeoutRef.current);
+        topbarPinTimeoutRef.current = null;
+      }
       topbar.removeEventListener('pointerenter', handleEnter);
       topbar.removeEventListener('pointerleave', handleLeave);
       reveal.removeEventListener('pointerenter', handleEnter);
       reveal.removeEventListener('pointerleave', handleLeave);
       reveal.removeEventListener('pointerdown', handleEnter);
       reveal.removeEventListener('pointermove', handleRevealMove);
-      document.removeEventListener('pointerdown', handleOutside);
+      if (!isTouchPrimary) {
+        document.removeEventListener('pointerdown', handleOutside);
+      }
     };
   }, [dragging, revealTopbar, setTopbarHidden, sidebarOpen]);
 
@@ -1986,7 +2008,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 />
                 <div className="search-toolbar" aria-label="Search filters" data-interactive="true" data-topbar-control="true">
                   <details className="dropdown" data-interactive="true" data-topbar-control="true">
-                    <summary className="control" aria-label="Filter by media type" data-interactive="true" data-topbar-control="true">
+                    <summary className="control" aria-label="Filter by media type" data-interactive="true" data-topbar-control="true" onPointerDown={() => pinTopbarTemporarily(900)}>
                       Type: <span>{typeLabel}</span>
                     </summary>
                     <div className="dropdown-menu" role="listbox" aria-label="Media type filters">
@@ -2056,6 +2078,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 data-interactive="true"
                 data-topbar-control="true"
                 aria-expanded={actionsOpen}
+                onPointerDown={() => pinTopbarTemporarily(900)}
                 onClick={() => setActionsOpen((prev) => !prev)}
               >
                 Actions ▾
@@ -2105,7 +2128,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   </option>
                 </select>
                 <details className="dropdown" data-interactive="true" data-topbar-control="true">
-                  <summary className="control" aria-label="Sort media" data-interactive="true" data-topbar-control="true">
+                  <summary className="control" aria-label="Sort media" data-interactive="true" data-topbar-control="true" onPointerDown={() => pinTopbarTemporarily(900)}>
                     Sort: <span>{sortLabel}</span>
                   </summary>
                   <div className="dropdown-menu" role="listbox" aria-label="Sort media">

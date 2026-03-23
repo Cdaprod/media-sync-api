@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
 const TOPBAR_TOP_REVEAL_PX = 24;
-const TOPBAR_HIDE_START_PX = 72;
-const TOPBAR_HIDE_DELTA_PX = 20;
-const TOPBAR_REVEAL_DELTA_PX = 16;
+const TOPBAR_HIDE_START_PX = 96;
+const TOPBAR_HIDE_DELTA_PX = 44;
+const TOPBAR_REVEAL_DELTA_PX = 18;
 
 interface UseTopbarScrollStateOptions {
   disabled?: boolean;

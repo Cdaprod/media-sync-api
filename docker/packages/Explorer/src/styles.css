@@ -22,7 +22,7 @@
   --topbar-row-height: 56px;
   --topbar-subrow-height: 38px;
   --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
-  --topbar-gap: 10px;
+  --topbar-gap: 12px;
   --topbar-reveal-height: 24px;
   --topbar-offset: calc(var(--topbar-height) + var(--topbar-gap));
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -59,7 +59,7 @@ body{
   overflow: hidden;
 }
 .app.topbar-hidden{
-  --topbar-offset: 0px;
+  --topbar-offset: calc(var(--topbar-height) + var(--topbar-gap));
 }
 
 a { color: inherit; }
@@ -118,7 +118,7 @@ code { font-family: var(--mono); }
   transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);
   opacity: 0;
   pointer-events: none;
-  margin-bottom: calc(-1 * var(--topbar-height));
+  margin-bottom: 0;
 }
 .topbar-reveal{
   position: fixed;
@@ -1438,6 +1438,9 @@ select.control{
   .sidebar{ width: 320px; }
 }
 @media (max-width: 860px){
+  :root{
+    --topbar-gap: 14px;
+  }
   body{ overflow:hidden; }
   .main{ flex-direction: column; overflow:hidden; }
   .sidebar{ display:block; width: 100%; }
@@ -1474,6 +1477,12 @@ select.control{
     min-width: 0;
     justify-content: flex-end;
     gap: 6px;
+  }
+  .content .scroll{
+    padding-top: 8px;
+  }
+  .grid{
+    padding-top: 6px;
   }
   .search{
     flex: 1;

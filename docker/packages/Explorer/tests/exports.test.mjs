@@ -243,7 +243,17 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(utils.includes("'[data-topbar-control=\"true\"]'"));
   assert.ok(utils.includes("'summary'"));
   assert.ok(utils.includes("'[data-interactive=\"true\"]'"));
+  assert.ok(explorer.includes("const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;"));
+  assert.ok(explorer.includes("const isTouchPrimary = window.matchMedia('(hover: none) and (pointer: coarse)').matches;"));
+  assert.ok(explorer.includes('if (isTouchPrimary) return;'));
+  assert.ok(explorer.includes('if (!isTouchPrimary) {'));
+  assert.ok(explorer.includes("document.addEventListener('pointerdown', handleOutside);"));
+  assert.ok(explorer.includes("document.removeEventListener('pointerdown', handleOutside);"));
   assert.ok(explorer.includes('if (isTopbarOwnedTarget(event.target)) return;'));
+  assert.ok(explorer.includes('const pinTopbarTemporarily = useCallback((ms = 900) => {'));
+  assert.ok(explorer.includes('topbarIntentRef.current?.setPinned(true);'));
+  assert.ok(explorer.includes('topbarIntentRef.current?.setPinned(false);'));
+  assert.ok(explorer.includes('onPointerDown={() => pinTopbarTemporarily(900)}'));
   assert.ok(explorer.includes('data-topbar-root="true"'));
   assert.ok(explorer.includes('data-topbar-panel="true"'));
   assert.ok(explorer.includes('data-topbar-reveal="true"'));
@@ -478,8 +488,8 @@ test('topbar dropdown and sidebar scroll contracts avoid clipping and preserve p
   assert.ok(styles.includes('height: 100%;'));
   assert.ok(styles.includes('overflow-y: auto;'));
   assert.ok(styles.includes('overscroll-behavior-y: contain;'));
-  assert.ok(styles.includes(`@media (max-width: 860px){
-  body{ overflow:hidden; }`));
+  assert.ok(styles.includes('@media (max-width: 860px){'));
+  assert.ok(styles.includes('body{ overflow:hidden; }'));
 });
 
 test('brand area still toggles the project panel and is not blocked by reveal layers', () => {
@@ -732,8 +742,10 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('aria-label="Toggle projects panel"'));
   assert.ok(!content.includes('className="btn mobile-only"'));
   assert.ok(styles.includes('--topbar-subrow-height'));
-  assert.ok(styles.includes('--topbar-gap: 10px;'));
+  assert.ok(styles.includes('--topbar-gap: 12px;'));
   assert.ok(styles.includes('--topbar-offset: calc(var(--topbar-height) + var(--topbar-gap));'));
+  assert.ok(styles.includes('.app.topbar-hidden{'));
+  assert.ok(styles.includes('margin-bottom: 0;'));
   assert.ok(styles.includes('.topbar::before{'));
   assert.ok(styles.includes('background: transparent;'));
   assert.ok(styles.includes('.topbar-inner{'));
@@ -745,11 +757,18 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('.content .scroll{'));
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
+  assert.ok(hookContent.includes('const TOPBAR_HIDE_START_PX = 96;'));
+  assert.ok(hookContent.includes('const TOPBAR_HIDE_DELTA_PX = 44;'));
+  assert.ok(hookContent.includes('const TOPBAR_REVEAL_DELTA_PX = 18;'));
   assert.ok(hookContent.includes('scrollDeltaBudgetRef.current += delta;'));
   assert.ok(hookContent.includes('TOPBAR_HIDE_DELTA_PX'));
   assert.ok(hookContent.includes('TOPBAR_REVEAL_DELTA_PX'));
   assert.ok(styles.includes('will-change: transform, opacity;'));
   assert.ok(styles.includes('transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);'));
+  assert.ok(styles.includes('@media (max-width: 860px){'));
+  assert.ok(styles.includes('--topbar-gap: 14px;'));
+  assert.ok(styles.includes('padding-top: 8px;'));
+  assert.ok(styles.includes('padding-top: 6px;'));
 });
 
 

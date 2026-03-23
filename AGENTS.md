@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Package Explorer topbar dismiss behavior now treats touch/coarse devices as scroll-only for closure: the document-level outside-`pointerdown` dismissal path remains for hover/fine-pointer environments, but mobile portrait no longer closes the topbar just because a tap lands outside topbar-owned controls.
+- Hidden-topbar layout now preserves the same `--topbar-offset` reservation instead of collapsing the content band to zero, so the first asset row does not jump upward under the user’s finger when the fixed header animates away.
+- Increased the touch-oriented topbar hide thresholds, added temporary pinning on dropdown/action `pointerdown`, widened the mobile topbar gap, and extended Explorer package regression assertions to lock the new mobile-first interaction contract.
+
+### Latest Implementation Notes (2026-03-23)
 - Package Explorer topbar spacing/tap follow-up now reserves an explicit `--topbar-gap` inside `--topbar-offset`, keeping the first content row slightly clear of the fixed header/reveal seam so iPhone Safari does not feel like the topbar is flush against tappable assets.
 - The topbar backdrop now renders through a full-surface `::before` layer while the actual header rows (`.topbar-inner`, `.section-h`) stay above it with real pointer events, reducing the chance of Safari compositing or backdrop layers stealing taps from Search, Type, or nearby controls.
 - Expanded Explorer package regression assertions to lock the new gap/pseudo-element/pointer-event contract so future CSS cleanups do not collapse the seam or demote the real controls behind the backdrop layer.
