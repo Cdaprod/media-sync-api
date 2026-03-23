@@ -310,7 +310,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
-  const mediaScrollRef = useRef<HTMLDivElement | null>(null);
+  const mediaContentRef = useRef<HTMLDivElement | null>(null);
+  const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -496,7 +497,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearPendingDataLoadOverlay,
     endContentLoading,
     pendingDataLoadOverlay,
-    rootRef: mediaScrollRef,
+    rootRef: mediaContentRef,
     thumbDatasetSignature,
     updateCardOrientation,
     view,
@@ -560,7 +561,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const updateGridColumnCount = useCallback(() => {
     if (typeof window === 'undefined') return;
-    const hostWidth = mediaScrollRef.current?.clientWidth || window.innerWidth || 0;
+    const hostWidth = mediaContentRef.current?.clientWidth || window.innerWidth || 0;
     const rootStyles = window.getComputedStyle(document.documentElement);
     const gridGap = parseFloat(rootStyles.getPropertyValue('--grid-gap')) || GRID_GAP_FALLBACK;
     const gridColWidth = parseFloat(rootStyles.getPropertyValue('--grid-col-width')) || GRID_COL_WIDTH_FALLBACK;
@@ -571,7 +572,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     updateGridColumnCount();
-    const host = mediaScrollRef.current;
+    const host = mediaContentRef.current;
     const observer = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => updateGridColumnCount())
       : null;
@@ -1649,7 +1650,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     topbarHidden,
   } = useTopbarScrollState({
     disabled: sidebarOpen || composeModalOpen || deleteModalOpen,
-    scrollRef: mediaScrollRef,
+    scrollRef: mediaScrollViewportRef,
   });
 
   useEffect(() => {
@@ -2461,7 +2462,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </aside>
 
         <section
-          ref={mediaScrollRef}
+          ref={mediaContentRef}
           className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''}`}
           onContextMenuCapture={(event) => {
             const target = event.target as HTMLElement | null;
@@ -2495,7 +2496,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <div className="spinner"></div>
             <div>Preparing thumbnails…</div>
           </div>
-          <div className="scroll" onScroll={clearPendingLongPress}>
+          <div ref={mediaScrollViewportRef} className="scroll" onScroll={clearPendingLongPress}>
             <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
               {!activeProject && mediaScope !== 'all' ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
@@ -2643,95 +2644,97 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </div>
       ) : null}
 
-      <div
-        className={`confirm-modal ${deleteModalOpen ? 'open' : ''}`}
-        role="dialog"
-        aria-modal="true"
-        aria-hidden={!deleteModalOpen}
-        aria-busy={deleteSubmitting}
-        aria-labelledby="confirmDeleteTitle"
-        aria-describedby="confirmDeleteBody"
-        onClick={() => {
-          if (deleteSubmitting) return;
-          handleDeleteCancel();
-        }}
-      >
-        <div className="confirm-card custom-ui-surface" onClick={(event) => event.stopPropagation()}>
-          <h3 id="confirmDeleteTitle" className="confirm-title">{pendingDeleteSelectionKeys.length === 1 ? 'Delete this asset?' : `Delete ${Math.max(1, pendingDeleteSelectionKeys.length)} assets?`}</h3>
-          <p id="confirmDeleteBody" className="confirm-body">This removes the media file from disk and updates the project index.</p>
-          <div className="confirm-actions">
-            <button className="btn" type="button" disabled={deleteSubmitting} onClick={handleDeleteCancel}>Cancel</button>
-            <button
-              ref={deleteConfirmButtonRef}
-              className="btn bad"
-              type="button"
-              disabled={deleteSubmitting}
-              onClick={() => { void handleDeleteConfirm(); }}
-            >
-              {deleteSubmitting ? 'Deleting...' : 'Delete'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className={`compose-modal ${composeModalOpen ? 'open' : ''}`}
-        role="dialog"
-        aria-modal="true"
-        aria-hidden={!composeModalOpen}
-        aria-busy={composeSubmitting}
-        aria-labelledby="composeModalTitle"
-        onClick={() => {
-          if (composeSubmitting) return;
-          setComposeModalOpen(false);
-        }}
-      >
-        <form
-          className="compose-card custom-ui-surface"
-          aria-busy={composeSubmitting}
-          onClick={(event) => event.stopPropagation()}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleComposeConfirm();
+      {deleteModalOpen ? (
+        <div
+          className="confirm-modal open"
+          role="dialog"
+          aria-modal="true"
+          aria-busy={deleteSubmitting}
+          aria-labelledby="confirmDeleteTitle"
+          aria-describedby="confirmDeleteBody"
+          onClick={() => {
+            if (deleteSubmitting) return;
+            handleDeleteCancel();
           }}
         >
-          <h3 id="composeModalTitle" className="compose-title">Compose video output</h3>
-          <p className="compose-body">Choose the output filename and destination project.</p>
-          <div className="compose-fields">
-            <label className="compose-field">
-              <span>Output file name (mp4)</span>
-              <input
-                ref={composeNameInputRef}
-                value={composeOutputName}
-                onChange={(event) => setComposeOutputName(event.target.value)}
-                placeholder="compose-YYYYMMDDHHMMSS.mp4"
-                autoComplete="off"
-                spellCheck={false}
-                disabled={composeSubmitting}
-              />
-            </label>
-            <label className="compose-field">
-              <span>Output project</span>
-              <select
-                value={composeOutputProject}
-                onChange={(event) => setComposeOutputProject(event.target.value)}
-                data-compose-project-picker="1"
-                disabled={composeSubmitting}
+          <div className="confirm-card custom-ui-surface" onClick={(event) => event.stopPropagation()}>
+            <h3 id="confirmDeleteTitle" className="confirm-title">{pendingDeleteSelectionKeys.length === 1 ? 'Delete this asset?' : `Delete ${Math.max(1, pendingDeleteSelectionKeys.length)} assets?`}</h3>
+            <p id="confirmDeleteBody" className="confirm-body">This removes the media file from disk and updates the project index.</p>
+            <div className="confirm-actions">
+              <button className="btn" type="button" disabled={deleteSubmitting} onClick={handleDeleteCancel}>Cancel</button>
+              <button
+                ref={deleteConfirmButtonRef}
+                className="btn bad"
+                type="button"
+                disabled={deleteSubmitting}
+                onClick={() => { void handleDeleteConfirm(); }}
               >
-                {projects.map((project) => (
-                  <option key={`${project.source || 'primary'}::${project.name}`} value={project.name}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {deleteSubmitting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
-          <div className="compose-actions">
-            <button className="btn" type="button" disabled={composeSubmitting} onClick={() => setComposeModalOpen(false)}>Cancel</button>
-            <button className="btn good" type="submit" disabled={composeSubmitting}>{composeSubmitting ? 'Composing...' : 'Compose'}</button>
-          </div>
-        </form>
-      </div>
+        </div>
+      ) : null}
+
+      {composeModalOpen ? (
+        <div
+          className="compose-modal open"
+          role="dialog"
+          aria-modal="true"
+          aria-busy={composeSubmitting}
+          aria-labelledby="composeModalTitle"
+          onClick={() => {
+            if (composeSubmitting) return;
+            setComposeModalOpen(false);
+          }}
+        >
+          <form
+            className="compose-card custom-ui-surface"
+            aria-busy={composeSubmitting}
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleComposeConfirm();
+            }}
+          >
+            <h3 id="composeModalTitle" className="compose-title">Compose video output</h3>
+            <p className="compose-body">Choose the output filename and destination project.</p>
+            <div className="compose-fields">
+              <label className="compose-field">
+                <span>Output file name (mp4)</span>
+                <input
+                  ref={composeNameInputRef}
+                  value={composeOutputName}
+                  onChange={(event) => setComposeOutputName(event.target.value)}
+                  placeholder="compose-YYYYMMDDHHMMSS.mp4"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={composeSubmitting}
+                />
+              </label>
+              <label className="compose-field">
+                <span>Output project</span>
+                <select
+                  value={composeOutputProject}
+                  onChange={(event) => setComposeOutputProject(event.target.value)}
+                  data-compose-project-picker="1"
+                  disabled={composeSubmitting}
+                >
+                  {projects.map((project) => (
+                    <option key={`${project.source || 'primary'}::${project.name}`} value={project.name}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="compose-actions">
+              <button className="btn" type="button" disabled={composeSubmitting} onClick={() => setComposeModalOpen(false)}>Cancel</button>
+              <button className="btn good" type="submit" disabled={composeSubmitting}>{composeSubmitting ? 'Composing...' : 'Compose'}</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       <div className="toasts">
         {toasts.map((toast) => (

@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Explorer topbar hide/reveal is now wired to the real media scroll viewport (`.content .scroll`) instead of the outer content shell, so mobile scroll-away collapse can actually fire and release the header’s touch territory when the user moves down the grid.
+- Topbar stacking was rebalanced so `.topbar-inner` sits above the metadata band while the topbar-owned `.section-h` row is non-interactive, preventing the section strip from painting or hit-testing above dropdown menus, actions panels, or first-row assets.
+- Closed delete/compose modals are no longer left mounted with only `opacity: 0` / `pointer-events: none`; Explorer now conditionally renders those dialogs only while open to reduce phantom overlay layers and Safari compositing confusion.
+
+### Latest Implementation Notes (2026-03-23)
 - Package Explorer topbar dismiss behavior now treats touch/coarse devices as scroll-only for closure: the document-level outside-`pointerdown` dismissal path remains for hover/fine-pointer environments, but mobile portrait no longer closes the topbar just because a tap lands outside topbar-owned controls.
 - Hidden-topbar layout now preserves the same `--topbar-offset` reservation instead of collapsing the content band to zero, so the first asset row does not jump upward under the user’s finger when the fixed header animates away.
 - Increased the touch-oriented topbar hide thresholds, added temporary pinning on dropdown/action `pointerdown`, widened the mobile topbar gap, and extended Explorer package regression assertions to lock the new mobile-first interaction contract.

@@ -134,7 +134,7 @@ code { font-family: var(--mono); }
 }
 .topbar-inner{
   position: relative;
-  z-index: 2;
+  z-index: 4;
   min-height: var(--topbar-row-height);
   display:flex;
   align-items:center;
@@ -315,7 +315,7 @@ select.control{
   display: none;
   flex-direction: column;
   gap: 4px;
-  z-index: 126;
+  z-index: 31;
   pointer-events: auto;
 }
 .dropdown[open] .dropdown-menu{ display: flex; }
@@ -374,7 +374,7 @@ select.control{
   display: none;
   flex-direction: column;
   gap: 10px;
-  z-index: 125;
+  z-index: 30;
   pointer-events: auto;
 }
 .actions-panel.open{ display:flex; }
@@ -561,6 +561,10 @@ select.control{
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   pointer-events: auto;
+}
+.topbar > .section-h{
+  z-index: 1;
+  pointer-events: none;
 }
 .section-h h2{
   margin:0;

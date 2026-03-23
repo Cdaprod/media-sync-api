@@ -254,6 +254,12 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('topbarIntentRef.current?.setPinned(true);'));
   assert.ok(explorer.includes('topbarIntentRef.current?.setPinned(false);'));
   assert.ok(explorer.includes('onPointerDown={() => pinTopbarTemporarily(900)}'));
+  assert.ok(explorer.includes('const mediaContentRef = useRef<HTMLDivElement | null>(null);'));
+  assert.ok(explorer.includes('const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);'));
+  assert.ok(explorer.includes('rootRef: mediaContentRef,'));
+  assert.ok(explorer.includes('scrollRef: mediaScrollViewportRef,'));
+  assert.ok(explorer.includes('ref={mediaContentRef}'));
+  assert.ok(explorer.includes('ref={mediaScrollViewportRef} className="scroll"'));
   assert.ok(explorer.includes('data-topbar-root="true"'));
   assert.ok(explorer.includes('data-topbar-panel="true"'));
   assert.ok(explorer.includes('data-topbar-reveal="true"'));
@@ -268,7 +274,10 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(styles.includes('--topbar-reveal-height: 24px;'));
   assert.ok(styles.includes('height: var(--topbar-reveal-height);'));
   assert.ok(styles.includes('z-index: 110;'));
-  assert.ok(styles.includes('z-index: 126;'));
+  assert.ok(styles.includes('.topbar > .section-h{'));
+  assert.ok(styles.includes('pointer-events: none;'));
+  assert.ok(styles.includes('z-index: 31;'));
+  assert.ok(styles.includes('z-index: 30;'));
   assert.ok(styles.includes('pointer-events: auto;'));
   assert.ok(styles.includes('.content .scroll{'));
   assert.ok(styles.includes('.masonry-columns{'));
@@ -302,7 +311,8 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('const buildComposeTimestampName = () => {'));
   assert.ok(content.includes("entry?.name === 'P5-SHARED-Exported-Media'"));
   assert.ok(content.includes('setComposeModalOpen(true);'));
-  assert.ok(content.includes('className={`compose-modal ${composeModalOpen ? \'open\' : \'\'}`}'));
+  assert.ok(content.includes('{composeModalOpen ? ('));
+  assert.ok(content.includes('className="compose-modal open"'));
   assert.ok(content.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
   assert.ok(content.includes('data-compose-project-picker="1"'));
   assert.ok(content.includes('onSubmit={(event) => {'));
@@ -442,7 +452,8 @@ test('package explorer delete actions route through custom confirmation modal', 
   assert.ok(content.includes('await performDeleteMediaSelection(selectionKeys);'));
   assert.ok(content.includes('const handleDeleteCancel = useCallback(() => {'));
   assert.ok(content.includes('setPendingDeleteSelectionKeys([]);'));
-  assert.ok(content.includes("className={`confirm-modal ${deleteModalOpen ? 'open' : ''}`}"));
+  assert.ok(content.includes("{deleteModalOpen ? ("));
+  assert.ok(content.includes('className="confirm-modal open"'));
   assert.ok(content.includes('id="confirmDeleteTitle" className="confirm-title"'));
   assert.ok(content.includes("pendingDeleteSelectionKeys.length === 1 ? 'Delete this asset?' : `Delete ${Math.max(1, pendingDeleteSelectionKeys.length)} assets?`"));
   assert.ok(content.includes('onClick={() => deleteMediaSelection(selectedKeysOrdered)}'));
@@ -749,9 +760,10 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('.topbar::before{'));
   assert.ok(styles.includes('background: transparent;'));
   assert.ok(styles.includes('.topbar-inner{'));
-  assert.ok(styles.includes('z-index: 2;'));
+  assert.ok(styles.includes('z-index: 4;'));
   assert.ok(styles.includes('.section-h{'));
-  assert.ok(styles.includes('pointer-events: auto;'));
+  assert.ok(styles.includes('.topbar > .section-h{'));
+  assert.ok(styles.includes('pointer-events: none;'));
   assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
   assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
   assert.ok(styles.includes('.content .scroll{'));
@@ -791,4 +803,16 @@ test('package explorer sidebar scroll keeps touch scrolling enabled for project 
   assert.ok(styles.includes('-webkit-overflow-scrolling: touch;'));
   assert.ok(styles.includes('overscroll-behavior: contain;'));
   assert.ok(styles.includes('touch-action: pan-y;'));
+});
+
+
+test('package explorer conditionally mounts confirm and compose modals only while open', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('{deleteModalOpen ? ('));
+  assert.ok(content.includes('className="confirm-modal open"'));
+  assert.ok(!content.includes('aria-hidden={!deleteModalOpen}'));
+  assert.ok(content.includes('{composeModalOpen ? ('));
+  assert.ok(content.includes('className="compose-modal open"'));
+  assert.ok(!content.includes('aria-hidden={!composeModalOpen}'));
 });

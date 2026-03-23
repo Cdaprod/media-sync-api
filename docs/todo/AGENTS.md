@@ -1,3 +1,10 @@
+## 2026-03-23 — Explorer real scroll-host + topbar stacking cleanup
+- [x] Split the Explorer content shell ref from the actual `.content .scroll` viewport and bound `useTopbarScrollState` to the real scrolling node so topbar collapse can trigger from real media scrolling.
+- [x] Lowered the topbar-owned `.section-h` band beneath `.topbar-inner`, made that topbar section row non-interactive, and kept dropdown/actions layers above it so the metadata strip no longer wins the stacking fight.
+- [x] Stopped always mounting hidden confirm/compose modal DOM and now render those dialogs only while open to avoid phantom overlay geometry on iPhone Safari.
+- [x] Expanded focused Explorer package regressions to lock the split scroll-host refs, topbar stacking contract, and conditional modal mounting behavior.
+- [ ] Validate on physical iPhone Safari that scrolling the media grid now collapses the topbar reliably, Type/Actions panels render above the metadata row, and no hidden confirm/compose overlay remains discoverable when closed.
+
 ## 2026-03-23 — Explorer topbar touch-only close model + stable hidden offset
 - [x] Disabled document-level topbar outside-tap dismissal for touch/coarse-pointer environments so mobile portrait now relies on scroll-away behavior instead of tap-away collapse.
 - [x] Kept the Explorer content offset stable while the fixed topbar hides, eliminating the upward first-row jump that previously moved checkboxes/assets under the user’s finger.
