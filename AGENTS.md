@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Explorer hidden-topbar layout now uses split offset tokens (`--topbar-offset-open` / `--topbar-offset-hidden`) so `main` only reserves the reveal seam while the header is hidden, letting media tiles scroll up under the collapsed header area without reintroducing the original moving-target tap bug.
+- Main layout now animates `padding-top` alongside the topbar transform, smoothing the open/hidden transition instead of leaving a hard blank band when the header collapses.
+- Toasts now render above the fixed topbar stack via a higher app-layer z-index and safe-area-aware top placement so boot/status messages are no longer trapped behind the metadata row on iPhone Safari.
+
+### Latest Implementation Notes (2026-03-23)
 - Explorer topbar hide/reveal is now wired to the real media scroll viewport (`.content .scroll`) instead of the outer content shell, so mobile scroll-away collapse can actually fire and release the header’s touch territory when the user moves down the grid.
 - Topbar stacking was rebalanced so `.topbar-inner` sits above the metadata band while the topbar-owned `.section-h` row is non-interactive, preventing the section strip from painting or hit-testing above dropdown menus, actions panels, or first-row assets.
 - Closed delete/compose modals are no longer left mounted with only `opacity: 0` / `pointer-events: none`; Explorer now conditionally renders those dialogs only while open to reduce phantom overlay layers and Safari compositing confusion.

@@ -1,3 +1,10 @@
+## 2026-03-23 — Explorer hidden-offset seam + toast stacking polish
+- [x] Split the topbar offset into open vs hidden values so `main` keeps only the reveal seam while the topbar is collapsed instead of reserving the full header band.
+- [x] Added a `padding-top` transition on `main` so the collapsed/open layout change reads as a smooth seam shift instead of a dead blank slab.
+- [x] Raised the toast stack above the fixed header with safe-area-aware placement so boot/status toasts no longer appear behind the topbar metadata strip.
+- [x] Expanded focused Explorer package regressions to lock the new offset-token and toast-layering contract.
+- [ ] Validate on physical iPhone Safari that hidden-topbar mode shows media directly under the reveal seam and that toasts always paint above the header stack.
+
 ## 2026-03-23 — Explorer real scroll-host + topbar stacking cleanup
 - [x] Split the Explorer content shell ref from the actual `.content .scroll` viewport and bound `useTopbarScrollState` to the real scrolling node so topbar collapse can trigger from real media scrolling.
 - [x] Lowered the topbar-owned `.section-h` band beneath `.topbar-inner`, made that topbar section row non-interactive, and kept dropdown/actions layers above it so the metadata strip no longer wins the stacking fight.

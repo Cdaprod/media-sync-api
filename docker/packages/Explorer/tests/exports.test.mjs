@@ -754,8 +754,11 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(!content.includes('className="btn mobile-only"'));
   assert.ok(styles.includes('--topbar-subrow-height'));
   assert.ok(styles.includes('--topbar-gap: 12px;'));
-  assert.ok(styles.includes('--topbar-offset: calc(var(--topbar-height) + var(--topbar-gap));'));
+  assert.ok(styles.includes('--topbar-offset-open: calc(var(--topbar-height) + var(--topbar-gap));'));
+  assert.ok(styles.includes('--topbar-offset-hidden: calc(var(--topbar-reveal-height) + 2px);'));
+  assert.ok(styles.includes('--topbar-offset: var(--topbar-offset-open);'));
   assert.ok(styles.includes('.app.topbar-hidden{'));
+  assert.ok(styles.includes('--topbar-offset: var(--topbar-offset-hidden);'));
   assert.ok(styles.includes('margin-bottom: 0;'));
   assert.ok(styles.includes('.topbar::before{'));
   assert.ok(styles.includes('background: transparent;'));
@@ -766,6 +769,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('pointer-events: none;'));
   assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
   assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
+  assert.ok(styles.includes('transition: padding-top 160ms ease;'));
   assert.ok(styles.includes('.content .scroll{'));
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
@@ -815,4 +819,13 @@ test('package explorer conditionally mounts confirm and compose modals only whil
   assert.ok(content.includes('{composeModalOpen ? ('));
   assert.ok(content.includes('className="compose-modal open"'));
   assert.ok(!content.includes('aria-hidden={!composeModalOpen}'));
+});
+
+
+test('package explorer toast layer stays above the fixed topbar stack', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  assert.ok(styles.includes('.toasts{'));
+  assert.ok(styles.includes('top: calc(env(safe-area-inset-top, 0px) + 74px);'));
+  assert.ok(styles.includes('z-index: 140;'));
 });
