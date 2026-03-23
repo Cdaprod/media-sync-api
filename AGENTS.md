@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Pending compose card water animation now overscans all fills well below the visible SVG bounds and uses softened gradient wave fills, preventing bobbing-induced bottom gaps and reducing the harsh seam near the crest while keeping the two-wave read.
+- Explorer grid pending placeholders no longer force a full asset re-columnization on every poll update: asset masonry columns are built from real media only, then pending cards are prepended per-column so unchanged asset cards keep their parent columns and do not lose thumbnail continuity.
+- Real asset cards now prefer their actual thumbnail URL immediately (falling back only on known thumb errors), and scoped compose refresh merges preserve unchanged media object identity so already-loaded thumbnails stay visible while completed compose assets can render their normal thumb path on first appearance.
+
+### Latest Implementation Notes (2026-03-23)
 - Polished the single-SVG pending compose water renderer for Safari predictability by moving wave/body fills to solid hex colors and leaving transparency control to the SVG layer-opacity rules instead of compounding `rgba(...)` alpha with CSS opacity.
 - Slightly increased rear-wave readability and lowered the body surface so the placeholder keeps clearer front/rear separation without flattening the water line back into a single band.
 - Extended package regression coverage to lock the solid-color fill contract and the tuned rear-wave opacity so this visual polish does not drift back toward the muddier double-alpha look.

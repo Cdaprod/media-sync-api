@@ -48,6 +48,28 @@ export function buildMasonryColumns<T>(
   return columns;
 }
 
+export function prependItemsIntoMasonryColumns<T>(
+  columns: T[][],
+  pendingItems: T[],
+  columnCount: number,
+): T[][] {
+  const normalizedColumns = columns.length
+    ? columns.map((column) => [...column])
+    : Array.from({ length: Math.max(1, Math.floor(Number(columnCount) || 1)) }, () => [] as T[]);
+  if (!pendingItems.length) return normalizedColumns;
+
+  const pendingBuckets = normalizedColumns.map(() => [] as T[]);
+  pendingItems.forEach((item, index) => {
+    const targetIndex = index % normalizedColumns.length;
+    pendingBuckets[targetIndex].push(item);
+  });
+
+  return normalizedColumns.map((column, index) => [
+    ...pendingBuckets[index],
+    ...column,
+  ]);
+}
+
 export function getMediaType(item: MediaItem): MediaTypeFilter {
   const raw = (item.kind || item.type || '').toLowerCase();
   if (raw.includes('overlay')) return 'overlay';

@@ -138,7 +138,7 @@ test('toggleSelectionWithOrder tracks selection order and deselection cleanup', 
 });
 
 test('buildMasonryColumns keeps source order stable while balancing columns', () => {
-  const { buildMasonryColumns } = loadTsModule(statePath);
+  const { buildMasonryColumns, prependItemsIntoMasonryColumns } = loadTsModule(statePath);
   const items = [
     { id: '1', h: 1.1 },
     { id: '2', h: 1.3 },
@@ -165,6 +165,15 @@ test('buildMasonryColumns keeps source order stable while balancing columns', ()
   assert.equal(placement.get('2').columnIndex, 1);
   assert.equal(placement.get('3').columnIndex, 2);
   assert.ok(placement.get('4').rowIndex >= 1);
+
+  const pendingColumns = prependItemsIntoMasonryColumns(columns, [
+    { id: 'p1', h: 1.16 },
+    { id: 'p2', h: 1.16 },
+  ], 3);
+  assert.deepEqual(pendingColumns.map((column) => column[0].id), ['p1', 'p2', '3']);
+  assert.deepEqual(pendingColumns[0].slice(1).map((item) => item.id), columns[0].map((item) => item.id));
+  assert.deepEqual(pendingColumns[1].slice(1).map((item) => item.id), columns[1].map((item) => item.id));
+  assert.deepEqual(pendingColumns[2].slice(0).map((item) => item.id), columns[2].map((item) => item.id));
 });
 
 test('compose job helpers derive pending item fields and long-running status from job envelopes', () => {

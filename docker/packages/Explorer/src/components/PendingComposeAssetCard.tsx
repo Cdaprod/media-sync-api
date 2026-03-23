@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useId, useMemo, useRef } from "react";
 
 export type PendingComposeJobStatus =
   | "queued"
@@ -64,19 +64,19 @@ const CARD_STYLES = `
 }
 
 .pending-compose-water-svg .water-body {
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .pending-compose-water-svg .water-rear {
-  opacity: 0.38;
+  opacity: 1;
 }
 
 .pending-compose-water-svg .water-front {
-  opacity: 0.68;
+  opacity: 1;
 }
 
 .pending-compose-water-svg .water-highlight {
-  opacity: 0.4;
+  opacity: 0.22;
 }
 
 .pending-compose-overlay {
@@ -228,9 +228,10 @@ const CARD_STYLES = `
 const SVG_WIDTH = 600;
 const SVG_HEIGHT = 220;
 const WAVE_SPAN = 1200;
-const REAR_WAVE_FLOOR = 172;
-const FRONT_WAVE_FLOOR = 158;
-const BODY_SURFACE_PATH = "M0 164 C75 158 145 170 225 164 C305 158 385 169 470 164 C555 158 640 168 730 164 C820 159 910 170 1005 164 C1090 159 1155 168 1200 164";
+const BODY_FILL_FLOOR = 360;
+const REAR_WAVE_FLOOR = 292;
+const FRONT_WAVE_FLOOR = 276;
+const BODY_SURFACE_PATH = "M0 170 C75 164 145 176 225 170 C305 164 385 175 470 170 C555 164 640 174 730 170 C820 165 910 176 1005 170 C1090 165 1155 174 1200 170";
 const REAR_WAVE_PATH = "M0 144 C85 136 170 152 255 145 C350 138 445 154 540 145 C640 136 740 151 840 145 C945 139 1045 154 1140 145 C1175 142 1195 143 1200 144";
 const FRONT_WAVE_PATH = "M0 132 C55 118 110 148 175 133 C250 118 325 149 405 133 C490 117 565 150 645 133 C730 118 805 149 890 133 C970 118 1045 148 1125 133 C1160 126 1185 128 1200 132";
 
@@ -256,8 +257,11 @@ function PendingComposeWaterSvg({
   const rearWaveGroupRef = useRef<SVGGElement | null>(null);
   const frontWaveGroupRef = useRef<SVGGElement | null>(null);
   const highlightGroupRef = useRef<SVGGElement | null>(null);
+  const rearGradientId = useId().replace(/:/g, "");
+  const frontGradientId = useId().replace(/:/g, "");
+  const bodyGradientId = useId().replace(/:/g, "");
   const animated = status !== "failed";
-  const bodyPath = useMemo(() => buildClosedWavePath(BODY_SURFACE_PATH, SVG_HEIGHT), []);
+  const bodyPath = useMemo(() => buildClosedWavePath(BODY_SURFACE_PATH, BODY_FILL_FLOOR), []);
   const rearWaveFillPath = useMemo(() => buildClosedWavePath(REAR_WAVE_PATH, REAR_WAVE_FLOOR), []);
   const frontWaveFillPath = useMemo(() => buildClosedWavePath(FRONT_WAVE_PATH, FRONT_WAVE_FLOOR), []);
 
@@ -268,7 +272,7 @@ function PendingComposeWaterSvg({
     const highlightGroup = highlightGroupRef.current;
     if (!surfaceGroup || !rearWaveGroup || !frontWaveGroup || !highlightGroup) return;
 
-    const bobAmplitude = status === "running_long" ? 5.5 : 7.5;
+    const bobAmplitude = status === "running_long" ? 4.5 : 6;
     const bobPeriodSeconds = status === "running_long" ? 4.8 : 4.2;
     const rearSpeed = status === "running_long" ? 12 : 18;
     const frontSpeed = status === "running_long" ? 24 : 32;
@@ -313,23 +317,39 @@ function PendingComposeWaterSvg({
       aria-hidden="true"
       data-water-svg="true"
     >
+      <defs>
+        <linearGradient id={bodyGradientId} x1="0" y1="136" x2="0" y2={String(BODY_FILL_FLOOR)}>
+          <stop offset="0%" stopColor={solid} stopOpacity="0.94" />
+          <stop offset="100%" stopColor={solid} stopOpacity="1" />
+        </linearGradient>
+        <linearGradient id={rearGradientId} x1="0" y1="134" x2="0" y2={String(REAR_WAVE_FLOOR)}>
+          <stop offset="0%" stopColor={back} stopOpacity="0.44" />
+          <stop offset="55%" stopColor={back} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={back} stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={frontGradientId} x1="0" y1="126" x2="0" y2={String(FRONT_WAVE_FLOOR)}>
+          <stop offset="0%" stopColor={solid} stopOpacity="0.62" />
+          <stop offset="58%" stopColor={solid} stopOpacity="0.26" />
+          <stop offset="100%" stopColor={solid} stopOpacity="0" />
+        </linearGradient>
+      </defs>
       <rect className="water-bg" x="0" y="0" width={SVG_WIDTH} height={SVG_HEIGHT} />
       <g ref={surfaceGroupRef}>
-        <path className="water-body" d={bodyPath} fill={solid} />
+        <path className="water-body" d={bodyPath} fill={`url(#${bodyGradientId})`} />
         <g ref={rearWaveGroupRef} className="water-rear">
-          <path d={rearWaveFillPath} fill={back} />
-          <path d={rearWaveFillPath} fill={back} transform={`translate(${WAVE_SPAN} 0)`} />
+          <path d={rearWaveFillPath} fill={`url(#${rearGradientId})`} />
+          <path d={rearWaveFillPath} fill={`url(#${rearGradientId})`} transform={`translate(${WAVE_SPAN} 0)`} />
         </g>
         <g ref={frontWaveGroupRef} className="water-front">
-          <path d={frontWaveFillPath} fill={solid} />
-          <path d={frontWaveFillPath} fill={solid} transform={`translate(${WAVE_SPAN} 0)`} />
+          <path d={frontWaveFillPath} fill={`url(#${frontGradientId})`} />
+          <path d={frontWaveFillPath} fill={`url(#${frontGradientId})`} transform={`translate(${WAVE_SPAN} 0)`} />
         </g>
         <g ref={highlightGroupRef} className="water-highlight">
           <path
             d={FRONT_WAVE_PATH}
             fill="none"
             stroke="rgba(255,255,255,0.22)"
-            strokeWidth="3"
+            strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
@@ -338,7 +358,7 @@ function PendingComposeWaterSvg({
             d={FRONT_WAVE_PATH}
             fill="none"
             stroke="rgba(255,255,255,0.22)"
-            strokeWidth="3"
+            strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"

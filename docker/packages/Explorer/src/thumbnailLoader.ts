@@ -8,6 +8,11 @@ type ThumbLoadState = 'loaded' | 'error';
 const thumbLoadStateCache = new Map<string, ThumbLoadState>();
 const inflightThumbLoads = new Map<string, Promise<ThumbLoadState>>();
 
+export const getThumbLoadState = (jobKey: string): ThumbLoadState | undefined => {
+  if (!jobKey) return undefined;
+  return thumbLoadStateCache.get(jobKey);
+};
+
 export const normalizeThumbUrl = (rawUrl?: string): string | undefined => {
   if (!rawUrl) return undefined;
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {

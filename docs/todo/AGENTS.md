@@ -1,3 +1,10 @@
+## 2026-03-23 — Pending compose water overscan + thumbnail continuity fix
+- [x] Overscanned the pending compose water SVG fills below the viewport and softened the crest transition so bobbing no longer reveals a bottom gap or a harsh dark seam.
+- [x] Stopped pending compose polling updates from re-columnizing the real asset masonry by prepending pending cards into existing asset columns instead of rebuilding the whole mixed-entry column set.
+- [x] Made real asset cards prefer their actual thumbnail URL immediately and preserved unchanged media object identity during scoped refresh merges so compose start/completion no longer drops visible thumbs back to generic placeholders.
+- [x] Added focused package regression coverage for the masonry-prepend helper, immediate thumb-src path, and the overscanned SVG water renderer contract.
+- [ ] Validate on iPhone Safari that active water cards never expose the thumb background at the bottom and that starting/completing a compose no longer causes visible asset thumbnails to blink back to generic VIDEO placeholders.
+
 ## 2026-03-23 — Pending compose card SVG polish pass
 - [x] Switched the SVG water fill colors from embedded-alpha `rgba(...)` values to solid hex colors so wave/body transparency is controlled only by SVG layer opacity.
 - [x] Slightly strengthened rear-wave readability and lowered the body surface to keep clearer front/rear separation on dark mobile Safari thumbnails.

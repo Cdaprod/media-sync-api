@@ -14,6 +14,7 @@ import {
   extractAiTags,
   extractTags,
   filterMedia,
+  prependItemsIntoMasonryColumns,
   pruneSelection,
   selectionOrderIndexMap,
   sortMedia,
@@ -34,7 +35,7 @@ import { AssetPreviewPanel } from './AssetPreviewPanel';
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
-import { buildThumbJobKey, getThumbCacheKey, normalizeThumbUrl } from './thumbnailLoader';
+import { buildThumbJobKey, getThumbCacheKey, getThumbLoadState, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './usePendingComposeJobs';
 import { useAssetInteractions } from './useAssetInteractions';
 import { useThumbnailQueue } from './useThumbnailQueue';
@@ -709,6 +710,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
     const payload = await api.listMedia(refreshedProject.name, refreshedProject.source || undefined);
     const items = Array.isArray(payload.media) ? payload.media : [];
+    const mergeProjectItems = (
+      current: MediaItem[],
+      nextItems: MediaItem[],
+      project: Project,
+    ) => {
+      const currentByKey = new Map(current.map((item) => [assetSelectionKey(item, project), item]));
+      return nextItems.map((item) => {
+        const currentItem = currentByKey.get(assetSelectionKey(item, project));
+        if (!currentItem) return item;
+        const nextKeys = new Set([
+          ...Object.keys(currentItem),
+          ...Object.keys(item),
+        ]);
+        for (const key of nextKeys) {
+          if ((currentItem as Record<string, unknown>)[key] !== (item as Record<string, unknown>)[key]) {
+            return { ...currentItem, ...item };
+          }
+        }
+        return currentItem;
+      });
+    };
 
     if (mediaScope === 'all' || !activeProject) {
       setMedia((current) => {
@@ -722,7 +744,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           project_name: refreshedProject.name,
           project_source: refreshedProject.source || null,
         }));
-        return sortMediaByRecent([...retained, ...nextItems]);
+        const mergedItems = mergeProjectItems(current, nextItems, refreshedProject);
+        return sortMediaByRecent([...retained, ...mergedItems]);
       });
       return;
     }
@@ -731,9 +754,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       activeProject.name === refreshedProject.name
       && (activeProject.source || 'primary') === (refreshedProject.source || 'primary')
     ) {
-      setMedia(sortMediaByRecent(items));
+      setMedia((current) => sortMediaByRecent(mergeProjectItems(current, items, refreshedProject)));
     }
-  }, [activeProject, api, mediaScope, projects]);
+  }, [activeProject, api, assetSelectionKey, mediaScope, projects]);
 
   const fetchComposeJobJson = useCallback(async (url: string) => {
     const response = await fetch(api.buildUrl(url));
@@ -794,15 +817,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return sortPendingComposeItemsForDisplay(relevant);
   }, [activeProject, mediaScope, pendingComposeItems]);
 
-  const renderedMediaEntries = useMemo(() => {
-    const pendingEntries = visiblePendingComposeItems.map((pendingItem) => ({
-      kind: 'pending' as const,
-      pendingItem,
-    }));
-    const assetEntries = filteredMedia.map((item) => ({
+  const pendingEntries = useMemo(() => visiblePendingComposeItems.map((pendingItem) => ({
+    kind: 'pending' as const,
+    pendingItem,
+  })), [visiblePendingComposeItems]);
+
+  const assetEntries = useMemo(() => filteredMedia.map((item) => ({
       kind: 'asset' as const,
       item,
-    }));
+    })), [filteredMedia]);
+
+  const renderedMediaEntries = useMemo(() => {
     return [
       ...pendingEntries,
       ...assetEntries,
@@ -810,15 +835,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       | { kind: 'asset'; item: MediaItem }
       | { kind: 'pending'; pendingItem: PendingComposeItem }
     >;
-  }, [filteredMedia, visiblePendingComposeItems]);
+  }, [assetEntries, pendingEntries]);
+
+  const assetMasonryColumns = useMemo(
+    () => buildMasonryColumns(
+      assetEntries,
+      gridColumnCount,
+      (entry) => estimateTileHeight(entry.item),
+    ),
+    [assetEntries, estimateTileHeight, gridColumnCount],
+  );
 
   const masonryRenderColumns = useMemo(
-    () => buildMasonryColumns(
-      renderedMediaEntries,
+    () => prependItemsIntoMasonryColumns(
+      assetMasonryColumns,
+      pendingEntries,
       gridColumnCount,
-      (entry) => entry.kind === 'pending' ? 1.16 : estimateTileHeight(entry.item),
     ),
-    [estimateTileHeight, gridColumnCount, renderedMediaEntries],
+    [assetMasonryColumns, gridColumnCount, pendingEntries],
   );
 
   useEffect(() => {
@@ -1870,7 +1904,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const fallbackThumb = buildThumbFallback(kind);
     const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
-    const safeThumbUrl = fallbackThumb;
+    const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
+      ? thumbUrl
+      : fallbackThumb;
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
