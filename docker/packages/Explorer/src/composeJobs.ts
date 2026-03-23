@@ -30,8 +30,15 @@ export type PendingComposeViewStatus =
   | "queued"
   | "running"
   | "running_long"
+  | "reconnecting"
   | "finalizing"
   | "failed";
+
+export interface PendingComposeRefreshScope {
+  project?: string;
+  source?: string;
+  paths?: string[];
+}
 
 export interface PendingComposeItem {
   jobId: string;
@@ -46,14 +53,25 @@ export interface PendingComposeItem {
   status: PendingComposeViewStatus;
   error?: string;
   jobUrl?: string;
-  refreshScope?: {
-    project?: string;
-    source?: string;
-    paths?: string[];
-  };
+  refreshScope?: PendingComposeRefreshScope;
   completedPath?: string;
   debugArtifacts?: string[] | null;
 }
+
+export interface PersistedPendingComposeJobRecord {
+  jobId: string;
+  jobUrl: string;
+  project: string;
+  source: string;
+  targetDir: string;
+  outputName: string;
+  createdAt?: string;
+  modeRequested?: "auto" | "copy" | "encode" | string;
+  inputCount?: number;
+  refreshScope?: PendingComposeRefreshScope;
+}
+
+export const PENDING_COMPOSE_STORAGE_KEY = "media-sync.explorer.pending-compose-jobs";
 
 function normalizeDebugArtifacts(envelope: ComposeJobEnvelope): string[] | null {
   if (Array.isArray(envelope.debug_artifacts)) {
@@ -75,6 +93,18 @@ function normalizeCompletedPath(envelope: ComposeJobEnvelope): string | undefine
     return resultPath.trim();
   }
   return undefined;
+}
+
+function normalizeRefreshScope(value: unknown): PendingComposeRefreshScope | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const scope = value as Record<string, unknown>;
+  const project = typeof scope.project === "string" && scope.project.trim() ? scope.project.trim() : undefined;
+  const source = typeof scope.source === "string" && scope.source.trim() ? scope.source.trim() : undefined;
+  const paths = Array.isArray(scope.paths)
+    ? scope.paths.filter((path): path is string => typeof path === "string" && path.trim().length > 0)
+    : undefined;
+  if (!project && !source && !paths?.length) return undefined;
+  return { project, source, paths };
 }
 
 export function buildPendingComposeItemFromEnvelope(
@@ -106,6 +136,24 @@ export function buildPendingComposeItemFromEnvelope(
   };
 }
 
+export function buildPendingComposeItemFromPersistedRecord(
+  record: PersistedPendingComposeJobRecord,
+): PendingComposeItem {
+  return {
+    jobId: record.jobId,
+    jobUrl: record.jobUrl,
+    project: record.project,
+    source: record.source,
+    targetDir: record.targetDir,
+    outputName: record.outputName,
+    createdAt: record.createdAt,
+    modeRequested: record.modeRequested,
+    inputCount: record.inputCount,
+    refreshScope: record.refreshScope,
+    status: "queued",
+  };
+}
+
 export function derivePendingComposeStatus(
   envelope: ComposeJobEnvelope,
 ): PendingComposeViewStatus | "completed" {
@@ -133,6 +181,7 @@ export function pendingComposeHoldsNewestSlot(status: PendingComposeViewStatus):
   return status === "queued"
     || status === "running"
     || status === "running_long"
+    || status === "reconnecting"
     || status === "finalizing";
 }
 
@@ -156,4 +205,81 @@ export function sortPendingComposeItemsForDisplay(items: PendingComposeItem[]): 
 
     return left.jobId.localeCompare(right.jobId);
   });
+}
+
+
+export function toPersistedPendingComposeJobRecord(
+  item: PendingComposeItem,
+): PersistedPendingComposeJobRecord | null {
+  if (!item.jobId || !item.jobUrl) return null;
+  return {
+    jobId: item.jobId,
+    jobUrl: item.jobUrl,
+    project: item.project,
+    source: item.source || "primary",
+    targetDir: item.targetDir,
+    outputName: item.outputName,
+    createdAt: item.createdAt,
+    modeRequested: item.modeRequested,
+    inputCount: item.inputCount,
+    refreshScope: item.refreshScope,
+  };
+}
+
+function normalizePersistedPendingComposeJobRecord(
+  value: unknown,
+): PersistedPendingComposeJobRecord | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const jobId = typeof record.jobId === "string" && record.jobId.trim() ? record.jobId.trim() : "";
+  const jobUrl = typeof record.jobUrl === "string" && record.jobUrl.trim() ? record.jobUrl.trim() : "";
+  const project = typeof record.project === "string" && record.project.trim() ? record.project.trim() : "";
+  const source = typeof record.source === "string" && record.source.trim() ? record.source.trim() : "primary";
+  const targetDir = typeof record.targetDir === "string" && record.targetDir.trim() ? record.targetDir.trim() : "";
+  const outputName = typeof record.outputName === "string" && record.outputName.trim() ? record.outputName.trim() : "";
+  if (!jobId || !jobUrl || !project || !targetDir || !outputName) return null;
+  const createdAt = typeof record.createdAt === "string" && record.createdAt.trim() ? record.createdAt.trim() : undefined;
+  const modeRequested = typeof record.modeRequested === "string" && record.modeRequested.trim() ? record.modeRequested.trim() : undefined;
+  const inputCount = typeof record.inputCount === "number" ? record.inputCount : undefined;
+  return {
+    jobId,
+    jobUrl,
+    project,
+    source,
+    targetDir,
+    outputName,
+    createdAt,
+    modeRequested,
+    inputCount,
+    refreshScope: normalizeRefreshScope(record.refreshScope),
+  };
+}
+
+export function serializePendingComposeItemsForStorage(items: PendingComposeItem[]): string {
+  const records = items
+    .map((item) => toPersistedPendingComposeJobRecord(item))
+    .filter((item): item is PersistedPendingComposeJobRecord => Boolean(item));
+  return JSON.stringify(records);
+}
+
+export function restorePendingComposeItemsFromStorage(raw: string | null | undefined): PendingComposeItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const deduped = new Map<string, PendingComposeItem>();
+    parsed.forEach((value) => {
+      const record = normalizePersistedPendingComposeJobRecord(value);
+      if (!record) return;
+      deduped.set(record.jobId, buildPendingComposeItemFromPersistedRecord(record));
+    });
+    return Array.from(deduped.values());
+  } catch {
+    return [];
+  }
+}
+
+export function pendingComposeReconnectDelayMs(attemptCount: number, pollIntervalMs: number): number {
+  const safeAttempts = Math.max(1, attemptCount);
+  return Math.min(pollIntervalMs * (2 ** safeAttempts), 30_000);
 }

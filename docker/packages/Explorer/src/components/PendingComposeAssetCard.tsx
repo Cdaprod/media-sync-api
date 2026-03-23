@@ -4,6 +4,7 @@ export type PendingComposeJobStatus =
   | "queued"
   | "running"
   | "running_long"
+  | "reconnecting"
   | "finalizing"
   | "failed";
 
@@ -24,6 +25,7 @@ export interface PendingComposeAsset {
 
 interface PendingComposeAssetCardProps {
   item: PendingComposeAsset;
+  onDismiss?: (() => void) | undefined;
 }
 
 const CARD_STYLES = `
@@ -202,6 +204,28 @@ const CARD_STYLES = `
   color: #d7b27a;
 }
 
+.pending-compose-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pending-compose-dismiss {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: #d0d3e6;
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.pending-compose-dismiss:hover {
+  background: rgba(255,255,255,0.09);
+}
+
 .pending-compose-card[data-status="failed"] .pending-compose-wave.back,
 .pending-compose-card[data-status="failed"] .pending-compose-wave.front,
 .pending-compose-card[data-status="failed"] .pending-compose-status-dot,
@@ -277,6 +301,15 @@ function getVisualState(status: PendingComposeJobStatus) {
         label: "COMPOSING",
         footer: "job still running",
       };
+    case "reconnecting":
+      return {
+        solid: "rgba(120,104,255,0.86)",
+        back: "rgba(120,104,255,0.46)",
+        dot: "#9e8cff",
+        badge: "RECONNECTING",
+        label: "RECONNECTING",
+        footer: "waiting to resume",
+      };
     case "finalizing":
       return {
         solid: "rgba(42,168,255,0.86)",
@@ -309,6 +342,7 @@ function getVisualState(status: PendingComposeJobStatus) {
 
 export default function PendingComposeAssetCard({
   item,
+  onDismiss,
 }: PendingComposeAssetCardProps) {
   const visual = useMemo(() => getVisualState(item.status), [item.status]);
 
@@ -374,6 +408,19 @@ export default function PendingComposeAssetCard({
           {item.status === "failed" && item.debugArtifacts?.length ? (
             <div className="pending-compose-debug">
               debug artifacts preserved
+            </div>
+          ) : null}
+
+          {item.status === "failed" && onDismiss ? (
+            <div className="pending-compose-actions">
+              <button
+                type="button"
+                className="pending-compose-dismiss"
+                data-pending-compose-dismiss="true"
+                onClick={onDismiss}
+              >
+                Dismiss
+              </button>
             </div>
           ) : null}
         </div>

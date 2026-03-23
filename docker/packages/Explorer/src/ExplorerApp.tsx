@@ -2430,6 +2430,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   gridColumnCount={gridColumnCount}
                   masonryColumns={masonryRenderColumns}
                   onToggleSelected={toggleSelected}
+                  onDismissPendingJob={removePendingJob}
                 />
               )}
             </div>
@@ -2452,6 +2453,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   items={renderedMediaEntries}
                   onOpenDrawer={openDrawer}
                   onToggleSelected={toggleSelected}
+                  onDismissPendingJob={removePendingJob}
                 />
               )}
             </div>

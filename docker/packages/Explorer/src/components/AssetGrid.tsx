@@ -35,6 +35,7 @@ interface AssetGridProps {
     | { kind: 'pending'; pendingItem: PendingComposeAsset }
   >>;
   onToggleSelected: (item: MediaItem) => void;
+  onDismissPendingJob: (jobId: string) => void;
 }
 
 function AssetGridComponent({
@@ -43,6 +44,7 @@ function AssetGridComponent({
   gridColumnCount,
   masonryColumns,
   onToggleSelected,
+  onDismissPendingJob,
 }: AssetGridProps) {
   return (
     <div className="masonry-columns" style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}>
@@ -54,6 +56,7 @@ function AssetGridComponent({
                 <PendingComposeAssetCard
                   key={`pending-${entry.pendingItem.jobId}`}
                   item={entry.pendingItem}
+                  onDismiss={entry.pendingItem.status === 'failed' ? () => onDismissPendingJob(entry.pendingItem.jobId) : undefined}
                 />
               );
             }

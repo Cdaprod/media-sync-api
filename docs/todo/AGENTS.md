@@ -1,3 +1,11 @@
+## 2026-03-23 — Explorer pending compose recovery across refresh + reconnect
+- [x] Persisted accepted pending compose jobs to localStorage with the lightweight recovery fields (`jobId`, `jobUrl`, project/source/target/output identity, created time, mode/input count, and refresh scope).
+- [x] Rehydrated pending placeholders on Explorer startup before polling resumes so refreshes do not create a blank gap between submission and eventual asset registration.
+- [x] Converted poll transport failures into a frontend-only `reconnecting` state with backoff instead of hard-failing the placeholder, while keeping backend-explicit failures dismissible and persisted until dismissal.
+- [x] Kept completed placeholders visible after reload until refreshed media confirms `result.path`, then cleaned up both in-memory and persisted recovery state only on the confirmed swap.
+- [x] Added focused Explorer package regression coverage for persisted recovery helpers, reconnect timing, reconnecting UI state, and dismissal/cleanup wiring.
+- [ ] Validate on a real browser by starting compose, refreshing mid-run, toggling network offline/online once, and confirming there is never a visual gap between placeholder and final asset.
+
 ## 2026-03-22 — Explorer pending compose newest-slot + finalizing handoff
 - [x] Moved pending compose placeholders into the flat render list before masonry/list distribution so they behave like virtual newest assets instead of being injected after layout in a visually wrong column.
 - [x] Added frontend-only `finalizing` status so completed compose jobs keep their reserved placeholder slot until refreshed media actually includes `result.path`, avoiding blank handoff gaps.

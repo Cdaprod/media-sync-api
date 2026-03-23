@@ -172,6 +172,9 @@ test('compose job helpers derive pending item fields and long-running status fro
     buildPendingComposeItemFromEnvelope,
     derivePendingComposeStatus,
     pendingComposeHoldsNewestSlot,
+    pendingComposeReconnectDelayMs,
+    restorePendingComposeItemsFromStorage,
+    serializePendingComposeItemsForStorage,
     sortPendingComposeItemsForDisplay,
   } = loadTsModule(composeJobsPath);
   const originalNow = Date.now;
@@ -246,8 +249,61 @@ test('compose job helpers derive pending item fields and long-running status fro
     }), 'completed');
 
     assert.equal(pendingComposeHoldsNewestSlot('queued'), true);
+    assert.equal(pendingComposeHoldsNewestSlot('reconnecting'), true);
     assert.equal(pendingComposeHoldsNewestSlot('finalizing'), true);
     assert.equal(pendingComposeHoldsNewestSlot('failed'), false);
+    assert.equal(pendingComposeReconnectDelayMs(1, 2000), 4000);
+    assert.equal(pendingComposeReconnectDelayMs(4, 2000), 30000);
+
+    const restored = restorePendingComposeItemsFromStorage(JSON.stringify([
+      {
+        jobId: 'job-restore',
+        jobUrl: '/api/projects/Demo/compose/jobs/job-restore',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'restore.mp4',
+        createdAt: '2026-03-22T00:00:05.000Z',
+        modeRequested: 'encode',
+        inputCount: 3,
+        refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      },
+    ]));
+
+    assert.deepEqual(restored, [{
+      jobId: 'job-restore',
+      jobUrl: '/api/projects/Demo/compose/jobs/job-restore',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'restore.mp4',
+      createdAt: '2026-03-22T00:00:05.000Z',
+      modeRequested: 'encode',
+      inputCount: 3,
+      refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      status: 'queued',
+    }]);
+
+    assert.deepEqual(JSON.parse(serializePendingComposeItemsForStorage([
+      {
+        ...restored[0],
+        status: 'failed',
+        error: 'backend failed',
+        completedPath: 'exports/restore.mp4',
+        debugArtifacts: ['debug/a.txt'],
+      },
+    ])), [{
+      jobId: 'job-restore',
+      jobUrl: '/api/projects/Demo/compose/jobs/job-restore',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'restore.mp4',
+      createdAt: '2026-03-22T00:00:05.000Z',
+      modeRequested: 'encode',
+      inputCount: 3,
+      refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+    }]);
 
     const ordered = sortPendingComposeItemsForDisplay([
       {
@@ -269,6 +325,15 @@ test('compose job helpers derive pending item fields and long-running status fro
         status: 'finalizing',
       },
       {
+        jobId: 'job-reconnecting',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'reconnecting.mp4',
+        createdAt: '2026-03-22T00:00:01.000Z',
+        status: 'reconnecting',
+      },
+      {
         jobId: 'job-running',
         project: 'Demo',
         source: 'primary',
@@ -279,7 +344,7 @@ test('compose job helpers derive pending item fields and long-running status fro
       },
     ]);
 
-    assert.deepEqual(ordered.map((item) => item.jobId), ['job-running', 'job-finalizing', 'job-failed']);
+    assert.deepEqual(ordered.map((item) => item.jobId), ['job-running', 'job-finalizing', 'job-reconnecting', 'job-failed']);
   } finally {
     Date.now = originalNow;
   }

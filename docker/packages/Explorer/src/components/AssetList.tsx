@@ -13,6 +13,7 @@ interface AssetListProps {
   >;
   onOpenDrawer: (item: MediaItem) => void;
   onToggleSelected: (item: MediaItem) => void;
+  onDismissPendingJob: (jobId: string) => void;
 }
 
 function AssetListComponent({
@@ -21,6 +22,7 @@ function AssetListComponent({
   items,
   onOpenDrawer,
   onToggleSelected,
+  onDismissPendingJob,
 }: AssetListProps) {
   return (
     <>
@@ -30,6 +32,7 @@ function AssetListComponent({
             <PendingComposeAssetCard
               key={`pending-row-${entry.pendingItem.jobId}`}
               item={entry.pendingItem}
+              onDismiss={entry.pendingItem.status === 'failed' ? () => onDismissPendingJob(entry.pendingItem.jobId) : undefined}
             />
           );
         }

@@ -297,6 +297,7 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(explorer.includes("onCompletedRefreshScope: async (refreshScope) => {"));
   assert.ok(explorer.includes("masonryColumns={masonryRenderColumns}"));
   assert.ok(explorer.includes("items={renderedMediaEntries}"));
+  assert.ok(explorer.includes("onDismissPendingJob={removePendingJob}"));
   assert.ok(grid.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
   assert.ok(grid.includes("if (entry.kind === 'pending') {"));
   assert.ok(list.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
@@ -304,16 +305,29 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(card.includes('data-pending-compose-card="true"'));
   assert.ok(card.includes('badge: "QUEUED"'));
   assert.ok(card.includes('badge: "TAKING LONGER"'));
+  assert.ok(card.includes('badge: "RECONNECTING"'));
   assert.ok(card.includes('badge: "FINALIZING"'));
   assert.ok(card.includes('badge: "FAILED"'));
+  assert.ok(card.includes('footer: "waiting to resume"'));
+  assert.ok(card.includes('data-pending-compose-dismiss="true"'));
   assert.ok(card.includes('debug artifacts preserved'));
   assert.ok(hook.includes('pollIntervalMs = 2000'));
+  assert.ok(hook.includes('const [items, setItems] = useState<PendingComposeItem[]>(() => readPersistedPendingComposeItems());'));
+  assert.ok(hook.includes('window.localStorage.getItem(PENDING_COMPOSE_STORAGE_KEY)'));
+  assert.ok(hook.includes('window.localStorage.setItem('));
+  assert.ok(hook.includes('window.localStorage.removeItem(PENDING_COMPOSE_STORAGE_KEY);'));
   assert.ok(hook.includes('const active = current.filter('));
+  assert.ok(hook.includes('|| item.status === "reconnecting"'));
   assert.ok(hook.includes('if (nextStatus === "completed") {'));
   assert.ok(hook.includes('status: "finalizing"'));
-  assert.ok(hook.includes('status: "failed"'));
+  assert.ok(hook.includes('status: "reconnecting"'));
+  assert.ok(hook.includes('pendingComposeReconnectDelayMs(attemptCount, pollIntervalMs)'));
+  assert.ok(hook.includes('error: undefined,'));
   assert.ok(jobs.includes('if (elapsedMs > 45_000) return "running_long";'));
-  assert.ok(jobs.includes('|| status === "finalizing";'));
+  assert.ok(jobs.includes('|| status === "reconnecting"'));
+  assert.ok(jobs.includes('PENDING_COMPOSE_STORAGE_KEY'));
+  assert.ok(jobs.includes('restorePendingComposeItemsFromStorage'));
+  assert.ok(jobs.includes('serializePendingComposeItemsForStorage'));
 });
 
 test('package explorer delete actions route through custom confirmation modal', () => {

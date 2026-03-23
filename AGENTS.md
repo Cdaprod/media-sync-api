@@ -1,6 +1,11 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-23)
+- Package Explorer pending compose recovery is now resilient across refreshes and transient poll outages: accepted jobs persist lightweight records in localStorage, restore synchronously on startup, and resume polling from the saved `job_url` without waiting for a new compose submission.
+- Poll transport failures are now frontend-only `reconnecting` states with exponential backoff instead of hard `failed`, while backend-reported `failed` jobs remain dismissible placeholders and completed jobs still hold `finalizing` until refreshed media confirms `result.path`.
+- Added focused Explorer regression coverage for persisted pending-job serialization/rehydration, reconnect-delay behavior, reconnecting badge wiring, dismiss-only failed cleanup, and the package render path that keeps placeholders visible through refresh/reconnect handoff gaps.
+
 ### Latest Implementation Notes (2026-03-22)
 - Explorer pending compose cards now enter the same flat render list *before* masonry columnization as virtual newest assets, so queued/running/running_long/finalizing placeholders reserve the same top-left slot the eventual new asset will occupy instead of appearing in a later/right-side column.
 - Added a frontend-only `finalizing` state for compose placeholders: backend `completed` now triggers refresh-scope media reload first, then the placeholder stays visible until refreshed media actually contains `result.path`, eliminating the blank gap between placeholder removal and real-asset appearance.
