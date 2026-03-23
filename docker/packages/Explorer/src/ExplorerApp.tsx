@@ -10,10 +10,12 @@ import {
 import type { ComposeJobEnvelope, PendingComposeItem } from './composeJobs';
 import {
   buildMasonryColumns,
+  buildMediaIdentityKey,
   collectMediaMeta,
   extractAiTags,
   extractTags,
   filterMedia,
+  mergeMediaItemsPreservingIdentity,
   prependItemsIntoMasonryColumns,
   pruneSelection,
   selectionOrderIndexMap,
@@ -44,6 +46,10 @@ import { useTopbarScrollState } from './useTopbarScrollState';
 interface ExplorerAppProps {
   apiBaseUrl?: string;
 }
+
+type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
+type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
+type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -335,13 +341,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return kind === 'video' ? 1.05 : 1;
   }, [resolveItemOrientation]);
 
-  const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
-    const relativePath = String(item.relative_path || '').trim();
-    if (!relativePath) return '';
-    const projectName = String(item.project_name || item.project || projectOverride?.name || '').trim();
-    const sourceName = String(item.project_source || item.source || projectOverride?.source || '').trim();
-    return `${sourceName}::${projectName}::${relativePath}`;
-  }, []);
+  const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => (
+    buildMediaIdentityKey(item, projectOverride)
+  ), []);
   const assetRenderKey = assetSelectionKey;
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
@@ -508,6 +510,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return project.upload_url || `/api/projects/${encodeURIComponent(project.name)}/upload${query}`;
   }, []);
 
+  const hydrateProjectMediaItems = useCallback((items: MediaItem[], project: { name: string; source?: string | null }): MediaItem[] => (
+    items.map((item) => ({
+      ...item,
+      project_name: project.name,
+      project_source: project.source && project.source !== 'primary' ? project.source : null,
+    }))
+  ), []);
+
   const normalizedPreviewAsset = useMemo(() => {
     if (!inspectorOpen || !focused) return null;
     return normalizePreviewAsset(focused, resolveAssetUrl);
@@ -644,9 +654,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setPendingDataLoadOverlay(true);
         const payload = await api.listMedia(project.name, project.source);
         const items = Array.isArray(payload.media) ? payload.media : [];
-        setMedia(sortMediaByRecent(items));
+        const hydratedItems = hydrateProjectMediaItems(items, project);
+        setMedia(sortMediaByRecent(hydratedItems));
         setMediaScope('project');
-        const existing = new Set(items.map((item) => assetSelectionKey(item, project)));
+        const existing = new Set(hydratedItems.map((item) => assetSelectionKey(item, project)));
         setSelected((current) => {
           const next = pruneSelection(current, existing);
           setSelectedOrder((order) => order.filter((value) => next.has(value)));
@@ -658,7 +669,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         addToast('bad', 'Media', message);
       }
     },
-    [api, addToast, assetSelectionKey, clearActiveAsset, clearSelectionState],
+    [api, addToast, assetSelectionKey, clearActiveAsset, clearSelectionState, hydrateProjectMediaItems],
   );
 
   const loadAllMedia = useCallback(async () => {
@@ -680,7 +691,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           gathered.push({
             ...item,
             project_name: project.name,
-            project_source: project.source || null,
+            project_source: project.source && project.source !== 'primary' ? project.source : null,
           });
         });
       } catch (err) {
@@ -710,27 +721,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
     const payload = await api.listMedia(refreshedProject.name, refreshedProject.source || undefined);
     const items = Array.isArray(payload.media) ? payload.media : [];
-    const mergeProjectItems = (
-      current: MediaItem[],
-      nextItems: MediaItem[],
-      project: Project,
-    ) => {
-      const currentByKey = new Map(current.map((item) => [assetSelectionKey(item, project), item]));
-      return nextItems.map((item) => {
-        const currentItem = currentByKey.get(assetSelectionKey(item, project));
-        if (!currentItem) return item;
-        const nextKeys = new Set([
-          ...Object.keys(currentItem),
-          ...Object.keys(item),
-        ]);
-        for (const key of nextKeys) {
-          if ((currentItem as Record<string, unknown>)[key] !== (item as Record<string, unknown>)[key]) {
-            return { ...currentItem, ...item };
-          }
-        }
-        return currentItem;
-      });
-    };
+    const hydratedItems = hydrateProjectMediaItems(items, refreshedProject);
 
     if (mediaScope === 'all' || !activeProject) {
       setMedia((current) => {
@@ -739,12 +730,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           const itemSource = String(item.project_source || item.source || '').trim() || 'primary';
           return itemProject !== refreshedProject.name || itemSource !== (refreshedProject.source || 'primary');
         });
-        const nextItems = items.map((item) => ({
-          ...item,
-          project_name: refreshedProject.name,
-          project_source: refreshedProject.source || null,
-        }));
-        const mergedItems = mergeProjectItems(current, nextItems, refreshedProject);
+        const mergedItems = mergeMediaItemsPreservingIdentity(current, hydratedItems);
         return sortMediaByRecent([...retained, ...mergedItems]);
       });
       return;
@@ -754,9 +740,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       activeProject.name === refreshedProject.name
       && (activeProject.source || 'primary') === (refreshedProject.source || 'primary')
     ) {
-      setMedia((current) => sortMediaByRecent(mergeProjectItems(current, items, refreshedProject)));
+      setMedia((current) => sortMediaByRecent(mergeMediaItemsPreservingIdentity(current, hydratedItems)));
     }
-  }, [activeProject, api, assetSelectionKey, mediaScope, projects]);
+  }, [activeProject, api, hydrateProjectMediaItems, mediaScope, projects]);
 
   const fetchComposeJobJson = useCallback(async (url: string) => {
     const response = await fetch(api.buildUrl(url));
@@ -817,27 +803,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return sortPendingComposeItemsForDisplay(relevant);
   }, [activeProject, mediaScope, pendingComposeItems]);
 
-  const pendingEntries = useMemo(() => visiblePendingComposeItems.map((pendingItem) => ({
+  const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({
     kind: 'pending' as const,
     pendingItem,
   })), [visiblePendingComposeItems]);
 
-  const assetEntries = useMemo(() => filteredMedia.map((item) => ({
+  const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
       kind: 'asset' as const,
       item,
     })), [filteredMedia]);
 
-  const renderedMediaEntries = useMemo(() => {
-    return [
-      ...pendingEntries,
-      ...assetEntries,
-    ] satisfies Array<
-      | { kind: 'asset'; item: MediaItem }
-      | { kind: 'pending'; pendingItem: PendingComposeItem }
-    >;
-  }, [assetEntries, pendingEntries]);
+  const renderedMediaEntries = useMemo<RenderedMediaEntry[]>(() => ([
+    ...pendingEntries,
+    ...assetEntries,
+  ]), [assetEntries, pendingEntries]);
 
-  const assetMasonryColumns = useMemo(
+  const assetMasonryColumns = useMemo<AssetRenderedEntry[][]>(
     () => buildMasonryColumns(
       assetEntries,
       gridColumnCount,
@@ -846,9 +827,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [assetEntries, estimateTileHeight, gridColumnCount],
   );
 
-  const masonryRenderColumns = useMemo(
-    () => prependItemsIntoMasonryColumns(
-      assetMasonryColumns,
+  const masonryRenderColumns = useMemo<RenderedMediaEntry[][]>(
+    () => prependItemsIntoMasonryColumns<RenderedMediaEntry>(
+      assetMasonryColumns as RenderedMediaEntry[][],
       pendingEntries,
       gridColumnCount,
     ),

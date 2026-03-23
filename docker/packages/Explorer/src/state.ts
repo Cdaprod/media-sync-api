@@ -24,6 +24,69 @@ export interface MediaMeta {
   hasSize: boolean;
 }
 
+type MediaIdentityProjectOverride = {
+  name?: string | null;
+  source?: string | null;
+} | null | undefined;
+
+export function canonicalAssetSource(value?: string | null): string {
+  const normalized = String(value || '').trim();
+  return normalized || 'primary';
+}
+
+export function buildMediaIdentityKey(
+  item: MediaItem,
+  projectOverride?: MediaIdentityProjectOverride,
+): string {
+  const relativePath = String(item.relative_path || '').trim();
+  if (!relativePath) return '';
+  const projectName = String(item.project_name || item.project || projectOverride?.name || '').trim();
+  const sourceName = canonicalAssetSource(item.project_source || item.source || projectOverride?.source || '');
+  return `${sourceName}::${projectName}::${relativePath}`;
+}
+
+function mediaItemsShallowEqual(current: MediaItem, next: MediaItem): boolean {
+  const keys = new Set([
+    ...Object.keys(current),
+    ...Object.keys(next),
+  ]);
+  for (const key of keys) {
+    const currentValue = (current as unknown as Record<string, unknown>)[key];
+    const nextValue = (next as unknown as Record<string, unknown>)[key];
+    if (key === 'source' || key === 'project_source') {
+      if (canonicalAssetSource(currentValue as string | null | undefined) !== canonicalAssetSource(nextValue as string | null | undefined)) {
+        return false;
+      }
+      continue;
+    }
+    if (currentValue !== nextValue) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function mergeMediaItemsPreservingIdentity(
+  current: MediaItem[],
+  nextItems: MediaItem[],
+  getKey: (item: MediaItem) => string = (item) => buildMediaIdentityKey(item),
+): MediaItem[] {
+  const currentByKey = new Map<string, MediaItem>();
+  current.forEach((item) => {
+    const key = getKey(item);
+    if (key) currentByKey.set(key, item);
+  });
+
+  return nextItems.map((item) => {
+    const key = getKey(item);
+    if (!key) return item;
+    const currentItem = currentByKey.get(key);
+    if (!currentItem) return item;
+    if (mediaItemsShallowEqual(currentItem, item)) return currentItem;
+    return { ...currentItem, ...item };
+  });
+}
+
 export function buildMasonryColumns<T>(
   items: T[],
   columnCount: number,

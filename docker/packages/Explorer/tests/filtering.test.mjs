@@ -41,6 +41,7 @@ const loadTsModule = (filePath) => {
 
 const statePath = path.join(packageRoot, 'src', 'state.ts');
 const composeJobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
+const thumbnailLoaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
 
 test('filterMedia composes query, type, selection, and untagged filters', () => {
   const { filterMedia, collectMediaMeta } = loadTsModule(statePath);
@@ -137,6 +138,52 @@ test('toggleSelectionWithOrder tracks selection order and deselection cleanup', 
   assert.equal(orderMap.get('b'), 3);
 });
 
+test('media identity helpers preserve stable keys and object identity across compose refresh updates', () => {
+  const { buildMediaIdentityKey, canonicalAssetSource, mergeMediaItemsPreservingIdentity } = loadTsModule(statePath);
+  const original = {
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: null,
+    thumb_url: '/thumbs/reel.jpg',
+    sha256: 'abc123',
+    updated_at: '2026-03-23T01:00:00Z',
+  };
+  const unchangedRefresh = {
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: 'primary',
+    thumb_url: '/thumbs/reel.jpg',
+    sha256: 'abc123',
+    updated_at: '2026-03-23T01:00:00Z',
+  };
+  const changedRefresh = {
+    ...unchangedRefresh,
+    thumbnail_url: '/thumbs/reel-v2.jpg',
+  };
+  const nextOnly = {
+    relative_path: 'exports/new-output.mp4',
+    project_name: 'Demo',
+    project_source: null,
+    thumb_url: '/thumbs/new-output.jpg',
+  };
+
+  assert.equal(canonicalAssetSource(''), 'primary');
+  assert.equal(canonicalAssetSource(null), 'primary');
+  assert.equal(buildMediaIdentityKey(original), 'primary::Demo::exports/reel.mp4');
+  assert.equal(buildMediaIdentityKey(unchangedRefresh), 'primary::Demo::exports/reel.mp4');
+
+  const mergedUnchanged = mergeMediaItemsPreservingIdentity([original], [unchangedRefresh]);
+  assert.equal(mergedUnchanged.length, 1);
+  assert.strictEqual(mergedUnchanged[0], original);
+
+  const mergedChanged = mergeMediaItemsPreservingIdentity([original], [changedRefresh, nextOnly]);
+  assert.equal(mergedChanged.length, 2);
+  assert.notStrictEqual(mergedChanged[0], original);
+  assert.equal(mergedChanged[0].thumb_url, '/thumbs/reel.jpg');
+  assert.equal(mergedChanged[0].thumbnail_url, '/thumbs/reel-v2.jpg');
+  assert.deepEqual(mergedChanged[1], nextOnly);
+});
+
 test('buildMasonryColumns keeps source order stable while balancing columns', () => {
   const { buildMasonryColumns, prependItemsIntoMasonryColumns } = loadTsModule(statePath);
   const items = [
@@ -174,6 +221,9 @@ test('buildMasonryColumns keeps source order stable while balancing columns', ()
   assert.deepEqual(pendingColumns[0].slice(1).map((item) => item.id), columns[0].map((item) => item.id));
   assert.deepEqual(pendingColumns[1].slice(1).map((item) => item.id), columns[1].map((item) => item.id));
   assert.deepEqual(pendingColumns[2].slice(0).map((item) => item.id), columns[2].map((item) => item.id));
+  assert.strictEqual(pendingColumns[0][1], columns[0][0]);
+  assert.strictEqual(pendingColumns[1][1], columns[1][0]);
+  assert.strictEqual(pendingColumns[2][0], columns[2][0]);
 });
 
 test('compose job helpers derive pending item fields and long-running status from job envelopes', () => {
@@ -357,4 +407,30 @@ test('compose job helpers derive pending item fields and long-running status fro
   } finally {
     Date.now = originalNow;
   }
+});
+
+test('thumbnail cache keys stay stable for primary-source assets across pending compose refreshes', () => {
+  const { getThumbCacheKey } = loadTsModule(thumbnailLoaderPath);
+  const before = getThumbCacheKey({
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: null,
+    sha256: 'abc123',
+  });
+  const after = getThumbCacheKey({
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: 'primary',
+    sha256: 'abc123',
+  });
+  const changed = getThumbCacheKey({
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: 'primary',
+    sha256: 'def456',
+  });
+
+  assert.equal(before, 'primary|Demo|exports/reel.mp4|abc123');
+  assert.equal(after, before);
+  assert.notEqual(changed, before);
 });

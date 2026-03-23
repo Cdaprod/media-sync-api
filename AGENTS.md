@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Explorer package media identity is now canonicalized around `primary::project::relative_path`, and project-scoped loads/refreshes hydrate `project_name` + `project_source` immediately so compose placeholder polling does not churn keys or thumbnail job identities when the backend alternates between null and `primary` source fields.
+- Scoped compose refreshes now reuse `mergeMediaItemsPreservingIdentity(...)` for unchanged media objects, while thumbnail cache keys normalize primary-source identity too, preventing visible real assets from dropping back to generic placeholders during pending/finalizing updates and letting completed assets use their normal thumb path immediately when available.
+- Pending compose water SVG tuning now pushes body/wave fills farther below the viewport, trims bob amplitude slightly, and softens the crest highlight/body gradient handoff so active cards keep the two-wave read without bottom-gap exposure or a dark seam near the crest.
+
+### Latest Implementation Notes (2026-03-23)
 - Pending compose card water animation now overscans all fills well below the visible SVG bounds and uses softened gradient wave fills, preventing bobbing-induced bottom gaps and reducing the harsh seam near the crest while keeping the two-wave read.
 - Explorer grid pending placeholders no longer force a full asset re-columnization on every poll update: asset masonry columns are built from real media only, then pending cards are prepended per-column so unchanged asset cards keep their parent columns and do not lose thumbnail continuity.
 - Real asset cards now prefer their actual thumbnail URL immediately (falling back only on known thumb errors), and scoped compose refresh merges preserve unchanged media object identity so already-loaded thumbnails stay visible while completed compose assets can render their normal thumb path on first appearance.

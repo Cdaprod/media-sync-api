@@ -1,3 +1,10 @@
+## 2026-03-23 — Explorer compose thumbnail continuity + water seam follow-up
+- [x] Canonicalized Explorer asset/thumb identity around the normalized `primary` source so pending compose polling no longer churns keys when media rows alternate between `null` and `primary` source fields.
+- [x] Hydrated project-scoped media rows with explicit `project_name` / `project_source` on load + scoped refresh and reused the identity-preserving media merge helper so unchanged assets keep their object identity and loaded thumbnails through compose placeholder updates.
+- [x] Pushed the pending compose SVG body/wave fills farther below the viewport, reduced bob amplitude slightly, and softened the crest highlight/body transition to remove the bottom gap and harsh seam without collapsing the two-wave look.
+- [x] Added focused package regressions for canonical asset/thumb identity, identity-preserving scoped merges, and the updated SVG overscan/highlight contract.
+- [ ] Validate on physical iPhone Safari that primary-source compose updates no longer blink visible real thumbnails back to generic placeholders and that the pending-water crest reads cleanly in queued/running/running_long/finalizing states.
+
 ## 2026-03-23 — Pending compose water overscan + thumbnail continuity fix
 - [x] Overscanned the pending compose water SVG fills below the viewport and softened the crest transition so bobbing no longer reveals a bottom gap or a harsh dark seam.
 - [x] Stopped pending compose polling updates from re-columnizing the real asset masonry by prepending pending cards into existing asset columns instead of rebuilding the whole mixed-entry column set.

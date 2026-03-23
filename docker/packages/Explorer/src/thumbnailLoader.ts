@@ -1,3 +1,4 @@
+import { canonicalAssetSource } from './state';
 import type { MediaItem } from './types';
 
 export const THUMB_LOAD_TIMEOUT_MS = 8000;
@@ -30,10 +31,10 @@ export const normalizeThumbUrl = (rawUrl?: string): string | undefined => {
 };
 
 export const getThumbCacheKey = (item: MediaItem) => {
-  const project = item.project_name || item.project || '';
-  const source = item.project_source || item.source || '';
-  const rel = item.relative_path || '';
-  const sha = item.sha256 || item.hash || '';
+  const project = String(item.project_name || item.project || '').trim();
+  const source = canonicalAssetSource(item.project_source || item.source || '');
+  const rel = String(item.relative_path || '').trim();
+  const sha = String(item.sha256 || item.hash || '').trim();
   return [source, project, rel, sha].filter(Boolean).join('|');
 };
 

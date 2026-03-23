@@ -254,7 +254,7 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes("pollIntervalMs: 2000,"));
   assert.ok(content.includes("const visiblePendingComposeItems = useMemo(() => {"));
   assert.ok(content.includes("return sortPendingComposeItemsForDisplay(relevant);"));
-  assert.ok(content.includes("const pendingEntries = useMemo(() => visiblePendingComposeItems.map((pendingItem) => ({"));
+  assert.ok(content.includes("const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({"));
   assert.ok(content.includes("...pendingEntries,"));
   assert.ok(content.includes("...assetEntries,"));
   assert.ok(content.includes("if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {"));
@@ -298,7 +298,10 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(explorer.includes("masonryColumns={masonryRenderColumns}"));
   assert.ok(explorer.includes("items={renderedMediaEntries}"));
   assert.ok(explorer.includes("onDismissPendingJob={removePendingJob}"));
-  assert.ok(explorer.includes("() => prependItemsIntoMasonryColumns("));
+  assert.ok(explorer.includes("() => prependItemsIntoMasonryColumns<RenderedMediaEntry>("));
+  assert.ok(explorer.includes("const hydrateProjectMediaItems = useCallback((items: MediaItem[], project: { name: string; source?: string | null }): MediaItem[] => ("));
+  assert.ok(explorer.includes('mergeMediaItemsPreservingIdentity(current, hydratedItems)'));
+  assert.ok(explorer.includes('buildMediaIdentityKey(item, projectOverride)'));
   assert.ok(explorer.includes("const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'"));
   assert.ok(grid.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
   assert.ok(grid.includes("if (entry.kind === 'pending') {"));
@@ -320,9 +323,14 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(card.includes('data-pending-compose-dismiss="true"'));
   assert.ok(card.includes('debug artifacts preserved'));
   assert.ok(card.includes('.pending-compose-water-svg'));
-  assert.ok(card.includes('const BODY_FILL_FLOOR = 360;'));
+  assert.ok(card.includes('const BODY_FILL_FLOOR = 420;'));
   assert.ok(card.includes('linearGradient id={bodyGradientId}'));
-  assert.ok(card.includes('const bobAmplitude = status === "running_long" ? 4.5 : 6;'));
+  assert.ok(card.includes('stopOpacity="0.8"'));
+  assert.ok(card.includes('stopOpacity="0.04"'));
+  assert.ok(card.includes('stroke="#ffffff"'));
+  assert.ok(card.includes('strokeOpacity="0.18"'));
+  assert.ok(card.includes('transform="translate(0 -1.5)"'));
+  assert.ok(card.includes('const bobAmplitude = status === "running_long" ? 3.5 : 4.75;'));
   assert.ok(card.includes('solid: "#2aa8ff"'));
   assert.ok(card.includes('solid: "#ff9b1e"'));
   assert.ok(card.includes('solid: "#7868ff"'));

@@ -228,10 +228,10 @@ const CARD_STYLES = `
 const SVG_WIDTH = 600;
 const SVG_HEIGHT = 220;
 const WAVE_SPAN = 1200;
-const BODY_FILL_FLOOR = 360;
-const REAR_WAVE_FLOOR = 292;
-const FRONT_WAVE_FLOOR = 276;
-const BODY_SURFACE_PATH = "M0 170 C75 164 145 176 225 170 C305 164 385 175 470 170 C555 164 640 174 730 170 C820 165 910 176 1005 170 C1090 165 1155 174 1200 170";
+const BODY_FILL_FLOOR = 420;
+const REAR_WAVE_FLOOR = 352;
+const FRONT_WAVE_FLOOR = 340;
+const BODY_SURFACE_PATH = "M0 182 C75 176 145 188 225 182 C305 176 385 187 470 182 C555 176 640 186 730 182 C820 177 910 188 1005 182 C1090 177 1155 186 1200 182";
 const REAR_WAVE_PATH = "M0 144 C85 136 170 152 255 145 C350 138 445 154 540 145 C640 136 740 151 840 145 C945 139 1045 154 1140 145 C1175 142 1195 143 1200 144";
 const FRONT_WAVE_PATH = "M0 132 C55 118 110 148 175 133 C250 118 325 149 405 133 C490 117 565 150 645 133 C730 118 805 149 890 133 C970 118 1045 148 1125 133 C1160 126 1185 128 1200 132";
 
@@ -272,7 +272,7 @@ function PendingComposeWaterSvg({
     const highlightGroup = highlightGroupRef.current;
     if (!surfaceGroup || !rearWaveGroup || !frontWaveGroup || !highlightGroup) return;
 
-    const bobAmplitude = status === "running_long" ? 4.5 : 6;
+    const bobAmplitude = status === "running_long" ? 3.5 : 4.75;
     const bobPeriodSeconds = status === "running_long" ? 4.8 : 4.2;
     const rearSpeed = status === "running_long" ? 12 : 18;
     const frontSpeed = status === "running_long" ? 24 : 32;
@@ -318,19 +318,20 @@ function PendingComposeWaterSvg({
       data-water-svg="true"
     >
       <defs>
-        <linearGradient id={bodyGradientId} x1="0" y1="136" x2="0" y2={String(BODY_FILL_FLOOR)}>
-          <stop offset="0%" stopColor={solid} stopOpacity="0.94" />
+        <linearGradient id={bodyGradientId} x1="0" y1="146" x2="0" y2={String(BODY_FILL_FLOOR)}>
+          <stop offset="0%" stopColor={solid} stopOpacity="0.8" />
+          <stop offset="26%" stopColor={solid} stopOpacity="0.9" />
           <stop offset="100%" stopColor={solid} stopOpacity="1" />
         </linearGradient>
-        <linearGradient id={rearGradientId} x1="0" y1="134" x2="0" y2={String(REAR_WAVE_FLOOR)}>
-          <stop offset="0%" stopColor={back} stopOpacity="0.44" />
-          <stop offset="55%" stopColor={back} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={back} stopOpacity="0" />
+        <linearGradient id={rearGradientId} x1="0" y1="140" x2="0" y2={String(REAR_WAVE_FLOOR)}>
+          <stop offset="0%" stopColor={back} stopOpacity="0.5" />
+          <stop offset="42%" stopColor={back} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={back} stopOpacity="0.04" />
         </linearGradient>
         <linearGradient id={frontGradientId} x1="0" y1="126" x2="0" y2={String(FRONT_WAVE_FLOOR)}>
-          <stop offset="0%" stopColor={solid} stopOpacity="0.62" />
-          <stop offset="58%" stopColor={solid} stopOpacity="0.26" />
-          <stop offset="100%" stopColor={solid} stopOpacity="0" />
+          <stop offset="0%" stopColor={solid} stopOpacity="0.56" />
+          <stop offset="34%" stopColor={solid} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={solid} stopOpacity="0.05" />
         </linearGradient>
       </defs>
       <rect className="water-bg" x="0" y="0" width={SVG_WIDTH} height={SVG_HEIGHT} />
@@ -348,21 +349,24 @@ function PendingComposeWaterSvg({
           <path
             d={FRONT_WAVE_PATH}
             fill="none"
-            stroke="rgba(255,255,255,0.22)"
-            strokeWidth="2.2"
+            stroke="#ffffff"
+            strokeOpacity="0.18"
+            strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
+            transform="translate(0 -1.5)"
           />
           <path
             d={FRONT_WAVE_PATH}
             fill="none"
-            stroke="rgba(255,255,255,0.22)"
-            strokeWidth="2.2"
+            stroke="#ffffff"
+            strokeOpacity="0.18"
+            strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
-            transform={`translate(${WAVE_SPAN} 0)`}
+            transform={`translate(${WAVE_SPAN} -1.5)`}
           />
         </g>
       </g>
