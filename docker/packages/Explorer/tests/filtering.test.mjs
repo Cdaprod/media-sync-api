@@ -40,6 +40,8 @@ const loadTsModule = (filePath) => {
 };
 
 const statePath = path.join(packageRoot, 'src', 'state.ts');
+const composeJobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
+const thumbnailLoaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
 
 test('filterMedia composes query, type, selection, and untagged filters', () => {
   const { filterMedia, collectMediaMeta } = loadTsModule(statePath);
@@ -136,8 +138,54 @@ test('toggleSelectionWithOrder tracks selection order and deselection cleanup', 
   assert.equal(orderMap.get('b'), 3);
 });
 
+test('media identity helpers preserve stable keys and object identity across compose refresh updates', () => {
+  const { buildMediaIdentityKey, canonicalAssetSource, mergeMediaItemsPreservingIdentity } = loadTsModule(statePath);
+  const original = {
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: null,
+    thumb_url: '/thumbs/reel.jpg',
+    sha256: 'abc123',
+    updated_at: '2026-03-23T01:00:00Z',
+  };
+  const unchangedRefresh = {
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: 'primary',
+    thumb_url: '/thumbs/reel.jpg',
+    sha256: 'abc123',
+    updated_at: '2026-03-23T01:00:00Z',
+  };
+  const changedRefresh = {
+    ...unchangedRefresh,
+    thumbnail_url: '/thumbs/reel-v2.jpg',
+  };
+  const nextOnly = {
+    relative_path: 'exports/new-output.mp4',
+    project_name: 'Demo',
+    project_source: null,
+    thumb_url: '/thumbs/new-output.jpg',
+  };
+
+  assert.equal(canonicalAssetSource(''), 'primary');
+  assert.equal(canonicalAssetSource(null), 'primary');
+  assert.equal(buildMediaIdentityKey(original), 'primary::Demo::exports/reel.mp4');
+  assert.equal(buildMediaIdentityKey(unchangedRefresh), 'primary::Demo::exports/reel.mp4');
+
+  const mergedUnchanged = mergeMediaItemsPreservingIdentity([original], [unchangedRefresh]);
+  assert.equal(mergedUnchanged.length, 1);
+  assert.strictEqual(mergedUnchanged[0], original);
+
+  const mergedChanged = mergeMediaItemsPreservingIdentity([original], [changedRefresh, nextOnly]);
+  assert.equal(mergedChanged.length, 2);
+  assert.notStrictEqual(mergedChanged[0], original);
+  assert.equal(mergedChanged[0].thumb_url, '/thumbs/reel.jpg');
+  assert.equal(mergedChanged[0].thumbnail_url, '/thumbs/reel-v2.jpg');
+  assert.deepEqual(mergedChanged[1], nextOnly);
+});
+
 test('buildMasonryColumns keeps source order stable while balancing columns', () => {
-  const { buildMasonryColumns } = loadTsModule(statePath);
+  const { buildMasonryColumns, prependItemsIntoMasonryColumns } = loadTsModule(statePath);
   const items = [
     { id: '1', h: 1.1 },
     { id: '2', h: 1.3 },
@@ -164,4 +212,225 @@ test('buildMasonryColumns keeps source order stable while balancing columns', ()
   assert.equal(placement.get('2').columnIndex, 1);
   assert.equal(placement.get('3').columnIndex, 2);
   assert.ok(placement.get('4').rowIndex >= 1);
+
+  const pendingColumns = prependItemsIntoMasonryColumns(columns, [
+    { id: 'p1', h: 1.16 },
+    { id: 'p2', h: 1.16 },
+  ], 3);
+  assert.deepEqual(pendingColumns.map((column) => column[0].id), ['p1', 'p2', '3']);
+  assert.deepEqual(pendingColumns[0].slice(1).map((item) => item.id), columns[0].map((item) => item.id));
+  assert.deepEqual(pendingColumns[1].slice(1).map((item) => item.id), columns[1].map((item) => item.id));
+  assert.deepEqual(pendingColumns[2].slice(0).map((item) => item.id), columns[2].map((item) => item.id));
+  assert.strictEqual(pendingColumns[0][1], columns[0][0]);
+  assert.strictEqual(pendingColumns[1][1], columns[1][0]);
+  assert.strictEqual(pendingColumns[2][0], columns[2][0]);
+});
+
+test('compose job helpers derive pending item fields and long-running status from job envelopes', () => {
+  const {
+    buildPendingComposeItemFromEnvelope,
+    derivePendingComposeStatus,
+    pendingComposeHoldsNewestSlot,
+    pendingComposeReconnectDelayMs,
+    restorePendingComposeItemsFromStorage,
+    serializePendingComposeItemsForStorage,
+    sortPendingComposeItemsForDisplay,
+  } = loadTsModule(composeJobsPath);
+  const originalNow = Date.now;
+  Date.now = () => new Date('2026-03-22T00:01:00.000Z').getTime();
+
+  try {
+    const pending = buildPendingComposeItemFromEnvelope({
+      job_id: 'job-123',
+      status: 'accepted',
+      job_status: 'running',
+      project: 'Demo',
+      source: 'primary',
+      output_name: 'exports/reel.mp4',
+      target_dir: 'exports',
+      created_at: '2026-03-22T00:00:00.000Z',
+      mode_requested: 'encode',
+      input_count: 2,
+      input_preview: ['a.mov', 'b.mov'],
+      job_url: '/api/projects/Demo/compose/jobs/job-123',
+      refresh_scope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      result: {
+        debug_artifacts: {
+          files: ['normalized/segment_0000.mp4'],
+        },
+      },
+    });
+
+    assert.deepEqual(pending, {
+      jobId: 'job-123',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'exports/reel.mp4',
+      modeRequested: 'encode',
+      inputCount: 2,
+      inputPreview: ['a.mov', 'b.mov'],
+      createdAt: '2026-03-22T00:00:00.000Z',
+      status: 'running',
+      error: undefined,
+      jobUrl: '/api/projects/Demo/compose/jobs/job-123',
+      refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      completedPath: undefined,
+      debugArtifacts: ['normalized/segment_0000.mp4'],
+    });
+
+    assert.equal(derivePendingComposeStatus({
+      job_id: 'job-123',
+      status: 'running',
+      project: 'Demo',
+      source: 'primary',
+      output_name: 'exports/reel.mp4',
+      target_dir: 'exports',
+      started_at: '2026-03-22T00:00:10.000Z',
+    }), 'running_long');
+
+    assert.equal(derivePendingComposeStatus({
+      job_id: 'job-123',
+      status: 'queued',
+      project: 'Demo',
+      source: 'primary',
+      output_name: 'exports/reel.mp4',
+      target_dir: 'exports',
+    }), 'queued');
+
+    assert.equal(derivePendingComposeStatus({
+      job_id: 'job-123',
+      status: 'completed',
+      project: 'Demo',
+      source: 'primary',
+      output_name: 'exports/reel.mp4',
+      target_dir: 'exports',
+    }), 'completed');
+
+    assert.equal(pendingComposeHoldsNewestSlot('queued'), true);
+    assert.equal(pendingComposeHoldsNewestSlot('reconnecting'), true);
+    assert.equal(pendingComposeHoldsNewestSlot('finalizing'), true);
+    assert.equal(pendingComposeHoldsNewestSlot('failed'), false);
+    assert.equal(pendingComposeReconnectDelayMs(1, 2000), 4000);
+    assert.equal(pendingComposeReconnectDelayMs(4, 2000), 30000);
+
+    const restored = restorePendingComposeItemsFromStorage(JSON.stringify([
+      {
+        jobId: 'job-restore',
+        jobUrl: '/api/projects/Demo/compose/jobs/job-restore',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'restore.mp4',
+        createdAt: '2026-03-22T00:00:05.000Z',
+        modeRequested: 'encode',
+        inputCount: 3,
+        refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      },
+    ]));
+
+    assert.deepEqual(restored, [{
+      jobId: 'job-restore',
+      jobUrl: '/api/projects/Demo/compose/jobs/job-restore',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'restore.mp4',
+      createdAt: '2026-03-22T00:00:05.000Z',
+      modeRequested: 'encode',
+      inputCount: 3,
+      refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      status: 'queued',
+    }]);
+
+    assert.deepEqual(JSON.parse(serializePendingComposeItemsForStorage([
+      {
+        ...restored[0],
+        status: 'failed',
+        error: 'backend failed',
+        completedPath: 'exports/restore.mp4',
+        debugArtifacts: ['debug/a.txt'],
+      },
+    ])), [{
+      jobId: 'job-restore',
+      jobUrl: '/api/projects/Demo/compose/jobs/job-restore',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'restore.mp4',
+      createdAt: '2026-03-22T00:00:05.000Z',
+      modeRequested: 'encode',
+      inputCount: 3,
+      refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+    }]);
+
+    const ordered = sortPendingComposeItemsForDisplay([
+      {
+        jobId: 'job-failed',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'failed.mp4',
+        createdAt: '2026-03-22T00:00:03.000Z',
+        status: 'failed',
+      },
+      {
+        jobId: 'job-finalizing',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'finalizing.mp4',
+        createdAt: '2026-03-22T00:00:02.000Z',
+        status: 'finalizing',
+      },
+      {
+        jobId: 'job-reconnecting',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'reconnecting.mp4',
+        createdAt: '2026-03-22T00:00:01.000Z',
+        status: 'reconnecting',
+      },
+      {
+        jobId: 'job-running',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'running.mp4',
+        createdAt: '2026-03-22T00:00:04.000Z',
+        status: 'running',
+      },
+    ]);
+
+    assert.deepEqual(ordered.map((item) => item.jobId), ['job-running', 'job-finalizing', 'job-reconnecting', 'job-failed']);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('thumbnail cache keys stay stable for primary-source assets across pending compose refreshes', () => {
+  const { getThumbCacheKey } = loadTsModule(thumbnailLoaderPath);
+  const before = getThumbCacheKey({
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: null,
+    sha256: 'abc123',
+  });
+  const after = getThumbCacheKey({
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: 'primary',
+    sha256: 'abc123',
+  });
+  const changed = getThumbCacheKey({
+    relative_path: 'exports/reel.mp4',
+    project_name: 'Demo',
+    project_source: 'primary',
+    sha256: 'def456',
+  });
+
+  assert.equal(before, 'primary|Demo|exports/reel.mp4|abc123');
+  assert.equal(after, before);
+  assert.notEqual(changed, before);
 });

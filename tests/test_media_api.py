@@ -979,7 +979,7 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
 
     captured: dict[str, object] = {}
 
-    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir):
+    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir, job_id=None):
         captured["project"] = ctx.project_name
         captured["output_name"] = spec.output_name
         captured["count"] = len(staged_paths)
@@ -1006,6 +1006,9 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
     assert response.status_code == 202
     payload = response.json()
     assert payload["status"] == "accepted"
+    assert payload["mode_requested"] == "auto"
+    assert payload["input_count"] == 2
+    assert payload["debug_keep_intermediates"] is False
     job_id = payload["job_id"]
     deadline = time.time() + 5
     status_payload = None
@@ -1021,6 +1024,7 @@ def test_bulk_asset_compose_across_projects(client: TestClient, env_settings: Pa
         time.sleep(0.05)
     assert status_payload is not None
     assert status_payload["status"] == "completed"
+    assert status_payload["mode_requested"] == "auto"
     assert status_payload["result"]["path"].startswith("exports/")
     assert captured["project"] == output_project
     assert captured["output_name"] == "bulk-cut.mp4"
@@ -1099,7 +1103,7 @@ def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClien
     listing = client.get(f"/api/projects/{source}/media").json()["media"]
     asset_uuid = listing[0]["asset_uuid"]
 
-    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir):
+    def _fake_compose_staged_paths(ctx, spec, staged_paths, base_url, *, work_dir, job_id=None):
         assert ctx.project_name == output_project
         assert spec.output_name == "uuid-cut.mp4"
         assert len(staged_paths) == 1
@@ -1117,7 +1121,11 @@ def test_bulk_compose_accepts_asset_uuid_without_relative_path(client: TestClien
         },
     )
     assert response.status_code == 202
-    job_id = response.json()["job_id"]
+    payload = response.json()
+    assert payload["mode_requested"] == "auto"
+    assert payload["input_count"] == 1
+    assert payload["debug_keep_intermediates"] is False
+    job_id = payload["job_id"]
     deadline = time.time() + 5
     status_payload = None
     while time.time() < deadline:

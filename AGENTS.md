@@ -1,6 +1,91 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-23)
+- Explorer package media identity is now canonicalized around `primary::project::relative_path`, and project-scoped loads/refreshes hydrate `project_name` + `project_source` immediately so compose placeholder polling does not churn keys or thumbnail job identities when the backend alternates between null and `primary` source fields.
+- Scoped compose refreshes now reuse `mergeMediaItemsPreservingIdentity(...)` for unchanged media objects, while thumbnail cache keys normalize primary-source identity too, preventing visible real assets from dropping back to generic placeholders during pending/finalizing updates and letting completed assets use their normal thumb path immediately when available.
+- Pending compose water SVG tuning now pushes body/wave fills farther below the viewport, trims bob amplitude slightly, and softens the crest highlight/body gradient handoff so active cards keep the two-wave read without bottom-gap exposure or a dark seam near the crest.
+
+### Latest Implementation Notes (2026-03-23)
+- Pending compose card water animation now overscans all fills well below the visible SVG bounds and uses softened gradient wave fills, preventing bobbing-induced bottom gaps and reducing the harsh seam near the crest while keeping the two-wave read.
+- Explorer grid pending placeholders no longer force a full asset re-columnization on every poll update: asset masonry columns are built from real media only, then pending cards are prepended per-column so unchanged asset cards keep their parent columns and do not lose thumbnail continuity.
+- Real asset cards now prefer their actual thumbnail URL immediately (falling back only on known thumb errors), and scoped compose refresh merges preserve unchanged media object identity so already-loaded thumbnails stay visible while completed compose assets can render their normal thumb path on first appearance.
+
+### Latest Implementation Notes (2026-03-23)
+- Polished the single-SVG pending compose water renderer for Safari predictability by moving wave/body fills to solid hex colors and leaving transparency control to the SVG layer-opacity rules instead of compounding `rgba(...)` alpha with CSS opacity.
+- Slightly increased rear-wave readability and lowered the body surface so the placeholder keeps clearer front/rear separation without flattening the water line back into a single band.
+- Extended package regression coverage to lock the solid-color fill contract and the tuned rear-wave opacity so this visual polish does not drift back toward the muddier double-alpha look.
+
+### Latest Implementation Notes (2026-03-23)
+- Package Explorer pending compose cards now render their water treatment through a single in-file SVG renderer instead of stacked DOM wave/body layers, eliminating the banded compositing artifact where the front wave swallowed the rear surface.
+- The new water renderer uses distinct rear/front wave paths plus requestAnimationFrame-driven slower rear pan, faster front pan, and subtle symmetric vertical bobbing for active states, while failed cards stay visually stalled.
+- Explorer package regression coverage now asserts the single-SVG water implementation (`PendingComposeWaterSvg`, distinct wave paths, RAF motion) and guards against reintroducing the old `pending-compose-water-wrap` / reused-`Wave` layering approach.
+
+### Latest Implementation Notes (2026-03-23)
+- Package Explorer pending compose recovery is now resilient across refreshes and transient poll outages: accepted jobs persist lightweight records in localStorage, restore synchronously on startup, and resume polling from the saved `job_url` without waiting for a new compose submission.
+- Poll transport failures are now frontend-only `reconnecting` states with exponential backoff instead of hard `failed`, while backend-reported `failed` jobs remain dismissible placeholders and completed jobs still hold `finalizing` until refreshed media confirms `result.path`.
+- Added focused Explorer regression coverage for persisted pending-job serialization/rehydration, reconnect-delay behavior, reconnecting badge wiring, dismiss-only failed cleanup, and the package render path that keeps placeholders visible through refresh/reconnect handoff gaps.
+
+### Latest Implementation Notes (2026-03-22)
+- Explorer pending compose cards now enter the same flat render list *before* masonry columnization as virtual newest assets, so queued/running/running_long/finalizing placeholders reserve the same top-left slot the eventual new asset will occupy instead of appearing in a later/right-side column.
+- Added a frontend-only `finalizing` state for compose placeholders: backend `completed` now triggers refresh-scope media reload first, then the placeholder stays visible until refreshed media actually contains `result.path`, eliminating the blank gap between placeholder removal and real-asset appearance.
+- Explorer package tests now lock the new ordering/handoff contract by asserting pre-masonry pending entry merging, `FINALIZING` badge support, newest-slot sort helpers, and completed-placeholder persistence until refreshed media confirms the final path.
+
+### Latest Implementation Notes (2026-03-22)
+- Real compose evidence showed normalized segment validation still failing on `rotate:90` and `video_pix_fmt:yuvj420p`, so normalization now explicitly clears inherited input display rotation (`-display_rotation:v:0 0`) while forcing limited-range `yuv420p` through `format=yuv420p`, `setparams=range=tv`, and `-color_range tv`.
+- Probe summaries now include `video_color_range`, and encode validation only tolerates `yuvj420p` when ffprobe simultaneously reports limited-range color semantics (`limited`/`tv`/`mpeg`) instead of blindly accepting or rejecting all `yuvj420p` outputs.
+- Added focused backend regression coverage for the exact failure shape: normalize command flags now assert rotation/color-range hardening, limited-range `yuvj420p` is accepted when otherwise canonical, and full-range `yuvj420p` continues to fail validation.
+
+### Latest Implementation Notes (2026-03-22)
+- Package Explorer now keeps compose-job placeholders in local in-memory UI state keyed by project + target dir, inserting a pending compose card immediately on `202 Accepted` instead of waiting for backend asset registration or a full page refresh.
+- Added modular pending compose UI files in the Explorer package (`PendingComposeAssetCard`, `composeJobs`, and `usePendingComposeJobs`) with exact cyan/blue active states, amber `running_long` after 45 seconds, red failed state, and no fake percentage/fill-progress semantics.
+- Compose polling now runs every 2 seconds from the returned `job_url`; completion triggers a refresh-scope-targeted media refresh plus `Compose completed` toast, while failed jobs stay visible with backend error text and optional debug-artifact notice.
+
+### Latest Implementation Notes (2026-03-22)
+- Added optional compose debug preservation across existing/upload/bulk flows via `debug_keep_intermediates`, with preserved work dirs copied under `MEDIA_SYNC_TEMP_ROOT/compose_debug/<job_id>` and surfaced back in compose results as `debug_artifacts`.
+- Hardened the repro harness log harvesting path with a broader two-pass scan (`recent` then full service log) so job-scoped lifecycle lines are much less likely to come back empty during real operator runs.
+- Expanded tests to cover both the preserved-debug-artifacts path and the harness’s full-log fallback behavior so these operator workflows remain dependable.
+
+### Latest Implementation Notes (2026-03-22)
+- All compose job entrypoints now serialize the same operator-facing job envelope fields (`mode_requested`, `input_count`, `input_preview`, and status-specific `instructions`) so existing/upload/incremental/bulk compose all expose the same polling/debug contract.
+- README now documents the mode semantics explicitly (`encode` correctness-first, `copy` strict fast-path, `auto` deterministic selection) instead of leaving that policy implied by compose internals and Explorer defaults.
+- Updated regression coverage across project and bulk compose job responses so these envelope fields stay aligned with the now-verified encode pipeline rather than drifting by route.
+
+### Latest Implementation Notes (2026-03-22)
+- Real repro evidence then localized the next failure earlier in the pipeline: normalized segment validation rejected `segment_0000.mp4` on `video_avg_frame_rate:25/1`, so this branch now treats normalized FPS canonicalization/validation as the active bottleneck instead of only the final join.
+- Compose probe summaries now include both `video_avg_frame_rate` and `video_r_frame_rate`, and encode validation accepts canonical intermediates when the real stream rate is correct even if `avg_frame_rate` is noisy for these iPhone-derived normalized outputs.
+- Normalization now also stamps an explicit output `-r 30000/1001` on generated intermediates/images, and the repro harness log filter was widened from strict `job_id=...` matching to any lifecycle line containing the job id so JSON-shaped log fields are still captured.
+
+### Latest Implementation Notes (2026-03-22)
+- Encode-mode finalization now prefers concat-demuxer copy over the already-normalized intermediate MP4s, using the heavier filter-concat re-encode only as a logged fallback when the normalized join itself fails.
+- This narrows the remaining iPhone boundary investigation toward whether the freeze is introduced before final join or only in the fallback path, while keeping the faster/more deterministic normalized-join path reviewable in logs via `mechanism=concat_demuxer_copy_normalized`.
+- Added regression coverage for normalized-join preference and explicit fallback back into the filter-concat encode path so the executor’s chosen final-join mechanism stays observable.
+
+### Latest Implementation Notes (2026-03-22)
+- Fixed `scripts/compose_repro.py` to match the current existing-assets compose API contract by sending `inputs` (not stale `relative_paths`), closing the immediate 422 that blocked real compose repro runs.
+- Hardened encode-mode timeline normalization for the reproduced iPhone HEVC/Dolby Vision portrait case by rebasing normalized video/audio onto explicit canonical timebases, forcing CFR-oriented output args, and re-normalizing streams again inside the final concat filtergraph before encode.
+- Expanded compose probe validation with per-stream duration summaries plus `av_duration_delta_seconds` so normalized/final encode artifacts can fail fast when audio/video drift exceeds tolerance instead of silently registering a boundary-broken output.
+
+### Latest Implementation Notes (2026-03-22)
+- Added `scripts/compose_repro.py` as the branch-follow-up validation harness for existing-assets compose repros so operators can submit a real clip set, poll the async `job_id`, and capture only the correlated lifecycle log block from `docker compose logs`.
+- Documented a copy-paste real-compose repro workflow in README and added regression coverage for payload-building, job-status URL shaping, and `job_id` log filtering so the validation helper stays stable across future compose changes.
+- Updated the todo handoff with a dedicated real-clip validation task stub that points future agents/operators at the new harness instead of another no-op alignment pass.
+
+### Latest Implementation Notes (2026-03-22)
+- Added normalized-intermediate probe logging (`compose_normalized_probe`) plus fail-fast validation for normalized segments and final outputs so broken compose artifacts are rejected before registration instead of silently landing in project indexes.
+- Encode/output validation now enforces canonical expectations around codec, pixel format, dimensions, fps, audio shape, rotation reset, and non-zero duration, with explicit validation-failure log events for forensics.
+- Expanded compose regression coverage for normalized-probe visibility and output-validation registration guards while preserving the earlier explicit copy/encode pipeline split.
+
+### Latest Implementation Notes (2026-03-22)
+- Refactored backend compose execution into explicit mode-specific paths: direct concat-demuxer copy for conservative copy-safe inputs, canonical normalize-then-filter-concat encode for correctness-first jobs, and auto-mode delegation that logs the requested-vs-selected strategy per job.
+- Compose jobs now emit structured lifecycle breadcrumbs across request receipt, per-input probes, strategy confirmation, normalization, concat execution, output validation, and completion/failure so API logs can explain which path actually ran.
+- Encode normalization now resets timestamps, normalizes fps/audio layout, and injects silent stereo tracks where needed before concat; added regression tests for concat command selection, normalization audio fallback, and observability markers.
+
+### Latest Implementation Notes (2026-03-22)
+- Explorer multi-select compose in both the static UI and package Explorer now submits `mode: 'encode'` for the human-driven ordered-stitch workflow, avoiding unsafe concat-copy selection for selected assets.
+- Hardened backend compose auto-mode selection with more conservative copy-compatibility checks (matching container suffixes plus expanded ffprobe stream/container signature fields) and added explicit `compose_strategy_selected` / auto-copy-fallback logging for easier verification in logs.
+- Added regression coverage for the frontend compose payload policy and backend conservative auto/copy decision reasons, and documented the correctness-first Explorer compose policy in README.
+
 ### Latest Implementation Notes (2026-03-21)
 - Replaced the package Explorer root `app/not-found.tsx` with a multi-phase shader scene (`idle` → `warp` → `arrival` → `exit`) that keeps App Router 404 ownership while turning the page into a contained cinematic handoff back into Explorer.
 - Swapped package-level 404 font loading from `next/font/google` to shared layout `<head>` links for `Bebas Neue` + `DM Mono` after the build-time Bebas fetch proved brittle in the replacement scene flow; the page still avoids page-local `@import` usage.

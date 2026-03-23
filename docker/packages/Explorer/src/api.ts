@@ -1,4 +1,5 @@
 import type { MediaResponse, Project, ResolveOpenResponse, Source } from './types';
+import type { ComposeJobEnvelope } from './composeJobs';
 
 export interface ResolveRequest {
   project: string;
@@ -38,7 +39,7 @@ export interface ApiClient {
     target_dir?: string;
     mode?: 'auto' | 'copy' | 'encode';
     allow_overwrite?: boolean;
-  }) => Promise<Record<string, unknown>>;
+  }) => Promise<ComposeJobEnvelope>;
   buildUrl: (path: string) => string;
 }
 
@@ -191,13 +192,13 @@ export function createApiClient(baseUrl: string): ApiClient {
       target_dir?: string;
       mode?: 'auto' | 'copy' | 'encode';
       allow_overwrite?: boolean;
-    }): Promise<Record<string, unknown>> {
+    }): Promise<ComposeJobEnvelope> {
       const response = await fetch(buildUrl('/api/assets/bulk/compose'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const data = await parseJson<Record<string, unknown>>(response);
+      const data = await parseJson<ComposeJobEnvelope & Record<string, unknown>>(response);
       if (!response.ok) {
         throw new Error(String(data?.detail || data?.message || 'Bulk compose failed'));
       }

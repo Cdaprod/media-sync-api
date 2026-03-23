@@ -5,11 +5,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
 import {
+  sortPendingComposeItemsForDisplay,
+} from './composeJobs';
+import type { ComposeJobEnvelope, PendingComposeItem } from './composeJobs';
+import {
   buildMasonryColumns,
+  buildMediaIdentityKey,
   collectMediaMeta,
   extractAiTags,
   extractTags,
   filterMedia,
+  mergeMediaItemsPreservingIdentity,
+  prependItemsIntoMasonryColumns,
   pruneSelection,
   selectionOrderIndexMap,
   sortMedia,
@@ -30,7 +37,8 @@ import { AssetPreviewPanel } from './AssetPreviewPanel';
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
-import { buildThumbJobKey, getThumbCacheKey, normalizeThumbUrl } from './thumbnailLoader';
+import { buildThumbJobKey, getThumbCacheKey, getThumbLoadState, normalizeThumbUrl } from './thumbnailLoader';
+import { usePendingComposeJobs } from './usePendingComposeJobs';
 import { useAssetInteractions } from './useAssetInteractions';
 import { useThumbnailQueue } from './useThumbnailQueue';
 import { useTopbarScrollState } from './useTopbarScrollState';
@@ -38,6 +46,10 @@ import { useTopbarScrollState } from './useTopbarScrollState';
 interface ExplorerAppProps {
   apiBaseUrl?: string;
 }
+
+type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
+type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
+type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -292,6 +304,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
+  const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -328,13 +341,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return kind === 'video' ? 1.05 : 1;
   }, [resolveItemOrientation]);
 
-  const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => {
-    const relativePath = String(item.relative_path || '').trim();
-    if (!relativePath) return '';
-    const projectName = String(item.project_name || item.project || projectOverride?.name || '').trim();
-    const sourceName = String(item.project_source || item.source || projectOverride?.source || '').trim();
-    return `${sourceName}::${projectName}::${relativePath}`;
-  }, []);
+  const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => (
+    buildMediaIdentityKey(item, projectOverride)
+  ), []);
   const assetRenderKey = assetSelectionKey;
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
@@ -355,10 +364,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       : filtered;
     return sortMedia(selectedFiltered, sortKey, mediaMeta);
   }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
-  const masonryColumns = useMemo(
-    () => buildMasonryColumns(filteredMedia, gridColumnCount, (item) => estimateTileHeight(item)),
-    [estimateTileHeight, filteredMedia, gridColumnCount],
-  );
   const itemsBySelectionKey = useMemo(() => {
     const map = new Map<string, MediaItem>();
     media.forEach((item) => {
@@ -505,6 +510,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return project.upload_url || `/api/projects/${encodeURIComponent(project.name)}/upload${query}`;
   }, []);
 
+  const hydrateProjectMediaItems = useCallback((items: MediaItem[], project: { name: string; source?: string | null }): MediaItem[] => (
+    items.map((item) => ({
+      ...item,
+      project_name: project.name,
+      project_source: project.source && project.source !== 'primary' ? project.source : null,
+    }))
+  ), []);
+
   const normalizedPreviewAsset = useMemo(() => {
     if (!inspectorOpen || !focused) return null;
     return normalizePreviewAsset(focused, resolveAssetUrl);
@@ -641,9 +654,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setPendingDataLoadOverlay(true);
         const payload = await api.listMedia(project.name, project.source);
         const items = Array.isArray(payload.media) ? payload.media : [];
-        setMedia(sortMediaByRecent(items));
+        const hydratedItems = hydrateProjectMediaItems(items, project);
+        setMedia(sortMediaByRecent(hydratedItems));
         setMediaScope('project');
-        const existing = new Set(items.map((item) => assetSelectionKey(item, project)));
+        const existing = new Set(hydratedItems.map((item) => assetSelectionKey(item, project)));
         setSelected((current) => {
           const next = pruneSelection(current, existing);
           setSelectedOrder((order) => order.filter((value) => next.has(value)));
@@ -655,7 +669,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         addToast('bad', 'Media', message);
       }
     },
-    [api, addToast, assetSelectionKey, clearActiveAsset, clearSelectionState],
+    [api, addToast, assetSelectionKey, clearActiveAsset, clearSelectionState, hydrateProjectMediaItems],
   );
 
   const loadAllMedia = useCallback(async () => {
@@ -677,7 +691,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           gathered.push({
             ...item,
             project_name: project.name,
-            project_source: project.source || null,
+            project_source: project.source && project.source !== 'primary' ? project.source : null,
           });
         });
       } catch (err) {
@@ -687,6 +701,70 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     setMedia(sortMediaByRecent(gathered));
   }, [addToast, api, clearActiveAsset, clearSelectionState, projects]);
+
+  const refreshMediaForScope = useCallback(async (
+    refreshScope: {
+      project?: string;
+      source?: string;
+      paths?: string[];
+    } | null | undefined,
+  ) => {
+    const projectName = String(refreshScope?.project || '').trim();
+    if (!projectName) return;
+    const sourceName = String(refreshScope?.source || '').trim();
+    const refreshedProject = projects.find((entry) => (
+      entry.name === projectName
+      && (entry.source || 'primary') === (sourceName || 'primary')
+    )) || {
+      name: projectName,
+      source: sourceName || null,
+    };
+    const payload = await api.listMedia(refreshedProject.name, refreshedProject.source || undefined);
+    const items = Array.isArray(payload.media) ? payload.media : [];
+    const hydratedItems = hydrateProjectMediaItems(items, refreshedProject);
+
+    if (mediaScope === 'all' || !activeProject) {
+      setMedia((current) => {
+        const retained = current.filter((item) => {
+          const itemProject = String(item.project_name || item.project || '').trim();
+          const itemSource = String(item.project_source || item.source || '').trim() || 'primary';
+          return itemProject !== refreshedProject.name || itemSource !== (refreshedProject.source || 'primary');
+        });
+        const mergedItems = mergeMediaItemsPreservingIdentity(current, hydratedItems);
+        return sortMediaByRecent([...retained, ...mergedItems]);
+      });
+      return;
+    }
+
+    if (
+      activeProject.name === refreshedProject.name
+      && (activeProject.source || 'primary') === (refreshedProject.source || 'primary')
+    ) {
+      setMedia((current) => sortMediaByRecent(mergeMediaItemsPreservingIdentity(current, hydratedItems)));
+    }
+  }, [activeProject, api, hydrateProjectMediaItems, mediaScope, projects]);
+
+  const fetchComposeJobJson = useCallback(async (url: string) => {
+    const response = await fetch(api.buildUrl(url));
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(String(payload?.detail || payload?.message || 'Failed to poll compose job'));
+    }
+    return payload;
+  }, [api]);
+
+  const {
+    pendingComposeItems,
+    registerAcceptedJob,
+    removePendingJob,
+  } = usePendingComposeJobs({
+    pollIntervalMs: 2000,
+    fetchJson: fetchComposeJobJson,
+    onCompletedRefreshScope: async (refreshScope) => {
+      await refreshMediaForScope(refreshScope);
+      addToast('good', 'Compose', 'Compose completed');
+    },
+  });
 
   const refreshAll = useCallback(async () => {
     await loadSources();
@@ -698,6 +776,83 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     addToast('good', 'Refresh', 'Reloaded projects + media');
   }, [activeProject, addToast, loadAllMedia, loadMedia, loadProjects, loadSources]);
+
+  useEffect(() => {
+    const previous = pendingStatusSnapshotRef.current;
+    const next = new Map<string, PendingComposeItem['status']>();
+    pendingComposeItems.forEach((item) => {
+      next.set(item.jobId, item.status);
+      const previousStatus = previous.get(item.jobId);
+      if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {
+        addToast('good', 'Compose', 'Compose completed');
+      }
+      if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
+        addToast('bad', 'Compose', 'Compose failed');
+      }
+    });
+    pendingStatusSnapshotRef.current = next;
+  }, [addToast, pendingComposeItems]);
+
+  const visiblePendingComposeItems = useMemo(() => {
+    const relevant = pendingComposeItems.filter((item) => {
+      if (mediaScope === 'all') return true;
+      if (!activeProject) return false;
+      return item.project === activeProject.name
+        && (item.source || 'primary') === (activeProject.source || 'primary');
+    });
+    return sortPendingComposeItemsForDisplay(relevant);
+  }, [activeProject, mediaScope, pendingComposeItems]);
+
+  const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({
+    kind: 'pending' as const,
+    pendingItem,
+  })), [visiblePendingComposeItems]);
+
+  const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
+      kind: 'asset' as const,
+      item,
+    })), [filteredMedia]);
+
+  const renderedMediaEntries = useMemo<RenderedMediaEntry[]>(() => ([
+    ...pendingEntries,
+    ...assetEntries,
+  ]), [assetEntries, pendingEntries]);
+
+  const assetMasonryColumns = useMemo<AssetRenderedEntry[][]>(
+    () => buildMasonryColumns(
+      assetEntries,
+      gridColumnCount,
+      (entry) => estimateTileHeight(entry.item),
+    ),
+    [assetEntries, estimateTileHeight, gridColumnCount],
+  );
+
+  const masonryRenderColumns = useMemo<RenderedMediaEntry[][]>(
+    () => prependItemsIntoMasonryColumns<RenderedMediaEntry>(
+      assetMasonryColumns as RenderedMediaEntry[][],
+      pendingEntries,
+      gridColumnCount,
+    ),
+    [assetMasonryColumns, gridColumnCount, pendingEntries],
+  );
+
+  useEffect(() => {
+    if (!pendingComposeItems.length) return;
+    pendingComposeItems.forEach((item) => {
+      if (item.status !== 'finalizing') return;
+      if (!item.completedPath) return;
+      const visible = media.some((mediaItem) => {
+        const relativePath = String(mediaItem.relative_path || '').trim();
+        if (relativePath !== item.completedPath) return false;
+        const mediaProject = String(mediaItem.project_name || mediaItem.project || activeProject?.name || '').trim();
+        const mediaSource = String(mediaItem.project_source || mediaItem.source || activeProject?.source || '').trim() || 'primary';
+        return mediaProject === item.project && mediaSource === (item.source || 'primary');
+      });
+      if (visible) {
+        removePendingJob(item.jobId);
+      }
+    });
+  }, [activeProject, media, pendingComposeItems, removePendingJob]);
 
   const selectProject = useCallback(
     (project: Project) => {
@@ -1067,25 +1222,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         output_name: outputName,
         output_source: targetProject.source || null,
         target_dir: 'exports',
-        mode: 'auto',
+        mode: 'encode',
         allow_overwrite: false,
       });
-      const composedPath = typeof response.path === 'string' && response.path.trim()
-        ? response.path
-        : outputName;
-      addToast('good', 'Compose', `Created ${composedPath}`);
+      registerAcceptedJob({ envelope: response as ComposeJobEnvelope });
+      addToast('good', 'Compose', 'Compose started');
       setComposeModalOpen(false);
-      setComposeSubmitting(false);
-      await loadProjects();
-      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-      else await loadMedia(activeProject);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Compose failed';
       addToast('bad', 'Compose', message);
     } finally {
       setComposeSubmitting(false);
     }
-  }, [activeProject, addToast, api, composeOutputName, composeOutputProject, composeSubmitting, loadAllMedia, loadMedia, loadProjects, mediaScope, projects, selectedVideoItems, toAssetRef]);
+  }, [addToast, api, composeOutputName, composeOutputProject, composeSubmitting, projects, registerAcceptedJob, selectedVideoItems, toAssetRef]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -1736,7 +1885,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const fallbackThumb = buildThumbFallback(kind);
     const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
-    const safeThumbUrl = fallbackThumb;
+    const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
+      ? thumbUrl
+      : fallbackThumb;
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
@@ -2283,7 +2434,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   Select a project to view media.
                 </div>
-              ) : filteredMedia.length === 0 ? (
+              ) : renderedMediaEntries.length === 0 ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   {mediaScope === 'all'
                     ? 'No indexed files yet across all projects.'
@@ -2294,8 +2445,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   buildAssetViewModel={buildAssetViewModel}
                   canSelect={canSelect}
                   gridColumnCount={gridColumnCount}
-                  masonryColumns={masonryColumns}
+                  masonryColumns={masonryRenderColumns}
                   onToggleSelected={toggleSelected}
+                  onDismissPendingJob={removePendingJob}
                 />
               )}
             </div>
@@ -2305,7 +2457,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   Select a project to view media.
                 </div>
-              ) : filteredMedia.length === 0 ? (
+              ) : renderedMediaEntries.length === 0 ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
                   {mediaScope === 'all'
                     ? 'No indexed files yet across all projects.'
@@ -2315,9 +2467,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <AssetList
                   buildAssetViewModel={buildAssetViewModel}
                   canSelect={canSelect}
-                  items={filteredMedia}
+                  items={renderedMediaEntries}
                   onOpenDrawer={openDrawer}
                   onToggleSelected={toggleSelected}
+                  onDismissPendingJob={removePendingJob}
                 />
               )}
             </div>

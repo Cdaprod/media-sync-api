@@ -148,6 +148,7 @@ class BulkComposeRequest(BaseModel):
     target_dir: str = "exports"
     mode: str = "auto"
     allow_overwrite: bool = False
+    debug_keep_intermediates: bool = False
 
 
 class NormalizeOrientationRequest(BaseModel):
@@ -847,12 +848,13 @@ async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
         output_name=payload.output_name,
         target_dir=payload.target_dir,
         mode=compose_mode,
+        debug_keep_intermediates=payload.debug_keep_intermediates,
     )
     _validate_compose_submission(output_ctx, spec)
 
     base_url = str(request.base_url)
 
-    def _task() -> dict[str, Any]:
+    def _task(job_id: str) -> dict[str, Any]:
         settings = get_settings()
         work_dir = Path(tempfile.mkdtemp(prefix="compose_bulk_", dir=settings.temp_root))
         try:
@@ -862,6 +864,7 @@ async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
                 input_paths,
                 base_url,
                 work_dir=work_dir,
+                job_id=job_id,
             )
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
@@ -872,6 +875,10 @@ async def bulk_compose_media(payload: BulkComposeRequest, request: Request):
         output_name=spec.output_name,
         target_dir=spec.target_dir,
         base_url=base_url,
+        mode_requested=spec.mode,
+        input_count=len(input_paths),
+        input_preview=[path.name for path in input_paths],
+        debug_keep_intermediates=spec.debug_keep_intermediates,
         task=_task,
     )
 
