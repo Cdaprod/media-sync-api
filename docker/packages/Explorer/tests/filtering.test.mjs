@@ -229,6 +229,8 @@ test('buildMasonryColumns keeps source order stable while balancing columns', ()
 test('compose job helpers derive pending item fields and long-running status from job envelopes', () => {
   const {
     buildPendingComposeItemFromEnvelope,
+    pendingComposeCandidateOutputPaths,
+    pendingComposeMatchesMediaItem,
     derivePendingComposeStatus,
     pendingComposeHoldsNewestSlot,
     pendingComposeReconnectDelayMs,
@@ -329,7 +331,8 @@ test('compose job helpers derive pending item fields and long-running status fro
       },
     ]));
 
-    assert.deepEqual(restored, [{
+    assert.equal(restored.length, 1);
+    assert.deepEqual({ ...restored[0], recoveryStartedAt: undefined }, {
       jobId: 'job-restore',
       jobUrl: '/api/projects/Demo/compose/jobs/job-restore',
       project: 'Demo',
@@ -340,8 +343,14 @@ test('compose job helpers derive pending item fields and long-running status fro
       modeRequested: 'encode',
       inputCount: 3,
       refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
-      status: 'queued',
-    }]);
+      status: 'reconnecting',
+      error: undefined,
+      completedPath: undefined,
+      debugArtifacts: undefined,
+      recoveredFromStorage: true,
+      recoveryStartedAt: undefined,
+    });
+    assert.equal(typeof restored[0].recoveryStartedAt, 'string');
 
     assert.deepEqual(JSON.parse(serializePendingComposeItemsForStorage([
       {
@@ -362,7 +371,47 @@ test('compose job helpers derive pending item fields and long-running status fro
       modeRequested: 'encode',
       inputCount: 3,
       refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      status: 'failed',
+      error: 'backend failed',
+      completedPath: 'exports/restore.mp4',
+      debugArtifacts: ['debug/a.txt'],
     }]);
+
+    assert.deepEqual(pendingComposeCandidateOutputPaths({
+      jobId: 'job-restore',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'restore.mp4',
+      completedPath: 'exports/restore-final.mp4',
+      status: 'reconnecting',
+    }), ['exports/restore-final.mp4', 'exports/restore.mp4', 'restore.mp4']);
+
+    assert.equal(pendingComposeMatchesMediaItem({
+      jobId: 'job-restore',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'restore.mp4',
+      status: 'reconnecting',
+    }, {
+      relative_path: 'exports/restore.mp4',
+      project_name: 'Demo',
+      project_source: 'primary',
+    }), true);
+
+    assert.equal(pendingComposeMatchesMediaItem({
+      jobId: 'job-restore',
+      project: 'Demo',
+      source: 'primary',
+      targetDir: 'exports',
+      outputName: 'restore.mp4',
+      status: 'reconnecting',
+    }, {
+      relative_path: 'exports/other.mp4',
+      project_name: 'Demo',
+      project_source: 'primary',
+    }), false);
 
     const ordered = sortPendingComposeItemsForDisplay([
       {

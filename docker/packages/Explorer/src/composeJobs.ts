@@ -1,3 +1,5 @@
+import type { MediaItem } from "./types";
+
 export type ComposeJobApiStatus = "queued" | "running" | "completed" | "failed";
 
 export interface ComposeJobEnvelope {
@@ -56,6 +58,8 @@ export interface PendingComposeItem {
   refreshScope?: PendingComposeRefreshScope;
   completedPath?: string;
   debugArtifacts?: string[] | null;
+  recoveredFromStorage?: boolean;
+  recoveryStartedAt?: string;
 }
 
 export interface PersistedPendingComposeJobRecord {
@@ -69,6 +73,10 @@ export interface PersistedPendingComposeJobRecord {
   modeRequested?: "auto" | "copy" | "encode" | string;
   inputCount?: number;
   refreshScope?: PendingComposeRefreshScope;
+  status?: PendingComposeViewStatus;
+  error?: string;
+  completedPath?: string;
+  debugArtifacts?: string[] | null;
 }
 
 export const PENDING_COMPOSE_STORAGE_KEY = "media-sync.explorer.pending-compose-jobs";
@@ -139,6 +147,12 @@ export function buildPendingComposeItemFromEnvelope(
 export function buildPendingComposeItemFromPersistedRecord(
   record: PersistedPendingComposeJobRecord,
 ): PendingComposeItem {
+  const restoredStatus = record.status === "failed"
+    ? "failed"
+    : record.status === "finalizing"
+      ? "finalizing"
+      : "reconnecting";
+
   return {
     jobId: record.jobId,
     jobUrl: record.jobUrl,
@@ -150,7 +164,12 @@ export function buildPendingComposeItemFromPersistedRecord(
     modeRequested: record.modeRequested,
     inputCount: record.inputCount,
     refreshScope: record.refreshScope,
-    status: "queued",
+    status: restoredStatus,
+    error: record.error,
+    completedPath: record.completedPath,
+    debugArtifacts: record.debugArtifacts,
+    recoveredFromStorage: restoredStatus !== "failed",
+    recoveryStartedAt: new Date().toISOString(),
   };
 }
 
@@ -185,6 +204,15 @@ export function pendingComposeHoldsNewestSlot(status: PendingComposeViewStatus):
     || status === "finalizing";
 }
 
+function pendingComposeShouldPersistStatus(status: PendingComposeViewStatus): boolean {
+  return status === "queued"
+    || status === "running"
+    || status === "running_long"
+    || status === "reconnecting"
+    || status === "finalizing"
+    || status === "failed";
+}
+
 function pendingComposeStatusPriority(status: PendingComposeViewStatus): number {
   return pendingComposeHoldsNewestSlot(status) ? 0 : 1;
 }
@@ -212,6 +240,7 @@ export function toPersistedPendingComposeJobRecord(
   item: PendingComposeItem,
 ): PersistedPendingComposeJobRecord | null {
   if (!item.jobId || !item.jobUrl) return null;
+  if (!pendingComposeShouldPersistStatus(item.status)) return null;
   return {
     jobId: item.jobId,
     jobUrl: item.jobUrl,
@@ -223,6 +252,10 @@ export function toPersistedPendingComposeJobRecord(
     modeRequested: item.modeRequested,
     inputCount: item.inputCount,
     refreshScope: item.refreshScope,
+    status: item.status,
+    error: item.status === "failed" ? item.error : undefined,
+    completedPath: item.completedPath,
+    debugArtifacts: item.status === "failed" ? item.debugArtifacts : undefined,
   };
 }
 
@@ -241,6 +274,14 @@ function normalizePersistedPendingComposeJobRecord(
   const createdAt = typeof record.createdAt === "string" && record.createdAt.trim() ? record.createdAt.trim() : undefined;
   const modeRequested = typeof record.modeRequested === "string" && record.modeRequested.trim() ? record.modeRequested.trim() : undefined;
   const inputCount = typeof record.inputCount === "number" ? record.inputCount : undefined;
+  const status = typeof record.status === "string" && record.status.trim()
+    ? record.status.trim() as PendingComposeViewStatus
+    : undefined;
+  const error = typeof record.error === "string" && record.error.trim() ? record.error.trim() : undefined;
+  const completedPath = typeof record.completedPath === "string" && record.completedPath.trim() ? record.completedPath.trim() : undefined;
+  const debugArtifacts = Array.isArray(record.debugArtifacts)
+    ? record.debugArtifacts.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    : undefined;
   return {
     jobId,
     jobUrl,
@@ -252,6 +293,10 @@ function normalizePersistedPendingComposeJobRecord(
     modeRequested,
     inputCount,
     refreshScope: normalizeRefreshScope(record.refreshScope),
+    status,
+    error,
+    completedPath,
+    debugArtifacts,
   };
 }
 
@@ -282,4 +327,45 @@ export function restorePendingComposeItemsFromStorage(raw: string | null | undef
 export function pendingComposeReconnectDelayMs(attemptCount: number, pollIntervalMs: number): number {
   const safeAttempts = Math.max(1, attemptCount);
   return Math.min(pollIntervalMs * (2 ** safeAttempts), 30_000);
+}
+
+function pendingComposeNormalizePath(path: string): string {
+  return path.replace(/^\/+/, "").replace(/\\/g, "/").trim();
+}
+
+function pendingComposeBaseName(path: string): string {
+  const normalized = pendingComposeNormalizePath(path);
+  const segments = normalized.split("/").filter(Boolean);
+  return segments[segments.length - 1] || normalized;
+}
+
+export function pendingComposeCandidateOutputPaths(item: PendingComposeItem): string[] {
+  const values = new Set<string>();
+  const completedPath = typeof item.completedPath === "string" ? pendingComposeNormalizePath(item.completedPath) : "";
+  const outputName = typeof item.outputName === "string" ? pendingComposeNormalizePath(item.outputName) : "";
+  const targetDir = typeof item.targetDir === "string" ? pendingComposeNormalizePath(item.targetDir) : "";
+  if (completedPath) values.add(completedPath);
+  if (targetDir && outputName) values.add(pendingComposeNormalizePath(`${targetDir}/${outputName}`));
+  if (outputName) values.add(outputName);
+  return Array.from(values);
+}
+
+export function pendingComposeMatchesMediaItem(item: PendingComposeItem, mediaItem: MediaItem): boolean {
+  const itemProject = String(mediaItem.project_name || mediaItem.project || "").trim();
+  const itemSource = String(mediaItem.project_source || mediaItem.source || "").trim() || "primary";
+  if (itemProject !== item.project) return false;
+  if (itemSource !== (item.source || "primary")) return false;
+
+  const relativePath = pendingComposeNormalizePath(String(mediaItem.relative_path || ""));
+  if (!relativePath) return false;
+
+  const candidatePaths = pendingComposeCandidateOutputPaths(item);
+  if (!candidatePaths.length) return false;
+
+  const relativeBase = pendingComposeBaseName(relativePath);
+  return candidatePaths.some((candidate) => (
+    relativePath === candidate
+    || relativeBase === pendingComposeBaseName(candidate)
+    || relativePath.endsWith(`/${pendingComposeBaseName(candidate)}`)
+  ));
 }

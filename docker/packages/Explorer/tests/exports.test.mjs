@@ -257,6 +257,30 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(list.includes('data-interactive="true"'));
   assert.ok(styles.includes('--topbar-reveal-height: 24px;'));
   assert.ok(styles.includes('height: var(--topbar-reveal-height);'));
+  assert.ok(styles.includes('z-index: 110;'));
+  assert.ok(styles.includes('z-index: 126;'));
+  assert.ok(styles.includes('pointer-events: auto;'));
+  assert.ok(styles.includes('.content .scroll{'));
+  assert.ok(styles.includes('.masonry-columns{'));
+});
+
+test('pending compose recovery reconciles stale restored jobs and prefers real assets over zombie placeholders', () => {
+  const hookPath = path.join(packageRoot, 'src', 'usePendingComposeJobs.ts');
+  const jobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const jobs = fs.readFileSync(jobsPath, 'utf8');
+
+  assert.ok(hook.includes('RESTORED_PENDING_COMPOSE_RECOVERY_MS = 8_000'));
+  assert.ok(hook.includes('RESTORED_PENDING_COMPOSE_MAX_ATTEMPTS = 2'));
+  assert.ok(hook.includes('pendingComposeMatchesMediaItem'));
+  assert.ok(hook.includes('const hasConfirmedOutput = useCallback'));
+  assert.ok(hook.includes('item.recoveredFromStorage'));
+  assert.ok(hook.includes('hasConfirmedOutput(item)'));
+  assert.ok(hook.includes('setItems((prev) => prev.filter((x) => x.jobId !== item.jobId))'));
+  assert.ok(jobs.includes('status?: PendingComposeViewStatus;'));
+  assert.ok(jobs.includes('recoveredFromStorage?: boolean;'));
+  assert.ok(jobs.includes('pendingComposeCandidateOutputPaths'));
+  assert.ok(jobs.includes('pendingComposeMatchesMediaItem'));
 });
 
 test('compose action filters selected assets to videos', () => {

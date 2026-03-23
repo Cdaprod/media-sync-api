@@ -1,3 +1,10 @@
+## 2026-03-23 — Explorer stale compose recovery cleanup + topbar touch fix
+- [x] Added bounded reconciliation for startup-restored pending compose jobs so missing/unconfirmable records self-clear instead of lingering forever as reconnecting placeholders.
+- [x] Made restored pending jobs remove themselves immediately when a matching real asset is already present and preserved failed-job persistence with richer serialized status/error/debug fields.
+- [x] Raised package Explorer topbar/dropdown/action-panel interactive stacking above normal content and explicitly restored pointer-events on the real header controls to address untouchable Search/Type controls on iPhone Safari.
+- [x] Added focused package regression coverage for stale pending-job reconciliation markers plus the topbar layering/pointer-events contract.
+- [ ] Validate on physical iPhone Safari that stale compose placeholders no longer reappear after reload and that Search + Type are tappable in normal browsing with/without pending compose cards present.
+
 ## 2026-03-23 — Explorer topbar outside-dismiss scope correction
 - [x] Replaced the document-level topbar outside-dismiss bailout’s app-wide interactive check with a topbar-owned target contract so unrelated project chips and bulk-action buttons can still collapse the revealed topbar.
 - [x] Added explicit topbar ownership markers (`data-topbar-root/control/panel/reveal`) while preserving the generic interactive helper for asset/card routing only.

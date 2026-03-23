@@ -762,6 +762,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   } = usePendingComposeJobs({
     pollIntervalMs: 2000,
     fetchJson: fetchComposeJobJson,
+    mediaItems: media,
     onCompletedRefreshScope: async (refreshScope) => {
       await refreshMediaForScope(refreshScope);
       addToast('good', 'Compose', 'Compose completed');

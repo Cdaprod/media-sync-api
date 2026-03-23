@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Explorer pending compose recovery now bounds restored-job reconciliation: startup-restored placeholders rehydrate as reconnecting only temporarily, poll for confirmation, remove themselves when a matching real asset is already present, and clear stale persisted records after a short failed recovery window instead of lingering forever as zombie reconnecting cards.
+- Persisted compose records now retain failure/finalizing context (`status`, `error`, `completedPath`, `debugArtifacts`) so failed placeholders can survive reloads intentionally while stale/running records are reconciled or cleaned up with better fidelity.
+- Package Explorer topbar touchability was hardened for iPhone Safari by lifting topbar/dropdown/action-panel stacking above normal content, restoring pointer-events on the real header controls, and explicitly keeping scroll/grid stacking at the base layer to avoid invisible content hit-boxes stealing taps from Search or Type.
+
+### Latest Implementation Notes (2026-03-23)
 - Tightened the Explorer topbar follow-up by narrowing document-level outside-dismiss handling to topbar-owned targets only (`data-topbar-root/control/panel/reveal`) instead of exempting every interactive control in the app, so unrelated chips/buttons can still collapse the revealed bar correctly.
 - Kept the generic `isInteractiveTarget(...)` helper for asset/card interaction routing, but split topbar ownership into its own helper to avoid coupling shell-dismiss behavior to unrelated UI controls.
 - Expanded the focused package regression assertions to lock the new topbar-owned marker/helper contract and prevent future regressions back to app-wide interactive dismiss exemptions.
