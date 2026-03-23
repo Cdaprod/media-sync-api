@@ -30,6 +30,7 @@ export type PendingComposeViewStatus =
   | "queued"
   | "running"
   | "running_long"
+  | "finalizing"
   | "failed";
 
 export interface PendingComposeItem {
@@ -50,6 +51,7 @@ export interface PendingComposeItem {
     source?: string;
     paths?: string[];
   };
+  completedPath?: string;
   debugArtifacts?: string[] | null;
 }
 
@@ -65,6 +67,14 @@ function normalizeDebugArtifacts(envelope: ComposeJobEnvelope): string[] | null 
     return resultArtifacts.files;
   }
   return null;
+}
+
+function normalizeCompletedPath(envelope: ComposeJobEnvelope): string | undefined {
+  const resultPath = envelope.result?.path;
+  if (typeof resultPath === "string" && resultPath.trim()) {
+    return resultPath.trim();
+  }
+  return undefined;
 }
 
 export function buildPendingComposeItemFromEnvelope(
@@ -91,6 +101,7 @@ export function buildPendingComposeItemFromEnvelope(
     error: envelope.error,
     jobUrl: envelope.job_url,
     refreshScope: envelope.refresh_scope,
+    completedPath: normalizeCompletedPath(envelope),
     debugArtifacts: normalizeDebugArtifacts(envelope),
   };
 }
@@ -116,4 +127,33 @@ export function derivePendingComposeStatus(
   }
 
   return "running";
+}
+
+export function pendingComposeHoldsNewestSlot(status: PendingComposeViewStatus): boolean {
+  return status === "queued"
+    || status === "running"
+    || status === "running_long"
+    || status === "finalizing";
+}
+
+function pendingComposeStatusPriority(status: PendingComposeViewStatus): number {
+  return pendingComposeHoldsNewestSlot(status) ? 0 : 1;
+}
+
+export function sortPendingComposeItemsForDisplay(items: PendingComposeItem[]): PendingComposeItem[] {
+  return [...items].sort((left, right) => {
+    const leftPriority = pendingComposeStatusPriority(left.status);
+    const rightPriority = pendingComposeStatusPriority(right.status);
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    const leftCreated = new Date(left.createdAt || 0).getTime();
+    const rightCreated = new Date(right.createdAt || 0).getTime();
+    if (Number.isFinite(leftCreated) && Number.isFinite(rightCreated) && leftCreated !== rightCreated) {
+      return rightCreated - leftCreated;
+    }
+
+    return left.jobId.localeCompare(right.jobId);
+  });
 }

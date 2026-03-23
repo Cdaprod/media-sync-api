@@ -252,8 +252,15 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('disabled={composeSubmitting}'));
   assert.ok(content.includes('aria-busy={composeSubmitting}'));
   assert.ok(content.includes("pollIntervalMs: 2000,"));
-  assert.ok(content.includes("const pendingKey = pendingBucketKeyForItem(item);"));
-  assert.ok(content.includes("entries.push({ kind: 'pending', pendingItem });"));
+  assert.ok(content.includes("const visiblePendingComposeItems = useMemo(() => {"));
+  assert.ok(content.includes("return sortPendingComposeItemsForDisplay(relevant);"));
+  assert.ok(content.includes("const pendingEntries = visiblePendingComposeItems.map((pendingItem) => ({"));
+  assert.ok(content.includes("...pendingEntries,"));
+  assert.ok(content.includes("...assetEntries,"));
+  assert.ok(content.includes("if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {"));
+  assert.ok(content.includes("if (item.status !== 'finalizing') return;"));
+  assert.ok(content.includes("if (visible) {"));
+  assert.ok(content.includes("removePendingJob(item.jobId);"));
   const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
   const composeEnd = content.indexOf('const handleComposeConfirm = useCallback(async () => {', composeStart);
   assert.ok(composeStart >= 0);
@@ -285,7 +292,7 @@ test('pending compose modules and render wiring are present', () => {
   const hook = fs.readFileSync(hookPath, 'utf8');
   const jobs = fs.readFileSync(jobsPath, 'utf8');
 
-  assert.ok(explorer.includes("const {\n    pendingComposeItems,\n    pendingItemsByProjectAndDir,\n    registerAcceptedJob,\n  } = usePendingComposeJobs({"));
+  assert.ok(explorer.includes("const {\n    pendingComposeItems,\n    registerAcceptedJob,\n    removePendingJob,\n  } = usePendingComposeJobs({"));
   assert.ok(explorer.includes("fetchJson: fetchComposeJobJson,"));
   assert.ok(explorer.includes("onCompletedRefreshScope: async (refreshScope) => {"));
   assert.ok(explorer.includes("masonryColumns={masonryRenderColumns}"));
@@ -297,13 +304,16 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(card.includes('data-pending-compose-card="true"'));
   assert.ok(card.includes('badge: "QUEUED"'));
   assert.ok(card.includes('badge: "TAKING LONGER"'));
+  assert.ok(card.includes('badge: "FINALIZING"'));
   assert.ok(card.includes('badge: "FAILED"'));
   assert.ok(card.includes('debug artifacts preserved'));
   assert.ok(hook.includes('pollIntervalMs = 2000'));
   assert.ok(hook.includes('const active = current.filter('));
   assert.ok(hook.includes('if (nextStatus === "completed") {'));
+  assert.ok(hook.includes('status: "finalizing"'));
   assert.ok(hook.includes('status: "failed"'));
   assert.ok(jobs.includes('if (elapsedMs > 45_000) return "running_long";'));
+  assert.ok(jobs.includes('|| status === "finalizing";'));
 });
 
 test('package explorer delete actions route through custom confirmation modal', () => {

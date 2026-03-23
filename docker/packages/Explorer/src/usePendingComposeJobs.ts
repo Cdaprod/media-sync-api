@@ -60,7 +60,24 @@ export function usePendingComposeJobs({
               await onCompletedRefreshScope(envelope.refresh_scope);
             }
             if (!cancelled) {
-              setItems((prev) => prev.filter((x) => x.jobId !== item.jobId));
+              setItems((prev) =>
+                prev.map((x) =>
+                  x.jobId === item.jobId
+                    ? {
+                        ...x,
+                        status: "finalizing",
+                        error: envelope.error,
+                        refreshScope: envelope.refresh_scope ?? x.refreshScope,
+                        completedPath: typeof envelope.result?.path === "string" ? envelope.result.path : x.completedPath,
+                        debugArtifacts: Array.isArray(envelope.debug_artifacts)
+                          ? envelope.debug_artifacts
+                          : Array.isArray(envelope.result?.debug_artifacts?.files)
+                            ? envelope.result.debug_artifacts.files
+                            : x.debugArtifacts,
+                      }
+                    : x,
+                ),
+              );
             }
             continue;
           }
@@ -113,7 +130,7 @@ export function usePendingComposeJobs({
     };
   }, [items.length, pollIntervalMs, fetchJson, onCompletedRefreshScope]);
 
-  const removeFailedJob = useCallback((jobId: string) => {
+  const removePendingJob = useCallback((jobId: string) => {
     setItems((prev) => prev.filter((x) => x.jobId !== jobId));
   }, []);
 
@@ -132,6 +149,6 @@ export function usePendingComposeJobs({
     pendingComposeItems: items,
     pendingItemsByProjectAndDir,
     registerAcceptedJob,
-    removeFailedJob,
+    removePendingJob,
   };
 }

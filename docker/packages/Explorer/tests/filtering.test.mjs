@@ -168,7 +168,12 @@ test('buildMasonryColumns keeps source order stable while balancing columns', ()
 });
 
 test('compose job helpers derive pending item fields and long-running status from job envelopes', () => {
-  const { buildPendingComposeItemFromEnvelope, derivePendingComposeStatus } = loadTsModule(composeJobsPath);
+  const {
+    buildPendingComposeItemFromEnvelope,
+    derivePendingComposeStatus,
+    pendingComposeHoldsNewestSlot,
+    sortPendingComposeItemsForDisplay,
+  } = loadTsModule(composeJobsPath);
   const originalNow = Date.now;
   Date.now = () => new Date('2026-03-22T00:01:00.000Z').getTime();
 
@@ -208,6 +213,7 @@ test('compose job helpers derive pending item fields and long-running status fro
       error: undefined,
       jobUrl: '/api/projects/Demo/compose/jobs/job-123',
       refreshScope: { project: 'Demo', source: 'primary', paths: ['exports'] },
+      completedPath: undefined,
       debugArtifacts: ['normalized/segment_0000.mp4'],
     });
 
@@ -238,6 +244,42 @@ test('compose job helpers derive pending item fields and long-running status fro
       output_name: 'exports/reel.mp4',
       target_dir: 'exports',
     }), 'completed');
+
+    assert.equal(pendingComposeHoldsNewestSlot('queued'), true);
+    assert.equal(pendingComposeHoldsNewestSlot('finalizing'), true);
+    assert.equal(pendingComposeHoldsNewestSlot('failed'), false);
+
+    const ordered = sortPendingComposeItemsForDisplay([
+      {
+        jobId: 'job-failed',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'failed.mp4',
+        createdAt: '2026-03-22T00:00:03.000Z',
+        status: 'failed',
+      },
+      {
+        jobId: 'job-finalizing',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'finalizing.mp4',
+        createdAt: '2026-03-22T00:00:02.000Z',
+        status: 'finalizing',
+      },
+      {
+        jobId: 'job-running',
+        project: 'Demo',
+        source: 'primary',
+        targetDir: 'exports',
+        outputName: 'running.mp4',
+        createdAt: '2026-03-22T00:00:04.000Z',
+        status: 'running',
+      },
+    ]);
+
+    assert.deepEqual(ordered.map((item) => item.jobId), ['job-running', 'job-finalizing', 'job-failed']);
   } finally {
     Date.now = originalNow;
   }

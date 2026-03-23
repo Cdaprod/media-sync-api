@@ -4,6 +4,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
+import {
+  sortPendingComposeItemsForDisplay,
+} from './composeJobs';
 import type { ComposeJobEnvelope, PendingComposeItem } from './composeJobs';
 import {
   buildMasonryColumns,
@@ -743,8 +746,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const {
     pendingComposeItems,
-    pendingItemsByProjectAndDir,
     registerAcceptedJob,
+    removePendingJob,
   } = usePendingComposeJobs({
     pollIntervalMs: 2000,
     fetchJson: fetchComposeJobJson,
@@ -771,6 +774,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     pendingComposeItems.forEach((item) => {
       next.set(item.jobId, item.status);
       const previousStatus = previous.get(item.jobId);
+      if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {
+        addToast('good', 'Compose', 'Compose completed');
+      }
       if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
         addToast('bad', 'Compose', 'Compose failed');
       }
@@ -778,48 +784,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     pendingStatusSnapshotRef.current = next;
   }, [addToast, pendingComposeItems]);
 
-  const pendingBucketKeyForProjectAndDir = useCallback((projectName: string, targetDir: string) => {
-    return `${projectName}::${targetDir}`;
-  }, []);
-
-  const pendingBucketKeyForItem = useCallback((item: MediaItem) => {
-    const projectName = String(item.project_name || item.project || activeProject?.name || '').trim();
-    const targetDir = String(item.relative_path || '').split('/')[0] || '';
-    return pendingBucketKeyForProjectAndDir(projectName, targetDir);
-  }, [activeProject, pendingBucketKeyForProjectAndDir]);
+  const visiblePendingComposeItems = useMemo(() => {
+    const relevant = pendingComposeItems.filter((item) => {
+      if (mediaScope === 'all') return true;
+      if (!activeProject) return false;
+      return item.project === activeProject.name
+        && (item.source || 'primary') === (activeProject.source || 'primary');
+    });
+    return sortPendingComposeItemsForDisplay(relevant);
+  }, [activeProject, mediaScope, pendingComposeItems]);
 
   const renderedMediaEntries = useMemo(() => {
-    const entries: Array<
+    const pendingEntries = visiblePendingComposeItems.map((pendingItem) => ({
+      kind: 'pending' as const,
+      pendingItem,
+    }));
+    const assetEntries = filteredMedia.map((item) => ({
+      kind: 'asset' as const,
+      item,
+    }));
+    return [
+      ...pendingEntries,
+      ...assetEntries,
+    ] satisfies Array<
       | { kind: 'asset'; item: MediaItem }
       | { kind: 'pending'; pendingItem: PendingComposeItem }
-    > = [];
-    const insertedPendingKeys = new Set<string>();
-
-    filteredMedia.forEach((item) => {
-      const pendingKey = pendingBucketKeyForItem(item);
-      const pendingItems = pendingItemsByProjectAndDir.get(pendingKey);
-      if (pendingItems?.length && !insertedPendingKeys.has(pendingKey)) {
-        pendingItems.forEach((pendingItem) => {
-          entries.push({ kind: 'pending', pendingItem });
-        });
-        insertedPendingKeys.add(pendingKey);
-      }
-      entries.push({ kind: 'asset', item });
-    });
-
-    pendingItemsByProjectAndDir.forEach((pendingItems, pendingKey) => {
-      if (insertedPendingKeys.has(pendingKey)) return;
-      const [pendingProject] = pendingKey.split('::');
-      const shouldRender = mediaScope === 'all'
-        || (activeProject && activeProject.name === pendingProject);
-      if (!shouldRender) return;
-      pendingItems.forEach((pendingItem) => {
-        entries.push({ kind: 'pending', pendingItem });
-      });
-    });
-
-    return entries;
-  }, [activeProject, filteredMedia, mediaScope, pendingBucketKeyForItem, pendingItemsByProjectAndDir]);
+    >;
+  }, [filteredMedia, visiblePendingComposeItems]);
 
   const masonryRenderColumns = useMemo(
     () => buildMasonryColumns(
@@ -829,6 +820,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ),
     [estimateTileHeight, gridColumnCount, renderedMediaEntries],
   );
+
+  useEffect(() => {
+    if (!pendingComposeItems.length) return;
+    pendingComposeItems.forEach((item) => {
+      if (item.status !== 'finalizing') return;
+      if (!item.completedPath) return;
+      const visible = media.some((mediaItem) => {
+        const relativePath = String(mediaItem.relative_path || '').trim();
+        if (relativePath !== item.completedPath) return false;
+        const mediaProject = String(mediaItem.project_name || mediaItem.project || activeProject?.name || '').trim();
+        const mediaSource = String(mediaItem.project_source || mediaItem.source || activeProject?.source || '').trim() || 'primary';
+        return mediaProject === item.project && mediaSource === (item.source || 'primary');
+      });
+      if (visible) {
+        removePendingJob(item.jobId);
+      }
+    });
+  }, [activeProject, media, pendingComposeItems, removePendingJob]);
 
   const selectProject = useCallback(
     (project: Project) => {

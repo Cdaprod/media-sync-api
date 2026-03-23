@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-22)
+- Explorer pending compose cards now enter the same flat render list *before* masonry columnization as virtual newest assets, so queued/running/running_long/finalizing placeholders reserve the same top-left slot the eventual new asset will occupy instead of appearing in a later/right-side column.
+- Added a frontend-only `finalizing` state for compose placeholders: backend `completed` now triggers refresh-scope media reload first, then the placeholder stays visible until refreshed media actually contains `result.path`, eliminating the blank gap between placeholder removal and real-asset appearance.
+- Explorer package tests now lock the new ordering/handoff contract by asserting pre-masonry pending entry merging, `FINALIZING` badge support, newest-slot sort helpers, and completed-placeholder persistence until refreshed media confirms the final path.
+
+### Latest Implementation Notes (2026-03-22)
 - Real compose evidence showed normalized segment validation still failing on `rotate:90` and `video_pix_fmt:yuvj420p`, so normalization now explicitly clears inherited input display rotation (`-display_rotation:v:0 0`) while forcing limited-range `yuv420p` through `format=yuv420p`, `setparams=range=tv`, and `-color_range tv`.
 - Probe summaries now include `video_color_range`, and encode validation only tolerates `yuvj420p` when ffprobe simultaneously reports limited-range color semantics (`limited`/`tv`/`mpeg`) instead of blindly accepting or rejecting all `yuvj420p` outputs.
 - Added focused backend regression coverage for the exact failure shape: normalize command flags now assert rotation/color-range hardening, limited-range `yuvj420p` is accepted when otherwise canonical, and full-range `yuvj420p` continues to fail validation.

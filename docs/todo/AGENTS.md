@@ -1,3 +1,9 @@
+## 2026-03-22 — Explorer pending compose newest-slot + finalizing handoff
+- [x] Moved pending compose placeholders into the flat render list before masonry/list distribution so they behave like virtual newest assets instead of being injected after layout in a visually wrong column.
+- [x] Added frontend-only `finalizing` status so completed compose jobs keep their reserved placeholder slot until refreshed media actually includes `result.path`, avoiding blank handoff gaps.
+- [x] Added focused Explorer package regression coverage for newest-slot ordering helpers, `FINALIZING` badge support, and completed-placeholder persistence wiring.
+- [ ] Validate on physical Safari/iPhone that a just-submitted compose placeholder now lands in the same top-left slot the final newest export occupies, including in All Projects view.
+
 ## 2026-03-22 — Backend normalized rotate/pix_fmt canonicalization follow-up
 - [x] Reproduced the concrete failing shape from real logs: normalized segment validation still saw `rotate:90` and `video_pix_fmt:yuvj420p` on `segment_0000.mp4`.
 - [x] Hardened normalization to clear inherited input display rotation metadata and to stamp limited-range `yuv420p` intent more explicitly in both video and image intermediate generation.

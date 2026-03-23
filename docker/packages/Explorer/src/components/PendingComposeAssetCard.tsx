@@ -4,6 +4,7 @@ export type PendingComposeJobStatus =
   | "queued"
   | "running"
   | "running_long"
+  | "finalizing"
   | "failed";
 
 export interface PendingComposeAsset {
@@ -275,6 +276,15 @@ function getVisualState(status: PendingComposeJobStatus) {
         badge: "TAKING LONGER",
         label: "COMPOSING",
         footer: "job still running",
+      };
+    case "finalizing":
+      return {
+        solid: "rgba(42,168,255,0.86)",
+        back: "rgba(42,168,255,0.46)",
+        dot: "#38b6ff",
+        badge: "FINALIZING",
+        label: "FINALIZING",
+        footer: "refreshing result",
       };
     case "failed":
       return {
