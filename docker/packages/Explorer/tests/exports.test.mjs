@@ -303,6 +303,12 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(list.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
   assert.ok(list.includes("if (entry.kind === 'pending') {"));
   assert.ok(card.includes('data-pending-compose-card="true"'));
+  assert.ok(card.includes('function PendingComposeWaterSvg({'));
+  assert.ok(card.includes('data-water-svg="true"'));
+  assert.ok(card.includes('const REAR_WAVE_PATH ='));
+  assert.ok(card.includes('const FRONT_WAVE_PATH ='));
+  assert.ok(card.includes('window.requestAnimationFrame(tick)'));
+  assert.ok(card.includes('status !== "failed"'));
   assert.ok(card.includes('badge: "QUEUED"'));
   assert.ok(card.includes('badge: "TAKING LONGER"'));
   assert.ok(card.includes('badge: "RECONNECTING"'));
@@ -311,6 +317,10 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(card.includes('footer: "waiting to resume"'));
   assert.ok(card.includes('data-pending-compose-dismiss="true"'));
   assert.ok(card.includes('debug artifacts preserved'));
+  assert.ok(card.includes('.pending-compose-water-svg'));
+  assert.ok(!card.includes('pending-compose-water-wrap'));
+  assert.ok(!card.includes('function Wave({'));
+  assert.ok(!card.includes('const WAVE_PATH ='));
   assert.ok(hook.includes('pollIntervalMs = 2000'));
   assert.ok(hook.includes('const [items, setItems] = useState<PendingComposeItem[]>(() => readPersistedPendingComposeItems());'));
   assert.ok(hook.includes('window.localStorage.getItem(PENDING_COMPOSE_STORAGE_KEY)'));

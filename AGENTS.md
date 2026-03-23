@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Package Explorer pending compose cards now render their water treatment through a single in-file SVG renderer instead of stacked DOM wave/body layers, eliminating the banded compositing artifact where the front wave swallowed the rear surface.
+- The new water renderer uses distinct rear/front wave paths plus requestAnimationFrame-driven slower rear pan, faster front pan, and subtle symmetric vertical bobbing for active states, while failed cards stay visually stalled.
+- Explorer package regression coverage now asserts the single-SVG water implementation (`PendingComposeWaterSvg`, distinct wave paths, RAF motion) and guards against reintroducing the old `pending-compose-water-wrap` / reused-`Wave` layering approach.
+
+### Latest Implementation Notes (2026-03-23)
 - Package Explorer pending compose recovery is now resilient across refreshes and transient poll outages: accepted jobs persist lightweight records in localStorage, restore synchronously on startup, and resume polling from the saved `job_url` without waiting for a new compose submission.
 - Poll transport failures are now frontend-only `reconnecting` states with exponential backoff instead of hard `failed`, while backend-reported `failed` jobs remain dismissible placeholders and completed jobs still hold `finalizing` until refreshed media confirms `result.path`.
 - Added focused Explorer regression coverage for persisted pending-job serialization/rehydration, reconnect-delay behavior, reconnecting badge wiring, dismiss-only failed cleanup, and the package render path that keeps placeholders visible through refresh/reconnect handoff gaps.

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 
 export type PendingComposeJobStatus =
   | "queued"
@@ -50,50 +50,33 @@ const CARD_STYLES = `
   background: linear-gradient(160deg, #0d0d1a 0%, #131326 100%);
 }
 
-.pending-compose-water-wrap {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 52%;
-  z-index: 2;
-}
-
-.pending-compose-wave {
-  position: absolute;
-  left: 0;
-  width: 200%;
-  height: 34px;
-  z-index: 3;
-}
-
-.pending-compose-wave.back {
-  top: -16px;
-  opacity: 0.42;
-  animation: pendingComposeWavePan 4.2s linear infinite;
-}
-
-.pending-compose-wave.front {
-  top: -24px;
-  opacity: 0.92;
-  animation: pendingComposeWavePan 2.6s linear infinite reverse;
-}
-
-.pending-compose-water-body {
-  position: absolute;
-  top: 8px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
-}
-
-.pending-compose-sheen {
+.pending-compose-water-svg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(255,255,255,0.06) 0%, transparent 35%);
-  z-index: 5;
-  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+}
+
+.pending-compose-water-svg .water-bg {
+  fill: #121224;
+}
+
+.pending-compose-water-svg .water-body {
+  opacity: 0.92;
+}
+
+.pending-compose-water-svg .water-rear {
+  opacity: 0.30;
+}
+
+.pending-compose-water-svg .water-front {
+  opacity: 0.72;
+}
+
+.pending-compose-water-svg .water-highlight {
+  opacity: 0.4;
 }
 
 .pending-compose-overlay {
@@ -226,16 +209,9 @@ const CARD_STYLES = `
   background: rgba(255,255,255,0.09);
 }
 
-.pending-compose-card[data-status="failed"] .pending-compose-wave.back,
-.pending-compose-card[data-status="failed"] .pending-compose-wave.front,
 .pending-compose-card[data-status="failed"] .pending-compose-status-dot,
 .pending-compose-card[data-status="failed"] .pending-compose-icon {
   animation: none !important;
-}
-
-@keyframes pendingComposeWavePan {
-  from { transform: translateX(0%); }
-  to   { transform: translateX(-50%); }
 }
 
 @keyframes pendingComposeIconPulse {
@@ -249,25 +225,128 @@ const CARD_STYLES = `
 }
 `;
 
-const WAVE_PATH =
-  "M0,18 C25,2 50,34 75,18 C100,2 125,34 150,18 C175,2 200,34 225,18 C250,2 275,34 300,18 C325,2 350,34 375,18 C400,2 425,34 450,18 C475,2 500,34 525,18 C550,2 575,34 600,18 L600,36 L0,36 Z";
+const SVG_WIDTH = 600;
+const SVG_HEIGHT = 220;
+const WAVE_SPAN = 1200;
+const WATERLINE_FLOOR = 172;
+const REAR_WAVE_FLOOR = 164;
+const FRONT_WAVE_FLOOR = 152;
+const BODY_SURFACE_PATH = "M0 156 C70 151 135 161 210 156 C285 151 360 160 440 156 C525 151 610 159 700 156 C790 152 885 161 980 156 C1075 151 1145 160 1200 156";
+const REAR_WAVE_PATH = "M0 144 C85 136 170 152 255 145 C350 138 445 154 540 145 C640 136 740 151 840 145 C945 139 1045 154 1140 145 C1175 142 1195 143 1200 144";
+const FRONT_WAVE_PATH = "M0 132 C55 118 110 148 175 133 C250 118 325 149 405 133 C490 117 565 150 645 133 C730 118 805 149 890 133 C970 118 1045 148 1125 133 C1160 126 1185 128 1200 132";
 
-function Wave({
-  fill,
-  className,
+function buildClosedWavePath(curvePath: string, floorY: number) {
+  return `${curvePath} L ${WAVE_SPAN} ${floorY} L 0 ${floorY} Z`;
+}
+
+function applySvgTranslate(target: SVGGElement | null, x: number, y: number) {
+  if (!target) return;
+  target.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+}
+
+function PendingComposeWaterSvg({
+  solid,
+  back,
+  status,
 }: {
-  fill: string;
-  className: string;
+  solid: string;
+  back: string;
+  status: PendingComposeJobStatus;
 }) {
+  const surfaceGroupRef = useRef<SVGGElement | null>(null);
+  const rearWaveGroupRef = useRef<SVGGElement | null>(null);
+  const frontWaveGroupRef = useRef<SVGGElement | null>(null);
+  const highlightGroupRef = useRef<SVGGElement | null>(null);
+  const animated = status !== "failed";
+  const bodyPath = useMemo(() => buildClosedWavePath(BODY_SURFACE_PATH, SVG_HEIGHT), []);
+  const rearWaveFillPath = useMemo(() => buildClosedWavePath(REAR_WAVE_PATH, REAR_WAVE_FLOOR), []);
+  const frontWaveFillPath = useMemo(() => buildClosedWavePath(FRONT_WAVE_PATH, FRONT_WAVE_FLOOR), []);
+
+  useEffect(() => {
+    const surfaceGroup = surfaceGroupRef.current;
+    const rearWaveGroup = rearWaveGroupRef.current;
+    const frontWaveGroup = frontWaveGroupRef.current;
+    const highlightGroup = highlightGroupRef.current;
+    if (!surfaceGroup || !rearWaveGroup || !frontWaveGroup || !highlightGroup) return;
+
+    const bobAmplitude = status === "running_long" ? 5.5 : 7.5;
+    const bobPeriodSeconds = status === "running_long" ? 4.8 : 4.2;
+    const rearSpeed = status === "running_long" ? 12 : 18;
+    const frontSpeed = status === "running_long" ? 24 : 32;
+
+    applySvgTranslate(surfaceGroup, 0, 0);
+    applySvgTranslate(rearWaveGroup, 0, 0);
+    applySvgTranslate(frontWaveGroup, 0, 0);
+    applySvgTranslate(highlightGroup, 0, 0);
+
+    if (!animated) {
+      return;
+    }
+
+    let frameId = 0;
+    const startedAt = performance.now();
+
+    const tick = (timestamp: number) => {
+      const elapsedSeconds = (timestamp - startedAt) / 1000;
+      const bobOffset = Math.sin((elapsedSeconds / bobPeriodSeconds) * Math.PI * 2) * bobAmplitude;
+      const rearOffset = -((elapsedSeconds * rearSpeed) % WAVE_SPAN);
+      const frontOffset = -((elapsedSeconds * frontSpeed) % WAVE_SPAN);
+
+      applySvgTranslate(surfaceGroup, 0, bobOffset);
+      applySvgTranslate(rearWaveGroup, rearOffset, 0);
+      applySvgTranslate(frontWaveGroup, frontOffset, 0);
+      applySvgTranslate(highlightGroup, frontOffset, 0);
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [animated, status]);
+
   return (
     <svg
-      className={className}
-      viewBox="0 0 600 36"
+      className="pending-compose-water-svg"
+      viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
       preserveAspectRatio="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
+      data-water-svg="true"
     >
-      <path d={WAVE_PATH} fill={fill} />
+      <rect className="water-bg" x="0" y="0" width={SVG_WIDTH} height={SVG_HEIGHT} />
+      <g ref={surfaceGroupRef}>
+        <path className="water-body" d={bodyPath} fill={solid} />
+        <g ref={rearWaveGroupRef} className="water-rear">
+          <path d={rearWaveFillPath} fill={back} />
+          <path d={rearWaveFillPath} fill={back} transform={`translate(${WAVE_SPAN} 0)`} />
+        </g>
+        <g ref={frontWaveGroupRef} className="water-front">
+          <path d={frontWaveFillPath} fill={solid} />
+          <path d={frontWaveFillPath} fill={solid} transform={`translate(${WAVE_SPAN} 0)`} />
+        </g>
+        <g ref={highlightGroupRef} className="water-highlight">
+          <path
+            d={FRONT_WAVE_PATH}
+            fill="none"
+            stroke="rgba(255,255,255,0.22)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+          <path
+            d={FRONT_WAVE_PATH}
+            fill="none"
+            stroke="rgba(255,255,255,0.22)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            transform={`translate(${WAVE_SPAN} 0)`}
+          />
+        </g>
+      </g>
     </svg>
   );
 }
@@ -356,15 +435,11 @@ export default function PendingComposeAssetCard({
         data-pending-compose-card="true"
       >
         <div className="pending-compose-thumb">
-          <div className="pending-compose-water-wrap">
-            <Wave fill={visual.back} className="pending-compose-wave back" />
-            <Wave fill={visual.solid} className="pending-compose-wave front" />
-            <div
-              className="pending-compose-water-body"
-              style={{ background: visual.solid }}
-            />
-            <div className="pending-compose-sheen" />
-          </div>
+          <PendingComposeWaterSvg
+            solid={visual.solid}
+            back={visual.back}
+            status={item.status}
+          />
 
           <div className="pending-compose-overlay">
             <div className="pending-compose-icon" aria-hidden="true">

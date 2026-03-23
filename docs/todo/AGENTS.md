@@ -1,3 +1,9 @@
+## 2026-03-23 — Pending compose card single-SVG wave fix
+- [x] Replaced the placeholder card’s layered DOM wave/body treatment with a single in-file SVG renderer so rear/front water layers share one coordinate space and no longer composite into visible bands.
+- [x] Added distinct rear/front wave paths plus subtle vertical bob + separate horizontal pan rates for active states, while keeping failed cards visually stalled and preserving existing status/color semantics.
+- [x] Updated focused package tests to lock the new SVG water renderer contract and guard against reintroducing the old `pending-compose-water-wrap` / reused `Wave` implementation.
+- [ ] Validate on iPhone Safari that the rear wave now remains readable behind the front crest in queued/running/failed cards and that the bob stays subtle rather than progress-like.
+
 ## 2026-03-23 — Explorer pending compose recovery across refresh + reconnect
 - [x] Persisted accepted pending compose jobs to localStorage with the lightweight recovery fields (`jobId`, `jobUrl`, project/source/target/output identity, created time, mode/input count, and refresh scope).
 - [x] Rehydrated pending placeholders on Explorer startup before polling resumes so refreshes do not create a blank gap between submission and eventual asset registration.
