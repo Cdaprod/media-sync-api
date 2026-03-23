@@ -732,6 +732,14 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('aria-label="Toggle projects panel"'));
   assert.ok(!content.includes('className="btn mobile-only"'));
   assert.ok(styles.includes('--topbar-subrow-height'));
+  assert.ok(styles.includes('--topbar-gap: 10px;'));
+  assert.ok(styles.includes('--topbar-offset: calc(var(--topbar-height) + var(--topbar-gap));'));
+  assert.ok(styles.includes('.topbar::before{'));
+  assert.ok(styles.includes('background: transparent;'));
+  assert.ok(styles.includes('.topbar-inner{'));
+  assert.ok(styles.includes('z-index: 2;'));
+  assert.ok(styles.includes('.section-h{'));
+  assert.ok(styles.includes('pointer-events: auto;'));
   assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
   assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
   assert.ok(styles.includes('.content .scroll{'));

@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Package Explorer topbar spacing/tap follow-up now reserves an explicit `--topbar-gap` inside `--topbar-offset`, keeping the first content row slightly clear of the fixed header/reveal seam so iPhone Safari does not feel like the topbar is flush against tappable assets.
+- The topbar backdrop now renders through a full-surface `::before` layer while the actual header rows (`.topbar-inner`, `.section-h`) stay above it with real pointer events, reducing the chance of Safari compositing or backdrop layers stealing taps from Search, Type, or nearby controls.
+- Expanded Explorer package regression assertions to lock the new gap/pseudo-element/pointer-event contract so future CSS cleanups do not collapse the seam or demote the real controls behind the backdrop layer.
+
+### Latest Implementation Notes (2026-03-23)
 - Explorer pending compose recovery now bounds restored-job reconciliation: startup-restored placeholders rehydrate as reconnecting only temporarily, poll for confirmation, remove themselves when a matching real asset is already present, and clear stale persisted records after a short failed recovery window instead of lingering forever as zombie reconnecting cards.
 - Persisted compose records now retain failure/finalizing context (`status`, `error`, `completedPath`, `debugArtifacts`) so failed placeholders can survive reloads intentionally while stale/running records are reconciled or cleaned up with better fidelity.
 - Package Explorer topbar touchability was hardened for iPhone Safari by lifting topbar/dropdown/action-panel stacking above normal content, restoring pointer-events on the real header controls, and explicitly keeping scroll/grid stacking at the base layer to avoid invisible content hit-boxes stealing taps from Search or Type.
