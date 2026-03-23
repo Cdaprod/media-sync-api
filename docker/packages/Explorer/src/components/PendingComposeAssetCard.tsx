@@ -64,15 +64,15 @@ const CARD_STYLES = `
 }
 
 .pending-compose-water-svg .water-body {
-  opacity: 0.92;
+  opacity: 0.9;
 }
 
 .pending-compose-water-svg .water-rear {
-  opacity: 0.30;
+  opacity: 0.38;
 }
 
 .pending-compose-water-svg .water-front {
-  opacity: 0.72;
+  opacity: 0.68;
 }
 
 .pending-compose-water-svg .water-highlight {
@@ -228,10 +228,9 @@ const CARD_STYLES = `
 const SVG_WIDTH = 600;
 const SVG_HEIGHT = 220;
 const WAVE_SPAN = 1200;
-const WATERLINE_FLOOR = 172;
-const REAR_WAVE_FLOOR = 164;
-const FRONT_WAVE_FLOOR = 152;
-const BODY_SURFACE_PATH = "M0 156 C70 151 135 161 210 156 C285 151 360 160 440 156 C525 151 610 159 700 156 C790 152 885 161 980 156 C1075 151 1145 160 1200 156";
+const REAR_WAVE_FLOOR = 172;
+const FRONT_WAVE_FLOOR = 158;
+const BODY_SURFACE_PATH = "M0 164 C75 158 145 170 225 164 C305 158 385 169 470 164 C555 158 640 168 730 164 C820 159 910 170 1005 164 C1090 159 1155 168 1200 164";
 const REAR_WAVE_PATH = "M0 144 C85 136 170 152 255 145 C350 138 445 154 540 145 C640 136 740 151 840 145 C945 139 1045 154 1140 145 C1175 142 1195 143 1200 144";
 const FRONT_WAVE_PATH = "M0 132 C55 118 110 148 175 133 C250 118 325 149 405 133 C490 117 565 150 645 133 C730 118 805 149 890 133 C970 118 1045 148 1125 133 C1160 126 1185 128 1200 132";
 
@@ -355,8 +354,8 @@ function getVisualState(status: PendingComposeJobStatus) {
   switch (status) {
     case "queued":
       return {
-        solid: "rgba(42,168,255,0.86)",
-        back: "rgba(42,168,255,0.46)",
+        solid: "#2aa8ff",
+        back: "#2aa8ff",
         dot: "#38b6ff",
         badge: "QUEUED",
         label: "QUEUED",
@@ -364,8 +363,8 @@ function getVisualState(status: PendingComposeJobStatus) {
       };
     case "running":
       return {
-        solid: "rgba(42,168,255,0.86)",
-        back: "rgba(42,168,255,0.46)",
+        solid: "#2aa8ff",
+        back: "#2aa8ff",
         dot: "#38b6ff",
         badge: "COMPOSING",
         label: "COMPOSING",
@@ -373,8 +372,8 @@ function getVisualState(status: PendingComposeJobStatus) {
       };
     case "running_long":
       return {
-        solid: "rgba(255,155,30,0.86)",
-        back: "rgba(255,155,30,0.46)",
+        solid: "#ff9b1e",
+        back: "#ff9b1e",
         dot: "#ff9b1e",
         badge: "TAKING LONGER",
         label: "COMPOSING",
@@ -382,8 +381,8 @@ function getVisualState(status: PendingComposeJobStatus) {
       };
     case "reconnecting":
       return {
-        solid: "rgba(120,104,255,0.86)",
-        back: "rgba(120,104,255,0.46)",
+        solid: "#7868ff",
+        back: "#7868ff",
         dot: "#9e8cff",
         badge: "RECONNECTING",
         label: "RECONNECTING",
@@ -391,8 +390,8 @@ function getVisualState(status: PendingComposeJobStatus) {
       };
     case "finalizing":
       return {
-        solid: "rgba(42,168,255,0.86)",
-        back: "rgba(42,168,255,0.46)",
+        solid: "#2aa8ff",
+        back: "#2aa8ff",
         dot: "#38b6ff",
         badge: "FINALIZING",
         label: "FINALIZING",
@@ -400,8 +399,8 @@ function getVisualState(status: PendingComposeJobStatus) {
       };
     case "failed":
       return {
-        solid: "rgba(219,67,67,0.86)",
-        back: "rgba(219,67,67,0.46)",
+        solid: "#db4343",
+        back: "#db4343",
         dot: "#db4343",
         badge: "FAILED",
         label: "FAILED",
@@ -409,8 +408,8 @@ function getVisualState(status: PendingComposeJobStatus) {
       };
     default:
       return {
-        solid: "rgba(42,168,255,0.86)",
-        back: "rgba(42,168,255,0.46)",
+        solid: "#2aa8ff",
+        back: "#2aa8ff",
         dot: "#38b6ff",
         badge: "COMPOSING",
         label: "COMPOSING",

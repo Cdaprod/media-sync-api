@@ -318,6 +318,12 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(card.includes('data-pending-compose-dismiss="true"'));
   assert.ok(card.includes('debug artifacts preserved'));
   assert.ok(card.includes('.pending-compose-water-svg'));
+  assert.ok(card.includes('.water-rear {\n  opacity: 0.38;'));
+  assert.ok(card.includes('solid: "#2aa8ff"'));
+  assert.ok(card.includes('solid: "#ff9b1e"'));
+  assert.ok(card.includes('solid: "#7868ff"'));
+  assert.ok(card.includes('solid: "#db4343"'));
+  assert.ok(!card.includes('solid: "rgba('));
   assert.ok(!card.includes('pending-compose-water-wrap'));
   assert.ok(!card.includes('function Wave({'));
   assert.ok(!card.includes('const WAVE_PATH ='));

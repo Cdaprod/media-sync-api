@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Polished the single-SVG pending compose water renderer for Safari predictability by moving wave/body fills to solid hex colors and leaving transparency control to the SVG layer-opacity rules instead of compounding `rgba(...)` alpha with CSS opacity.
+- Slightly increased rear-wave readability and lowered the body surface so the placeholder keeps clearer front/rear separation without flattening the water line back into a single band.
+- Extended package regression coverage to lock the solid-color fill contract and the tuned rear-wave opacity so this visual polish does not drift back toward the muddier double-alpha look.
+
+### Latest Implementation Notes (2026-03-23)
 - Package Explorer pending compose cards now render their water treatment through a single in-file SVG renderer instead of stacked DOM wave/body layers, eliminating the banded compositing artifact where the front wave swallowed the rear surface.
 - The new water renderer uses distinct rear/front wave paths plus requestAnimationFrame-driven slower rear pan, faster front pan, and subtle symmetric vertical bobbing for active states, while failed cards stay visually stalled.
 - Explorer package regression coverage now asserts the single-SVG water implementation (`PendingComposeWaterSvg`, distinct wave paths, RAF motion) and guards against reintroducing the old `pending-compose-water-wrap` / reused-`Wave` layering approach.

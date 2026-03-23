@@ -1,3 +1,9 @@
+## 2026-03-23 — Pending compose card SVG polish pass
+- [x] Switched the SVG water fill colors from embedded-alpha `rgba(...)` values to solid hex colors so wave/body transparency is controlled only by SVG layer opacity.
+- [x] Slightly strengthened rear-wave readability and lowered the body surface to keep clearer front/rear separation on dark mobile Safari thumbnails.
+- [x] Updated focused package tests to lock the solid-color fill contract and tuned rear-wave opacity.
+- [ ] Re-check on a physical iPhone that the rear wave stays readable in bright ambient light and that the extra separation does not overstate the water depth.
+
 ## 2026-03-23 — Pending compose card single-SVG wave fix
 - [x] Replaced the placeholder card’s layered DOM wave/body treatment with a single in-file SVG renderer so rear/front water layers share one coordinate space and no longer composite into visible bands.
 - [x] Added distinct rear/front wave paths plus subtle vertical bob + separate horizontal pan rates for active states, while keeping failed cards visually stalled and preserving existing status/color semantics.
