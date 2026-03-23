@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-23)
+- Tightened Explorer topbar interaction boundaries so shell-level dismiss logic now respects a shared interactive-target guard (`data-interactive`, native form controls, summaries, selector zones) instead of collapsing while users work inside the header or on nearby selector controls.
+- Reduced the hidden-topbar reveal hotspot from the full header height down to a dedicated 24px strip, preventing first-row asset taps/checkboxes from being intercepted by the reveal layer when the topbar is collapsed.
+- Updated package Explorer asset selector controls to consume `pointerdown` and stop propagation, and expanded package regression coverage to lock the new interactive-target guard plus narrowed reveal-strip contract.
+
+### Latest Implementation Notes (2026-03-23)
 - Explorer package media identity is now canonicalized around `primary::project::relative_path`, and project-scoped loads/refreshes hydrate `project_name` + `project_source` immediately so compose placeholder polling does not churn keys or thumbnail job identities when the backend alternates between null and `primary` source fields.
 - Scoped compose refreshes now reuse `mergeMediaItemsPreservingIdentity(...)` for unchanged media objects, while thumbnail cache keys normalize primary-source identity too, preventing visible real assets from dropping back to generic placeholders during pending/finalizing updates and letting completed assets use their normal thumb path immediately when available.
 - Pending compose water SVG tuning now pushes body/wave fills farther below the viewport, trims bob amplitude slightly, and softens the crest highlight/body gradient handoff so active cards keep the two-wave read without bottom-gap exposure or a dark seam near the crest.

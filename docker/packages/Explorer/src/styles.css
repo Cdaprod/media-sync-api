@@ -22,6 +22,7 @@
   --topbar-row-height: 56px;
   --topbar-subrow-height: 38px;
   --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
+  --topbar-reveal-height: 24px;
   --topbar-offset: var(--topbar-height);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
@@ -115,7 +116,7 @@ code { font-family: var(--mono); }
   top: 0;
   left: 0;
   right: 0;
-  height: var(--topbar-height);
+  height: var(--topbar-reveal-height);
   z-index: 45;
   pointer-events: auto;
   transform: translateZ(0);

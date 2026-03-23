@@ -78,6 +78,29 @@ export function normalizeTagList(value?: string[] | string): string[] {
     .filter(Boolean);
 }
 
+const INTERACTIVE_TARGET_SELECTOR = [
+  '[data-interactive="true"]',
+  '[data-no-preview]',
+  'input',
+  'button',
+  'select',
+  'textarea',
+  'label',
+  'summary',
+  'a[href]',
+  '[role="button"]',
+  '[role="checkbox"]',
+  '[role="combobox"]',
+  '[role="menu"]',
+  '[role="menuitem"]',
+  '[contenteditable="true"]',
+].join(', ');
+
+export function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest(INTERACTIVE_TARGET_SELECTOR));
+}
+
 export async function copyTextWithFallback(text: string): Promise<boolean> {
   if (!text) return false;
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {

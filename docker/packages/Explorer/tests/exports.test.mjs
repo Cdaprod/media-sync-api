@@ -224,6 +224,35 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(list.includes('data-no-preview="1"'));
 });
 
+test('topbar interaction boundaries protect header controls and nearby asset selectors', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
+  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const utils = fs.readFileSync(utilsPath, 'utf8');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+  const list = fs.readFileSync(listPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.ok(utils.includes('export function isInteractiveTarget'));
+  assert.ok(utils.includes("'summary'"));
+  assert.ok(utils.includes("'[data-interactive=\"true\"]'"));
+  assert.ok(explorer.includes('if (isInteractiveTarget(event.target)) return;'));
+  assert.ok(explorer.includes('data-interactive="true"'));
+  assert.ok(explorer.includes('<div className="search" role="search" data-interactive="true">'));
+  assert.ok(explorer.includes('className={`actions-panel ${actionsOpen ? \'open\' : \'\'}`} role="region" aria-label="Explorer actions" data-interactive="true"'));
+  assert.ok(hook.includes('if (isInteractiveTarget(event.target)) return;'));
+  assert.ok(grid.includes('onPointerDown={handleTogglePointerDown}'));
+  assert.ok(grid.includes('event.stopPropagation();'));
+  assert.ok(list.includes('data-interactive="true"'));
+  assert.ok(styles.includes('--topbar-reveal-height: 24px;'));
+  assert.ok(styles.includes('height: var(--topbar-reveal-height);'));
+});
+
 test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');

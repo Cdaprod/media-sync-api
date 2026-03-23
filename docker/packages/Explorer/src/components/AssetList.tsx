@@ -24,6 +24,12 @@ function AssetListComponent({
   onToggleSelected,
   onDismissPendingJob,
 }: AssetListProps) {
+  const handleInteractivePointerDown = (
+    event: React.PointerEvent<HTMLInputElement | HTMLButtonElement | HTMLDivElement>,
+  ) => {
+    event.stopPropagation();
+  };
+
   return (
     <>
       {items.map((entry) => {
@@ -70,16 +76,28 @@ function AssetListComponent({
                 {viewModel.sub} • {viewModel.size} • {viewModel.kind}
               </div>
             </div>
-            <div className="actions" data-no-preview="1">
+            <div className="actions" data-interactive="true" data-no-preview="1" onPointerDown={handleInteractivePointerDown}>
               <input
                 type="checkbox"
                 checked={viewModel.isSelected}
                 title="Select"
+                data-interactive="true"
                 data-no-preview="1"
                 disabled={!canSelect}
+                onPointerDown={handleInteractivePointerDown}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
                 onChange={() => onToggleSelected(item)}
               />
-              <button className="iconbtn" type="button" data-no-preview="1" onClick={() => onOpenDrawer(item)}>
+              <button
+                className="iconbtn"
+                type="button"
+                data-interactive="true"
+                data-no-preview="1"
+                onPointerDown={handleInteractivePointerDown}
+                onClick={() => onOpenDrawer(item)}
+              >
                 Preview
               </button>
             </div>

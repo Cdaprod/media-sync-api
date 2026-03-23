@@ -30,6 +30,7 @@ import {
   formatBytes,
   guessKind,
   inferApiBaseUrl,
+  isInteractiveTarget,
   kindBadgeClass,
   toAbsoluteUrl,
 } from './utils';
@@ -398,7 +399,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const inNoPreviewZone = useCallback((target: EventTarget | null) => {
     const node = target instanceof HTMLElement ? target : null;
-    return Boolean(node?.closest?.('[data-no-preview], .sel-ui'));
+    return Boolean(node?.closest?.('[data-no-preview], .sel-ui')) || isInteractiveTarget(target);
   }, []);
 
   useEffect(() => {
@@ -1727,6 +1728,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     reveal.addEventListener('pointermove', handleRevealMove);
 
     const handleOutside = (event: PointerEvent) => {
+      if (isInteractiveTarget(event.target)) return;
       if (intent.isPinned()) return;
       if (topbar.contains(event.target as Node) || reveal.contains(event.target as Node)) return;
       if (!shouldKeepOpen()) intent.scheduleClose(120);
@@ -1964,9 +1966,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           <div className="toolbar">
             <div className="toolbar-toggle" aria-hidden="true"></div>
             <div className="topbar-controls">
-              <div className="search" role="search">
+              <div className="search" role="search" data-interactive="true">
                 <span className="kbd">⌘K</span>
                 <input
+                  data-interactive="true"
                   ref={searchInputRef}
                   placeholder="Search filename, path… (client-side filter)"
                   autoComplete="off"
@@ -1978,14 +1981,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     topbarIntentRef.current?.scheduleClose(360);
                   }}
                 />
-                <div className="search-toolbar" aria-label="Search filters">
-                  <details className="dropdown">
-                    <summary className="control" aria-label="Filter by media type">
+                <div className="search-toolbar" aria-label="Search filters" data-interactive="true">
+                  <details className="dropdown" data-interactive="true">
+                    <summary className="control" aria-label="Filter by media type" data-interactive="true">
                       Type: <span>{typeLabel}</span>
                     </summary>
                     <div className="dropdown-menu" role="listbox" aria-label="Media type filters">
                       <button
                         type="button"
+                        data-interactive="true"
                         className={typeFilter === 'all' ? 'is-active' : ''}
                         onClick={handleTypeSelect('all')}
                       >
@@ -1993,6 +1997,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       </button>
                       <button
                         type="button"
+                        data-interactive="true"
                         className={typeFilter === 'video' ? 'is-active' : ''}
                         onClick={handleTypeSelect('video')}
                       >
@@ -2000,6 +2005,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       </button>
                       <button
                         type="button"
+                        data-interactive="true"
                         className={typeFilter === 'image' ? 'is-active' : ''}
                         onClick={handleTypeSelect('image')}
                       >
@@ -2007,6 +2013,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       </button>
                       <button
                         type="button"
+                        data-interactive="true"
                         className={typeFilter === 'audio' ? 'is-active' : ''}
                         onClick={handleTypeSelect('audio')}
                       >
@@ -2015,6 +2022,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       {mediaMeta.types.has('overlay') ? (
                         <button
                           type="button"
+                          data-interactive="true"
                           className={typeFilter === 'overlay' ? 'is-active' : ''}
                           onClick={handleTypeSelect('overlay')}
                         >
@@ -2023,6 +2031,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       ) : null}
                       <button
                         type="button"
+                        data-interactive="true"
                         className={typeFilter === 'unknown' ? 'is-active' : ''}
                         onClick={handleTypeSelect('unknown')}
                       >
@@ -2035,17 +2044,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               <button
                 className="btn actions-toggle"
                 type="button"
+                data-interactive="true"
                 aria-expanded={actionsOpen}
                 onClick={() => setActionsOpen((prev) => !prev)}
               >
                 Actions ▾
               </button>
             </div>
-            <div className={`actions-panel ${actionsOpen ? 'open' : ''}`} role="region" aria-label="Explorer actions">
+            <div className={`actions-panel ${actionsOpen ? 'open' : ''}`} role="region" aria-label="Explorer actions" data-interactive="true">
               <div className="seg" aria-label="View mode">
                 <button
                   className={view === 'grid' ? 'active' : ''}
                   type="button"
+                  data-interactive="true"
                   onClick={() => setView('grid')}
                 >
                   Grid
@@ -2053,6 +2064,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <button
                   className={view === 'list' ? 'active' : ''}
                   type="button"
+                  data-interactive="true"
                   onClick={() => setView('list')}
                 >
                   List
@@ -2064,6 +2076,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   ref={sortSelectRef}
                   className="control visually-hidden"
                   aria-label="Sort media"
+                  data-interactive="true"
                   value={sortKey}
                   onChange={(event) => setSortKey(event.target.value as SortKey)}
                 >
@@ -2078,13 +2091,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     Sort: Size small→big
                   </option>
                 </select>
-                <details className="dropdown">
-                  <summary className="control" aria-label="Sort media">
+                <details className="dropdown" data-interactive="true">
+                  <summary className="control" aria-label="Sort media" data-interactive="true">
                     Sort: <span>{sortLabel}</span>
                   </summary>
                   <div className="dropdown-menu" role="listbox" aria-label="Sort media">
                     <button
                       type="button"
+                      data-interactive="true"
                       className={sortKey === 'newest' ? 'is-active' : ''}
                       onClick={handleSortSelect('newest')}
                     >
@@ -2092,6 +2106,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     </button>
                     <button
                       type="button"
+                      data-interactive="true"
                       className={sortKey === 'oldest' ? 'is-active' : ''}
                       onClick={handleSortSelect('oldest')}
                     >
@@ -2099,6 +2114,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     </button>
                     <button
                       type="button"
+                      data-interactive="true"
                       className={sortKey === 'name-asc' ? 'is-active' : ''}
                       onClick={handleSortSelect('name-asc')}
                     >
@@ -2106,6 +2122,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     </button>
                     <button
                       type="button"
+                      data-interactive="true"
                       className={sortKey === 'name-desc' ? 'is-active' : ''}
                       onClick={handleSortSelect('name-desc')}
                     >
@@ -2113,6 +2130,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     </button>
                     <button
                       type="button"
+                      data-interactive="true"
                       className={sortKey === 'size-desc' ? 'is-active' : ''}
                       onClick={handleSortSelect('size-desc')}
                       disabled={!mediaMeta.hasSize}
@@ -2121,6 +2139,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     </button>
                     <button
                       type="button"
+                      data-interactive="true"
                       className={sortKey === 'size-asc' ? 'is-active' : ''}
                       onClick={handleSortSelect('size-asc')}
                       disabled={!mediaMeta.hasSize}
@@ -2133,6 +2152,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   <button
                     className={`btn toggle-btn ${selectedOnly ? 'is-on' : ''}`}
                     type="button"
+                    data-interactive="true"
                     onClick={() => setSelectedOnly((prev) => !prev)}
                   >
                     Selected only
@@ -2140,6 +2160,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   <button
                     className={`btn toggle-btn ${untaggedOnly ? 'is-on' : ''}`}
                     type="button"
+                    data-interactive="true"
                     onClick={() => setUntaggedOnly((prev) => !prev)}
                     disabled={!mediaMeta.hasTags}
                     title={mediaMeta.hasTags ? '' : 'No tagged items yet'}
@@ -2150,21 +2171,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               </div>
 
               <div className="pillbar">
-                <button className="btn" type="button" onClick={refreshAll}>
+                <button className="btn" type="button" data-interactive="true" onClick={refreshAll}>
                   ↻ Refresh
                 </button>
-                <button className="btn good" type="button" onClick={pickUpload}>
+                <button className="btn good" type="button" data-interactive="true" onClick={pickUpload}>
                   ＋ Upload
                 </button>
                 <button
                   className="btn primary"
                   type="button"
+                  data-interactive="true"
                   onClick={handleResolve}
                   disabled={!selectedCount || !activeProject}
                 >
                   ⇢ Send to Resolve
                 </button>
-                <button className="btn" type="button" onClick={clearSelection} disabled={!selectedCount}>
+                <button className="btn" type="button" data-interactive="true" onClick={clearSelection} disabled={!selectedCount}>
                   ✕ Clear
                 </button>
               </div>

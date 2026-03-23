@@ -46,6 +46,12 @@ function AssetGridComponent({
   onToggleSelected,
   onDismissPendingJob,
 }: AssetGridProps) {
+  const handleTogglePointerDown = (
+    event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
+  ) => {
+    event.stopPropagation();
+  };
+
   return (
     <div className="masonry-columns" style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}>
       {masonryColumns.map((column, columnIndex) => (
@@ -101,7 +107,9 @@ function AssetGridComponent({
                       <div
                         className="selector sel-ui"
                         title="Select"
+                        data-interactive="true"
                         data-no-preview="1"
+                        onPointerDown={handleTogglePointerDown}
                         onClick={(event) => {
                           event.stopPropagation();
                           if (!canSelect) return;
@@ -116,8 +124,12 @@ function AssetGridComponent({
                             checked={viewModel.isSelected}
                             aria-label="Select media"
                             disabled={!canSelect}
+                            data-interactive="true"
                             data-no-preview="1"
-                            onClick={(event) => event.stopPropagation()}
+                            onPointerDown={handleTogglePointerDown}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
                             onChange={() => onToggleSelected(item)}
                           />
                           <span className="sel-order" data-no-preview="1" aria-hidden="true">

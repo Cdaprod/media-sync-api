@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 
 import type { MediaItem, Project } from './types';
+import { isInteractiveTarget } from './utils';
 
 const POINTER_THRESHOLD = 8;
 const LONG_PRESS_MOVE_CANCEL_PX = 12;
@@ -94,7 +95,7 @@ export function useAssetInteractions({
       const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         if (inNoPreviewZone(event.target)) return;
-        if ((event.target as HTMLElement).closest('input, button, a, summary')) return;
+        if (isInteractiveTarget(event.target)) return;
         pointerId = event.pointerId;
         startX = event.clientX;
         startY = event.clientY;
@@ -115,7 +116,7 @@ export function useAssetInteractions({
 
       const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
         if (pointerId !== event.pointerId) return;
-        if (inNoPreviewZone(event.target)) {
+        if (inNoPreviewZone(event.target) || isInteractiveTarget(event.target)) {
           clearPendingLongPress();
           return;
         }
@@ -185,7 +186,7 @@ export function useAssetInteractions({
       };
 
       const handleContextMenu = (event: React.MouseEvent<HTMLElement>) => {
-        if (inNoPreviewZone(event.target)) {
+        if (inNoPreviewZone(event.target) || isInteractiveTarget(event.target)) {
           event.preventDefault();
           event.stopPropagation();
           return;

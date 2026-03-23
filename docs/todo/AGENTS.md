@@ -1,3 +1,9 @@
+## 2026-03-23 — Explorer topbar interaction-boundary repair
+- [x] Narrowed the hidden-topbar reveal hotspot to a dedicated strip so first-row asset taps no longer get intercepted by the reveal layer.
+- [x] Added a shared interactive-target guard for topbar dismiss/asset gesture code so search, type/sort dropdowns, and selector controls no longer collapse the shell during valid interaction.
+- [x] Hardened package asset selector controls to consume `pointerdown`/`click` before shell handlers can win and added focused regression coverage for the new interaction-boundary contract.
+- [ ] Validate on physical iPhone Safari that search, type/sort controls, and first-row asset checkboxes all work without collapsing/revealing the topbar unexpectedly.
+
 ## 2026-03-23 — Explorer compose thumbnail continuity + water seam follow-up
 - [x] Canonicalized Explorer asset/thumb identity around the normalized `primary` source so pending compose polling no longer churns keys when media rows alternate between `null` and `primary` source fields.
 - [x] Hydrated project-scoped media rows with explicit `project_name` / `project_source` on load + scoped refresh and reused the identity-preserving media merge helper so unchanged assets keep their object identity and loaded thumbnails through compose placeholder updates.
