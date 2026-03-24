@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Tightened `useTopbarScrollState` to remove legacy top-of-scroll reveal thresholding and drive reopen from logical state only (`contentTopPx` hysteresis + hidden-at-top guard), preventing raw-`scrollTop` shortcuts from pre-empting the inset-aware collapse model.
+- The hook now computes `openInsetPx` via an explicit `getOpenInsetPx()` helper and derives `currentInsetPx`/`contentTopPx` from that value, keeping hide/reveal decisions aligned with `.scroll-content.topbar-open` inset geometry.
+- `suppressAutoToggle()` now also re-baselines `lastScrollTopRef` against the current host scroll position before opening the suppression window so programmatic compensation cannot replay stale deltas into immediate opposite-state toggles.
+
+### Latest Implementation Notes (2026-03-24)
 - Refactored Explorer topbar hide/reveal to logical content-top math in `useTopbarScrollState`: `contentTopPx = scrollTop - currentInsetPx`, where open inset uses live `topbarMeasuredHeight + --topbar-gap` and hidden inset is zero.
 - Hide now triggers only on downward scroll once `contentTopPx >= 0` (assets push the topbar away at the viewport edge), while reopen requires upward scroll beyond a hysteresis threshold (`TOPBAR_REVEAL_HYSTERESIS_PX = 20`) to prevent threshold chatter.
 - Added temporary auto-toggle suppression (`suppressAutoToggle`) around programmatic inset-compensation `scrollTop` adjustments so collapse/reveal compensation cannot immediately bounce topbar state.

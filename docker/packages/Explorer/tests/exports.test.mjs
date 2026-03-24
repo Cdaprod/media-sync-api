@@ -791,9 +791,12 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
   assert.ok(hookContent.includes('const TOPBAR_REVEAL_HYSTERESIS_PX = 20;'));
+  assert.ok(hookContent.includes('const TOPBAR_REVEAL_AT_TOP_PX = 0;'));
   assert.ok(hookContent.includes('const suppressAutoToggle = useCallback((ms = TOPBAR_COMPENSATION_SUPPRESS_MS) => {'));
-  assert.ok(hookContent.includes('const currentInsetPx = hiddenRef.current ? 0 : Math.max(0, topbarMeasuredHeight + topbarGap);'));
+  assert.ok(hookContent.includes('const openInsetPx = getOpenInsetPx();'));
+  assert.ok(hookContent.includes('const currentInsetPx = hiddenRef.current ? 0 : openInsetPx;'));
   assert.ok(hookContent.includes('const contentTopPx = currentTop - currentInsetPx;'));
+  assert.ok(hookContent.includes('if (hiddenRef.current && currentTop <= TOPBAR_REVEAL_AT_TOP_PX) {'));
   assert.ok(hookContent.includes('if (!hiddenRef.current && delta > 0 && contentTopPx >= 0) {'));
   assert.ok(hookContent.includes('if (hiddenRef.current && delta < 0 && contentTopPx <= -TOPBAR_REVEAL_HYSTERESIS_PX) {'));
   assert.ok(styles.includes('will-change: transform, opacity;'));

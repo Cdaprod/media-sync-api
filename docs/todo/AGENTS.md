@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer content-edge gating follow-up hardening
+- [x] Removed the remaining legacy top-of-scroll reveal shortcut from `useTopbarScrollState` and kept reveal decisions in the logical content-edge path.
+- [x] Introduced `getOpenInsetPx()` so open inset is computed explicitly and reused to derive `currentInsetPx` + `contentTopPx` for hide/reveal gating.
+- [x] Rebased `lastScrollTopRef` inside `suppressAutoToggle()` to prevent compensation-window stale deltas from triggering immediate opposite-state toggles.
+- [x] Updated focused Explorer regression assertions for the helper/guard additions and reran package export checks.
+- [ ] Validate on physical iPhone Safari that collapse near top no longer pulls first-row assets into the ceiling and that reopen still feels stable without boundary chatter.
+
 ## 2026-03-24 — Explorer logical content-top topbar gating
 - [x] Refactored `useTopbarScrollState` to compute `contentTopPx = scrollTop - currentInsetPx` using live measured topbar height plus runtime `--topbar-gap` while open.
 - [x] Switched collapse behavior to hide only on downward scroll when logical content top reaches the viewport edge (`contentTopPx >= 0`) so assets push the topbar away instead of sliding behind it while open.

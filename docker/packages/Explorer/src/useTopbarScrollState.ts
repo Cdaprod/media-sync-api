@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-const TOPBAR_TOP_REVEAL_PX = 24;
+const TOPBAR_REVEAL_AT_TOP_PX = 0;
 const TOPBAR_REVEAL_HYSTERESIS_PX = 20;
 const TOPBAR_COMPENSATION_SUPPRESS_MS = 140;
 
@@ -25,10 +25,14 @@ export function useTopbarScrollState(
   const [topbarHidden, setTopbarHiddenState] = useState(false);
   const hiddenRef = useRef(false);
   const scrollRafRef = useRef<number | null>(null);
+  const scrollHostRef = useRef<HTMLDivElement | null>(null);
   const lastScrollTopRef = useRef(0);
   const suppressAutoToggleUntilRef = useRef(0);
 
   const suppressAutoToggle = useCallback((ms = TOPBAR_COMPENSATION_SUPPRESS_MS) => {
+    if (scrollHostRef.current) {
+      lastScrollTopRef.current = Math.max(0, scrollHostRef.current.scrollTop);
+    }
     if (typeof performance !== 'undefined') {
       suppressAutoToggleUntilRef.current = performance.now() + ms;
     } else {
@@ -53,6 +57,7 @@ export function useTopbarScrollState(
   useEffect(() => {
     const host = scrollRef.current;
     if (!host) return;
+    scrollHostRef.current = host;
 
     lastScrollTopRef.current = host.scrollTop;
 
@@ -71,14 +76,18 @@ export function useTopbarScrollState(
       if (!delta) return;
       if (now < suppressAutoToggleUntilRef.current) return;
 
-      if (currentTop <= TOPBAR_TOP_REVEAL_PX) {
+      if (hiddenRef.current && currentTop <= TOPBAR_REVEAL_AT_TOP_PX) {
         revealTopbar();
         return;
       }
 
-      const styles = window.getComputedStyle(host);
-      const topbarGap = Number.parseFloat(styles.getPropertyValue('--topbar-gap')) || 0;
-      const currentInsetPx = hiddenRef.current ? 0 : Math.max(0, topbarMeasuredHeight + topbarGap);
+      const getOpenInsetPx = () => {
+        const styles = window.getComputedStyle(host);
+        const topbarGap = Number.parseFloat(styles.getPropertyValue('--topbar-gap')) || 0;
+        return Math.max(0, topbarMeasuredHeight + topbarGap);
+      };
+      const openInsetPx = getOpenInsetPx();
+      const currentInsetPx = hiddenRef.current ? 0 : openInsetPx;
       const contentTopPx = currentTop - currentInsetPx;
 
       if (!hiddenRef.current && delta > 0 && contentTopPx >= 0) {
@@ -99,6 +108,9 @@ export function useTopbarScrollState(
     host.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       host.removeEventListener('scroll', handleScroll);
+      if (scrollHostRef.current === host) {
+        scrollHostRef.current = null;
+      }
       if (scrollRafRef.current) {
         window.cancelAnimationFrame(scrollRafRef.current);
         scrollRafRef.current = null;
