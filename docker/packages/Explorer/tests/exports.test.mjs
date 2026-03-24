@@ -927,6 +927,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('const onSliderInput = () => {'));
   assert.ok(content.includes('density.scrubTo(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE));'));
   assert.ok(content.includes('density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);'));
+  assert.ok(content.includes('step={0.05}'));
   assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
   assert.ok(content.includes('if (inDensityPinchSurface(event.target)) return;'));
   assert.ok(content.includes('data-density-pinch-surface="true"'));
@@ -934,14 +935,19 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
 
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
-  assert.ok(densityController.includes('scaleForScrubValue'));
-  assert.ok(densityController.includes('setScale(scaleForScrubValue(nextValue));'));
-  assert.ok(densityController.includes('const distanceToStep = Math.abs(clampedValue - nearestStep);'));
+  assert.ok(densityController.includes('DENSITY_STEP_HYSTERESIS = 0.55'));
+  assert.ok(densityController.includes('while (clampedValue >= nextColumns + DENSITY_STEP_HYSTERESIS && nextColumns < maxColumns) {'));
+  assert.ok(densityController.includes('while (clampedValue <= nextColumns - DENSITY_STEP_HYSTERESIS && nextColumns > minColumns) {'));
+  assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
+  assert.ok(!densityController.includes('scaleForScrubValue'));
 
   assert.ok(!flip.includes('requestAnimationFrame(() => {'));
   assert.ok(flip.includes('const state = Flip.getState(items);'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('Flip.from(state, {'));
+  assert.ok(flip.includes('absolute: true,'));
+  assert.ok(flip.includes('scale: false,'));
+  assert.ok(flip.includes("clearProps: 'transform,opacity'"));
 
   assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));
   assert.ok(drawerMotion.includes("if (mode === 'sheet') {"));

@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-03-24)
+- Density scrub was redesigned to be masonry-authoritative for Explorer: removed container-scale scrub illusion, moved to thresholded discrete column commits on live slider input, and kept synchronous CSS variable commits (`--masonry-column-count`) as the real layout source.
+- Flip density choreography is now tuned for Explorer masonry cards (`.masonry-column > .asset` / pending cards) with immediate capture→commit→Flip sequencing, `absolute: true`, `scale: false`, and transform cleanup to prevent overlap/behind-layer artifacts.
+- Preserved prior lifecycle fixes (drawer side/sheet mode sync, modal/toast exit presence, topbar hidden-offset refresh, density pinch gesture exemptions) while refining slider responsiveness via fractional slider step for smoother threshold crossing without fake grid scaling.
+
 ### 2026-03-24 Consolidated Notes Index
 - Note: 2026-03-24 work items are grouped under repeated day-stamped entries below for chronological handoff continuity.
 - This pass repaired the GSAP architecture regressions (density lifecycle/commit/scrub, drawer/backdrop truth, modal/toast exit presence, pinch gesture exemptions, topbar hidden-offset refresh).

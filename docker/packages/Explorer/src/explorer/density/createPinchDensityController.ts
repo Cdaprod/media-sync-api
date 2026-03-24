@@ -29,6 +29,7 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     minScale = 0.86,
     maxScale = 1.18,
   } = options;
+  void visualScaleTargetEl;
 
   let active = false;
   let initialDistance = 0;

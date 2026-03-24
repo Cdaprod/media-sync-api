@@ -1,3 +1,12 @@
+## 2026-03-24 — Masonry-safe density scrub follow-up (PR #138 validation fix)
+- [x] Removed density container-scale scrub illusion that caused overlapping/behind-card artifacts in orientation-sensitive masonry.
+- [x] Kept masonry layout authoritative with synchronous `--masonry-column-count` commits + immediate Flip sequencing.
+- [x] Tuned Flip targets/config for real Explorer card nodes and added transform/opacity cleanup guard.
+- [x] Switched slider to fractional scrub input (`step=0.05`) with thresholded discrete column commits for smoother feel without fake scaled layers.
+- [x] Kept drawer/backdrop, modal/toast presence, topbar refresh, and density pinch gesture exemptions intact.
+- [x] Expanded focused contract assertions for masonry-safe density behavior.
+- [ ] Capture on-device proof clip showing no overlap/behind-layer artifacts while scrubbing density on iPhone Safari.
+
 ## 2026-03-24 — GSAP architecture repair pass (PR #138 follow-up)
 - [x] Rebind density controller lifecycle to delayed grid mount + grid/list view transitions.
 - [x] Make density controller synchronously commit `--masonry-column-count` on the live grid before Flip choreography.

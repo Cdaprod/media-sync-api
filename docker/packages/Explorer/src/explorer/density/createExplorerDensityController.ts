@@ -1,12 +1,11 @@
-import { gsap } from '../../lib/gsap';
 import { animateDensityFlip } from './animateDensityFlip';
 import { clampColumnCount } from './getColumnCount';
 
 /**
  * Explorer density authority contract:
- * - Controller owns immediate committed layout (`--masonry-column-count` on the live grid element).
- * - React state mirrors committed columns for labels/derived render math.
- * - Scrub state is visual-only live feedback and is not an independent layout source.
+ * - Masonry layout is always authoritative.
+ * - Controller synchronously commits `--masonry-column-count` on the real grid node.
+ * - Slider scrub is continuous input, but layout commits happen at discrete column thresholds.
  */
 export type ExplorerDensityController = {
   getColumns: () => number;
@@ -26,7 +25,7 @@ export type ExplorerDensityControllerOptions = {
   maxColumns: number;
 };
 
-const SCRUB_SCALE_PER_STEP = 0.035;
+const DENSITY_STEP_HYSTERESIS = 0.55;
 
 export function createExplorerDensityController(options: ExplorerDensityControllerOptions): ExplorerDensityController {
   const {
@@ -40,16 +39,11 @@ export function createExplorerDensityController(options: ExplorerDensityControll
 
   let currentColumns = clampColumnCount(initialColumns);
   let scrubValue = currentColumns;
-  let liveTween: gsap.core.Tween | null = null;
-  const setScale = gsap.quickSetter(gridEl, 'scale');
 
-  const scaleForScrubValue = (value: number) => {
-    const centeredDelta = value - currentColumns;
-    return gsap.utils.clamp(0.86, 1.18, 1 - centeredDelta * SCRUB_SCALE_PER_STEP);
-  };
+  const clampToRange = (value: number) => Math.max(minColumns, Math.min(maxColumns, value));
 
   const commitLayoutColumns = (nextColumns: number) => {
-    currentColumns = clampColumnCount(nextColumns);
+    currentColumns = clampColumnCount(clampToRange(nextColumns));
     scrubValue = currentColumns;
     gridEl.style.setProperty('--masonry-column-count', String(currentColumns));
     gridEl.dataset.columns = String(currentColumns);
@@ -57,67 +51,48 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     onColumnsCommit(currentColumns);
   };
 
-  const applyLiveScrubScale = (nextValue: number) => {
-    setScale(scaleForScrubValue(nextValue));
-  };
-
   function setColumns(nextColumns: number, animated = true) {
-    const clamped = gsap.utils.clamp(minColumns, maxColumns, clampColumnCount(nextColumns));
-    if (clamped === currentColumns) {
-      settleScrub();
-      return;
-    }
+    const clamped = clampColumnCount(clampToRange(nextColumns));
+    if (clamped === currentColumns) return;
 
     if (animated) {
       animateDensityFlip({
         gridEl,
         commitLayout: () => commitLayoutColumns(clamped),
       });
-      settleScrub();
       return;
     }
 
     commitLayoutColumns(clamped);
-    settleScrub();
   }
 
   function scrubTo(nextValue: number) {
-    const clampedValue = gsap.utils.clamp(minColumns, maxColumns, nextValue);
+    const clampedValue = clampToRange(nextValue);
     scrubValue = clampedValue;
-    sliderEl.value = String(clampedValue);
-    applyLiveScrubScale(clampedValue);
 
-    const nearestStep = Math.round(clampedValue);
-    if (nearestStep !== currentColumns) {
-      setColumns(nearestStep, true);
-      return;
+    // keep native thumb movement smooth even with fractional drag values
+    sliderEl.value = String(clampedValue);
+
+    let nextColumns = currentColumns;
+    while (clampedValue >= nextColumns + DENSITY_STEP_HYSTERESIS && nextColumns < maxColumns) {
+      nextColumns += 1;
+    }
+    while (clampedValue <= nextColumns - DENSITY_STEP_HYSTERESIS && nextColumns > minColumns) {
+      nextColumns -= 1;
     }
 
-    const distanceToStep = Math.abs(clampedValue - nearestStep);
-    if (distanceToStep < 0.18) {
-      liveTween?.kill();
-      liveTween = gsap.to(gridEl, {
-        scale: 1,
-        duration: 0.12,
-        ease: 'power2.out',
-        overwrite: 'auto',
-      });
+    if (nextColumns !== currentColumns) {
+      setColumns(nextColumns, true);
     }
   }
 
   function settleScrub() {
-    liveTween?.kill();
-    liveTween = gsap.to(gridEl, {
-      scale: 1,
-      duration: 0.16,
-      ease: 'power2.out',
-      overwrite: 'auto',
-    });
+    sliderEl.value = String(currentColumns);
+    scrubValue = currentColumns;
   }
 
   function destroy() {
-    liveTween?.kill();
-    gsap.set(gridEl, { clearProps: 'transform' });
+    gridEl.style.removeProperty('will-change');
   }
 
   commitLayoutColumns(currentColumns);

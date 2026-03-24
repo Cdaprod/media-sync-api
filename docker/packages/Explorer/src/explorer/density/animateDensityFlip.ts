@@ -1,5 +1,4 @@
 import { Flip, gsap } from '../../lib/gsap';
-import { addBubblySettle } from './addBubblySettle';
 
 export type AnimateDensityFlipOptions = {
   gridEl: HTMLElement;
@@ -9,7 +8,7 @@ export type AnimateDensityFlipOptions = {
 
 export function animateDensityFlip({
   gridEl,
-  itemSelector = '.asset, .row, .pending-compose-card',
+  itemSelector = '.masonry-column > .asset, .masonry-column > .pending-compose-card, .list .row',
   commitLayout,
 }: AnimateDensityFlipOptions): void {
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
@@ -20,25 +19,25 @@ export function animateDensityFlip({
 
   const state = Flip.getState(items);
   commitLayout();
-  const visibleItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
+
+  const nextItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
   Flip.from(state, {
-    absolute: false,
+    absolute: true,
     nested: true,
     prune: true,
-    scale: true,
-    duration: 0.32,
+    scale: false,
+    duration: 0.2,
     ease: 'power2.out',
-    simple: false,
+    simple: true,
     onEnter: (elements) => {
       gsap.fromTo(
         elements,
-        { autoAlpha: 0, scale: 0.98 },
-        { autoAlpha: 1, scale: 1, duration: 0.18, ease: 'power2.out' },
+        { autoAlpha: 0.6 },
+        { autoAlpha: 1, duration: 0.12, ease: 'power1.out' },
       );
     },
     onComplete: () => {
-      gsap.set(visibleItems, { clearProps: 'transform' });
-      void addBubblySettle(visibleItems);
+      gsap.set(nextItems, { clearProps: 'transform,opacity' });
     },
   });
 }
