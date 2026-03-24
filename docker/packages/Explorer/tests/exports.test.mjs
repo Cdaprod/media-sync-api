@@ -954,19 +954,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
 
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
-  assert.ok(densityController.includes('const valueToColumnCount = (nextValue: number) => {'));
-  assert.ok(densityController.includes('if (nextValue > previousScrubValue) return Math.floor(nextValue + 1e-6);'));
-  assert.ok(densityController.includes('if (nextValue < previousScrubValue) return Math.ceil(nextValue - 1e-6);'));
-  assert.ok(densityController.includes('let latestRequestedColumns: number | null = null;'));
-  assert.ok(densityController.includes('let frameCommittedColumns: number | null = null;'));
-  assert.ok(densityController.includes('const requestLatestCommit = (nextColumns: number) => {'));
-  assert.ok(densityController.includes('if (rafId) return;'));
-  assert.ok(densityController.includes('requestAnimationFrame(flushLatestCommit);'));
-  assert.ok(densityController.includes('if (target === frameCommittedColumns) return;'));
-  assert.ok(densityController.includes('frameCommittedColumns = target;'));
-  assert.ok(densityController.includes('requestLatestCommit(nextColumns);'));
-  assert.ok(densityController.includes("interactionMode: 'scrub' | 'settle' = 'scrub',"));
-  assert.ok(densityController.includes("commitColumns(nextColumns, animated, 'settle');"));
+  assert.ok(densityController.includes('if (!Number.isFinite(value)) return minColumns;'));
+  assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'scrub\');'));
+  assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'settle\');'));
+  assert.ok(densityController.includes('destroyed = true;'));
+  assert.ok(!densityController.includes('requestAnimationFrame('));
   assert.ok(!densityController.includes('setTimeout('));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
@@ -976,7 +968,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('Flip.from(state, {'));
   assert.ok(flip.includes("itemSelector = '.masonry-column > .asset, .masonry-column > .pending-compose-card'"));
+  assert.ok(flip.includes('Flip.killFlipsOf(items);'));
+  assert.ok(flip.includes('gsap.killTweensOf(items);'));
+  assert.ok(flip.includes('targets: items,'));
   assert.ok(flip.includes('absolute: true,'));
+  assert.ok(flip.includes('nested: false,'));
   assert.ok(flip.includes('scale: false,'));
   assert.ok(flip.includes("clearProps: 'transform'"));
   assert.ok(!flip.includes('onEnter: (elements) => {'));

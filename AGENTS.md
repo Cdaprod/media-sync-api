@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Rewrote density controller into direct-manipulation mode: slider scrub now clamps and commits columns immediately through the authoritative masonry CSS var path without scheduler layers.
+- Density Flip now explicitly kills stale flips/tweens on persistent card nodes before capture and animates with `targets: items` to preserve continuity under rapid input.
+- Added stronger invalid-value guards (`Number.isFinite` + clamp) to prevent transient empty/invalid column states that could produce full-field collapse frames.
+
+### Latest Implementation Notes (2026-03-24)
 - Added focused regression assertions verifying local-only interaction handlers (density slider scrub, context-menu open, preview drawer open) do not call startup/media loader functions.
 - This adds an automated network-quiet contract check at source level to guard against accidental coupling of local UI actions to boot/data-load paths.
 - Manual runtime verification is still required for visual smoothness and z-layer truth, but local handler-level loader coupling is now asserted.

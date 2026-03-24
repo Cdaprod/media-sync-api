@@ -1,11 +1,10 @@
 import { animateDensityFlip } from './animateDensityFlip';
-import { clampColumnCount } from './getColumnCount';
 
 /**
  * Explorer density authority contract:
  * - Masonry layout is always authoritative.
  * - Controller synchronously commits `--masonry-column-count` on the real grid node.
- * - Slider scrub is continuous input; commits are latest-value-wins at frame cadence.
+ * - Scrub path is direct-manipulation: latest finger position commits immediately.
  */
 export type ExplorerDensityController = {
   getColumns: () => number;
@@ -25,6 +24,11 @@ export type ExplorerDensityControllerOptions = {
   maxColumns: number;
 };
 
+function clampColumns(value: number, minColumns: number, maxColumns: number): number {
+  if (!Number.isFinite(value)) return minColumns;
+  return Math.max(minColumns, Math.min(maxColumns, Math.round(value)));
+}
+
 export function createExplorerDensityController(options: ExplorerDensityControllerOptions): ExplorerDensityController {
   const {
     gridEl,
@@ -35,23 +39,12 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     maxColumns,
   } = options;
 
-  let currentColumns = clampColumnCount(initialColumns);
+  let currentColumns = clampColumns(initialColumns, minColumns, maxColumns);
   let scrubValue = currentColumns;
-  let previousScrubValue = currentColumns;
-  let rafId = 0;
-  let latestRequestedColumns: number | null = null;
-  let frameCommittedColumns: number | null = null;
-
-  const clampToRange = (value: number) => Math.max(minColumns, Math.min(maxColumns, value));
-
-  const valueToColumnCount = (nextValue: number) => {
-    if (nextValue > previousScrubValue) return Math.floor(nextValue + 1e-6);
-    if (nextValue < previousScrubValue) return Math.ceil(nextValue - 1e-6);
-    return Math.round(nextValue);
-  };
+  let destroyed = false;
 
   const commitLayoutColumns = (nextColumns: number) => {
-    currentColumns = clampColumnCount(clampToRange(nextColumns));
+    currentColumns = clampColumns(nextColumns, minColumns, maxColumns);
     scrubValue = currentColumns;
     gridEl.style.setProperty('--masonry-column-count', String(currentColumns));
     gridEl.dataset.columns = String(currentColumns);
@@ -59,70 +52,48 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     onColumnsCommit(currentColumns);
   };
 
-  const commitColumns = (
-    nextColumns: number,
-    animated = true,
-    interactionMode: 'scrub' | 'settle' = 'scrub',
-  ) => {
-    const clamped = clampColumnCount(clampToRange(nextColumns));
-    if (clamped === currentColumns) return;
-
-    if (animated) {
-      animateDensityFlip({
-        gridEl,
-        commitLayout: () => commitLayoutColumns(clamped),
-        interactionMode,
-      });
-      return;
-    }
-
-    commitLayoutColumns(clamped);
+  const runAnimatedCommit = (nextColumns: number, interactionMode: 'scrub' | 'settle') => {
+    const safeColumns = clampColumns(nextColumns, minColumns, maxColumns);
+    if (safeColumns === currentColumns) return;
+    animateDensityFlip({
+      gridEl,
+      interactionMode,
+      commitLayout: () => {
+        commitLayoutColumns(safeColumns);
+      },
+    });
   };
 
   function setColumns(nextColumns: number, animated = true) {
-    commitColumns(nextColumns, animated, 'settle');
+    if (destroyed) return;
+    const safeColumns = clampColumns(nextColumns, minColumns, maxColumns);
+    if (safeColumns === currentColumns) return;
+
+    if (!animated) {
+      commitLayoutColumns(safeColumns);
+      return;
+    }
+
+    runAnimatedCommit(safeColumns, 'settle');
   }
 
-  const flushLatestCommit = () => {
-    rafId = 0;
-    if (latestRequestedColumns == null) return;
-    const target = latestRequestedColumns;
-    if (target === frameCommittedColumns) return;
-    latestRequestedColumns = null;
-    frameCommittedColumns = target;
-    if (target !== currentColumns) {
-      commitColumns(target, true, 'scrub');
-    }
-  };
-
-  const requestLatestCommit = (nextColumns: number) => {
-    latestRequestedColumns = clampColumnCount(clampToRange(nextColumns));
-    if (rafId) return;
-    rafId = requestAnimationFrame(flushLatestCommit);
-  };
-
   function scrubTo(nextValue: number) {
-    const clampedValue = clampToRange(nextValue);
-    scrubValue = clampedValue;
-    sliderEl.value = String(clampedValue);
-    const nextColumns = valueToColumnCount(clampedValue);
-    requestLatestCommit(nextColumns);
-    previousScrubValue = clampedValue;
+    if (destroyed) return;
+    const safeColumns = clampColumns(nextValue, minColumns, maxColumns);
+    scrubValue = safeColumns;
+    sliderEl.value = String(safeColumns);
+    if (safeColumns === currentColumns) return;
+    runAnimatedCommit(safeColumns, 'scrub');
   }
 
   function settleScrub() {
-    frameCommittedColumns = null;
-    if (latestRequestedColumns != null && latestRequestedColumns !== currentColumns) {
-      commitColumns(latestRequestedColumns, true, 'settle');
-      latestRequestedColumns = null;
-    }
+    if (destroyed) return;
     sliderEl.value = String(currentColumns);
     scrubValue = currentColumns;
-    previousScrubValue = currentColumns;
   }
 
   function destroy() {
-    if (rafId) cancelAnimationFrame(rafId);
+    destroyed = true;
   }
 
   commitLayoutColumns(currentColumns);

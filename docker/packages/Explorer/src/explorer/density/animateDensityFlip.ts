@@ -15,39 +15,42 @@ export function animateDensityFlip({
   commitLayout,
   interactionMode = 'scrub',
 }: AnimateDensityFlipOptions): void {
-  const previous = activeByGrid.get(gridEl);
-  if (previous) {
-    previous.kill();
-    activeByGrid.delete(gridEl);
-  }
-
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
   if (!items.length) {
     commitLayout();
     return;
   }
 
+  const previous = activeByGrid.get(gridEl);
+  if (previous) {
+    previous.kill();
+    activeByGrid.delete(gridEl);
+  }
+
+  Flip.killFlipsOf(items);
+  gsap.killTweensOf(items);
+
   const state = Flip.getState(items);
   commitLayout();
 
-  const nextItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
   const animation = Flip.from(state, {
+    targets: items,
     absolute: true,
-    nested: true,
+    nested: false,
     prune: true,
     scale: false,
-    duration: interactionMode === 'scrub' ? 0.085 : 0.16,
+    duration: interactionMode === 'scrub' ? 0.14 : 0.2,
     ease: 'power2.out',
     simple: true,
     overwrite: 'auto',
     onComplete: () => {
-      gsap.set(nextItems, { clearProps: 'transform' });
+      gsap.set(items, { clearProps: 'transform' });
       if (activeByGrid.get(gridEl) === animation) {
         activeByGrid.delete(gridEl);
       }
     },
     onInterrupt: () => {
-      gsap.set(nextItems, { clearProps: 'transform' });
+      gsap.set(items, { clearProps: 'transform' });
       if (activeByGrid.get(gridEl) === animation) {
         activeByGrid.delete(gridEl);
       }

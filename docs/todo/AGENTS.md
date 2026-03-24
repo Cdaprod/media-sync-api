@@ -1,3 +1,10 @@
+## 2026-03-24 — Direct-manipulation density rewrite
+- [x] Removed scheduler-style density buffering and switched to immediate scrub commits.
+- [x] Added strict safe-column clamping/finite guards for all density commits.
+- [x] Updated Flip path to kill stale flips/tweens before capture and animate persistent node targets.
+- [x] Refreshed regression assertions for direct-manipulation density contracts.
+- [ ] Confirm on-device that blue-void collapse frames are gone during fast slider drags.
+
 ## 2026-03-24 — Local interaction network-quiet contract assertions
 - [x] Added focused static assertions that density scrub handler does not invoke startup/media loaders.
 - [x] Added focused static assertions that context-menu open path does not invoke startup/media loaders.
