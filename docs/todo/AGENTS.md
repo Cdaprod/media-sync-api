@@ -1,3 +1,72 @@
+## 2026-03-24 — Explorer sidebar backdrop touch-intercept fix
+- [x] Split sidebar overlay into `.sidebar-backdrop` and positioned it to start outside the open drawer footprint.
+- [x] Updated Explorer markup to use `backdrop sidebar-backdrop` for sidebar-open dimming/close behavior.
+- [x] Added focused regression assertions for sidebar-backdrop wiring and left-offset contract.
+- [ ] Validate on physical iPhone Safari that the open left project panel is no longer darkened/intercepted and remains fully touch-scrollable while outside taps still close it.
+
+## 2026-03-24 — Explorer sidebar touch + topbar menu pinning fix
+- [x] Changed root shell touch-action from `none` to `manipulation` to restore sidebar panel touch/scroll usability.
+- [x] Added topbar interaction lock conditions (`actionsOpen`, dropdown open state, focus-within) to `useTopbarScrollState` disable gating.
+- [x] Added dropdown `toggle` listener + focus-within state tracking so topbar remains open while menus/controls are in use.
+- [x] Updated focused Explorer regressions for root touch-action and new topbar-interaction lock markers.
+- [ ] Validate on physical iPhone Safari that sidebar drawer remains touch-scrollable when open and topbar does not collapse while action/dropdown menus are active.
+
+## 2026-03-24 — Explorer touch-action + iOS gesture fallback hardening
+- [x] Added root shell `touch-action: none` to keep page-level pan/zoom disabled while app surfaces own interaction.
+- [x] Re-enabled vertical scrolling on Explorer scroll hosts (`.content .scroll`, `.sidebar .scroll`, `.drawer-body`, `.preview-details`) with `touch-action: pan-y`.
+- [x] Added tappable UI chrome `touch-action: manipulation` coverage for topbar/buttons/controls/assets/context-menu actions.
+- [x] Added iOS fallback listeners in `ExplorerApp` to block gesture zoom, multi-touch start, and rapid double-tap zoom with passive:false handlers.
+- [ ] Validate on physical iPhone Safari that pinch/double-tap zoom no longer fires while normal vertical scroll/tap interactions remain intact.
+
+## 2026-03-24 — Explorer iPhone Safari viewport-lock hardening
+- [x] Updated App Router viewport metadata to include `maximumScale: 1`, `userScalable: false`, and `viewportFit: 'cover'`.
+- [x] Added global viewport-lock CSS for `html/body/#__next/.app` (`100vh` + `100dvh`, `overflow: hidden`) so the app shell owns screen scrolling.
+- [x] Added safe-area env variable plumbing (`--safe-area-*`) and applied it to body padding.
+- [x] Added global text-size adjust stability and minimum `16px` form-control font sizing to reduce iPhone Safari input zoom.
+- [ ] Validate on physical iPhone Safari that viewport no longer drifts/zooms and shell scrolling stays locked to Explorer surfaces.
+
+## 2026-03-24 — Explorer topbar/layout decoupling cleanup
+- [x] Removed the root `.app` hidden-state class toggle tied to `topbarHidden` so shell layout no longer changes during ordinary hide/reveal.
+- [x] Kept topbar-hidden state confined to topbar visual class/debug markers only.
+- [x] Reran focused Explorer regression suite after the shell-class decoupling cleanup.
+- [ ] Validate on physical iPhone Safari that no shell-level spacing or rebasing appears when topbar hide/reveal toggles repeatedly.
+
+## 2026-03-24 — Explorer collapse decoupling follow-up
+- [x] Removed legacy top-of-scroll reopen shortcut (`TOPBAR_REVEAL_AT_TOP_PX`) from `useTopbarScrollState` so reopen is hysteresis/content-edge only.
+- [x] Stopped treating `--scroll-content-top-inset` as a live hide/reveal value by fixing it to measured open inset instead of `topbarHidden` toggles.
+- [x] Updated inset-compensation effect to react only to measured inset deltas (height/gap changes), not topbar hidden-state transitions.
+- [x] Updated focused Explorer regressions for removed raw reopen guard, fixed inset variable wiring, and revised compensation markers.
+- [ ] Validate on physical iPhone Safari that collapse no longer drags assets upward during topbar hide and that upward scroll reopen still triggers reliably with hysteresis.
+
+## 2026-03-24 — Explorer unified inset source-of-truth refactor
+- [x] Replaced `.scroll-content.topbar-open/.topbar-hidden` class-driven padding with a single inline `--scroll-content-top-inset` variable derived from `topbarHidden`.
+- [x] Added `data-topbar-hidden` debug markers to both `.scroll` and `.scroll-content` to validate state synchronization in Safari/Web Inspector.
+- [x] Removed temporary `.content .scroll` padding seam (`padding: 0`) while debugging top-edge collapse behavior.
+- [x] Updated focused Explorer regression assertions to lock variable-driven inset wiring and removal of legacy topbar-open/topbar-hidden content classes.
+- [ ] Validate on physical iPhone Safari that topbar visual state and `--scroll-content-top-inset` stay in lockstep through repeated hide/reveal cycles with no one-frame mismatch.
+
+## 2026-03-24 — Explorer inset transition removal + pre-paint compensation
+- [x] Removed `.scroll-content` `padding-top` transition so topbar-open/topbar-hidden inset changes apply immediately without easing drag.
+- [x] Removed `.topbar` transform easing from collapse path (kept light opacity-only transition) to avoid moving-edge coupling during scroll-driven hide.
+- [x] Switched inset-compensation effect in `ExplorerApp.tsx` to `useLayoutEffect` so compensation scrollTop adjustments land before paint.
+- [x] Updated focused Explorer regression assertions for no-padding transition, topbar transition contract, and layout-effect compensation wiring.
+- [ ] Validate on physical iPhone Safari that collapse/reveal keeps first-row checkboxes fully tappable at the top edge with no ceiling-pull or transient clipping.
+
+## 2026-03-24 — Explorer content-edge gating follow-up hardening
+- [x] Removed the remaining legacy top-of-scroll reveal shortcut from `useTopbarScrollState` and kept reveal decisions in the logical content-edge path.
+- [x] Introduced `getOpenInsetPx()` so open inset is computed explicitly and reused to derive `currentInsetPx` + `contentTopPx` for hide/reveal gating.
+- [x] Rebased `lastScrollTopRef` inside `suppressAutoToggle()` to prevent compensation-window stale deltas from triggering immediate opposite-state toggles.
+- [x] Updated focused Explorer regression assertions for the helper/guard additions and reran package export checks.
+- [ ] Validate on physical iPhone Safari that collapse near top no longer pulls first-row assets into the ceiling and that reopen still feels stable without boundary chatter.
+
+## 2026-03-24 — Explorer logical content-top topbar gating
+- [x] Refactored `useTopbarScrollState` to compute `contentTopPx = scrollTop - currentInsetPx` using live measured topbar height plus runtime `--topbar-gap` while open.
+- [x] Switched collapse behavior to hide only on downward scroll when logical content top reaches the viewport edge (`contentTopPx >= 0`) so assets push the topbar away instead of sliding behind it while open.
+- [x] Added reopen hysteresis (`contentTopPx <= -20` while scrolling upward) to reduce hide/reveal chatter near threshold.
+- [x] Added temporary topbar auto-toggle suppression around programmatic inset-compensation scroll updates to prevent immediate state bounce from compensation-induced `scrollTop` deltas.
+- [x] Updated focused Explorer regression assertions for the new logical-content-top and suppression contract.
+- [ ] Validate on physical iPhone Safari that first-row assets remain fully below the open topbar inset and then become fully tappable at the top edge immediately after collapse.
+
 ## 2026-03-24 — Explorer topbar hidden-ref TDZ build fix
 - [x] Fixed `ExplorerApp.tsx` declaration order by replacing `useRef(topbarHidden)` with declaration-safe hidden/inset refs initialized before `useTopbarScrollState(...)`.
 - [x] Seeded first-run hidden/inset baseline inside the inset-compensation effect so scroll adjustment remains transition-only and does not fire on mount.

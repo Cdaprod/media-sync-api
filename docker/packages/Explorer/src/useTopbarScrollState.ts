@@ -1,31 +1,43 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-const TOPBAR_TOP_REVEAL_PX = 24;
-const TOPBAR_HIDE_START_PX = 96;
-const TOPBAR_HIDE_DELTA_PX = 44;
-const TOPBAR_REVEAL_DELTA_PX = 18;
+const TOPBAR_REVEAL_HYSTERESIS_PX = 20;
+const TOPBAR_COMPENSATION_SUPPRESS_MS = 140;
 
 interface UseTopbarScrollStateOptions {
   disabled?: boolean;
   scrollRef: RefObject<HTMLDivElement>;
+  topbarMeasuredHeight: number;
 }
 
 interface UseTopbarScrollStateResult {
   hideTopbar: () => void;
   revealTopbar: () => void;
   setTopbarHidden: (next: boolean) => void;
+  suppressAutoToggle: (ms?: number) => void;
   topbarHidden: boolean;
 }
 
 export function useTopbarScrollState(
-  { disabled = false, scrollRef }: UseTopbarScrollStateOptions,
+  { disabled = false, scrollRef, topbarMeasuredHeight }: UseTopbarScrollStateOptions,
 ): UseTopbarScrollStateResult {
   const [topbarHidden, setTopbarHiddenState] = useState(false);
   const hiddenRef = useRef(false);
   const scrollRafRef = useRef<number | null>(null);
+  const scrollHostRef = useRef<HTMLDivElement | null>(null);
   const lastScrollTopRef = useRef(0);
-  const scrollDeltaBudgetRef = useRef(0);
+  const suppressAutoToggleUntilRef = useRef(0);
+
+  const suppressAutoToggle = useCallback((ms = TOPBAR_COMPENSATION_SUPPRESS_MS) => {
+    if (scrollHostRef.current) {
+      lastScrollTopRef.current = Math.max(0, scrollHostRef.current.scrollTop);
+    }
+    if (typeof performance !== 'undefined') {
+      suppressAutoToggleUntilRef.current = performance.now() + ms;
+    } else {
+      suppressAutoToggleUntilRef.current = Date.now() + ms;
+    }
+  }, []);
 
   const setTopbarHidden = useCallback((next: boolean) => {
     if (hiddenRef.current === next) return;
@@ -34,21 +46,19 @@ export function useTopbarScrollState(
   }, []);
 
   const revealTopbar = useCallback(() => {
-    scrollDeltaBudgetRef.current = 0;
     setTopbarHidden(false);
   }, [setTopbarHidden]);
 
   const hideTopbar = useCallback(() => {
-    scrollDeltaBudgetRef.current = 0;
     setTopbarHidden(true);
   }, [setTopbarHidden]);
 
   useEffect(() => {
     const host = scrollRef.current;
     if (!host) return;
+    scrollHostRef.current = host;
 
     lastScrollTopRef.current = host.scrollTop;
-    scrollDeltaBudgetRef.current = 0;
 
     if (disabled) {
       revealTopbar();
@@ -60,21 +70,26 @@ export function useTopbarScrollState(
       const currentTop = Math.max(0, host.scrollTop);
       const delta = currentTop - lastScrollTopRef.current;
       lastScrollTopRef.current = currentTop;
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
       if (!delta) return;
-      scrollDeltaBudgetRef.current += delta;
+      if (now < suppressAutoToggleUntilRef.current) return;
 
-      if (currentTop <= TOPBAR_TOP_REVEAL_PX) {
-        revealTopbar();
-        return;
-      }
+      const getOpenInsetPx = () => {
+        const styles = window.getComputedStyle(host);
+        const topbarGap = Number.parseFloat(styles.getPropertyValue('--topbar-gap')) || 0;
+        return Math.max(0, topbarMeasuredHeight + topbarGap);
+      };
+      const openInsetPx = getOpenInsetPx();
+      const currentInsetPx = openInsetPx;
+      const contentTopPx = currentTop - currentInsetPx;
 
-      if (scrollDeltaBudgetRef.current >= TOPBAR_HIDE_DELTA_PX && currentTop > TOPBAR_HIDE_START_PX) {
+      if (!hiddenRef.current && delta > 0 && contentTopPx >= 0) {
         hideTopbar();
         return;
       }
 
-      if (scrollDeltaBudgetRef.current <= -TOPBAR_REVEAL_DELTA_PX) {
+      if (hiddenRef.current && delta < 0 && contentTopPx <= -TOPBAR_REVEAL_HYSTERESIS_PX) {
         revealTopbar();
       }
     };
@@ -87,17 +102,21 @@ export function useTopbarScrollState(
     host.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       host.removeEventListener('scroll', handleScroll);
+      if (scrollHostRef.current === host) {
+        scrollHostRef.current = null;
+      }
       if (scrollRafRef.current) {
         window.cancelAnimationFrame(scrollRafRef.current);
         scrollRafRef.current = null;
       }
     };
-  }, [disabled, hideTopbar, revealTopbar, scrollRef]);
+  }, [disabled, hideTopbar, revealTopbar, scrollRef, topbarMeasuredHeight]);
 
   return {
     hideTopbar,
     revealTopbar,
     setTopbarHidden,
+    suppressAutoToggle,
     topbarHidden,
   };
 }

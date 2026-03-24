@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
@@ -304,6 +304,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);
+  const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);
+  const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
@@ -321,7 +323,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const topbarIntentRef = useRef<IntentController | null>(null);
   const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);
-  const topbarHiddenPrevRef = useRef<boolean | null>(null);
   const topbarInsetPrevRef = useRef(0);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
@@ -1649,10 +1650,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const {
     revealTopbar,
     setTopbarHidden,
+    suppressAutoToggle,
     topbarHidden,
   } = useTopbarScrollState({
-    disabled: sidebarOpen || composeModalOpen || deleteModalOpen,
+    disabled: sidebarOpen
+      || composeModalOpen
+      || deleteModalOpen
+      || actionsOpen
+      || topbarHasOpenDropdown
+      || topbarFocusWithin,
     scrollRef: mediaScrollViewportRef,
+    topbarMeasuredHeight,
   });
 
   useEffect(() => {
@@ -1704,6 +1712,43 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [closeDrawer, inspectorOpen, sidebarOpen]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const ua = window.navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua)
+      || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+    const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    if (!isIOS || !isCoarsePointer) return;
+
+    let lastTouchEndAt = 0;
+    const listenerOptions: AddEventListenerOptions = { passive: false };
+    const blockGesture = (event: Event) => event.preventDefault();
+    const blockMultiTouch = (event: TouchEvent) => {
+      if (event.touches.length > 1) event.preventDefault();
+    };
+    const blockDoubleTap = (event: TouchEvent) => {
+      const now = Date.now();
+      if (now - lastTouchEndAt < 320) {
+        event.preventDefault();
+      }
+      lastTouchEndAt = now;
+    };
+
+    document.addEventListener('gesturestart', blockGesture, listenerOptions);
+    document.addEventListener('gesturechange', blockGesture, listenerOptions);
+    document.addEventListener('gestureend', blockGesture, listenerOptions);
+    document.addEventListener('touchstart', blockMultiTouch, listenerOptions);
+    document.addEventListener('touchend', blockDoubleTap, listenerOptions);
+
+    return () => {
+      document.removeEventListener('gesturestart', blockGesture);
+      document.removeEventListener('gesturechange', blockGesture);
+      document.removeEventListener('gestureend', blockGesture);
+      document.removeEventListener('touchstart', blockMultiTouch);
+      document.removeEventListener('touchend', blockDoubleTap);
+    };
+  }, []);
+
+  useEffect(() => {
     const topbar = topbarRef.current;
     if (!topbar) return;
 
@@ -1723,29 +1768,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const scrollEl = mediaScrollViewportRef.current;
     if (!scrollEl) return;
     const styles = window.getComputedStyle(scrollEl);
     const topbarGap = Number.parseFloat(styles.getPropertyValue('--topbar-gap')) || 0;
-    const nextInset = topbarHidden ? 0 : Math.max(0, topbarMeasuredHeight + topbarGap);
+    const nextInset = Math.max(0, topbarMeasuredHeight + topbarGap);
 
-    if (topbarHiddenPrevRef.current === null) {
-      topbarHiddenPrevRef.current = topbarHidden;
+    if (!topbarInsetPrevRef.current) {
       topbarInsetPrevRef.current = nextInset;
       return;
     }
 
-    if (topbarHiddenPrevRef.current !== topbarHidden) {
-      const delta = nextInset - topbarInsetPrevRef.current;
-      if (Math.abs(delta) > 0.5) {
-        scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);
-      }
+    const delta = nextInset - topbarInsetPrevRef.current;
+    if (Math.abs(delta) > 0.5) {
+      suppressAutoToggle();
+      scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);
     }
 
     topbarInsetPrevRef.current = nextInset;
-    topbarHiddenPrevRef.current = topbarHidden;
-  }, [topbarHidden, topbarMeasuredHeight]);
+  }, [suppressAutoToggle, topbarMeasuredHeight]);
 
   useEffect(() => {
     const topbar = topbarRef.current;
@@ -1773,13 +1815,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
     };
 
-    topbar.addEventListener('pointerenter', handleEnter);
-    topbar.addEventListener('pointerleave', handleLeave);
-    topbar.addEventListener('focusin', () => intent.setPinned(true));
-    topbar.addEventListener('focusout', () => {
+    const updateDropdownState = () => {
+      setTopbarHasOpenDropdown(Boolean(topbar.querySelector('details.dropdown[open]')));
+    };
+    const handleFocusIn = () => {
+      setTopbarFocusWithin(true);
+      intent.setPinned(true);
+    };
+    const handleFocusOut = () => {
+      const stillFocusedWithin = topbar.contains(document.activeElement);
+      setTopbarFocusWithin(stillFocusedWithin);
       intent.setPinned(false);
       if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
-    });
+    };
+    const handleDropdownToggle = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.matches('details.dropdown')) return;
+      updateDropdownState();
+    };
+
+    updateDropdownState();
+
+    topbar.addEventListener('pointerenter', handleEnter);
+    topbar.addEventListener('pointerleave', handleLeave);
+    topbar.addEventListener('focusin', handleFocusIn);
+    topbar.addEventListener('focusout', handleFocusOut);
+    topbar.addEventListener('toggle', handleDropdownToggle, true);
     const handleOutside = (event: PointerEvent) => {
       if (isTouchPrimary) return;
       if (isTopbarOwnedTarget(event.target)) return;
@@ -1800,6 +1861,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       topbar.removeEventListener('pointerenter', handleEnter);
       topbar.removeEventListener('pointerleave', handleLeave);
+      topbar.removeEventListener('focusin', handleFocusIn);
+      topbar.removeEventListener('focusout', handleFocusOut);
+      topbar.removeEventListener('toggle', handleDropdownToggle, true);
       if (!isTouchPrimary) {
         document.removeEventListener('pointerdown', handleOutside);
       }
@@ -1993,7 +2057,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   return (
-    <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`}>
+    <div className="app">
       <div className="main">
         <aside className={`sidebar sidebar-drawer ${sidebarOpen ? 'is-open' : ''}`}>
           <div className="section-h">
@@ -2245,6 +2309,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             ref={mediaScrollViewportRef}
             className="scroll"
             onScroll={clearPendingLongPress}
+            data-topbar-hidden={topbarHidden ? 'true' : 'false'}
             style={{ '--topbar-measured-height': `${topbarMeasuredHeight}px` } as React.CSSProperties}
           >
             <div className="topbar-anchor" aria-hidden="true">
@@ -2404,7 +2469,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 </div>
               </div>
             </div>
-            <div className={`scroll-content ${topbarHidden ? 'topbar-hidden' : 'topbar-open'}`}>
+            <div
+              className="scroll-content"
+              data-topbar-hidden={topbarHidden ? 'true' : 'false'}
+              style={
+                {
+                  '--scroll-content-top-inset': 'calc(var(--topbar-measured-height) + var(--topbar-gap))',
+                } as React.CSSProperties
+              }
+            >
               <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
                 {!activeProject && mediaScope !== 'all' ? (
                   <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
@@ -2654,7 +2727,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ))}
       </div>
       <div
-        className={`backdrop ${sidebarOpen ? 'show' : ''}`}
+        className={`backdrop sidebar-backdrop ${sidebarOpen ? 'show' : ''}`}
         onClick={() => setSidebarOpen(false)}
       ></div>
       <div

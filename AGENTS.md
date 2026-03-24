@@ -1,3 +1,53 @@
+### Latest Implementation Notes (2026-03-24)
+- Fixed sidebar drawer dim/intercept regression by splitting the sidebar backdrop into a dedicated `.sidebar-backdrop` layer that starts to the right of the drawer (`left: min(420px, calc(100vw - 24px))`), so the drawer itself stays undimmed and touch-scrollable.
+- Explorer now renders the sidebar overlay with `className="backdrop sidebar-backdrop ..."`, keeping close-on-tap behavior for content area while avoiding pointer interception over the open panel.
+- Extended focused sidebar/topbar regression assertions to lock the sidebar-backdrop class/wiring and inset positioning contract.
+
+### Latest Implementation Notes (2026-03-24)
+- Fixed the iOS touch-action regression that blocked sidebar panel interaction: root shell touch-action now uses `manipulation` (not `none`) so panel taps/scroll remain usable while dedicated scroll hosts still force `pan-y`.
+- Topbar auto-hide is now paused while topbar UI is actively in use (`actionsOpen`, dropdowns with `details[open]`, or focus within topbar), preventing the action menu from staying open while the topbar itself collapses.
+- Added topbar dropdown-state tracking via capture-phase `toggle` listener and focus-within tracking so open menus/controls keep the topbar pinned until interaction ends.
+
+### Latest Implementation Notes (2026-03-24)
+- Shifted iPhone Safari zoom/pan control toward touch-action first: `html/body/#__next/.app` now include `touch-action: none` in global CSS while real scroll hosts explicitly opt back into `touch-action: pan-y`.
+- Added broad tappable-chrome `touch-action: manipulation` coverage for topbar/buttons/controls/asset surfaces/context-menu buttons to suppress double-tap zoom on interactive UI.
+- Added iOS runtime gesture fallback in `ExplorerApp` (`gesturestart/gesturechange/gestureend`, multi-touch `touchstart`, and rapid double-tap `touchend` prevention with passive:false) for devices where CSS/meta controls are insufficient.
+
+### Latest Implementation Notes (2026-03-24)
+- Hardened Explorer App Router shell viewport locking for iPhone Safari: `layout.tsx` now sets `maximumScale: 1` + `userScalable: false` alongside `viewportFit: 'cover'`.
+- Added global shell constraints in `app/globals.css` so `html`, `body`, `#__next`, and `.app` share `height: 100vh; height: 100dvh; overflow: hidden`, with safe-area variables (`env(safe-area-inset-*)`) applied via body padding.
+- Added global text-size stability (`-webkit-text-size-adjust` / `text-size-adjust` at 100%) plus minimum `16px` sizing for `input`/`textarea`/`select` controls to prevent iPhone Safari input zoom drift.
+
+### Latest Implementation Notes (2026-03-24)
+- Completed the topbar/content decoupling pass by removing the root `.app` topbar-hidden class toggle; topbar state now only drives topbar visual state/debug markers and no longer mutates app-shell layout classes.
+- This keeps the contract explicit: ordinary topbar hide/reveal does not alter content layout or apply hidden/open shell-level spacing shifts.
+- Existing compensation remains restricted to measured-height delta synchronization only.
+
+### Latest Implementation Notes (2026-03-24)
+- Removed the remaining raw-scroll reopen shortcut from `useTopbarScrollState` (`TOPBAR_REVEAL_AT_TOP_PX` guard), so topbar reopen now comes only from the logical content-edge hysteresis path.
+- Explorer scroll-content inset is no longer a live hide/reveal toggle: `--scroll-content-top-inset` now stays fixed to the measured open clearance, avoiding per-collapse `padding-top` reseating during topbar movement.
+- Inset compensation was narrowed to measured-height delta changes only (independent of `topbarHidden` flips), preventing extra programmatic scroll adjustments during normal scroll-driven collapse/reveal cycles.
+
+### Latest Implementation Notes (2026-03-24)
+- Refactored Explorer scroll-content inset ownership to a single inline CSS variable (`--scroll-content-top-inset`) driven directly from `topbarHidden`, removing `topbar-open` / `topbar-hidden` class-based inset switching to avoid header/content state drift.
+- `.scroll` and `.scroll-content` now expose `data-topbar-hidden` debug attributes so on-device inspection can confirm whether visual topbar state and content inset state are synchronized in the same render.
+- Removed `.content .scroll` debug seam padding (`padding: 0`) while keeping measured-height/inset logic, so remaining top-edge motion can be isolated to topbar/inset state transitions only.
+
+### Latest Implementation Notes (2026-03-24)
+- Removed inset animation from Explorer content geometry: `.scroll-content` now uses `transition: none`, so open↔hidden inset changes snap immediately instead of easing `padding-top` and visually dragging the first asset rows through the topbar boundary.
+- Reduced topbar collapse motion coupling by dropping transform easing on `.topbar` (`transition: opacity 120ms ease` only), preserving hide/show state while avoiding the moving-bottom-edge effect that made assets appear glued to the disappearing header.
+- Moved topbar inset compensation in `ExplorerApp` from `useEffect` to `useLayoutEffect` so scrollTop compensation applies before paint on hidden-state transitions, minimizing one-frame ceiling-pull/jump artifacts.
+
+### Latest Implementation Notes (2026-03-24)
+- Tightened `useTopbarScrollState` to remove legacy top-of-scroll reveal thresholding and drive reopen from logical state only (`contentTopPx` hysteresis + hidden-at-top guard), preventing raw-`scrollTop` shortcuts from pre-empting the inset-aware collapse model.
+- The hook now computes `openInsetPx` via an explicit `getOpenInsetPx()` helper and derives `currentInsetPx`/`contentTopPx` from that value, keeping hide/reveal decisions aligned with `.scroll-content.topbar-open` inset geometry.
+- `suppressAutoToggle()` now also re-baselines `lastScrollTopRef` against the current host scroll position before opening the suppression window so programmatic compensation cannot replay stale deltas into immediate opposite-state toggles.
+
+### Latest Implementation Notes (2026-03-24)
+- Refactored Explorer topbar hide/reveal to logical content-top math in `useTopbarScrollState`: `contentTopPx = scrollTop - currentInsetPx`, where open inset uses live `topbarMeasuredHeight + --topbar-gap` and hidden inset is zero.
+- Hide now triggers only on downward scroll once `contentTopPx >= 0` (assets push the topbar away at the viewport edge), while reopen requires upward scroll beyond a hysteresis threshold (`TOPBAR_REVEAL_HYSTERESIS_PX = 20`) to prevent threshold chatter.
+- Added temporary auto-toggle suppression (`suppressAutoToggle`) around programmatic inset-compensation `scrollTop` adjustments so collapse/reveal compensation cannot immediately bounce topbar state.
+
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 

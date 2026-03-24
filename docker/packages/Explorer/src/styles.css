@@ -81,13 +81,24 @@ code { font-family: var(--mono); }
 #drawerBackdrop{
   background: rgba(6,8,14,0.35);
 }
+.sidebar-backdrop{
+  z-index: 85;
+  left: min(420px, calc(100vw - 24px));
+  top: 70px;
+}
+@media (max-width: 860px){
+  .sidebar-backdrop{
+    top: 52px;
+    left: min(420px, calc(100vw - 24px));
+  }
+}
 
 /* Top bar */
 .topbar{
   position: relative;
   z-index: 1;
   background: transparent;
-  transition: transform 160ms ease, opacity 160ms ease;
+  transition: opacity 120ms ease;
   will-change: transform, opacity;
   backface-visibility: hidden;
   isolation: isolate;
@@ -588,22 +599,18 @@ select.control{
 }
 .content .scroll{
   overflow: auto;
-  padding: 4px;
+  padding: 0;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   position: relative;
   z-index: 0;
 }
 .scroll-content{
   position: relative;
   z-index: 0;
-  transition: padding-top 160ms ease;
-}
-.scroll-content.topbar-open{
-  padding-top: calc(var(--topbar-measured-height) + var(--topbar-gap));
-}
-.scroll-content.topbar-hidden{
-  padding-top: 0;
+  transition: none;
+  padding-top: var(--scroll-content-top-inset, 0px);
 }
 .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
 .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
@@ -1071,6 +1078,7 @@ select.control{
   overflow: hidden;
   min-height: 0;
   flex: 1;
+  touch-action: pan-y;
 }
 .preview-shell{
   position: relative;
@@ -1345,6 +1353,18 @@ select.control{
   font-size: 12px;
   max-height: 36vh;
   overflow: auto;
+  touch-action: pan-y;
+}
+
+.topbar,
+.btn,
+.control,
+.dropdown-menu button,
+.asset,
+.row,
+.selector,
+.context-menu button{
+  touch-action: manipulation;
 }
 
 .preview-details.open{
