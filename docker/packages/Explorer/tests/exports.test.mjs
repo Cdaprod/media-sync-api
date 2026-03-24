@@ -529,7 +529,9 @@ test('package explorer compose modal styles are present', () => {
 });
 
 test('topbar dropdown and sidebar scroll contracts avoid clipping and preserve pane-owned scrolling', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(styles.includes('.topbar{'));
   assert.ok(styles.includes('isolation: isolate;'));
@@ -541,6 +543,9 @@ test('topbar dropdown and sidebar scroll contracts avoid clipping and preserve p
   assert.ok(styles.includes('height: 100%;'));
   assert.ok(styles.includes('overflow-y: auto;'));
   assert.ok(styles.includes('overscroll-behavior-y: contain;'));
+  assert.ok(explorer.includes('className={`backdrop sidebar-backdrop ${sidebarOpen ? \'show\' : \'\'}`}'));
+  assert.ok(styles.includes('.sidebar-backdrop{'));
+  assert.ok(styles.includes('left: min(420px, calc(100vw - 24px));'));
   assert.ok(styles.includes('@media (max-width: 860px){'));
   assert.ok(styles.includes('body{ overflow:hidden; }'));
 });

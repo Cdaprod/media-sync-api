@@ -1,3 +1,9 @@
+## 2026-03-24 — Explorer sidebar backdrop touch-intercept fix
+- [x] Split sidebar overlay into `.sidebar-backdrop` and positioned it to start outside the open drawer footprint.
+- [x] Updated Explorer markup to use `backdrop sidebar-backdrop` for sidebar-open dimming/close behavior.
+- [x] Added focused regression assertions for sidebar-backdrop wiring and left-offset contract.
+- [ ] Validate on physical iPhone Safari that the open left project panel is no longer darkened/intercepted and remains fully touch-scrollable while outside taps still close it.
+
 ## 2026-03-24 — Explorer sidebar touch + topbar menu pinning fix
 - [x] Changed root shell touch-action from `none` to `manipulation` to restore sidebar panel touch/scroll usability.
 - [x] Added topbar interaction lock conditions (`actionsOpen`, dropdown open state, focus-within) to `useTopbarScrollState` disable gating.

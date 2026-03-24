@@ -2727,7 +2727,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ))}
       </div>
       <div
-        className={`backdrop ${sidebarOpen ? 'show' : ''}`}
+        className={`backdrop sidebar-backdrop ${sidebarOpen ? 'show' : ''}`}
         onClick={() => setSidebarOpen(false)}
       ></div>
       <div

@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Fixed sidebar drawer dim/intercept regression by splitting the sidebar backdrop into a dedicated `.sidebar-backdrop` layer that starts to the right of the drawer (`left: min(420px, calc(100vw - 24px))`), so the drawer itself stays undimmed and touch-scrollable.
+- Explorer now renders the sidebar overlay with `className="backdrop sidebar-backdrop ..."`, keeping close-on-tap behavior for content area while avoiding pointer interception over the open panel.
+- Extended focused sidebar/topbar regression assertions to lock the sidebar-backdrop class/wiring and inset positioning contract.
+
+### Latest Implementation Notes (2026-03-24)
 - Fixed the iOS touch-action regression that blocked sidebar panel interaction: root shell touch-action now uses `manipulation` (not `none`) so panel taps/scroll remain usable while dedicated scroll hosts still force `pan-y`.
 - Topbar auto-hide is now paused while topbar UI is actively in use (`actionsOpen`, dropdowns with `details[open]`, or focus within topbar), preventing the action menu from staying open while the topbar itself collapses.
 - Added topbar dropdown-state tracking via capture-phase `toggle` listener and focus-within tracking so open menus/controls keep the topbar pinned until interaction ends.

@@ -81,6 +81,17 @@ code { font-family: var(--mono); }
 #drawerBackdrop{
   background: rgba(6,8,14,0.35);
 }
+.sidebar-backdrop{
+  z-index: 85;
+  left: min(420px, calc(100vw - 24px));
+  top: 70px;
+}
+@media (max-width: 860px){
+  .sidebar-backdrop{
+    top: 52px;
+    left: min(420px, calc(100vw - 24px));
+  }
+}
 
 /* Top bar */
 .topbar{
