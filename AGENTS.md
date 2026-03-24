@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Added focused regression assertions verifying local-only interaction handlers (density slider scrub, context-menu open, preview drawer open) do not call startup/media loader functions.
+- This adds an automated network-quiet contract check at source level to guard against accidental coupling of local UI actions to boot/data-load paths.
+- Manual runtime verification is still required for visual smoothness and z-layer truth, but local handler-level loader coupling is now asserted.
+
+### Latest Implementation Notes (2026-03-24)
 - Fixed large-jump density disappear/reappear artifact by removing Flip `onEnter` fade choreography from ordinary density reflow path.
 - Density Flip target selector is now limited to persistent masonry card nodes only, improving node-mapping continuity for big column-count jumps.
 - Transform cleanup now clears transform only (not opacity), preventing transient full-field fade behavior during normal density transitions.

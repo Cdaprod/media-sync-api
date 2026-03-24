@@ -1,3 +1,9 @@
+## 2026-03-24 — Local interaction network-quiet contract assertions
+- [x] Added focused static assertions that density scrub handler does not invoke startup/media loaders.
+- [x] Added focused static assertions that context-menu open path does not invoke startup/media loaders.
+- [x] Added focused static assertions that preview drawer open path does not invoke startup/media loaders.
+- [ ] Perform browser-level devtools check to confirm zero fetches during density/context/preview interactions.
+
 ## 2026-03-24 — Density continuity fix for large jumps
 - [x] Audited disappear/reappear artifact during large density jumps.
 - [x] Removed ordinary density-path `onEnter` fade behavior that misclassified persistent cards as entering.

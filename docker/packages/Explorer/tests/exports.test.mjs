@@ -995,3 +995,32 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(topbarMotion.includes('function refresh() {'));
   assert.ok(topbarMotion.includes('y: -topbarEl.offsetHeight,'));
 });
+
+test('local density/context/preview interactions stay network-quiet and do not invoke boot loaders', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+
+  const sliderStart = content.indexOf('const onSliderInput = () => {');
+  const sliderBlock = sliderStart >= 0 ? content.slice(sliderStart, sliderStart + 420) : '';
+  assert.ok(sliderBlock.includes('density.scrubTo(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE));'));
+  assert.ok(!sliderBlock.includes('loadSources('));
+  assert.ok(!sliderBlock.includes('loadProjects('));
+  assert.ok(!sliderBlock.includes('loadMedia('));
+  assert.ok(!sliderBlock.includes('loadAllMedia('));
+
+  const contextStart = content.indexOf('const openContextMenu = useCallback((x: number, y: number, items: MediaItem[]) => {');
+  const contextBlock = contextStart >= 0 ? content.slice(contextStart, contextStart + 220) : '';
+  assert.ok(contextBlock.includes('setContextMenu({ x, y, items });'));
+  assert.ok(!contextBlock.includes('loadSources('));
+  assert.ok(!contextBlock.includes('loadProjects('));
+  assert.ok(!contextBlock.includes('loadMedia('));
+  assert.ok(!contextBlock.includes('loadAllMedia('));
+
+  const previewStart = content.indexOf('const openDrawer = useCallback((item: MediaItem) => {');
+  const previewBlock = previewStart >= 0 ? content.slice(previewStart, previewStart + 260) : '';
+  assert.ok(previewBlock.includes('setInspectorOpen(true);'));
+  assert.ok(!previewBlock.includes('loadSources('));
+  assert.ok(!previewBlock.includes('loadProjects('));
+  assert.ok(!previewBlock.includes('loadMedia('));
+  assert.ok(!previewBlock.includes('loadAllMedia('));
+});
