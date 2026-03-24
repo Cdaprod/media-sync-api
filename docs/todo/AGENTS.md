@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer in-scroll sticky topbar overlay refactor
+- [x] Moved the Explorer topbar into the real `.content .scroll` viewport as the first child inside a zero-height sticky anchor so the media grid and header now share one scroll world.
+- [x] Removed the app-level `topbar-reveal` seam element plus the remaining `main` top-padding / topbar-offset layout contract so header hide/show no longer depends on content re-spacing.
+- [x] Kept the topbar metadata row (`.section-h`) inside the same overlay block and switched hidden/open behavior to transform-only `.topbar.is-hidden` state so collapsed top-row assets can remain tappable.
+- [x] Updated focused Explorer package regressions to lock the new sticky-overlay structure and guard against reintroducing reveal-strip or top-offset layout patterns.
+- [ ] Validate on physical iPhone Safari that the first asset row no longer jumps during topbar hide/reveal transitions and that top-row checkboxes remain tappable immediately after collapse.
+
 ## 2026-03-23 — Explorer hidden-offset seam + toast stacking polish
 - [x] Split the topbar offset into open vs hidden values so `main` keeps only the reveal seam while the topbar is collapsed instead of reserving the full header band.
 - [x] Added a `padding-top` transition on `main` so the collapsed/open layout change reads as a smooth seam shift instead of a dead blank slab.

@@ -100,7 +100,6 @@ const TOPBAR_OWNED_TARGET_SELECTOR = [
   '[data-topbar-root="true"]',
   '[data-topbar-control="true"]',
   '[data-topbar-panel="true"]',
-  '[data-topbar-reveal="true"]',
 ].join(', ');
 
 export function isInteractiveTarget(target: EventTarget | null): boolean {

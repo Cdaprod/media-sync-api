@@ -1,6 +1,11 @@
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
+### Latest Implementation Notes (2026-03-24)
+- Explorer topbar/reveal spacing was fully refactored out of app-level layout: the topbar now lives inside the real media scroll viewport as the first child of a zero-height sticky overlay anchor, so grid/list content can scroll upward naturally without `main` padding math or a separate `topbar-reveal` seam element.
+- Hidden/open topbar state is now purely visual (`.topbar.is-hidden` transform + pointer-events) instead of changing content layout, which is intended to eliminate first-row jumpiness and let collapsed-state asset checkboxes remain tappable right at the top of the viewport.
+- The topbar-owned metadata band (`.section-h`) remains inside the same overlay block and focused Explorer regressions now guard against reintroducing app-level reveal strips or top-offset layout tokens.
+
 ### Latest Implementation Notes (2026-03-23)
 - Explorer hidden-topbar layout now uses split offset tokens (`--topbar-offset-open` / `--topbar-offset-hidden`) so `main` only reserves the reveal seam while the header is hidden, letting media tiles scroll up under the collapsed header area without reintroducing the original moving-target tap bug.
 - Main layout now animates `padding-top` alongside the topbar transform, smoothing the open/hidden transition instead of leaving a hard blank band when the header collapses.

@@ -23,10 +23,6 @@
   --topbar-subrow-height: 38px;
   --topbar-height: calc(var(--topbar-row-height) + var(--topbar-subrow-height));
   --topbar-gap: 12px;
-  --topbar-reveal-height: 24px;
-  --topbar-offset-open: calc(var(--topbar-height) + var(--topbar-gap));
-  --topbar-offset-hidden: calc(var(--topbar-reveal-height) + 2px);
-  --topbar-offset: var(--topbar-offset-open);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
 }
@@ -60,10 +56,6 @@ body{
   color: var(--text);
   overflow: hidden;
 }
-.app.topbar-hidden{
-  --topbar-offset: var(--topbar-offset-hidden);
-}
-
 a { color: inherit; }
 code { font-family: var(--mono); }
 
@@ -92,18 +84,16 @@ code { font-family: var(--mono); }
 
 /* Top bar */
 .topbar{
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 110;
+  position: relative;
+  z-index: 1;
   background: transparent;
-  transition: transform 160ms ease, opacity 160ms ease, margin-bottom 160ms ease;
+  transition: transform 160ms ease, opacity 160ms ease;
   will-change: transform, opacity;
   backface-visibility: hidden;
   isolation: isolate;
   overflow: visible;
   pointer-events: auto;
+  margin: 0;
 }
 .topbar::before{
   content: "";
@@ -116,22 +106,17 @@ code { font-family: var(--mono); }
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
-.app.topbar-hidden .topbar{
-  transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);
-  opacity: 0;
-  pointer-events: none;
-  margin-bottom: 0;
-}
-.topbar-reveal{
-  position: fixed;
+.topbar-anchor{
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  height: var(--topbar-reveal-height);
-  z-index: 109;
-  pointer-events: auto;
+  z-index: 120;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
 }
-.app:not(.topbar-hidden) .topbar-reveal{
+.topbar.is-hidden{
+  transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);
+  opacity: 0.98;
   pointer-events: none;
 }
 .topbar-inner{
@@ -453,11 +438,10 @@ select.control{
   max-width: none;
   width: 100%;
   margin: 0;
-  padding: var(--topbar-offset) 0 0;
+  padding: 0;
   gap: 0;
   position: relative;
   z-index: 0;
-  transition: padding-top 160ms ease;
 }
 
 .sidebar{
@@ -1484,12 +1468,6 @@ select.control{
     min-width: 0;
     justify-content: flex-end;
     gap: 6px;
-  }
-  .content .scroll{
-    padding-top: 8px;
-  }
-  .grid{
-    padding-top: 6px;
   }
   .search{
     flex: 1;

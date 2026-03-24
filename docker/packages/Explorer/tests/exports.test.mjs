@@ -262,7 +262,7 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('ref={mediaScrollViewportRef} className="scroll"'));
   assert.ok(explorer.includes('data-topbar-root="true"'));
   assert.ok(explorer.includes('data-topbar-panel="true"'));
-  assert.ok(explorer.includes('data-topbar-reveal="true"'));
+  assert.ok(explorer.includes('<div className="topbar-anchor" aria-hidden="true">'));
   assert.ok(explorer.includes('data-topbar-control="true"'));
   assert.ok(explorer.includes('data-interactive="true"'));
   assert.ok(explorer.includes('<div className="search" role="search" data-interactive="true" data-topbar-control="true">'));
@@ -271,9 +271,10 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(grid.includes('onPointerDown={handleTogglePointerDown}'));
   assert.ok(grid.includes('event.stopPropagation();'));
   assert.ok(list.includes('data-interactive="true"'));
-  assert.ok(styles.includes('--topbar-reveal-height: 24px;'));
-  assert.ok(styles.includes('height: var(--topbar-reveal-height);'));
-  assert.ok(styles.includes('z-index: 110;'));
+  assert.ok(styles.includes('.topbar-anchor{'));
+  assert.ok(styles.includes('position: sticky;'));
+  assert.ok(styles.includes('height: 0;'));
+  assert.ok(styles.includes('z-index: 120;'));
   assert.ok(styles.includes('.topbar > .section-h{'));
   assert.ok(styles.includes('pointer-events: none;'));
   assert.ok(styles.includes('z-index: 31;'));
@@ -517,7 +518,7 @@ test('brand area still toggles the project panel and is not blocked by reveal la
   assert.ok(styles.includes('.brand{'));
   assert.ok(styles.includes('cursor: pointer;'));
   assert.ok(styles.includes('pointer-events: auto;'));
-  assert.ok(styles.includes('.app:not(.topbar-hidden) .topbar-reveal{'));
+  assert.ok(!styles.includes('.topbar-reveal{'));
   assert.ok(styles.includes('pointer-events: none;'));
 });
 
@@ -748,18 +749,16 @@ test('package explorer topbar layout follows static two-row structure', () => {
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
-  assert.ok(content.includes('<div className="topbar"'));
+  assert.ok(content.includes("className={`topbar ${topbarHidden ? 'is-hidden' : ''}`}"));
   assert.ok(content.includes('<div className="section-h">'));
   assert.ok(content.includes('aria-label="Toggle projects panel"'));
   assert.ok(!content.includes('className="btn mobile-only"'));
   assert.ok(styles.includes('--topbar-subrow-height'));
   assert.ok(styles.includes('--topbar-gap: 12px;'));
-  assert.ok(styles.includes('--topbar-offset-open: calc(var(--topbar-height) + var(--topbar-gap));'));
-  assert.ok(styles.includes('--topbar-offset-hidden: calc(var(--topbar-reveal-height) + 2px);'));
-  assert.ok(styles.includes('--topbar-offset: var(--topbar-offset-open);'));
-  assert.ok(styles.includes('.app.topbar-hidden{'));
-  assert.ok(styles.includes('--topbar-offset: var(--topbar-offset-hidden);'));
-  assert.ok(styles.includes('margin-bottom: 0;'));
+  assert.ok(!styles.includes('--topbar-offset-open'));
+  assert.ok(!styles.includes('--topbar-offset-hidden'));
+  assert.ok(!styles.includes('.app.topbar-hidden{'));
+  assert.ok(styles.includes('margin: 0;'));
   assert.ok(styles.includes('.topbar::before{'));
   assert.ok(styles.includes('background: transparent;'));
   assert.ok(styles.includes('.topbar-inner{'));
@@ -768,8 +767,8 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('.topbar > .section-h{'));
   assert.ok(styles.includes('pointer-events: none;'));
   assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
-  assert.ok(styles.includes('padding: var(--topbar-offset) 0 0;'));
-  assert.ok(styles.includes('transition: padding-top 160ms ease;'));
+  assert.ok(styles.includes('padding: 0;'));
+  assert.ok(!styles.includes('transition: padding-top 160ms ease;'));
   assert.ok(styles.includes('.content .scroll{'));
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
@@ -783,8 +782,8 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);'));
   assert.ok(styles.includes('@media (max-width: 860px){'));
   assert.ok(styles.includes('--topbar-gap: 14px;'));
-  assert.ok(styles.includes('padding-top: 8px;'));
-  assert.ok(styles.includes('padding-top: 6px;'));
+  assert.ok(!styles.includes('padding-top: 8px;'));
+  assert.ok(!styles.includes('padding-top: 6px;'));
 });
 
 

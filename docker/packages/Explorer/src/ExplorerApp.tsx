@@ -319,7 +319,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const selectedOrderRef = useRef<string[]>([]);
   const topbarRef = useRef<HTMLDivElement | null>(null);
-  const topbarRevealRef = useRef<HTMLDivElement | null>(null);
   const topbarIntentRef = useRef<IntentController | null>(null);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
@@ -1703,8 +1702,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   useEffect(() => {
     const topbar = topbarRef.current;
-    const reveal = topbarRevealRef.current;
-    if (!topbar || !reveal) return;
+    if (!topbar) return;
     const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const isTouchPrimary = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
@@ -1735,19 +1733,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       intent.setPinned(false);
       if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
     });
-    reveal.addEventListener('pointerenter', handleEnter);
-    reveal.addEventListener('pointerleave', handleLeave);
-    reveal.addEventListener('pointerdown', handleEnter);
-    const handleRevealMove = () => {
-      if (dragging) intent.scheduleOpen(0);
-    };
-    reveal.addEventListener('pointermove', handleRevealMove);
-
     const handleOutside = (event: PointerEvent) => {
       if (isTouchPrimary) return;
       if (isTopbarOwnedTarget(event.target)) return;
       if (intent.isPinned()) return;
-      if (topbar.contains(event.target as Node) || reveal.contains(event.target as Node)) return;
+      if (topbar.contains(event.target as Node)) return;
       if (!shouldKeepOpen()) intent.scheduleClose(120);
     };
     if (!isTouchPrimary) {
@@ -1763,10 +1753,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       topbar.removeEventListener('pointerenter', handleEnter);
       topbar.removeEventListener('pointerleave', handleLeave);
-      reveal.removeEventListener('pointerenter', handleEnter);
-      reveal.removeEventListener('pointerleave', handleLeave);
-      reveal.removeEventListener('pointerdown', handleEnter);
-      reveal.removeEventListener('pointermove', handleRevealMove);
       if (!isTouchPrimary) {
         document.removeEventListener('pointerdown', handleOutside);
       }
@@ -1961,294 +1947,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   return (
     <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`}>
-      <div className="topbar-reveal" ref={topbarRevealRef} aria-hidden="true" data-topbar-reveal="true" />
-      <div className="topbar" ref={topbarRef} data-topbar-root="true">
-        <div className="topbar-inner">
-          <div
-            className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
-            title="LAN-only media-sync-api explorer"
-            ref={brandRef}
-            role="button"
-            tabIndex={0}
-            aria-label="Toggle projects panel"
-            onClick={toggleSidebarOpen}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return;
-              event.preventDefault();
-              toggleSidebarOpen();
-            }}
-          >
-            <div className="logo" aria-hidden="true"></div>
-            <div className="brand-text">
-              <h1>
-                <span className="brand-title is-primary">Cdaprod's Explorer</span>
-                <span className="brand-title is-secondary">Cdaprod's Projects</span>
-              </h1>
-              <div className="sub">media-sync-api</div>
-            </div>
-          </div>
-
-          <div className="toolbar">
-            <div className="toolbar-toggle" aria-hidden="true"></div>
-            <div className="topbar-controls">
-              <div className="search" role="search" data-interactive="true" data-topbar-control="true">
-                <span className="kbd">⌘K</span>
-                <input
-                  data-interactive="true"
-                  data-topbar-control="true"
-                  ref={searchInputRef}
-                  placeholder="Search filename, path… (client-side filter)"
-                  autoComplete="off"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  onFocus={() => topbarIntentRef.current?.setPinned(true)}
-                  onBlur={() => {
-                    topbarIntentRef.current?.setPinned(false);
-                    topbarIntentRef.current?.scheduleClose(360);
-                  }}
-                />
-                <div className="search-toolbar" aria-label="Search filters" data-interactive="true" data-topbar-control="true">
-                  <details className="dropdown" data-interactive="true" data-topbar-control="true">
-                    <summary className="control" aria-label="Filter by media type" data-interactive="true" data-topbar-control="true" onPointerDown={() => pinTopbarTemporarily(900)}>
-                      Type: <span>{typeLabel}</span>
-                    </summary>
-                    <div className="dropdown-menu" role="listbox" aria-label="Media type filters">
-                      <button
-                        type="button"
-                        data-interactive="true"
-                        data-topbar-control="true"
-                        className={typeFilter === 'all' ? 'is-active' : ''}
-                        onClick={handleTypeSelect('all')}
-                      >
-                        All types
-                      </button>
-                      <button
-                        type="button"
-                        data-interactive="true"
-                        data-topbar-control="true"
-                        className={typeFilter === 'video' ? 'is-active' : ''}
-                        onClick={handleTypeSelect('video')}
-                      >
-                        Video
-                      </button>
-                      <button
-                        type="button"
-                        data-interactive="true"
-                        data-topbar-control="true"
-                        className={typeFilter === 'image' ? 'is-active' : ''}
-                        onClick={handleTypeSelect('image')}
-                      >
-                        Image
-                      </button>
-                      <button
-                        type="button"
-                        data-interactive="true"
-                        data-topbar-control="true"
-                        className={typeFilter === 'audio' ? 'is-active' : ''}
-                        onClick={handleTypeSelect('audio')}
-                      >
-                        Audio
-                      </button>
-                      {mediaMeta.types.has('overlay') ? (
-                        <button
-                          type="button"
-                          data-interactive="true"
-                          data-topbar-control="true"
-                          className={typeFilter === 'overlay' ? 'is-active' : ''}
-                          onClick={handleTypeSelect('overlay')}
-                        >
-                          Overlay
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        data-interactive="true"
-                        data-topbar-control="true"
-                        className={typeFilter === 'unknown' ? 'is-active' : ''}
-                        onClick={handleTypeSelect('unknown')}
-                      >
-                        Unknown
-                      </button>
-                    </div>
-                  </details>
-                </div>
-              </div>
-              <button
-                className="btn actions-toggle"
-                type="button"
-                data-interactive="true"
-                data-topbar-control="true"
-                aria-expanded={actionsOpen}
-                onPointerDown={() => pinTopbarTemporarily(900)}
-                onClick={() => setActionsOpen((prev) => !prev)}
-              >
-                Actions ▾
-              </button>
-            </div>
-            <div className={`actions-panel ${actionsOpen ? 'open' : ''}`} role="region" aria-label="Explorer actions" data-interactive="true" data-topbar-panel="true">
-              <div className="seg" aria-label="View mode">
-                <button
-                  className={view === 'grid' ? 'active' : ''}
-                  type="button"
-                  data-interactive="true"
-                  data-topbar-control="true"
-                  onClick={() => setView('grid')}
-                >
-                  Grid
-                </button>
-                <button
-                  className={view === 'list' ? 'active' : ''}
-                  type="button"
-                  data-interactive="true"
-                  data-topbar-control="true"
-                  onClick={() => setView('list')}
-                >
-                  List
-                </button>
-              </div>
-
-              <div className="action-controls" aria-label="Sort and quick filters">
-                <select
-                  ref={sortSelectRef}
-                  className="control visually-hidden"
-                  aria-label="Sort media"
-                  data-interactive="true"
-                  data-topbar-control="true"
-                  value={sortKey}
-                  onChange={(event) => setSortKey(event.target.value as SortKey)}
-                >
-                  <option value="newest">Sort: Newest</option>
-                  <option value="oldest">Sort: Oldest</option>
-                  <option value="name-asc">Sort: Name A→Z</option>
-                  <option value="name-desc">Sort: Name Z→A</option>
-                  <option value="size-desc" disabled={!mediaMeta.hasSize}>
-                    Sort: Size big→small
-                  </option>
-                  <option value="size-asc" disabled={!mediaMeta.hasSize}>
-                    Sort: Size small→big
-                  </option>
-                </select>
-                <details className="dropdown" data-interactive="true" data-topbar-control="true">
-                  <summary className="control" aria-label="Sort media" data-interactive="true" data-topbar-control="true" onPointerDown={() => pinTopbarTemporarily(900)}>
-                    Sort: <span>{sortLabel}</span>
-                  </summary>
-                  <div className="dropdown-menu" role="listbox" aria-label="Sort media">
-                    <button
-                      type="button"
-                      data-interactive="true"
-                      data-topbar-control="true"
-                      className={sortKey === 'newest' ? 'is-active' : ''}
-                      onClick={handleSortSelect('newest')}
-                    >
-                      Sort: Newest
-                    </button>
-                    <button
-                      type="button"
-                      data-interactive="true"
-                      data-topbar-control="true"
-                      className={sortKey === 'oldest' ? 'is-active' : ''}
-                      onClick={handleSortSelect('oldest')}
-                    >
-                      Sort: Oldest
-                    </button>
-                    <button
-                      type="button"
-                      data-interactive="true"
-                      data-topbar-control="true"
-                      className={sortKey === 'name-asc' ? 'is-active' : ''}
-                      onClick={handleSortSelect('name-asc')}
-                    >
-                      Sort: Name A→Z
-                    </button>
-                    <button
-                      type="button"
-                      data-interactive="true"
-                      data-topbar-control="true"
-                      className={sortKey === 'name-desc' ? 'is-active' : ''}
-                      onClick={handleSortSelect('name-desc')}
-                    >
-                      Sort: Name Z→A
-                    </button>
-                    <button
-                      type="button"
-                      data-interactive="true"
-                      data-topbar-control="true"
-                      className={sortKey === 'size-desc' ? 'is-active' : ''}
-                      onClick={handleSortSelect('size-desc')}
-                      disabled={!mediaMeta.hasSize}
-                    >
-                      Sort: Size big→small
-                    </button>
-                    <button
-                      type="button"
-                      data-interactive="true"
-                      data-topbar-control="true"
-                      className={sortKey === 'size-asc' ? 'is-active' : ''}
-                      onClick={handleSortSelect('size-asc')}
-                      disabled={!mediaMeta.hasSize}
-                    >
-                      Sort: Size small→big
-                    </button>
-                  </div>
-                </details>
-                <div className="pillbar">
-                  <button
-                    className={`btn toggle-btn ${selectedOnly ? 'is-on' : ''}`}
-                    type="button"
-                    data-interactive="true"
-                    data-topbar-control="true"
-                    onClick={() => setSelectedOnly((prev) => !prev)}
-                  >
-                    Selected only
-                  </button>
-                  <button
-                    className={`btn toggle-btn ${untaggedOnly ? 'is-on' : ''}`}
-                    type="button"
-                    data-interactive="true"
-                    data-topbar-control="true"
-                    onClick={() => setUntaggedOnly((prev) => !prev)}
-                    disabled={!mediaMeta.hasTags}
-                    title={mediaMeta.hasTags ? '' : 'No tagged items yet'}
-                  >
-                    Untagged only
-                  </button>
-                </div>
-              </div>
-
-              <div className="pillbar">
-                <button className="btn" type="button" data-interactive="true" data-topbar-control="true" onClick={refreshAll}>
-                  ↻ Refresh
-                </button>
-                <button className="btn good" type="button" data-interactive="true" data-topbar-control="true" onClick={pickUpload}>
-                  ＋ Upload
-                </button>
-                <button
-                  className="btn primary"
-                  type="button"
-                  data-interactive="true"
-                  data-topbar-control="true"
-                  onClick={handleResolve}
-                  disabled={!selectedCount || !activeProject}
-                >
-                  ⇢ Send to Resolve
-                </button>
-                <button className="btn" type="button" data-interactive="true" data-topbar-control="true" onClick={clearSelection} disabled={!selectedCount}>
-                  ✕ Clear
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="section-h">
-          <h2>{contentTitle}</h2>
-          <div className="meta-line">
-            <span>{filteredMedia.length} items</span>
-            <span>•</span>
-            <span className="kbd">{activePath}</span>
-          </div>
-        </div>
-      </div>
-
       <div className="main">
         <aside className={`sidebar sidebar-drawer ${sidebarOpen ? 'is-open' : ''}`}>
           <div className="section-h">
@@ -2497,6 +2195,163 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <div>Preparing thumbnails…</div>
           </div>
           <div ref={mediaScrollViewportRef} className="scroll" onScroll={clearPendingLongPress}>
+            <div className="topbar-anchor" aria-hidden="true">
+              <div className={`topbar ${topbarHidden ? 'is-hidden' : ''}`} ref={topbarRef} data-topbar-root="true">
+                <div className="topbar-inner">
+                  <div
+                    className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
+                    title="LAN-only media-sync-api explorer"
+                    ref={brandRef}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Toggle projects panel"
+                    onClick={toggleSidebarOpen}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.preventDefault();
+                      toggleSidebarOpen();
+                    }}
+                  >
+                    <div className="logo" aria-hidden="true"></div>
+                    <div className="brand-text">
+                      <h1>
+                        <span className="brand-title is-primary">Cdaprod's Explorer</span>
+                        <span className="brand-title is-secondary">Cdaprod's Projects</span>
+                      </h1>
+                      <div className="sub">media-sync-api</div>
+                    </div>
+                  </div>
+
+                  <div className="toolbar">
+                    <div className="toolbar-toggle" aria-hidden="true"></div>
+                    <div className="topbar-controls">
+                      <div className="search" role="search" data-interactive="true" data-topbar-control="true">
+                        <span className="kbd">⌘K</span>
+                        <input
+                          data-interactive="true"
+                          data-topbar-control="true"
+                          ref={searchInputRef}
+                          placeholder="Search filename, path… (client-side filter)"
+                          autoComplete="off"
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                          onFocus={() => topbarIntentRef.current?.setPinned(true)}
+                          onBlur={() => {
+                            topbarIntentRef.current?.setPinned(false);
+                            topbarIntentRef.current?.scheduleClose(360);
+                          }}
+                        />
+                        <div className="search-toolbar" aria-label="Search filters" data-interactive="true" data-topbar-control="true">
+                          <details className="dropdown" data-interactive="true" data-topbar-control="true">
+                            <summary className="control" aria-label="Filter by media type" data-interactive="true" data-topbar-control="true" onPointerDown={() => pinTopbarTemporarily(900)}>
+                              Type: <span>{typeLabel}</span>
+                            </summary>
+                            <div className="dropdown-menu" role="listbox" aria-label="Media type filters">
+                              <button type="button" data-interactive="true" data-topbar-control="true" className={typeFilter === 'all' ? 'is-active' : ''} onClick={handleTypeSelect('all')}>
+                                All types
+                              </button>
+                              <button type="button" data-interactive="true" data-topbar-control="true" className={typeFilter === 'video' ? 'is-active' : ''} onClick={handleTypeSelect('video')}>
+                                Video
+                              </button>
+                              <button type="button" data-interactive="true" data-topbar-control="true" className={typeFilter === 'image' ? 'is-active' : ''} onClick={handleTypeSelect('image')}>
+                                Image
+                              </button>
+                              <button type="button" data-interactive="true" data-topbar-control="true" className={typeFilter === 'audio' ? 'is-active' : ''} onClick={handleTypeSelect('audio')}>
+                                Audio
+                              </button>
+                              {mediaMeta.types.has('overlay') ? (
+                                <button type="button" data-interactive="true" data-topbar-control="true" className={typeFilter === 'overlay' ? 'is-active' : ''} onClick={handleTypeSelect('overlay')}>
+                                  Overlay
+                                </button>
+                              ) : null}
+                              <button type="button" data-interactive="true" data-topbar-control="true" className={typeFilter === 'unknown' ? 'is-active' : ''} onClick={handleTypeSelect('unknown')}>
+                                Unknown
+                              </button>
+                            </div>
+                          </details>
+                        </div>
+                      </div>
+                      <button
+                        className="btn actions-toggle"
+                        type="button"
+                        data-interactive="true"
+                        data-topbar-control="true"
+                        aria-expanded={actionsOpen}
+                        onPointerDown={() => pinTopbarTemporarily(900)}
+                        onClick={() => setActionsOpen((prev) => !prev)}
+                      >
+                        Actions ▾
+                      </button>
+                    </div>
+                    <div className={`actions-panel ${actionsOpen ? 'open' : ''}`} role="region" aria-label="Explorer actions" data-interactive="true" data-topbar-panel="true">
+                      <div className="seg" aria-label="View mode">
+                        <button className={view === 'grid' ? 'active' : ''} type="button" data-interactive="true" data-topbar-control="true" onClick={() => setView('grid')}>
+                          Grid
+                        </button>
+                        <button className={view === 'list' ? 'active' : ''} type="button" data-interactive="true" data-topbar-control="true" onClick={() => setView('list')}>
+                          List
+                        </button>
+                      </div>
+
+                      <div className="action-controls" aria-label="Sort and quick filters">
+                        <select
+                          ref={sortSelectRef}
+                          className="control visually-hidden"
+                          aria-label="Sort media"
+                          data-interactive="true"
+                          data-topbar-control="true"
+                          value={sortKey}
+                          onChange={(event) => setSortKey(event.target.value as SortKey)}
+                        >
+                          <option value="newest">Sort: Newest</option>
+                          <option value="oldest">Sort: Oldest</option>
+                          <option value="name-asc">Sort: Name A→Z</option>
+                          <option value="name-desc">Sort: Name Z→A</option>
+                          <option value="size-desc" disabled={!mediaMeta.hasSize}>Sort: Size big→small</option>
+                          <option value="size-asc" disabled={!mediaMeta.hasSize}>Sort: Size small→big</option>
+                        </select>
+                        <details className="dropdown" data-interactive="true" data-topbar-control="true">
+                          <summary className="control" aria-label="Sort media" data-interactive="true" data-topbar-control="true" onPointerDown={() => pinTopbarTemporarily(900)}>
+                            Sort: <span>{sortLabel}</span>
+                          </summary>
+                          <div className="dropdown-menu" role="listbox" aria-label="Sort media">
+                            <button type="button" data-interactive="true" data-topbar-control="true" className={sortKey === 'newest' ? 'is-active' : ''} onClick={handleSortSelect('newest')}>Sort: Newest</button>
+                            <button type="button" data-interactive="true" data-topbar-control="true" className={sortKey === 'oldest' ? 'is-active' : ''} onClick={handleSortSelect('oldest')}>Sort: Oldest</button>
+                            <button type="button" data-interactive="true" data-topbar-control="true" className={sortKey === 'name-asc' ? 'is-active' : ''} onClick={handleSortSelect('name-asc')}>Sort: Name A→Z</button>
+                            <button type="button" data-interactive="true" data-topbar-control="true" className={sortKey === 'name-desc' ? 'is-active' : ''} onClick={handleSortSelect('name-desc')}>Sort: Name Z→A</button>
+                            <button type="button" data-interactive="true" data-topbar-control="true" className={sortKey === 'size-desc' ? 'is-active' : ''} onClick={handleSortSelect('size-desc')} disabled={!mediaMeta.hasSize}>Sort: Size big→small</button>
+                            <button type="button" data-interactive="true" data-topbar-control="true" className={sortKey === 'size-asc' ? 'is-active' : ''} onClick={handleSortSelect('size-asc')} disabled={!mediaMeta.hasSize}>Sort: Size small→big</button>
+                          </div>
+                        </details>
+                        <div className="pillbar">
+                          <button className={`btn toggle-btn ${selectedOnly ? 'is-on' : ''}`} type="button" data-interactive="true" data-topbar-control="true" onClick={() => setSelectedOnly((prev) => !prev)}>
+                            Selected only
+                          </button>
+                          <button className={`btn toggle-btn ${untaggedOnly ? 'is-on' : ''}`} type="button" data-interactive="true" data-topbar-control="true" onClick={() => setUntaggedOnly((prev) => !prev)} disabled={!mediaMeta.hasTags} title={mediaMeta.hasTags ? '' : 'No tagged items yet'}>
+                            Untagged only
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="pillbar">
+                        <button className="btn" type="button" data-interactive="true" data-topbar-control="true" onClick={refreshAll}>↻ Refresh</button>
+                        <button className="btn good" type="button" data-interactive="true" data-topbar-control="true" onClick={pickUpload}>＋ Upload</button>
+                        <button className="btn primary" type="button" data-interactive="true" data-topbar-control="true" onClick={handleResolve} disabled={!selectedCount || !activeProject}>⇢ Send to Resolve</button>
+                        <button className="btn" type="button" data-interactive="true" data-topbar-control="true" onClick={clearSelection} disabled={!selectedCount}>✕ Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="section-h">
+                  <h2>{contentTitle}</h2>
+                  <div className="meta-line">
+                    <span>{filteredMedia.length} items</span>
+                    <span>•</span>
+                    <span className="kbd">{activePath}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
               {!activeProject && mediaScope !== 'all' ? (
                 <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
