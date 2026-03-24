@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Root-cause hardening for repeated Boot toast: Explorer boot effect is now session-singleton (`hasBootstrappedExplorerSession`) so density/layout interactions cannot replay startup toast or source/project boot loads.
+- Startup boot effect now runs behind an empty-deps lifecycle gate plus singleton guard, isolating density scrubs to local layout/animation paths only.
+- Added focused regression assertions locking the singleton boot guard contract to prevent future coupling between density interactions and startup/loading paths.
+
+### Latest Implementation Notes (2026-03-24)
 - Follow-up retune for density finger-tracking now converts scrub values using direction-aware integer thresholds (upward uses `floor`, downward uses `ceil`) so column commits happen at boundary crossing instead of half-step lag.
 - Density Flip choreography now distinguishes scrub vs settle durations and clears transforms on interrupt, keeping masonry reflow fast, interruptible, and latest-input-wins under rapid slider movement.
 - Inspector drawer/backdrop contract was hardened with persistent motion ownership markers (`data-drawer-motion-owned`), explicit inspector-backdrop marker (`data-inspector-backdrop`), and responsive mode-query sync (`matchMedia` change + resize) to keep panel-over-dimmer truth stable in portrait/landscape/desktop layouts.

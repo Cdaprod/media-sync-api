@@ -236,6 +236,12 @@ const SORT_LABELS: Record<SortKey, string> = {
   'size-asc': 'Size small→big',
 };
 
+/**
+ * Boot path must be session-singleton.
+ * Density/view/layout interactions must never replay startup loading effects.
+ */
+let hasBootstrappedExplorerSession = false;
+
 function useToastQueue() {
   const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
   const timeouts = useRef<number[]>([]);
@@ -1814,10 +1820,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [dragging, revealTopbar]);
 
   useEffect(() => {
+    if (hasBootstrappedExplorerSession) return;
+    hasBootstrappedExplorerSession = true;
     addToast('good', 'Boot', 'Loading sources + projects…');
     void loadSources();
     void loadProjects();
-  }, [addToast, loadProjects, loadSources]);
+  }, []);
 
   useEffect(() => {
     if (activeProject) {

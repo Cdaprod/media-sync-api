@@ -1,3 +1,10 @@
+## 2026-03-24 — Boot-path isolation from density interactions (regression fix)
+- [x] Investigated repeated “Boot Loading sources + projects” toast during density changes as startup-path replay signal.
+- [x] Isolated boot/startup effect behind a session-singleton guard so density/view/layout interactions cannot replay boot loading.
+- [x] Verified density controls remain local UI/layout interactions and do not intentionally invoke startup loaders.
+- [x] Added focused regression assertions for boot-path singleton gating markers.
+- [ ] Add runtime instrumentation pass (if needed) to capture mount-count telemetry in development for future lifecycle regressions.
+
 ## 2026-03-24 — Density scrub immediacy + inspector truth hardening (follow-up)
 - [x] Replace half-step rounding lag with direction-aware scrub threshold conversion so density commits track finger movement at integer boundaries.
 - [x] Split scrub vs settle Flip timing and add interrupt cleanup to keep rapid density changes interruptible without stale transforms.

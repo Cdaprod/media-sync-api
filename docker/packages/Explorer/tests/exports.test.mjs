@@ -838,6 +838,9 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('const modeQuery = window.matchMedia(\'(max-width: 860px)\');'));
   assert.ok(content.includes("getMode: () => (modeQuery.matches ? 'sheet' : 'side')"));
   assert.ok(content.includes('controller.syncLayoutMode();'));
+  assert.ok(content.includes('let hasBootstrappedExplorerSession = false;'));
+  assert.ok(content.includes('if (hasBootstrappedExplorerSession) return;'));
+  assert.ok(content.includes('hasBootstrappedExplorerSession = true;'));
   assert.ok(content.includes('createExplorerDensityController({'));
   assert.ok(content.includes('createPinchDensityController({'));
   assert.ok(content.includes('id="asset-density-slider"'));
@@ -939,6 +942,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("const modeQuery = window.matchMedia('(max-width: 860px)');"));
   assert.ok(content.includes("modeQuery.addEventListener('change', handleModeChange);"));
   assert.ok(content.includes('inspectorOpenRef.current = inspectorOpen;'));
+  assert.ok(content.includes('if (hasBootstrappedExplorerSession) return;'));
+  assert.ok(content.includes('hasBootstrappedExplorerSession = true;'));
 
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
