@@ -1,8 +1,9 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo, useRef, useState, useLayoutEffect } from 'react';
 
 import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';
 import type { AssetPointerHandlers } from '../useAssetInteractions';
 import type { MediaItem } from '../types';
+import { computeMasonryLayout } from '../explorer/masonry/computeMasonryLayout';
 
 export interface ExplorerAssetViewModel {
   item: MediaItem;
@@ -26,17 +27,26 @@ export interface ExplorerAssetViewModel {
   selectionOrderLabel: string;
 }
 
+type GridEntry =
+  | { kind: 'asset'; item: MediaItem }
+  | { kind: 'pending'; pendingItem: PendingComposeAsset };
+
 interface AssetGridProps {
   buildAssetViewModel: (item: MediaItem) => ExplorerAssetViewModel;
   canSelect: boolean;
   gridColumnCount: number;
   gridRef?: React.Ref<HTMLDivElement>;
-  masonryColumns: Array<Array<
-    | { kind: 'asset'; item: MediaItem }
-    | { kind: 'pending'; pendingItem: PendingComposeAsset }
-  >>;
+  entries: GridEntry[];
   onToggleSelected: (item: MediaItem) => void;
   onDismissPendingJob: (jobId: string) => void;
+}
+
+function heightRatioForEntry(entry: GridEntry, viewModel?: ExplorerAssetViewModel): number {
+  if (entry.kind === 'pending') return 1;
+  const orient = viewModel?.orient || 'square';
+  if (orient === 'portrait') return 1.34;
+  if (orient === 'landscape') return 0.84;
+  return 1;
 }
 
 function AssetGridComponent({
@@ -44,10 +54,54 @@ function AssetGridComponent({
   canSelect,
   gridColumnCount,
   gridRef,
-  masonryColumns,
+  entries,
   onToggleSelected,
   onDismissPendingJob,
 }: AssetGridProps) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [hostWidth, setHostWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const node = hostRef.current;
+    if (!node) return;
+
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      setHostWidth((prev) => (Math.abs(prev - rect.width) < 0.5 ? prev : rect.width));
+    };
+
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const viewModelsByKey = useMemo(() => {
+    const map = new Map<string, ExplorerAssetViewModel>();
+    entries.forEach((entry) => {
+      if (entry.kind !== 'asset') return;
+      const viewModel = buildAssetViewModel(entry.item);
+      map.set(viewModel.renderKey, viewModel);
+    });
+    return map;
+  }, [buildAssetViewModel, entries]);
+
+  const layout = useMemo(
+    () => computeMasonryLayout({
+      items: entries,
+      containerWidth: hostWidth,
+      columnCount: gridColumnCount,
+      gap: 6,
+      estimateHeightRatio: (entry) => {
+        if (entry.kind === 'pending') return 1;
+        const key = buildAssetViewModel(entry.item).renderKey;
+        return heightRatioForEntry(entry, viewModelsByKey.get(key));
+      },
+    }),
+    [buildAssetViewModel, entries, gridColumnCount, hostWidth, viewModelsByKey],
+  );
+
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
   ) => {
@@ -55,110 +109,126 @@ function AssetGridComponent({
   };
 
   return (
-    <div
-      className="masonry-columns"
-      ref={gridRef}
-      data-density-columns={gridColumnCount}
-      style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}
-    >
-      {masonryColumns.map((column, columnIndex) => (
-        <div className="masonry-column" key={`masonry-column-${columnIndex}`}>
-          {column.map((entry) => {
-            if (entry.kind === 'pending') {
-              return (
+    <div className="masonry-host" ref={hostRef}>
+      <div
+        className="masonry-columns"
+        ref={gridRef}
+        data-density-columns={gridColumnCount}
+        style={{
+          '--masonry-column-count': String(gridColumnCount),
+          height: `${Math.max(layout.stageHeight, 0)}px`,
+        } as React.CSSProperties}
+      >
+        {layout.items.map(({ item: entry, x, y, width, height }, index) => {
+          const positionedStyle: React.CSSProperties = {
+            position: 'absolute',
+            left: `${x}px`,
+            top: `${y}px`,
+            width: `${width}px`,
+            minHeight: `${height}px`,
+          };
+
+          if (entry.kind === 'pending') {
+            return (
+              <div
+                key={`pending-${entry.pendingItem.jobId}`}
+                className="masonry-card"
+                style={positionedStyle}
+                data-pending-job={entry.pendingItem.jobId}
+              >
                 <PendingComposeAssetCard
-                  key={`pending-${entry.pendingItem.jobId}`}
                   item={entry.pendingItem}
                   onDismiss={entry.pendingItem.status === 'failed' ? () => onDismissPendingJob(entry.pendingItem.jobId) : undefined}
                 />
-              );
-            }
-            const item = entry.item;
-            const viewModel = buildAssetViewModel(item);
+              </div>
+            );
+          }
 
-            return (
-              <div
-                key={viewModel.renderKey}
-                className={`asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
-                data-kind={viewModel.kind}
-                data-orient={viewModel.orient}
-                data-orient-locked={viewModel.orientLocked ? 'true' : 'false'}
-                data-thumb-key={viewModel.thumbKey}
-                data-thumb-job-key={viewModel.thumbJobKey}
-                data-relative={viewModel.item.relative_path || ''}
-                data-select-key={viewModel.selectionKey}
-                data-active={viewModel.isActive ? 'true' : 'false'}
-                {...viewModel.pointerHandlers}
-              >
-                <div className="thumb">
-                  <img
-                    className="asset-thumb"
-                    src={viewModel.safeThumbUrl}
-                    alt={viewModel.title}
-                    loading="lazy"
-                    draggable={false}
-                    onDragStart={(event) => event.preventDefault()}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    data-thumb-url={viewModel.thumbUrl}
-                    data-thumb-fallback={viewModel.fallbackThumb}
-                    data-thumb-job-key={viewModel.thumbJobKey}
-                  />
-                  <div className="asset-overlay">
-                    <div className="asset-ol-tl">
-                      <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>
-                    </div>
-                    <div className="asset-ol-tr">
-                      <div
-                        className="selector sel-ui"
-                        title="Select"
-                        data-interactive="true"
-                        data-no-preview="1"
-                        onPointerDown={handleTogglePointerDown}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (!canSelect) return;
-                          const target = event.target as HTMLElement;
-                          if (!target.closest('.sel-shell, .sel-order, input[type="checkbox"]')) return;
-                          onToggleSelected(item);
-                        }}
-                      >
-                        <span className="sel-shell" data-no-preview="1">
-                          <input
-                            type="checkbox"
-                            checked={viewModel.isSelected}
-                            aria-label="Select media"
-                            disabled={!canSelect}
-                            data-interactive="true"
-                            data-no-preview="1"
-                            onPointerDown={handleTogglePointerDown}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                            }}
-                            onChange={() => onToggleSelected(item)}
-                          />
-                          <span className="sel-order" data-no-preview="1" aria-hidden="true">
-                            {viewModel.selectionOrderLabel}
-                          </span>
+          const viewModel = buildAssetViewModel(entry.item);
+          return (
+            <div
+              key={viewModel.renderKey}
+              className={`asset masonry-card asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
+              style={positionedStyle}
+              data-kind={viewModel.kind}
+              data-orient={viewModel.orient}
+              data-orient-locked={viewModel.orientLocked ? 'true' : 'false'}
+              data-thumb-key={viewModel.thumbKey}
+              data-thumb-job-key={viewModel.thumbJobKey}
+              data-relative={viewModel.item.relative_path || ''}
+              data-select-key={viewModel.selectionKey}
+              data-active={viewModel.isActive ? 'true' : 'false'}
+              data-layout-index={index}
+              {...viewModel.pointerHandlers}
+            >
+              <div className="thumb">
+                <img
+                  className="asset-thumb"
+                  src={viewModel.safeThumbUrl}
+                  alt={viewModel.title}
+                  loading="lazy"
+                  draggable={false}
+                  onDragStart={(event) => event.preventDefault()}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  data-thumb-url={viewModel.thumbUrl}
+                  data-thumb-fallback={viewModel.fallbackThumb}
+                  data-thumb-job-key={viewModel.thumbJobKey}
+                />
+                <div className="asset-overlay">
+                  <div className="asset-ol-tl">
+                    <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>
+                  </div>
+                  <div className="asset-ol-tr">
+                    <div
+                      className="selector sel-ui"
+                      title="Select"
+                      data-interactive="true"
+                      data-no-preview="1"
+                      onPointerDown={handleTogglePointerDown}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!canSelect) return;
+                        const target = event.target as HTMLElement;
+                        if (!target.closest('.sel-shell, .sel-order, input[type="checkbox"]')) return;
+                        onToggleSelected(entry.item);
+                      }}
+                    >
+                      <span className="sel-shell" data-no-preview="1">
+                        <input
+                          type="checkbox"
+                          checked={viewModel.isSelected}
+                          aria-label="Select media"
+                          disabled={!canSelect}
+                          data-interactive="true"
+                          data-no-preview="1"
+                          onPointerDown={handleTogglePointerDown}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onChange={() => onToggleSelected(entry.item)}
+                        />
+                        <span className="sel-order" data-no-preview="1" aria-hidden="true">
+                          {viewModel.selectionOrderLabel}
                         </span>
-                      </div>
+                      </span>
                     </div>
-                    <div className="asset-ol-bl">
-                      <span className="badge tile-ui-text">{viewModel.size}</span>
-                    </div>
-                    <div className="asset-ol-bottom">
-                      <div className="asset-title tile-ui-text">{viewModel.title}</div>
-                      <div className="asset-subtitle tile-ui-text">{viewModel.sub}</div>
-                    </div>
+                  </div>
+                  <div className="asset-ol-bl">
+                    <span className="badge tile-ui-text">{viewModel.size}</span>
+                  </div>
+                  <div className="asset-ol-bottom">
+                    <div className="asset-title tile-ui-text">{viewModel.title}</div>
+                    <div className="asset-subtitle tile-ui-text">{viewModel.sub}</div>
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

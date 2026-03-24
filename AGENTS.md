@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Replaced Explorer’s column-bucket masonry render path with a persistent flat card stage: `ExplorerApp` now feeds `entries={renderedMediaEntries}` into `AssetGrid`, and `AssetGrid` computes explicit per-card geometry via `computeMasonryLayout(...)`.
+- `AssetGrid` now measures host width with `ResizeObserver` and renders cards as absolutely-positioned `.masonry-card` nodes inside a single `.masonry-columns` stage, improving DOM continuity across density changes and reducing reparent/recreate churn.
+- Density Flip selector and regression contracts were updated to the persistent stage contract (`.masonry-columns > .masonry-card`), and styles now include `.masonry-host`/`.masonry-card` instead of `.masonry-column` buckets.
+
+### Latest Implementation Notes (2026-03-24)
 - Added explicit regression assertions for the two PR-review comment risks: (1) density setup rebinding after grid surface mount, and (2) topbar hidden-offset refresh when measured height changes.
 - Explorer test contracts now lock callback-ref driven grid-surface availability (`gridSurfaceEl`) and the density effect dependency path (`[gridSurfaceEl, view]`).
 - Topbar motion contracts now explicitly assert hidden-state `refresh()` behavior and the measured-height-triggered refresh effect path in `ExplorerApp`.

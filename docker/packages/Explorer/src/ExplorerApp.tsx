@@ -9,14 +9,12 @@ import {
 } from './composeJobs';
 import type { ComposeJobEnvelope, PendingComposeItem } from './composeJobs';
 import {
-  buildMasonryColumns,
   buildMediaIdentityKey,
   collectMediaMeta,
   extractAiTags,
   extractTags,
   filterMedia,
   mergeMediaItemsPreservingIdentity,
-  prependItemsIntoMasonryColumns,
   pruneSelection,
   selectionOrderIndexMap,
   sortMedia,
@@ -377,16 +375,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (kind === 'video') return 'landscape';
     return 'square';
   }, [dynamicOrientations]);
-
-  const estimateTileHeight = useCallback((item: MediaItem) => {
-    const orient = resolveItemOrientation(item);
-    const kind = guessKind(item);
-    if (kind === 'audio') return 1;
-    if (orient === 'portrait') return 1.34;
-    if (orient === 'landscape') return 0.84;
-    if (orient === 'square') return 1;
-    return kind === 'video' ? 1.05 : 1;
-  }, [resolveItemOrientation]);
 
   const assetSelectionKey = useCallback((item: MediaItem, projectOverride?: Project | null) => (
     buildMediaIdentityKey(item, projectOverride)
@@ -865,24 +853,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ...pendingEntries,
     ...assetEntries,
   ]), [assetEntries, pendingEntries]);
-
-  const assetMasonryColumns = useMemo<AssetRenderedEntry[][]>(
-    () => buildMasonryColumns(
-      assetEntries,
-      gridColumnCount,
-      (entry) => estimateTileHeight(entry.item),
-    ),
-    [assetEntries, estimateTileHeight, gridColumnCount],
-  );
-
-  const masonryRenderColumns = useMemo<RenderedMediaEntry[][]>(
-    () => prependItemsIntoMasonryColumns<RenderedMediaEntry>(
-      assetMasonryColumns as RenderedMediaEntry[][],
-      pendingEntries,
-      gridColumnCount,
-    ),
-    [assetMasonryColumns, gridColumnCount, pendingEntries],
-  );
 
   useEffect(() => {
     if (!pendingComposeItems.length) return;
@@ -2786,7 +2756,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     canSelect={canSelect}
                     gridColumnCount={gridColumnCount}
                     gridRef={bindGridSurface}
-                    masonryColumns={masonryRenderColumns}
+                    entries={renderedMediaEntries}
                     onToggleSelected={toggleSelected}
                     onDismissPendingJob={removePendingJob}
                   />

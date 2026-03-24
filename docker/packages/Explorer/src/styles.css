@@ -716,18 +716,18 @@ select.control{
 .grid{
   padding: 4px;
 }
+.masonry-host{
+  position: relative;
+  width: 100%;
+}
 .masonry-columns{
-  display: grid;
-  grid-template-columns: repeat(var(--masonry-column-count, 1), minmax(0, 1fr));
-  gap: var(--grid-gap);
-  align-items: start;
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+.masonry-card{
   position: relative;
   z-index: 0;
-}
-.masonry-column{
-  display: flex;
-  flex-direction: column;
-  gap: var(--grid-gap);
 }
 .list{
   padding: 10px 12px;

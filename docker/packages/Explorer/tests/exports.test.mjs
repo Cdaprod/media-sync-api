@@ -424,10 +424,10 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(explorer.includes("const {\n    pendingComposeItems,\n    registerAcceptedJob,\n    removePendingJob,\n  } = usePendingComposeJobs({"));
   assert.ok(explorer.includes("fetchJson: fetchComposeJobJson,"));
   assert.ok(explorer.includes("onCompletedRefreshScope: async (refreshScope) => {"));
-  assert.ok(explorer.includes("masonryColumns={masonryRenderColumns}"));
+  assert.ok(explorer.includes("entries={renderedMediaEntries}"));
   assert.ok(explorer.includes("items={renderedMediaEntries}"));
   assert.ok(explorer.includes("onDismissPendingJob={removePendingJob}"));
-  assert.ok(explorer.includes("() => prependItemsIntoMasonryColumns<RenderedMediaEntry>("));
+  assert.ok(!explorer.includes("prependItemsIntoMasonryColumns<RenderedMediaEntry>"));
   assert.ok(explorer.includes("const hydrateProjectMediaItems = useCallback((items: MediaItem[], project: { name: string; source?: string | null }): MediaItem[] => ("));
   assert.ok(explorer.includes('mergeMediaItemsPreservingIdentity(current, hydratedItems)'));
   assert.ok(explorer.includes('buildMediaIdentityKey(item, projectOverride)'));
@@ -630,12 +630,12 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('pendingDataLoadOverlay'));
   assert.ok(content.includes('dynamicOrientations'));
   assert.ok(content.includes('resolveItemOrientation'));
-  assert.ok(content.includes('buildMasonryColumns'));
-  assert.ok(gridContent.includes('masonryColumns.map((column, columnIndex) => ('));
+  assert.ok(gridContent.includes('computeMasonryLayout({'));
+  assert.ok(gridContent.includes('layout.items.map(({ item: entry, x, y, width, height }, index) => {'));
   assert.ok(gridContent.includes('--masonry-column-count'));
   assert.ok(stateContent.includes('export function buildMasonryColumns'));
   assert.ok(styles.includes('.masonry-columns{'));
-  assert.ok(styles.includes('.masonry-column{'));
+  assert.ok(styles.includes('.masonry-host{'));
   assert.ok(styles.includes('-webkit-touch-callout: none;'));
   assert.ok(!styles.includes('column-fill: balance;'));
   assert.ok(content.includes('beginContentLoading'));
@@ -967,7 +967,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('const state = Flip.getState(items);'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('Flip.from(state, {'));
-  assert.ok(flip.includes("itemSelector = '.masonry-column > .asset, .masonry-column > .pending-compose-card'"));
+  assert.ok(flip.includes("itemSelector = '.masonry-columns > .masonry-card'"));
   assert.ok(flip.includes('Flip.killFlipsOf(items);'));
   assert.ok(flip.includes('gsap.killTweensOf(items);'));
   assert.ok(flip.includes('targets: items,'));
