@@ -321,6 +321,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const topbarIntentRef = useRef<IntentController | null>(null);
   const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);
+  const topbarHiddenPrevRef = useRef(topbarHidden);
+  const topbarInsetPrevRef = useRef(0);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
     const itemOrient = inferOrientationFromItem(item);
@@ -1720,6 +1722,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     observer.observe(topbar);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const scrollEl = mediaScrollViewportRef.current;
+    if (!scrollEl) return;
+    const styles = window.getComputedStyle(scrollEl);
+    const topbarGap = Number.parseFloat(styles.getPropertyValue('--topbar-gap')) || 0;
+    const nextInset = topbarHidden ? 0 : Math.max(0, topbarMeasuredHeight + topbarGap);
+
+    if (topbarHiddenPrevRef.current !== topbarHidden) {
+      const delta = nextInset - topbarInsetPrevRef.current;
+      if (Math.abs(delta) > 0.5) {
+        scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);
+      }
+    }
+
+    topbarInsetPrevRef.current = nextInset;
+    topbarHiddenPrevRef.current = topbarHidden;
+  }, [topbarHidden, topbarMeasuredHeight]);
 
   useEffect(() => {
     const topbar = topbarRef.current;

@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-24)
+- Topbar collapse now preserves on-screen asset position across open↔hidden inset changes: Explorer tracks previous inset/hidden state and compensates `mediaScrollViewportRef.scrollTop` by inset delta when `topbarHidden` flips, preventing first-row tiles from jumping out of bounds during collapse near the top of the viewport.
+- Inset compensation is computed from the live measured topbar height plus runtime `--topbar-gap`, and only applies on hidden-state transitions (not every measurement update), so dynamic topbar remeasure does not unexpectedly shift scroll position.
+- Focused Explorer regressions now guard the new topbar hidden-transition scroll compensation wiring (`topbarHiddenPrevRef`, `topbarInsetPrevRef`, and delta-based `scrollTop` adjustment).
+
+### Latest Implementation Notes (2026-03-24)
 - Explorer topbar geometry now uses live measured height instead of a hardcoded token: `ExplorerApp` observes `topbarRef` with `ResizeObserver`, stores `topbarMeasuredHeight`, and exports `--topbar-measured-height` on `.scroll` so Safari/mobile wrapping and padding changes stay synchronized with layout math.
 - Topbar hidden transform and scroll-content open inset now both consume `var(--topbar-measured-height)` (with `.scroll` fallback to `--topbar-height`), eliminating partial-header hang and top-row clipping/overlap when collapsing near the top of the viewport.
 - Focused Explorer regression assertions now lock measured-height wiring (`topbarMeasuredHeight` state, observer hook, CSS custom property style binding, and measured-height CSS usage) to prevent regressions back to static topbar-height assumptions.

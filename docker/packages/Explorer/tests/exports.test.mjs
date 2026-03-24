@@ -257,8 +257,13 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('const mediaContentRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes('const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes("const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);"));
+  assert.ok(explorer.includes('const topbarHiddenPrevRef = useRef(topbarHidden);'));
+  assert.ok(explorer.includes('const topbarInsetPrevRef = useRef(0);'));
   assert.ok(explorer.includes('const updateTopbarMeasuredHeight = () => {'));
   assert.ok(explorer.includes('const observer = new ResizeObserver(() => updateTopbarMeasuredHeight());'));
+  assert.ok(explorer.includes('const topbarGap = Number.parseFloat(styles.getPropertyValue(\'--topbar-gap\')) || 0;'));
+  assert.ok(explorer.includes('if (topbarHiddenPrevRef.current !== topbarHidden) {'));
+  assert.ok(explorer.includes('scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);'));
   assert.ok(explorer.includes('rootRef: mediaContentRef,'));
   assert.ok(explorer.includes('scrollRef: mediaScrollViewportRef,'));
   assert.ok(explorer.includes('ref={mediaContentRef}'));

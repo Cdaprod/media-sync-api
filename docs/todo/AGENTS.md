@@ -1,3 +1,9 @@
+## 2026-03-24 — Explorer topbar-collapse scroll compensation
+- [x] Added hidden-transition scroll compensation that adjusts `.scroll` `scrollTop` by inset delta when `topbarHidden` flips, keeping first-row assets from jumping above the viewport edge.
+- [x] Scoped compensation to hidden-state transitions only, while deriving inset from measured topbar height + `--topbar-gap` so geometry remains device-responsive without measurement-churn jumps.
+- [x] Updated focused Explorer tests to assert transition compensation markers and prevent regression to uncorrected inset-collapse jumps.
+- [ ] Validate on physical iPhone Safari that collapsed topbar leaves first-row checkbox fully visible/tappable after repeated near-top collapse/reveal cycles.
+
 ## 2026-03-24 — Explorer measured topbar height synchronization
 - [x] Added `topbarMeasuredHeight` state in `ExplorerApp` and wired a `ResizeObserver` on `topbarRef` so topbar geometry follows real rendered height.
 - [x] Exposed `--topbar-measured-height` on `.scroll` with runtime style binding and kept CSS fallback to tokenized `--topbar-height`.
