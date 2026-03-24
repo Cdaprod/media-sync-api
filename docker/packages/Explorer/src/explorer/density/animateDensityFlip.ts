@@ -20,28 +20,25 @@ export function animateDensityFlip({
 
   const state = Flip.getState(items);
   commitLayout();
-
-  requestAnimationFrame(() => {
-    const visibleItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
-    Flip.from(state, {
-      absolute: false,
-      nested: true,
-      prune: true,
-      scale: true,
-      duration: 0.32,
-      ease: 'power2.out',
-      simple: false,
-      onEnter: (elements) => {
-        gsap.fromTo(
-          elements,
-          { autoAlpha: 0, scale: 0.98 },
-          { autoAlpha: 1, scale: 1, duration: 0.18, ease: 'power2.out' },
-        );
-      },
-      onComplete: () => {
-        gsap.set(visibleItems, { clearProps: 'transform' });
-        void addBubblySettle(visibleItems);
-      },
-    });
+  const visibleItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
+  Flip.from(state, {
+    absolute: false,
+    nested: true,
+    prune: true,
+    scale: true,
+    duration: 0.32,
+    ease: 'power2.out',
+    simple: false,
+    onEnter: (elements) => {
+      gsap.fromTo(
+        elements,
+        { autoAlpha: 0, scale: 0.98 },
+        { autoAlpha: 1, scale: 1, duration: 0.18, ease: 'power2.out' },
+      );
+    },
+    onComplete: () => {
+      gsap.set(visibleItems, { clearProps: 'transform' });
+      void addBubblySettle(visibleItems);
+    },
   });
 }

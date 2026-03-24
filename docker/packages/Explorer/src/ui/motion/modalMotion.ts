@@ -29,7 +29,11 @@ export function createModalMotion(modalEl: HTMLElement, cardEl: HTMLElement): Op
     open() {
       tl.play();
     },
-    close() {
+    close(onDone?: () => void) {
+      tl.eventCallback('onReverseComplete', () => {
+        gsap.set(modalEl, { pointerEvents: 'none' });
+        onDone?.();
+      });
       tl.reverse();
     },
     destroy() {

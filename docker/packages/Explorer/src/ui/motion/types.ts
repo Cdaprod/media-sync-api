@@ -4,5 +4,5 @@ export type Destroyable = {
 
 export type OpenCloseController = Destroyable & {
   open: () => void;
-  close: () => void;
+  close: (onDone?: () => void) => void;
 };

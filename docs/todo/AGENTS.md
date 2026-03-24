@@ -1,3 +1,15 @@
+## 2026-03-24 — GSAP architecture repair pass (PR #138 follow-up)
+- [x] Rebind density controller lifecycle to delayed grid mount + grid/list view transitions.
+- [x] Make density controller synchronously commit `--masonry-column-count` on the live grid before Flip choreography.
+- [x] Implement continuous slider scrub feedback with discrete resting-point commits and settle behavior.
+- [x] Re-sequence Flip to capture old state → synchronous commit → immediate Flip.from without React-timing RAF dependency.
+- [x] Redesign preview drawer motion for explicit side-panel vs bottom-sheet modes and synchronize backdrop interactivity with visible panel lifecycle.
+- [x] Implement real modal and toast exit-presence management (rendered vs open/exiting lifecycle).
+- [x] Exempt density pinch surface from document-level iOS `gesturestart/gesturechange/gestureend` preventDefault handling.
+- [x] Add topbar hidden-offset refresh path tied to measured-height updates while hidden.
+- [x] Expand focused Explorer regression assertions for repaired contracts.
+- [ ] Capture manual iPhone Safari validation for slider scrub feel + pinch behavior + drawer mode transitions.
+
 ## 2026-03-24 — Explorer GSAP motion architecture (new)
 - [x] Add shared GSAP module with Flip registration and reusable motion controller contracts.
 - [x] Add topbar/drawer/modal/toast/snap-band motion controller implementations under Explorer package motion modules.

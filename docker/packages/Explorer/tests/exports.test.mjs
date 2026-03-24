@@ -361,7 +361,7 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('const buildComposeTimestampName = () => {'));
   assert.ok(content.includes("entry?.name === 'P5-SHARED-Exported-Media'"));
   assert.ok(content.includes('setComposeModalOpen(true);'));
-  assert.ok(content.includes('{composeModalOpen ? ('));
+  assert.ok(content.includes('{composeModalRendered ? ('));
   assert.ok(content.includes('className="compose-modal open"'));
   assert.ok(content.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
   assert.ok(content.includes('data-compose-project-picker="1"'));
@@ -502,7 +502,7 @@ test('package explorer delete actions route through custom confirmation modal', 
   assert.ok(content.includes('await performDeleteMediaSelection(selectionKeys);'));
   assert.ok(content.includes('const handleDeleteCancel = useCallback(() => {'));
   assert.ok(content.includes('setPendingDeleteSelectionKeys([]);'));
-  assert.ok(content.includes("{deleteModalOpen ? ("));
+  assert.ok(content.includes('{deleteModalRendered ? ('));
   assert.ok(content.includes('className="confirm-modal open"'));
   assert.ok(content.includes('id="confirmDeleteTitle" className="confirm-title"'));
   assert.ok(content.includes("pendingDeleteSelectionKeys.length === 1 ? 'Delete this asset?' : `Delete ${Math.max(1, pendingDeleteSelectionKeys.length)} assets?`"));
@@ -834,7 +834,9 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(content.includes('createTopbarMotion(topbarEl)'));
   assert.ok(content.includes('createTopbarSnapBand({'));
-  assert.ok(content.includes('createDrawerMotion(drawerEl, backdropEl)'));
+  assert.ok(content.includes('createDrawerMotion(drawerEl, backdropEl, {'));
+  assert.ok(content.includes("getMode: () => (window.matchMedia('(max-width: 860px)').matches ? 'sheet' : 'side')"));
+  assert.ok(content.includes('controller.syncLayoutMode();'));
   assert.ok(content.includes('createExplorerDensityController({'));
   assert.ok(content.includes('createPinchDensityController({'));
   assert.ok(content.includes('id="asset-density-slider"'));
@@ -884,13 +886,17 @@ test('package explorer sidebar scroll keeps touch scrolling enabled for project 
 });
 
 
-test('package explorer conditionally mounts confirm and compose modals only while open', () => {
+test('package explorer conditionally mounts confirm and compose modals with exit presence', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
-  assert.ok(content.includes('{deleteModalOpen ? ('));
+  assert.ok(content.includes('{deleteModalRendered ? ('));
+  assert.ok(content.includes('if (deleteModalOpen) setDeleteModalRendered(true);'));
+  assert.ok(content.includes('motion.close(() => setDeleteModalRendered(false));'));
   assert.ok(content.includes('className="confirm-modal open"'));
   assert.ok(!content.includes('aria-hidden={!deleteModalOpen}'));
-  assert.ok(content.includes('{composeModalOpen ? ('));
+  assert.ok(content.includes('{composeModalRendered ? ('));
+  assert.ok(content.includes('if (composeModalOpen) setComposeModalRendered(true);'));
+  assert.ok(content.includes('motion.close(() => setComposeModalRendered(false));'));
   assert.ok(content.includes('className="compose-modal open"'));
   assert.ok(!content.includes('aria-hidden={!composeModalOpen}'));
 });
@@ -902,4 +908,47 @@ test('package explorer toast layer stays above the fixed topbar stack', () => {
   assert.ok(styles.includes('.toasts{'));
   assert.ok(styles.includes('top: calc(env(safe-area-inset-top, 0px) + 74px);'));
   assert.ok(styles.includes('z-index: 140;'));
+});
+
+test('motion architecture keeps density, drawer, toast, and topbar contracts explicit', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const densityControllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts');
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const drawerMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts');
+  const topbarMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const densityController = fs.readFileSync(densityControllerPath, 'utf8');
+  const flip = fs.readFileSync(flipPath, 'utf8');
+  const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
+  const topbarMotion = fs.readFileSync(topbarMotionPath, 'utf8');
+
+  assert.ok(content.includes("if (view !== 'grid') {"));
+  assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
+  assert.ok(content.includes('const onSliderInput = () => {'));
+  assert.ok(content.includes('density.scrubTo(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE));'));
+  assert.ok(content.includes('density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);'));
+  assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
+  assert.ok(content.includes('if (inDensityPinchSurface(event.target)) return;'));
+  assert.ok(content.includes('data-density-pinch-surface="true"'));
+  assert.ok(content.includes('topbarMotionRef.current?.refresh();'));
+
+  assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
+  assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
+  assert.ok(densityController.includes('scaleForScrubValue'));
+  assert.ok(densityController.includes('setScale(scaleForScrubValue(nextValue));'));
+  assert.ok(densityController.includes('const distanceToStep = Math.abs(clampedValue - nearestStep);'));
+
+  assert.ok(!flip.includes('requestAnimationFrame(() => {'));
+  assert.ok(flip.includes('const state = Flip.getState(items);'));
+  assert.ok(flip.includes('commitLayout();'));
+  assert.ok(flip.includes('Flip.from(state, {'));
+
+  assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));
+  assert.ok(drawerMotion.includes("if (mode === 'sheet') {"));
+  assert.ok(drawerMotion.includes('function syncLayoutMode() {'));
+  assert.ok(drawerMotion.includes('function setClosedState() {'));
+
+  assert.ok(topbarMotion.includes('refresh: () => void;'));
+  assert.ok(topbarMotion.includes('function refresh() {'));
+  assert.ok(topbarMotion.includes('y: -topbarEl.offsetHeight,'));
 });

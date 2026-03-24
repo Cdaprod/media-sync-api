@@ -5,6 +5,7 @@ export type TopbarMotionController = Destroyable & {
   show: () => void;
   hide: () => void;
   isHidden: () => boolean;
+  refresh: () => void;
 };
 
 export function createTopbarMotion(topbarEl: HTMLElement): TopbarMotionController {
@@ -49,9 +50,19 @@ export function createTopbarMotion(topbarEl: HTMLElement): TopbarMotionControlle
     return hidden;
   }
 
+  function refresh() {
+    if (!hidden) return;
+    stop();
+    gsap.set(topbarEl, {
+      y: -topbarEl.offsetHeight,
+      autoAlpha: 0.98,
+      pointerEvents: 'none',
+    });
+  }
+
   function destroy() {
     stop();
   }
 
-  return { show, hide, isHidden, destroy };
+  return { show, hide, isHidden, refresh, destroy };
 }

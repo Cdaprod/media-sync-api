@@ -1,3 +1,12 @@
+### 2026-03-24 Consolidated Notes Index
+- Note: 2026-03-24 work items are grouped under repeated day-stamped entries below for chronological handoff continuity.
+- This pass repaired the GSAP architecture regressions (density lifecycle/commit/scrub, drawer/backdrop truth, modal/toast exit presence, pinch gesture exemptions, topbar hidden-offset refresh).
+
+### Latest Implementation Notes (2026-03-24)
+- Repaired Explorer density ownership around the real masonry contract: controller now synchronously commits `--masonry-column-count` on the live grid element and only mirrors committed columns back to React for UI/readout.
+- Added continuous density scrub behavior (live GSAP scale feedback while dragging) plus discrete column commit thresholds with Flip reflow + subtle settle, and made controller attach/rebind resilient to delayed grid mount and grid/list view transitions.
+- Reworked preview drawer motion for explicit side-panel vs bottom-sheet modes (based on actual Explorer layout breakpoint), fixed backdrop/panel synchronization so closed/off-screen states are non-interactive, added real modal/toast exit presence lifecycles, scoped iOS gesture-block exemptions to the density pinch surface, and added topbar hidden-offset refresh on measured-height changes.
+
 ### Latest Implementation Notes (2026-03-24)
 - Added a shared Explorer GSAP foundation (`src/lib/gsap.ts`) with one-time `Flip` registration and introduced reusable motion controllers for topbar, drawer, modal, toast, and topbar snap-band settling.
 - Wired Explorer motion orchestration into `ExplorerApp`: GSAP controllers now drive topbar hide/reveal animation, drawer/backdrop transitions, modal enter animation, toast entry animation, and thresholded snap-band settle cancellation hooks on pointer/scroll interaction.

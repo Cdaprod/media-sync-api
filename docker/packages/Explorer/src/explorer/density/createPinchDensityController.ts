@@ -1,4 +1,3 @@
-import { gsap } from '../../lib/gsap';
 import type { ExplorerDensityController } from './createExplorerDensityController';
 
 export type PinchDensityController = {
@@ -36,8 +35,6 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   let initialColumns = density.getColumns();
   let pendingColumns = initialColumns;
 
-  const setScale = gsap.quickSetter(visualScaleTargetEl, 'scale');
-
   function getTouchPair(evt: TouchEvent): TouchPair | null {
     if (evt.touches.length < 2) return null;
     return { a: evt.touches[0], b: evt.touches[1] };
@@ -68,9 +65,9 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
 
     const nextDistance = distance(pair);
     const ratio = nextDistance / Math.max(initialDistance, 1);
-
     const clampedVisual = Math.max(minScale, Math.min(maxScale, ratio));
-    setScale(clampedVisual);
+    const scrubTarget = initialColumns - ((clampedVisual - 1) / scaleThresholdPerStep);
+    density.scrubTo(scrubTarget);
 
     const signedDelta = -((ratio - 1) / scaleThresholdPerStep);
     const nextColumns = Math.round(initialColumns + signedDelta);
@@ -81,19 +78,10 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     }
   }
 
-  function settleVisualScale() {
-    gsap.to(visualScaleTargetEl, {
-      scale: 1,
-      duration: 0.18,
-      ease: 'power2.out',
-      overwrite: 'auto',
-    });
-  }
-
   function onTouchEnd() {
     if (!active) return;
     active = false;
-    settleVisualScale();
+    density.settleScrub();
   }
 
   function attach() {
