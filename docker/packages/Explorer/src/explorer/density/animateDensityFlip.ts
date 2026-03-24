@@ -36,7 +36,7 @@ export function animateDensityFlip({
     nested: true,
     prune: true,
     scale: false,
-    duration: interactionMode === 'scrub' ? 0.11 : 0.18,
+    duration: interactionMode === 'scrub' ? 0.085 : 0.16,
     ease: 'power2.out',
     simple: true,
     overwrite: 'auto',
@@ -48,6 +48,12 @@ export function animateDensityFlip({
       );
     },
     onComplete: () => {
+      gsap.set(nextItems, { clearProps: 'transform,opacity' });
+      if (activeByGrid.get(gridEl) === animation) {
+        activeByGrid.delete(gridEl);
+      }
+    },
+    onInterrupt: () => {
       gsap.set(nextItems, { clearProps: 'transform,opacity' });
       if (activeByGrid.get(gridEl) === animation) {
         activeByGrid.delete(gridEl);

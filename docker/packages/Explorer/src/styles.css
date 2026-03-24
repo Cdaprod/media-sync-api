@@ -81,6 +81,10 @@ code { font-family: var(--mono); }
 .inspector-backdrop{
   z-index: 70;
 }
+[data-inspector-backdrop="true"]{
+  z-index: 70;
+  pointer-events: none;
+}
 #drawerBackdrop{
   background: rgba(6,8,14,0.35);
 }

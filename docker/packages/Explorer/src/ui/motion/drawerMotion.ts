@@ -26,6 +26,9 @@ export function createDrawerMotion(
     tween = null;
   };
 
+  drawerEl.dataset.drawerMotionOwned = 'true';
+  backdropEl.dataset.drawerMotionOwned = 'true';
+
   const closedVector = () => {
     const rect = drawerEl.getBoundingClientRect();
     const width = Math.max(rect.width, window.innerWidth * 0.65);
@@ -37,11 +40,11 @@ export function createDrawerMotion(
   };
 
   const activateBackdrop = () => {
-    gsap.set(backdropEl, { autoAlpha: 1, pointerEvents: 'auto' });
+    gsap.set(backdropEl, { autoAlpha: 1, pointerEvents: 'auto', zIndex: 70 });
   };
 
   const deactivateBackdrop = () => {
-    gsap.set(backdropEl, { autoAlpha: 0, pointerEvents: 'none' });
+    gsap.set(backdropEl, { autoAlpha: 0, pointerEvents: 'none', zIndex: 70 });
   };
 
   function open() {

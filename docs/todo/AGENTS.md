@@ -1,3 +1,11 @@
+## 2026-03-24 — Density scrub immediacy + inspector truth hardening (follow-up)
+- [x] Replace half-step rounding lag with direction-aware scrub threshold conversion so density commits track finger movement at integer boundaries.
+- [x] Split scrub vs settle Flip timing and add interrupt cleanup to keep rapid density changes interruptible without stale transforms.
+- [x] Harden inspector drawer/backdrop contract with explicit ownership markers and backdrop data-attribute selector.
+- [x] Add mode-query change synchronization so side/sheet preview behavior stays correct across portrait, landscape, and desktop-like widths.
+- [x] Extend focused Explorer regression assertions for new density threshold and inspector ownership contracts.
+- [ ] Capture manual runtime proof (portrait + landscape + desktop-like viewport) confirming panel-over-backdrop visibility and immediate density slider feel.
+
 ## 2026-03-24 — Density latency + inspector backdrop truth pass (PR #138 follow-up)
 - [x] Reworked density scrub to latest-input-wins frame-coalesced commits for immediate finger-tracking.
 - [x] Added in-flight Flip interruption/overwrite so stale transitions cannot lag behind new slider targets.

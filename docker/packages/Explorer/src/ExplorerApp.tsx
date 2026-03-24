@@ -357,6 +357,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const confirmCardRef = useRef<HTMLDivElement | null>(null);
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
+  const inspectorOpenRef = useRef(false);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
     const itemOrient = inferOrientationFromItem(item);
@@ -1701,6 +1702,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     topbarMeasuredHeight,
   });
   topbarHiddenRef.current = topbarHidden;
+  inspectorOpenRef.current = inspectorOpen;
 
   useEffect(() => {
     const topbarEl = topbarRef.current;
@@ -1759,26 +1761,30 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const drawerEl = document.querySelector<HTMLElement>('[data-inspector-drawer="true"]');
     const backdropEl = inspectorBackdropRef.current;
     if (!drawerEl || !backdropEl) return;
+    const modeQuery = window.matchMedia('(max-width: 860px)');
     const controller = createDrawerMotion(drawerEl, backdropEl, {
-      getMode: () => (window.matchMedia('(max-width: 860px)').matches ? 'sheet' : 'side'),
+      getMode: () => (modeQuery.matches ? 'sheet' : 'side'),
     });
     drawerMotionRef.current = controller;
-    if (inspectorOpen) controller.open();
+    if (inspectorOpenRef.current) controller.open();
     else controller.setClosedState();
 
     const handleResize = () => {
       controller.syncLayoutMode();
-      if (inspectorOpen) controller.open();
+      if (inspectorOpenRef.current) controller.open();
       else controller.setClosedState();
     };
+    const handleModeChange = () => handleResize();
     window.addEventListener('resize', handleResize, { passive: true });
+    modeQuery.addEventListener('change', handleModeChange);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      modeQuery.removeEventListener('change', handleModeChange);
       controller.destroy();
       drawerMotionRef.current = null;
     };
-  }, [inspectorOpen]);
+  }, []);
 
   useEffect(() => {
     const controller = drawerMotionRef.current;
@@ -3022,6 +3028,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       <div
         className="backdrop inspector-backdrop"
         ref={inspectorBackdropRef}
+        data-inspector-backdrop="true"
+        aria-hidden={!inspectorOpen}
         onClick={closeDrawer}
       ></div>
     </div>

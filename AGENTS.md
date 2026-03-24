@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Follow-up retune for density finger-tracking now converts scrub values using direction-aware integer thresholds (upward uses `floor`, downward uses `ceil`) so column commits happen at boundary crossing instead of half-step lag.
+- Density Flip choreography now distinguishes scrub vs settle durations and clears transforms on interrupt, keeping masonry reflow fast, interruptible, and latest-input-wins under rapid slider movement.
+- Inspector drawer/backdrop contract was hardened with persistent motion ownership markers (`data-drawer-motion-owned`), explicit inspector-backdrop marker (`data-inspector-backdrop`), and responsive mode-query sync (`matchMedia` change + resize) to keep panel-over-dimmer truth stable in portrait/landscape/desktop layouts.
+
+### Latest Implementation Notes (2026-03-24)
 - Retuned Explorer density scrub for immediate touch responsiveness: removed lag-heavy hysteresis stepping in favor of latest-input-wins frame-coalesced commits (`requestAnimationFrame`) that chase the current slider value while preserving masonry-authoritative layout commits.
 - Density Flip reflow now interrupts stale in-flight transitions per-grid (`WeakMap` + `kill`) and uses shorter scrub timing so rapid drag input no longer queues old targets behind the user’s finger.
 - Preview inspector backdrop/panel truth was tightened by explicitly targeting the inspector drawer node (`data-inspector-drawer`), using an inspector-specific backdrop class contract, and switching drawer transform ownership to explicit GSAP x/y vectors so the panel remains visually above its dimmer across side/sheet modes.

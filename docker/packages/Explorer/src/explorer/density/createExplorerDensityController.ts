@@ -37,10 +37,17 @@ export function createExplorerDensityController(options: ExplorerDensityControll
 
   let currentColumns = clampColumnCount(initialColumns);
   let scrubValue = currentColumns;
+  let previousScrubValue = currentColumns;
   let rafId = 0;
   let latestRequestedColumns: number | null = null;
 
   const clampToRange = (value: number) => Math.max(minColumns, Math.min(maxColumns, value));
+
+  const valueToColumnCount = (nextValue: number) => {
+    if (nextValue > previousScrubValue) return Math.floor(nextValue + 1e-6);
+    if (nextValue < previousScrubValue) return Math.ceil(nextValue - 1e-6);
+    return Math.round(nextValue);
+  };
 
   const commitLayoutColumns = (nextColumns: number) => {
     currentColumns = clampColumnCount(clampToRange(nextColumns));
@@ -51,7 +58,11 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     onColumnsCommit(currentColumns);
   };
 
-  function setColumns(nextColumns: number, animated = true) {
+  const commitColumns = (
+    nextColumns: number,
+    animated = true,
+    interactionMode: 'scrub' | 'settle' = 'scrub',
+  ) => {
     const clamped = clampColumnCount(clampToRange(nextColumns));
     if (clamped === currentColumns) return;
 
@@ -59,12 +70,16 @@ export function createExplorerDensityController(options: ExplorerDensityControll
       animateDensityFlip({
         gridEl,
         commitLayout: () => commitLayoutColumns(clamped),
-        interactionMode: 'scrub',
+        interactionMode,
       });
       return;
     }
 
     commitLayoutColumns(clamped);
+  };
+
+  function setColumns(nextColumns: number, animated = true) {
+    commitColumns(nextColumns, animated, 'settle');
   }
 
   const flushLatestCommit = () => {
@@ -73,7 +88,7 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     const target = latestRequestedColumns;
     latestRequestedColumns = null;
     if (target !== currentColumns) {
-      setColumns(target, true);
+      commitColumns(target, true, 'scrub');
     }
   };
 
@@ -87,16 +102,18 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     const clampedValue = clampToRange(nextValue);
     scrubValue = clampedValue;
     sliderEl.value = String(clampedValue);
-    requestLatestCommit(Math.round(clampedValue));
+    requestLatestCommit(valueToColumnCount(clampedValue));
+    previousScrubValue = clampedValue;
   }
 
   function settleScrub() {
     if (latestRequestedColumns != null && latestRequestedColumns !== currentColumns) {
-      setColumns(latestRequestedColumns, true);
+      commitColumns(latestRequestedColumns, true, 'settle');
       latestRequestedColumns = null;
     }
     sliderEl.value = String(currentColumns);
     scrubValue = currentColumns;
+    previousScrubValue = currentColumns;
   }
 
   function destroy() {

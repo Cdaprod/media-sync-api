@@ -835,7 +835,8 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('createTopbarMotion(topbarEl)'));
   assert.ok(content.includes('createTopbarSnapBand({'));
   assert.ok(content.includes('createDrawerMotion(drawerEl, backdropEl, {'));
-  assert.ok(content.includes("getMode: () => (window.matchMedia('(max-width: 860px)').matches ? 'sheet' : 'side')"));
+  assert.ok(content.includes('const modeQuery = window.matchMedia(\'(max-width: 860px)\');'));
+  assert.ok(content.includes("getMode: () => (modeQuery.matches ? 'sheet' : 'side')"));
   assert.ok(content.includes('controller.syncLayoutMode();'));
   assert.ok(content.includes('createExplorerDensityController({'));
   assert.ok(content.includes('createPinchDensityController({'));
@@ -933,14 +934,23 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('data-density-pinch-surface="true"'));
   assert.ok(content.includes('topbarMotionRef.current?.refresh();'));
   assert.ok(content.includes('className="backdrop inspector-backdrop"'));
+  assert.ok(content.includes('data-inspector-backdrop="true"'));
   assert.ok(content.includes('data-inspector-drawer="true"'));
+  assert.ok(content.includes("const modeQuery = window.matchMedia('(max-width: 860px)');"));
+  assert.ok(content.includes("modeQuery.addEventListener('change', handleModeChange);"));
+  assert.ok(content.includes('inspectorOpenRef.current = inspectorOpen;'));
 
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
+  assert.ok(densityController.includes('const valueToColumnCount = (nextValue: number) => {'));
+  assert.ok(densityController.includes('if (nextValue > previousScrubValue) return Math.floor(nextValue + 1e-6);'));
+  assert.ok(densityController.includes('if (nextValue < previousScrubValue) return Math.ceil(nextValue - 1e-6);'));
   assert.ok(densityController.includes('let latestRequestedColumns: number | null = null;'));
   assert.ok(densityController.includes('const requestLatestCommit = (nextColumns: number) => {'));
   assert.ok(densityController.includes('if (rafId) return;'));
   assert.ok(densityController.includes('requestAnimationFrame(flushLatestCommit);'));
+  assert.ok(densityController.includes("interactionMode: 'scrub' | 'settle' = 'scrub',"));
+  assert.ok(densityController.includes("commitColumns(nextColumns, animated, 'settle');"));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
 
@@ -953,11 +963,14 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes("clearProps: 'transform,opacity'"));
   assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));
   assert.ok(flip.includes('previous.kill();'));
+  assert.ok(flip.includes('onInterrupt: () => {'));
 
   assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));
   assert.ok(drawerMotion.includes("if (mode === 'sheet') {"));
   assert.ok(drawerMotion.includes('function syncLayoutMode() {'));
   assert.ok(drawerMotion.includes('function setClosedState() {'));
+  assert.ok(drawerMotion.includes("drawerEl.dataset.drawerMotionOwned = 'true';"));
+  assert.ok(drawerMotion.includes("backdropEl.dataset.drawerMotionOwned = 'true';"));
 
   assert.ok(topbarMotion.includes('refresh: () => void;'));
   assert.ok(topbarMotion.includes('function refresh() {'));
