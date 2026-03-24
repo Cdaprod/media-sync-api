@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer measured topbar height synchronization
+- [x] Added `topbarMeasuredHeight` state in `ExplorerApp` and wired a `ResizeObserver` on `topbarRef` so topbar geometry follows real rendered height.
+- [x] Exposed `--topbar-measured-height` on `.scroll` with runtime style binding and kept CSS fallback to tokenized `--topbar-height`.
+- [x] Switched both hidden transform and open-state `scroll-content` inset to measured-height variable to remove partial-collapse/header-overlap behavior near top-of-scroll.
+- [x] Updated focused Explorer tests to assert measured-height state/effect/style wiring and measured-height CSS usage.
+- [ ] Validate repeatedly on physical iPhone Safari (open→hidden near top boundary, short stop/start scroll cycles) that no clipping/jump remains and top-row checkboxes remain fully tappable.
+
 ## 2026-03-24 — Explorer scroll-content top inset follow-up
 - [x] Added a dedicated `.scroll-content` wrapper under `.topbar-anchor` and moved both grid/list render blocks into that wrapper.
 - [x] Applied open-state top inset only to `.scroll-content` (`topbar-open`) and collapse-to-zero in hidden state (`topbar-hidden`) so the first media row starts below the visible topbar at load.

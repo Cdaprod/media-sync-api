@@ -115,7 +115,7 @@ code { font-family: var(--mono); }
   pointer-events: none;
 }
 .topbar.is-hidden{
-  transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);
+  transform: translate3d(0, calc(-1 * var(--topbar-measured-height)), 0);
   opacity: 0.98;
   pointer-events: none;
 }
@@ -581,6 +581,7 @@ select.control{
 
 .scroll{
   min-height: 0;
+  --topbar-measured-height: var(--topbar-height);
 }
 .sidebar .scroll{
   overflow: auto;
@@ -599,7 +600,7 @@ select.control{
   transition: padding-top 160ms ease;
 }
 .scroll-content.topbar-open{
-  padding-top: calc(var(--topbar-height) + var(--topbar-gap));
+  padding-top: calc(var(--topbar-measured-height) + var(--topbar-gap));
 }
 .scroll-content.topbar-hidden{
   padding-top: 0;

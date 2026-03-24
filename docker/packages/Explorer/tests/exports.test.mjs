@@ -256,10 +256,15 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('onPointerDown={() => pinTopbarTemporarily(900)}'));
   assert.ok(explorer.includes('const mediaContentRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes('const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);'));
+  assert.ok(explorer.includes("const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);"));
+  assert.ok(explorer.includes('const updateTopbarMeasuredHeight = () => {'));
+  assert.ok(explorer.includes('const observer = new ResizeObserver(() => updateTopbarMeasuredHeight());'));
   assert.ok(explorer.includes('rootRef: mediaContentRef,'));
   assert.ok(explorer.includes('scrollRef: mediaScrollViewportRef,'));
   assert.ok(explorer.includes('ref={mediaContentRef}'));
-  assert.ok(explorer.includes('ref={mediaScrollViewportRef} className="scroll"'));
+  assert.ok(explorer.includes('ref={mediaScrollViewportRef}'));
+  assert.ok(explorer.includes('className="scroll"'));
+  assert.ok(explorer.includes("style={{ '--topbar-measured-height': `${topbarMeasuredHeight}px` } as React.CSSProperties}"));
   assert.ok(explorer.includes('data-topbar-root="true"'));
   assert.ok(explorer.includes('data-topbar-panel="true"'));
   assert.ok(explorer.includes('<div className="topbar-anchor" aria-hidden="true">'));
@@ -756,6 +761,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(!content.includes('className="btn mobile-only"'));
   assert.ok(styles.includes('--topbar-subrow-height'));
   assert.ok(styles.includes('--topbar-gap: 12px;'));
+  assert.ok(styles.includes('--topbar-measured-height: var(--topbar-height);'));
   assert.ok(!styles.includes('--topbar-offset-open'));
   assert.ok(!styles.includes('--topbar-offset-hidden'));
   assert.ok(!styles.includes('.app.topbar-hidden{'));
@@ -772,7 +778,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('.scroll-content{'));
   assert.ok(styles.includes('transition: padding-top 160ms ease;'));
   assert.ok(styles.includes('.scroll-content.topbar-open{'));
-  assert.ok(styles.includes('padding-top: calc(var(--topbar-height) + var(--topbar-gap));'));
+  assert.ok(styles.includes('padding-top: calc(var(--topbar-measured-height) + var(--topbar-gap));'));
   assert.ok(styles.includes('.scroll-content.topbar-hidden{'));
   assert.ok(styles.includes('padding-top: 0;'));
   assert.ok(styles.includes('.content .scroll{'));
@@ -785,7 +791,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(hookContent.includes('TOPBAR_HIDE_DELTA_PX'));
   assert.ok(hookContent.includes('TOPBAR_REVEAL_DELTA_PX'));
   assert.ok(styles.includes('will-change: transform, opacity;'));
-  assert.ok(styles.includes('transform: translate3d(0, calc(-1 * var(--topbar-height)), 0);'));
+  assert.ok(styles.includes('transform: translate3d(0, calc(-1 * var(--topbar-measured-height)), 0);'));
   assert.ok(styles.includes('@media (max-width: 860px){'));
   assert.ok(styles.includes('--topbar-gap: 14px;'));
   assert.ok(!styles.includes('padding-top: 8px;'));

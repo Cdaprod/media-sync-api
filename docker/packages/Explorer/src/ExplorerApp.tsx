@@ -320,6 +320,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const selectedOrderRef = useRef<string[]>([]);
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const topbarIntentRef = useRef<IntentController | null>(null);
+  const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
     const itemOrient = inferOrientationFromItem(item);
@@ -1703,6 +1704,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     const topbar = topbarRef.current;
     if (!topbar) return;
+
+    const updateTopbarMeasuredHeight = () => {
+      const rect = topbar.getBoundingClientRect();
+      setTopbarMeasuredHeight((prev) => {
+        const next = Math.max(0, Math.ceil(rect.height));
+        return prev === next ? prev : next;
+      });
+    };
+
+    updateTopbarMeasuredHeight();
+
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => updateTopbarMeasuredHeight());
+    observer.observe(topbar);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const topbar = topbarRef.current;
+    if (!topbar) return;
     const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const isTouchPrimary = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
@@ -2194,7 +2215,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <div className="spinner"></div>
             <div>Preparing thumbnails…</div>
           </div>
-          <div ref={mediaScrollViewportRef} className="scroll" onScroll={clearPendingLongPress}>
+          <div
+            ref={mediaScrollViewportRef}
+            className="scroll"
+            onScroll={clearPendingLongPress}
+            style={{ '--topbar-measured-height': `${topbarMeasuredHeight}px` } as React.CSSProperties}
+          >
             <div className="topbar-anchor" aria-hidden="true">
               <div className={`topbar ${topbarHidden ? 'is-hidden' : ''}`} ref={topbarRef} data-topbar-root="true">
                 <div className="topbar-inner">

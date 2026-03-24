@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-24)
+- Explorer topbar geometry now uses live measured height instead of a hardcoded token: `ExplorerApp` observes `topbarRef` with `ResizeObserver`, stores `topbarMeasuredHeight`, and exports `--topbar-measured-height` on `.scroll` so Safari/mobile wrapping and padding changes stay synchronized with layout math.
+- Topbar hidden transform and scroll-content open inset now both consume `var(--topbar-measured-height)` (with `.scroll` fallback to `--topbar-height`), eliminating partial-header hang and top-row clipping/overlap when collapsing near the top of the viewport.
+- Focused Explorer regression assertions now lock measured-height wiring (`topbarMeasuredHeight` state, observer hook, CSS custom property style binding, and measured-height CSS usage) to prevent regressions back to static topbar-height assumptions.
+
+### Latest Implementation Notes (2026-03-24)
 - Follow-up on the in-scroll sticky topbar overlay now adds a dedicated `.scroll-content` wrapper beneath `.topbar-anchor`; grid/list content is nested there and receives open-state inset spacing so first-row assets no longer render beneath the visible header on initial load.
 - The new content inset is local to the scroll content only (`.scroll-content.topbar-open` / `.scroll-content.topbar-hidden`), preserving full-height `.scroll` viewport behavior while letting hidden topbar state collapse the inset to zero without reintroducing app-level offsets or a reveal seam element.
 - Explorer package regression assertions now lock this structure and CSS contract (`scroll-content` wrapper + open/hidden padding states) to guard against regressions where the first media row starts under the topbar.
