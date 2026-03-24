@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer scroll-content top inset follow-up
+- [x] Added a dedicated `.scroll-content` wrapper under `.topbar-anchor` and moved both grid/list render blocks into that wrapper.
+- [x] Applied open-state top inset only to `.scroll-content` (`topbar-open`) and collapse-to-zero in hidden state (`topbar-hidden`) so the first media row starts below the visible topbar at load.
+- [x] Kept `.scroll` full-height and avoided reintroducing app-level top offsets or `topbar-reveal` seam elements.
+- [x] Updated focused Explorer regressions to assert the `scroll-content` wrapper and open/hidden inset CSS contract.
+- [ ] Validate on physical iPhone Safari that open-state first row is fully visible/tappable and hidden-state collapse remains smooth during repeated short scroll-stop cycles.
+
 ## 2026-03-24 — Explorer in-scroll sticky topbar overlay refactor
 - [x] Moved the Explorer topbar into the real `.content .scroll` viewport as the first child inside a zero-height sticky anchor so the media grid and header now share one scroll world.
 - [x] Removed the app-level `topbar-reveal` seam element plus the remaining `main` top-padding / topbar-offset layout contract so header hide/show no longer depends on content re-spacing.

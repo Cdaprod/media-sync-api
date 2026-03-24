@@ -263,6 +263,7 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('data-topbar-root="true"'));
   assert.ok(explorer.includes('data-topbar-panel="true"'));
   assert.ok(explorer.includes('<div className="topbar-anchor" aria-hidden="true">'));
+  assert.ok(explorer.includes('className={`scroll-content ${topbarHidden ? \'topbar-hidden\' : \'topbar-open\'}`}'));
   assert.ok(explorer.includes('data-topbar-control="true"'));
   assert.ok(explorer.includes('data-interactive="true"'));
   assert.ok(explorer.includes('<div className="search" role="search" data-interactive="true" data-topbar-control="true">'));
@@ -768,7 +769,12 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('pointer-events: none;'));
   assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
   assert.ok(styles.includes('padding: 0;'));
-  assert.ok(!styles.includes('transition: padding-top 160ms ease;'));
+  assert.ok(styles.includes('.scroll-content{'));
+  assert.ok(styles.includes('transition: padding-top 160ms ease;'));
+  assert.ok(styles.includes('.scroll-content.topbar-open{'));
+  assert.ok(styles.includes('padding-top: calc(var(--topbar-height) + var(--topbar-gap));'));
+  assert.ok(styles.includes('.scroll-content.topbar-hidden{'));
+  assert.ok(styles.includes('padding-top: 0;'));
   assert.ok(styles.includes('.content .scroll{'));
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));

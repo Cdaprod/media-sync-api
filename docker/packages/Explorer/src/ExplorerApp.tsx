@@ -2352,50 +2352,52 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 </div>
               </div>
             </div>
-            <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
-              {!activeProject && mediaScope !== 'all' ? (
-                <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                  Select a project to view media.
-                </div>
-              ) : renderedMediaEntries.length === 0 ? (
-                <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                  {mediaScope === 'all'
-                    ? 'No indexed files yet across all projects.'
-                    : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
-                </div>
-              ) : (
-                <AssetGrid
-                  buildAssetViewModel={buildAssetViewModel}
-                  canSelect={canSelect}
-                  gridColumnCount={gridColumnCount}
-                  masonryColumns={masonryRenderColumns}
-                  onToggleSelected={toggleSelected}
-                  onDismissPendingJob={removePendingJob}
-                />
-              )}
-            </div>
+            <div className={`scroll-content ${topbarHidden ? 'topbar-hidden' : 'topbar-open'}`}>
+              <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
+                {!activeProject && mediaScope !== 'all' ? (
+                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                    Select a project to view media.
+                  </div>
+                ) : renderedMediaEntries.length === 0 ? (
+                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                    {mediaScope === 'all'
+                      ? 'No indexed files yet across all projects.'
+                      : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
+                  </div>
+                ) : (
+                  <AssetGrid
+                    buildAssetViewModel={buildAssetViewModel}
+                    canSelect={canSelect}
+                    gridColumnCount={gridColumnCount}
+                    masonryColumns={masonryRenderColumns}
+                    onToggleSelected={toggleSelected}
+                    onDismissPendingJob={removePendingJob}
+                  />
+                )}
+              </div>
 
-            <div className="list" style={{ display: view === 'list' ? '' : 'none' }}>
-              {!activeProject && mediaScope !== 'all' ? (
-                <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                  Select a project to view media.
-                </div>
-              ) : renderedMediaEntries.length === 0 ? (
-                <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                  {mediaScope === 'all'
-                    ? 'No indexed files yet across all projects.'
-                    : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
-                </div>
-              ) : (
-                <AssetList
-                  buildAssetViewModel={buildAssetViewModel}
-                  canSelect={canSelect}
-                  items={renderedMediaEntries}
-                  onOpenDrawer={openDrawer}
-                  onToggleSelected={toggleSelected}
-                  onDismissPendingJob={removePendingJob}
-                />
-              )}
+              <div className="list" style={{ display: view === 'list' ? '' : 'none' }}>
+                {!activeProject && mediaScope !== 'all' ? (
+                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                    Select a project to view media.
+                  </div>
+                ) : renderedMediaEntries.length === 0 ? (
+                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                    {mediaScope === 'all'
+                      ? 'No indexed files yet across all projects.'
+                      : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
+                  </div>
+                ) : (
+                  <AssetList
+                    buildAssetViewModel={buildAssetViewModel}
+                    canSelect={canSelect}
+                    items={renderedMediaEntries}
+                    onOpenDrawer={openDrawer}
+                    onToggleSelected={toggleSelected}
+                    onDismissPendingJob={removePendingJob}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </section>

@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-24)
+- Follow-up on the in-scroll sticky topbar overlay now adds a dedicated `.scroll-content` wrapper beneath `.topbar-anchor`; grid/list content is nested there and receives open-state inset spacing so first-row assets no longer render beneath the visible header on initial load.
+- The new content inset is local to the scroll content only (`.scroll-content.topbar-open` / `.scroll-content.topbar-hidden`), preserving full-height `.scroll` viewport behavior while letting hidden topbar state collapse the inset to zero without reintroducing app-level offsets or a reveal seam element.
+- Explorer package regression assertions now lock this structure and CSS contract (`scroll-content` wrapper + open/hidden padding states) to guard against regressions where the first media row starts under the topbar.
+
+### Latest Implementation Notes (2026-03-24)
 - Explorer topbar/reveal spacing was fully refactored out of app-level layout: the topbar now lives inside the real media scroll viewport as the first child of a zero-height sticky overlay anchor, so grid/list content can scroll upward naturally without `main` padding math or a separate `topbar-reveal` seam element.
 - Hidden/open topbar state is now purely visual (`.topbar.is-hidden` transform + pointer-events) instead of changing content layout, which is intended to eliminate first-row jumpiness and let collapsed-state asset checkboxes remain tappable right at the top of the viewport.
 - The topbar-owned metadata band (`.section-h`) remains inside the same overlay block and focused Explorer regressions now guard against reintroducing app-level reveal strips or top-offset layout tokens.
