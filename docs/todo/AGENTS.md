@@ -1,3 +1,10 @@
+## 2026-03-24 — Density continuity fix for large jumps
+- [x] Audited disappear/reappear artifact during large density jumps.
+- [x] Removed ordinary density-path `onEnter` fade behavior that misclassified persistent cards as entering.
+- [x] Narrowed Flip selector to persistent masonry nodes and stopped opacity cleanup resets.
+- [x] Updated focused regression assertions for no-enter-fade density reflow contract.
+- [ ] Validate visually on device that 7→2 and 2→7 keep card continuity without field-wide blink.
+
 ## 2026-03-24 — RAF-first density scheduler refinement
 - [x] Replaced timer-based fast-scrub coalescing with RAF-driven latest-target scheduling.
 - [x] Enforced one density commit per frame max and removed timer-window lag path.

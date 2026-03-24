@@ -975,9 +975,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('const state = Flip.getState(items);'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('Flip.from(state, {'));
+  assert.ok(flip.includes("itemSelector = '.masonry-column > .asset, .masonry-column > .pending-compose-card'"));
   assert.ok(flip.includes('absolute: true,'));
   assert.ok(flip.includes('scale: false,'));
-  assert.ok(flip.includes("clearProps: 'transform,opacity'"));
+  assert.ok(flip.includes("clearProps: 'transform'"));
+  assert.ok(!flip.includes('onEnter: (elements) => {'));
   assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));
   assert.ok(flip.includes('previous.kill();'));
   assert.ok(flip.includes('onInterrupt: () => {'));

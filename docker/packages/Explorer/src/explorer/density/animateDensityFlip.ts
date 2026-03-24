@@ -11,7 +11,7 @@ const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
 
 export function animateDensityFlip({
   gridEl,
-  itemSelector = '.masonry-column > .asset, .masonry-column > .pending-compose-card, .list .row',
+  itemSelector = '.masonry-column > .asset, .masonry-column > .pending-compose-card',
   commitLayout,
   interactionMode = 'scrub',
 }: AnimateDensityFlipOptions): void {
@@ -40,21 +40,14 @@ export function animateDensityFlip({
     ease: 'power2.out',
     simple: true,
     overwrite: 'auto',
-    onEnter: (elements) => {
-      gsap.fromTo(
-        elements,
-        { autoAlpha: 0.74 },
-        { autoAlpha: 1, duration: 0.09, ease: 'power1.out', overwrite: 'auto' },
-      );
-    },
     onComplete: () => {
-      gsap.set(nextItems, { clearProps: 'transform,opacity' });
+      gsap.set(nextItems, { clearProps: 'transform' });
       if (activeByGrid.get(gridEl) === animation) {
         activeByGrid.delete(gridEl);
       }
     },
     onInterrupt: () => {
-      gsap.set(nextItems, { clearProps: 'transform,opacity' });
+      gsap.set(nextItems, { clearProps: 'transform' });
       if (activeByGrid.get(gridEl) === animation) {
         activeByGrid.delete(gridEl);
       }

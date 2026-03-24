@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Fixed large-jump density disappear/reappear artifact by removing Flip `onEnter` fade choreography from ordinary density reflow path.
+- Density Flip target selector is now limited to persistent masonry card nodes only, improving node-mapping continuity for big column-count jumps.
+- Transform cleanup now clears transform only (not opacity), preventing transient full-field fade behavior during normal density transitions.
+
+### Latest Implementation Notes (2026-03-24)
 - Removed timer-window density coalescing and switched back to a pure RAF-driven latest-target scheduler for direct-manipulation responsiveness.
 - Density scrub now commits at most once per animation frame, overwriting stale intermediate targets and keeping fast drags responsive without timer-induced delay.
 - Added frame-level duplicate-target suppression (`frameCommittedColumns`) so scrub pipelines avoid redundant same-target commits while preserving masonry-authoritative updates.
