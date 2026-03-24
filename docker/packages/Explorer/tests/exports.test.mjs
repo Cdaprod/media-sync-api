@@ -257,12 +257,12 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('const mediaContentRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes('const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes("const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);"));
-  assert.ok(explorer.includes('const topbarHiddenPrevRef = useRef<boolean | null>(null);'));
   assert.ok(explorer.includes('const topbarInsetPrevRef = useRef(0);'));
   assert.ok(explorer.includes('const updateTopbarMeasuredHeight = () => {'));
   assert.ok(explorer.includes('const observer = new ResizeObserver(() => updateTopbarMeasuredHeight());'));
   assert.ok(explorer.includes('const topbarGap = Number.parseFloat(styles.getPropertyValue(\'--topbar-gap\')) || 0;'));
-  assert.ok(explorer.includes('if (topbarHiddenPrevRef.current !== topbarHidden) {'));
+  assert.ok(explorer.includes('const nextInset = Math.max(0, topbarMeasuredHeight + topbarGap);'));
+  assert.ok(explorer.includes('const delta = nextInset - topbarInsetPrevRef.current;'));
   assert.ok(explorer.includes('suppressAutoToggle();'));
   assert.ok(explorer.includes('scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);'));
   assert.ok(explorer.includes('rootRef: mediaContentRef,'));
@@ -276,7 +276,7 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('data-topbar-panel="true"'));
   assert.ok(explorer.includes('<div className="topbar-anchor" aria-hidden="true">'));
   assert.ok(explorer.includes('className="scroll-content"'));
-  assert.ok(explorer.includes("'--scroll-content-top-inset': topbarHidden"));
+  assert.ok(explorer.includes("'--scroll-content-top-inset': 'calc(var(--topbar-measured-height) + var(--topbar-gap))'"));
   assert.ok(explorer.includes("'calc(var(--topbar-measured-height) + var(--topbar-gap))'"));
   assert.ok(explorer.includes('data-topbar-control="true"'));
   assert.ok(explorer.includes('data-interactive="true"'));
@@ -794,12 +794,11 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
   assert.ok(hookContent.includes('const TOPBAR_REVEAL_HYSTERESIS_PX = 20;'));
-  assert.ok(hookContent.includes('const TOPBAR_REVEAL_AT_TOP_PX = 0;'));
   assert.ok(hookContent.includes('const suppressAutoToggle = useCallback((ms = TOPBAR_COMPENSATION_SUPPRESS_MS) => {'));
   assert.ok(hookContent.includes('const openInsetPx = getOpenInsetPx();'));
-  assert.ok(hookContent.includes('const currentInsetPx = hiddenRef.current ? 0 : openInsetPx;'));
+  assert.ok(hookContent.includes('const currentInsetPx = openInsetPx;'));
   assert.ok(hookContent.includes('const contentTopPx = currentTop - currentInsetPx;'));
-  assert.ok(hookContent.includes('if (hiddenRef.current && currentTop <= TOPBAR_REVEAL_AT_TOP_PX) {'));
+  assert.ok(!hookContent.includes('if (hiddenRef.current && currentTop <= TOPBAR_REVEAL_AT_TOP_PX) {'));
   assert.ok(hookContent.includes('if (!hiddenRef.current && delta > 0 && contentTopPx >= 0) {'));
   assert.ok(hookContent.includes('if (hiddenRef.current && delta < 0 && contentTopPx <= -TOPBAR_REVEAL_HYSTERESIS_PX) {'));
   assert.ok(content.includes('useLayoutEffect(() => {'));

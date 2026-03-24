@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
-const TOPBAR_REVEAL_AT_TOP_PX = 0;
 const TOPBAR_REVEAL_HYSTERESIS_PX = 20;
 const TOPBAR_COMPENSATION_SUPPRESS_MS = 140;
 
@@ -76,18 +75,13 @@ export function useTopbarScrollState(
       if (!delta) return;
       if (now < suppressAutoToggleUntilRef.current) return;
 
-      if (hiddenRef.current && currentTop <= TOPBAR_REVEAL_AT_TOP_PX) {
-        revealTopbar();
-        return;
-      }
-
       const getOpenInsetPx = () => {
         const styles = window.getComputedStyle(host);
         const topbarGap = Number.parseFloat(styles.getPropertyValue('--topbar-gap')) || 0;
         return Math.max(0, topbarMeasuredHeight + topbarGap);
       };
       const openInsetPx = getOpenInsetPx();
-      const currentInsetPx = hiddenRef.current ? 0 : openInsetPx;
+      const currentInsetPx = openInsetPx;
       const contentTopPx = currentTop - currentInsetPx;
 
       if (!hiddenRef.current && delta > 0 && contentTopPx >= 0) {

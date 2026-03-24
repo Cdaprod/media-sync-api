@@ -321,7 +321,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const topbarIntentRef = useRef<IntentController | null>(null);
   const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);
-  const topbarHiddenPrevRef = useRef<boolean | null>(null);
   const topbarInsetPrevRef = useRef(0);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
@@ -1730,25 +1729,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!scrollEl) return;
     const styles = window.getComputedStyle(scrollEl);
     const topbarGap = Number.parseFloat(styles.getPropertyValue('--topbar-gap')) || 0;
-    const nextInset = topbarHidden ? 0 : Math.max(0, topbarMeasuredHeight + topbarGap);
+    const nextInset = Math.max(0, topbarMeasuredHeight + topbarGap);
 
-    if (topbarHiddenPrevRef.current === null) {
-      topbarHiddenPrevRef.current = topbarHidden;
+    if (!topbarInsetPrevRef.current) {
       topbarInsetPrevRef.current = nextInset;
       return;
     }
 
-    if (topbarHiddenPrevRef.current !== topbarHidden) {
-      const delta = nextInset - topbarInsetPrevRef.current;
-      if (Math.abs(delta) > 0.5) {
-        suppressAutoToggle();
-        scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);
-      }
+    const delta = nextInset - topbarInsetPrevRef.current;
+    if (Math.abs(delta) > 0.5) {
+      suppressAutoToggle();
+      scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);
     }
 
     topbarInsetPrevRef.current = nextInset;
-    topbarHiddenPrevRef.current = topbarHidden;
-  }, [suppressAutoToggle, topbarHidden, topbarMeasuredHeight]);
+  }, [suppressAutoToggle, topbarMeasuredHeight]);
 
   useEffect(() => {
     const topbar = topbarRef.current;
@@ -2413,9 +2408,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               data-topbar-hidden={topbarHidden ? 'true' : 'false'}
               style={
                 {
-                  '--scroll-content-top-inset': topbarHidden
-                    ? '0px'
-                    : 'calc(var(--topbar-measured-height) + var(--topbar-gap))',
+                  '--scroll-content-top-inset': 'calc(var(--topbar-measured-height) + var(--topbar-gap))',
                 } as React.CSSProperties
               }
             >

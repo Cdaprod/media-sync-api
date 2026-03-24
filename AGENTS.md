@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Removed the remaining raw-scroll reopen shortcut from `useTopbarScrollState` (`TOPBAR_REVEAL_AT_TOP_PX` guard), so topbar reopen now comes only from the logical content-edge hysteresis path.
+- Explorer scroll-content inset is no longer a live hide/reveal toggle: `--scroll-content-top-inset` now stays fixed to the measured open clearance, avoiding per-collapse `padding-top` reseating during topbar movement.
+- Inset compensation was narrowed to measured-height delta changes only (independent of `topbarHidden` flips), preventing extra programmatic scroll adjustments during normal scroll-driven collapse/reveal cycles.
+
+### Latest Implementation Notes (2026-03-24)
 - Refactored Explorer scroll-content inset ownership to a single inline CSS variable (`--scroll-content-top-inset`) driven directly from `topbarHidden`, removing `topbar-open` / `topbar-hidden` class-based inset switching to avoid header/content state drift.
 - `.scroll` and `.scroll-content` now expose `data-topbar-hidden` debug attributes so on-device inspection can confirm whether visual topbar state and content inset state are synchronized in the same render.
 - Removed `.content .scroll` debug seam padding (`padding: 0`) while keeping measured-height/inset logic, so remaining top-edge motion can be isolated to topbar/inset state transitions only.

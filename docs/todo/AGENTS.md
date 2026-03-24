@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer collapse decoupling follow-up
+- [x] Removed legacy top-of-scroll reopen shortcut (`TOPBAR_REVEAL_AT_TOP_PX`) from `useTopbarScrollState` so reopen is hysteresis/content-edge only.
+- [x] Stopped treating `--scroll-content-top-inset` as a live hide/reveal value by fixing it to measured open inset instead of `topbarHidden` toggles.
+- [x] Updated inset-compensation effect to react only to measured inset deltas (height/gap changes), not topbar hidden-state transitions.
+- [x] Updated focused Explorer regressions for removed raw reopen guard, fixed inset variable wiring, and revised compensation markers.
+- [ ] Validate on physical iPhone Safari that collapse no longer drags assets upward during topbar hide and that upward scroll reopen still triggers reliably with hysteresis.
+
 ## 2026-03-24 — Explorer unified inset source-of-truth refactor
 - [x] Replaced `.scroll-content.topbar-open/.topbar-hidden` class-driven padding with a single inline `--scroll-content-top-inset` variable derived from `topbarHidden`.
 - [x] Added `data-topbar-hidden` debug markers to both `.scroll` and `.scroll-content` to validate state synchronization in Safari/Web Inspector.
