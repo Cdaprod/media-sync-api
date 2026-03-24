@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer iPhone Safari viewport-lock hardening
+- [x] Updated App Router viewport metadata to include `maximumScale: 1`, `userScalable: false`, and `viewportFit: 'cover'`.
+- [x] Added global viewport-lock CSS for `html/body/#__next/.app` (`100vh` + `100dvh`, `overflow: hidden`) so the app shell owns screen scrolling.
+- [x] Added safe-area env variable plumbing (`--safe-area-*`) and applied it to body padding.
+- [x] Added global text-size adjust stability and minimum `16px` form-control font sizing to reduce iPhone Safari input zoom.
+- [ ] Validate on physical iPhone Safari that viewport no longer drifts/zooms and shell scrolling stays locked to Explorer surfaces.
+
 ## 2026-03-24 — Explorer topbar/layout decoupling cleanup
 - [x] Removed the root `.app` hidden-state class toggle tied to `topbarHidden` so shell layout no longer changes during ordinary hide/reveal.
 - [x] Kept topbar-hidden state confined to topbar visual class/debug markers only.

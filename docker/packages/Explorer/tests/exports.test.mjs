@@ -35,11 +35,24 @@ test('standalone app entry exists', () => {
 test('package app layout owns default App Router not-found fonts and wiring', () => {
   const layoutPath = path.join(packageRoot, 'app', 'layout.tsx');
   const notFoundPath = path.join(packageRoot, 'app', 'not-found.tsx');
+  const globalsPath = path.join(packageRoot, 'app', 'globals.css');
   const layout = fs.readFileSync(layoutPath, 'utf8');
   const notFound = fs.readFileSync(notFoundPath, 'utf8');
+  const globals = fs.readFileSync(globalsPath, 'utf8');
   assert.ok(layout.includes('fonts.googleapis.com'));
   assert.ok(layout.includes('fonts.gstatic.com'));
   assert.ok(layout.includes("viewportFit: 'cover'"));
+  assert.ok(layout.includes('maximumScale: 1'));
+  assert.ok(layout.includes('userScalable: false'));
+  assert.ok(globals.includes('--safe-area-top: env(safe-area-inset-top, 0px);'));
+  assert.ok(globals.includes('html,'));
+  assert.ok(globals.includes('height: 100dvh;'));
+  assert.ok(globals.includes('#__next,'));
+  assert.ok(globals.includes('overflow: hidden;'));
+  assert.ok(globals.includes('-webkit-text-size-adjust: 100%;'));
+  assert.ok(globals.includes('text-size-adjust: 100%;'));
+  assert.ok(globals.includes('padding-top: var(--safe-area-top);'));
+  assert.ok(globals.includes('font-size: 16px;'));
   assert.ok(!layout.includes("from 'next/font/google'"));
   assert.ok(notFound.includes('data-explorer-default-not-found="true"'));
   assert.ok(notFound.includes('data-explorer-not-found-scene="multi-phase"'));

@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Hardened Explorer App Router shell viewport locking for iPhone Safari: `layout.tsx` now sets `maximumScale: 1` + `userScalable: false` alongside `viewportFit: 'cover'`.
+- Added global shell constraints in `app/globals.css` so `html`, `body`, `#__next`, and `.app` share `height: 100vh; height: 100dvh; overflow: hidden`, with safe-area variables (`env(safe-area-inset-*)`) applied via body padding.
+- Added global text-size stability (`-webkit-text-size-adjust` / `text-size-adjust` at 100%) plus minimum `16px` sizing for `input`/`textarea`/`select` controls to prevent iPhone Safari input zoom drift.
+
+### Latest Implementation Notes (2026-03-24)
 - Completed the topbar/content decoupling pass by removing the root `.app` topbar-hidden class toggle; topbar state now only drives topbar visual state/debug markers and no longer mutates app-shell layout classes.
 - This keeps the contract explicit: ordinary topbar hide/reveal does not alter content layout or apply hidden/open shell-level spacing shifts.
 - Existing compensation remains restricted to measured-height delta synchronization only.
