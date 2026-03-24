@@ -1,3 +1,11 @@
+## 2026-03-24 — Explorer logical content-top topbar gating
+- [x] Refactored `useTopbarScrollState` to compute `contentTopPx = scrollTop - currentInsetPx` using live measured topbar height plus runtime `--topbar-gap` while open.
+- [x] Switched collapse behavior to hide only on downward scroll when logical content top reaches the viewport edge (`contentTopPx >= 0`) so assets push the topbar away instead of sliding behind it while open.
+- [x] Added reopen hysteresis (`contentTopPx <= -20` while scrolling upward) to reduce hide/reveal chatter near threshold.
+- [x] Added temporary topbar auto-toggle suppression around programmatic inset-compensation scroll updates to prevent immediate state bounce from compensation-induced `scrollTop` deltas.
+- [x] Updated focused Explorer regression assertions for the new logical-content-top and suppression contract.
+- [ ] Validate on physical iPhone Safari that first-row assets remain fully below the open topbar inset and then become fully tappable at the top edge immediately after collapse.
+
 ## 2026-03-24 — Explorer topbar hidden-ref TDZ build fix
 - [x] Fixed `ExplorerApp.tsx` declaration order by replacing `useRef(topbarHidden)` with declaration-safe hidden/inset refs initialized before `useTopbarScrollState(...)`.
 - [x] Seeded first-run hidden/inset baseline inside the inset-compensation effect so scroll adjustment remains transition-only and does not fire on mount.

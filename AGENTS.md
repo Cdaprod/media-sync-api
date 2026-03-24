@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-03-24)
+- Refactored Explorer topbar hide/reveal to logical content-top math in `useTopbarScrollState`: `contentTopPx = scrollTop - currentInsetPx`, where open inset uses live `topbarMeasuredHeight + --topbar-gap` and hidden inset is zero.
+- Hide now triggers only on downward scroll once `contentTopPx >= 0` (assets push the topbar away at the viewport edge), while reopen requires upward scroll beyond a hysteresis threshold (`TOPBAR_REVEAL_HYSTERESIS_PX = 20`) to prevent threshold chatter.
+- Added temporary auto-toggle suppression (`suppressAutoToggle`) around programmatic inset-compensation `scrollTop` adjustments so collapse/reveal compensation cannot immediately bounce topbar state.
+
 # AGENTS.md -- Codex Operating Guide (Media Sync API)
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 

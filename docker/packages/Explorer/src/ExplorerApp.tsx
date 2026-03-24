@@ -1649,10 +1649,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const {
     revealTopbar,
     setTopbarHidden,
+    suppressAutoToggle,
     topbarHidden,
   } = useTopbarScrollState({
     disabled: sidebarOpen || composeModalOpen || deleteModalOpen,
     scrollRef: mediaScrollViewportRef,
+    topbarMeasuredHeight,
   });
 
   useEffect(() => {
@@ -1739,13 +1741,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (topbarHiddenPrevRef.current !== topbarHidden) {
       const delta = nextInset - topbarInsetPrevRef.current;
       if (Math.abs(delta) > 0.5) {
+        suppressAutoToggle();
         scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);
       }
     }
 
     topbarInsetPrevRef.current = nextInset;
     topbarHiddenPrevRef.current = topbarHidden;
-  }, [topbarHidden, topbarMeasuredHeight]);
+  }, [suppressAutoToggle, topbarHidden, topbarMeasuredHeight]);
 
   useEffect(() => {
     const topbar = topbarRef.current;
