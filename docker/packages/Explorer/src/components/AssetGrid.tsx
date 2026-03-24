@@ -30,6 +30,7 @@ interface AssetGridProps {
   buildAssetViewModel: (item: MediaItem) => ExplorerAssetViewModel;
   canSelect: boolean;
   gridColumnCount: number;
+  gridRef?: React.Ref<HTMLDivElement>;
   masonryColumns: Array<Array<
     | { kind: 'asset'; item: MediaItem }
     | { kind: 'pending'; pendingItem: PendingComposeAsset }
@@ -42,6 +43,7 @@ function AssetGridComponent({
   buildAssetViewModel,
   canSelect,
   gridColumnCount,
+  gridRef,
   masonryColumns,
   onToggleSelected,
   onDismissPendingJob,
@@ -53,7 +55,12 @@ function AssetGridComponent({
   };
 
   return (
-    <div className="masonry-columns" style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}>
+    <div
+      className="masonry-columns"
+      ref={gridRef}
+      data-density-columns={gridColumnCount}
+      style={{ '--masonry-column-count': String(gridColumnCount) } as React.CSSProperties}
+    >
       {masonryColumns.map((column, columnIndex) => (
         <div className="masonry-column" key={`masonry-column-${columnIndex}`}>
           {column.map((entry) => {

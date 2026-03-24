@@ -23,6 +23,14 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'composeJobs.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'usePendingComposeJobs.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'lib', 'gsap.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'modalMotion.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'toastMotion.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'topbarSnapBand.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -795,7 +803,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
-  assert.ok(content.includes("className={`topbar ${topbarHidden ? 'is-hidden' : ''}`}"));
+  assert.ok(content.includes('className="topbar"'));
   assert.ok(content.includes('<div className="section-h">'));
   assert.ok(content.includes('aria-label="Toggle projects panel"'));
   assert.ok(!content.includes('className="btn mobile-only"'));
@@ -824,6 +832,13 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('padding: 0;'));
   assert.ok(styles.includes('touch-action: pan-y;'));
   assert.ok(content.includes('useTopbarScrollState({'));
+  assert.ok(content.includes('createTopbarMotion(topbarEl)'));
+  assert.ok(content.includes('createTopbarSnapBand({'));
+  assert.ok(content.includes('createDrawerMotion(drawerEl, backdropEl)'));
+  assert.ok(content.includes('createExplorerDensityController({'));
+  assert.ok(content.includes('createPinchDensityController({'));
+  assert.ok(content.includes('id="asset-density-slider"'));
+  assert.ok(content.includes('data-density-pinch-surface="true"'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
   assert.ok(hookContent.includes('const TOPBAR_REVEAL_HYSTERESIS_PX = 20;'));
   assert.ok(hookContent.includes('const suppressAutoToggle = useCallback((ms = TOPBAR_COMPENSATION_SUPPRESS_MS) => {'));

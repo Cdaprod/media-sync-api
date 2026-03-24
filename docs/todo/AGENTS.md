@@ -1,3 +1,11 @@
+## 2026-03-24 — Explorer GSAP motion architecture (new)
+- [x] Add shared GSAP module with Flip registration and reusable motion controller contracts.
+- [x] Add topbar/drawer/modal/toast/snap-band motion controller implementations under Explorer package motion modules.
+- [x] Integrate Explorer topbar, drawer, modal, toast, and snap-band motion wiring without regressing existing selector/topbar ownership semantics.
+- [x] Add density slider + pinch input pipeline with GSAP Flip-based masonry reflow animation and subtle post-Flip settle behavior.
+- [x] Update Explorer package tests for GSAP motion/density wiring coverage and verify package test/build commands pass.
+- [ ] Capture on-device iPhone Safari proof clip for pinch-density + snap-band interaction feel and attach notes to next PR cycle.
+
 ## 2026-03-24 — Explorer sidebar backdrop touch-intercept fix
 - [x] Split sidebar overlay into `.sidebar-backdrop` and positioned it to start outside the open drawer footprint.
 - [x] Updated Explorer markup to use `backdrop sidebar-backdrop` for sidebar-open dimming/close behavior.

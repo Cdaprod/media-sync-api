@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Added a shared Explorer GSAP foundation (`src/lib/gsap.ts`) with one-time `Flip` registration and introduced reusable motion controllers for topbar, drawer, modal, toast, and topbar snap-band settling.
+- Wired Explorer motion orchestration into `ExplorerApp`: GSAP controllers now drive topbar hide/reveal animation, drawer/backdrop transitions, modal enter animation, toast entry animation, and thresholded snap-band settle cancellation hooks on pointer/scroll interaction.
+- Added density motion architecture with slider + pinch input routed through one controller pipeline, GSAP Flip-based masonry reflow animation, and lightweight post-Flip settle behavior, plus transform-origin/density control styling and focused regression assertions.
+
+### Latest Implementation Notes (2026-03-24)
 - Fixed sidebar drawer dim/intercept regression by splitting the sidebar backdrop into a dedicated `.sidebar-backdrop` layer that starts to the right of the drawer (`left: min(420px, calc(100vw - 24px))`), so the drawer itself stays undimmed and touch-scrollable.
 - Explorer now renders the sidebar overlay with `className="backdrop sidebar-backdrop ..."`, keeping close-on-tap behavior for content area while avoiding pointer interception over the open panel.
 - Extended focused sidebar/topbar regression assertions to lock the sidebar-backdrop class/wiring and inset positioning contract.

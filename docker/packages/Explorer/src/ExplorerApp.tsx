@@ -44,6 +44,14 @@ import { usePendingComposeJobs } from './usePendingComposeJobs';
 import { useAssetInteractions } from './useAssetInteractions';
 import { useThumbnailQueue } from './useThumbnailQueue';
 import { useTopbarScrollState } from './useTopbarScrollState';
+import { createTopbarMotion } from './ui/motion/topbarMotion';
+import { createDrawerMotion } from './ui/motion/drawerMotion';
+import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
+import { createToastMotion } from './ui/motion/toastMotion';
+import { createModalMotion } from './ui/motion/modalMotion';
+import { createExplorerDensityController } from './explorer/density/createExplorerDensityController';
+import { createPinchDensityController } from './explorer/density/createPinchDensityController';
+import { DEFAULT_COLUMNS_MOBILE, MAX_COLUMNS_MOBILE, MIN_COLUMNS_MOBILE } from './explorer/density/constants';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -283,7 +291,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
-  const [gridColumnCount, setGridColumnCount] = useState(1);
+  const [gridColumnCount, setGridColumnCount] = useState(DEFAULT_COLUMNS_MOBILE);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const contentLoadingTokenRef = useRef(0);
   const contentLoadingTimerRef = useRef<number | null>(null);
@@ -324,6 +332,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const topbarIntentRef = useRef<IntentController | null>(null);
   const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);
   const topbarInsetPrevRef = useRef(0);
+  const topbarHiddenRef = useRef(false);
+  const topbarMotionRef = useRef<ReturnType<typeof createTopbarMotion> | null>(null);
+  const snapBandRef = useRef<ReturnType<typeof createTopbarSnapBand> | null>(null);
+  const drawerMotionRef = useRef<ReturnType<typeof createDrawerMotion> | null>(null);
+  const toastMotionRef = useRef<ReturnType<typeof createToastMotion> | null>(null);
+  const composeModalMotionRef = useRef<ReturnType<typeof createModalMotion> | null>(null);
+  const confirmModalMotionRef = useRef<ReturnType<typeof createModalMotion> | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const densitySliderRef = useRef<HTMLInputElement | null>(null);
+  const densityControllerRef = useRef<ReturnType<typeof createExplorerDensityController> | null>(null);
+  const pinchDensityRef = useRef<ReturnType<typeof createPinchDensityController> | null>(null);
+  const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
+  const composeModalRef = useRef<HTMLDivElement | null>(null);
+  const composeCardRef = useRef<HTMLFormElement | null>(null);
+  const confirmModalRef = useRef<HTMLDivElement | null>(null);
+  const confirmCardRef = useRef<HTMLDivElement | null>(null);
+  const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
     const itemOrient = inferOrientationFromItem(item);
@@ -1662,6 +1687,85 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     scrollRef: mediaScrollViewportRef,
     topbarMeasuredHeight,
   });
+  topbarHiddenRef.current = topbarHidden;
+
+  useEffect(() => {
+    const topbarEl = topbarRef.current;
+    if (!topbarEl) return;
+    const motion = createTopbarMotion(topbarEl);
+    topbarMotionRef.current = motion;
+    if (topbarHiddenRef.current) motion.hide();
+    else motion.show();
+    return () => {
+      motion.destroy();
+      topbarMotionRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const motion = topbarMotionRef.current;
+    if (!motion) return;
+    if (topbarHidden) motion.hide();
+    else motion.show();
+  }, [topbarHidden]);
+
+  useEffect(() => {
+    const scroller = mediaScrollViewportRef.current;
+    if (!scroller) return;
+    const snapBand = createTopbarSnapBand({
+      scroller,
+      getTopbarOpen: () => !topbarHiddenRef.current,
+      getTopbarClearance: () => topbarRef.current?.offsetHeight ?? topbarMeasuredHeight,
+      thresholdPx: 10,
+      minVelocityPxPerFrame: 1.25,
+    });
+    snapBandRef.current = snapBand;
+
+    const onScroll = () => snapBand.notifyScroll();
+    const onPointerDown = () => snapBand.notifyPointerDown();
+    const onPointerUp = () => snapBand.notifyPointerUp();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    scroller.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      scroller.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      snapBand.destroy();
+      snapBandRef.current = null;
+    };
+  }, [topbarMeasuredHeight]);
+
+  useEffect(() => {
+    const drawerEl = document.querySelector<HTMLElement>('.drawer');
+    const backdropEl = inspectorBackdropRef.current;
+    if (!drawerEl || !backdropEl) return;
+    const controller = createDrawerMotion(drawerEl, backdropEl);
+    drawerMotionRef.current = controller;
+    if (inspectorOpen) controller.open();
+    else controller.setClosedState();
+    return () => {
+      controller.destroy();
+      drawerMotionRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = drawerMotionRef.current;
+    if (!controller) return;
+    if (inspectorOpen) controller.open();
+    else controller.close();
+  }, [inspectorOpen]);
+
+  useEffect(() => {
+    const toastMotion = createToastMotion();
+    toastMotionRef.current = toastMotion;
+    return () => {
+      toastMotion.destroy();
+      toastMotionRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!dragging) return;
@@ -1723,6 +1827,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const listenerOptions: AddEventListenerOptions = { passive: false };
     const blockGesture = (event: Event) => event.preventDefault();
     const blockMultiTouch = (event: TouchEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.('[data-density-pinch-surface=\"true\"]')) return;
       if (event.touches.length > 1) event.preventDefault();
     };
     const blockDoubleTap = (event: TouchEvent) => {
@@ -1869,6 +1975,72 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     };
   }, [dragging, revealTopbar, setTopbarHidden, sidebarOpen]);
+
+  useEffect(() => {
+    const gridEl = gridRef.current;
+    const sliderEl = densitySliderRef.current;
+    const scrollerEl = mediaScrollViewportRef.current;
+    if (!gridEl || !sliderEl || !scrollerEl) return;
+
+    const density = createExplorerDensityController({
+      gridEl,
+      sliderEl,
+      initialColumns: gridColumnCount || DEFAULT_COLUMNS_MOBILE,
+      onColumnsChange: (nextColumns) => {
+        setGridColumnCount(nextColumns);
+      },
+    });
+    densityControllerRef.current = density;
+
+    const pinch = createPinchDensityController({
+      gestureSurfaceEl: scrollerEl,
+      visualScaleTargetEl: gridEl,
+      density,
+    });
+    pinch.attach();
+    pinchDensityRef.current = pinch;
+
+    const onSliderInput = () => {
+      density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);
+    };
+    sliderEl.addEventListener('input', onSliderInput);
+
+    return () => {
+      sliderEl.removeEventListener('input', onSliderInput);
+      pinch.destroy();
+      density.destroy();
+      pinchDensityRef.current = null;
+      densityControllerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!composeModalOpen) return;
+    const modalEl = composeModalRef.current;
+    const cardEl = composeCardRef.current;
+    if (!modalEl || !cardEl) return;
+    const motion = createModalMotion(modalEl, cardEl);
+    composeModalMotionRef.current = motion;
+    motion.open();
+    return () => {
+      motion.destroy();
+      composeModalMotionRef.current = null;
+    };
+  }, [composeModalOpen]);
+
+  useEffect(() => {
+    if (!deleteModalOpen) return;
+    const modalEl = confirmModalRef.current;
+    const cardEl = confirmCardRef.current;
+    if (!modalEl || !cardEl) return;
+    const motion = createModalMotion(modalEl, cardEl);
+    confirmModalMotionRef.current = motion;
+    motion.open();
+    return () => {
+      motion.destroy();
+      confirmModalMotionRef.current = null;
+    };
+  }, [deleteModalOpen]);
 
   useEffect(() => {
     const brand = brandRef.current;
@@ -2310,10 +2482,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             className="scroll"
             onScroll={clearPendingLongPress}
             data-topbar-hidden={topbarHidden ? 'true' : 'false'}
+            data-density-pinch-surface="true"
             style={{ '--topbar-measured-height': `${topbarMeasuredHeight}px` } as React.CSSProperties}
           >
             <div className="topbar-anchor" aria-hidden="true">
-              <div className={`topbar ${topbarHidden ? 'is-hidden' : ''}`} ref={topbarRef} data-topbar-root="true">
+              <div className="topbar" ref={topbarRef} data-topbar-root="true">
                 <div className="topbar-inner">
                   <div
                     className={`brand ${sidebarOpen ? 'projects-open' : ''}`}
@@ -2411,6 +2584,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       </div>
 
                       <div className="action-controls" aria-label="Sort and quick filters">
+                        <label className="density-control" data-interactive="true" data-topbar-control="true">
+                          <span>Density: {gridColumnCount}</span>
+                          <input
+                            ref={densitySliderRef}
+                            id="asset-density-slider"
+                            type="range"
+                            min={MIN_COLUMNS_MOBILE}
+                            max={MAX_COLUMNS_MOBILE}
+                            step={1}
+                            defaultValue={gridColumnCount}
+                            data-interactive="true"
+                            data-topbar-control="true"
+                          />
+                        </label>
                         <select
                           ref={sortSelectRef}
                           className="control visually-hidden"
@@ -2494,6 +2681,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     buildAssetViewModel={buildAssetViewModel}
                     canSelect={canSelect}
                     gridColumnCount={gridColumnCount}
+                    gridRef={gridRef}
                     masonryColumns={masonryRenderColumns}
                     onToggleSelected={toggleSelected}
                     onDismissPendingJob={removePendingJob}
@@ -2573,7 +2761,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
       </div>
 
-      <aside className={`drawer ${inspectorOpen ? 'open' : ''}`} aria-hidden={!inspectorOpen}>
+      <aside className="drawer" aria-hidden={!inspectorOpen}>
         <div className="drawer-body custom-ui-surface">
           <AssetPreviewPanel
               asset={normalizedPreviewAsset}
@@ -2628,6 +2816,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
       {deleteModalOpen ? (
         <div
+          ref={confirmModalRef}
           className="confirm-modal open"
           role="dialog"
           aria-modal="true"
@@ -2639,7 +2828,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             handleDeleteCancel();
           }}
         >
-          <div className="confirm-card custom-ui-surface" onClick={(event) => event.stopPropagation()}>
+          <div ref={confirmCardRef} className="confirm-card custom-ui-surface" onClick={(event) => event.stopPropagation()}>
             <h3 id="confirmDeleteTitle" className="confirm-title">{pendingDeleteSelectionKeys.length === 1 ? 'Delete this asset?' : `Delete ${Math.max(1, pendingDeleteSelectionKeys.length)} assets?`}</h3>
             <p id="confirmDeleteBody" className="confirm-body">This removes the media file from disk and updates the project index.</p>
             <div className="confirm-actions">
@@ -2660,6 +2849,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
       {composeModalOpen ? (
         <div
+          ref={composeModalRef}
           className="compose-modal open"
           role="dialog"
           aria-modal="true"
@@ -2671,6 +2861,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           }}
         >
           <form
+            ref={composeCardRef}
             className="compose-card custom-ui-surface"
             aria-busy={composeSubmitting}
             onClick={(event) => event.stopPropagation()}
@@ -2720,7 +2911,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
       <div className="toasts">
         {toasts.map((toast) => (
-          <div className={`toast ${toast.type}`} key={toast.id}>
+          <div
+            className={`toast ${toast.type}`}
+            key={toast.id}
+            ref={(node) => {
+              const prevNode = toastNodeMapRef.current.get(toast.id);
+              if (node && !prevNode) {
+                toastNodeMapRef.current.set(toast.id, node);
+                toastMotionRef.current?.enter(node);
+                return;
+              }
+              if (!node && prevNode) {
+                toastMotionRef.current?.exit(prevNode);
+                toastNodeMapRef.current.delete(toast.id);
+              }
+            }}
+          >
             <div className="t">{toast.title}</div>
             <div className="m">{toast.message}</div>
           </div>
@@ -2732,6 +2938,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ></div>
       <div
         className={`backdrop ${inspectorOpen ? 'show' : ''}`}
+        ref={inspectorBackdropRef}
         style={{ zIndex: 70 }}
         onClick={closeDrawer}
       ></div>
