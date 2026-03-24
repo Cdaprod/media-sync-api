@@ -1,3 +1,9 @@
+## 2026-03-24 — Explorer topbar hidden-ref TDZ build fix
+- [x] Fixed `ExplorerApp.tsx` declaration order by replacing `useRef(topbarHidden)` with declaration-safe hidden/inset refs initialized before `useTopbarScrollState(...)`.
+- [x] Seeded first-run hidden/inset baseline inside the inset-compensation effect so scroll adjustment remains transition-only and does not fire on mount.
+- [x] Restored package Explorer build/type-check pass for the topbar compensation follow-up branch.
+- [ ] Validate on physical iPhone Safari that collapse/reveal still preserves first-row asset position after the first interaction cycle.
+
 ## 2026-03-24 — Explorer topbar-collapse scroll compensation
 - [x] Added hidden-transition scroll compensation that adjusts `.scroll` `scrollTop` by inset delta when `topbarHidden` flips, keeping first-row assets from jumping above the viewport edge.
 - [x] Scoped compensation to hidden-state transitions only, while deriving inset from measured topbar height + `--topbar-gap` so geometry remains device-responsive without measurement-churn jumps.

@@ -2,6 +2,11 @@
 > Update this file **on every commit**. Treat it like the "handoff contract" for the next agent.
 
 ### Latest Implementation Notes (2026-03-24)
+- Fixed a package Explorer production-build TDZ regression by removing the early `useRef(topbarHidden)` initializer and switching the hidden-transition refs to declaration-order-safe defaults.
+- `topbarHiddenPrevRef` now starts as `null` and the inset-compensation effect seeds baseline hidden/inset state on first run, preserving transition-only scroll compensation while avoiding any first-pass jump.
+- This keeps the new topbar inset compensation behavior intact and restores `npm run build` success for Next.js type-checking.
+
+### Latest Implementation Notes (2026-03-24)
 - Topbar collapse now preserves on-screen asset position across open↔hidden inset changes: Explorer tracks previous inset/hidden state and compensates `mediaScrollViewportRef.scrollTop` by inset delta when `topbarHidden` flips, preventing first-row tiles from jumping out of bounds during collapse near the top of the viewport.
 - Inset compensation is computed from the live measured topbar height plus runtime `--topbar-gap`, and only applies on hidden-state transitions (not every measurement update), so dynamic topbar remeasure does not unexpectedly shift scroll position.
 - Focused Explorer regressions now guard the new topbar hidden-transition scroll compensation wiring (`topbarHiddenPrevRef`, `topbarInsetPrevRef`, and delta-based `scrollTop` adjustment).
