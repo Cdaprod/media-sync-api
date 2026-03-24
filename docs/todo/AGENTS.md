@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer touch-action + iOS gesture fallback hardening
+- [x] Added root shell `touch-action: none` to keep page-level pan/zoom disabled while app surfaces own interaction.
+- [x] Re-enabled vertical scrolling on Explorer scroll hosts (`.content .scroll`, `.sidebar .scroll`, `.drawer-body`, `.preview-details`) with `touch-action: pan-y`.
+- [x] Added tappable UI chrome `touch-action: manipulation` coverage for topbar/buttons/controls/assets/context-menu actions.
+- [x] Added iOS fallback listeners in `ExplorerApp` to block gesture zoom, multi-touch start, and rapid double-tap zoom with passive:false handlers.
+- [ ] Validate on physical iPhone Safari that pinch/double-tap zoom no longer fires while normal vertical scroll/tap interactions remain intact.
+
 ## 2026-03-24 — Explorer iPhone Safari viewport-lock hardening
 - [x] Updated App Router viewport metadata to include `maximumScale: 1`, `userScalable: false`, and `viewportFit: 'cover'`.
 - [x] Added global viewport-lock CSS for `html/body/#__next/.app` (`100vh` + `100dvh`, `overflow: hidden`) so the app shell owns screen scrolling.

@@ -42,13 +42,14 @@ test('package app layout owns default App Router not-found fonts and wiring', ()
   assert.ok(layout.includes('fonts.googleapis.com'));
   assert.ok(layout.includes('fonts.gstatic.com'));
   assert.ok(layout.includes("viewportFit: 'cover'"));
-  assert.ok(layout.includes('maximumScale: 1'));
-  assert.ok(layout.includes('userScalable: false'));
+  assert.ok(layout.includes("width: 'device-width'"));
+  assert.ok(layout.includes('initialScale: 1'));
   assert.ok(globals.includes('--safe-area-top: env(safe-area-inset-top, 0px);'));
   assert.ok(globals.includes('html,'));
   assert.ok(globals.includes('height: 100dvh;'));
   assert.ok(globals.includes('#__next,'));
   assert.ok(globals.includes('overflow: hidden;'));
+  assert.ok(globals.includes('touch-action: none;'));
   assert.ok(globals.includes('-webkit-text-size-adjust: 100%;'));
   assert.ok(globals.includes('text-size-adjust: 100%;'));
   assert.ok(globals.includes('padding-top: var(--safe-area-top);'));
@@ -273,6 +274,11 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('const topbarInsetPrevRef = useRef(0);'));
   assert.ok(explorer.includes('const updateTopbarMeasuredHeight = () => {'));
   assert.ok(explorer.includes('const observer = new ResizeObserver(() => updateTopbarMeasuredHeight());'));
+  assert.ok(explorer.includes("document.addEventListener('gesturestart', blockGesture, listenerOptions);"));
+  assert.ok(explorer.includes("document.addEventListener('gesturechange', blockGesture, listenerOptions);"));
+  assert.ok(explorer.includes("document.addEventListener('gestureend', blockGesture, listenerOptions);"));
+  assert.ok(explorer.includes("document.addEventListener('touchstart', blockMultiTouch, listenerOptions);"));
+  assert.ok(explorer.includes("document.addEventListener('touchend', blockDoubleTap, listenerOptions);"));
   assert.ok(explorer.includes('const topbarGap = Number.parseFloat(styles.getPropertyValue(\'--topbar-gap\')) || 0;'));
   assert.ok(explorer.includes('const nextInset = Math.max(0, topbarMeasuredHeight + topbarGap);'));
   assert.ok(explorer.includes('const delta = nextInset - topbarInsetPrevRef.current;'));
@@ -804,6 +810,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(!styles.includes('.scroll-content.topbar-hidden{'));
   assert.ok(styles.includes('.content .scroll{'));
   assert.ok(styles.includes('padding: 0;'));
+  assert.ok(styles.includes('touch-action: pan-y;'));
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
   assert.ok(hookContent.includes('const TOPBAR_REVEAL_HYSTERESIS_PX = 20;'));
@@ -818,6 +825,8 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('will-change: transform, opacity;'));
   assert.ok(styles.includes('transition: opacity 120ms ease;'));
   assert.ok(!styles.includes('transition: transform 160ms ease, opacity 160ms ease;'));
+  assert.ok(styles.includes('.topbar,'));
+  assert.ok(styles.includes('touch-action: manipulation;'));
   assert.ok(styles.includes('transform: translate3d(0, calc(-1 * var(--topbar-measured-height)), 0);'));
   assert.ok(styles.includes('@media (max-width: 860px){'));
   assert.ok(styles.includes('--topbar-gap: 14px;'));

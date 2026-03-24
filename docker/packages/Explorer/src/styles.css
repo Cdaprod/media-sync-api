@@ -591,6 +591,7 @@ select.control{
   padding: 0;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   position: relative;
   z-index: 0;
 }
@@ -1066,6 +1067,7 @@ select.control{
   overflow: hidden;
   min-height: 0;
   flex: 1;
+  touch-action: pan-y;
 }
 .preview-shell{
   position: relative;
@@ -1340,6 +1342,18 @@ select.control{
   font-size: 12px;
   max-height: 36vh;
   overflow: auto;
+  touch-action: pan-y;
+}
+
+.topbar,
+.btn,
+.control,
+.dropdown-menu button,
+.asset,
+.row,
+.selector,
+.context-menu button{
+  touch-action: manipulation;
 }
 
 .preview-details.open{

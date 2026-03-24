@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Shifted iPhone Safari zoom/pan control toward touch-action first: `html/body/#__next/.app` now include `touch-action: none` in global CSS while real scroll hosts explicitly opt back into `touch-action: pan-y`.
+- Added broad tappable-chrome `touch-action: manipulation` coverage for topbar/buttons/controls/asset surfaces/context-menu buttons to suppress double-tap zoom on interactive UI.
+- Added iOS runtime gesture fallback in `ExplorerApp` (`gesturestart/gesturechange/gestureend`, multi-touch `touchstart`, and rapid double-tap `touchend` prevention with passive:false) for devices where CSS/meta controls are insufficient.
+
+### Latest Implementation Notes (2026-03-24)
 - Hardened Explorer App Router shell viewport locking for iPhone Safari: `layout.tsx` now sets `maximumScale: 1` + `userScalable: false` alongside `viewportFit: 'cover'`.
 - Added global shell constraints in `app/globals.css` so `html`, `body`, `#__next`, and `.app` share `height: 100vh; height: 100dvh; overflow: hidden`, with safe-area variables (`env(safe-area-inset-*)`) applied via body padding.
 - Added global text-size stability (`-webkit-text-size-adjust` / `text-size-adjust` at 100%) plus minimum `16px` sizing for `input`/`textarea`/`select` controls to prevent iPhone Safari input zoom drift.

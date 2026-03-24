@@ -1705,6 +1705,43 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [closeDrawer, inspectorOpen, sidebarOpen]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const ua = window.navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua)
+      || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+    const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    if (!isIOS || !isCoarsePointer) return;
+
+    let lastTouchEndAt = 0;
+    const listenerOptions: AddEventListenerOptions = { passive: false };
+    const blockGesture = (event: Event) => event.preventDefault();
+    const blockMultiTouch = (event: TouchEvent) => {
+      if (event.touches.length > 1) event.preventDefault();
+    };
+    const blockDoubleTap = (event: TouchEvent) => {
+      const now = Date.now();
+      if (now - lastTouchEndAt < 320) {
+        event.preventDefault();
+      }
+      lastTouchEndAt = now;
+    };
+
+    document.addEventListener('gesturestart', blockGesture, listenerOptions);
+    document.addEventListener('gesturechange', blockGesture, listenerOptions);
+    document.addEventListener('gestureend', blockGesture, listenerOptions);
+    document.addEventListener('touchstart', blockMultiTouch, listenerOptions);
+    document.addEventListener('touchend', blockDoubleTap, listenerOptions);
+
+    return () => {
+      document.removeEventListener('gesturestart', blockGesture);
+      document.removeEventListener('gesturechange', blockGesture);
+      document.removeEventListener('gestureend', blockGesture);
+      document.removeEventListener('touchstart', blockMultiTouch);
+      document.removeEventListener('touchend', blockDoubleTap);
+    };
+  }, []);
+
+  useEffect(() => {
     const topbar = topbarRef.current;
     if (!topbar) return;
 
