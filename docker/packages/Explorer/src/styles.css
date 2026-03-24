@@ -78,6 +78,9 @@ code { font-family: var(--mono); }
   z-index:65;
 }
 .backdrop.show{ opacity:1; pointer-events:auto; }
+.inspector-backdrop{
+  z-index: 70;
+}
 #drawerBackdrop{
   background: rgba(6,8,14,0.35);
 }

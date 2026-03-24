@@ -1,3 +1,12 @@
+## 2026-03-24 — Density latency + inspector backdrop truth pass (PR #138 follow-up)
+- [x] Reworked density scrub to latest-input-wins frame-coalesced commits for immediate finger-tracking.
+- [x] Added in-flight Flip interruption/overwrite so stale transitions cannot lag behind new slider targets.
+- [x] Shortened scrub-driven reflow timings to keep layout motion responsive during fast drags.
+- [x] Added inspector-specific drawer/backdrop targeting contract (`data-inspector-drawer`, `.inspector-backdrop`) and explicit GSAP x/y closed vectors.
+- [x] Preserved masonry-safe authority, modal/toast presence, topbar hidden refresh, and pinch gesture exemptions.
+- [x] Expanded contract assertions for latest-input density behavior and inspector backdrop ownership markers.
+- [ ] Capture fresh on-device iPhone Safari proof showing immediate slider tracking and visible inspector panel above dimmer in portrait/landscape.
+
 ## 2026-03-24 — Masonry-safe density scrub follow-up (PR #138 validation fix)
 - [x] Removed density container-scale scrub illusion that caused overlapping/behind-card artifacts in orientation-sensitive masonry.
 - [x] Kept masonry layout authoritative with synchronous `--masonry-column-count` commits + immediate Flip sequencing.

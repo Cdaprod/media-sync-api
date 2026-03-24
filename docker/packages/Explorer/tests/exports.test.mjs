@@ -926,20 +926,23 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
   assert.ok(content.includes('const onSliderInput = () => {'));
   assert.ok(content.includes('density.scrubTo(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE));'));
-  assert.ok(content.includes('density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);'));
-  assert.ok(content.includes('step={0.05}'));
+  assert.ok(content.includes('const onSliderChange = () => density.settleScrub();'));
+  assert.ok(content.includes('step={0.01}'));
   assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
   assert.ok(content.includes('if (inDensityPinchSurface(event.target)) return;'));
   assert.ok(content.includes('data-density-pinch-surface="true"'));
   assert.ok(content.includes('topbarMotionRef.current?.refresh();'));
+  assert.ok(content.includes('className="backdrop inspector-backdrop"'));
+  assert.ok(content.includes('data-inspector-drawer="true"'));
 
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
-  assert.ok(densityController.includes('DENSITY_STEP_HYSTERESIS = 0.55'));
-  assert.ok(densityController.includes('while (clampedValue >= nextColumns + DENSITY_STEP_HYSTERESIS && nextColumns < maxColumns) {'));
-  assert.ok(densityController.includes('while (clampedValue <= nextColumns - DENSITY_STEP_HYSTERESIS && nextColumns > minColumns) {'));
+  assert.ok(densityController.includes('let latestRequestedColumns: number | null = null;'));
+  assert.ok(densityController.includes('const requestLatestCommit = (nextColumns: number) => {'));
+  assert.ok(densityController.includes('if (rafId) return;'));
+  assert.ok(densityController.includes('requestAnimationFrame(flushLatestCommit);'));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
-  assert.ok(!densityController.includes('scaleForScrubValue'));
+  assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
 
   assert.ok(!flip.includes('requestAnimationFrame(() => {'));
   assert.ok(flip.includes('const state = Flip.getState(items);'));
@@ -948,6 +951,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('absolute: true,'));
   assert.ok(flip.includes('scale: false,'));
   assert.ok(flip.includes("clearProps: 'transform,opacity'"));
+  assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));
+  assert.ok(flip.includes('previous.kill();'));
 
   assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));
   assert.ok(drawerMotion.includes("if (mode === 'sheet') {"));

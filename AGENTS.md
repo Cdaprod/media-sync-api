@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Retuned Explorer density scrub for immediate touch responsiveness: removed lag-heavy hysteresis stepping in favor of latest-input-wins frame-coalesced commits (`requestAnimationFrame`) that chase the current slider value while preserving masonry-authoritative layout commits.
+- Density Flip reflow now interrupts stale in-flight transitions per-grid (`WeakMap` + `kill`) and uses shorter scrub timing so rapid drag input no longer queues old targets behind the user’s finger.
+- Preview inspector backdrop/panel truth was tightened by explicitly targeting the inspector drawer node (`data-inspector-drawer`), using an inspector-specific backdrop class contract, and switching drawer transform ownership to explicit GSAP x/y vectors so the panel remains visually above its dimmer across side/sheet modes.
+
+### Latest Implementation Notes (2026-03-24)
 - Density scrub was redesigned to be masonry-authoritative for Explorer: removed container-scale scrub illusion, moved to thresholded discrete column commits on live slider input, and kept synchronous CSS variable commits (`--masonry-column-count`) as the real layout source.
 - Flip density choreography is now tuned for Explorer masonry cards (`.masonry-column > .asset` / pending cards) with immediate capture→commit→Flip sequencing, `absolute: true`, `scale: false`, and transform cleanup to prevent overlap/behind-layer artifacts.
 - Preserved prior lifecycle fixes (drawer side/sheet mode sync, modal/toast exit presence, topbar hidden-offset refresh, density pinch gesture exemptions) while refining slider responsiveness via fractional slider step for smoother threshold crossing without fake grid scaling.

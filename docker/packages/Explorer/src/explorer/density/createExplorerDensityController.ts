@@ -5,7 +5,7 @@ import { clampColumnCount } from './getColumnCount';
  * Explorer density authority contract:
  * - Masonry layout is always authoritative.
  * - Controller synchronously commits `--masonry-column-count` on the real grid node.
- * - Slider scrub is continuous input, but layout commits happen at discrete column thresholds.
+ * - Slider scrub is continuous input; commits are latest-value-wins at frame cadence.
  */
 export type ExplorerDensityController = {
   getColumns: () => number;
@@ -25,8 +25,6 @@ export type ExplorerDensityControllerOptions = {
   maxColumns: number;
 };
 
-const DENSITY_STEP_HYSTERESIS = 0.55;
-
 export function createExplorerDensityController(options: ExplorerDensityControllerOptions): ExplorerDensityController {
   const {
     gridEl,
@@ -39,6 +37,8 @@ export function createExplorerDensityController(options: ExplorerDensityControll
 
   let currentColumns = clampColumnCount(initialColumns);
   let scrubValue = currentColumns;
+  let rafId = 0;
+  let latestRequestedColumns: number | null = null;
 
   const clampToRange = (value: number) => Math.max(minColumns, Math.min(maxColumns, value));
 
@@ -59,6 +59,7 @@ export function createExplorerDensityController(options: ExplorerDensityControll
       animateDensityFlip({
         gridEl,
         commitLayout: () => commitLayoutColumns(clamped),
+        interactionMode: 'scrub',
       });
       return;
     }
@@ -66,33 +67,40 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     commitLayoutColumns(clamped);
   }
 
+  const flushLatestCommit = () => {
+    rafId = 0;
+    if (latestRequestedColumns == null) return;
+    const target = latestRequestedColumns;
+    latestRequestedColumns = null;
+    if (target !== currentColumns) {
+      setColumns(target, true);
+    }
+  };
+
+  const requestLatestCommit = (nextColumns: number) => {
+    latestRequestedColumns = clampColumnCount(clampToRange(nextColumns));
+    if (rafId) return;
+    rafId = requestAnimationFrame(flushLatestCommit);
+  };
+
   function scrubTo(nextValue: number) {
     const clampedValue = clampToRange(nextValue);
     scrubValue = clampedValue;
-
-    // keep native thumb movement smooth even with fractional drag values
     sliderEl.value = String(clampedValue);
-
-    let nextColumns = currentColumns;
-    while (clampedValue >= nextColumns + DENSITY_STEP_HYSTERESIS && nextColumns < maxColumns) {
-      nextColumns += 1;
-    }
-    while (clampedValue <= nextColumns - DENSITY_STEP_HYSTERESIS && nextColumns > minColumns) {
-      nextColumns -= 1;
-    }
-
-    if (nextColumns !== currentColumns) {
-      setColumns(nextColumns, true);
-    }
+    requestLatestCommit(Math.round(clampedValue));
   }
 
   function settleScrub() {
+    if (latestRequestedColumns != null && latestRequestedColumns !== currentColumns) {
+      setColumns(latestRequestedColumns, true);
+      latestRequestedColumns = null;
+    }
     sliderEl.value = String(currentColumns);
     scrubValue = currentColumns;
   }
 
   function destroy() {
-    gridEl.style.removeProperty('will-change');
+    if (rafId) cancelAnimationFrame(rafId);
   }
 
   commitLayoutColumns(currentColumns);

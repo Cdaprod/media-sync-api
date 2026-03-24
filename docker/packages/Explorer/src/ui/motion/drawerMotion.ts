@@ -19,92 +19,86 @@ export function createDrawerMotion(
 ): DrawerMotionController {
   const { getMode } = options;
   let mode = getMode();
+  let tween: gsap.core.Tween | null = null;
 
-  const applyClosedTransform = () => {
-    if (mode === 'sheet') {
-      gsap.set(drawerEl, { xPercent: 0, yPercent: 110 });
-      return;
-    }
-    gsap.set(drawerEl, { yPercent: 0, xPercent: 100 });
+  const stop = () => {
+    tween?.kill();
+    tween = null;
   };
 
-  const tl = gsap.timeline({
-    paused: true,
-    defaults: { overwrite: 'auto' },
-    onStart: () => {
-      gsap.set([drawerEl, backdropEl], { pointerEvents: 'auto' });
-    },
-    onReverseComplete: () => {
-      gsap.set(backdropEl, { autoAlpha: 0, pointerEvents: 'none' });
-      gsap.set(drawerEl, { pointerEvents: 'none' });
-      applyClosedTransform();
-    },
-  });
-
-  const rebuildTimelineForMode = () => {
-    mode = getMode();
-    tl.clear();
-
-    tl.fromTo(
-      backdropEl,
-      { autoAlpha: 0 },
-      { autoAlpha: 1, duration: 0.16, ease: 'power1.out' },
-      0,
-    );
-
+  const closedVector = () => {
+    const rect = drawerEl.getBoundingClientRect();
+    const width = Math.max(rect.width, window.innerWidth * 0.65);
+    const height = Math.max(rect.height, window.innerHeight * 0.65);
     if (mode === 'sheet') {
-      tl.fromTo(
-        drawerEl,
-        { yPercent: 110, xPercent: 0 },
-        { yPercent: 0, xPercent: 0, duration: 0.22, ease: 'power3.out' },
-        0,
-      );
-      return;
+      return { x: 0, y: height + 24 };
     }
-
-    tl.fromTo(
-      drawerEl,
-      { xPercent: 100, yPercent: 0 },
-      { xPercent: 0, yPercent: 0, duration: 0.22, ease: 'power3.out' },
-      0,
-    );
+    return { x: width + 24, y: 0 };
   };
 
-  rebuildTimelineForMode();
+  const activateBackdrop = () => {
+    gsap.set(backdropEl, { autoAlpha: 1, pointerEvents: 'auto' });
+  };
+
+  const deactivateBackdrop = () => {
+    gsap.set(backdropEl, { autoAlpha: 0, pointerEvents: 'none' });
+  };
 
   function open() {
     syncLayoutMode();
-    tl.play(0);
+    stop();
+    activateBackdrop();
+    gsap.set(drawerEl, { pointerEvents: 'auto', zIndex: 80 });
+    tween = gsap.to(drawerEl, {
+      x: 0,
+      y: 0,
+      duration: 0.18,
+      ease: 'power3.out',
+      overwrite: 'auto',
+    });
   }
 
   function close(onDone?: () => void) {
     syncLayoutMode();
-    tl.eventCallback('onReverseComplete', () => {
-      gsap.set(backdropEl, { autoAlpha: 0, pointerEvents: 'none' });
-      gsap.set(drawerEl, { pointerEvents: 'none' });
-      applyClosedTransform();
-      onDone?.();
+    stop();
+    const closed = closedVector();
+    tween = gsap.to(drawerEl, {
+      x: closed.x,
+      y: closed.y,
+      duration: 0.16,
+      ease: 'power2.inOut',
+      overwrite: 'auto',
+      onComplete: () => {
+        gsap.set(drawerEl, { pointerEvents: 'none' });
+        deactivateBackdrop();
+        onDone?.();
+      },
     });
-    tl.reverse();
   }
 
   function setClosedState() {
     syncLayoutMode();
-    tl.pause(0);
-    gsap.set(backdropEl, { autoAlpha: 0, pointerEvents: 'none' });
-    gsap.set(drawerEl, { pointerEvents: 'none' });
-    applyClosedTransform();
+    stop();
+    const closed = closedVector();
+    gsap.set(drawerEl, {
+      x: closed.x,
+      y: closed.y,
+      pointerEvents: 'none',
+      zIndex: 80,
+    });
+    deactivateBackdrop();
   }
 
   function syncLayoutMode() {
     const next = getMode();
     if (next === mode) return;
     mode = next;
-    rebuildTimelineForMode();
+    const closed = closedVector();
+    gsap.set(drawerEl, { x: closed.x, y: closed.y });
   }
 
   function destroy() {
-    tl.kill();
+    stop();
   }
 
   setClosedState();

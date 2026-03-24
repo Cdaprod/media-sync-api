@@ -1756,7 +1756,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [topbarMeasuredHeight]);
 
   useEffect(() => {
-    const drawerEl = document.querySelector<HTMLElement>('.drawer');
+    const drawerEl = document.querySelector<HTMLElement>('[data-inspector-drawer="true"]');
     const backdropEl = inspectorBackdropRef.current;
     if (!drawerEl || !backdropEl) return;
     const controller = createDrawerMotion(drawerEl, backdropEl, {
@@ -2049,10 +2049,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const onSliderInput = () => {
       density.scrubTo(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE));
     };
-    const onSliderChange = () => {
-      density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);
-      density.settleScrub();
-    };
+    const onSliderChange = () => density.settleScrub();
     const onSliderPointerUp = () => density.settleScrub();
     sliderEl.addEventListener('input', onSliderInput);
     sliderEl.addEventListener('change', onSliderChange);
@@ -2675,7 +2672,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             type="range"
                             min={MIN_COLUMNS_MOBILE}
                             max={MAX_COLUMNS_MOBILE}
-                            step={0.05}
+                            step={0.01}
                             defaultValue={gridColumnCount}
                             data-interactive="true"
                             data-topbar-control="true"
@@ -2844,7 +2841,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
       </div>
 
-      <aside className="drawer" aria-hidden={!inspectorOpen}>
+      <aside className="drawer" data-inspector-drawer="true" aria-hidden={!inspectorOpen}>
         <div className="drawer-body custom-ui-surface">
           <AssetPreviewPanel
               asset={normalizedPreviewAsset}
@@ -3023,9 +3020,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onClick={() => setSidebarOpen(false)}
       ></div>
       <div
-        className="backdrop"
+        className="backdrop inspector-backdrop"
         ref={inspectorBackdropRef}
-        style={{ zIndex: 70 }}
         onClick={closeDrawer}
       ></div>
     </div>
