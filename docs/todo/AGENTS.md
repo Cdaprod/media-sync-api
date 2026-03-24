@@ -1,3 +1,10 @@
+## 2026-03-24 — RAF-first density scheduler refinement
+- [x] Replaced timer-based fast-scrub coalescing with RAF-driven latest-target scheduling.
+- [x] Enforced one density commit per frame max and removed timer-window lag path.
+- [x] Added frame-level duplicate-target guard to avoid redundant commit churn.
+- [x] Updated focused regression assertions to lock RAF-first scheduler contract.
+- [ ] Validate finger-tracking feel on device against prior timer-based build and archive short perf notes.
+
 ## 2026-03-24 — Density intermediate-step coalescing pass
 - [x] Audited density scrub pipeline for intermediate-step replay during fast drags.
 - [x] Added fast-scrub/large-jump coalescing so stale intermediate column targets are skipped under rapid input.

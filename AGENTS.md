@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Removed timer-window density coalescing and switched back to a pure RAF-driven latest-target scheduler for direct-manipulation responsiveness.
+- Density scrub now commits at most once per animation frame, overwriting stale intermediate targets and keeping fast drags responsive without timer-induced delay.
+- Added frame-level duplicate-target suppression (`frameCommittedColumns`) so scrub pipelines avoid redundant same-target commits while preserving masonry-authoritative updates.
+
+### Latest Implementation Notes (2026-03-24)
 - Density commit pipeline now coalesces aggressive fast scrubs so large jumps (e.g., 5→2) do not waste work stepping through every intermediate column state.
 - Added a fast-scrub detector (value delta + time window) and short coalescing timer to enforce latest-target-wins during quick drags while preserving richer step feedback for slow scrubs.
 - Settle path still flushes the latest requested target immediately, cancels pending coalesce timers, and preserves masonry-authoritative commit semantics.

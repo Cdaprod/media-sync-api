@@ -958,19 +958,16 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes('if (nextValue > previousScrubValue) return Math.floor(nextValue + 1e-6);'));
   assert.ok(densityController.includes('if (nextValue < previousScrubValue) return Math.ceil(nextValue - 1e-6);'));
   assert.ok(densityController.includes('let latestRequestedColumns: number | null = null;'));
-  assert.ok(densityController.includes('let coalesceTimer = 0;'));
-  assert.ok(densityController.includes('const FAST_SCRUB_DELTA = 0.42;'));
-  assert.ok(densityController.includes('const FAST_SCRUB_COALESCE_MS = 34;'));
+  assert.ok(densityController.includes('let frameCommittedColumns: number | null = null;'));
   assert.ok(densityController.includes('const requestLatestCommit = (nextColumns: number) => {'));
-  assert.ok(densityController.includes('const requestCoalescedCommit = (nextColumns: number) => {'));
-  assert.ok(densityController.includes('window.setTimeout(flushCoalescedCommit, FAST_SCRUB_COALESCE_MS);'));
   assert.ok(densityController.includes('if (rafId) return;'));
   assert.ok(densityController.includes('requestAnimationFrame(flushLatestCommit);'));
-  assert.ok(densityController.includes('const isFastScrub = timeDelta <= FAST_SCRUB_WINDOW_MS && valueDelta >= FAST_SCRUB_DELTA;'));
-  assert.ok(densityController.includes('const isLargeJump = Math.abs(nextColumns - currentColumns) >= 2;'));
-  assert.ok(densityController.includes('if (isFastScrub || isLargeJump) {'));
+  assert.ok(densityController.includes('if (target === frameCommittedColumns) return;'));
+  assert.ok(densityController.includes('frameCommittedColumns = target;'));
+  assert.ok(densityController.includes('requestLatestCommit(nextColumns);'));
   assert.ok(densityController.includes("interactionMode: 'scrub' | 'settle' = 'scrub',"));
   assert.ok(densityController.includes("commitColumns(nextColumns, animated, 'settle');"));
+  assert.ok(!densityController.includes('setTimeout('));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
 
