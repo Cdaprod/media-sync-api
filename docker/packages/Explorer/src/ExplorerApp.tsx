@@ -2248,6 +2248,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             ref={mediaScrollViewportRef}
             className="scroll"
             onScroll={clearPendingLongPress}
+            data-topbar-hidden={topbarHidden ? 'true' : 'false'}
             style={{ '--topbar-measured-height': `${topbarMeasuredHeight}px` } as React.CSSProperties}
           >
             <div className="topbar-anchor" aria-hidden="true">
@@ -2407,7 +2408,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 </div>
               </div>
             </div>
-            <div className={`scroll-content ${topbarHidden ? 'topbar-hidden' : 'topbar-open'}`}>
+            <div
+              className="scroll-content"
+              data-topbar-hidden={topbarHidden ? 'true' : 'false'}
+              style={
+                {
+                  '--scroll-content-top-inset': topbarHidden
+                    ? '0px'
+                    : 'calc(var(--topbar-measured-height) + var(--topbar-gap))',
+                } as React.CSSProperties
+              }
+            >
               <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
                 {!activeProject && mediaScope !== 'all' ? (
                   <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>

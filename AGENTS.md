@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Refactored Explorer scroll-content inset ownership to a single inline CSS variable (`--scroll-content-top-inset`) driven directly from `topbarHidden`, removing `topbar-open` / `topbar-hidden` class-based inset switching to avoid header/content state drift.
+- `.scroll` and `.scroll-content` now expose `data-topbar-hidden` debug attributes so on-device inspection can confirm whether visual topbar state and content inset state are synchronized in the same render.
+- Removed `.content .scroll` debug seam padding (`padding: 0`) while keeping measured-height/inset logic, so remaining top-edge motion can be isolated to topbar/inset state transitions only.
+
+### Latest Implementation Notes (2026-03-24)
 - Removed inset animation from Explorer content geometry: `.scroll-content` now uses `transition: none`, so open↔hidden inset changes snap immediately instead of easing `padding-top` and visually dragging the first asset rows through the topbar boundary.
 - Reduced topbar collapse motion coupling by dropping transform easing on `.topbar` (`transition: opacity 120ms ease` only), preserving hide/show state while avoiding the moving-bottom-edge effect that made assets appear glued to the disappearing header.
 - Moved topbar inset compensation in `ExplorerApp` from `useEffect` to `useLayoutEffect` so scrollTop compensation applies before paint on hidden-state transitions, minimizing one-frame ceiling-pull/jump artifacts.

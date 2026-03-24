@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer unified inset source-of-truth refactor
+- [x] Replaced `.scroll-content.topbar-open/.topbar-hidden` class-driven padding with a single inline `--scroll-content-top-inset` variable derived from `topbarHidden`.
+- [x] Added `data-topbar-hidden` debug markers to both `.scroll` and `.scroll-content` to validate state synchronization in Safari/Web Inspector.
+- [x] Removed temporary `.content .scroll` padding seam (`padding: 0`) while debugging top-edge collapse behavior.
+- [x] Updated focused Explorer regression assertions to lock variable-driven inset wiring and removal of legacy topbar-open/topbar-hidden content classes.
+- [ ] Validate on physical iPhone Safari that topbar visual state and `--scroll-content-top-inset` stay in lockstep through repeated hide/reveal cycles with no one-frame mismatch.
+
 ## 2026-03-24 — Explorer inset transition removal + pre-paint compensation
 - [x] Removed `.scroll-content` `padding-top` transition so topbar-open/topbar-hidden inset changes apply immediately without easing drag.
 - [x] Removed `.topbar` transform easing from collapse path (kept light opacity-only transition) to avoid moving-edge coupling during scroll-driven hide.
