@@ -1020,3 +1020,25 @@ test('local density/context/preview interactions stay network-quiet and do not i
   assert.ok(!previewBlock.includes('loadMedia('));
   assert.ok(!previewBlock.includes('loadAllMedia('));
 });
+
+test('density setup rebinds on grid surface availability and hidden topbar refreshes on height changes', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const topbarMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const topbarMotion = fs.readFileSync(topbarMotionPath, 'utf8');
+
+  assert.ok(explorer.includes('const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);'));
+  assert.ok(explorer.includes('const bindGridSurface = useCallback((node: HTMLDivElement | null) => {'));
+  assert.ok(explorer.includes('const gridEl = gridSurfaceEl;'));
+  assert.ok(explorer.includes('if (!gridEl || !sliderEl || !scrollerEl) return;'));
+  assert.ok(explorer.includes('}, [gridSurfaceEl, view]);'));
+
+  assert.ok(explorer.includes('if (!topbarHidden) return;'));
+  assert.ok(explorer.includes('topbarMotionRef.current?.refresh();'));
+  assert.ok(explorer.includes('}, [topbarHidden, topbarMeasuredHeight]);'));
+
+  assert.ok(topbarMotion.includes('refresh: () => void;'));
+  assert.ok(topbarMotion.includes('function refresh() {'));
+  assert.ok(topbarMotion.includes('if (!hidden) return;'));
+  assert.ok(topbarMotion.includes('y: -topbarEl.offsetHeight,'));
+});

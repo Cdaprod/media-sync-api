@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Added explicit regression assertions for the two PR-review comment risks: (1) density setup rebinding after grid surface mount, and (2) topbar hidden-offset refresh when measured height changes.
+- Explorer test contracts now lock callback-ref driven grid-surface availability (`gridSurfaceEl`) and the density effect dependency path (`[gridSurfaceEl, view]`).
+- Topbar motion contracts now explicitly assert hidden-state `refresh()` behavior and the measured-height-triggered refresh effect path in `ExplorerApp`.
+
+### Latest Implementation Notes (2026-03-24)
 - Rewrote density controller into direct-manipulation mode: slider scrub now clamps and commits columns immediately through the authoritative masonry CSS var path without scheduler layers.
 - Density Flip now explicitly kills stale flips/tweens on persistent card nodes before capture and animates with `targets: items` to preserve continuity under rapid input.
 - Added stronger invalid-value guards (`Number.isFinite` + clamp) to prevent transient empty/invalid column states that could produce full-field collapse frames.

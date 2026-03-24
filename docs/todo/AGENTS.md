@@ -1,3 +1,8 @@
+## 2026-03-24 — PR-review regression lock: density mount timing + topbar hidden offset
+- [x] Added focused assertions that density setup binds from `gridSurfaceEl` availability, not mount-only `gridRef.current` assumptions.
+- [x] Added focused assertions that hidden topbar refresh path runs when `topbarMeasuredHeight` changes.
+- [ ] Optional: add runtime telemetry marker for first density-controller attach on cold boot to confirm device behavior.
+
 ## 2026-03-24 — Direct-manipulation density rewrite
 - [x] Removed scheduler-style density buffering and switched to immediate scrub commits.
 - [x] Added strict safe-column clamping/finite guards for all density commits.
