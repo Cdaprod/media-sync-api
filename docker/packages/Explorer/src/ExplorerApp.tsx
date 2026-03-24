@@ -1991,7 +1991,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   return (
-    <div className={`app ${topbarHidden ? 'topbar-hidden' : ''}`}>
+    <div className="app">
       <div className="main">
         <aside className={`sidebar sidebar-drawer ${sidebarOpen ? 'is-open' : ''}`}>
           <div className="section-h">

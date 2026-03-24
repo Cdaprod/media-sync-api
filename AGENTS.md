@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Completed the topbar/content decoupling pass by removing the root `.app` topbar-hidden class toggle; topbar state now only drives topbar visual state/debug markers and no longer mutates app-shell layout classes.
+- This keeps the contract explicit: ordinary topbar hide/reveal does not alter content layout or apply hidden/open shell-level spacing shifts.
+- Existing compensation remains restricted to measured-height delta synchronization only.
+
+### Latest Implementation Notes (2026-03-24)
 - Removed the remaining raw-scroll reopen shortcut from `useTopbarScrollState` (`TOPBAR_REVEAL_AT_TOP_PX` guard), so topbar reopen now comes only from the logical content-edge hysteresis path.
 - Explorer scroll-content inset is no longer a live hide/reveal toggle: `--scroll-content-top-inset` now stays fixed to the measured open clearance, avoiding per-collapse `padding-top` reseating during topbar movement.
 - Inset compensation was narrowed to measured-height delta changes only (independent of `topbarHidden` flips), preventing extra programmatic scroll adjustments during normal scroll-driven collapse/reveal cycles.

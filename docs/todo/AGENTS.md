@@ -1,3 +1,9 @@
+## 2026-03-24 — Explorer topbar/layout decoupling cleanup
+- [x] Removed the root `.app` hidden-state class toggle tied to `topbarHidden` so shell layout no longer changes during ordinary hide/reveal.
+- [x] Kept topbar-hidden state confined to topbar visual class/debug markers only.
+- [x] Reran focused Explorer regression suite after the shell-class decoupling cleanup.
+- [ ] Validate on physical iPhone Safari that no shell-level spacing or rebasing appears when topbar hide/reveal toggles repeatedly.
+
 ## 2026-03-24 — Explorer collapse decoupling follow-up
 - [x] Removed legacy top-of-scroll reopen shortcut (`TOPBAR_REVEAL_AT_TOP_PX`) from `useTopbarScrollState` so reopen is hysteresis/content-edge only.
 - [x] Stopped treating `--scroll-content-top-inset` as a live hide/reveal value by fixing it to measured open inset instead of `topbarHidden` toggles.
