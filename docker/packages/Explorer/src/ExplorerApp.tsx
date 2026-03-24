@@ -304,6 +304,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);
+  const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);
+  const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
@@ -1651,7 +1653,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     suppressAutoToggle,
     topbarHidden,
   } = useTopbarScrollState({
-    disabled: sidebarOpen || composeModalOpen || deleteModalOpen,
+    disabled: sidebarOpen
+      || composeModalOpen
+      || deleteModalOpen
+      || actionsOpen
+      || topbarHasOpenDropdown
+      || topbarFocusWithin,
     scrollRef: mediaScrollViewportRef,
     topbarMeasuredHeight,
   });
@@ -1808,13 +1815,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
     };
 
-    topbar.addEventListener('pointerenter', handleEnter);
-    topbar.addEventListener('pointerleave', handleLeave);
-    topbar.addEventListener('focusin', () => intent.setPinned(true));
-    topbar.addEventListener('focusout', () => {
+    const updateDropdownState = () => {
+      setTopbarHasOpenDropdown(Boolean(topbar.querySelector('details.dropdown[open]')));
+    };
+    const handleFocusIn = () => {
+      setTopbarFocusWithin(true);
+      intent.setPinned(true);
+    };
+    const handleFocusOut = () => {
+      const stillFocusedWithin = topbar.contains(document.activeElement);
+      setTopbarFocusWithin(stillFocusedWithin);
       intent.setPinned(false);
       if (supportsHover && !shouldKeepOpen()) intent.scheduleClose(600);
-    });
+    };
+    const handleDropdownToggle = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.matches('details.dropdown')) return;
+      updateDropdownState();
+    };
+
+    updateDropdownState();
+
+    topbar.addEventListener('pointerenter', handleEnter);
+    topbar.addEventListener('pointerleave', handleLeave);
+    topbar.addEventListener('focusin', handleFocusIn);
+    topbar.addEventListener('focusout', handleFocusOut);
+    topbar.addEventListener('toggle', handleDropdownToggle, true);
     const handleOutside = (event: PointerEvent) => {
       if (isTouchPrimary) return;
       if (isTopbarOwnedTarget(event.target)) return;
@@ -1835,6 +1861,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       topbar.removeEventListener('pointerenter', handleEnter);
       topbar.removeEventListener('pointerleave', handleLeave);
+      topbar.removeEventListener('focusin', handleFocusIn);
+      topbar.removeEventListener('focusout', handleFocusOut);
+      topbar.removeEventListener('toggle', handleDropdownToggle, true);
       if (!isTouchPrimary) {
         document.removeEventListener('pointerdown', handleOutside);
       }

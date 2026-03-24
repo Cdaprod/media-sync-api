@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer sidebar touch + topbar menu pinning fix
+- [x] Changed root shell touch-action from `none` to `manipulation` to restore sidebar panel touch/scroll usability.
+- [x] Added topbar interaction lock conditions (`actionsOpen`, dropdown open state, focus-within) to `useTopbarScrollState` disable gating.
+- [x] Added dropdown `toggle` listener + focus-within state tracking so topbar remains open while menus/controls are in use.
+- [x] Updated focused Explorer regressions for root touch-action and new topbar-interaction lock markers.
+- [ ] Validate on physical iPhone Safari that sidebar drawer remains touch-scrollable when open and topbar does not collapse while action/dropdown menus are active.
+
 ## 2026-03-24 — Explorer touch-action + iOS gesture fallback hardening
 - [x] Added root shell `touch-action: none` to keep page-level pan/zoom disabled while app surfaces own interaction.
 - [x] Re-enabled vertical scrolling on Explorer scroll hosts (`.content .scroll`, `.sidebar .scroll`, `.drawer-body`, `.preview-details`) with `touch-action: pan-y`.

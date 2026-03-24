@@ -49,7 +49,7 @@ test('package app layout owns default App Router not-found fonts and wiring', ()
   assert.ok(globals.includes('height: 100dvh;'));
   assert.ok(globals.includes('#__next,'));
   assert.ok(globals.includes('overflow: hidden;'));
-  assert.ok(globals.includes('touch-action: none;'));
+  assert.ok(globals.includes('touch-action: manipulation;'));
   assert.ok(globals.includes('-webkit-text-size-adjust: 100%;'));
   assert.ok(globals.includes('text-size-adjust: 100%;'));
   assert.ok(globals.includes('padding-top: var(--safe-area-top);'));
@@ -271,6 +271,8 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('const mediaContentRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes('const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes("const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);"));
+  assert.ok(explorer.includes('const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);'));
+  assert.ok(explorer.includes('const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);'));
   assert.ok(explorer.includes('const topbarInsetPrevRef = useRef(0);'));
   assert.ok(explorer.includes('const updateTopbarMeasuredHeight = () => {'));
   assert.ok(explorer.includes('const observer = new ResizeObserver(() => updateTopbarMeasuredHeight());'));
@@ -284,6 +286,11 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('const delta = nextInset - topbarInsetPrevRef.current;'));
   assert.ok(explorer.includes('suppressAutoToggle();'));
   assert.ok(explorer.includes('scrollEl.scrollTop = Math.max(0, scrollEl.scrollTop + delta);'));
+  assert.ok(explorer.includes('|| actionsOpen'));
+  assert.ok(explorer.includes('|| topbarHasOpenDropdown'));
+  assert.ok(explorer.includes('|| topbarFocusWithin'));
+  assert.ok(explorer.includes("topbar.addEventListener('toggle', handleDropdownToggle, true);"));
+  assert.ok(explorer.includes("topbar.removeEventListener('toggle', handleDropdownToggle, true);"));
   assert.ok(explorer.includes('rootRef: mediaContentRef,'));
   assert.ok(explorer.includes('scrollRef: mediaScrollViewportRef,'));
   assert.ok(explorer.includes('ref={mediaContentRef}'));

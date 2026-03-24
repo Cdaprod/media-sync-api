@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Fixed the iOS touch-action regression that blocked sidebar panel interaction: root shell touch-action now uses `manipulation` (not `none`) so panel taps/scroll remain usable while dedicated scroll hosts still force `pan-y`.
+- Topbar auto-hide is now paused while topbar UI is actively in use (`actionsOpen`, dropdowns with `details[open]`, or focus within topbar), preventing the action menu from staying open while the topbar itself collapses.
+- Added topbar dropdown-state tracking via capture-phase `toggle` listener and focus-within tracking so open menus/controls keep the topbar pinned until interaction ends.
+
+### Latest Implementation Notes (2026-03-24)
 - Shifted iPhone Safari zoom/pan control toward touch-action first: `html/body/#__next/.app` now include `touch-action: none` in global CSS while real scroll hosts explicitly opt back into `touch-action: pan-y`.
 - Added broad tappable-chrome `touch-action: manipulation` coverage for topbar/buttons/controls/asset surfaces/context-menu buttons to suppress double-tap zoom on interactive UI.
 - Added iOS runtime gesture fallback in `ExplorerApp` (`gesturestart/gesturechange/gestureend`, multi-touch `touchstart`, and rapid double-tap `touchend` prevention with passive:false) for devices where CSS/meta controls are insufficient.
