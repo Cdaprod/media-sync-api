@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Identified deeper root cause for recurring Boot toast flashes during density/context-menu/preview interactions: toast ref callbacks were inline and churned on every render, triggering ref null→node cycles that re-fired toast enter animation for existing toasts.
+- Toast node ownership now resists ordinary rerenders: null-ref callbacks no longer clear tracking maps, node swaps are handled idempotently, and stale ids are pruned by a dedicated `toasts`-driven cleanup effect.
+- Kept boot singleton guard as stabilization, but this pass addresses the real local-interaction churn symptom without relying solely on startup suppression.
+
+### Latest Implementation Notes (2026-03-24)
 - Root-cause hardening for repeated Boot toast: Explorer boot effect is now session-singleton (`hasBootstrappedExplorerSession`) so density/layout interactions cannot replay startup toast or source/project boot loads.
 - Startup boot effect now runs behind an empty-deps lifecycle gate plus singleton guard, isolating density scrubs to local layout/animation paths only.
 - Added focused regression assertions locking the singleton boot guard contract to prevent future coupling between density interactions and startup/loading paths.

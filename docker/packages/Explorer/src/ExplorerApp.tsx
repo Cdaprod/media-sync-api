@@ -1811,6 +1811,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   useEffect(() => {
+    const liveIds = new Set(toasts.map((toast) => toast.id));
+    for (const key of Array.from(toastNodeMapRef.current.keys())) {
+      if (!liveIds.has(key)) toastNodeMapRef.current.delete(key);
+    }
+    for (const key of Array.from(toastExitingRef.current.keys())) {
+      if (!liveIds.has(key)) toastExitingRef.current.delete(key);
+    }
+  }, [toasts]);
+
+  useEffect(() => {
     if (!dragging) return;
     const handleMove = (event: PointerEvent) => {
       if (event.clientY <= 56) revealTopbar();
@@ -3009,14 +3019,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             className={`toast ${toast.type}`}
             key={toast.id}
             ref={(node) => {
-              if (!node) {
-                toastNodeMapRef.current.delete(toast.id);
-                toastExitingRef.current.delete(toast.id);
-                return;
-              }
-              if (!toastNodeMapRef.current.has(toast.id)) {
+              if (!node) return;
+              const knownNode = toastNodeMapRef.current.get(toast.id);
+              if (!knownNode) {
                 toastNodeMapRef.current.set(toast.id, node);
                 toastMotionRef.current?.enter(node);
+              } else if (knownNode !== node) {
+                toastNodeMapRef.current.set(toast.id, node);
               }
               if (toast.exiting && !toastExitingRef.current.has(toast.id)) {
                 toastExitingRef.current.add(toast.id);

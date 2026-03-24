@@ -1,3 +1,10 @@
+## 2026-03-24 — Toast rerender-churn root-cause fix (post-mitigation)
+- [x] Investigated cross-feature Boot-toast replay signal beyond density (context-menu + preview-panel triggers).
+- [x] Found root cause in toast ref-callback churn (inline callback ref identity changes causing null→node cycles and repeated toast enter animation).
+- [x] Updated toast node tracking to be rerender-stable and idempotent; added stale-id cleanup effect keyed by current toast ids.
+- [x] Added focused regression assertions for rerender-stable toast ref behavior and cleanup markers.
+- [ ] Optional follow-up: add dev-only mount counter logging hook to detect unexpected subtree remounts early.
+
 ## 2026-03-24 — Boot-path isolation from density interactions (regression fix)
 - [x] Investigated repeated “Boot Loading sources + projects” toast during density changes as startup-path replay signal.
 - [x] Isolated boot/startup effect behind a session-singleton guard so density/view/layout interactions cannot replay boot loading.

@@ -841,6 +841,9 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('let hasBootstrappedExplorerSession = false;'));
   assert.ok(content.includes('if (hasBootstrappedExplorerSession) return;'));
   assert.ok(content.includes('hasBootstrappedExplorerSession = true;'));
+  assert.ok(content.includes('const liveIds = new Set(toasts.map((toast) => toast.id));'));
+  assert.ok(content.includes('if (!liveIds.has(key)) toastNodeMapRef.current.delete(key);'));
+  assert.ok(content.includes('if (!liveIds.has(key)) toastExitingRef.current.delete(key);'));
   assert.ok(content.includes('createExplorerDensityController({'));
   assert.ok(content.includes('createPinchDensityController({'));
   assert.ok(content.includes('id="asset-density-slider"'));
@@ -944,6 +947,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('inspectorOpenRef.current = inspectorOpen;'));
   assert.ok(content.includes('if (hasBootstrappedExplorerSession) return;'));
   assert.ok(content.includes('hasBootstrappedExplorerSession = true;'));
+  assert.ok(content.includes('if (!node) return;'));
+  assert.ok(content.includes('const knownNode = toastNodeMapRef.current.get(toast.id);'));
+  assert.ok(content.includes('} else if (knownNode !== node) {'));
+  assert.ok(!content.includes('toastNodeMapRef.current.delete(toast.id);'));
 
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
