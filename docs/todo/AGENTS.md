@@ -1,3 +1,10 @@
+## 2026-03-24 — Density intermediate-step coalescing pass
+- [x] Audited density scrub pipeline for intermediate-step replay during fast drags.
+- [x] Added fast-scrub/large-jump coalescing so stale intermediate column targets are skipped under rapid input.
+- [x] Preserved latest-input-wins and interruptible Flip behavior while keeping slow scrub feel intact.
+- [x] Updated focused regression assertions for fast-scrub coalescing markers.
+- [ ] Gather device-level perf trace comparing 5→2 drag before/after (layout + scripting cost).
+
 ## 2026-03-24 — Toast rerender-churn root-cause fix (post-mitigation)
 - [x] Investigated cross-feature Boot-toast replay signal beyond density (context-menu + preview-panel triggers).
 - [x] Found root cause in toast ref-callback churn (inline callback ref identity changes causing null→node cycles and repeated toast enter animation).

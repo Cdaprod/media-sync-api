@@ -39,7 +39,13 @@ export function createExplorerDensityController(options: ExplorerDensityControll
   let scrubValue = currentColumns;
   let previousScrubValue = currentColumns;
   let rafId = 0;
+  let coalesceTimer = 0;
   let latestRequestedColumns: number | null = null;
+  let lastScrubAt = 0;
+  let lastScrubValue = currentColumns;
+  const FAST_SCRUB_DELTA = 0.42;
+  const FAST_SCRUB_WINDOW_MS = 48;
+  const FAST_SCRUB_COALESCE_MS = 34;
 
   const clampToRange = (value: number) => Math.max(minColumns, Math.min(maxColumns, value));
 
@@ -98,15 +104,47 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     rafId = requestAnimationFrame(flushLatestCommit);
   };
 
+  const flushCoalescedCommit = () => {
+    coalesceTimer = 0;
+    if (latestRequestedColumns == null) return;
+    const target = latestRequestedColumns;
+    latestRequestedColumns = null;
+    if (target !== currentColumns) {
+      commitColumns(target, true, 'scrub');
+    }
+  };
+
+  const requestCoalescedCommit = (nextColumns: number) => {
+    latestRequestedColumns = clampColumnCount(clampToRange(nextColumns));
+    if (coalesceTimer) return;
+    coalesceTimer = window.setTimeout(flushCoalescedCommit, FAST_SCRUB_COALESCE_MS);
+  };
+
   function scrubTo(nextValue: number) {
     const clampedValue = clampToRange(nextValue);
     scrubValue = clampedValue;
     sliderEl.value = String(clampedValue);
-    requestLatestCommit(valueToColumnCount(clampedValue));
+    const nextColumns = valueToColumnCount(clampedValue);
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const timeDelta = Math.max(1, now - (lastScrubAt || now));
+    const valueDelta = Math.abs(clampedValue - lastScrubValue);
+    const isFastScrub = timeDelta <= FAST_SCRUB_WINDOW_MS && valueDelta >= FAST_SCRUB_DELTA;
+    const isLargeJump = Math.abs(nextColumns - currentColumns) >= 2;
+    if (isFastScrub || isLargeJump) {
+      requestCoalescedCommit(nextColumns);
+    } else {
+      requestLatestCommit(nextColumns);
+    }
+    lastScrubAt = now;
+    lastScrubValue = clampedValue;
     previousScrubValue = clampedValue;
   }
 
   function settleScrub() {
+    if (coalesceTimer) {
+      window.clearTimeout(coalesceTimer);
+      coalesceTimer = 0;
+    }
     if (latestRequestedColumns != null && latestRequestedColumns !== currentColumns) {
       commitColumns(latestRequestedColumns, true, 'settle');
       latestRequestedColumns = null;
@@ -118,6 +156,7 @@ export function createExplorerDensityController(options: ExplorerDensityControll
 
   function destroy() {
     if (rafId) cancelAnimationFrame(rafId);
+    if (coalesceTimer) window.clearTimeout(coalesceTimer);
   }
 
   commitLayoutColumns(currentColumns);

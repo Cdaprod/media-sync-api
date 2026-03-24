@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Density commit pipeline now coalesces aggressive fast scrubs so large jumps (e.g., 5→2) do not waste work stepping through every intermediate column state.
+- Added a fast-scrub detector (value delta + time window) and short coalescing timer to enforce latest-target-wins during quick drags while preserving richer step feedback for slow scrubs.
+- Settle path still flushes the latest requested target immediately, cancels pending coalesce timers, and preserves masonry-authoritative commit semantics.
+
+### Latest Implementation Notes (2026-03-24)
 - Identified deeper root cause for recurring Boot toast flashes during density/context-menu/preview interactions: toast ref callbacks were inline and churned on every render, triggering ref null→node cycles that re-fired toast enter animation for existing toasts.
 - Toast node ownership now resists ordinary rerenders: null-ref callbacks no longer clear tracking maps, node swaps are handled idempotently, and stale ids are pruned by a dedicated `toasts`-driven cleanup effect.
 - Kept boot singleton guard as stabilization, but this pass addresses the real local-interaction churn symptom without relying solely on startup suppression.
