@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Removed inset animation from Explorer content geometry: `.scroll-content` now uses `transition: none`, so open↔hidden inset changes snap immediately instead of easing `padding-top` and visually dragging the first asset rows through the topbar boundary.
+- Reduced topbar collapse motion coupling by dropping transform easing on `.topbar` (`transition: opacity 120ms ease` only), preserving hide/show state while avoiding the moving-bottom-edge effect that made assets appear glued to the disappearing header.
+- Moved topbar inset compensation in `ExplorerApp` from `useEffect` to `useLayoutEffect` so scrollTop compensation applies before paint on hidden-state transitions, minimizing one-frame ceiling-pull/jump artifacts.
+
+### Latest Implementation Notes (2026-03-24)
 - Tightened `useTopbarScrollState` to remove legacy top-of-scroll reveal thresholding and drive reopen from logical state only (`contentTopPx` hysteresis + hidden-at-top guard), preventing raw-`scrollTop` shortcuts from pre-empting the inset-aware collapse model.
 - The hook now computes `openInsetPx` via an explicit `getOpenInsetPx()` helper and derives `currentInsetPx`/`contentTopPx` from that value, keeping hide/reveal decisions aligned with `.scroll-content.topbar-open` inset geometry.
 - `suppressAutoToggle()` now also re-baselines `lastScrollTopRef` against the current host scroll position before opening the suppression window so programmatic compensation cannot replay stale deltas into immediate opposite-state toggles.

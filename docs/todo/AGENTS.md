@@ -1,3 +1,10 @@
+## 2026-03-24 — Explorer inset transition removal + pre-paint compensation
+- [x] Removed `.scroll-content` `padding-top` transition so topbar-open/topbar-hidden inset changes apply immediately without easing drag.
+- [x] Removed `.topbar` transform easing from collapse path (kept light opacity-only transition) to avoid moving-edge coupling during scroll-driven hide.
+- [x] Switched inset-compensation effect in `ExplorerApp.tsx` to `useLayoutEffect` so compensation scrollTop adjustments land before paint.
+- [x] Updated focused Explorer regression assertions for no-padding transition, topbar transition contract, and layout-effect compensation wiring.
+- [ ] Validate on physical iPhone Safari that collapse/reveal keeps first-row checkboxes fully tappable at the top edge with no ceiling-pull or transient clipping.
+
 ## 2026-03-24 — Explorer content-edge gating follow-up hardening
 - [x] Removed the remaining legacy top-of-scroll reveal shortcut from `useTopbarScrollState` and kept reveal decisions in the logical content-edge path.
 - [x] Introduced `getOpenInsetPx()` so open inset is computed explicitly and reused to derive `currentInsetPx` + `contentTopPx` for hide/reveal gating.

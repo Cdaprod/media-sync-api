@@ -782,7 +782,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(styles.includes('.brand.projects-open .brand-title.is-secondary'));
   assert.ok(styles.includes('padding: 0;'));
   assert.ok(styles.includes('.scroll-content{'));
-  assert.ok(styles.includes('transition: padding-top 160ms ease;'));
+  assert.ok(styles.includes('transition: none;'));
   assert.ok(styles.includes('.scroll-content.topbar-open{'));
   assert.ok(styles.includes('padding-top: calc(var(--topbar-measured-height) + var(--topbar-gap));'));
   assert.ok(styles.includes('.scroll-content.topbar-hidden{'));
@@ -799,7 +799,10 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(hookContent.includes('if (hiddenRef.current && currentTop <= TOPBAR_REVEAL_AT_TOP_PX) {'));
   assert.ok(hookContent.includes('if (!hiddenRef.current && delta > 0 && contentTopPx >= 0) {'));
   assert.ok(hookContent.includes('if (hiddenRef.current && delta < 0 && contentTopPx <= -TOPBAR_REVEAL_HYSTERESIS_PX) {'));
+  assert.ok(content.includes('useLayoutEffect(() => {'));
   assert.ok(styles.includes('will-change: transform, opacity;'));
+  assert.ok(styles.includes('transition: opacity 120ms ease;'));
+  assert.ok(!styles.includes('transition: transform 160ms ease, opacity 160ms ease;'));
   assert.ok(styles.includes('transform: translate3d(0, calc(-1 * var(--topbar-measured-height)), 0);'));
   assert.ok(styles.includes('@media (max-width: 860px){'));
   assert.ok(styles.includes('--topbar-gap: 14px;'));

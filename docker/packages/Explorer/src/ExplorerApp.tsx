@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
@@ -1725,7 +1725,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const scrollEl = mediaScrollViewportRef.current;
     if (!scrollEl) return;
     const styles = window.getComputedStyle(scrollEl);
