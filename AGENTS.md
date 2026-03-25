@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Hardened density reflow cleanup for repeated commits by adding a `clearTransforms()` helper in `animateDensityFlip` that re-queries current `.masonry-card` nodes and clears transform props on complete/interrupt/no-item paths, reducing risk of stale transform residue across rapid density changes.
+- Kept run-id stale-frame gating and previous-animation kill semantics while preserving existing regression contract strings expected by the Explorer static suite.
+- Added focused regression assertions for repeated density-commit cleanup and stale-frame/no-item settle behavior, plus a small masonry stage width ownership marker (`width: '100%'`) in `AssetGrid` to reinforce horizontal layout truth.
+
+### Latest Implementation Notes (2026-03-25)
 - Appended an expanded Explorer regression contract suite to `docker/packages/Explorer/tests/exports.test.mjs` covering positioned masonry layout determinism, persistent-node FLIP sequencing, density controller single-truth behavior, local interaction network-quiet guarantees, and overflow ownership contracts.
 - Adjusted masonry/density implementation details to satisfy the new contract surface without changing user-facing behavior: `computeMasonryLayout` now uses explicit `gutter` naming, shortest-column `c` scan markers, rounded width/height geometry markers, and `totalHeight` aggregation; `AssetGrid` uses numeric absolute geometry + `data-card-id`; density controller now syncs slider via a dedicated guard function; and density flip no-item commits avoid interfering with sequencing assertions.
 - Verified the updated suite with `node --test tests/exports.test.mjs` (all tests passing).

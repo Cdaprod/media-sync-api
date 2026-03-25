@@ -121,6 +121,7 @@ function AssetGridComponent({
         data-density-columns={gridColumnCount}
         style={{
           '--masonry-column-count': String(gridColumnCount),
+          width: '100%',
           height: `${Math.max(layout.stageHeight, 0)}px`,
         } as React.CSSProperties}
       >

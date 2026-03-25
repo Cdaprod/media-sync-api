@@ -16,18 +16,25 @@ export function animateDensityFlip({
   commitLayout,
   interactionMode = 'scrub',
 }: AnimateDensityFlipOptions): void {
-  const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
-  if (!items.length) {
-    const applyCommit = commitLayout;
-    applyCommit();
-    return;
-  }
+  const clearTransforms = () => {
+    const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
+    if (currentItems.length) {
+      gsap.set(currentItems, { clearProps: 'transform' });
+    }
+  };
 
   const previous = activeByGrid.get(gridEl);
   if (previous) {
     previous.kill();
-    gsap.set(items, { clearProps: 'transform' });
     activeByGrid.delete(gridEl);
+  }
+
+  const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
+  if (!items.length) {
+    const applyCommit = commitLayout;
+    applyCommit();
+    clearTransforms();
+    return;
   }
 
   Flip.killFlipsOf(items);
@@ -40,9 +47,12 @@ export function animateDensityFlip({
   commitLayout();
 
   window.requestAnimationFrame(() => {
-    if (runIdByGrid.get(gridEl) !== nextRunId) return;
-    window.requestAnimationFrame(() => {
       if (runIdByGrid.get(gridEl) !== nextRunId) return;
+    window.requestAnimationFrame(() => {
+      if (runIdByGrid.get(gridEl) !== nextRunId) {
+        clearTransforms();
+        return;
+      }
       const animation = Flip.from(state, {
         targets: items,
         absolute: false,
@@ -54,13 +64,13 @@ export function animateDensityFlip({
         simple: true,
         overwrite: true,
         onComplete: () => {
-          gsap.set(items, { clearProps: 'transform' });
+          clearTransforms();
           if (activeByGrid.get(gridEl) === animation) {
             activeByGrid.delete(gridEl);
           }
         },
         onInterrupt: () => {
-          gsap.set(items, { clearProps: 'transform' });
+          clearTransforms();
           if (activeByGrid.get(gridEl) === animation) {
             activeByGrid.delete(gridEl);
           }

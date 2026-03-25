@@ -1521,3 +1521,30 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('className="masonry-columns"'));
   assert.ok(content.includes('className={`masonry-card'));
 });
+
+test('density flip cleanup path re-queries current masonry nodes to prevent stale transforms after repeated commits', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes('const clearTransforms = () => {'));
+  assert.ok(content.includes('const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));'));
+  assert.ok(content.includes('if (currentItems.length) {'));
+  assert.ok(content.includes("gsap.set(currentItems, { clearProps: 'transform' });"));
+  assert.ok(content.includes('clearTransforms();'));
+  assert.ok(content.includes('onComplete: () => {'));
+  assert.ok(content.includes('onInterrupt: () => {'));
+});
+
+test('density flip no-item and stale-frame paths still enforce single settled layout truth', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes('const previous = activeByGrid.get(gridEl);'));
+  assert.ok(content.includes('previous.kill();'));
+  assert.ok(content.includes('activeByGrid.delete(gridEl);'));
+  assert.ok(content.includes('if (!items.length) {'));
+  assert.ok(content.includes('const applyCommit = commitLayout;'));
+  assert.ok(content.includes('applyCommit();'));
+  assert.ok(content.includes('if (runIdByGrid.get(gridEl) !== nextRunId) {'));
+  assert.ok(content.includes('clearTransforms();'));
+});

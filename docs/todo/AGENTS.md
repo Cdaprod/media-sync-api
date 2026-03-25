@@ -1,3 +1,10 @@
+## 2026-03-25 — Repeated density-commit settle truth hardening
+- [x] Added `clearTransforms()` in density Flip pipeline that re-queries live masonry cards and clears transform props after complete/interrupt/no-item commits.
+- [x] Preserved run-id stale-frame gating and existing static contract strings while hardening cleanup behavior.
+- [x] Added focused static assertions for stale-transform cleanup and no-item/stale-frame settle behavior.
+- [x] Added stage width ownership marker (`width: '100%'`) on `.masonry-columns` render style to reinforce horizontal layout truth after repeated density transitions.
+- [ ] Next: add browser/runtime test harness (Playwright or jsdom+layout shim) to validate “single settled masonry truth” after N rapid density changes with no horizontal overflow drift.
+
 ## 2026-03-25 — Explorer masonry/density regression contract expansion
 - [x] Appended the provided static contract suite into `docker/packages/Explorer/tests/exports.test.mjs` without removing existing tests.
 - [x] Kept intent intact while fixing implementation mismatches surfaced by the new assertions (`gutter` naming, masonry geometry markers, slider sync guard, and FLIP sequencing marker hygiene).
