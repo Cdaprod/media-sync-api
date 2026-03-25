@@ -10,9 +10,8 @@ export type PinchDensityControllerOptions = {
   gestureSurfaceEl: HTMLElement;
   visualScaleTargetEl: HTMLElement;
   density: ExplorerDensityController;
-  scaleThresholdPerStep?: number;
-  minScale?: number;
-  maxScale?: number;
+  outwardThreshold?: number;
+  inwardThreshold?: number;
 };
 
 type TouchPair = {
@@ -25,16 +24,15 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     gestureSurfaceEl,
     visualScaleTargetEl,
     density,
-    scaleThresholdPerStep = 0.12,
-    minScale = 0.86,
-    maxScale = 1.18,
+    outwardThreshold = 1.12,
+    inwardThreshold = 0.88,
   } = options;
   void visualScaleTargetEl;
 
   let active = false;
+  let stepped = false;
   let initialDistance = 0;
   let initialColumns = density.getColumns();
-  let pendingColumns = initialColumns;
 
   function getTouchPair(evt: TouchEvent): TouchPair | null {
     if (evt.touches.length < 2) return null;
@@ -52,9 +50,9 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     if (!pair) return;
 
     active = true;
+    stepped = false;
     initialDistance = distance(pair);
     initialColumns = density.getColumns();
-    pendingColumns = initialColumns;
   }
 
   function onTouchMove(evt: TouchEvent) {
@@ -63,25 +61,26 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     if (!pair) return;
 
     evt.preventDefault();
+    if (stepped) return;
 
     const nextDistance = distance(pair);
     const ratio = nextDistance / Math.max(initialDistance, 1);
-    const clampedVisual = Math.max(minScale, Math.min(maxScale, ratio));
-    const scrubTarget = initialColumns - ((clampedVisual - 1) / scaleThresholdPerStep);
-    density.scrubTo(scrubTarget);
 
-    const signedDelta = -((ratio - 1) / scaleThresholdPerStep);
-    const nextColumns = Math.round(initialColumns + signedDelta);
-
-    if (nextColumns !== pendingColumns) {
-      pendingColumns = nextColumns;
-      density.setColumns(pendingColumns, true);
+    if (ratio >= outwardThreshold) {
+      density.setColumns(initialColumns - 1, true);
+      stepped = true;
+      return;
+    }
+    if (ratio <= inwardThreshold) {
+      density.setColumns(initialColumns + 1, true);
+      stepped = true;
     }
   }
 
   function onTouchEnd() {
     if (!active) return;
     active = false;
+    stepped = false;
     density.settleScrub();
   }
 

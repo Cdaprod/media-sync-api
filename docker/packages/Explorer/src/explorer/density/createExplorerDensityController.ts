@@ -17,7 +17,7 @@ export type ExplorerDensityController = {
 
 export type ExplorerDensityControllerOptions = {
   gridEl: HTMLElement;
-  sliderEl: HTMLInputElement;
+  sliderEl?: HTMLInputElement | null;
   initialColumns: number;
   onColumnsCommit: (columns: number) => void;
   minColumns: number;
@@ -48,7 +48,7 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     scrubValue = currentColumns;
     gridEl.style.setProperty('--masonry-column-count', String(currentColumns));
     gridEl.dataset.columns = String(currentColumns);
-    sliderEl.value = String(currentColumns);
+    if (sliderEl) sliderEl.value = String(currentColumns);
     onColumnsCommit(currentColumns);
   };
 
@@ -81,14 +81,14 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     if (destroyed) return;
     const safeColumns = clampColumns(nextValue, minColumns, maxColumns);
     scrubValue = safeColumns;
-    sliderEl.value = String(safeColumns);
+    if (sliderEl) sliderEl.value = String(safeColumns);
     if (safeColumns === currentColumns) return;
     runAnimatedCommit(safeColumns, 'scrub');
   }
 
   function settleScrub() {
     if (destroyed) return;
-    sliderEl.value = String(currentColumns);
+    if (sliderEl) sliderEl.value = String(currentColumns);
     scrubValue = currentColumns;
   }
 

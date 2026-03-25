@@ -924,11 +924,15 @@ test('package explorer toast layer stays above the fixed topbar stack', () => {
 test('motion architecture keeps density, drawer, toast, and topbar contracts explicit', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const densityControllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts');
+  const pinchControllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts');
+  const densityConstantsPath = path.join(packageRoot, 'src', 'explorer', 'density', 'constants.ts');
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const drawerMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts');
   const topbarMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const densityController = fs.readFileSync(densityControllerPath, 'utf8');
+  const pinchController = fs.readFileSync(pinchControllerPath, 'utf8');
+  const densityConstants = fs.readFileSync(densityConstantsPath, 'utf8');
   const flip = fs.readFileSync(flipPath, 'utf8');
   const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
   const topbarMotion = fs.readFileSync(topbarMotionPath, 'utf8');
@@ -936,9 +940,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("if (view !== 'grid') {"));
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
   assert.ok(content.includes('const onSliderInput = () => {'));
-  assert.ok(content.includes('density.scrubTo(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE));'));
-  assert.ok(content.includes('const onSliderChange = () => density.settleScrub();'));
-  assert.ok(content.includes('step={0.01}'));
+  assert.ok(content.includes('density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);'));
+  assert.ok(content.includes('className="density-stepper"'));
+  assert.ok(content.includes('step={1}'));
+  assert.ok(content.includes('if (isMobile) {'));
   assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
   assert.ok(content.includes('if (inDensityPinchSurface(event.target)) return;'));
   assert.ok(content.includes('data-density-pinch-surface="true"'));
@@ -966,16 +971,22 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(!densityController.includes('setTimeout('));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
+  assert.ok(densityConstants.includes('export const MIN_COLUMNS_MOBILE = 1;'));
+  assert.ok(densityConstants.includes('export const MAX_COLUMNS_MOBILE = 6;'));
+  assert.ok(pinchController.includes('outwardThreshold = 1.12'));
+  assert.ok(pinchController.includes('inwardThreshold = 0.88'));
+  assert.ok(pinchController.includes('let stepped = false;'));
+  assert.ok(pinchController.includes('if (stepped) return;'));
+  assert.ok(pinchController.includes('density.setColumns(initialColumns - 1, true);'));
+  assert.ok(pinchController.includes('density.setColumns(initialColumns + 1, true);'));
 
   assert.ok(!flip.includes('requestAnimationFrame(() => {'));
   assert.ok(flip.includes('const state = Flip.getState(items);'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('Flip.from(state, {'));
   assert.ok(flip.includes("itemSelector = '.masonry-columns > .masonry-card'"));
-  assert.ok(flip.includes('const VISIBLE_BUFFER_PX = 280;'));
-  assert.ok(flip.includes('const MAX_ANIMATED_ITEMS = 72;'));
-  assert.ok(flip.includes('function pickVisibleAnimationTargets('));
-  assert.ok(flip.includes('const items = pickVisibleAnimationTargets(gridEl, allItems);'));
+  assert.ok(!flip.includes('MAX_ANIMATED_ITEMS'));
+  assert.ok(!flip.includes('pickVisibleAnimationTargets'));
   assert.ok(flip.includes('Flip.killFlipsOf(items);'));
   assert.ok(flip.includes('gsap.killTweensOf(items);'));
   assert.ok(flip.includes('targets: items,'));
@@ -1006,7 +1017,7 @@ test('local density/context/preview interactions stay network-quiet and do not i
 
   const sliderStart = content.indexOf('const onSliderInput = () => {');
   const sliderBlock = sliderStart >= 0 ? content.slice(sliderStart, sliderStart + 420) : '';
-  assert.ok(sliderBlock.includes('density.scrubTo(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE));'));
+  assert.ok(sliderBlock.includes('density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);'));
   assert.ok(!sliderBlock.includes('loadSources('));
   assert.ok(!sliderBlock.includes('loadProjects('));
   assert.ok(!sliderBlock.includes('loadMedia('));
@@ -1038,8 +1049,8 @@ test('density setup rebinds on grid surface availability and hidden topbar refre
   assert.ok(explorer.includes('const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes('const bindGridSurface = useCallback((node: HTMLDivElement | null) => {'));
   assert.ok(explorer.includes('const gridEl = gridSurfaceEl;'));
-  assert.ok(explorer.includes('if (!gridEl || !sliderEl || !scrollerEl) return;'));
-  assert.ok(explorer.includes('}, [gridSurfaceEl, view]);'));
+  assert.ok(explorer.includes('if (!gridEl || !scrollerEl) return;'));
+  assert.ok(explorer.includes('}, [gridSurfaceEl, isMobile, view]);'));
 
   assert.ok(explorer.includes('if (!topbarHidden) return;'));
   assert.ok(explorer.includes('topbarMotionRef.current?.refresh();'));

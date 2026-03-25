@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Reverted density Flip’s partial visible-target animation optimization after field evidence of mixed old/new masonry states; density reflow now animates the full persistent card set again to preserve one visual layout truth per commit.
+- Mobile density authority was tightened to a single committed source (`gridColumnCount`) with unified 1..6 clamp (`MIN_COLUMNS_MOBILE=1`, `MAX_COLUMNS_MOBILE=6`), removing auto width-derived column overrides that could drift displayed vs committed density.
+- Mobile density controls now prioritize discrete interactions: topbar shows stepper buttons (`Larger` / `Denser`) on mobile, and pinch was redesigned to one-step-per-gesture thresholds (outward `1.12`, inward `0.88`) with a per-gesture lock so both pinch and buttons route through the same `setColumns(..., true)` commit path.
+
+### Latest Implementation Notes (2026-03-25)
 - Density Flip animation scope is now visibility-prioritized: the reflow path still computes/commits full masonry layout, but Flip target selection is capped and focused on near-viewport cards (`MAX_ANIMATED_ITEMS = 72`, buffered by `VISIBLE_BUFFER_PX = 280`).
 - `AssetGrid` now stamps layout geometry markers (`data-layout-top` / `data-layout-bottom`) on each masonry card so density animation targeting can avoid expensive all-card animation while preserving deterministic stage layout for every asset.
 - Regression assertions were extended to lock visibility-capped Flip targeting and card geometry marker wiring so future refactors preserve latest-target responsiveness on large projects.

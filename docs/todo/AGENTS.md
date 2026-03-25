@@ -1,3 +1,12 @@
+## 2026-03-25 — Density truth + mobile control stabilization pass
+- [x] Reverted partial visible-only Flip target optimization to restore single-layout-truth rendering during density transitions.
+- [x] Unified mobile density bounds to `1..6` in shared density constants and removed width-derived auto density overrides that could desync displayed vs committed values.
+- [x] Switched mobile density UI from scrub slider to discrete stepper buttons (`Larger` / `Denser`) with one-step commits.
+- [x] Reworked pinch density to one-step-per-gesture thresholds (outward/inward), with lock-until-gesture-end behavior.
+- [x] Ensured pinch and stepper both route through the same density controller `setColumns(..., true)` path.
+- [x] Updated regression assertions for new density control and pinch contracts.
+- [ ] Optional: tune one-step pinch thresholds with on-device telemetry for Safari-specific touch jitter.
+
 ## 2026-03-25 — Density reflow performance scope audit + optimization
 - [x] Audited density pipeline to separate pure layout compute work from DOM/Flip animation scope costs.
 - [x] Kept full masonry layout correctness (all-item position map) while reducing Flip animation targets to near-viewport cards only.

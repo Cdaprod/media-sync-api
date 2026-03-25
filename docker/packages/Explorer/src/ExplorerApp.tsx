@@ -177,8 +177,6 @@ const buildThumbFallback = (label: string) => {
 };
 
 const CONTENT_LOADING_DELAY_MS = 180;
-const GRID_GAP_FALLBACK = 6;
-const GRID_COL_WIDTH_FALLBACK = 180;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 
@@ -590,30 +588,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, []);
 
-  const updateGridColumnCount = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const hostWidth = mediaContentRef.current?.clientWidth || window.innerWidth || 0;
-    const rootStyles = window.getComputedStyle(document.documentElement);
-    const gridGap = parseFloat(rootStyles.getPropertyValue('--grid-gap')) || GRID_GAP_FALLBACK;
-    const gridColWidth = parseFloat(rootStyles.getPropertyValue('--grid-col-width')) || GRID_COL_WIDTH_FALLBACK;
-    const count = Math.max(1, Math.floor((hostWidth + gridGap) / (gridColWidth + gridGap)));
-    setGridColumnCount(count);
-  }, []);
+  const clampDensityColumns = useCallback((value: number) => (
+    Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
+  ), []);
+
+  const applyDensityStep = useCallback((delta: number) => {
+    const density = densityControllerRef.current;
+    if (density) {
+      density.setColumns(density.getColumns() + delta, true);
+      return;
+    }
+    setGridColumnCount((current) => clampDensityColumns(current + delta));
+  }, [clampDensityColumns]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    updateGridColumnCount();
-    const host = mediaContentRef.current;
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => updateGridColumnCount())
-      : null;
-    if (host && observer) observer.observe(host);
-    window.addEventListener('resize', updateGridColumnCount, { passive: true });
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', updateGridColumnCount);
-    };
-  }, [updateGridColumnCount]);
+    setGridColumnCount((current) => clampDensityColumns(current));
+  }, [clampDensityColumns]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2018,7 +2008,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const gridEl = gridSurfaceEl;
     const sliderEl = densitySliderRef.current;
     const scrollerEl = mediaScrollViewportRef.current;
-    if (!gridEl || !sliderEl || !scrollerEl) return;
+    if (!gridEl || !scrollerEl) return;
 
     const density = createExplorerDensityController({
       gridEl,
@@ -2032,33 +2022,30 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     });
     densityControllerRef.current = density;
 
-    const pinch = createPinchDensityController({
-      gestureSurfaceEl: scrollerEl,
-      visualScaleTargetEl: gridEl,
-      density,
-    });
-    pinch.attach();
-    pinchDensityRef.current = pinch;
+    if (isMobile) {
+      const pinch = createPinchDensityController({
+        gestureSurfaceEl: scrollerEl,
+        visualScaleTargetEl: gridEl,
+        density,
+      });
+      pinch.attach();
+      pinchDensityRef.current = pinch;
+    }
 
     const onSliderInput = () => {
-      density.scrubTo(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE));
+      if (!sliderEl) return;
+      density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);
     };
-    const onSliderChange = () => density.settleScrub();
-    const onSliderPointerUp = () => density.settleScrub();
-    sliderEl.addEventListener('input', onSliderInput);
-    sliderEl.addEventListener('change', onSliderChange);
-    sliderEl.addEventListener('pointerup', onSliderPointerUp);
+    if (sliderEl) sliderEl.addEventListener('input', onSliderInput);
 
     return () => {
-      sliderEl.removeEventListener('input', onSliderInput);
-      sliderEl.removeEventListener('change', onSliderChange);
-      sliderEl.removeEventListener('pointerup', onSliderPointerUp);
-      pinch.destroy();
+      if (sliderEl) sliderEl.removeEventListener('input', onSliderInput);
+      pinchDensityRef.current?.destroy();
       density.destroy();
       pinchDensityRef.current = null;
       densityControllerRef.current = null;
     };
-  }, [gridSurfaceEl, view]);
+  }, [gridSurfaceEl, isMobile, view]);
 
   useEffect(() => {
     if (composeModalOpen) setComposeModalRendered(true);
@@ -2660,17 +2647,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       <div className="action-controls" aria-label="Sort and quick filters">
                         <label className="density-control" data-interactive="true" data-topbar-control="true">
                           <span>Density: {gridColumnCount}</span>
-                          <input
-                            ref={densitySliderRef}
-                            id="asset-density-slider"
-                            type="range"
-                            min={MIN_COLUMNS_MOBILE}
-                            max={MAX_COLUMNS_MOBILE}
-                            step={0.01}
-                            defaultValue={gridColumnCount}
-                            data-interactive="true"
-                            data-topbar-control="true"
-                          />
+                          {isMobile ? (
+                            <div className="density-stepper" data-interactive="true" data-topbar-control="true">
+                              <button type="button" className="btn" onClick={() => applyDensityStep(-1)} disabled={gridColumnCount <= MIN_COLUMNS_MOBILE}>Larger</button>
+                              <span>{gridColumnCount} cols</span>
+                              <button type="button" className="btn" onClick={() => applyDensityStep(1)} disabled={gridColumnCount >= MAX_COLUMNS_MOBILE}>Denser</button>
+                            </div>
+                          ) : (
+                            <input
+                              ref={densitySliderRef}
+                              id="asset-density-slider"
+                              type="range"
+                              min={MIN_COLUMNS_MOBILE}
+                              max={MAX_COLUMNS_MOBILE}
+                              step={1}
+                              value={gridColumnCount}
+                              data-interactive="true"
+                              data-topbar-control="true"
+                              onChange={(event) => {
+                                const nextColumns = Number(event.target.value || DEFAULT_COLUMNS_MOBILE);
+                                densityControllerRef.current?.setColumns(nextColumns, true);
+                              }}
+                            />
+                          )}
                         </label>
                         <select
                           ref={sortSelectRef}
