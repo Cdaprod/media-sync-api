@@ -1,3 +1,10 @@
+## 2026-03-25 — Density slider no-op/stuck-at-3 hotfix
+- [x] Added fallback-safe `commitDensityColumns(...)` path so slider commits still update layout when controller ref is not yet attached.
+- [x] Switched slider interaction to React `onInput` for immediate mobile commit behavior.
+- [x] Corrected Flip item selector scope to match real persistent cards under the bound masonry grid element.
+- [x] Updated focused assertions for commit fallback and corrected selector contracts.
+- [ ] Optional follow-up: add lightweight in-app debug badge showing `{requested, committed, rendered}` density values during QA sessions.
+
 ## 2026-03-25 — Slider restoration + horizontal layout-state repair
 - [x] Reverted mobile density UI from stepper back to slider while keeping 1..6 clamp and integer-step commits.
 - [x] Kept committed density as single source of truth across readout, slider value, and masonry commit path.

@@ -592,6 +592,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
   ), []);
 
+  const commitDensityColumns = useCallback((nextColumns: number, animated = true) => {
+    const density = densityControllerRef.current;
+    if (density) {
+      density.setColumns(nextColumns, animated);
+      return;
+    }
+    const safeColumns = clampDensityColumns(nextColumns);
+    setGridColumnCount(safeColumns);
+    if (gridSurfaceEl) {
+      gridSurfaceEl.style.setProperty('--masonry-column-count', String(safeColumns));
+      gridSurfaceEl.dataset.columns = String(safeColumns);
+    }
+  }, [clampDensityColumns, gridSurfaceEl]);
+
   useEffect(() => {
     setGridColumnCount((current) => clampDensityColumns(current));
   }, [clampDensityColumns]);
@@ -1997,13 +2011,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
 
     const gridEl = gridSurfaceEl;
-    const sliderEl = densitySliderRef.current;
     const scrollerEl = mediaScrollViewportRef.current;
     if (!gridEl || !scrollerEl) return;
 
     const density = createExplorerDensityController({
       gridEl,
-      sliderEl,
+      sliderEl: densitySliderRef.current,
       initialColumns: densityControllerRef.current?.getColumns() ?? gridColumnCount ?? DEFAULT_COLUMNS_MOBILE,
       onColumnsCommit: (nextColumns) => {
         setGridColumnCount(nextColumns);
@@ -2023,14 +2036,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       pinchDensityRef.current = pinch;
     }
 
-    const onSliderInput = () => {
-      if (!sliderEl) return;
-      density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);
-    };
-    if (sliderEl) sliderEl.addEventListener('input', onSliderInput);
-
     return () => {
-      if (sliderEl) sliderEl.removeEventListener('input', onSliderInput);
       pinchDensityRef.current?.destroy();
       density.destroy();
       pinchDensityRef.current = null;
@@ -2648,9 +2654,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             value={gridColumnCount}
                             data-interactive="true"
                             data-topbar-control="true"
-                            onChange={(event) => {
+                            onInput={(event) => {
                               const nextColumns = Number(event.target.value || DEFAULT_COLUMNS_MOBILE);
-                              densityControllerRef.current?.setColumns(nextColumns, true);
+                              commitDensityColumns(nextColumns, true);
                             }}
                           />
                         </label>

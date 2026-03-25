@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Fixed a density commit wiring gap where mobile slider interaction could effectively no-op when the density controller ref was not ready; `ExplorerApp` now routes slider input through a fallback-safe `commitDensityColumns(...)` path that updates committed columns and stage CSS even without an active controller instance.
+- Density slider events now use React `onInput` for immediate mobile updates, reducing Safari lag/commit ambiguity that made the UI appear stuck at the default three-column state.
+- Corrected density Flip target selector to `.masonry-card` scoped under the bound grid element so Flip state capture targets real persistent cards instead of an over-specific descendant selector that could resolve to zero targets.
+
+### Latest Implementation Notes (2026-03-25)
 - Reverted mobile density stepper UI back to a slider control (range 1..6, integer steps) after runtime UX regressions; density readout + slider thumb + committed grid columns now stay aligned through the same controller commit path.
 - Hardened positioned masonry lifecycle against stale horizontal placement by forcing pre-capture transform cleanup when interrupting/starting density Flip reflows, reducing persistent stale x-offset artifacts after rapid commits.
 - Added overflow hardening for positioned grid surfaces (`.content .scroll` x-hidden plus masonry host/stage x-clipping) and extra host-width remeasure on density/entry changes so horizontal drift/sideways scroll no longer requires Grid/List toggles to recover.

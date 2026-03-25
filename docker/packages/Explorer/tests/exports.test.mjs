@@ -941,8 +941,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
 
   assert.ok(content.includes("if (view !== 'grid') {"));
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
-  assert.ok(content.includes('const onSliderInput = () => {'));
-  assert.ok(content.includes('density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);'));
+  assert.ok(content.includes('const commitDensityColumns = useCallback((nextColumns: number, animated = true) => {'));
+  assert.ok(content.includes('commitDensityColumns(nextColumns, true);'));
   assert.ok(content.includes('step={1}'));
   assert.ok(content.includes('if (isMobile) {'));
   assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
@@ -985,7 +985,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('const state = Flip.getState(items);'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('Flip.from(state, {'));
-  assert.ok(flip.includes("itemSelector = '.masonry-columns > .masonry-card'"));
+  assert.ok(flip.includes("itemSelector = '.masonry-card'"));
   assert.ok(!flip.includes('MAX_ANIMATED_ITEMS'));
   assert.ok(!flip.includes('pickVisibleAnimationTargets'));
   assert.ok(flip.includes('Flip.killFlipsOf(items);'));
@@ -1017,9 +1017,10 @@ test('local density/context/preview interactions stay network-quiet and do not i
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
 
-  const sliderStart = content.indexOf('const onSliderInput = () => {');
+  const sliderStart = content.indexOf('const commitDensityColumns = useCallback((nextColumns: number, animated = true) => {');
   const sliderBlock = sliderStart >= 0 ? content.slice(sliderStart, sliderStart + 420) : '';
-  assert.ok(sliderBlock.includes('density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);'));
+  assert.ok(sliderBlock.includes('density.setColumns(nextColumns, animated);'));
+  assert.ok(content.includes('commitDensityColumns(nextColumns, true);'));
   assert.ok(!sliderBlock.includes('loadSources('));
   assert.ok(!sliderBlock.includes('loadProjects('));
   assert.ok(!sliderBlock.includes('loadMedia('));

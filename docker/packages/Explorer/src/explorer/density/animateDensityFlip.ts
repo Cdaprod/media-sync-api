@@ -11,7 +11,7 @@ const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
 
 export function animateDensityFlip({
   gridEl,
-  itemSelector = '.masonry-columns > .masonry-card',
+  itemSelector = '.masonry-card',
   commitLayout,
   interactionMode = 'scrub',
 }: AnimateDensityFlipOptions): void {
