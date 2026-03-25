@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useRef, useState, useLayoutEffect } from 'react';
+import React, { memo, useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react';
 
 import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';
 import type { AssetPointerHandlers } from '../useAssetInteractions';
@@ -65,22 +65,26 @@ function AssetGridComponent({
 }: AssetGridProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [hostWidth, setHostWidth] = useState(0);
+  const measureHostWidth = useCallback(() => {
+    const node = hostRef.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    setHostWidth((prev) => (Math.abs(prev - rect.width) < 0.5 ? prev : rect.width));
+  }, []);
 
   useLayoutEffect(() => {
     const node = hostRef.current;
     if (!node) return;
-
-    const measure = () => {
-      const rect = node.getBoundingClientRect();
-      setHostWidth((prev) => (Math.abs(prev - rect.width) < 0.5 ? prev : rect.width));
-    };
-
-    measure();
+    measureHostWidth();
     if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => measure());
+    const observer = new ResizeObserver(() => measureHostWidth());
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [measureHostWidth]);
+
+  useLayoutEffect(() => {
+    measureHostWidth();
+  }, [entries.length, gridColumnCount, measureHostWidth]);
 
   const gridItems = useMemo(() => entries.map((entry) => {
     if (entry.kind === 'pending') {

@@ -592,15 +592,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
   ), []);
 
-  const applyDensityStep = useCallback((delta: number) => {
-    const density = densityControllerRef.current;
-    if (density) {
-      density.setColumns(density.getColumns() + delta, true);
-      return;
-    }
-    setGridColumnCount((current) => clampDensityColumns(current + delta));
-  }, [clampDensityColumns]);
-
   useEffect(() => {
     setGridColumnCount((current) => clampDensityColumns(current));
   }, [clampDensityColumns]);
@@ -2647,29 +2638,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       <div className="action-controls" aria-label="Sort and quick filters">
                         <label className="density-control" data-interactive="true" data-topbar-control="true">
                           <span>Density: {gridColumnCount}</span>
-                          {isMobile ? (
-                            <div className="density-stepper" data-interactive="true" data-topbar-control="true">
-                              <button type="button" className="btn" onClick={() => applyDensityStep(-1)} disabled={gridColumnCount <= MIN_COLUMNS_MOBILE}>Larger</button>
-                              <span>{gridColumnCount} cols</span>
-                              <button type="button" className="btn" onClick={() => applyDensityStep(1)} disabled={gridColumnCount >= MAX_COLUMNS_MOBILE}>Denser</button>
-                            </div>
-                          ) : (
-                            <input
-                              ref={densitySliderRef}
-                              id="asset-density-slider"
-                              type="range"
-                              min={MIN_COLUMNS_MOBILE}
-                              max={MAX_COLUMNS_MOBILE}
-                              step={1}
-                              value={gridColumnCount}
-                              data-interactive="true"
-                              data-topbar-control="true"
-                              onChange={(event) => {
-                                const nextColumns = Number(event.target.value || DEFAULT_COLUMNS_MOBILE);
-                                densityControllerRef.current?.setColumns(nextColumns, true);
-                              }}
-                            />
-                          )}
+                          <input
+                            ref={densitySliderRef}
+                            id="asset-density-slider"
+                            type="range"
+                            min={MIN_COLUMNS_MOBILE}
+                            max={MAX_COLUMNS_MOBILE}
+                            step={1}
+                            value={gridColumnCount}
+                            data-interactive="true"
+                            data-topbar-control="true"
+                            onChange={(event) => {
+                              const nextColumns = Number(event.target.value || DEFAULT_COLUMNS_MOBILE);
+                              densityControllerRef.current?.setColumns(nextColumns, true);
+                            }}
+                          />
                         </label>
                         <select
                           ref={sortSelectRef}

@@ -24,11 +24,13 @@ export function animateDensityFlip({
   const previous = activeByGrid.get(gridEl);
   if (previous) {
     previous.kill();
+    gsap.set(items, { clearProps: 'transform' });
     activeByGrid.delete(gridEl);
   }
 
   Flip.killFlipsOf(items);
   gsap.killTweensOf(items);
+  gsap.set(items, { clearProps: 'transform' });
 
   const state = Flip.getState(items);
   commitLayout();

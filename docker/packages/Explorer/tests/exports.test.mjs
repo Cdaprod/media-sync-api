@@ -640,6 +640,8 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(stateContent.includes('export function buildMasonryColumns'));
   assert.ok(styles.includes('.masonry-columns{'));
   assert.ok(styles.includes('.masonry-host{'));
+  assert.ok(styles.includes('overflow-x: hidden;'));
+  assert.ok(styles.includes('overflow-x: clip;'));
   assert.ok(styles.includes('-webkit-touch-callout: none;'));
   assert.ok(!styles.includes('column-fill: balance;'));
   assert.ok(content.includes('beginContentLoading'));
@@ -941,7 +943,6 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
   assert.ok(content.includes('const onSliderInput = () => {'));
   assert.ok(content.includes('density.setColumns(Number(sliderEl.value || DEFAULT_COLUMNS_MOBILE), true);'));
-  assert.ok(content.includes('className="density-stepper"'));
   assert.ok(content.includes('step={1}'));
   assert.ok(content.includes('if (isMobile) {'));
   assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
@@ -997,6 +998,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(!flip.includes('onEnter: (elements) => {'));
   assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));
   assert.ok(flip.includes('previous.kill();'));
+  assert.ok(flip.includes("gsap.set(items, { clearProps: 'transform' });"));
   assert.ok(flip.includes('onInterrupt: () => {'));
 
   assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));

@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Reverted mobile density stepper UI back to a slider control (range 1..6, integer steps) after runtime UX regressions; density readout + slider thumb + committed grid columns now stay aligned through the same controller commit path.
+- Hardened positioned masonry lifecycle against stale horizontal placement by forcing pre-capture transform cleanup when interrupting/starting density Flip reflows, reducing persistent stale x-offset artifacts after rapid commits.
+- Added overflow hardening for positioned grid surfaces (`.content .scroll` x-hidden plus masonry host/stage x-clipping) and extra host-width remeasure on density/entry changes so horizontal drift/sideways scroll no longer requires Grid/List toggles to recover.
+
+### Latest Implementation Notes (2026-03-25)
 - Reverted density Flip’s partial visible-target animation optimization after field evidence of mixed old/new masonry states; density reflow now animates the full persistent card set again to preserve one visual layout truth per commit.
 - Mobile density authority was tightened to a single committed source (`gridColumnCount`) with unified 1..6 clamp (`MIN_COLUMNS_MOBILE=1`, `MAX_COLUMNS_MOBILE=6`), removing auto width-derived column overrides that could drift displayed vs committed density.
 - Mobile density controls now prioritize discrete interactions: topbar shows stepper buttons (`Larger` / `Denser`) on mobile, and pinch was redesigned to one-step-per-gesture thresholds (outward `1.12`, inward `0.88`) with a per-gesture lock so both pinch and buttons route through the same `setColumns(..., true)` commit path.

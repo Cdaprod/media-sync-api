@@ -445,19 +445,6 @@ select.control{
 .density-control input[type="range"]{
   width: 100%;
 }
-.density-stepper{
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.density-stepper .btn{
-  padding: 4px 9px;
-  font-size: 11px;
-}
-.density-stepper span{
-  min-width: 56px;
-  text-align: center;
-}
 .action-controls .control{
   min-width: 140px;
 }
@@ -629,7 +616,8 @@ select.control{
   overflow: auto;
 }
 .content .scroll{
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -732,10 +720,14 @@ select.control{
 .masonry-host{
   position: relative;
   width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 .masonry-columns{
   position: relative;
   width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   min-height: 0;
 }
 .masonry-card{

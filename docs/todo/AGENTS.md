@@ -1,3 +1,12 @@
+## 2026-03-25 — Slider restoration + horizontal layout-state repair
+- [x] Reverted mobile density UI from stepper back to slider while keeping 1..6 clamp and integer-step commits.
+- [x] Kept committed density as single source of truth across readout, slider value, and masonry commit path.
+- [x] Added additional masonry host-width remeasure pass on density/entry changes to reduce stale geometry reuse without Grid/List toggles.
+- [x] Hardened density Flip interrupt path with explicit transform cleanup before new state capture to prevent stale horizontal offsets.
+- [x] Added horizontal overflow guards on scroll + masonry host/stage to prevent sideways scroll caused by out-of-sync positioned cards.
+- [x] Updated focused regression assertions for restored slider + overflow/transform cleanup contracts.
+- [ ] Optional follow-up: add lightweight runtime debug overlay to print hostWidth/stageHeight/columnWidth during density changes on mobile Safari.
+
 ## 2026-03-25 — Density truth + mobile control stabilization pass
 - [x] Reverted partial visible-only Flip target optimization to restore single-layout-truth rendering during density transitions.
 - [x] Unified mobile density bounds to `1..6` in shared density constants and removed width-derived auto density overrides that could desync displayed vs committed values.
