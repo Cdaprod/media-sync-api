@@ -10,6 +10,50 @@ export type AnimateDensityFlipOptions = {
 
 const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
 const runIdByGrid = new WeakMap<HTMLElement, number>();
+const suppressInterruptCleanupByGrid = new WeakMap<HTMLElement, boolean>();
+const debugByGrid = new Map<HTMLElement, {
+  starts: number;
+  completes: number;
+  interrupts: number;
+  retargetKills: number;
+  staleFrameDrops: number;
+  noItemCommits: number;
+  startWithActive: number;
+  captures: number;
+  immediateStarts: number;
+  delayedStarts: number;
+}>();
+
+function updateDebug(
+  gridEl: HTMLElement,
+  key: 'starts' | 'completes' | 'interrupts' | 'retargetKills' | 'staleFrameDrops' | 'noItemCommits' | 'startWithActive' | 'captures' | 'immediateStarts' | 'delayedStarts',
+) {
+  const current = debugByGrid.get(gridEl) ?? {
+    starts: 0,
+    completes: 0,
+    interrupts: 0,
+    retargetKills: 0,
+    staleFrameDrops: 0,
+    noItemCommits: 0,
+    startWithActive: 0,
+    captures: 0,
+    immediateStarts: 0,
+    delayedStarts: 0,
+  };
+  current[key] += 1;
+  debugByGrid.set(gridEl, current);
+  (globalThis as typeof globalThis & {
+    __explorerDensityFlipDebug?: { getStats: () => Array<Record<string, number>> };
+  }).__explorerDensityFlipDebug = {
+    getStats: () => {
+      const stats: Array<Record<string, number>> = [];
+      debugByGrid.forEach((value) => {
+        stats.push({ ...value });
+      });
+      return stats;
+    },
+  };
+}
 
 export function animateDensityFlip({
   gridEl,
@@ -34,65 +78,90 @@ export function animateDensityFlip({
     }
   };
 
-  const previous = activeByGrid.get(gridEl);
-  if (previous) {
-    previous.kill();
-    activeByGrid.delete(gridEl);
-  }
-
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
   if (!items.length) {
     const applyCommit = commitLayout;
     applyCommit();
+    updateDebug(gridEl, 'noItemCommits');
     clearTransforms();
     return;
   }
 
+  updateDebug(gridEl, 'captures');
+  const state = Flip.getState(items);
+  const previous = activeByGrid.get(gridEl);
+  if (previous) {
+    updateDebug(gridEl, 'startWithActive');
+    suppressInterruptCleanupByGrid.set(gridEl, true);
+    previous.kill();
+    suppressInterruptCleanupByGrid.set(gridEl, false);
+    activeByGrid.delete(gridEl);
+    updateDebug(gridEl, 'retargetKills');
+  }
+
   Flip.killFlipsOf(items);
   gsap.killTweensOf(items);
-  gsap.set(items, { clearProps: 'transform' });
 
-  const state = Flip.getState(items);
   const nextRunId = (runIdByGrid.get(gridEl) ?? 0) + 1;
   runIdByGrid.set(gridEl, nextRunId);
   commitLayout();
 
-  window.requestAnimationFrame(() => {
-      if (runIdByGrid.get(gridEl) !== nextRunId) return;
-    window.requestAnimationFrame(() => {
-      if (runIdByGrid.get(gridEl) !== nextRunId) {
+  const startFlip = () => {
+    if (runIdByGrid.get(gridEl) !== nextRunId) {
+      updateDebug(gridEl, 'staleFrameDrops');
+      clearTransforms();
+      return;
+    }
+    const animation = Flip.from(state, {
+      targets: items,
+      absolute: false,
+      nested: false,
+      prune: false,
+      scale: true,
+      duration: interactionMode === 'scrub'
+        ? (jumpDistance >= 2 ? 0.1 : 0.14)
+        : (jumpDistance >= 2 ? 0.16 : 0.22),
+      ease: interactionMode === 'scrub'
+        ? (jumpDistance >= 2 ? 'power4.out' : 'power3.out')
+        : (jumpDistance >= 2 ? 'power3.out' : 'power2.out'),
+      simple: true,
+      overwrite: true,
+      onComplete: () => {
+        updateDebug(gridEl, 'completes');
         clearTransforms();
-        return;
-      }
-      const animation = Flip.from(state, {
-        targets: items,
-        absolute: false,
-        nested: false,
-        prune: false,
-        scale: true,
-        duration: interactionMode === 'scrub'
-          ? (jumpDistance >= 2 ? 0.14 : 0.18)
-          : (jumpDistance >= 2 ? 0.2 : 0.26),
-        ease: interactionMode === 'scrub'
-          ? (jumpDistance >= 2 ? 'power3.out' : 'power2.out')
-          : (jumpDistance >= 2 ? 'power2.out' : 'power2.inOut'),
-        simple: true,
-        overwrite: true,
-        onComplete: () => {
+        if (activeByGrid.get(gridEl) === animation) {
+          activeByGrid.delete(gridEl);
+        }
+      },
+      onInterrupt: () => {
+        updateDebug(gridEl, 'interrupts');
+        if (!suppressInterruptCleanupByGrid.get(gridEl)) {
           clearTransforms();
-          if (activeByGrid.get(gridEl) === animation) {
-            activeByGrid.delete(gridEl);
-          }
-        },
-        onInterrupt: () => {
-          clearTransforms();
-          if (activeByGrid.get(gridEl) === animation) {
-            activeByGrid.delete(gridEl);
-          }
-        },
-      });
+        }
+        if (activeByGrid.get(gridEl) === animation) {
+          activeByGrid.delete(gridEl);
+        }
+      },
+    });
+    updateDebug(gridEl, 'starts');
+    activeByGrid.set(gridEl, animation);
+  };
 
-      activeByGrid.set(gridEl, animation);
+  if (interactionMode === 'scrub') {
+    updateDebug(gridEl, 'immediateStarts');
+    startFlip();
+    return;
+  }
+
+  updateDebug(gridEl, 'delayedStarts');
+  window.requestAnimationFrame(() => {
+    if (runIdByGrid.get(gridEl) !== nextRunId) {
+      updateDebug(gridEl, 'staleFrameDrops');
+      clearTransforms();
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      startFlip();
     });
   });
 }

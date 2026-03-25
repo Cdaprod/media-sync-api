@@ -1,3 +1,12 @@
+## 2026-03-25 — Density FLIP retarget lifecycle + responsiveness instrumentation pass
+- [x] Moved FLIP state capture ahead of active animation kill so retarget commits read current visible geometry before interruption.
+- [x] Added interrupt-cleanup suppression gate during intentional retarget kill to avoid flattening transforms between back-to-back density commits.
+- [x] Switched scrub-start timing to immediate post-commit Flip start while retaining delayed settle-start path.
+- [x] Tightened jump-distance motion tuning to firmer/faster durations/eases for both scrub and settle commits.
+- [x] Added runtime debug stats hook (`globalThis.__explorerDensityFlipDebug.getStats()`) to count starts/completes/interrupts/retarget kills/stale-frame drops/no-item commits.
+- [x] Updated static assertions for the new retarget and timing contracts.
+- [ ] Next: collect before/after on-device metrics for `interrupts / starts` and `staleFrameDrops` under rapid 1↔6 scrubs.
+
 ## 2026-03-25 — Masonry transform ownership conflict fix (CSS vs FLIP)
 - [x] Reviewed runtime DevTools density instrumentation output showing high `transitioncancel` churn and active baseline `transition: transform ...` on masonry cards.
 - [x] Added masonry-specific CSS override to remove baseline transform transition ownership from `.masonry-card.asset` while preserving filter/border-color micro-interactions.

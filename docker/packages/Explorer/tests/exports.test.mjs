@@ -983,11 +983,12 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('density.setColumns(initialColumns + 1, true);'));
 
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
-  assert.ok(flip.includes('window.requestAnimationFrame(() => {\n      if (runIdByGrid.get(gridEl) !== nextRunId) return;'));
+  assert.ok(flip.includes('if (interactionMode === \'scrub\') {'));
+  assert.ok(flip.includes('startFlip();'));
   assert.ok(flip.includes('const state = Flip.getState(items);'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
-  assert.ok(flip.includes('if (runIdByGrid.get(gridEl) !== nextRunId) return;'));
+  assert.ok(flip.includes('if (runIdByGrid.get(gridEl) !== nextRunId) {'));
   assert.ok(flip.includes('Flip.from(state, {'));
   assert.ok(flip.includes("itemSelector = '.masonry-card'"));
   assert.ok(!flip.includes('MAX_ANIMATED_ITEMS'));
@@ -1004,8 +1005,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(!flip.includes('onEnter: (elements) => {'));
   assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));
   assert.ok(flip.includes('previous.kill();'));
-  assert.ok(flip.includes("gsap.set(items, { clearProps: 'transform' });"));
+  assert.ok(flip.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
   assert.ok(flip.includes('onInterrupt: () => {'));
+  assert.ok(flip.includes('__explorerDensityFlipDebug'));
 
   assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));
   assert.ok(drawerMotion.includes("if (mode === 'sheet') {"));
@@ -1390,7 +1392,8 @@ test('density animation pipeline aggressively interrupts stale transitions befor
   assert.ok(content.includes('activeByGrid.delete(gridEl);'));
   assert.ok(content.includes('Flip.killFlipsOf(items);'));
   assert.ok(content.includes('gsap.killTweensOf(items);'));
-  assert.ok(content.includes("gsap.set(items, { clearProps: 'transform' });"));
+  assert.ok(content.includes('const state = Flip.getState(items);'));
+  assert.ok(content.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
   assert.ok(content.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
 });
 
@@ -1400,13 +1403,15 @@ test('density animation sequencing explicitly captures old state before commit a
 
   const stateIndex = content.indexOf('const state = Flip.getState(items);');
   const commitIndex = content.indexOf('commitLayout();');
-  const rafIndex = content.indexOf('window.requestAnimationFrame(() => {');
-  const fromIndex = content.indexOf('Flip.from(state, {');
+  const immediateIndex = content.indexOf("if (interactionMode === 'scrub') {");
+  const delayedIndex = content.indexOf('window.requestAnimationFrame(() => {');
+  const fromIndex = content.indexOf('const animation = Flip.from(state, {');
 
   assert.ok(stateIndex >= 0);
   assert.ok(commitIndex > stateIndex);
-  assert.ok(rafIndex > commitIndex);
-  assert.ok(fromIndex > rafIndex);
+  assert.ok(immediateIndex > commitIndex);
+  assert.ok(delayedIndex > immediateIndex);
+  assert.ok(fromIndex > commitIndex);
 });
 
 test('density controls preserve slider UI and do not regress to mobile stepper-only control', () => {
@@ -1589,8 +1594,9 @@ test('density controller/flip tuning keeps jump-distance-aware motion timing und
   assert.ok(controller.includes('const jumpDistance = Math.abs(safeColumns - currentColumns);'));
   assert.ok(controller.includes('jumpDistance,'));
   assert.ok(flip.includes('jumpDistance = 1'));
-  assert.ok(flip.includes('jumpDistance >= 2 ? 0.14 : 0.18'));
-  assert.ok(flip.includes('jumpDistance >= 2 ? 0.2 : 0.26'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.1 : 0.14'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.16 : 0.22'));
+  assert.ok(flip.includes("jumpDistance >= 2 ? 'power4.out' : 'power3.out'"));
   assert.ok(flip.includes("jumpDistance >= 2 ? 'power3.out' : 'power2.out'"));
-  assert.ok(flip.includes("jumpDistance >= 2 ? 'power2.out' : 'power2.inOut'"));
+  assert.ok(flip.includes("if (interactionMode === 'scrub') {"));
 });

@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Retuned density FLIP lifecycle toward retarget continuity: state capture now occurs before killing any active animation, and interrupt cleanup is suppression-gated during retarget kills so mid-flight visual geometry can hand off into the next Flip run.
+- Scrub interactions now start Flip immediately after commit (no double-rAF), while settle interactions keep delayed start gating; this reduces input-to-motion latency for rapid slider/pinch updates.
+- Added runtime density instrumentation plumbing (`globalThis.__explorerDensityFlipDebug.getStats()`) plus tighter jump-distance timing/easing (`0.10/0.14` scrub, `0.16/0.22` settle; firmer power eases) to audit kill/start/interrupt behavior and responsiveness.
+
+### Latest Implementation Notes (2026-03-25)
 - Runtime DevTools instrumentation review showed high density-transition cancel churn (`transitioncancel` dominating `transitionend`) with cards reporting baseline `transition: transform ...` while FLIP also controls transform.
 - Added masonry-specific CSS motion ownership guard: `.masonry-card.asset` now removes baseline transform transition (keeps filter/border-color only), and `.masonry-card.asset:hover` no longer applies transform offset.
 - This isolates transform animation authority to `animateDensityFlip` during density reflow and avoids CSS+GSAP dual ownership on the same masonry card nodes.
