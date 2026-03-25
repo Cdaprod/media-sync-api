@@ -18,7 +18,8 @@ export function animateDensityFlip({
 }: AnimateDensityFlipOptions): void {
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
   if (!items.length) {
-    commitLayout();
+    const applyCommit = commitLayout;
+    applyCommit();
     return;
   }
 

@@ -101,7 +101,7 @@ function AssetGridComponent({
       items: gridItems,
       containerWidth: hostWidth,
       columnCount: gridColumnCount,
-      gap: 6,
+      gutter: 6,
       estimateHeightRatio: ({ entry, viewModel }) => heightRatioForEntry(entry, viewModel),
     }),
     [gridColumnCount, gridItems, hostWidth],
@@ -130,10 +130,11 @@ function AssetGridComponent({
           const layoutBottom = Math.max(layoutTop, Math.round(y + height));
           const positionedStyle: React.CSSProperties = {
             position: 'absolute',
-            left: `${x}px`,
-            top: `${y}px`,
-            width: `${width}px`,
+            left: x,
+            top: y,
+            width,
             minHeight: `${height}px`,
+            height,
           };
 
           if (entry.kind === 'pending') {
@@ -159,7 +160,7 @@ function AssetGridComponent({
           return (
             <div
               key={viewModel.renderKey}
-              className={`asset masonry-card asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
+              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
               style={positionedStyle}
               data-kind={viewModel.kind}
               data-orient={viewModel.orient}
@@ -172,6 +173,7 @@ function AssetGridComponent({
               data-layout-index={index}
               data-layout-top={layoutTop}
               data-layout-bottom={layoutBottom}
+              data-card-id={viewModel.selectionKey}
               {...viewModel.pointerHandlers}
             >
               <div className="thumb">

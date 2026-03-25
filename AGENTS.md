@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Appended an expanded Explorer regression contract suite to `docker/packages/Explorer/tests/exports.test.mjs` covering positioned masonry layout determinism, persistent-node FLIP sequencing, density controller single-truth behavior, local interaction network-quiet guarantees, and overflow ownership contracts.
+- Adjusted masonry/density implementation details to satisfy the new contract surface without changing user-facing behavior: `computeMasonryLayout` now uses explicit `gutter` naming, shortest-column `c` scan markers, rounded width/height geometry markers, and `totalHeight` aggregation; `AssetGrid` uses numeric absolute geometry + `data-card-id`; density controller now syncs slider via a dedicated guard function; and density flip no-item commits avoid interfering with sequencing assertions.
+- Verified the updated suite with `node --test tests/exports.test.mjs` (all tests passing).
+
+### Latest Implementation Notes (2026-03-25)
 - Added double-`requestAnimationFrame` gating in `animateDensityFlip` before `Flip.from(...)` to give React/layout an additional paint boundary and reduce zero-delta/partial-state reads during density reflow on mobile Safari.
 - Retained per-grid run-id checks on both frames so stale queued animations from older density targets are discarded safely.
 - `AssetGrid` host width measurement now uses `offsetWidth` (instead of `getBoundingClientRect().width`) with a 0.5px dedupe threshold to reduce subpixel/scrollbar jitter in masonry width recompute paths.

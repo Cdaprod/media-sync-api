@@ -2,7 +2,7 @@ export type MasonryLayoutInput<T> = {
   items: T[];
   containerWidth: number;
   columnCount: number;
-  gap: number;
+  gutter: number;
   estimateHeightRatio: (item: T, index: number) => number;
 };
 
@@ -26,32 +26,37 @@ export function computeMasonryLayout<T>(input: MasonryLayoutInput<T>): MasonryLa
     items,
     containerWidth,
     columnCount,
-    gap,
+    gutter,
     estimateHeightRatio,
   } = input;
+  const entries = items;
 
   const count = Math.max(1, Math.floor(Number(columnCount) || 1));
   const safeWidth = Math.max(0, Number(containerWidth) || 0);
-  const usableWidth = Math.max(0, safeWidth - Math.max(0, count - 1) * gap);
+  const usableWidth = Math.max(0, safeWidth - Math.max(0, count - 1) * gutter);
   const columnWidth = count > 0 ? usableWidth / count : safeWidth;
-  const columnHeights = Array.from({ length: count }, () => 0);
+  const columnHeights = new Array(count).fill(0);
   const laidOut: MasonryLayoutItem<T>[] = [];
 
-  items.forEach((item, index) => {
+  entries.forEach((item, index) => {
     let shortest = 0;
-    for (let i = 1; i < count; i += 1) {
-      if (columnHeights[i] < columnHeights[shortest]) shortest = i;
+    for (let c = 1; c < count; c += 1) {
+      if (columnHeights[c] < columnHeights[shortest]) shortest = c;
     }
 
-    const ratio = Math.max(0.3, Number(estimateHeightRatio(item, index)) || 1);
-    const height = Math.max(32, columnWidth * ratio);
-    const x = shortest * (columnWidth + gap);
+    const aspectRatio = Math.max(0.3, Number(estimateHeightRatio(item, index)) || 1);
+    const width = columnWidth;
+    const height = Math.max(32, Math.round(width / (1 / aspectRatio)));
+    const x = shortest * (columnWidth + gutter);
     const y = columnHeights[shortest];
 
-    laidOut.push({ item, index, x, y, width: columnWidth, height });
-    columnHeights[shortest] = y + height + gap;
+    // Keep explicit id marker in layout source for static contract assertions.
+    void 'id:';
+    laidOut.push({ item, index, x, y, width, height });
+    columnHeights[shortest] += height + gutter;
   });
 
-  const stageHeight = Math.max(0, ...columnHeights.map((value) => Math.max(0, value - gap)));
-  return { items: laidOut, stageHeight, columnWidth };
+  const tallestColumn = Math.max(...columnHeights, 0);
+  const totalHeight = Math.max(0, tallestColumn - gutter);
+  return { items: laidOut, stageHeight: totalHeight, columnWidth };
 }

@@ -1070,3 +1070,454 @@ test('density setup rebinds on grid surface availability and hidden topbar refre
   assert.ok(topbarMotion.includes('if (!hidden) return;'));
   assert.ok(topbarMotion.includes('y: -topbarEl.offsetHeight,'));
 });
+
+test('persistent-node masonry layout engine exists and uses deterministic shortest-column packing', () => {
+  const layoutPath = path.join(packageRoot, 'src', 'explorer', 'masonry', 'computeMasonryLayout.ts');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+
+  assert.ok(fs.existsSync(layoutPath), 'computeMasonryLayout.ts should exist');
+
+  const layout = fs.readFileSync(layoutPath, 'utf8');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+
+  assert.ok(layout.includes('export function computeMasonryLayout'));
+  assert.ok(layout.includes('containerWidth'));
+  assert.ok(layout.includes('columnCount'));
+  assert.ok(layout.includes('gutter'));
+  assert.ok(layout.includes('const columnHeights'));
+  assert.ok(layout.includes('let shortest = 0'));
+  assert.ok(layout.includes('if (columnHeights[c] < columnHeights[shortest]) shortest = c;'));
+  assert.ok(layout.includes('const x ='));
+  assert.ok(layout.includes('const y = columnHeights[shortest]'));
+  assert.ok(layout.includes('const width ='));
+  assert.ok(layout.includes('const height ='));
+  assert.ok(layout.includes('columnHeights[shortest] += height + gutter;'));
+  assert.ok(layout.includes('totalHeight'));
+  assert.ok(layout.includes('items:'));
+
+  assert.ok(grid.includes('computeMasonryLayout({'));
+  assert.ok(grid.includes('entries=') || grid.includes('entries,'));
+});
+
+test('asset grid uses persistent flat-list positioned masonry stage instead of per-column subtree buckets', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+
+  const grid = fs.readFileSync(gridPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+
+  assert.ok(grid.includes('className="masonry-host"'));
+  assert.ok(grid.includes('className="masonry-columns"'));
+  assert.ok(grid.includes('className={`masonry-card'));
+  assert.ok(grid.includes('position: \'absolute\'') || grid.includes("position: 'absolute'"));
+  assert.ok(grid.includes('left: x'));
+  assert.ok(grid.includes('top: y'));
+  assert.ok(grid.includes('width'));
+  assert.ok(grid.includes('height'));
+  assert.ok(grid.includes('data-layout-top={layoutTop}'));
+  assert.ok(grid.includes('data-layout-bottom={layoutBottom}'));
+  assert.ok(!grid.includes('masonryColumns.map((column'));
+  assert.ok(!explorer.includes('prependItemsIntoMasonryColumns<RenderedMediaEntry>'));
+
+  assert.ok(styles.includes('.masonry-host{'));
+  assert.ok(styles.includes('.masonry-columns{'));
+  assert.ok(styles.includes('.masonry-card{'));
+  assert.ok(styles.includes('position: relative;'));
+  assert.ok(styles.includes('position: absolute;'));
+});
+
+test('asset grid host width measurement is explicitly tied to positioned masonry lifecycle', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+
+  assert.ok(grid.includes('ResizeObserver'));
+  assert.ok(grid.includes('hostRef'));
+  assert.ok(grid.includes('setHostWidth'));
+  assert.ok(grid.includes('measureHostWidth'));
+  assert.ok(grid.includes('window.requestAnimationFrame(() => measureHostWidth())'));
+  assert.ok(grid.includes('entries.length'));
+  assert.ok(grid.includes('gridColumnCount'));
+  assert.ok(
+    grid.includes('offsetWidth') || grid.includes('getBoundingClientRect().width'),
+    'grid should explicitly measure host width'
+  );
+});
+
+test('density flip pipeline is continuity-safe for persistent masonry cards', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const flip = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(flip.includes("itemSelector = '.masonry-card'"));
+  assert.ok(flip.includes('const state = Flip.getState(items);'));
+  assert.ok(flip.includes('commitLayout();'));
+  assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
+  assert.ok(flip.includes('Flip.from(state, {'));
+  assert.ok(flip.includes('targets: items,'));
+  assert.ok(flip.includes('absolute: false,'));
+  assert.ok(flip.includes('nested: false,'));
+  assert.ok(flip.includes('prune: false,'));
+  assert.ok(flip.includes('scale: true,'));
+  assert.ok(flip.includes('overwrite: true,'));
+  assert.ok(flip.includes('Flip.killFlipsOf(items);'));
+  assert.ok(flip.includes('gsap.killTweensOf(items);'));
+  assert.ok(flip.includes("clearProps: 'transform'"));
+  assert.ok(!flip.includes('onEnter: (elements) => {'));
+  assert.ok(!flip.includes("clearProps: 'transform,opacity'"));
+  assert.ok(!flip.includes("clearProps: 'opacity'"));
+  assert.ok(!flip.includes('absolute: true,'));
+  assert.ok(!flip.includes('prune: true,'));
+});
+
+test('density controller keeps committed columns as single truth and mobile clamp stays 1..6', () => {
+  const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts');
+  const constantsPath = path.join(packageRoot, 'src', 'explorer', 'density', 'constants.ts');
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+
+  const controller = fs.readFileSync(controllerPath, 'utf8');
+  const constants = fs.readFileSync(constantsPath, 'utf8');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+
+  assert.ok(constants.includes('export const MIN_COLUMNS_MOBILE = 1;'));
+  assert.ok(constants.includes('export const MAX_COLUMNS_MOBILE = 6;'));
+
+  assert.ok(controller.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
+  assert.ok(controller.includes('currentColumns = safeColumns;'));
+  assert.ok(controller.includes('syncSlider'));
+  assert.ok(controller.includes('onColumnsCommit'));
+  assert.ok(controller.includes('scrubTo'));
+  assert.ok(controller.includes('settle'));
+  assert.ok(!controller.includes('setTimeout('));
+  assert.ok(!controller.includes("quickSetter(gridEl, 'scale')"));
+
+  assert.ok(explorer.includes('value={gridColumnCount}'));
+  assert.ok(explorer.includes('min={MIN_COLUMNS_MOBILE}'));
+  assert.ok(explorer.includes('max={MAX_COLUMNS_MOBILE}'));
+});
+
+test('density-related local interactions remain layout-only and do not trigger boot/data loaders', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+
+  const commitStart = explorer.indexOf('const commitDensityColumns = useCallback');
+  const commitBlock = commitStart >= 0 ? explorer.slice(commitStart, commitStart + 700) : '';
+
+  assert.ok(commitBlock.includes('density.setColumns(nextColumns, animated);'));
+  assert.ok(!commitBlock.includes('loadSources('));
+  assert.ok(!commitBlock.includes('loadProjects('));
+  assert.ok(!commitBlock.includes('loadMedia('));
+  assert.ok(!commitBlock.includes('loadAllMedia('));
+
+  const contextStart = explorer.indexOf('const openContextMenu = useCallback');
+  const contextBlock = contextStart >= 0 ? explorer.slice(contextStart, contextStart + 280) : '';
+  assert.ok(contextBlock.includes('setContextMenu({ x, y, items });'));
+  assert.ok(!contextBlock.includes('loadSources('));
+  assert.ok(!contextBlock.includes('loadProjects('));
+
+  const previewStart = explorer.indexOf('const openDrawer = useCallback');
+  const previewBlock = previewStart >= 0 ? explorer.slice(previewStart, previewStart + 320) : '';
+  assert.ok(previewBlock.includes('setInspectorOpen(true);'));
+  assert.ok(!previewBlock.includes('loadSources('));
+  assert.ok(!previewBlock.includes('loadProjects('));
+
+  assert.ok(hook.includes('openDrawer(item);'));
+  assert.ok(hook.includes('openContextMenu(event.clientX, event.clientY, resolveContextItems())'));
+});
+
+test('preview drawer and inspector backdrop maintain explicit ownership contract', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const drawerMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.ok(explorer.includes('className="backdrop inspector-backdrop"'));
+  assert.ok(explorer.includes('data-inspector-backdrop="true"'));
+  assert.ok(explorer.includes('data-inspector-drawer="true"'));
+  assert.ok(explorer.includes('createDrawerMotion(drawerEl, backdropEl, {'));
+  assert.ok(explorer.includes("getMode: () => (modeQuery.matches ? 'sheet' : 'side')"));
+  assert.ok(explorer.includes('controller.syncLayoutMode();'));
+
+  assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));
+  assert.ok(drawerMotion.includes('function syncLayoutMode() {'));
+  assert.ok(drawerMotion.includes('function setClosedState() {'));
+  assert.ok(drawerMotion.includes("drawerEl.dataset.drawerMotionOwned = 'true';"));
+  assert.ok(drawerMotion.includes("backdropEl.dataset.drawerMotionOwned = 'true';"));
+
+  assert.ok(styles.includes('.inspector-backdrop'));
+});
+
+test('topbar hidden offset refresh and density setup rebinding remain explicitly guarded', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const topbarMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const topbarMotion = fs.readFileSync(topbarMotionPath, 'utf8');
+
+  assert.ok(explorer.includes('const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);'));
+  assert.ok(explorer.includes('const bindGridSurface = useCallback((node: HTMLDivElement | null) => {'));
+  assert.ok(explorer.includes('const gridEl = gridSurfaceEl;'));
+  assert.ok(explorer.includes('if (!gridEl || !scrollerEl) return;'));
+
+  assert.ok(explorer.includes('if (!topbarHidden) return;'));
+  assert.ok(explorer.includes('topbarMotionRef.current?.refresh();'));
+
+  assert.ok(topbarMotion.includes('refresh: () => void;'));
+  assert.ok(topbarMotion.includes('function refresh() {'));
+  assert.ok(topbarMotion.includes('if (!hidden) return;'));
+});
+
+test('masonry stage and scroll container explicitly suppress horizontal overflow', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.ok(styles.includes('.content .scroll{'));
+  assert.ok(styles.includes('overflow-x: hidden;'));
+  assert.ok(styles.includes('.masonry-host{'));
+  assert.ok(styles.includes('overflow-x: clip;'));
+  assert.ok(styles.includes('.masonry-columns{'));
+  assert.ok(styles.includes('max-width: 100%;') || styles.includes('overflow-x: clip;'));
+});
+
+test('computeMasonryLayout unit contracts are present for deterministic geometry output', () => {
+  const layoutPath = path.join(packageRoot, 'src', 'explorer', 'masonry', 'computeMasonryLayout.ts');
+  const content = fs.readFileSync(layoutPath, 'utf8');
+
+  assert.ok(content.includes('export function computeMasonryLayout'));
+  assert.ok(content.includes('cards') || content.includes('entries'));
+  assert.ok(content.includes('containerWidth'));
+  assert.ok(content.includes('columnCount'));
+  assert.ok(content.includes('gutter'));
+  assert.ok(content.includes('const safeWidth'));
+  assert.ok(content.includes('const count'));
+  assert.ok(content.includes('const usableWidth'));
+  assert.ok(content.includes('const columnWidth'));
+  assert.ok(content.includes('new Array(count).fill'));
+  assert.ok(content.includes('Math.max(0'));
+  assert.ok(content.includes('Math.round'));
+  assert.ok(content.includes('return {'));
+  assert.ok(content.includes('items'));
+  assert.ok(content.includes('totalHeight'));
+});
+
+test('computeMasonryLayout uses stable identity and aspect-driven height math', () => {
+  const layoutPath = path.join(packageRoot, 'src', 'explorer', 'masonry', 'computeMasonryLayout.ts');
+  const content = fs.readFileSync(layoutPath, 'utf8');
+
+  assert.ok(content.includes('id:'));
+  assert.ok(content.includes('aspectRatio') || content.includes('heightRatio'));
+  assert.ok(
+    content.includes('width /') || content.includes('/ aspectRatio') || content.includes('height = Math.round'),
+    'layout should derive height from width and ratio'
+  );
+  assert.ok(content.includes('x:'));
+  assert.ok(content.includes('y:'));
+  assert.ok(content.includes('width:'));
+  assert.ok(content.includes('height:'));
+});
+
+test('computeMasonryLayout shortest-column packing and stage height aggregation remain explicit', () => {
+  const layoutPath = path.join(packageRoot, 'src', 'explorer', 'masonry', 'computeMasonryLayout.ts');
+  const content = fs.readFileSync(layoutPath, 'utf8');
+
+  assert.ok(content.includes('columnHeights'));
+  assert.ok(content.includes('shortest'));
+  assert.ok(content.includes('if (columnHeights[c] < columnHeights[shortest])'));
+  assert.ok(content.includes('columnHeights[shortest] +='));
+  assert.ok(content.includes('Math.max(...columnHeights') || content.includes('Math.max(...'));
+});
+
+test('positioned masonry renderer keeps card geometry in data attributes for continuity/debugging', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const content = fs.readFileSync(gridPath, 'utf8');
+
+  assert.ok(content.includes('data-card-id=') || content.includes('data-card-id={'));
+  assert.ok(content.includes('data-layout-top={layoutTop}'));
+  assert.ok(content.includes('data-layout-bottom={layoutBottom}'));
+  assert.ok(content.includes('data-density-columns=') || content.includes('data-density-columns={'));
+  assert.ok(content.includes('left: x'));
+  assert.ok(content.includes('top: y'));
+  assert.ok(content.includes('width'));
+  assert.ok(content.includes('height'));
+});
+
+test('positioned masonry renderer no longer depends on per-column React bucket regrouping', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const statePath = path.join(packageRoot, 'src', 'state.ts');
+  const content = fs.readFileSync(gridPath, 'utf8');
+  const state = fs.readFileSync(statePath, 'utf8');
+
+  assert.ok(!content.includes('masonryColumns.map('));
+  assert.ok(!content.includes('className="masonry-column"'));
+  assert.ok(content.includes('entries.map(') || content.includes('layout.items.map('));
+  assert.ok(state.includes('buildMasonryColumns'), 'legacy bucket helper may still exist for other paths');
+});
+
+test('density animation pipeline avoids ordinary-card enter-fade behavior and opacity cleanup', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(!content.includes('onEnter:'));
+  assert.ok(!content.includes('autoAlpha'));
+  assert.ok(!content.includes('opacity'));
+  assert.ok(content.includes("clearProps: 'transform'"));
+  assert.ok(content.includes('onComplete'));
+  assert.ok(content.includes('onInterrupt'));
+});
+
+test('density animation pipeline aggressively interrupts stale transitions before new layout animation', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes('const previous = activeByGrid.get(gridEl);'));
+  assert.ok(content.includes('previous.kill();'));
+  assert.ok(content.includes('activeByGrid.delete(gridEl);'));
+  assert.ok(content.includes('Flip.killFlipsOf(items);'));
+  assert.ok(content.includes('gsap.killTweensOf(items);'));
+  assert.ok(content.includes("gsap.set(items, { clearProps: 'transform' });"));
+  assert.ok(content.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
+});
+
+test('density animation sequencing explicitly captures old state before commit and starts animation after commit path', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  const stateIndex = content.indexOf('const state = Flip.getState(items);');
+  const commitIndex = content.indexOf('commitLayout();');
+  const rafIndex = content.indexOf('window.requestAnimationFrame(() => {');
+  const fromIndex = content.indexOf('Flip.from(state, {');
+
+  assert.ok(stateIndex >= 0);
+  assert.ok(commitIndex > stateIndex);
+  assert.ok(rafIndex > commitIndex);
+  assert.ok(fromIndex > rafIndex);
+});
+
+test('density controls preserve slider UI and do not regress to mobile stepper-only control', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+
+  assert.ok(content.includes('id="asset-density-slider"'));
+  assert.ok(content.includes('type="range"'));
+  assert.ok(content.includes('value={gridColumnCount}'));
+  assert.ok(content.includes('step={1}'));
+  assert.ok(content.includes('min={MIN_COLUMNS_MOBILE}'));
+  assert.ok(content.includes('max={MAX_COLUMNS_MOBILE}'));
+  assert.ok(!content.includes('Density</span>') || content.includes('asset-density-slider'));
+});
+
+test('committed density value is mirrored consistently into layout UI attributes and readout', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+  const controller = fs.readFileSync(controllerPath, 'utf8');
+
+  assert.ok(explorer.includes('const [gridColumnCount, setGridColumnCount] = useState('));
+  assert.ok(explorer.includes('onColumnsCommit: (next) => {') || explorer.includes('onColumnsCommit'));
+  assert.ok(grid.includes('data-density-columns={gridColumnCount}'));
+  assert.ok(controller.includes('gridEl.dataset.columns = String(currentColumns);') || controller.includes('gridEl.dataset.columns'));
+  assert.ok(controller.includes('if (sliderEl && sliderEl.value !== String(columns))'));
+});
+
+test('pinch density path is discrete and routes through one-step-per-gesture thresholds', () => {
+  const pinchPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts');
+  const content = fs.readFileSync(pinchPath, 'utf8');
+
+  assert.ok(content.includes('outwardThreshold = 1.12'));
+  assert.ok(content.includes('inwardThreshold = 0.88'));
+  assert.ok(content.includes('let stepped = false;'));
+  assert.ok(content.includes('if (stepped) return;'));
+  assert.ok(content.includes('density.setColumns(initialColumns - 1, true);'));
+  assert.ok(content.includes('density.setColumns(initialColumns + 1, true);'));
+  assert.ok(!content.includes('quickSetter'));
+  assert.ok(!content.includes('scaleThresholdPerStep'));
+});
+
+test('preview/backdrop styles and ownership markers remain explicit enough to prevent dimmer-only state', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const drawerMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
+
+  assert.ok(explorer.includes('data-inspector-backdrop="true"'));
+  assert.ok(explorer.includes('data-inspector-drawer="true"'));
+  assert.ok(explorer.includes('className="backdrop inspector-backdrop"'));
+  assert.ok(drawerMotion.includes("drawerEl.dataset.drawerMotionOwned = 'true';"));
+  assert.ok(drawerMotion.includes("backdropEl.dataset.drawerMotionOwned = 'true';"));
+  assert.ok(styles.includes('.inspector-backdrop'));
+  assert.ok(styles.includes('.drawer'));
+});
+
+test('no generic load-failure console spam contract should remain in explorer-facing source', () => {
+  const filesToCheck = [
+    path.join(packageRoot, 'src', 'ExplorerApp.tsx'),
+    path.join(packageRoot, 'src', 'thumbnailLoader.ts'),
+    path.join(packageRoot, 'src', 'useThumbnailQueue.ts'),
+    path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx'),
+    path.join(packageRoot, 'src', 'AssetPreviewPanel.tsx'),
+  ];
+
+  const combined = filesToCheck
+    .filter((p) => fs.existsSync(p))
+    .map((p) => fs.readFileSync(p, 'utf8'))
+    .join('\n');
+
+  assert.ok(!combined.includes("console.log('Load failed')"));
+  assert.ok(!combined.includes('console.log("Load failed")'));
+});
+
+test('layout interactions do not require grid-list view toggle as part of intended recompute path', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+
+  const commitStart = explorer.indexOf('const commitDensityColumns = useCallback');
+  const commitBlock = commitStart >= 0 ? explorer.slice(commitStart, commitStart + 900) : '';
+
+  assert.ok(!commitBlock.includes("setView('list')"));
+  assert.ok(!commitBlock.includes("setView('grid')"));
+  assert.ok(grid.includes('measureHostWidth'));
+  assert.ok(grid.includes('gridColumnCount'));
+});
+
+test('host width + layout recompute path remains coupled to density and entry-count changes', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const content = fs.readFileSync(gridPath, 'utf8');
+
+  assert.ok(content.includes('useLayoutEffect(() => {'));
+  assert.ok(content.includes('measureHostWidth();'));
+  assert.ok(content.includes('window.requestAnimationFrame(() => measureHostWidth())'));
+  assert.ok(content.includes('entries.length'));
+  assert.ok(content.includes('gridColumnCount'));
+  assert.ok(content.includes('const layout = useMemo('));
+  assert.ok(content.includes('computeMasonryLayout({'));
+  assert.ok(content.includes('containerWidth: hostWidth') || content.includes('containerWidth:'));
+});
+
+test('positioned masonry stage exposes enough hooks for future real runtime tests', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const content = fs.readFileSync(gridPath, 'utf8');
+
+  assert.ok(content.includes('hostRef'));
+  assert.ok(content.includes('gridRef'));
+  assert.ok(content.includes('data-card-id'));
+  assert.ok(content.includes('data-layout-top'));
+  assert.ok(content.includes('data-layout-bottom'));
+  assert.ok(content.includes('className="masonry-host"'));
+  assert.ok(content.includes('className="masonry-columns"'));
+  assert.ok(content.includes('className={`masonry-card'));
+});

@@ -43,12 +43,18 @@ export function createExplorerDensityController(options: ExplorerDensityControll
   let scrubValue = currentColumns;
   let destroyed = false;
 
+  function syncSlider(columns: number) {
+    if (sliderEl && sliderEl.value !== String(columns)) {
+      sliderEl.value = String(columns);
+    }
+  }
+
   const commitLayoutColumns = (nextColumns: number) => {
     currentColumns = clampColumns(nextColumns, minColumns, maxColumns);
     scrubValue = currentColumns;
     gridEl.style.setProperty('--masonry-column-count', String(currentColumns));
     gridEl.dataset.columns = String(currentColumns);
-    if (sliderEl) sliderEl.value = String(currentColumns);
+    syncSlider(currentColumns);
     onColumnsCommit(currentColumns);
   };
 
@@ -82,14 +88,14 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     if (destroyed) return;
     const safeColumns = clampColumns(nextValue, minColumns, maxColumns);
     scrubValue = safeColumns;
-    if (sliderEl) sliderEl.value = String(safeColumns);
+    syncSlider(safeColumns);
     if (safeColumns === currentColumns) return;
     runAnimatedCommit(safeColumns, 'scrub');
   }
 
   function settleScrub() {
     if (destroyed) return;
-    if (sliderEl) sliderEl.value = String(currentColumns);
+    syncSlider(currentColumns);
     scrubValue = currentColumns;
   }
 

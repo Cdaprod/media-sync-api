@@ -1,3 +1,10 @@
+## 2026-03-25 — Explorer masonry/density regression contract expansion
+- [x] Appended the provided static contract suite into `docker/packages/Explorer/tests/exports.test.mjs` without removing existing tests.
+- [x] Kept intent intact while fixing implementation mismatches surfaced by the new assertions (`gutter` naming, masonry geometry markers, slider sync guard, and FLIP sequencing marker hygiene).
+- [x] Re-ran `node --test tests/exports.test.mjs` and confirmed full pass.
+- [ ] Next: add true unit tests for `computeMasonryLayout(...)` input/output vectors (edge widths, 1-column, high-column, and mixed aspect-ratio sets) instead of source-string contracts only.
+- [ ] Next: add DOM/runtime continuity tests for density transitions (no mixed old/new card states mid-commit).
+
 ## 2026-03-25 — Double-rAF Flip + offsetWidth measurement follow-up
 - [x] Added second-frame `requestAnimationFrame` gate before `Flip.from(...)` to reduce React/paint race conditions during density transitions.
 - [x] Kept run-id stale-frame guards on both deferred frames so superseded animation targets are dropped.
