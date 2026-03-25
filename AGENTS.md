@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-24)
+- Masonry card height estimation now prefers real media geometry (`height / width`) from `MediaItem.width` + `MediaItem.height` before falling back to orientation buckets, reducing geometry drift between layout math and rendered cards.
+- `AssetGrid` now builds view models once per entry (`gridItems`) and reuses them for both layout estimation and render, improving determinism and avoiding repeated view-model recomputation during density/layout updates.
+- Explorer regression assertions now lock the intrinsic ratio path and updated layout iteration signature so future changes do not regress back to orientation-only estimated geometry.
+
+### Latest Implementation Notes (2026-03-24)
 - Replaced Explorer’s column-bucket masonry render path with a persistent flat card stage: `ExplorerApp` now feeds `entries={renderedMediaEntries}` into `AssetGrid`, and `AssetGrid` computes explicit per-card geometry via `computeMasonryLayout(...)`.
 - `AssetGrid` now measures host width with `ResizeObserver` and renders cards as absolutely-positioned `.masonry-card` nodes inside a single `.masonry-columns` stage, improving DOM continuity across density changes and reducing reparent/recreate churn.
 - Density Flip selector and regression contracts were updated to the persistent stage contract (`.masonry-columns > .masonry-card`), and styles now include `.masonry-host`/`.masonry-card` instead of `.masonry-column` buckets.

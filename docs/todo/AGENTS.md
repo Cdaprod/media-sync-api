@@ -1,3 +1,10 @@
+## 2026-03-24 — Masonry intrinsic geometry stabilization follow-up
+- [x] Switched masonry height-ratio estimation to prefer intrinsic media dimensions (`height / width`) when `MediaItem.width` and `MediaItem.height` are available.
+- [x] Kept orientation-based ratio buckets as explicit fallback only for assets missing intrinsic dimensions.
+- [x] Refactored `AssetGrid` to build per-entry view models once and reuse them for both layout estimation and render paths.
+- [x] Updated focused regression assertions to lock the intrinsic-ratio and updated layout iteration contracts.
+- [ ] Add backend/API follow-up task to ensure every indexed media row consistently includes stable `width`/`height` metadata at ingest time.
+
 ## 2026-03-24 — PR-review regression lock: density mount timing + topbar hidden offset
 - [x] Added focused assertions that density setup binds from `gridSurfaceEl` availability, not mount-only `gridRef.current` assumptions.
 - [x] Added focused assertions that hidden topbar refresh path runs when `topbarMeasuredHeight` changes.

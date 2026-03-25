@@ -43,6 +43,11 @@ interface AssetGridProps {
 
 function heightRatioForEntry(entry: GridEntry, viewModel?: ExplorerAssetViewModel): number {
   if (entry.kind === 'pending') return 1;
+  const width = Number(entry.item.width) || 0;
+  const height = Number(entry.item.height) || 0;
+  if (width > 0 && height > 0) {
+    return Math.max(0.3, height / width);
+  }
   const orient = viewModel?.orient || 'square';
   if (orient === 'portrait') return 1.34;
   if (orient === 'landscape') return 0.84;
@@ -77,29 +82,23 @@ function AssetGridComponent({
     return () => observer.disconnect();
   }, []);
 
-  const viewModelsByKey = useMemo(() => {
-    const map = new Map<string, ExplorerAssetViewModel>();
-    entries.forEach((entry) => {
-      if (entry.kind !== 'asset') return;
-      const viewModel = buildAssetViewModel(entry.item);
-      map.set(viewModel.renderKey, viewModel);
-    });
-    return map;
-  }, [buildAssetViewModel, entries]);
+  const gridItems = useMemo(() => entries.map((entry) => {
+    if (entry.kind === 'pending') {
+      return { entry } as const;
+    }
+    const viewModel = buildAssetViewModel(entry.item);
+    return { entry, viewModel } as const;
+  }), [buildAssetViewModel, entries]);
 
   const layout = useMemo(
     () => computeMasonryLayout({
-      items: entries,
+      items: gridItems,
       containerWidth: hostWidth,
       columnCount: gridColumnCount,
       gap: 6,
-      estimateHeightRatio: (entry) => {
-        if (entry.kind === 'pending') return 1;
-        const key = buildAssetViewModel(entry.item).renderKey;
-        return heightRatioForEntry(entry, viewModelsByKey.get(key));
-      },
+      estimateHeightRatio: ({ entry, viewModel }) => heightRatioForEntry(entry, viewModel),
     }),
-    [buildAssetViewModel, entries, gridColumnCount, hostWidth, viewModelsByKey],
+    [gridColumnCount, gridItems, hostWidth],
   );
 
   const handleTogglePointerDown = (
@@ -119,7 +118,8 @@ function AssetGridComponent({
           height: `${Math.max(layout.stageHeight, 0)}px`,
         } as React.CSSProperties}
       >
-        {layout.items.map(({ item: entry, x, y, width, height }, index) => {
+        {layout.items.map(({ item, x, y, width, height }, index) => {
+          const { entry } = item;
           const positionedStyle: React.CSSProperties = {
             position: 'absolute',
             left: `${x}px`,
@@ -144,7 +144,8 @@ function AssetGridComponent({
             );
           }
 
-          const viewModel = buildAssetViewModel(entry.item);
+          const viewModel = item.viewModel;
+          if (!viewModel) return null;
           return (
             <div
               key={viewModel.renderKey}
