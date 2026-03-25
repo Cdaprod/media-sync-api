@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Fixed Explorer production build TypeScript failure in density slider input handler by typing the event as `React.FormEvent<HTMLInputElement>` and reading `event.currentTarget.value` instead of untyped `event.target.value`.
+- This keeps immediate slider commits (`onInput`) while satisfying Next.js/TypeScript strict event target typing in CI/container builds.
+- No behavior change intended beyond compile correctness; density commit flow remains `commitDensityColumns(nextColumns, true)`.
+
+### Latest Implementation Notes (2026-03-25)
 - Fixed a density commit wiring gap where mobile slider interaction could effectively no-op when the density controller ref was not ready; `ExplorerApp` now routes slider input through a fallback-safe `commitDensityColumns(...)` path that updates committed columns and stage CSS even without an active controller instance.
 - Density slider events now use React `onInput` for immediate mobile updates, reducing Safari lag/commit ambiguity that made the UI appear stuck at the default three-column state.
 - Corrected density Flip target selector to `.masonry-card` scoped under the bound grid element so Flip state capture targets real persistent cards instead of an over-specific descendant selector that could resolve to zero targets.

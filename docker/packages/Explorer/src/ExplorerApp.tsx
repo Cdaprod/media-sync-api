@@ -2654,8 +2654,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             value={gridColumnCount}
                             data-interactive="true"
                             data-topbar-control="true"
-                            onInput={(event) => {
-                              const nextColumns = Number(event.target.value || DEFAULT_COLUMNS_MOBILE);
+                            onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                              const nextColumns = Number(event.currentTarget.value || DEFAULT_COLUMNS_MOBILE);
                               commitDensityColumns(nextColumns, true);
                             }}
                           />

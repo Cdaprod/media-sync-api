@@ -1,3 +1,8 @@
+## 2026-03-25 — Build break hotfix (typed slider input event)
+- [x] Fixed TypeScript compile error in Explorer slider `onInput` handler by switching from `event.target.value` to typed `event.currentTarget.value`.
+- [x] Kept slider immediate-commit behavior unchanged while restoring `npm run build` type-check compatibility.
+- [ ] Optional: add a tiny focused test assertion for typed `React.FormEvent<HTMLInputElement>` slider handler signature to prevent regression.
+
 ## 2026-03-25 — Density slider no-op/stuck-at-3 hotfix
 - [x] Added fallback-safe `commitDensityColumns(...)` path so slider commits still update layout when controller ref is not yet attached.
 - [x] Switched slider interaction to React `onInput` for immediate mobile commit behavior.
