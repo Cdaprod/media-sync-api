@@ -983,6 +983,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('density.setColumns(initialColumns + 1, true);'));
 
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
+  assert.ok(flip.includes('window.requestAnimationFrame(() => {\n      if (runIdByGrid.get(gridEl) !== nextRunId) return;'));
   assert.ok(flip.includes('const state = Flip.getState(items);'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));

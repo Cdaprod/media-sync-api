@@ -1,3 +1,10 @@
+## 2026-03-25 — Double-rAF Flip + offsetWidth measurement follow-up
+- [x] Added second-frame `requestAnimationFrame` gate before `Flip.from(...)` to reduce React/paint race conditions during density transitions.
+- [x] Kept run-id stale-frame guards on both deferred frames so superseded animation targets are dropped.
+- [x] Switched masonry host width read to `offsetWidth` with 0.5px dedupe threshold to reduce subpixel/scrollbar jitter.
+- [x] Updated static regression assertions for nested rAF gating contract.
+- [ ] Optional: capture a short iPhone Safari trace to confirm reduced snap/no-op transitions after density commits.
+
 ## 2026-03-25 — Density Flip race/continuity hardening
 - [x] Switched Flip options for positioned cards to `absolute:false`, `prune:false`, `scale:true`, `overwrite:true`.
 - [x] Added `requestAnimationFrame` deferral and run-id gating so stale queued animations are dropped when newer commits arrive.

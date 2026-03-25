@@ -40,30 +40,33 @@ export function animateDensityFlip({
 
   window.requestAnimationFrame(() => {
     if (runIdByGrid.get(gridEl) !== nextRunId) return;
-    const animation = Flip.from(state, {
-      targets: items,
-      absolute: false,
-      nested: false,
-      prune: false,
-      scale: true,
-      duration: interactionMode === 'scrub' ? 0.16 : 0.24,
-      ease: interactionMode === 'scrub' ? 'power2.out' : 'power2.inOut',
-      simple: true,
-      overwrite: true,
-      onComplete: () => {
-        gsap.set(items, { clearProps: 'transform' });
-        if (activeByGrid.get(gridEl) === animation) {
-          activeByGrid.delete(gridEl);
-        }
-      },
-      onInterrupt: () => {
-        gsap.set(items, { clearProps: 'transform' });
-        if (activeByGrid.get(gridEl) === animation) {
-          activeByGrid.delete(gridEl);
-        }
-      },
-    });
+    window.requestAnimationFrame(() => {
+      if (runIdByGrid.get(gridEl) !== nextRunId) return;
+      const animation = Flip.from(state, {
+        targets: items,
+        absolute: false,
+        nested: false,
+        prune: false,
+        scale: true,
+        duration: interactionMode === 'scrub' ? 0.16 : 0.24,
+        ease: interactionMode === 'scrub' ? 'power2.out' : 'power2.inOut',
+        simple: true,
+        overwrite: true,
+        onComplete: () => {
+          gsap.set(items, { clearProps: 'transform' });
+          if (activeByGrid.get(gridEl) === animation) {
+            activeByGrid.delete(gridEl);
+          }
+        },
+        onInterrupt: () => {
+          gsap.set(items, { clearProps: 'transform' });
+          if (activeByGrid.get(gridEl) === animation) {
+            activeByGrid.delete(gridEl);
+          }
+        },
+      });
 
-    activeByGrid.set(gridEl, animation);
+      activeByGrid.set(gridEl, animation);
+    });
   });
 }

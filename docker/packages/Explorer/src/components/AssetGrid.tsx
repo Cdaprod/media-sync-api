@@ -68,8 +68,8 @@ function AssetGridComponent({
   const measureHostWidth = useCallback(() => {
     const node = hostRef.current;
     if (!node) return;
-    const rect = node.getBoundingClientRect();
-    setHostWidth((prev) => (Math.abs(prev - rect.width) < 0.1 ? prev : rect.width));
+    const measuredWidth = node.offsetWidth;
+    setHostWidth((prev) => (Math.abs(prev - measuredWidth) < 0.5 ? prev : measuredWidth));
   }, []);
 
   useLayoutEffect(() => {

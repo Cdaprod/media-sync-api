@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Added double-`requestAnimationFrame` gating in `animateDensityFlip` before `Flip.from(...)` to give React/layout an additional paint boundary and reduce zero-delta/partial-state reads during density reflow on mobile Safari.
+- Retained per-grid run-id checks on both frames so stale queued animations from older density targets are discarded safely.
+- `AssetGrid` host width measurement now uses `offsetWidth` (instead of `getBoundingClientRect().width`) with a 0.5px dedupe threshold to reduce subpixel/scrollbar jitter in masonry width recompute paths.
+
+### Latest Implementation Notes (2026-03-25)
 - Density Flip choreography was retuned for positioned masonry cards: switched to `absolute: false`, `prune: false`, `scale: true`, and `overwrite: true`, plus one-frame deferred `Flip.from(...)` to reduce React/Flip commit races and blended intermediate states under rapid density input.
 - Added per-grid run-id gating for deferred Flip runs so stale queued animation frames are ignored when newer density commits arrive.
 - Density controller now advances `currentColumns` before scheduling animated commits, reducing guard-based desync where interrupted transitions could block valid follow-up targets.
