@@ -336,6 +336,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const topbarPinTimeoutRef = useRef<number | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
+  const lastCommittedColumnsRef = useRef(DEFAULT_COLUMNS_MOBILE);
   const selectedOrderRef = useRef<string[]>([]);
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const topbarIntentRef = useRef<IntentController | null>(null);
@@ -599,6 +600,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
     const safeColumns = clampDensityColumns(nextColumns);
+    lastCommittedColumnsRef.current = safeColumns;
     setGridColumnCount(safeColumns);
     if (gridSurfaceEl) {
       gridSurfaceEl.style.setProperty('--masonry-column-count', String(safeColumns));
@@ -609,6 +611,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     setGridColumnCount((current) => clampDensityColumns(current));
   }, [clampDensityColumns]);
+
+  useEffect(() => {
+    lastCommittedColumnsRef.current = gridColumnCount;
+  }, [gridColumnCount]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2017,8 +2023,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const density = createExplorerDensityController({
       gridEl,
       sliderEl: densitySliderRef.current,
-      initialColumns: densityControllerRef.current?.getColumns() ?? gridColumnCount ?? DEFAULT_COLUMNS_MOBILE,
+      initialColumns: densityControllerRef.current?.getColumns()
+        ?? lastCommittedColumnsRef.current
+        ?? gridColumnCount
+        ?? DEFAULT_COLUMNS_MOBILE,
       onColumnsCommit: (nextColumns) => {
+        lastCommittedColumnsRef.current = nextColumns;
         setGridColumnCount(nextColumns);
       },
       minColumns: MIN_COLUMNS_MOBILE,

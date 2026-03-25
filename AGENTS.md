@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Addressed density-reset-to-3 behavior by introducing `lastCommittedColumnsRef` as a stable lifecycle handoff source for density controller rebinds; controller initialization now prefers prior committed columns over default fallback during effect re-creation.
+- `commitDensityColumns(...)` now updates `lastCommittedColumnsRef` in fallback mode and `onColumnsCommit` also refreshes it, reducing race windows where rebinding could replay stale defaults.
+- This hardens density state continuity when grid/controller mount timing shifts, without changing the public 1..6 slider contract.
+
+### Latest Implementation Notes (2026-03-25)
 - Fixed Explorer production build TypeScript failure in density slider input handler by typing the event as `React.FormEvent<HTMLInputElement>` and reading `event.currentTarget.value` instead of untyped `event.target.value`.
 - This keeps immediate slider commits (`onInput`) while satisfying Next.js/TypeScript strict event target typing in CI/container builds.
 - No behavior change intended beyond compile correctness; density commit flow remains `commitDensityColumns(nextColumns, true)`.

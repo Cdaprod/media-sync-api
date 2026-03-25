@@ -1,3 +1,10 @@
+## 2026-03-25 — Density reset-to-3 continuity hardening
+- [x] Added `lastCommittedColumnsRef` to carry committed density across controller lifecycle rebinds.
+- [x] Updated controller initialization to prefer prior committed columns ref before falling back to defaults.
+- [x] Synced fallback commit path and controller commit callback to the same committed-columns ref.
+- [x] Verified existing Explorer assertions still pass after continuity hardening.
+- [ ] Optional: add a focused regression assertion locking `lastCommittedColumnsRef` as part of density controller initial column selection.
+
 ## 2026-03-25 — Build break hotfix (typed slider input event)
 - [x] Fixed TypeScript compile error in Explorer slider `onInput` handler by switching from `event.target.value` to typed `event.currentTarget.value`.
 - [x] Kept slider immediate-commit behavior unchanged while restoring `npm run build` type-check compatibility.
