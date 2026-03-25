@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Removed `AssetGrid`’s post-layout global `.masonry-card` transform/transition reset `useLayoutEffect` so ordinary render commits no longer flatten active FLIP motion mid-transition.
+- Kept density final-settle ownership in `animateDensityFlip` and retained interruptible capture→commit→double-rAF→`Flip.from(...)` sequencing so new commits continue from live on-screen card geometry.
+- Added jump-distance-aware density timing/easing (`createExplorerDensityController` passes `jumpDistance`) so large column jumps animate shorter/firmer while single-step moves remain slightly richer.
+
+### Latest Implementation Notes (2026-03-25)
 - Implemented an explicit post-animation/post-render settle invariant for masonry cards: density flip cleanup now forces `transform: none` + temporary `transition: none` on live queried card nodes, then drops transition on microtask to prevent transform/layout drift under rapid density toggles.
 - `AssetGrid` now runs a layout-effect settle pass after layout commits that re-queries `.masonry-card` nodes and clears transform/transition residue again, ensuring final render truth wins even when React/GSAP timing interleaves.
 - Added focused regression assertions covering the new settle paths so future changes cannot remove forced finalization safeguards.

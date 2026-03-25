@@ -1,3 +1,10 @@
+## 2026-03-25 — Density live-geometry interrupt continuity pass
+- [x] Removed the `AssetGrid` post-render global transform/transition reset effect so render commits no longer cancel active FLIP motion.
+- [x] Kept settle cleanup under `animateDensityFlip` as the motion-layer owner of transform lifecycle (`complete`/`interrupt`/no-item paths).
+- [x] Added jump-distance-aware animation tuning (`jumpDistance`) so large density jumps are shorter/firmer and small jumps keep richer easing.
+- [x] Updated Explorer static regression assertions to lock the no-render-reset contract and jump-distance timing/easing wiring.
+- [ ] Next: add a runtime/browser continuity check (rapid 1↔6 scrubs) asserting no horizontal drift and monotonic visible-card continuity across interrupts.
+
 ## 2026-03-25 — Final settle invariant pass (geometry truth vs render truth)
 - [x] Added forced transform reset + temporary transition suppression in `animateDensityFlip` cleanup (`complete`, `interrupt`, and no-item paths) using live node re-query.
 - [x] Added an `AssetGrid` post-layout `useLayoutEffect` settle pass that re-clears transform/transition residue on all `.masonry-card` nodes after render commit.

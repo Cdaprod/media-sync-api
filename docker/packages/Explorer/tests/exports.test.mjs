@@ -1559,15 +1559,28 @@ test('density flip clear path explicitly forces transform/transition reset on li
   assert.ok(content.includes('window.requestAnimationFrame(() => {'));
 });
 
-test('asset grid applies post-layout settle pass to enforce final card truth after re-render', () => {
+test('asset grid does not run global post-render transform reset that conflicts with flip motion ownership', () => {
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const content = fs.readFileSync(gridPath, 'utf8');
 
-  assert.ok(content.includes("const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');"));
-  assert.ok(content.includes("const cards = Array.from(stage.querySelectorAll<HTMLElement>('.masonry-card'));"));
-  assert.ok(content.includes("card.style.transition = 'none';"));
-  assert.ok(content.includes("card.style.transform = 'none';"));
-  assert.ok(content.includes("card.style.removeProperty('transform');"));
-  assert.ok(content.includes("card.style.removeProperty('transition');"));
-  assert.ok(content.includes('window.requestAnimationFrame(() => {'));
+  assert.ok(!content.includes("const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');"));
+  assert.ok(!content.includes("card.style.transition = 'none';"));
+  assert.ok(!content.includes("card.style.transform = 'none';"));
+  assert.ok(!content.includes("card.style.removeProperty('transform');"));
+  assert.ok(!content.includes("card.style.removeProperty('transition');"));
+});
+
+test('density controller/flip tuning keeps jump-distance-aware motion timing under animation-layer ownership', () => {
+  const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts');
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const controller = fs.readFileSync(controllerPath, 'utf8');
+  const flip = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(controller.includes('const jumpDistance = Math.abs(safeColumns - currentColumns);'));
+  assert.ok(controller.includes('jumpDistance,'));
+  assert.ok(flip.includes('jumpDistance = 1'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.14 : 0.18'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.2 : 0.26'));
+  assert.ok(flip.includes("jumpDistance >= 2 ? 'power3.out' : 'power2.out'"));
+  assert.ok(flip.includes("jumpDistance >= 2 ? 'power2.out' : 'power2.inOut'"));
 });

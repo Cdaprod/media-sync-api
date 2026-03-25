@@ -5,6 +5,7 @@ export type AnimateDensityFlipOptions = {
   itemSelector?: string;
   commitLayout: () => void;
   interactionMode?: 'scrub' | 'settle';
+  jumpDistance?: number;
 };
 
 const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
@@ -15,6 +16,7 @@ export function animateDensityFlip({
   itemSelector = '.masonry-card',
   commitLayout,
   interactionMode = 'scrub',
+  jumpDistance = 1,
 }: AnimateDensityFlipOptions): void {
   const clearTransforms = () => {
     const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
@@ -68,8 +70,12 @@ export function animateDensityFlip({
         nested: false,
         prune: false,
         scale: true,
-        duration: interactionMode === 'scrub' ? 0.16 : 0.24,
-        ease: interactionMode === 'scrub' ? 'power2.out' : 'power2.inOut',
+        duration: interactionMode === 'scrub'
+          ? (jumpDistance >= 2 ? 0.14 : 0.18)
+          : (jumpDistance >= 2 ? 0.2 : 0.26),
+        ease: interactionMode === 'scrub'
+          ? (jumpDistance >= 2 ? 'power3.out' : 'power2.out')
+          : (jumpDistance >= 2 ? 'power2.out' : 'power2.inOut'),
         simple: true,
         overwrite: true,
         onComplete: () => {

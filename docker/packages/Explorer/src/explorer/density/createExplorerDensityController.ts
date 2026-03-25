@@ -61,10 +61,12 @@ export function createExplorerDensityController(options: ExplorerDensityControll
   const runAnimatedCommit = (nextColumns: number, interactionMode: 'scrub' | 'settle') => {
     const safeColumns = clampColumns(nextColumns, minColumns, maxColumns);
     if (safeColumns === currentColumns) return;
+    const jumpDistance = Math.abs(safeColumns - currentColumns);
     currentColumns = safeColumns;
     animateDensityFlip({
       gridEl,
       interactionMode,
+      jumpDistance,
       commitLayout: () => {
         commitLayoutColumns(safeColumns);
       },
