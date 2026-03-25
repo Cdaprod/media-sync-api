@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Follow-up motion-quality pass targets mid-animation overpower peaks by reducing scrub-time retarget churn at the source: density scrub commits are now frame-coalesced in `createExplorerDensityController` (latest-target-per-frame) instead of firing every input event.
+- Scrub controller now tracks `pendingScrubColumns` + `scrubFrameId`, emits at most one animated scrub commit per frame, and cancels pending RAF work on destroy for idempotent lifecycle cleanup.
+- This is intended to reduce excessive retarget-kill cadence (and corresponding interrupt spikes) so easing can read perceptually instead of being dominated by intra-gesture restart corrections.
+
+### Latest Implementation Notes (2026-03-25)
 - Retuned density FLIP lifecycle toward retarget continuity: state capture now occurs before killing any active animation, and interrupt cleanup is suppression-gated during retarget kills so mid-flight visual geometry can hand off into the next Flip run.
 - Scrub interactions now start Flip immediately after commit (no double-rAF), while settle interactions keep delayed start gating; this reduces input-to-motion latency for rapid slider/pinch updates.
 - Added runtime density instrumentation plumbing (`globalThis.__explorerDensityFlipDebug.getStats()`) plus tighter jump-distance timing/easing (`0.10/0.14` scrub, `0.16/0.22` settle; firmer power eases) to audit kill/start/interrupt behavior and responsiveness.

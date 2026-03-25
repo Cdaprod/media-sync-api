@@ -1,3 +1,9 @@
+## 2026-03-25 — Scrub retarget churn reduction (ease visibility follow-up)
+- [x] Added density scrub frame coalescing in `createExplorerDensityController` so rapid scrub input commits latest target once per frame.
+- [x] Added pending-target + RAF lifecycle cleanup (`pendingScrubColumns`, `scrubFrameId`, destroy-time cancel) for idempotent scrub scheduling.
+- [x] Updated static regression assertions to lock frame-coalesced scrub behavior and avoid accidental return to per-event scrub commits.
+- [ ] Next: rerun runtime trace and compare `retargetKills`/`interrupts` before vs after coalescing to validate reduced mid-animation overpower peaks.
+
 ## 2026-03-25 — Density FLIP retarget lifecycle + responsiveness instrumentation pass
 - [x] Moved FLIP state capture ahead of active animation kill so retarget commits read current visible geometry before interruption.
 - [x] Added interrupt-cleanup suppression gate during intentional retarget kill to avoid flattening transforms between back-to-back density commits.

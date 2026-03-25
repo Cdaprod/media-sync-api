@@ -42,6 +42,8 @@ export function createExplorerDensityController(options: ExplorerDensityControll
   let currentColumns = clampColumns(initialColumns, minColumns, maxColumns);
   let scrubValue = currentColumns;
   let destroyed = false;
+  let scrubFrameId = 0;
+  let pendingScrubColumns: number | null = null;
 
   function syncSlider(columns: number) {
     if (sliderEl && sliderEl.value !== String(columns)) {
@@ -92,7 +94,16 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     scrubValue = safeColumns;
     syncSlider(safeColumns);
     if (safeColumns === currentColumns) return;
-    runAnimatedCommit(safeColumns, 'scrub');
+    pendingScrubColumns = safeColumns;
+    if (scrubFrameId) return;
+    scrubFrameId = window.requestAnimationFrame(() => {
+      scrubFrameId = 0;
+      if (destroyed) return;
+      const nextColumns = pendingScrubColumns;
+      pendingScrubColumns = null;
+      if (nextColumns == null || nextColumns === currentColumns) return;
+      runAnimatedCommit(nextColumns, 'scrub');
+    });
   }
 
   function settleScrub() {
@@ -103,6 +114,11 @@ export function createExplorerDensityController(options: ExplorerDensityControll
 
   function destroy() {
     destroyed = true;
+    if (scrubFrameId) {
+      window.cancelAnimationFrame(scrubFrameId);
+      scrubFrameId = 0;
+    }
+    pendingScrubColumns = null;
   }
 
   commitLayoutColumns(currentColumns);

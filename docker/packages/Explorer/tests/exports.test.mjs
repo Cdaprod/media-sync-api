@@ -966,10 +966,14 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
   assert.ok(densityController.includes('if (!Number.isFinite(value)) return minColumns;'));
   assert.ok(densityController.includes('currentColumns = safeColumns;'));
-  assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'scrub\');'));
+  assert.ok(densityController.includes('runAnimatedCommit(nextColumns, \'scrub\');'));
   assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'settle\');'));
   assert.ok(densityController.includes('destroyed = true;'));
-  assert.ok(!densityController.includes('requestAnimationFrame('));
+  assert.ok(densityController.includes('let scrubFrameId = 0;'));
+  assert.ok(densityController.includes('pendingScrubColumns: number | null = null;'));
+  assert.ok(densityController.includes('scrubFrameId = window.requestAnimationFrame(() => {'));
+  assert.ok(densityController.includes('runAnimatedCommit(nextColumns, \'scrub\');'));
+  assert.ok(densityController.includes('window.cancelAnimationFrame(scrubFrameId);'));
   assert.ok(!densityController.includes('setTimeout('));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
