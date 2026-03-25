@@ -1,3 +1,9 @@
+## 2026-03-25 — Final settle invariant pass (geometry truth vs render truth)
+- [x] Added forced transform reset + temporary transition suppression in `animateDensityFlip` cleanup (`complete`, `interrupt`, and no-item paths) using live node re-query.
+- [x] Added an `AssetGrid` post-layout `useLayoutEffect` settle pass that re-clears transform/transition residue on all `.masonry-card` nodes after render commit.
+- [x] Added regression assertions that lock both settle invariants so cleanup cannot regress during refactors.
+- [ ] Next: add runtime instrumentation counter for density commits that verifies all cards finish with empty `transform` at settle boundary on device.
+
 ## 2026-03-25 — Repeated density-commit settle truth hardening
 - [x] Added `clearTransforms()` in density Flip pipeline that re-queries live masonry cards and clears transform props after complete/interrupt/no-item commits.
 - [x] Preserved run-id stale-frame gating and existing static contract strings while hardening cleanup behavior.

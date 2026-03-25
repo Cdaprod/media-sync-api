@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Implemented an explicit post-animation/post-render settle invariant for masonry cards: density flip cleanup now forces `transform: none` + temporary `transition: none` on live queried card nodes, then drops transition on microtask to prevent transform/layout drift under rapid density toggles.
+- `AssetGrid` now runs a layout-effect settle pass after layout commits that re-queries `.masonry-card` nodes and clears transform/transition residue again, ensuring final render truth wins even when React/GSAP timing interleaves.
+- Added focused regression assertions covering the new settle paths so future changes cannot remove forced finalization safeguards.
+
+### Latest Implementation Notes (2026-03-25)
 - Hardened density reflow cleanup for repeated commits by adding a `clearTransforms()` helper in `animateDensityFlip` that re-queries current `.masonry-card` nodes and clears transform props on complete/interrupt/no-item paths, reducing risk of stale transform residue across rapid density changes.
 - Kept run-id stale-frame gating and previous-animation kill semantics while preserving existing regression contract strings expected by the Explorer static suite.
 - Added focused regression assertions for repeated density-commit cleanup and stale-frame/no-item settle behavior, plus a small masonry stage width ownership marker (`width: '100%'`) in `AssetGrid` to reinforce horizontal layout truth.

@@ -20,6 +20,15 @@ export function animateDensityFlip({
     const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
     if (currentItems.length) {
       gsap.set(currentItems, { clearProps: 'transform' });
+      for (const card of currentItems) {
+        card.style.transition = 'none';
+        card.style.transform = 'none';
+      }
+      queueMicrotask(() => {
+        for (const card of currentItems) {
+          card.style.removeProperty('transition');
+        }
+      });
     }
   };
 

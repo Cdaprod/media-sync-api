@@ -107,6 +107,24 @@ function AssetGridComponent({
     [gridColumnCount, gridItems, hostWidth],
   );
 
+  useLayoutEffect(() => {
+    const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');
+    if (!stage) return;
+    const cards = Array.from(stage.querySelectorAll<HTMLElement>('.masonry-card'));
+    if (!cards.length) return;
+    for (const card of cards) {
+      card.style.transition = 'none';
+      card.style.transform = 'none';
+      card.style.removeProperty('transform');
+    }
+    const rafId = window.requestAnimationFrame(() => {
+      for (const card of cards) {
+        card.style.removeProperty('transition');
+      }
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [gridColumnCount, hostWidth, layout.items]);
+
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
   ) => {

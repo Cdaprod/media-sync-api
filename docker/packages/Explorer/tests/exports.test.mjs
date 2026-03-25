@@ -1548,3 +1548,26 @@ test('density flip no-item and stale-frame paths still enforce single settled la
   assert.ok(content.includes('if (runIdByGrid.get(gridEl) !== nextRunId) {'));
   assert.ok(content.includes('clearTransforms();'));
 });
+
+test('density flip clear path explicitly forces transform/transition reset on live cards', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes("card.style.transition = 'none';"));
+  assert.ok(content.includes("card.style.transform = 'none';"));
+  assert.ok(content.includes("card.style.removeProperty('transition');"));
+  assert.ok(content.includes('window.requestAnimationFrame(() => {'));
+});
+
+test('asset grid applies post-layout settle pass to enforce final card truth after re-render', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const content = fs.readFileSync(gridPath, 'utf8');
+
+  assert.ok(content.includes("const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');"));
+  assert.ok(content.includes("const cards = Array.from(stage.querySelectorAll<HTMLElement>('.masonry-card'));"));
+  assert.ok(content.includes("card.style.transition = 'none';"));
+  assert.ok(content.includes("card.style.transform = 'none';"));
+  assert.ok(content.includes("card.style.removeProperty('transform');"));
+  assert.ok(content.includes("card.style.removeProperty('transition');"));
+  assert.ok(content.includes('window.requestAnimationFrame(() => {'));
+});
