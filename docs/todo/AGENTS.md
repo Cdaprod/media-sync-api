@@ -1,3 +1,10 @@
+## 2026-03-25 — Masonry transform ownership conflict fix (CSS vs FLIP)
+- [x] Reviewed runtime DevTools density instrumentation output showing high `transitioncancel` churn and active baseline `transition: transform ...` on masonry cards.
+- [x] Added masonry-specific CSS override to remove baseline transform transition ownership from `.masonry-card.asset` while preserving filter/border-color micro-interactions.
+- [x] Disabled masonry-card hover transform offset (`.masonry-card.asset:hover { transform: none; }`) to avoid transform contention with density FLIP.
+- [x] Added static regression assertions to lock the masonry transform-ownership CSS contract.
+- [ ] Next: run another on-device 1→6→1 density trace and compare `transitioncancel` / `transitionend` ratios after CSS ownership isolation.
+
 ## 2026-03-25 — Density live-geometry interrupt continuity pass
 - [x] Removed the `AssetGrid` post-render global transform/transition reset effect so render commits no longer cancel active FLIP motion.
 - [x] Kept settle cleanup under `animateDensityFlip` as the motion-layer owner of transform lifecycle (`complete`/`interrupt`/no-item paths).

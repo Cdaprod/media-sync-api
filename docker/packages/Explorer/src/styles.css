@@ -760,6 +760,12 @@ select.control{
   transform: translateZ(0);
   will-change: transform;
 }
+.masonry-card.asset{
+  transition: filter 120ms ease, border-color 120ms ease;
+}
+.masonry-card.asset:hover{
+  transform: none;
+}
 .asset:hover{ transform: translateY(-1px) scale(1.005); filter: brightness(1.03); border-color: rgba(255,255,255,0.12); }
 
 .thumb{

@@ -1285,6 +1285,16 @@ test('masonry stage and scroll container explicitly suppress horizontal overflow
   assert.ok(styles.includes('max-width: 100%;') || styles.includes('overflow-x: clip;'));
 });
 
+test('masonry cards do not keep baseline CSS transform transitions that conflict with density flip ownership', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.ok(styles.includes('.masonry-card.asset{'));
+  assert.ok(styles.includes('transition: filter 120ms ease, border-color 120ms ease;'));
+  assert.ok(styles.includes('.masonry-card.asset:hover{'));
+  assert.ok(styles.includes('transform: none;'));
+});
+
 test('computeMasonryLayout unit contracts are present for deterministic geometry output', () => {
   const layoutPath = path.join(packageRoot, 'src', 'explorer', 'masonry', 'computeMasonryLayout.ts');
   const content = fs.readFileSync(layoutPath, 'utf8');

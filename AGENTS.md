@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Runtime DevTools instrumentation review showed high density-transition cancel churn (`transitioncancel` dominating `transitionend`) with cards reporting baseline `transition: transform ...` while FLIP also controls transform.
+- Added masonry-specific CSS motion ownership guard: `.masonry-card.asset` now removes baseline transform transition (keeps filter/border-color only), and `.masonry-card.asset:hover` no longer applies transform offset.
+- This isolates transform animation authority to `animateDensityFlip` during density reflow and avoids CSS+GSAP dual ownership on the same masonry card nodes.
+
+### Latest Implementation Notes (2026-03-25)
 - Removed `AssetGrid`’s post-layout global `.masonry-card` transform/transition reset `useLayoutEffect` so ordinary render commits no longer flatten active FLIP motion mid-transition.
 - Kept density final-settle ownership in `animateDensityFlip` and retained interruptible capture→commit→double-rAF→`Flip.from(...)` sequencing so new commits continue from live on-screen card geometry.
 - Added jump-distance-aware density timing/easing (`createExplorerDensityController` passes `jumpDistance`) so large column jumps animate shorter/firmer while single-step moves remain slightly richer.
