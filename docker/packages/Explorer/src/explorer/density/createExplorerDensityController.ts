@@ -55,6 +55,7 @@ export function createExplorerDensityController(options: ExplorerDensityControll
   const runAnimatedCommit = (nextColumns: number, interactionMode: 'scrub' | 'settle') => {
     const safeColumns = clampColumns(nextColumns, minColumns, maxColumns);
     if (safeColumns === currentColumns) return;
+    currentColumns = safeColumns;
     animateDensityFlip({
       gridEl,
       interactionMode,

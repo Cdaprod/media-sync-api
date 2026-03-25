@@ -69,7 +69,7 @@ function AssetGridComponent({
     const node = hostRef.current;
     if (!node) return;
     const rect = node.getBoundingClientRect();
-    setHostWidth((prev) => (Math.abs(prev - rect.width) < 0.5 ? prev : rect.width));
+    setHostWidth((prev) => (Math.abs(prev - rect.width) < 0.1 ? prev : rect.width));
   }, []);
 
   useLayoutEffect(() => {
@@ -84,6 +84,8 @@ function AssetGridComponent({
 
   useLayoutEffect(() => {
     measureHostWidth();
+    const rafId = window.requestAnimationFrame(() => measureHostWidth());
+    return () => window.cancelAnimationFrame(rafId);
   }, [entries.length, gridColumnCount, measureHostWidth]);
 
   const gridItems = useMemo(() => entries.map((entry) => {

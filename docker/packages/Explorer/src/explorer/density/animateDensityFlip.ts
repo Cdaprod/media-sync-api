@@ -8,6 +8,7 @@ export type AnimateDensityFlipOptions = {
 };
 
 const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
+const runIdByGrid = new WeakMap<HTMLElement, number>();
 
 export function animateDensityFlip({
   gridEl,
@@ -33,31 +34,36 @@ export function animateDensityFlip({
   gsap.set(items, { clearProps: 'transform' });
 
   const state = Flip.getState(items);
+  const nextRunId = (runIdByGrid.get(gridEl) ?? 0) + 1;
+  runIdByGrid.set(gridEl, nextRunId);
   commitLayout();
 
-  const animation = Flip.from(state, {
-    targets: items,
-    absolute: true,
-    nested: false,
-    prune: true,
-    scale: false,
-    duration: interactionMode === 'scrub' ? 0.14 : 0.2,
-    ease: 'power2.out',
-    simple: true,
-    overwrite: 'auto',
-    onComplete: () => {
-      gsap.set(items, { clearProps: 'transform' });
-      if (activeByGrid.get(gridEl) === animation) {
-        activeByGrid.delete(gridEl);
-      }
-    },
-    onInterrupt: () => {
-      gsap.set(items, { clearProps: 'transform' });
-      if (activeByGrid.get(gridEl) === animation) {
-        activeByGrid.delete(gridEl);
-      }
-    },
-  });
+  window.requestAnimationFrame(() => {
+    if (runIdByGrid.get(gridEl) !== nextRunId) return;
+    const animation = Flip.from(state, {
+      targets: items,
+      absolute: false,
+      nested: false,
+      prune: false,
+      scale: true,
+      duration: interactionMode === 'scrub' ? 0.16 : 0.24,
+      ease: interactionMode === 'scrub' ? 'power2.out' : 'power2.inOut',
+      simple: true,
+      overwrite: true,
+      onComplete: () => {
+        gsap.set(items, { clearProps: 'transform' });
+        if (activeByGrid.get(gridEl) === animation) {
+          activeByGrid.delete(gridEl);
+        }
+      },
+      onInterrupt: () => {
+        gsap.set(items, { clearProps: 'transform' });
+        if (activeByGrid.get(gridEl) === animation) {
+          activeByGrid.delete(gridEl);
+        }
+      },
+    });
 
-  activeByGrid.set(gridEl, animation);
+    activeByGrid.set(gridEl, animation);
+  });
 }

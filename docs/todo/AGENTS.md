@@ -1,3 +1,10 @@
+## 2026-03-25 — Density Flip race/continuity hardening
+- [x] Switched Flip options for positioned cards to `absolute:false`, `prune:false`, `scale:true`, `overwrite:true`.
+- [x] Added `requestAnimationFrame` deferral and run-id gating so stale queued animations are dropped when newer commits arrive.
+- [x] Updated density controller to advance `currentColumns` prior to animated scheduling to reduce interrupted-commit desync.
+- [x] Added/updated static regression assertions for new Flip options and run-id gating contract.
+- [ ] Optional: add a runtime perf marker around `Flip.getState` + deferred `Flip.from` to compare scrub latency before/after on iPhone Safari.
+
 ## 2026-03-25 — Density reset-to-3 continuity hardening
 - [x] Added `lastCommittedColumnsRef` to carry committed density across controller lifecycle rebinds.
 - [x] Updated controller initialization to prefer prior committed columns ref before falling back to defaults.

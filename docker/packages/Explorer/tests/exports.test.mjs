@@ -965,6 +965,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
   assert.ok(densityController.includes('if (!Number.isFinite(value)) return minColumns;'));
+  assert.ok(densityController.includes('currentColumns = safeColumns;'));
   assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'scrub\');'));
   assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'settle\');'));
   assert.ok(densityController.includes('destroyed = true;'));
@@ -981,9 +982,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('density.setColumns(initialColumns - 1, true);'));
   assert.ok(pinchController.includes('density.setColumns(initialColumns + 1, true);'));
 
-  assert.ok(!flip.includes('requestAnimationFrame(() => {'));
+  assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
   assert.ok(flip.includes('const state = Flip.getState(items);'));
   assert.ok(flip.includes('commitLayout();'));
+  assert.ok(flip.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
+  assert.ok(flip.includes('if (runIdByGrid.get(gridEl) !== nextRunId) return;'));
   assert.ok(flip.includes('Flip.from(state, {'));
   assert.ok(flip.includes("itemSelector = '.masonry-card'"));
   assert.ok(!flip.includes('MAX_ANIMATED_ITEMS'));
@@ -991,9 +994,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('Flip.killFlipsOf(items);'));
   assert.ok(flip.includes('gsap.killTweensOf(items);'));
   assert.ok(flip.includes('targets: items,'));
-  assert.ok(flip.includes('absolute: true,'));
+  assert.ok(flip.includes('absolute: false,'));
   assert.ok(flip.includes('nested: false,'));
-  assert.ok(flip.includes('scale: false,'));
+  assert.ok(flip.includes('prune: false,'));
+  assert.ok(flip.includes('scale: true,'));
+  assert.ok(flip.includes('overwrite: true,'));
   assert.ok(flip.includes("clearProps: 'transform'"));
   assert.ok(!flip.includes('onEnter: (elements) => {'));
   assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));

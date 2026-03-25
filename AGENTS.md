@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Density Flip choreography was retuned for positioned masonry cards: switched to `absolute: false`, `prune: false`, `scale: true`, and `overwrite: true`, plus one-frame deferred `Flip.from(...)` to reduce React/Flip commit races and blended intermediate states under rapid density input.
+- Added per-grid run-id gating for deferred Flip runs so stale queued animation frames are ignored when newer density commits arrive.
+- Density controller now advances `currentColumns` before scheduling animated commits, reducing guard-based desync where interrupted transitions could block valid follow-up targets.
+
+### Latest Implementation Notes (2026-03-25)
 - Addressed density-reset-to-3 behavior by introducing `lastCommittedColumnsRef` as a stable lifecycle handoff source for density controller rebinds; controller initialization now prefers prior committed columns over default fallback during effect re-creation.
 - `commitDensityColumns(...)` now updates `lastCommittedColumnsRef` in fallback mode and `onColumnsCommit` also refreshes it, reducing race windows where rebinding could replay stale defaults.
 - This hardens density state continuity when grid/controller mount timing shifts, without changing the public 1..6 slider contract.
