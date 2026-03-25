@@ -608,6 +608,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [clampDensityColumns, gridSurfaceEl]);
 
+  const scrubDensityColumns = useCallback((nextColumns: number) => {
+    const density = densityControllerRef.current;
+    if (density) {
+      density.scrubTo(nextColumns);
+      return;
+    }
+    commitDensityColumns(nextColumns, true);
+  }, [commitDensityColumns]);
+
+  const settleDensityScrub = useCallback(() => {
+    const density = densityControllerRef.current;
+    density?.settleScrub();
+  }, []);
+
   useEffect(() => {
     setGridColumnCount((current) => clampDensityColumns(current));
   }, [clampDensityColumns]);
@@ -2666,8 +2680,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             data-topbar-control="true"
                             onInput={(event: React.FormEvent<HTMLInputElement>) => {
                               const nextColumns = Number(event.currentTarget.value || DEFAULT_COLUMNS_MOBILE);
-                              commitDensityColumns(nextColumns, true);
+                              scrubDensityColumns(nextColumns);
                             }}
+                            onPointerUp={settleDensityScrub}
+                            onBlur={settleDensityScrub}
+                            onKeyUp={settleDensityScrub}
                           />
                         </label>
                         <select

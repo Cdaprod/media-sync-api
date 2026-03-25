@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-25)
+- Fixed a density slider sequencing mismatch that could create apparent double-pass/backwards-FLIP behavior: slider `onInput` now routes through controller `scrubTo(...)` (frame-coalesced scrub path) instead of `setColumns(..., true)` settle commits on every input event.
+- Added explicit slider settle hooks (`onPointerUp`/`onKeyUp`/`onBlur`) to call `settleScrub()` so scrub lifecycle closes cleanly without injecting an extra delayed settle animation pass per input delta.
+- This aligns UI event semantics with density controller intent (scrub during drag, settle on release) and reduces target-render-first then jump-back artifacts caused by settle choreography being used as live scrub transport.
+
+### Latest Implementation Notes (2026-03-25)
 - Follow-up motion-quality pass targets mid-animation overpower peaks by reducing scrub-time retarget churn at the source: density scrub commits are now frame-coalesced in `createExplorerDensityController` (latest-target-per-frame) instead of firing every input event.
 - Scrub controller now tracks `pendingScrubColumns` + `scrubFrameId`, emits at most one animated scrub commit per frame, and cancels pending RAF work on destroy for idempotent lifecycle cleanup.
 - This is intended to reduce excessive retarget-kill cadence (and corresponding interrupt spikes) so easing can read perceptually instead of being dominated by intra-gesture restart corrections.

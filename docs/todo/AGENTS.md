@@ -1,3 +1,9 @@
+## 2026-03-25 — Slider event sequencing fix for backwards-FLIP/double-pass symptom
+- [x] Switched density slider live input wiring from `setColumns(..., true)` to `scrubTo(...)` so drag updates use scrub semantics instead of delayed settle semantics.
+- [x] Added explicit scrub settle hooks on slider release/focus end (`onPointerUp`, `onKeyUp`, `onBlur`) via `settleScrub()`.
+- [x] Updated static assertions to lock slider scrub wiring and settle hook presence.
+- [ ] Next: re-check runtime 3→2 interaction for “target flashes first, jumps back, animates again” symptom after scrub/settle event split.
+
 ## 2026-03-25 — Scrub retarget churn reduction (ease visibility follow-up)
 - [x] Added density scrub frame coalescing in `createExplorerDensityController` so rapid scrub input commits latest target once per frame.
 - [x] Added pending-target + RAF lifecycle cleanup (`pendingScrubColumns`, `scrubFrameId`, destroy-time cancel) for idempotent scrub scheduling.

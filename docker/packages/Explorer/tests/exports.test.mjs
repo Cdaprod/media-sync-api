@@ -942,7 +942,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("if (view !== 'grid') {"));
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
   assert.ok(content.includes('const commitDensityColumns = useCallback((nextColumns: number, animated = true) => {'));
-  assert.ok(content.includes('commitDensityColumns(nextColumns, true);'));
+  assert.ok(content.includes('const scrubDensityColumns = useCallback((nextColumns: number) => {'));
+  assert.ok(content.includes('density.scrubTo(nextColumns);'));
+  assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
+  assert.ok(content.includes('density?.settleScrub();'));
   assert.ok(content.includes('step={1}'));
   assert.ok(content.includes('if (isMobile) {'));
   assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
@@ -1032,7 +1035,7 @@ test('local density/context/preview interactions stay network-quiet and do not i
   const sliderStart = content.indexOf('const commitDensityColumns = useCallback((nextColumns: number, animated = true) => {');
   const sliderBlock = sliderStart >= 0 ? content.slice(sliderStart, sliderStart + 420) : '';
   assert.ok(sliderBlock.includes('density.setColumns(nextColumns, animated);'));
-  assert.ok(content.includes('commitDensityColumns(nextColumns, true);'));
+  assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(!sliderBlock.includes('loadSources('));
   assert.ok(!sliderBlock.includes('loadProjects('));
   assert.ok(!sliderBlock.includes('loadMedia('));
