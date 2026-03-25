@@ -634,6 +634,8 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(gridContent.includes('layout.items.map(({ item, x, y, width, height }, index) => {'));
   assert.ok(gridContent.includes('if (width > 0 && height > 0) {'));
   assert.ok(gridContent.includes('return Math.max(0.3, height / width);'));
+  assert.ok(gridContent.includes('data-layout-top={layoutTop}'));
+  assert.ok(gridContent.includes('data-layout-bottom={layoutBottom}'));
   assert.ok(gridContent.includes('--masonry-column-count'));
   assert.ok(stateContent.includes('export function buildMasonryColumns'));
   assert.ok(styles.includes('.masonry-columns{'));
@@ -970,6 +972,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('Flip.from(state, {'));
   assert.ok(flip.includes("itemSelector = '.masonry-columns > .masonry-card'"));
+  assert.ok(flip.includes('const VISIBLE_BUFFER_PX = 280;'));
+  assert.ok(flip.includes('const MAX_ANIMATED_ITEMS = 72;'));
+  assert.ok(flip.includes('function pickVisibleAnimationTargets('));
+  assert.ok(flip.includes('const items = pickVisibleAnimationTargets(gridEl, allItems);'));
   assert.ok(flip.includes('Flip.killFlipsOf(items);'));
   assert.ok(flip.includes('gsap.killTweensOf(items);'));
   assert.ok(flip.includes('targets: items,'));

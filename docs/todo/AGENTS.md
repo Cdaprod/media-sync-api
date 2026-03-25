@@ -1,3 +1,11 @@
+## 2026-03-25 — Density reflow performance scope audit + optimization
+- [x] Audited density pipeline to separate pure layout compute work from DOM/Flip animation scope costs.
+- [x] Kept full masonry layout correctness (all-item position map) while reducing Flip animation targets to near-viewport cards only.
+- [x] Added geometry data markers (`data-layout-top` / `data-layout-bottom`) on cards to support low-cost visibility filtering without per-card live DOM measurement reads.
+- [x] Added hard cap for animated cards per density commit and retained stale-animation kill behavior for latest-target responsiveness.
+- [x] Updated focused regression assertions to lock visibility-capped Flip targeting and geometry marker contracts.
+- [ ] Optional follow-up: instrument runtime timing (`compute layout` vs `Flip state capture` vs `Flip animation`) behind a dev flag for device-level profiling.
+
 ## 2026-03-24 — Masonry intrinsic geometry stabilization follow-up
 - [x] Switched masonry height-ratio estimation to prefer intrinsic media dimensions (`height / width`) when `MediaItem.width` and `MediaItem.height` are available.
 - [x] Kept orientation-based ratio buckets as explicit fallback only for assets missing intrinsic dimensions.

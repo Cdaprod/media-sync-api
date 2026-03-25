@@ -120,6 +120,8 @@ function AssetGridComponent({
       >
         {layout.items.map(({ item, x, y, width, height }, index) => {
           const { entry } = item;
+          const layoutTop = Math.max(0, Math.round(y));
+          const layoutBottom = Math.max(layoutTop, Math.round(y + height));
           const positionedStyle: React.CSSProperties = {
             position: 'absolute',
             left: `${x}px`,
@@ -135,6 +137,8 @@ function AssetGridComponent({
                 className="masonry-card"
                 style={positionedStyle}
                 data-pending-job={entry.pendingItem.jobId}
+                data-layout-top={layoutTop}
+                data-layout-bottom={layoutBottom}
               >
                 <PendingComposeAssetCard
                   item={entry.pendingItem}
@@ -160,6 +164,8 @@ function AssetGridComponent({
               data-select-key={viewModel.selectionKey}
               data-active={viewModel.isActive ? 'true' : 'false'}
               data-layout-index={index}
+              data-layout-top={layoutTop}
+              data-layout-bottom={layoutBottom}
               {...viewModel.pointerHandlers}
             >
               <div className="thumb">

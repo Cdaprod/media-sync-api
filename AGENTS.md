@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-03-25)
+- Density Flip animation scope is now visibility-prioritized: the reflow path still computes/commits full masonry layout, but Flip target selection is capped and focused on near-viewport cards (`MAX_ANIMATED_ITEMS = 72`, buffered by `VISIBLE_BUFFER_PX = 280`).
+- `AssetGrid` now stamps layout geometry markers (`data-layout-top` / `data-layout-bottom`) on each masonry card so density animation targeting can avoid expensive all-card animation while preserving deterministic stage layout for every asset.
+- Regression assertions were extended to lock visibility-capped Flip targeting and card geometry marker wiring so future refactors preserve latest-target responsiveness on large projects.
+
 ### Latest Implementation Notes (2026-03-24)
 - Masonry card height estimation now prefers real media geometry (`height / width`) from `MediaItem.width` + `MediaItem.height` before falling back to orientation buckets, reducing geometry drift between layout math and rendered cards.
 - `AssetGrid` now builds view models once per entry (`gridItems`) and reuses them for both layout estimation and render, improving determinism and avoiding repeated view-model recomputation during density/layout updates.
