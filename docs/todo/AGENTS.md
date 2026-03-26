@@ -1,3 +1,11 @@
+## 2026-03-26 — Tap/second-tap regression recovery after hold-progress pass
+- [x] Root-caused tap regression to per-render local pointer variables in `useAssetInteractions` being reset by hold-progress-driven rerenders.
+- [x] Replaced local pointer-tracking variables with stable `pointerSessionRef` state so `pointerup` can always match the active pointer and cancel long-press correctly.
+- [x] Kept pre-threshold hold progress/threshold completion split while preserving pinch suppression and drag handoff behavior.
+- [x] Updated static assertions to reflect session-based hold-start coordinate wiring (`session.pressX/session.pressY`).
+- [x] Re-ran Explorer static suite to confirm tap/second-tap contract and shader lifecycle assertions all pass.
+- [ ] Next: run on-device touch QA focused on rapid tap, double-tap, and long-press transitions under active overlay animation.
+
 ## 2026-03-26 — Hold timing + exclusive thumbnail preview ownership
 - [x] Added pre-threshold long-press progress updates in `useAssetInteractions` (RAF-driven progress sampled against `LONG_PRESS_MS`) instead of spending the hold effect only at completion.
 - [x] Triggered hold completion beat strictly from the actual long-press timeout path and canceled progress RAF on completion/cancel to keep gesture lifecycle deterministic.

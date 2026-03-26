@@ -1740,7 +1740,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('Date.now() < pinchSuppressUntilRef.current'));
   assert.ok(interactions.includes('onTapFeedback?.({ x: event.clientX, y: event.clientY });'));
   assert.ok(interactions.includes('onHoldFeedback?.(holdPoint, true, 1, true);'));
-  assert.ok(interactions.includes('onHoldFeedback?.({ x: pressX, y: pressY }, true, 0, false);'));
+  assert.ok(interactions.includes('onHoldFeedback?.({ x: session.pressX, y: session.pressY }, true, 0, false);'));
   assert.ok(interactions.includes('const progress = Math.max(0, Math.min(0.92, elapsed / LONG_PRESS_MS));'));
   assert.ok(interactions.includes('longPressProgressFrameRef.current = window.requestAnimationFrame(updateHoldProgress);'));
   assert.ok(interactions.includes('onHoldFeedback?.(null, false, 0, false);'));

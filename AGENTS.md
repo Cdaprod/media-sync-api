@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-26)
+- Fixed a hold-progress induced pointer-handler regression: pre-threshold hold RAF updates were causing React rerenders that replaced per-render local pointer variables, so `pointerup` could miss active pointer IDs and let long-press timers fire on ordinary taps.
+- `useAssetInteractions` now stores pointer session state in stable refs (`pointerSessionRef`) instead of per-render locals, so pointer identity/move tracking survives rerenders and restores correct tap/second-tap behavior while keeping hold progress updates.
+- Updated static contract assertions for the session-based hold start coordinates (`session.pressX/session.pressY`) and reverified the Explorer contract suite pass.
+
+### Latest Implementation Notes (2026-03-26)
 - Fixed long-press visual timing by splitting hold feedback into pre-threshold progress updates (RAF-driven against `LONG_PRESS_MS`) and threshold-confirmation trigger at the actual timeout fire, so completion is no longer front-loaded before long-press commitment.
 - Updated hold shader response to keep confirmation visible after timeout with a dedicated confirmation-visibility channel (`u_confirm`) separate from active pre-hold progress, plus slower completion decay for a noticeable post-threshold beat.
 - Hardened thumbnail preview exclusivity by introducing activation commits through a single preview-owner path (`commitPreviewActivationKey`), clearing prior ownership on first-tap re-focus, and keying preview video instances by activation token so old preview nodes unmount immediately when ownership changes.

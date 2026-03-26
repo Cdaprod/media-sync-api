@@ -77,6 +77,23 @@ export function useAssetInteractions({
   const longPressProgressFrameRef = useRef<number | null>(null);
   const longPressStartAtRef = useRef(0);
   const longPressPointRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerSessionRef = useRef<{
+    pointerId: number | null;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    pressX: number;
+    pressY: number;
+    itemKey: string;
+  }>({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    moved: false,
+    pressX: 0,
+    pressY: 0,
+    itemKey: '',
+  });
   const longPressFiredRef = useRef(false);
   const gestureModeRef = useRef<GestureMode>('idle');
   const pinchSuppressRef = useRef(false);
@@ -94,6 +111,9 @@ export function useAssetInteractions({
     longPressPointerRef.current = null;
     longPressStartAtRef.current = 0;
     longPressPointRef.current = null;
+    pointerSessionRef.current.pointerId = null;
+    pointerSessionRef.current.itemKey = '';
+    pointerSessionRef.current.moved = false;
     longPressFiredRef.current = false;
     onHoldFeedback?.(null, false, 0, false);
     onHoldEmphasis?.(null, false);
@@ -139,12 +159,6 @@ export function useAssetInteractions({
 
   const buildAssetPointerHandlers = useCallback(
     (item: MediaItem): AssetPointerHandlers => {
-      let pointerId: number | null = null;
-      let startX = 0;
-      let startY = 0;
-      let moved = false;
-      let pressX = 0;
-      let pressY = 0;
       const itemKey = assetSelectionKey(item, activeProject);
 
       const resolveContextItems = () => (selected.has(itemKey)
@@ -162,23 +176,25 @@ export function useAssetInteractions({
           || gestureModeRef.current === 'pinch'
           || Date.now() < pinchSuppressUntilRef.current
         ) return;
-        pointerId = event.pointerId;
-        startX = event.clientX;
-        startY = event.clientY;
-        pressX = event.clientX;
-        pressY = event.clientY;
-        moved = false;
+        const session = pointerSessionRef.current;
+        session.pointerId = event.pointerId;
+        session.startX = event.clientX;
+        session.startY = event.clientY;
+        session.pressX = event.clientX;
+        session.pressY = event.clientY;
+        session.moved = false;
+        session.itemKey = itemKey;
         clearPendingLongPress();
         gestureModeRef.current = 'tap_candidate';
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
           gestureModeRef.current = 'hold_candidate';
-          longPressPointerRef.current = pointerId;
+          longPressPointerRef.current = event.pointerId;
           longPressStartAtRef.current = performance.now();
-          longPressPointRef.current = { x: pressX, y: pressY };
-          onHoldFeedback?.({ x: pressX, y: pressY }, true, 0, false);
+          longPressPointRef.current = { x: session.pressX, y: session.pressY };
+          onHoldFeedback?.({ x: session.pressX, y: session.pressY }, true, 0, false);
           const updateHoldProgress = () => {
             if (
-              longPressPointerRef.current !== pointerId
+              longPressPointerRef.current !== event.pointerId
               || longPressFiredRef.current
               || gestureModeRef.current !== 'hold_candidate'
             ) {
@@ -187,22 +203,25 @@ export function useAssetInteractions({
             }
             const elapsed = Math.max(0, performance.now() - longPressStartAtRef.current);
             const progress = Math.max(0, Math.min(0.92, elapsed / LONG_PRESS_MS));
-            const holdPoint = longPressPointRef.current ?? { x: pressX, y: pressY };
+            const holdPoint = longPressPointRef.current ?? { x: session.pressX, y: session.pressY };
             onHoldFeedback?.(holdPoint, true, progress, false);
             longPressProgressFrameRef.current = window.requestAnimationFrame(updateHoldProgress);
           };
           longPressProgressFrameRef.current = window.requestAnimationFrame(updateHoldProgress);
           longPressTimerRef.current = window.setTimeout(() => {
+            const latestSession = pointerSessionRef.current;
             if (
-              longPressPointerRef.current !== pointerId
-              || moved
+              longPressPointerRef.current !== event.pointerId
+              || latestSession.pointerId !== event.pointerId
+              || latestSession.itemKey !== itemKey
+              || latestSession.moved
               || dragging
               || assetDragActive
               || pinchSuppressRef.current
               || gestureModeRef.current === 'pinch'
             ) return;
             longPressFiredRef.current = true;
-            const holdPoint = longPressPointRef.current ?? { x: pressX, y: pressY };
+            const holdPoint = longPressPointRef.current ?? { x: latestSession.pressX, y: latestSession.pressY };
             if (longPressProgressFrameRef.current) {
               window.cancelAnimationFrame(longPressProgressFrameRef.current);
               longPressProgressFrameRef.current = null;
@@ -210,25 +229,26 @@ export function useAssetInteractions({
             onHoldFeedback?.(holdPoint, true, 1, true);
             onHoldEmphasis?.(itemKey, true);
             focusAsset(item, itemKey);
-            openContextMenu(pressX, pressY, resolveContextItems());
+            openContextMenu(latestSession.pressX, latestSession.pressY, resolveContextItems());
           }, LONG_PRESS_MS);
         }
       };
 
       const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
-        if (pointerId !== event.pointerId) return;
+        const session = pointerSessionRef.current;
+        if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;
         if (inNoPreviewZone(event.target) || isInteractiveTarget(event.target)) {
           clearPendingLongPress();
           return;
         }
-        const dx = event.clientX - startX;
-        const dy = event.clientY - startY;
+        const dx = event.clientX - session.startX;
+        const dy = event.clientY - session.startY;
         const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;
         if (movedFar) {
-          moved = true;
+          session.moved = true;
           clearPendingLongPress();
         }
-        if (!moved) return;
+        if (!session.moved) return;
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
           return;
         }
@@ -244,10 +264,11 @@ export function useAssetInteractions({
       };
 
       const handlePointerUp = (event: React.PointerEvent<HTMLElement>) => {
-        if (pointerId !== event.pointerId) return;
+        const session = pointerSessionRef.current;
+        if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;
         const longPressFired = longPressFiredRef.current;
+        const movedBeforeRelease = session.moved;
         clearPendingLongPress();
-        pointerId = null;
         if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') {
           gestureModeRef.current = 'idle';
           return;
@@ -260,7 +281,7 @@ export function useAssetInteractions({
           gestureModeRef.current = 'idle';
           return;
         }
-        if (moved) {
+        if (movedBeforeRelease) {
           stopAssetDrag();
           const dropEl = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.chip') as HTMLElement | null;
           if (dropEl?.dataset?.project) {
@@ -298,7 +319,6 @@ export function useAssetInteractions({
 
       const handlePointerCancel = () => {
         clearPendingLongPress();
-        pointerId = null;
         gestureModeRef.current = 'idle';
         stopAssetDrag();
       };
