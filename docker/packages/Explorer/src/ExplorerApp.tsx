@@ -364,6 +364,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [tapOverlayPoint, setTapOverlayPoint] = useState<PinchOverlayPoint>(null);
   const [holdOverlayPoint, setHoldOverlayPoint] = useState<PinchOverlayPoint>(null);
   const [holdOverlayActive, setHoldOverlayActive] = useState(false);
+  const [holdOverlayProgress, setHoldOverlayProgress] = useState(0);
+  const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
@@ -1573,9 +1575,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     selected,
     selectedKeysOrdered,
     onTapFeedback: (point) => setTapOverlayPoint(point),
-    onHoldFeedback: (point, active) => {
+    onHoldFeedback: (point, active, progress, completed) => {
       if (point) setHoldOverlayPoint(point);
       setHoldOverlayActive(active);
+      setHoldOverlayProgress(progress);
+      if (completed) {
+        setHoldOverlayCompleteBeat((prev) => prev + 1);
+      }
     },
     onTapStage: (stage, itemKey) => {
       if (stage === 'second') {
@@ -2633,7 +2639,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             }}
           />
           <TapShaderOverlay tapPoint={tapOverlayPoint} />
-          <HoldShaderOverlay holdPoint={holdOverlayPoint} active={holdOverlayActive} />
+          <HoldShaderOverlay
+            holdPoint={holdOverlayPoint}
+            active={holdOverlayActive}
+            progress={holdOverlayProgress}
+            completionBeat={holdOverlayCompleteBeat}
+          />
           <div
             ref={mediaScrollViewportRef}
             className="scroll"

@@ -1673,6 +1673,8 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(explorer.includes('<PinchShaderOverlay'));
   assert.ok(explorer.includes('<TapShaderOverlay'));
   assert.ok(explorer.includes('<HoldShaderOverlay'));
+  assert.ok(explorer.includes('progress={holdOverlayProgress}'));
+  assert.ok(explorer.includes('completionBeat={holdOverlayCompleteBeat}'));
   assert.ok(explorer.includes("import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';"));
   assert.ok(explorer.includes("import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';"));
   assert.ok(explorer.includes("import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';"));
@@ -1719,7 +1721,11 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes("gestureModeRef.current === 'pinch'"));
   assert.ok(interactions.includes('Date.now() < pinchSuppressUntilRef.current'));
   assert.ok(interactions.includes('onTapFeedback?.({ x: event.clientX, y: event.clientY });'));
-  assert.ok(interactions.includes('onHoldFeedback?.({ x: pressX, y: pressY }, true);'));
+  assert.ok(interactions.includes('onHoldFeedback?.({ x: pressX, y: pressY }, true, 0, false);'));
+  assert.ok(interactions.includes('onHoldFeedback?.({ x: pressX, y: pressY }, true, progress, holdCompletedRef.current);'));
+  assert.ok(interactions.includes('onHoldFeedback?.({ x: pressX, y: pressY }, true, 1, true);'));
+  assert.ok(interactions.includes('holdProgressRafRef.current = window.requestAnimationFrame(updateHoldProgress);'));
+  assert.ok(interactions.includes('window.cancelAnimationFrame(holdProgressRafRef.current);'));
   assert.ok(interactions.includes('clearPendingLongPress();'));
 
   assert.ok(coreHelper.includes('export function createFullscreenWebGLProgram('));
@@ -1728,13 +1734,21 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(tapHook.includes('createFullscreenWebGLProgram'));
   assert.ok(tapHook.includes('const triggerTap = useCallback'));
   assert.ok(tapHook.includes('float age = 1.0 - u_intensity;'));
-  assert.ok(tapHook.includes('float ringR = mix(0.046, 0.014, age);'));
-  assert.ok(tapHook.includes('float coreR = mix(0.020, 0.010, age);'));
+  assert.ok(tapHook.includes('float ringR = mix(0.032, 0.011, age);'));
+  assert.ok(tapHook.includes('float coreR = mix(0.014, 0.007, age);'));
   assert.ok(tapHook.includes('intensityRef.current = Math.max(0, intensityRef.current - dt * 5.8);'));
   assert.ok(tapOverlay.includes('data-tap-shader-overlay="true"'));
   assert.ok(holdHook.includes('createFullscreenWebGLProgram'));
-  assert.ok(holdHook.includes('const setHoldState = useCallback'));
+  assert.ok(holdHook.includes('uniform float u_progress;'));
+  assert.ok(holdHook.includes('uniform float u_complete;'));
+  assert.ok(holdHook.includes('float clockwise = fract(1.25 - angle / (2.0 * pi));'));
+  assert.ok(holdHook.includes('float head = clamp(u_progress, 0.0, 1.0);'));
+  assert.ok(holdHook.includes('float completionPop = u_complete * (0.72 + halo * 0.35);'));
+  assert.ok(holdHook.includes('completionRef.current = Math.max(0, completionRef.current - dt * 8.5);'));
+  assert.ok(holdHook.includes('completionRef.current = 1;'));
+  assert.ok(holdHook.includes('const setHoldState = useCallback((point: OverlayPoint, active: boolean, progress: number, completionBeat: number) => {'));
   assert.ok(holdOverlay.includes('data-hold-shader-overlay="true"'));
+  assert.ok(holdOverlay.includes('setHoldState(holdPoint, active, progress, completionBeat);'));
   assert.ok(styles.includes('.asset[data-active="true"] .thumb::after{'));
   assert.ok(styles.includes('.asset.is-active:not(.is-selected){'));
   assert.ok(styles.includes('.asset.is-active-reinforced:not(.is-selected){'));

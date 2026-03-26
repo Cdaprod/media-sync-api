@@ -38,7 +38,12 @@ interface UseAssetInteractionsOptions {
   selected: Set<string>;
   selectedKeysOrdered: string[];
   onTapFeedback?: (point: { x: number; y: number }) => void;
-  onHoldFeedback?: (point: { x: number; y: number } | null, active: boolean) => void;
+  onHoldFeedback?: (
+    point: { x: number; y: number } | null,
+    active: boolean,
+    progress: number,
+    completed: boolean,
+  ) => void;
   onTapStage?: (stage: 'first' | 'second', itemKey: string) => void;
   onHoldEmphasis?: (itemKey: string | null, active: boolean) => void;
 }
@@ -70,6 +75,9 @@ export function useAssetInteractions({
   const longPressTimerRef = useRef<number | null>(null);
   const longPressPointerRef = useRef<number | null>(null);
   const longPressFiredRef = useRef(false);
+  const holdStartedAtRef = useRef(0);
+  const holdProgressRafRef = useRef<number | null>(null);
+  const holdCompletedRef = useRef(false);
   const gestureModeRef = useRef<GestureMode>('idle');
   const pinchSuppressRef = useRef(false);
   const pinchSuppressUntilRef = useRef(0);
@@ -81,7 +89,13 @@ export function useAssetInteractions({
     longPressTimerRef.current = null;
     longPressPointerRef.current = null;
     longPressFiredRef.current = false;
-    onHoldFeedback?.(null, false);
+    holdStartedAtRef.current = 0;
+    holdCompletedRef.current = false;
+    if (holdProgressRafRef.current) {
+      window.cancelAnimationFrame(holdProgressRafRef.current);
+    }
+    holdProgressRafRef.current = null;
+    onHoldFeedback?.(null, false, 0, false);
     onHoldEmphasis?.(null, false);
   }, [onHoldEmphasis, onHoldFeedback]);
 
@@ -155,7 +169,21 @@ export function useAssetInteractions({
         gestureModeRef.current = 'tap_candidate';
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
           gestureModeRef.current = 'hold_candidate';
-          onHoldFeedback?.({ x: pressX, y: pressY }, true);
+          holdStartedAtRef.current = performance.now();
+          holdCompletedRef.current = false;
+          onHoldFeedback?.({ x: pressX, y: pressY }, true, 0, false);
+          const updateHoldProgress = () => {
+            if (holdStartedAtRef.current <= 0) return;
+            const elapsed = performance.now() - holdStartedAtRef.current;
+            const progress = Math.max(0, Math.min(1, elapsed / LONG_PRESS_MS));
+            onHoldFeedback?.({ x: pressX, y: pressY }, true, progress, holdCompletedRef.current);
+            if (progress < 1 && !holdCompletedRef.current) {
+              holdProgressRafRef.current = window.requestAnimationFrame(updateHoldProgress);
+              return;
+            }
+            holdProgressRafRef.current = null;
+          };
+          holdProgressRafRef.current = window.requestAnimationFrame(updateHoldProgress);
           longPressPointerRef.current = pointerId;
           longPressTimerRef.current = window.setTimeout(() => {
             if (
@@ -167,6 +195,8 @@ export function useAssetInteractions({
               || gestureModeRef.current === 'pinch'
             ) return;
             longPressFiredRef.current = true;
+            holdCompletedRef.current = true;
+            onHoldFeedback?.({ x: pressX, y: pressY }, true, 1, true);
             onHoldEmphasis?.(itemKey, true);
             focusAsset(item, itemKey);
             openContextMenu(pressX, pressY, resolveContextItems());

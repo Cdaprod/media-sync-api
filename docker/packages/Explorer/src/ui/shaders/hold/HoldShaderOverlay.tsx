@@ -6,14 +6,21 @@ import { useHoldShaderOverlay } from './useHoldShaderOverlay';
 type HoldShaderOverlayProps = {
   holdPoint: OverlayPoint;
   active: boolean;
+  progress: number;
+  completionBeat: number;
 };
 
-export default function HoldShaderOverlay({ holdPoint, active }: HoldShaderOverlayProps) {
+export default function HoldShaderOverlay({
+  holdPoint,
+  active,
+  progress,
+  completionBeat,
+}: HoldShaderOverlayProps) {
   const { canvasRef, setHoldState } = useHoldShaderOverlay();
 
   useEffect(() => {
-    setHoldState(holdPoint, active);
-  }, [active, holdPoint, setHoldState]);
+    setHoldState(holdPoint, active, progress, completionBeat);
+  }, [active, completionBeat, holdPoint, progress, setHoldState]);
 
   return (
     <canvas
