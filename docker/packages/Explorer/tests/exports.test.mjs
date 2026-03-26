@@ -1745,6 +1745,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('longPressProgressFrameRef.current = window.requestAnimationFrame(updateHoldProgress);'));
   assert.ok(interactions.includes('onHoldFeedback?.(null, false, 0, false);'));
   assert.ok(interactions.includes('clearPendingLongPress();'));
+  assert.ok(interactions.indexOf('clearPendingLongPress();') < interactions.indexOf('session.pointerId = event.pointerId;'));
 
   assert.ok(coreHelper.includes('export function createFullscreenWebGLProgram('));
   assert.ok(coreHelper.includes('gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);'));

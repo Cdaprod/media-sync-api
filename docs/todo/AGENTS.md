@@ -1,3 +1,10 @@
+## 2026-03-26 — Pointer session init-order hotfix (tap/second-tap restore)
+- [x] Root-caused missing first-tap/second-tap behavior to pointer session reset ordering in `handlePointerDown`.
+- [x] Moved `clearPendingLongPress()` ahead of pointer session assignment so new session values are not immediately nulled.
+- [x] Added static regression assertion to lock init-order (`clearPendingLongPress` must precede `session.pointerId = event.pointerId`).
+- [x] Re-ran Explorer static suite and confirmed all contracts pass.
+- [ ] Next: verify on-device that first tap restores purple border and second tap reliably opens/activates preview video.
+
 ## 2026-03-26 — Tap/second-tap regression recovery after hold-progress pass
 - [x] Root-caused tap regression to per-render local pointer variables in `useAssetInteractions` being reset by hold-progress-driven rerenders.
 - [x] Replaced local pointer-tracking variables with stable `pointerSessionRef` state so `pointerup` can always match the active pointer and cancel long-press correctly.

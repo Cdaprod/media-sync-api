@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-26)
+- Fixed a follow-up tap regression in `useAssetInteractions`: `clearPendingLongPress()` was being called *after* assigning `pointerSessionRef` on pointer-down, which immediately nulled the newly assigned pointer session and caused `pointerup` mismatches (no first-tap activation / no second-tap preview open).
+- Reordered pointer-down setup so pending-hold cleanup executes first, then the new pointer session is assigned, restoring single-tap active border and second-tap preview activation semantics.
+- Added a static ordering assertion in the Explorer contract suite to lock this call-order invariant (`clearPendingLongPress` before `session.pointerId` assignment).
+
+### Latest Implementation Notes (2026-03-26)
 - Fixed a hold-progress induced pointer-handler regression: pre-threshold hold RAF updates were causing React rerenders that replaced per-render local pointer variables, so `pointerup` could miss active pointer IDs and let long-press timers fire on ordinary taps.
 - `useAssetInteractions` now stores pointer session state in stable refs (`pointerSessionRef`) instead of per-render locals, so pointer identity/move tracking survives rerenders and restores correct tap/second-tap behavior while keeping hold progress updates.
 - Updated static contract assertions for the session-based hold start coordinates (`session.pressX/session.pressY`) and reverified the Explorer contract suite pass.

@@ -176,6 +176,7 @@ export function useAssetInteractions({
           || gestureModeRef.current === 'pinch'
           || Date.now() < pinchSuppressUntilRef.current
         ) return;
+        clearPendingLongPress();
         const session = pointerSessionRef.current;
         session.pointerId = event.pointerId;
         session.startX = event.clientX;
@@ -184,7 +185,6 @@ export function useAssetInteractions({
         session.pressY = event.clientY;
         session.moved = false;
         session.itemKey = itemKey;
-        clearPendingLongPress();
         gestureModeRef.current = 'tap_candidate';
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
           gestureModeRef.current = 'hold_candidate';
