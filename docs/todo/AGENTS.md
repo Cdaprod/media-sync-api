@@ -1,3 +1,10 @@
+## 2026-03-26 — WebGL pinch-feedback overlay integration (visual-only layer)
+- [x] Added fullscreen shader overlay modules (`pinchFeedback.vert`, `pinchFeedback.frag`, `usePinchShaderOverlay`, `PinchShaderOverlay`) with WebGL alpha blending and JS-driven fade/pulse decay.
+- [x] Mounted overlay in `ExplorerApp` above grid content and below topbar with `pointer-events: none` so it cannot capture interactions or own state.
+- [x] Wired existing pinch controller callbacks to feed live finger points and threshold-step pulses (`+1`/`-1`) into overlay without changing density thresholds/commit logic.
+- [x] Added static regression assertions for overlay mount wiring, shader hook lifecycle, pulse safety contract, and canvas overlay presence/unmount cleanup markers.
+- [ ] Next: capture device runtime metrics/screens to confirm pulse/readability over real content across portrait/landscape.
+
 ## 2026-03-25 — Slider event sequencing fix for backwards-FLIP/double-pass symptom
 - [x] Switched density slider live input wiring from `setColumns(..., true)` to `scrubTo(...)` so drag updates use scrub semantics instead of delayed settle semantics.
 - [x] Added explicit scrub settle hooks on slider release/focus end (`onPointerUp`, `onKeyUp`, `onBlur`) via `settleScrub()`.

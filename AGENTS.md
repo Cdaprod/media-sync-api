@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-03-26)
+- Added a visual-only fullscreen WebGL pinch-feedback overlay (`PinchShaderOverlay` + `usePinchShaderOverlay`) mounted above Explorer cards and below topbar chrome; overlay is pointer-events disabled and safe to unmount without owning layout/density truth.
+- Added shader assets (`pinchFeedback.vert` / `pinchFeedback.frag`) and hooked pinch gesture telemetry through optional callbacks in `createPinchDensityController` (`onPinchFrame`, `onPinchStep`, `onPinchRelease`) so overlay receives live finger positions and pulse triggers from existing threshold commits only.
+- Marked prior scrub/FLIP sequencing stabilization as retained: no changes to masonry math, FLIP commit path ownership, or density truth model; this pass is strictly visual feedback layering.
+
 ### Latest Implementation Notes (2026-03-25)
 - Fixed a density slider sequencing mismatch that could create apparent double-pass/backwards-FLIP behavior: slider `onInput` now routes through controller `scrubTo(...)` (frame-coalesced scrub path) instead of `setColumns(..., true)` settle commits on every input event.
 - Added explicit slider settle hooks (`onPointerUp`/`onKeyUp`/`onBlur`) to call `settleScrub()` so scrub lifecycle closes cleanly without injecting an extra delayed settle animation pass per input delta.

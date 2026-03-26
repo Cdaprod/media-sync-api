@@ -50,6 +50,7 @@ import { createModalMotion } from './ui/motion/modalMotion';
 import { createExplorerDensityController } from './explorer/density/createExplorerDensityController';
 import { createPinchDensityController } from './explorer/density/createPinchDensityController';
 import { DEFAULT_COLUMNS_MOBILE, MAX_COLUMNS_MOBILE, MIN_COLUMNS_MOBILE } from './explorer/density/constants';
+import PinchShaderOverlay from './ui/shaders/PinchShaderOverlay';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -58,6 +59,7 @@ interface ExplorerAppProps {
 type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
 type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
 type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
+type PinchOverlayPoint = { x: number; y: number } | null;
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -353,6 +355,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const densitySliderRef = useRef<HTMLInputElement | null>(null);
   const densityControllerRef = useRef<ReturnType<typeof createExplorerDensityController> | null>(null);
   const pinchDensityRef = useRef<ReturnType<typeof createPinchDensityController> | null>(null);
+  const pinchPulseTriggerRef = useRef<((dir: number) => void) | null>(null);
+  const [pinchOverlayActive, setPinchOverlayActive] = useState(false);
+  const [pinchFingerA, setPinchFingerA] = useState<PinchOverlayPoint>(null);
+  const [pinchFingerB, setPinchFingerB] = useState<PinchOverlayPoint>(null);
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
   const composeCardRef = useRef<HTMLFormElement | null>(null);
@@ -2055,6 +2061,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         gestureSurfaceEl: scrollerEl,
         visualScaleTargetEl: gridEl,
         density,
+        onPinchFrame: (a, b, active) => {
+          setPinchFingerA(a);
+          setPinchFingerB(b);
+          setPinchOverlayActive(active);
+        },
+        onPinchStep: (dir) => {
+          pinchPulseTriggerRef.current?.(dir);
+        },
+        onPinchRelease: () => {
+          setPinchOverlayActive(false);
+          setPinchFingerA(null);
+          setPinchFingerB(null);
+        },
       });
       pinch.attach();
       pinchDensityRef.current = pinch;
@@ -2065,6 +2084,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       density.destroy();
       pinchDensityRef.current = null;
       densityControllerRef.current = null;
+      setPinchOverlayActive(false);
+      setPinchFingerA(null);
+      setPinchFingerB(null);
     };
   }, [gridSurfaceEl, isMobile, view]);
 
@@ -2559,6 +2581,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <div className="spinner"></div>
             <div>Preparing thumbnails…</div>
           </div>
+          <PinchShaderOverlay
+            active={pinchOverlayActive}
+            fingerA={pinchFingerA}
+            fingerB={pinchFingerB}
+            onPulse={(trigger) => {
+              pinchPulseTriggerRef.current = trigger;
+            }}
+          />
           <div
             ref={mediaScrollViewportRef}
             className="scroll"

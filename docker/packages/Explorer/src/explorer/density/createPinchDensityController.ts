@@ -12,6 +12,9 @@ export type PinchDensityControllerOptions = {
   density: ExplorerDensityController;
   outwardThreshold?: number;
   inwardThreshold?: number;
+  onPinchFrame?: (a: { x: number; y: number } | null, b: { x: number; y: number } | null, active: boolean) => void;
+  onPinchStep?: (dir: 1 | -1) => void;
+  onPinchRelease?: () => void;
 };
 
 type TouchPair = {
@@ -26,6 +29,9 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     density,
     outwardThreshold = 1.12,
     inwardThreshold = 0.88,
+    onPinchFrame,
+    onPinchStep,
+    onPinchRelease,
   } = options;
   void visualScaleTargetEl;
 
@@ -53,12 +59,22 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     stepped = false;
     initialDistance = distance(pair);
     initialColumns = density.getColumns();
+    onPinchFrame?.(
+      { x: pair.a.clientX, y: pair.a.clientY },
+      { x: pair.b.clientX, y: pair.b.clientY },
+      true,
+    );
   }
 
   function onTouchMove(evt: TouchEvent) {
     if (!active) return;
     const pair = getTouchPair(evt);
     if (!pair) return;
+    onPinchFrame?.(
+      { x: pair.a.clientX, y: pair.a.clientY },
+      { x: pair.b.clientX, y: pair.b.clientY },
+      true,
+    );
 
     evt.preventDefault();
     if (stepped) return;
@@ -68,11 +84,13 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
 
     if (ratio >= outwardThreshold) {
       density.setColumns(initialColumns - 1, true);
+      onPinchStep?.(1);
       stepped = true;
       return;
     }
     if (ratio <= inwardThreshold) {
       density.setColumns(initialColumns + 1, true);
+      onPinchStep?.(-1);
       stepped = true;
     }
   }
@@ -82,6 +100,8 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     active = false;
     stepped = false;
     density.settleScrub();
+    onPinchFrame?.(null, null, false);
+    onPinchRelease?.();
   }
 
   function attach() {

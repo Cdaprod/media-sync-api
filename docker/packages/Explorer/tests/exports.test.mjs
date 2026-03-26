@@ -1607,3 +1607,50 @@ test('density controller/flip tuning keeps jump-distance-aware motion timing und
   assert.ok(flip.includes("jumpDistance >= 2 ? 'power3.out' : 'power2.out'"));
   assert.ok(flip.includes("if (interactionMode === 'scrub') {"));
 });
+
+test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/release lifecycle', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts');
+  const hookPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'usePinchShaderOverlay.ts');
+  const overlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'PinchShaderOverlay.tsx');
+  const vertPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinchFeedback.vert');
+  const fragPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinchFeedback.frag');
+
+  assert.ok(fs.existsSync(vertPath));
+  assert.ok(fs.existsSync(fragPath));
+  assert.ok(fs.existsSync(hookPath));
+  assert.ok(fs.existsSync(overlayPath));
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const controller = fs.readFileSync(controllerPath, 'utf8');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const overlay = fs.readFileSync(overlayPath, 'utf8');
+
+  assert.ok(explorer.includes('<PinchShaderOverlay'));
+  assert.ok(explorer.includes('onPulse={(trigger) => {'));
+  assert.ok(explorer.includes('pinchPulseTriggerRef.current?.(dir);'));
+  assert.ok(explorer.includes('fingerA={pinchFingerA}'));
+  assert.ok(explorer.includes('fingerB={pinchFingerB}'));
+
+  assert.ok(controller.includes('onPinchFrame?:'));
+  assert.ok(controller.includes('onPinchStep?:'));
+  assert.ok(controller.includes('onPinchRelease?:'));
+  assert.ok(controller.includes('onPinchFrame?.('));
+  assert.ok(controller.includes('onPinchStep?.(1);'));
+  assert.ok(controller.includes('onPinchStep?.(-1);'));
+
+  assert.ok(hook.includes('alpha: true, premultipliedAlpha: false'));
+  assert.ok(hook.includes('gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);'));
+  assert.ok(hook.includes('state.pulse = Math.max(0, state.pulse - dt * 3.2);'));
+  assert.ok(hook.includes('state.fade = Math.max(0, state.fade - dt * 5.5);'));
+  assert.ok(hook.includes('const triggerPulse = useCallback((dir: number) => {'));
+  assert.ok(hook.includes('state.pulse = 1;'));
+  assert.ok(hook.includes('const release = useCallback(() => {'));
+  assert.ok(hook.includes('window.cancelAnimationFrame(rafId);'));
+
+  assert.ok(overlay.includes('data-pinch-shader-overlay=\"true\"'));
+  assert.ok(overlay.includes("pointerEvents: 'none'"));
+  assert.ok(overlay.includes('position: \'fixed\''));
+  assert.ok(overlay.includes('if (active) return;'));
+  assert.ok(overlay.includes('release();'));
+});
