@@ -69,7 +69,10 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   function onTouchMove(evt: TouchEvent) {
     if (!active) return;
     const pair = getTouchPair(evt);
-    if (!pair) return;
+    if (!pair) {
+      onTouchEnd();
+      return;
+    }
     onPinchFrame?.(
       { x: pair.a.clientX, y: pair.a.clientY },
       { x: pair.b.clientX, y: pair.b.clientY },

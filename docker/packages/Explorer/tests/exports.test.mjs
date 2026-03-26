@@ -238,9 +238,11 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const isActive = activeAssetKey === selectionKey;'));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
   assert.ok(grid.includes('<img'));
-  assert.ok(!grid.includes('<video'));
+  assert.ok(grid.includes('activeVideoPreviewUrl'));
+  assert.ok(grid.includes('className="asset-thumb-preview"'));
   assert.ok(list.includes('<img'));
-  assert.ok(!list.includes('<video'));
+  assert.ok(list.includes('activeVideoPreviewUrl'));
+  assert.ok(list.includes('className="asset-thumb-preview"'));
   assert.ok(grid.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
   assert.ok(list.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
   assert.ok(list.includes('data-no-preview="1"'));
@@ -1619,7 +1621,15 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   const tapDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'tap');
   const holdDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold');
   const sharedDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'shared');
+  const tapHookPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'tap', 'useTapShaderOverlay.ts');
+  const tapOverlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'tap', 'TapShaderOverlay.tsx');
+  const holdHookPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold', 'useHoldShaderOverlay.ts');
+  const holdOverlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold', 'HoldShaderOverlay.tsx');
+  const coreHelperPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'core', 'createFullscreenWebGLProgram.ts');
+  const sharedTypesPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'shared', 'interactionShaderTypes.ts');
   const interactionsPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
 
   assert.ok(fs.existsSync(vertPath));
   assert.ok(fs.existsSync(fragPath));
@@ -1629,15 +1639,33 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(fs.existsSync(tapDir));
   assert.ok(fs.existsSync(holdDir));
   assert.ok(fs.existsSync(sharedDir));
+  assert.ok(fs.existsSync(tapHookPath));
+  assert.ok(fs.existsSync(tapOverlayPath));
+  assert.ok(fs.existsSync(holdHookPath));
+  assert.ok(fs.existsSync(holdOverlayPath));
+  assert.ok(fs.existsSync(coreHelperPath));
+  assert.ok(fs.existsSync(sharedTypesPath));
 
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const controller = fs.readFileSync(controllerPath, 'utf8');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const overlay = fs.readFileSync(overlayPath, 'utf8');
   const interactions = fs.readFileSync(interactionsPath, 'utf8');
+  const tapHook = fs.readFileSync(tapHookPath, 'utf8');
+  const tapOverlay = fs.readFileSync(tapOverlayPath, 'utf8');
+  const holdHook = fs.readFileSync(holdHookPath, 'utf8');
+  const holdOverlay = fs.readFileSync(holdOverlayPath, 'utf8');
+  const coreHelper = fs.readFileSync(coreHelperPath, 'utf8');
+  const sharedTypes = fs.readFileSync(sharedTypesPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const grid = fs.readFileSync(gridPath, 'utf8');
 
   assert.ok(explorer.includes('<PinchShaderOverlay'));
+  assert.ok(explorer.includes('<TapShaderOverlay'));
+  assert.ok(explorer.includes('<HoldShaderOverlay'));
   assert.ok(explorer.includes("import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';"));
+  assert.ok(explorer.includes("import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';"));
+  assert.ok(explorer.includes("import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';"));
   assert.ok(explorer.includes('onPulse={(trigger) => {'));
   assert.ok(explorer.includes('pinchPulseTriggerRef.current?.(dir);'));
   assert.ok(explorer.includes('fingerA={pinchFingerA}'));
@@ -1656,11 +1684,11 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(hook.includes('gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);'));
   assert.ok(hook.includes('uniform float u_nodes;'));
   assert.ok(hook.includes('float nodeCount=max(0.,min(u_nodes,12.));'));
-  assert.ok(hook.includes('state.pulse = Math.max(0, state.pulse - dt * 3.2);'));
+  assert.ok(hook.includes('state.pulse = Math.max(0, state.pulse - dt * 5.6);'));
   assert.ok(hook.includes('state.fade = Math.max(0, state.fade - dt * 5.5);'));
   assert.ok(hook.includes('const setNodeCount = useCallback((count: number) => {'));
   assert.ok(hook.includes('const triggerPulse = useCallback((dir: number) => {'));
-  assert.ok(hook.includes('state.pulse = Math.max(state.pulse, 0.94);'));
+  assert.ok(hook.includes('state.pulse = Math.max(state.pulse, 0.76);'));
   assert.ok(hook.includes('const release = useCallback(() => {'));
   assert.ok(!hook.includes('state.fingerA = null;'));
   assert.ok(!hook.includes('state.fingerB = null;'));
@@ -1676,6 +1704,29 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
 
   assert.ok(interactions.includes("type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';"));
   assert.ok(interactions.includes('pinchSuppressRef.current = true;'));
-  assert.ok(interactions.includes("if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') return;"));
+  assert.ok(interactions.includes('pinchSuppressUntilRef.current = Date.now() + 220;'));
+  assert.ok(interactions.includes('pinchSuppressRef.current'));
+  assert.ok(interactions.includes("gestureModeRef.current === 'pinch'"));
+  assert.ok(interactions.includes('Date.now() < pinchSuppressUntilRef.current'));
+  assert.ok(interactions.includes('onTapFeedback?.({ x: event.clientX, y: event.clientY });'));
+  assert.ok(interactions.includes('onHoldFeedback?.({ x: pressX, y: pressY }, true);'));
   assert.ok(interactions.includes('clearPendingLongPress();'));
+
+  assert.ok(coreHelper.includes('export function createFullscreenWebGLProgram('));
+  assert.ok(coreHelper.includes('gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);'));
+  assert.ok(sharedTypes.includes('export type OverlayPoint = { x: number; y: number } | null;'));
+  assert.ok(tapHook.includes('createFullscreenWebGLProgram'));
+  assert.ok(tapHook.includes('const triggerTap = useCallback'));
+  assert.ok(tapOverlay.includes('data-tap-shader-overlay="true"'));
+  assert.ok(holdHook.includes('createFullscreenWebGLProgram'));
+  assert.ok(holdHook.includes('const setHoldState = useCallback'));
+  assert.ok(holdOverlay.includes('data-hold-shader-overlay="true"'));
+  assert.ok(styles.includes('.asset[data-active="true"] .thumb::after{'));
+  assert.ok(styles.includes('.asset.is-selected .thumb::before{'));
+  assert.ok(styles.includes('.asset-thumb-preview{'));
+  assert.ok(grid.includes('className="asset-thumb-preview"'));
+  assert.ok(styles.includes('.masonry-card.asset{'));
+  assert.ok(styles.includes('transition: filter 120ms ease, border-color 120ms ease;'));
+  assert.ok(styles.includes('.masonry-card.asset:hover{'));
+  assert.ok(styles.includes('transform: none;'));
 });

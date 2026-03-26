@@ -37,6 +37,8 @@ interface UseAssetInteractionsOptions {
   projects: Project[];
   selected: Set<string>;
   selectedKeysOrdered: string[];
+  onTapFeedback?: (point: { x: number; y: number }) => void;
+  onHoldFeedback?: (point: { x: number; y: number } | null, active: boolean) => void;
 }
 
 export function useAssetInteractions({
@@ -54,6 +56,8 @@ export function useAssetInteractions({
   projects,
   selected,
   selectedKeysOrdered,
+  onTapFeedback,
+  onHoldFeedback,
 }: UseAssetInteractionsOptions): UseAssetInteractionsResult {
   const [dragging, setDragging] = useState(false);
   const [assetDragActive, setAssetDragActive] = useState(false);
@@ -64,6 +68,7 @@ export function useAssetInteractions({
   const longPressFiredRef = useRef(false);
   const gestureModeRef = useRef<GestureMode>('idle');
   const pinchSuppressRef = useRef(false);
+  const pinchSuppressUntilRef = useRef(0);
 
   const clearPendingLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -72,7 +77,8 @@ export function useAssetInteractions({
     longPressTimerRef.current = null;
     longPressPointerRef.current = null;
     longPressFiredRef.current = false;
-  }, []);
+    onHoldFeedback?.(null, false);
+  }, [onHoldFeedback]);
 
   const stopAssetDrag = useCallback(() => {
     setDragging(false);
@@ -93,6 +99,7 @@ export function useAssetInteractions({
     const onTouchEndCapture = (event: TouchEvent) => {
       if (event.touches.length > 0) return;
       pinchSuppressRef.current = false;
+      pinchSuppressUntilRef.current = Date.now() + 220;
       if (gestureModeRef.current === 'pinch') {
         gestureModeRef.current = 'idle';
       }
@@ -128,7 +135,11 @@ export function useAssetInteractions({
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         if (inNoPreviewZone(event.target)) return;
         if (isInteractiveTarget(event.target)) return;
-        if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') return;
+        if (
+          pinchSuppressRef.current
+          || gestureModeRef.current === 'pinch'
+          || Date.now() < pinchSuppressUntilRef.current
+        ) return;
         pointerId = event.pointerId;
         startX = event.clientX;
         startY = event.clientY;
@@ -139,6 +150,7 @@ export function useAssetInteractions({
         gestureModeRef.current = 'tap_candidate';
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
           gestureModeRef.current = 'hold_candidate';
+          onHoldFeedback?.({ x: pressX, y: pressY }, true);
           longPressPointerRef.current = pointerId;
           longPressTimerRef.current = window.setTimeout(() => {
             if (
@@ -193,6 +205,10 @@ export function useAssetInteractions({
           gestureModeRef.current = 'idle';
           return;
         }
+        if (Date.now() < pinchSuppressUntilRef.current) {
+          gestureModeRef.current = 'idle';
+          return;
+        }
         if (longPressFired) {
           gestureModeRef.current = 'idle';
           return;
@@ -220,6 +236,7 @@ export function useAssetInteractions({
         const prevTap = lastTileTapRef.current;
         const isSecondTap = prevTap.key === itemKey && (now - prevTap.at) <= 900;
         focusAsset(item, itemKey);
+        onTapFeedback?.({ x: event.clientX, y: event.clientY });
         if (isSecondTap) {
           openDrawer(item);
           lastTileTapRef.current = { key: '', at: 0 };
@@ -245,7 +262,11 @@ export function useAssetInteractions({
         }
         event.preventDefault();
         event.stopPropagation();
-        if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') return;
+        if (
+          pinchSuppressRef.current
+          || gestureModeRef.current === 'pinch'
+          || Date.now() < pinchSuppressUntilRef.current
+        ) return;
         if (dragging) return;
         openContextMenu(event.clientX, event.clientY, resolveContextItems());
       };

@@ -51,6 +51,8 @@ import { createExplorerDensityController } from './explorer/density/createExplor
 import { createPinchDensityController } from './explorer/density/createPinchDensityController';
 import { DEFAULT_COLUMNS_MOBILE, MAX_COLUMNS_MOBILE, MIN_COLUMNS_MOBILE } from './explorer/density/constants';
 import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
+import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
+import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -359,6 +361,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [pinchOverlayActive, setPinchOverlayActive] = useState(false);
   const [pinchFingerA, setPinchFingerA] = useState<PinchOverlayPoint>(null);
   const [pinchFingerB, setPinchFingerB] = useState<PinchOverlayPoint>(null);
+  const [tapOverlayPoint, setTapOverlayPoint] = useState<PinchOverlayPoint>(null);
+  const [holdOverlayPoint, setHoldOverlayPoint] = useState<PinchOverlayPoint>(null);
+  const [holdOverlayActive, setHoldOverlayActive] = useState(false);
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
   const composeCardRef = useRef<HTMLFormElement | null>(null);
@@ -1565,6 +1570,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     projects,
     selected,
     selectedKeysOrdered,
+    onTapFeedback: (point) => setTapOverlayPoint(point),
+    onHoldFeedback: (point, active) => {
+      if (point) setHoldOverlayPoint(point);
+      setHoldOverlayActive(active);
+    },
   });
 
   const handlePreviewSelected = useCallback(() => {
@@ -2288,8 +2298,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
+    const activeVideoPreviewUrl = (
+      isActive && kind === 'video'
+        ? resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || ''))
+        : undefined
+    );
 
     return {
+      activeVideoPreviewUrl,
       fallbackThumb,
       isActive,
       isSelected,
@@ -2586,6 +2602,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               pinchPulseTriggerRef.current = trigger;
             }}
           />
+          <TapShaderOverlay tapPoint={tapOverlayPoint} />
+          <HoldShaderOverlay holdPoint={holdOverlayPoint} active={holdOverlayActive} />
           <div
             ref={mediaScrollViewportRef}
             className="scroll"

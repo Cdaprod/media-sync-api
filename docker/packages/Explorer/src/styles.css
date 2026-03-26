@@ -803,6 +803,16 @@ select.control{
   -webkit-user-select: none;
   pointer-events: none;
 }
+.asset-thumb-preview{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  opacity: 0.98;
+  mix-blend-mode: normal;
+}
 .thumb .fallback{
   font-size: 12px;
   color: var(--muted);
@@ -942,12 +952,30 @@ select.control{
 
 .asset.is-active:not(.is-selected){
   border-color: rgba(124,58,237,0.62);
-  box-shadow: 0 0 0 1px rgba(124,58,237,0.28), 0 10px 28px rgba(124,58,237,0.16);
+  box-shadow: 0 0 0 1px rgba(124,58,237,0.34), 0 0 20px rgba(124,58,237,0.22), 0 10px 28px rgba(124,58,237,0.16);
 }
 
 .asset.is-selected{
   border-color: rgba(74,240,192,0.92);
-  box-shadow: 0 0 0 1px rgba(74,240,192,0.85), 0 0 28px rgba(74,240,192,0.34), 0 12px 44px rgba(74,240,192,0.22);
+  box-shadow: 0 0 0 2px rgba(74,240,192,0.92), 0 0 36px rgba(74,240,192,0.42), 0 12px 44px rgba(74,240,192,0.22);
+}
+
+.asset[data-active="true"] .thumb::after{
+  content: '';
+  position: absolute;
+  inset: -18%;
+  background: radial-gradient(circle at 35% 20%, rgba(179,126,255,0.34), rgba(124,58,237,0.12) 45%, transparent 72%);
+  pointer-events: none;
+}
+
+.asset.is-selected .thumb::before{
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 8px;
+  border: 1px solid rgba(126,255,209,0.9);
+  box-shadow: inset 0 0 18px rgba(74,240,192,0.24), 0 0 16px rgba(74,240,192,0.3);
+  pointer-events: none;
 }
 
 /* List row variant */
@@ -970,11 +998,11 @@ select.control{
 .row:hover{ border-color: rgba(255,255,255,0.16); background: rgba(255,255,255,0.07); }
 .row.is-active:not(.is-selected){
   border-color: rgba(124,58,237,0.52);
-  box-shadow: 0 0 0 1px rgba(124,58,237,0.22);
+  box-shadow: 0 0 0 1px rgba(124,58,237,0.24), 0 0 14px rgba(124,58,237,0.18);
 }
 .row.is-selected{
   border-color: rgba(74,240,192,0.72);
-  box-shadow: 0 0 0 1px rgba(74,240,192,0.35), 0 0 18px rgba(74,240,192,0.16);
+  box-shadow: 0 0 0 2px rgba(74,240,192,0.52), 0 0 20px rgba(74,240,192,0.24);
 }
 .row .mini{
   width: 86px; height: 54px;
@@ -986,6 +1014,7 @@ select.control{
   display:flex;
   align-items:center;
   justify-content:center;
+  position: relative;
 }
 .row .mini img{ width:100%; height:100%; object-fit: cover; display:block; }
 .row .info{ flex:1; min-width:0; }

@@ -69,6 +69,20 @@ function AssetListComponent({
                 data-thumb-fallback={viewModel.fallbackThumb}
                 data-thumb-job-key={viewModel.thumbJobKey}
               />
+              {viewModel.activeVideoPreviewUrl ? (
+                <video
+                  className="asset-thumb-preview"
+                  src={viewModel.activeVideoPreviewUrl}
+                  muted
+                  autoPlay
+                  loop
+                  playsInline
+                  preload="metadata"
+                  disablePictureInPicture
+                  controls={false}
+                  aria-hidden="true"
+                />
+              ) : null}
             </div>
             <div className="info">
               <div className="t tile-ui-text">{viewModel.title}</div>

@@ -22,6 +22,7 @@ export interface ExplorerAssetViewModel {
   title: string;
   fallbackThumb: string;
   safeThumbUrl: string;
+  activeVideoPreviewUrl?: string;
   pointerHandlers: AssetPointerHandlers;
   kindBadgeClassName: string;
   selectionOrderLabel: string;
@@ -193,6 +194,20 @@ function AssetGridComponent({
                   data-thumb-fallback={viewModel.fallbackThumb}
                   data-thumb-job-key={viewModel.thumbJobKey}
                 />
+                {viewModel.activeVideoPreviewUrl ? (
+                  <video
+                    className="asset-thumb-preview"
+                    src={viewModel.activeVideoPreviewUrl}
+                    muted
+                    autoPlay
+                    loop
+                    playsInline
+                    preload="metadata"
+                    disablePictureInPicture
+                    controls={false}
+                    aria-hidden="true"
+                  />
+                ) : null}
                 <div className="asset-overlay">
                   <div className="asset-ol-tl">
                     <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>

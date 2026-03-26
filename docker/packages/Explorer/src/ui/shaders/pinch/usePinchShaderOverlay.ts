@@ -239,7 +239,7 @@ export function usePinchShaderOverlay() {
       } else {
         state.fade = Math.min(1, state.fade + dt * 8.5);
       }
-      state.pulse = Math.max(0, state.pulse - dt * 3.2);
+      state.pulse = Math.max(0, state.pulse - dt * 5.6);
 
       resize();
 
@@ -301,7 +301,7 @@ export function usePinchShaderOverlay() {
 
   const triggerPulse = useCallback((dir: number) => {
     const state = stateRef.current;
-    state.pulse = Math.max(state.pulse, 0.94);
+    state.pulse = Math.max(state.pulse, 0.76);
     state.pulseDir = dir >= 0 ? 1 : -1;
   }, []);
 
