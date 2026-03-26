@@ -1,4 +1,8 @@
 ### Latest Implementation Notes (2026-03-26)
+- Per handoff contract, refreshed `AGENTS.md` for this commit with no additional code-path changes; latest Explorer gesture/density/shader notes above remain the authoritative implementation state.
+- No source files outside this handoff document were modified in this pass.
+
+### Latest Implementation Notes (2026-03-26)
 - Follow-up gesture arbitration fix introduced explicit pinch exclusivity in `useAssetInteractions` via `GestureMode` + multi-touch suppression refs: second-touch escalation now cancels pending long-press/context-menu candidates and blocks single-touch actions while pinch is active.
 - Reorganized shader layout under categorized subdirectories (`core/`, `pinch/`, `tap/`, `hold/`, `shared/`) and moved pinch overlay modules into `shaders/pinch/` for clean future tap/hold additions.
 - Pinch overlay polish: release no longer nulls finger anchors (prevents center flash), pulse tuned for tighter notch feel, and bridge waypoint count is now driven by committed column count (`nodeCount={gridColumnCount}` -> `u_nodes`).
