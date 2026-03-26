@@ -117,8 +117,11 @@ export function useAssetInteractions({
 
     const onTouchEndCapture = (event: TouchEvent) => {
       if (event.touches.length > 0) return;
+      const wasPinchGesture = gestureModeRef.current === 'pinch' || pinchSuppressRef.current;
       pinchSuppressRef.current = false;
-      pinchSuppressUntilRef.current = Date.now() + 220;
+      if (wasPinchGesture) {
+        pinchSuppressUntilRef.current = Date.now() + 220;
+      }
       if (gestureModeRef.current === 'pinch') {
         gestureModeRef.current = 'idle';
       }

@@ -1716,6 +1716,8 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
 
   assert.ok(interactions.includes("type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';"));
   assert.ok(interactions.includes('pinchSuppressRef.current = true;'));
+  assert.ok(interactions.includes("const wasPinchGesture = gestureModeRef.current === 'pinch' || pinchSuppressRef.current;"));
+  assert.ok(interactions.includes('if (wasPinchGesture) {'));
   assert.ok(interactions.includes('pinchSuppressUntilRef.current = Date.now() + 220;'));
   assert.ok(interactions.includes('pinchSuppressRef.current'));
   assert.ok(interactions.includes("gestureModeRef.current === 'pinch'"));
