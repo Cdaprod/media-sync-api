@@ -22,10 +22,15 @@ void main(){
   vec2 p = v_uv - u_center;
   p.x *= u_res.x / max(u_res.y, 1.0);
   float d = length(p);
-  float ring = smoothstep(0.16, 0.04, d) * (1.0 - smoothstep(0.04, 0.018, d));
-  float core = smoothstep(0.12, 0.0, d);
-  vec3 col = vec3(0.58, 0.38, 0.98) * ring + vec3(0.75, 0.62, 1.0) * core * 0.4;
-  gl_FragColor = vec4(col, (ring * 0.75 + core * 0.3) * u_intensity);
+  float age = 1.0 - u_intensity;
+  float ringR = mix(0.046, 0.014, age);
+  float ringW = mix(0.009, 0.004, age);
+  float ring = smoothstep(ringR + ringW, ringR, d) * (1.0 - smoothstep(ringR, max(ringR - ringW, 0.001), d));
+  float coreR = mix(0.020, 0.010, age);
+  float core = 1.0 - smoothstep(coreR, coreR + 0.0025, d);
+  vec3 col = vec3(0.67, 0.45, 1.0);
+  float alpha = (ring * 0.88 + core * 0.42) * u_intensity;
+  gl_FragColor = vec4(col, alpha);
 }
 `;
 
@@ -52,7 +57,7 @@ export function useTapShaderOverlay() {
     const render = (now: number) => {
       const dt = Math.max(0, (now - prev) / 1000);
       prev = now;
-      intensityRef.current = Math.max(0, intensityRef.current - dt * 3.6);
+      intensityRef.current = Math.max(0, intensityRef.current - dt * 5.8);
 
       const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
       const width = Math.max(1, Math.floor(window.innerWidth * dpr));

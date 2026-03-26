@@ -364,6 +364,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [tapOverlayPoint, setTapOverlayPoint] = useState<PinchOverlayPoint>(null);
   const [holdOverlayPoint, setHoldOverlayPoint] = useState<PinchOverlayPoint>(null);
   const [holdOverlayActive, setHoldOverlayActive] = useState(false);
+  const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
+  const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
   const composeCardRef = useRef<HTMLFormElement | null>(null);
@@ -1575,7 +1577,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (point) setHoldOverlayPoint(point);
       setHoldOverlayActive(active);
     },
+    onTapStage: (stage, itemKey) => {
+      if (stage === 'second') {
+        setReinforcedActiveKey(itemKey);
+        return;
+      }
+      setReinforcedActiveKey('');
+    },
+    onHoldEmphasis: (itemKey, active) => {
+      if (!active || !itemKey) {
+        setHoldEmphasisKey('');
+        return;
+      }
+      setHoldEmphasisKey(itemKey);
+    },
   });
+
+  useEffect(() => {
+    if (!reinforcedActiveKey) return;
+    const timeoutId = window.setTimeout(() => {
+      setReinforcedActiveKey((prev) => (prev === reinforcedActiveKey ? '' : prev));
+    }, 680);
+    return () => window.clearTimeout(timeoutId);
+  }, [reinforcedActiveKey]);
 
   const handlePreviewSelected = useCallback(() => {
     const first = selectionItems[0];
@@ -2297,6 +2321,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
+    const isSecondTapReinforced = reinforcedActiveKey === selectionKey;
+    const isHoldEmphasis = holdEmphasisKey === selectionKey;
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
     const activeVideoPreviewUrl = (
       isActive && kind === 'video'
@@ -2308,6 +2334,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       activeVideoPreviewUrl,
       fallbackThumb,
       isActive,
+      isSecondTapReinforced,
+      isHoldEmphasis,
       isSelected,
       item,
       kind,
@@ -2333,7 +2361,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     buildAssetPointerHandlers,
     dynamicOrientations,
     getCachedOrientation,
+    holdEmphasisKey,
     projectLabel,
+    reinforcedActiveKey,
     resolveAssetUrl,
     resolveItemOrientation,
     selected,

@@ -47,7 +47,7 @@ function AssetListComponent({
 
         return (
           <div
-            className={`row asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
+            className={`row asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSecondTapReinforced ? 'is-active-reinforced' : ''} ${viewModel.isHoldEmphasis ? 'is-hold-emphasis' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
             key={`row-${viewModel.renderKey}`}
             data-select-key={viewModel.selectionKey}
             data-active={viewModel.isActive ? 'true' : 'false'}

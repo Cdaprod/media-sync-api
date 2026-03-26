@@ -39,6 +39,8 @@ interface UseAssetInteractionsOptions {
   selectedKeysOrdered: string[];
   onTapFeedback?: (point: { x: number; y: number }) => void;
   onHoldFeedback?: (point: { x: number; y: number } | null, active: boolean) => void;
+  onTapStage?: (stage: 'first' | 'second', itemKey: string) => void;
+  onHoldEmphasis?: (itemKey: string | null, active: boolean) => void;
 }
 
 export function useAssetInteractions({
@@ -58,6 +60,8 @@ export function useAssetInteractions({
   selectedKeysOrdered,
   onTapFeedback,
   onHoldFeedback,
+  onTapStage,
+  onHoldEmphasis,
 }: UseAssetInteractionsOptions): UseAssetInteractionsResult {
   const [dragging, setDragging] = useState(false);
   const [assetDragActive, setAssetDragActive] = useState(false);
@@ -78,7 +82,8 @@ export function useAssetInteractions({
     longPressPointerRef.current = null;
     longPressFiredRef.current = false;
     onHoldFeedback?.(null, false);
-  }, [onHoldFeedback]);
+    onHoldEmphasis?.(null, false);
+  }, [onHoldEmphasis, onHoldFeedback]);
 
   const stopAssetDrag = useCallback(() => {
     setDragging(false);
@@ -162,6 +167,7 @@ export function useAssetInteractions({
               || gestureModeRef.current === 'pinch'
             ) return;
             longPressFiredRef.current = true;
+            onHoldEmphasis?.(itemKey, true);
             focusAsset(item, itemKey);
             openContextMenu(pressX, pressY, resolveContextItems());
           }, LONG_PRESS_MS);
@@ -238,11 +244,13 @@ export function useAssetInteractions({
         focusAsset(item, itemKey);
         onTapFeedback?.({ x: event.clientX, y: event.clientY });
         if (isSecondTap) {
+          onTapStage?.('second', itemKey);
           openDrawer(item);
           lastTileTapRef.current = { key: '', at: 0 };
           gestureModeRef.current = 'idle';
           return;
         }
+        onTapStage?.('first', itemKey);
         lastTileTapRef.current = { key: itemKey, at: now };
         gestureModeRef.current = 'idle';
       };

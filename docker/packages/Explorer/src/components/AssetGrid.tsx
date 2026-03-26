@@ -13,6 +13,8 @@ export interface ExplorerAssetViewModel {
   renderKey: string;
   selectionKey: string;
   isActive: boolean;
+  isSecondTapReinforced: boolean;
+  isHoldEmphasis: boolean;
   isSelected: boolean;
   size: string;
   sub: string;
@@ -162,7 +164,7 @@ function AssetGridComponent({
           return (
             <div
               key={viewModel.renderKey}
-              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
+              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSecondTapReinforced ? 'is-active-reinforced' : ''} ${viewModel.isHoldEmphasis ? 'is-hold-emphasis' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
               style={positionedStyle}
               data-kind={viewModel.kind}
               data-orient={viewModel.orient}

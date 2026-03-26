@@ -225,6 +225,9 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(hookContent.includes('focusAsset(item, itemKey);'));
   assert.ok(hookContent.includes('if (isSecondTap) {'));
   assert.ok(hookContent.includes('openDrawer(item);'));
+  assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
+  assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
+  assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
   assert.ok(explorer.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
   assert.ok(explorer.includes('const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {'));
   assert.ok(explorer.includes('setActiveAssetKey(nextKey);'));
@@ -236,6 +239,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('if (!inspectorOpen || !focused) return null;'));
   assert.ok(explorer.includes('if (!inspectorOpen || !focused) return [];'));
   assert.ok(explorer.includes('const isActive = activeAssetKey === selectionKey;'));
+  assert.ok(explorer.includes('const isSecondTapReinforced = reinforcedActiveKey === selectionKey;'));
+  assert.ok(explorer.includes('const isHoldEmphasis = holdEmphasisKey === selectionKey;'));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
   assert.ok(grid.includes('<img'));
   assert.ok(grid.includes('activeVideoPreviewUrl'));
@@ -246,6 +251,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(grid.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
   assert.ok(list.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
   assert.ok(list.includes('data-no-preview="1"'));
+  assert.ok(grid.includes('is-active-reinforced'));
+  assert.ok(grid.includes('is-hold-emphasis'));
 });
 
 test('topbar interaction boundaries protect header controls and nearby asset selectors', () => {
@@ -781,6 +788,9 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   assert.ok(hookContent.includes('if (inspectorOpen) {'));
   assert.ok(hookContent.includes('closeDrawer();'));
   assert.ok(hookContent.includes('openDrawer(item);'));
+  assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
+  assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
+  assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
   assert.ok(content.includes('toggleSelectionWithOrder'));
   assert.ok(content.includes('selectionOrderIndexMap'));
   assert.ok(content.includes('selectedOrderMap.get(selectionKey)'));
@@ -1717,11 +1727,20 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(sharedTypes.includes('export type OverlayPoint = { x: number; y: number } | null;'));
   assert.ok(tapHook.includes('createFullscreenWebGLProgram'));
   assert.ok(tapHook.includes('const triggerTap = useCallback'));
+  assert.ok(tapHook.includes('float age = 1.0 - u_intensity;'));
+  assert.ok(tapHook.includes('float ringR = mix(0.046, 0.014, age);'));
+  assert.ok(tapHook.includes('float coreR = mix(0.020, 0.010, age);'));
+  assert.ok(tapHook.includes('intensityRef.current = Math.max(0, intensityRef.current - dt * 5.8);'));
   assert.ok(tapOverlay.includes('data-tap-shader-overlay="true"'));
   assert.ok(holdHook.includes('createFullscreenWebGLProgram'));
   assert.ok(holdHook.includes('const setHoldState = useCallback'));
   assert.ok(holdOverlay.includes('data-hold-shader-overlay="true"'));
   assert.ok(styles.includes('.asset[data-active="true"] .thumb::after{'));
+  assert.ok(styles.includes('.asset.is-active:not(.is-selected){'));
+  assert.ok(styles.includes('.asset.is-active-reinforced:not(.is-selected){'));
+  assert.ok(styles.includes('.asset.is-hold-emphasis:not(.is-selected){'));
+  assert.ok(styles.includes('.row.is-active-reinforced:not(.is-selected){'));
+  assert.ok(styles.includes('.row.is-hold-emphasis:not(.is-selected){'));
   assert.ok(styles.includes('.asset.is-selected .thumb::before{'));
   assert.ok(styles.includes('.asset-thumb-preview{'));
   assert.ok(grid.includes('className="asset-thumb-preview"'));
