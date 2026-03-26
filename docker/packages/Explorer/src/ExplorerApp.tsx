@@ -361,6 +361,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [pinchOverlayActive, setPinchOverlayActive] = useState(false);
   const [pinchFingerA, setPinchFingerA] = useState<PinchOverlayPoint>(null);
   const [pinchFingerB, setPinchFingerB] = useState<PinchOverlayPoint>(null);
+  const [pinchDisplayNodeCount, setPinchDisplayNodeCount] = useState(DEFAULT_COLUMNS_MOBILE);
   const [tapOverlayPoint, setTapOverlayPoint] = useState<PinchOverlayPoint>(null);
   const [holdOverlayPoint, setHoldOverlayPoint] = useState<PinchOverlayPoint>(null);
   const [holdOverlayActive, setHoldOverlayActive] = useState(false);
@@ -2633,7 +2634,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             active={pinchOverlayActive}
             fingerA={pinchFingerA}
             fingerB={pinchFingerB}
-            nodeCount={gridColumnCount}
+            nodeCount={pinchDisplayNodeCount}
             onPulse={(trigger) => {
               pinchPulseTriggerRef.current = trigger;
             }}
@@ -3123,3 +3124,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     </div>
   );
 }
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(() => {
+      setPinchDisplayNodeCount(gridColumnCount);
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [gridColumnCount]);

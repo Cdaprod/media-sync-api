@@ -274,9 +274,9 @@ export function useAssetInteractions({
         }
         const prevTap = lastTileTapRef.current;
         const isSecondTap = prevTap.key === itemKey && (now - prevTap.at) <= 900;
-        focusAsset(item, itemKey);
         onTapFeedback?.({ x: event.clientX, y: event.clientY });
         if (isSecondTap) {
+          focusAsset(item, itemKey);
           onTapStage?.('second', itemKey);
           openDrawer(item);
           lastTileTapRef.current = { key: '', at: 0 };

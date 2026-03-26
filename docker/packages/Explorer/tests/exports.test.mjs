@@ -223,6 +223,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(hookContent.includes('lastTileTapRef'));
   assert.ok(hookContent.includes('const isSecondTap = prevTap.key === itemKey'));
   assert.ok(hookContent.includes('focusAsset(item, itemKey);'));
+  assert.ok(!hookContent.includes('focusAsset(item, itemKey);\n        onTapFeedback?.({ x: event.clientX, y: event.clientY });'));
+  assert.ok(hookContent.includes('focusAsset(item, itemKey);'));
   assert.ok(hookContent.includes('if (isSecondTap) {'));
   assert.ok(hookContent.includes('openDrawer(item);'));
   assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
@@ -1682,7 +1684,9 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(explorer.includes('pinchPulseTriggerRef.current?.(dir);'));
   assert.ok(explorer.includes('fingerA={pinchFingerA}'));
   assert.ok(explorer.includes('fingerB={pinchFingerB}'));
-  assert.ok(explorer.includes('nodeCount={gridColumnCount}'));
+  assert.ok(explorer.includes('nodeCount={pinchDisplayNodeCount}'));
+  assert.ok(explorer.includes('setPinchDisplayNodeCount(gridColumnCount);'));
+  assert.ok(explorer.includes('window.requestAnimationFrame(() => {'));
 
   assert.ok(controller.includes('onPinchFrame?:'));
   assert.ok(controller.includes('onPinchStep?:'));
