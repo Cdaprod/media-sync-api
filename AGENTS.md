@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-26)
+- Tap feedback visibility/retrigger hardening landed for Explorer: tap overlay now includes a trigger-keyed replay path (`tapTrigger`) and shader phase reset (`u_phase`) so rapid repeated taps always restart visibly instead of decaying invisibly between close events.
+- Tap visual readability was increased (brighter ring/core mix and slower intensity decay), overlay z-layer raised above card surfaces, and a short-lived fixed-position `.tap-debug-marker` was added at tap coordinates for runtime coordinate/stacking verification.
+- Activation ownership wiring was clarified so thumbnail preview visibility keys off explicit activation state (`previewActivationKey`) rather than long-press emphasis, with regression assertions updated to lock the new tap/activation contracts.
+
+### Latest Implementation Notes (2026-03-26)
 - Per handoff contract, refreshed `AGENTS.md` for this commit with no additional code-path changes; latest Explorer gesture/density/shader notes above remain the authoritative implementation state.
 - No source files outside this handoff document were modified in this pass.
 

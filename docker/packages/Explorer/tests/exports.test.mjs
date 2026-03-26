@@ -1744,12 +1744,16 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(sharedTypes.includes('export type OverlayPoint = { x: number; y: number } | null;'));
   assert.ok(tapHook.includes('createFullscreenWebGLProgram'));
   assert.ok(tapHook.includes('const triggerTap = useCallback'));
-  assert.ok(tapHook.includes('float age = 1.0 - u_intensity;'));
-  assert.ok(tapHook.includes('float ringR = mix(0.032, 0.011, age);'));
-  assert.ok(tapHook.includes('float coreR = mix(0.014, 0.007, age);'));
-  assert.ok(tapHook.includes('intensityRef.current = Math.max(0, intensityRef.current - dt * 5.8);'));
+  assert.ok(tapHook.includes('float ringR = mix(0.022, 0.040, u_phase);'));
+  assert.ok(tapHook.includes('float coreR = mix(0.012, 0.007, u_phase);'));
+  assert.ok(tapHook.includes('intensityRef.current = Math.max(0, intensityRef.current - dt * 4.8);'));
+  assert.ok(tapHook.includes('uniform float u_phase;'));
+  assert.ok(tapHook.includes('phaseRef.current = 0;'));
+  assert.ok(tapHook.includes('if (uPhase) gl.uniform1f(uPhase, phaseRef.current);'));
   assert.ok(tapOverlay.includes('data-tap-shader-overlay="true"'));
   assert.ok(tapOverlay.includes('tapTrigger: number;'));
+  assert.ok(tapOverlay.includes('className="tap-debug-marker"'));
+  assert.ok(tapOverlay.includes('zIndex: 160'));
   assert.ok(tapOverlay.includes('triggerTap(tapPoint);'));
   assert.ok(tapOverlay.includes('[tapPoint, tapTrigger, triggerTap]'));
   assert.ok(holdHook.includes('createFullscreenWebGLProgram'));
@@ -1771,6 +1775,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(styles.includes('.row.is-hold-emphasis:not(.is-selected){'));
   assert.ok(styles.includes('.asset.is-selected .thumb::before{'));
   assert.ok(styles.includes('.asset-thumb-preview{'));
+  assert.ok(styles.includes('.tap-debug-marker{'));
   assert.ok(grid.includes('className="asset-thumb-preview"'));
   assert.ok(styles.includes('.masonry-card.asset{'));
   assert.ok(styles.includes('transition: filter 120ms ease, border-color 120ms ease;'));
