@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-26)
+- Fixed long-press visual timing by splitting hold feedback into pre-threshold progress updates (RAF-driven against `LONG_PRESS_MS`) and threshold-confirmation trigger at the actual timeout fire, so completion is no longer front-loaded before long-press commitment.
+- Updated hold shader response to keep confirmation visible after timeout with a dedicated confirmation-visibility channel (`u_confirm`) separate from active pre-hold progress, plus slower completion decay for a noticeable post-threshold beat.
+- Hardened thumbnail preview exclusivity by introducing activation commits through a single preview-owner path (`commitPreviewActivationKey`), clearing prior ownership on first-tap re-focus, and keying preview video instances by activation token so old preview nodes unmount immediately when ownership changes.
+
+### Latest Implementation Notes (2026-03-26)
 - Tap feedback visibility/retrigger hardening landed for Explorer: tap overlay now includes a trigger-keyed replay path (`tapTrigger`) and shader phase reset (`u_phase`) so rapid repeated taps always restart visibly instead of decaying invisibly between close events.
 - Tap visual readability was increased (brighter ring/core mix and slower intensity decay), overlay z-layer raised above card surfaces, and a short-lived fixed-position `.tap-debug-marker` was added at tap coordinates for runtime coordinate/stacking verification.
 - Activation ownership wiring was clarified so thumbnail preview visibility keys off explicit activation state (`previewActivationKey`) rather than long-press emphasis, with regression assertions updated to lock the new tap/activation contracts.

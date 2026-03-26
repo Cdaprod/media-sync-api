@@ -1,3 +1,12 @@
+## 2026-03-26 — Hold timing + exclusive thumbnail preview ownership
+- [x] Added pre-threshold long-press progress updates in `useAssetInteractions` (RAF-driven progress sampled against `LONG_PRESS_MS`) instead of spending the hold effect only at completion.
+- [x] Triggered hold completion beat strictly from the actual long-press timeout path and canceled progress RAF on completion/cancel to keep gesture lifecycle deterministic.
+- [x] Retuned hold shader to separate pre-hold activity from completion confirmation (`u_active` + `u_confirm`) and lengthened confirmation visibility decay for a clear post-threshold payoff.
+- [x] Introduced preview ownership commit path in `ExplorerApp` and cleared preview ownership on first-tap focus transitions so previous video previews stop immediately when activation changes.
+- [x] Added preview remount keying in `AssetGrid` and `AssetList` so ownership transitions force old preview `<video>` instances to unmount.
+- [x] Updated `exports.test.mjs` assertions for hold timing split and exclusive preview ownership/remount contracts.
+- [ ] Next: run device-level touch QA to tune final hold confirmation duration feel (if needed) without increasing bloom/noise.
+
 ## 2026-03-26 — Gesture arbitration + pinch overlay polish follow-up
 - [x] Added pinch-win gesture exclusivity in `useAssetInteractions` so second-touch escalation cancels pending long-press/context-menu and suppresses single-touch actions until all touches end.
 - [x] Reorganized shader directories into categorized structure (`core/`, `pinch/`, `tap/`, `hold/`, `shared/`) and moved pinch overlay modules into `shaders/pinch/`.

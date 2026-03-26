@@ -71,6 +71,7 @@ function AssetListComponent({
               />
               {viewModel.activeVideoPreviewUrl ? (
                 <video
+                  key={viewModel.previewPlaybackKey}
                   className="asset-thumb-preview"
                   src={viewModel.activeVideoPreviewUrl}
                   muted

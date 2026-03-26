@@ -25,6 +25,7 @@ export interface ExplorerAssetViewModel {
   fallbackThumb: string;
   safeThumbUrl: string;
   activeVideoPreviewUrl?: string;
+  previewPlaybackKey: string;
   pointerHandlers: AssetPointerHandlers;
   kindBadgeClassName: string;
   selectionOrderLabel: string;
@@ -198,6 +199,7 @@ function AssetGridComponent({
                 />
                 {viewModel.activeVideoPreviewUrl ? (
                   <video
+                    key={viewModel.previewPlaybackKey}
                     className="asset-thumb-preview"
                     src={viewModel.activeVideoPreviewUrl}
                     muted

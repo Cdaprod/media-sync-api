@@ -291,6 +291,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
   const [activeAssetKey, setActiveAssetKey] = useState('');
   const [previewActivationKey, setPreviewActivationKey] = useState('');
+  const [previewPlaybackToken, setPreviewPlaybackToken] = useState(0);
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -451,7 +452,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const clearActiveAsset = useCallback(() => {
     setActiveAssetKey('');
-    setPreviewActivationKey('');
+    commitPreviewActivationKey('');
+    setPreviewPlaybackToken((prev) => prev + 1);
     setFocused(null);
     setPreviewDetailsOpen(false);
   }, []);
@@ -982,6 +984,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setPreviewDetailsOpen(false);
   }, []);
 
+  const commitPreviewActivationKey = useCallback((nextKey: string) => {
+    setPreviewActivationKey((prev) => {
+      if (prev !== nextKey) {
+        setPreviewPlaybackToken((token) => token + 1);
+      }
+      return nextKey;
+    });
+  }, []);
+
   const focusRelative = useCallback((offset: number) => {
     if (!focused || !filteredMedia.length) return;
     const currentKey = assetSelectionKey(focused, activeProject);
@@ -991,9 +1002,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const nextItem = filteredMedia[nextIndex] || focused;
     setFocused(nextItem);
     setActiveAssetKey(assetSelectionKey(nextItem, activeProject));
-    setPreviewActivationKey(assetSelectionKey(nextItem, activeProject));
+    commitPreviewActivationKey(assetSelectionKey(nextItem, activeProject));
     setPreviewAutoPlayToken((prev) => prev + 1);
-  }, [activeProject, assetSelectionKey, filteredMedia, focused]);
+  }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;
@@ -1077,11 +1088,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!activeAssetKey) return;
     if (itemsBySelectionKey.has(activeAssetKey)) return;
     setActiveAssetKey('');
-    setPreviewActivationKey('');
+    commitPreviewActivationKey('');
     if (!inspectorOpen) {
       setFocused(null);
     }
-  }, [activeAssetKey, inspectorOpen, itemsBySelectionKey]);
+  }, [activeAssetKey, commitPreviewActivationKey, inspectorOpen, itemsBySelectionKey]);
 
   const performDeleteMediaSelection = useCallback(
     async (selectionKeys: string[]) => {
@@ -1602,11 +1613,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     onTapStage: (stage, itemKey) => {
       if (stage === 'second') {
         setActiveAssetKey(itemKey);
-        setPreviewActivationKey(itemKey);
+        commitPreviewActivationKey(itemKey);
         setReinforcedActiveKey(itemKey);
         return;
       }
       setActiveAssetKey(itemKey);
+      commitPreviewActivationKey('');
       setReinforcedActiveKey('');
     },
     onHoldEmphasis: (itemKey, active) => {
@@ -1615,7 +1627,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return;
       }
       setHoldEmphasisKey(itemKey);
-      setPreviewActivationKey(itemKey);
+      commitPreviewActivationKey(itemKey);
     },
   });
 
@@ -2356,6 +2368,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ? resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || ''))
         : undefined
     );
+    const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';
 
     return {
       activeVideoPreviewUrl,
@@ -2370,6 +2383,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       orient,
       orientLocked,
       pointerHandlers,
+      previewPlaybackKey,
       renderKey,
       safeThumbUrl,
       selectionKey,
@@ -2391,6 +2405,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     holdEmphasisKey,
     projectLabel,
     previewActivationKey,
+    previewPlaybackToken,
     reinforcedActiveKey,
     resolveAssetUrl,
     resolveItemOrientation,
