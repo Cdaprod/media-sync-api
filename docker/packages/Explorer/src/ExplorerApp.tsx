@@ -378,6 +378,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
 
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(() => {
+      setPinchDisplayNodeCount(gridColumnCount);
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [gridColumnCount]);
+
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
     const itemOrient = inferOrientationFromItem(item);
     if (itemOrient) return itemOrient;
@@ -3124,9 +3131,3 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     </div>
   );
 }
-  useEffect(() => {
-    const rafId = window.requestAnimationFrame(() => {
-      setPinchDisplayNodeCount(gridColumnCount);
-    });
-    return () => window.cancelAnimationFrame(rafId);
-  }, [gridColumnCount]);
