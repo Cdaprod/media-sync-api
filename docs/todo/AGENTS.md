@@ -1,3 +1,11 @@
+## 2026-03-26 — Gesture arbitration + pinch overlay polish follow-up
+- [x] Added pinch-win gesture exclusivity in `useAssetInteractions` so second-touch escalation cancels pending long-press/context-menu and suppresses single-touch actions until all touches end.
+- [x] Reorganized shader directories into categorized structure (`core/`, `pinch/`, `tap/`, `hold/`, `shared/`) and moved pinch overlay modules into `shaders/pinch/`.
+- [x] Fixed release artifact path by preserving last valid pinch finger anchors during fade-out (no null-center fallback on release path).
+- [x] Added density-aware node count wiring (`gridColumnCount` -> overlay `nodeCount` -> shader `u_nodes`) so bridge internal nodes reflect committed columns.
+- [x] Retuned pulse ring behavior for tighter threshold-notch readability and kept overlay visual-only/pointer-events-none layering.
+- [ ] Next: capture new runtime trace verifying zero pinch-triggered context-menu opens and no center-flash artifacts on release.
+
 ## 2026-03-26 — WebGL pinch-feedback overlay integration (visual-only layer)
 - [x] Added fullscreen shader overlay modules (`pinchFeedback.vert`, `pinchFeedback.frag`, `usePinchShaderOverlay`, `PinchShaderOverlay`) with WebGL alpha blending and JS-driven fade/pulse decay.
 - [x] Mounted overlay in `ExplorerApp` above grid content and below topbar with `pointer-events: none` so it cannot capture interactions or own state.

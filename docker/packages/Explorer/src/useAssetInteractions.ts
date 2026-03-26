@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { MediaItem, Project } from './types';
 import { isInteractiveTarget } from './utils';
@@ -6,6 +6,7 @@ import { isInteractiveTarget } from './utils';
 const POINTER_THRESHOLD = 8;
 const LONG_PRESS_MOVE_CANCEL_PX = 12;
 const LONG_PRESS_MS = 620;
+type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';
 
 export type AssetPointerHandlers = Pick<
   React.HTMLAttributes<HTMLElement>,
@@ -61,6 +62,8 @@ export function useAssetInteractions({
   const longPressTimerRef = useRef<number | null>(null);
   const longPressPointerRef = useRef<number | null>(null);
   const longPressFiredRef = useRef(false);
+  const gestureModeRef = useRef<GestureMode>('idle');
+  const pinchSuppressRef = useRef(false);
 
   const clearPendingLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -74,7 +77,36 @@ export function useAssetInteractions({
   const stopAssetDrag = useCallback(() => {
     setDragging(false);
     setAssetDragActive(false);
+    if (gestureModeRef.current === 'drag') {
+      gestureModeRef.current = 'idle';
+    }
   }, []);
+
+  useEffect(() => {
+    const onTouchStartCapture = (event: TouchEvent) => {
+      if (event.touches.length < 2) return;
+      pinchSuppressRef.current = true;
+      gestureModeRef.current = 'pinch';
+      clearPendingLongPress();
+    };
+
+    const onTouchEndCapture = (event: TouchEvent) => {
+      if (event.touches.length > 0) return;
+      pinchSuppressRef.current = false;
+      if (gestureModeRef.current === 'pinch') {
+        gestureModeRef.current = 'idle';
+      }
+    };
+
+    document.addEventListener('touchstart', onTouchStartCapture, { capture: true, passive: true });
+    document.addEventListener('touchend', onTouchEndCapture, { capture: true, passive: true });
+    document.addEventListener('touchcancel', onTouchEndCapture, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStartCapture, { capture: true });
+      document.removeEventListener('touchend', onTouchEndCapture, { capture: true });
+      document.removeEventListener('touchcancel', onTouchEndCapture, { capture: true });
+    };
+  }, [clearPendingLongPress]);
 
   const buildAssetPointerHandlers = useCallback(
     (item: MediaItem): AssetPointerHandlers => {
@@ -96,6 +128,7 @@ export function useAssetInteractions({
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         if (inNoPreviewZone(event.target)) return;
         if (isInteractiveTarget(event.target)) return;
+        if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') return;
         pointerId = event.pointerId;
         startX = event.clientX;
         startY = event.clientY;
@@ -103,10 +136,19 @@ export function useAssetInteractions({
         pressY = event.clientY;
         moved = false;
         clearPendingLongPress();
+        gestureModeRef.current = 'tap_candidate';
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+          gestureModeRef.current = 'hold_candidate';
           longPressPointerRef.current = pointerId;
           longPressTimerRef.current = window.setTimeout(() => {
-            if (longPressPointerRef.current !== pointerId || moved || dragging || assetDragActive) return;
+            if (
+              longPressPointerRef.current !== pointerId
+              || moved
+              || dragging
+              || assetDragActive
+              || pinchSuppressRef.current
+              || gestureModeRef.current === 'pinch'
+            ) return;
             longPressFiredRef.current = true;
             focusAsset(item, itemKey);
             openContextMenu(pressX, pressY, resolveContextItems());
@@ -132,6 +174,7 @@ export function useAssetInteractions({
           return;
         }
         if ((dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
+          gestureModeRef.current = 'drag';
           setDragging(true);
           setAssetDragActive(true);
           dragPathsRef.current = selected.has(itemKey)
@@ -146,7 +189,12 @@ export function useAssetInteractions({
         const longPressFired = longPressFiredRef.current;
         clearPendingLongPress();
         pointerId = null;
+        if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') {
+          gestureModeRef.current = 'idle';
+          return;
+        }
         if (longPressFired) {
+          gestureModeRef.current = 'idle';
           return;
         }
         if (moved) {
@@ -157,8 +205,9 @@ export function useAssetInteractions({
               proj.name === dropEl.dataset.project
               && String(proj.source || '') === String(dropEl.dataset.source || '')
             ));
-            if (target) void moveMediaSelection(dragPathsRef.current, target);
+          if (target) void moveMediaSelection(dragPathsRef.current, target);
           }
+          gestureModeRef.current = 'idle';
           return;
         }
         const now = Date.now();
@@ -174,14 +223,17 @@ export function useAssetInteractions({
         if (isSecondTap) {
           openDrawer(item);
           lastTileTapRef.current = { key: '', at: 0 };
+          gestureModeRef.current = 'idle';
           return;
         }
         lastTileTapRef.current = { key: itemKey, at: now };
+        gestureModeRef.current = 'idle';
       };
 
       const handlePointerCancel = () => {
         clearPendingLongPress();
         pointerId = null;
+        gestureModeRef.current = 'idle';
         stopAssetDrag();
       };
 
@@ -193,6 +245,7 @@ export function useAssetInteractions({
         }
         event.preventDefault();
         event.stopPropagation();
+        if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') return;
         if (dragging) return;
         openContextMenu(event.clientX, event.clientY, resolveContextItems());
       };

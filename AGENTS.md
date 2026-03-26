@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-26)
+- Follow-up gesture arbitration fix introduced explicit pinch exclusivity in `useAssetInteractions` via `GestureMode` + multi-touch suppression refs: second-touch escalation now cancels pending long-press/context-menu candidates and blocks single-touch actions while pinch is active.
+- Reorganized shader layout under categorized subdirectories (`core/`, `pinch/`, `tap/`, `hold/`, `shared/`) and moved pinch overlay modules into `shaders/pinch/` for clean future tap/hold additions.
+- Pinch overlay polish: release no longer nulls finger anchors (prevents center flash), pulse tuned for tighter notch feel, and bridge waypoint count is now driven by committed column count (`nodeCount={gridColumnCount}` -> `u_nodes`).
+
+### Latest Implementation Notes (2026-03-26)
 - Added a visual-only fullscreen WebGL pinch-feedback overlay (`PinchShaderOverlay` + `usePinchShaderOverlay`) mounted above Explorer cards and below topbar chrome; overlay is pointer-events disabled and safe to unmount without owning layout/density truth.
 - Added shader assets (`pinchFeedback.vert` / `pinchFeedback.frag`) and hooked pinch gesture telemetry through optional callbacks in `createPinchDensityController` (`onPinchFrame`, `onPinchStep`, `onPinchRelease`) so overlay receives live finger positions and pulse triggers from existing threshold commits only.
 - Marked prior scrub/FLIP sequencing stabilization as retained: no changes to masonry math, FLIP commit path ownership, or density truth model; this pass is strictly visual feedback layering.

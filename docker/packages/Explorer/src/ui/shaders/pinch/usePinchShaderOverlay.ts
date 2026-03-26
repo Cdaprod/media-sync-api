@@ -11,6 +11,10 @@ export interface PinchShaderState {
 
 type PinchPoint = { x: number; y: number } | null;
 
+type InternalPinchShaderState = PinchShaderState & {
+  nodeCount: number;
+};
+
 const VERT_SOURCE = `
 attribute vec2 a_pos;
 varying   vec2 v_uv;
@@ -33,6 +37,7 @@ uniform float u_active;
 uniform float u_fade;
 uniform float u_pulse;
 uniform float u_pulse_dir;
+uniform float u_nodes;
 
 float adist(vec2 p, vec2 c) {
   vec2 d = p - c; d.x *= u_aspect; return length(d);
@@ -88,8 +93,11 @@ void main() {
   col+=bridgeCol*core*energy*.90; alpha=max(alpha,core*energy*.88);
   col+=bridgeCol*halo*.28;        alpha=max(alpha,halo*.22);
 
-  for(int i=1;i<=3;i++){
-    float nt=float(i)*.25;
+  float nodeCount=max(0.,min(u_nodes,12.));
+  for(int i=1;i<=12;i++){
+    float fi=float(i);
+    if(fi>nodeCount) continue;
+    float nt=fi/(nodeCount+1.);
     vec2 np=mix(a,b,nt);
     float pole=smoothstep(0.,.20,min(adist(np,a),adist(np,b)));
     float nodeR=.007+pole*.005;
@@ -105,13 +113,13 @@ void main() {
 
   if(u_pulse>.001){
     float pT=u_pulse;
-    float pR=ringR+(1.-pT)*.11;
-    float pA=ring(uv,a,pR,.002,mix(.016,.006,pT))*pT;
-    float pB=ring(uv,b,pR,.002,mix(.016,.006,pT))*pT;
+    float pR=ringR+(1.-pT)*.058;
+    float pA=ring(uv,a,pR,.002,mix(.010,.004,pT))*pT;
+    float pB=ring(uv,b,pR,.002,mix(.010,.004,pT))*pT;
     vec3 pCol=u_pulse_dir>0.?vec3(.22,1.,.52):vec3(1.,.52,.18);
-    col+=pCol*(pA+pB)*.95; alpha=max(alpha,(pA+pB)*.90);
-    float bFlash=halo*taper*pT*.7*bridgeFade;
-    col+=pCol*bFlash;      alpha=max(alpha,bFlash*.55);
+    col+=pCol*(pA+pB)*1.04; alpha=max(alpha,(pA+pB)*.95);
+    float bFlash=halo*taper*pT*.55*bridgeFade;
+    col+=pCol*bFlash;      alpha=max(alpha,bFlash*.58);
   }
 
   float grain=(hash21(uv*u_res+u_time*47.3)-.5)*.025;
@@ -157,13 +165,14 @@ function createProgram(gl: WebGLRenderingContext): WebGLProgram | null {
 
 export function usePinchShaderOverlay() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<PinchShaderState>({
+  const stateRef = useRef<InternalPinchShaderState>({
     fingerA: null,
     fingerB: null,
     active: false,
     pulse: 0,
     pulseDir: 1,
     fade: 0,
+    nodeCount: 3,
   });
 
   useEffect(() => {
@@ -185,6 +194,7 @@ export function usePinchShaderOverlay() {
     const uFade = gl.getUniformLocation(program, 'u_fade');
     const uPulse = gl.getUniformLocation(program, 'u_pulse');
     const uPulseDir = gl.getUniformLocation(program, 'u_pulse_dir');
+    const uNodes = gl.getUniformLocation(program, 'u_nodes');
 
     const buffer = gl.createBuffer();
     if (!buffer) {
@@ -235,10 +245,10 @@ export function usePinchShaderOverlay() {
 
       const w = Math.max(1, canvas.width);
       const h = Math.max(1, canvas.height);
-      const a = state.fingerA;
-      const b = state.fingerB;
-      const uvA = a ? [a.x / window.innerWidth, 1 - a.y / window.innerHeight] : [0.5, 0.5];
-      const uvB = b ? [b.x / window.innerWidth, 1 - b.y / window.innerHeight] : uvA;
+      const baseA = state.fingerA ?? state.fingerB ?? { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 };
+      const baseB = state.fingerB ?? state.fingerA ?? baseA;
+      const uvA = [baseA.x / window.innerWidth, 1 - baseA.y / window.innerHeight];
+      const uvB = [baseB.x / window.innerWidth, 1 - baseB.y / window.innerHeight];
 
       gl.useProgram(program);
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -257,6 +267,7 @@ export function usePinchShaderOverlay() {
       if (uFade) gl.uniform1f(uFade, state.fade);
       if (uPulse) gl.uniform1f(uPulse, state.pulse);
       if (uPulseDir) gl.uniform1f(uPulseDir, state.pulseDir);
+      if (uNodes) gl.uniform1f(uNodes, Math.max(0, Math.min(state.nodeCount, 12)));
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       rafId = window.requestAnimationFrame(render);
@@ -273,28 +284,31 @@ export function usePinchShaderOverlay() {
     };
   }, []);
 
-  const updateFingers = useCallback((a: PinchPoint, b: PinchPoint) => {
+  const updateFingers = useCallback((a: PinchPoint, b: PinchPoint, active: boolean) => {
     const state = stateRef.current;
-    state.fingerA = a;
-    state.fingerB = b;
-    state.active = Boolean(a && b);
+    if (a) state.fingerA = a;
+    if (b) state.fingerB = b;
+    state.active = active;
     if (state.active) {
-      state.fade = Math.max(0.3, state.fade);
+      state.fade = Math.max(0.32, state.fade);
     }
+  }, []);
+
+  const setNodeCount = useCallback((count: number) => {
+    const state = stateRef.current;
+    state.nodeCount = Number.isFinite(count) ? Math.max(0, Math.round(count)) : state.nodeCount;
   }, []);
 
   const triggerPulse = useCallback((dir: number) => {
     const state = stateRef.current;
-    state.pulse = 1;
+    state.pulse = Math.max(state.pulse, 0.94);
     state.pulseDir = dir >= 0 ? 1 : -1;
   }, []);
 
   const release = useCallback(() => {
     const state = stateRef.current;
     state.active = false;
-    state.fingerA = null;
-    state.fingerB = null;
   }, []);
 
-  return { canvasRef, updateFingers, triggerPulse, release };
+  return { canvasRef, updateFingers, triggerPulse, release, setNodeCount };
 }

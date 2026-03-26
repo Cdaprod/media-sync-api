@@ -7,6 +7,7 @@ type PinchShaderOverlayProps = {
   active: boolean;
   fingerA: PinchPoint;
   fingerB: PinchPoint;
+  nodeCount: number;
   onPulse?: (trigger: (dir: number) => void) => void;
 };
 
@@ -14,17 +15,22 @@ export default function PinchShaderOverlay({
   active,
   fingerA,
   fingerB,
+  nodeCount,
   onPulse,
 }: PinchShaderOverlayProps) {
-  const { canvasRef, updateFingers, triggerPulse, release } = usePinchShaderOverlay();
+  const { canvasRef, updateFingers, triggerPulse, release, setNodeCount } = usePinchShaderOverlay();
 
   useEffect(() => {
     onPulse?.(triggerPulse);
   }, [onPulse, triggerPulse]);
 
   useEffect(() => {
-    updateFingers(active ? fingerA : null, active ? fingerB : null);
+    updateFingers(fingerA, fingerB, active);
   }, [active, fingerA, fingerB, updateFingers]);
+
+  useEffect(() => {
+    setNodeCount(nodeCount);
+  }, [nodeCount, setNodeCount]);
 
   useEffect(() => {
     if (active) return;

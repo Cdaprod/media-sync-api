@@ -1611,26 +1611,38 @@ test('density controller/flip tuning keeps jump-distance-aware motion timing und
 test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/release lifecycle', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts');
-  const hookPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'usePinchShaderOverlay.ts');
-  const overlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'PinchShaderOverlay.tsx');
-  const vertPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinchFeedback.vert');
-  const fragPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinchFeedback.frag');
+  const hookPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinch', 'usePinchShaderOverlay.ts');
+  const overlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinch', 'PinchShaderOverlay.tsx');
+  const vertPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinch', 'pinchFeedback.vert');
+  const fragPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinch', 'pinchFeedback.frag');
+  const coreDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'core');
+  const tapDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'tap');
+  const holdDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold');
+  const sharedDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'shared');
+  const interactionsPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
 
   assert.ok(fs.existsSync(vertPath));
   assert.ok(fs.existsSync(fragPath));
   assert.ok(fs.existsSync(hookPath));
   assert.ok(fs.existsSync(overlayPath));
+  assert.ok(fs.existsSync(coreDir));
+  assert.ok(fs.existsSync(tapDir));
+  assert.ok(fs.existsSync(holdDir));
+  assert.ok(fs.existsSync(sharedDir));
 
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const controller = fs.readFileSync(controllerPath, 'utf8');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const overlay = fs.readFileSync(overlayPath, 'utf8');
+  const interactions = fs.readFileSync(interactionsPath, 'utf8');
 
   assert.ok(explorer.includes('<PinchShaderOverlay'));
+  assert.ok(explorer.includes("import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';"));
   assert.ok(explorer.includes('onPulse={(trigger) => {'));
   assert.ok(explorer.includes('pinchPulseTriggerRef.current?.(dir);'));
   assert.ok(explorer.includes('fingerA={pinchFingerA}'));
   assert.ok(explorer.includes('fingerB={pinchFingerB}'));
+  assert.ok(explorer.includes('nodeCount={gridColumnCount}'));
 
   assert.ok(controller.includes('onPinchFrame?:'));
   assert.ok(controller.includes('onPinchStep?:'));
@@ -1638,19 +1650,32 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(controller.includes('onPinchFrame?.('));
   assert.ok(controller.includes('onPinchStep?.(1);'));
   assert.ok(controller.includes('onPinchStep?.(-1);'));
+  assert.ok(controller.includes('onPinchFrame?.(null, null, false);'));
 
   assert.ok(hook.includes('alpha: true, premultipliedAlpha: false'));
   assert.ok(hook.includes('gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);'));
+  assert.ok(hook.includes('uniform float u_nodes;'));
+  assert.ok(hook.includes('float nodeCount=max(0.,min(u_nodes,12.));'));
   assert.ok(hook.includes('state.pulse = Math.max(0, state.pulse - dt * 3.2);'));
   assert.ok(hook.includes('state.fade = Math.max(0, state.fade - dt * 5.5);'));
+  assert.ok(hook.includes('const setNodeCount = useCallback((count: number) => {'));
   assert.ok(hook.includes('const triggerPulse = useCallback((dir: number) => {'));
-  assert.ok(hook.includes('state.pulse = 1;'));
+  assert.ok(hook.includes('state.pulse = Math.max(state.pulse, 0.94);'));
   assert.ok(hook.includes('const release = useCallback(() => {'));
+  assert.ok(!hook.includes('state.fingerA = null;'));
+  assert.ok(!hook.includes('state.fingerB = null;'));
   assert.ok(hook.includes('window.cancelAnimationFrame(rafId);'));
 
   assert.ok(overlay.includes('data-pinch-shader-overlay=\"true\"'));
   assert.ok(overlay.includes("pointerEvents: 'none'"));
   assert.ok(overlay.includes('position: \'fixed\''));
+  assert.ok(overlay.includes('nodeCount: number;'));
+  assert.ok(overlay.includes('setNodeCount(nodeCount);'));
   assert.ok(overlay.includes('if (active) return;'));
   assert.ok(overlay.includes('release();'));
+
+  assert.ok(interactions.includes("type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';"));
+  assert.ok(interactions.includes('pinchSuppressRef.current = true;'));
+  assert.ok(interactions.includes("if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') return;"));
+  assert.ok(interactions.includes('clearPendingLongPress();'));
 });

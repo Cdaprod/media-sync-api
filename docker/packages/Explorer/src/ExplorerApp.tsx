@@ -50,7 +50,7 @@ import { createModalMotion } from './ui/motion/modalMotion';
 import { createExplorerDensityController } from './explorer/density/createExplorerDensityController';
 import { createPinchDensityController } from './explorer/density/createPinchDensityController';
 import { DEFAULT_COLUMNS_MOBILE, MAX_COLUMNS_MOBILE, MIN_COLUMNS_MOBILE } from './explorer/density/constants';
-import PinchShaderOverlay from './ui/shaders/PinchShaderOverlay';
+import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -2071,8 +2071,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         },
         onPinchRelease: () => {
           setPinchOverlayActive(false);
-          setPinchFingerA(null);
-          setPinchFingerB(null);
         },
       });
       pinch.attach();
@@ -2085,8 +2083,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       pinchDensityRef.current = null;
       densityControllerRef.current = null;
       setPinchOverlayActive(false);
-      setPinchFingerA(null);
-      setPinchFingerB(null);
     };
   }, [gridSurfaceEl, isMobile, view]);
 
@@ -2585,6 +2581,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             active={pinchOverlayActive}
             fingerA={pinchFingerA}
             fingerB={pinchFingerB}
+            nodeCount={gridColumnCount}
             onPulse={(trigger) => {
               pinchPulseTriggerRef.current = trigger;
             }}

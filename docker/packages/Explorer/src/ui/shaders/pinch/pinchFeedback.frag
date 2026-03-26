@@ -10,6 +10,7 @@ uniform float u_active;
 uniform float u_fade;
 uniform float u_pulse;
 uniform float u_pulse_dir;
+uniform float u_nodes;
 
 float adist(vec2 p, vec2 c) {
   vec2 d = p - c; d.x *= u_aspect; return length(d);
@@ -65,8 +66,11 @@ void main() {
   col+=bridgeCol*core*energy*.90; alpha=max(alpha,core*energy*.88);
   col+=bridgeCol*halo*.28;        alpha=max(alpha,halo*.22);
 
-  for(int i=1;i<=3;i++){
-    float nt=float(i)*.25;
+  float nodeCount=max(0.,min(u_nodes,12.));
+  for(int i=1;i<=12;i++){
+    float fi=float(i);
+    if(fi>nodeCount) continue;
+    float nt=fi/(nodeCount+1.);
     vec2 np=mix(a,b,nt);
     float pole=smoothstep(0.,.20,min(adist(np,a),adist(np,b)));
     float nodeR=.007+pole*.005;
@@ -82,13 +86,13 @@ void main() {
 
   if(u_pulse>.001){
     float pT=u_pulse;
-    float pR=ringR+(1.-pT)*.11;
-    float pA=ring(uv,a,pR,.002,mix(.016,.006,pT))*pT;
-    float pB=ring(uv,b,pR,.002,mix(.016,.006,pT))*pT;
+    float pR=ringR+(1.-pT)*.058;
+    float pA=ring(uv,a,pR,.002,mix(.010,.004,pT))*pT;
+    float pB=ring(uv,b,pR,.002,mix(.010,.004,pT))*pT;
     vec3 pCol=u_pulse_dir>0.?vec3(.22,1.,.52):vec3(1.,.52,.18);
-    col+=pCol*(pA+pB)*.95; alpha=max(alpha,(pA+pB)*.90);
-    float bFlash=halo*taper*pT*.7*bridgeFade;
-    col+=pCol*bFlash;      alpha=max(alpha,bFlash*.55);
+    col+=pCol*(pA+pB)*1.04; alpha=max(alpha,(pA+pB)*.95);
+    float bFlash=halo*taper*pT*.55*bridgeFade;
+    col+=pCol*bFlash;      alpha=max(alpha,bFlash*.58);
   }
 
   float grain=(hash21(uv*u_res+u_time*47.3)-.5)*.025;
