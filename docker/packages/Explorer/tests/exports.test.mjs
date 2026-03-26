@@ -232,6 +232,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
   assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
   assert.ok(explorer.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
+  assert.ok(explorer.includes("const [previewActivationKey, setPreviewActivationKey] = useState('');"));
+  assert.ok(explorer.includes('setTapOverlayTrigger((prev) => prev + 1);'));
   assert.ok(explorer.includes('const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {'));
   assert.ok(explorer.includes('setActiveAssetKey(nextKey);'));
   assert.ok(!explorer.includes(`const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {
@@ -244,9 +246,11 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const isActive = activeAssetKey === selectionKey;'));
   assert.ok(explorer.includes('const isSecondTapReinforced = reinforcedActiveKey === selectionKey;'));
   assert.ok(explorer.includes('const isHoldEmphasis = holdEmphasisKey === selectionKey;'));
+  assert.ok(explorer.includes('const isActivated = previewActivationKey === selectionKey;'));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
   assert.ok(grid.includes('<img'));
   assert.ok(grid.includes('activeVideoPreviewUrl'));
+  assert.ok(explorer.includes("isActivated && kind === 'video'"));
   assert.ok(grid.includes('className="asset-thumb-preview"'));
   assert.ok(list.includes('<img'));
   assert.ok(list.includes('activeVideoPreviewUrl'));
@@ -1675,6 +1679,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
 
   assert.ok(explorer.includes('<PinchShaderOverlay'));
   assert.ok(explorer.includes('<TapShaderOverlay'));
+  assert.ok(explorer.includes('tapTrigger={tapOverlayTrigger}'));
   assert.ok(explorer.includes('<HoldShaderOverlay'));
   assert.ok(explorer.includes('progress={holdOverlayProgress}'));
   assert.ok(explorer.includes('completionBeat={holdOverlayCompleteBeat}'));
@@ -1744,6 +1749,9 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(tapHook.includes('float coreR = mix(0.014, 0.007, age);'));
   assert.ok(tapHook.includes('intensityRef.current = Math.max(0, intensityRef.current - dt * 5.8);'));
   assert.ok(tapOverlay.includes('data-tap-shader-overlay="true"'));
+  assert.ok(tapOverlay.includes('tapTrigger: number;'));
+  assert.ok(tapOverlay.includes('triggerTap(tapPoint);'));
+  assert.ok(tapOverlay.includes('[tapPoint, tapTrigger, triggerTap]'));
   assert.ok(holdHook.includes('createFullscreenWebGLProgram'));
   assert.ok(holdHook.includes('uniform float u_progress;'));
   assert.ok(holdHook.includes('uniform float u_complete;'));

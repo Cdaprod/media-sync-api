@@ -5,15 +5,15 @@ import { useTapShaderOverlay } from './useTapShaderOverlay';
 
 type TapShaderOverlayProps = {
   tapPoint: OverlayPoint;
+  tapTrigger: number;
 };
 
-export default function TapShaderOverlay({ tapPoint }: TapShaderOverlayProps) {
+export default function TapShaderOverlay({ tapPoint, tapTrigger }: TapShaderOverlayProps) {
   const { canvasRef, triggerTap } = useTapShaderOverlay();
 
   useEffect(() => {
-    if (!tapPoint) return;
     triggerTap(tapPoint);
-  }, [tapPoint, triggerTap]);
+  }, [tapPoint, tapTrigger, triggerTap]);
 
   return (
     <canvas

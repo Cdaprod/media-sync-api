@@ -290,6 +290,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
   const [activeAssetKey, setActiveAssetKey] = useState('');
+  const [previewActivationKey, setPreviewActivationKey] = useState('');
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -363,6 +364,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [pinchFingerB, setPinchFingerB] = useState<PinchOverlayPoint>(null);
   const [pinchDisplayNodeCount, setPinchDisplayNodeCount] = useState(DEFAULT_COLUMNS_MOBILE);
   const [tapOverlayPoint, setTapOverlayPoint] = useState<PinchOverlayPoint>(null);
+  const [tapOverlayTrigger, setTapOverlayTrigger] = useState(0);
   const [holdOverlayPoint, setHoldOverlayPoint] = useState<PinchOverlayPoint>(null);
   const [holdOverlayActive, setHoldOverlayActive] = useState(false);
   const [holdOverlayProgress, setHoldOverlayProgress] = useState(0);
@@ -449,6 +451,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const clearActiveAsset = useCallback(() => {
     setActiveAssetKey('');
+    setPreviewActivationKey('');
     setFocused(null);
     setPreviewDetailsOpen(false);
   }, []);
@@ -988,6 +991,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const nextItem = filteredMedia[nextIndex] || focused;
     setFocused(nextItem);
     setActiveAssetKey(assetSelectionKey(nextItem, activeProject));
+    setPreviewActivationKey(assetSelectionKey(nextItem, activeProject));
     setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, filteredMedia, focused]);
 
@@ -1073,6 +1077,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!activeAssetKey) return;
     if (itemsBySelectionKey.has(activeAssetKey)) return;
     setActiveAssetKey('');
+    setPreviewActivationKey('');
     if (!inspectorOpen) {
       setFocused(null);
     }
@@ -1582,7 +1587,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     projects,
     selected,
     selectedKeysOrdered,
-    onTapFeedback: (point) => setTapOverlayPoint(point),
+    onTapFeedback: (point) => {
+      setTapOverlayPoint(point);
+      setTapOverlayTrigger((prev) => prev + 1);
+    },
     onHoldFeedback: (point, active, progress, completed) => {
       if (point) setHoldOverlayPoint(point);
       setHoldOverlayActive(active);
@@ -1593,9 +1601,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     },
     onTapStage: (stage, itemKey) => {
       if (stage === 'second') {
+        setActiveAssetKey(itemKey);
+        setPreviewActivationKey(itemKey);
         setReinforcedActiveKey(itemKey);
         return;
       }
+      setActiveAssetKey(itemKey);
       setReinforcedActiveKey('');
     },
     onHoldEmphasis: (itemKey, active) => {
@@ -1604,6 +1615,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return;
       }
       setHoldEmphasisKey(itemKey);
+      setPreviewActivationKey(itemKey);
     },
   });
 
@@ -2335,11 +2347,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
+    const isActivated = previewActivationKey === selectionKey;
     const isSecondTapReinforced = reinforcedActiveKey === selectionKey;
     const isHoldEmphasis = holdEmphasisKey === selectionKey;
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
     const activeVideoPreviewUrl = (
-      isActive && kind === 'video'
+      isActivated && kind === 'video'
         ? resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || ''))
         : undefined
     );
@@ -2377,6 +2390,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     getCachedOrientation,
     holdEmphasisKey,
     projectLabel,
+    previewActivationKey,
     reinforcedActiveKey,
     resolveAssetUrl,
     resolveItemOrientation,
@@ -2646,7 +2660,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               pinchPulseTriggerRef.current = trigger;
             }}
           />
-          <TapShaderOverlay tapPoint={tapOverlayPoint} />
+          <TapShaderOverlay tapPoint={tapOverlayPoint} tapTrigger={tapOverlayTrigger} />
           <HoldShaderOverlay
             holdPoint={holdOverlayPoint}
             active={holdOverlayActive}
