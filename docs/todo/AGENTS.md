@@ -1,3 +1,13 @@
+## 2026-03-27 — Density motion-lane choreography hardening (new)
+- [x] Audited active density choreography collisions (in-flight FLIP overlap, pinch target handoff timing, transform cleanup/start ordering) and confirmed retarget-kill overlap was the primary readability conflict.
+- [x] Added per-grid deferred-start lane control in `animateDensityFlip` so new density commits queue (`queuedByGrid`) while an active density animation owns card transforms.
+- [x] Added queued replay handoff (`replayQueued`) that starts the latest queued density target on the next frame after settle cleanup, keeping a single readable resize/reflow pass.
+- [x] Preserved pinch path guarantees: dedicated pinch interaction mode, no settle-mode delay regression, `scale: false`, and existing pinch controller queue/gating behavior.
+- [x] Retuned density motion profile to remain responsive but more legible (`pinch 0.12`, scrub `0.12/0.16`, settle `0.18/0.24`; easing unchanged).
+- [x] Extended static contracts for deferred/queued lane behavior, explicit timing profile, and settle reconciliation callback payload (`invariantFixups`, `queuedReplay`).
+- [x] Re-ran Explorer static suite (`node --test tests/exports.test.mjs`) with passing results.
+- [ ] Next: run on-device QA focused on rapid pinch + slider changes to confirm queued replay reads as deliberate and non-colliding on mobile Safari.
+
 ## 2026-03-27 — Pinch-density performance guard pass
 - [x] Added pinch in-flight gating with single queued next pinch target in `createExplorerDensityController` to avoid re-entrant pinch FLIP churn.
 - [x] Added lightweight runtime instrumentation hook `globalThis.__explorerPinchPerfDebug.getStats()` (active state, target count, duration, preview-active flag, dropped/queued counts).

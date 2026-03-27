@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-27)
+- Refined density transition choreography to prevent overlapping transform ownership: new density commits now defer when an active density FLIP is running, using a per-grid latest-target queue (`queuedByGrid`) in `animateDensityFlip`.
+- Added queued replay handoff (`replayQueued`) so the next density animation starts only after settle cleanup on the next frame, yielding one clean resize/reflow pass instead of kill-and-overlap retarget churn.
+- Preserved pinch path guarantees (dedicated pinch mode, immediate path/no settle-delay regression, `scale: false`, controller pinch queue/gating) while retuning density timing slightly slower for readability (`pinch 0.12`, scrub `0.12/0.16`, settle `0.18/0.24`).
+
+### Latest Implementation Notes (2026-03-27)
 - Added pinch-focused runtime performance guards in density control: pinch commits are now in-flight gated with a single queued next target (`queuedPinchColumns`) and lightweight global runtime stats are exposed via `globalThis.__explorerPinchPerfDebug.getStats()`.
 - Pinch FLIP target workload is now reduced by selecting near-viewport masonry cards for pinch mode (`pickPinchTargets`, buffered viewport window + capped target count), while layout truth remains full-commit authoritative.
 - Explorer now applies temporary pinch performance mode (`.pinch-perf-active`) during pinch steps, hiding thumbnail preview video layers briefly to reduce repaint cost during pinch FLIP.

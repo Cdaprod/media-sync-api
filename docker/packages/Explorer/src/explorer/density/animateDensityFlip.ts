@@ -6,11 +6,19 @@ export type AnimateDensityFlipOptions = {
   commitLayout: () => void;
   interactionMode?: 'scrub' | 'settle' | 'pinch';
   jumpDistance?: number;
-  onStart?: (targetCount: number) => void;
-  onSettled?: () => void;
+  onStart?: (meta: {
+    targetCount: number;
+    totalCount: number;
+    targetReductionActive: boolean;
+  }) => void;
+  onSettled?: (meta: {
+    invariantFixups: number;
+    queuedReplay: boolean;
+  }) => void;
 };
 
 const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
+const queuedByGrid = new WeakMap<HTMLElement, Omit<AnimateDensityFlipOptions, 'gridEl'>>();
 const runIdByGrid = new WeakMap<HTMLElement, number>();
 const suppressInterruptCleanupByGrid = new WeakMap<HTMLElement, boolean>();
 const debugByGrid = new Map<HTMLElement, {
@@ -24,11 +32,13 @@ const debugByGrid = new Map<HTMLElement, {
   captures: number;
   immediateStarts: number;
   delayedStarts: number;
+  deferredStarts: number;
+  queuedReplays: number;
 }>();
 
 function updateDebug(
   gridEl: HTMLElement,
-  key: 'starts' | 'completes' | 'interrupts' | 'retargetKills' | 'staleFrameDrops' | 'noItemCommits' | 'startWithActive' | 'captures' | 'immediateStarts' | 'delayedStarts',
+  key: 'starts' | 'completes' | 'interrupts' | 'retargetKills' | 'staleFrameDrops' | 'noItemCommits' | 'startWithActive' | 'captures' | 'immediateStarts' | 'delayedStarts' | 'deferredStarts' | 'queuedReplays',
 ) {
   const current = debugByGrid.get(gridEl) ?? {
     starts: 0,
@@ -41,6 +51,8 @@ function updateDebug(
     captures: 0,
     immediateStarts: 0,
     delayedStarts: 0,
+    deferredStarts: 0,
+    queuedReplays: 0,
   };
   current[key] += 1;
   debugByGrid.set(gridEl, current);
@@ -82,11 +94,30 @@ export function animateDensityFlip({
     if (!visible.length) return items.slice(0, maxTargets);
     return visible.slice(0, maxTargets);
   };
+  const replayQueued = () => {
+    const queued = queuedByGrid.get(gridEl);
+    if (!queued) return false;
+    queuedByGrid.delete(gridEl);
+    updateDebug(gridEl, 'queuedReplays');
+    window.requestAnimationFrame(() => {
+      animateDensityFlip({
+        ...queued,
+        gridEl,
+      });
+    });
+    return true;
+  };
   const clearTransforms = () => {
     const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
-    if (!currentItems.length) return;
+    if (!currentItems.length) return 0;
+    let invariantFixups = 0;
+    for (const card of currentItems) {
+      if (card.style.transform && card.style.transform !== 'none') {
+        invariantFixups += 1;
+      }
+    }
     gsap.set(currentItems, { clearProps: 'transform' });
-    if (isPinch) return;
+    if (isPinch) return invariantFixups;
     for (const card of currentItems) {
       card.style.transition = 'none';
       card.style.transform = 'none';
@@ -96,7 +127,23 @@ export function animateDensityFlip({
         card.style.removeProperty('transition');
       }
     });
+    return invariantFixups;
   };
+
+  const previous = activeByGrid.get(gridEl);
+  if (previous) {
+    updateDebug(gridEl, 'startWithActive');
+    updateDebug(gridEl, 'deferredStarts');
+    queuedByGrid.set(gridEl, {
+      itemSelector,
+      commitLayout,
+      interactionMode,
+      jumpDistance,
+      onStart,
+      onSettled,
+    });
+    return;
+  }
 
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
   const animationTargets = isPinch ? pickPinchTargets(items) : items;
@@ -104,22 +151,14 @@ export function animateDensityFlip({
     const applyCommit = commitLayout;
     applyCommit();
     updateDebug(gridEl, 'noItemCommits');
-    clearTransforms();
-    onSettled?.();
+    const invariantFixups = clearTransforms();
+    const queuedReplay = replayQueued();
+    onSettled?.({ invariantFixups, queuedReplay });
     return;
   }
 
   updateDebug(gridEl, 'captures');
   const state = Flip.getState(animationTargets);
-  const previous = activeByGrid.get(gridEl);
-  if (previous) {
-    updateDebug(gridEl, 'startWithActive');
-    suppressInterruptCleanupByGrid.set(gridEl, true);
-    previous.kill();
-    suppressInterruptCleanupByGrid.set(gridEl, false);
-    activeByGrid.delete(gridEl);
-    updateDebug(gridEl, 'retargetKills');
-  }
 
   Flip.killFlipsOf(animationTargets);
   gsap.killTweensOf(animationTargets);
@@ -131,8 +170,9 @@ export function animateDensityFlip({
   const startFlip = () => {
     if (runIdByGrid.get(gridEl) !== nextRunId) {
       updateDebug(gridEl, 'staleFrameDrops');
-      clearTransforms();
-      onSettled?.();
+      const invariantFixups = clearTransforms();
+      const queuedReplay = replayQueued();
+      onSettled?.({ invariantFixups, queuedReplay });
       return;
     }
     const animation = Flip.from(state, {
@@ -142,10 +182,10 @@ export function animateDensityFlip({
       prune: false,
       scale: isPinch ? false : true,
       duration: isPinch
-        ? 0.09
+        ? 0.12
         : interactionMode === 'scrub'
-          ? (jumpDistance >= 2 ? 0.1 : 0.14)
-          : (jumpDistance >= 2 ? 0.16 : 0.22),
+          ? (jumpDistance >= 2 ? 0.12 : 0.16)
+          : (jumpDistance >= 2 ? 0.18 : 0.24),
       ease: isPinch
         ? 'power2.out'
         : interactionMode === 'scrub'
@@ -155,24 +195,31 @@ export function animateDensityFlip({
       overwrite: true,
       onComplete: () => {
         updateDebug(gridEl, 'completes');
-        clearTransforms();
-        onSettled?.();
+        const invariantFixups = clearTransforms();
+        const queuedReplay = replayQueued();
+        onSettled?.({ invariantFixups, queuedReplay });
         if (activeByGrid.get(gridEl) === animation) {
           activeByGrid.delete(gridEl);
         }
       },
       onInterrupt: () => {
         updateDebug(gridEl, 'interrupts');
+        let invariantFixups = 0;
         if (!suppressInterruptCleanupByGrid.get(gridEl)) {
-          clearTransforms();
+          invariantFixups = clearTransforms();
         }
-        onSettled?.();
+        const queuedReplay = replayQueued();
+        onSettled?.({ invariantFixups, queuedReplay });
         if (activeByGrid.get(gridEl) === animation) {
           activeByGrid.delete(gridEl);
         }
       },
     });
-    onStart?.(animationTargets.length);
+    onStart?.({
+      targetCount: animationTargets.length,
+      totalCount: items.length,
+      targetReductionActive: animationTargets.length !== items.length,
+    });
     updateDebug(gridEl, 'starts');
     activeByGrid.set(gridEl, animation);
   };
@@ -187,8 +234,9 @@ export function animateDensityFlip({
   window.requestAnimationFrame(() => {
     if (runIdByGrid.get(gridEl) !== nextRunId) {
       updateDebug(gridEl, 'staleFrameDrops');
-      clearTransforms();
-      onSettled?.();
+      const invariantFixups = clearTransforms();
+      const queuedReplay = replayQueued();
+      onSettled?.({ invariantFixups, queuedReplay });
       return;
     }
     window.requestAnimationFrame(() => {

@@ -1024,6 +1024,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
   assert.ok(flip.includes("if (interactionMode === 'scrub' || interactionMode === 'pinch') {"));
   assert.ok(flip.includes('startFlip();'));
+  assert.ok(flip.includes('const queuedByGrid = new WeakMap<HTMLElement, Omit<AnimateDensityFlipOptions, \'gridEl\'>>();'));
+  assert.ok(flip.includes('queuedByGrid.set(gridEl, {'));
+  assert.ok(flip.includes('const replayQueued = () => {'));
+  assert.ok(flip.includes("updateDebug(gridEl, 'deferredStarts');"));
+  assert.ok(flip.includes("updateDebug(gridEl, 'queuedReplays');"));
   assert.ok(flip.includes('const state = Flip.getState(animationTargets);'));
   assert.ok(flip.includes('const animationTargets = isPinch ? pickPinchTargets(items) : items;'));
   assert.ok(flip.includes('const maxTargets = 56;'));
@@ -1042,15 +1047,15 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('nested: false,'));
   assert.ok(flip.includes('prune: false,'));
   assert.ok(flip.includes('scale: isPinch ? false : true,'));
-  assert.ok(flip.includes('? 0.09'));
+  assert.ok(flip.includes('? 0.12'));
   assert.ok(flip.includes("? 'power2.out'"));
-  assert.ok(flip.includes('if (isPinch) return;'));
+  assert.ok(flip.includes('if (isPinch) return invariantFixups;'));
   assert.ok(flip.includes('overwrite: true,'));
   assert.ok(flip.includes("clearProps: 'transform'"));
   assert.ok(!flip.includes('onEnter: (elements) => {'));
   assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));
-  assert.ok(flip.includes('previous.kill();'));
-  assert.ok(flip.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
+  assert.ok(!flip.includes('previous.kill();'));
+  assert.ok(!flip.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
   assert.ok(flip.includes('onInterrupt: () => {'));
   assert.ok(flip.includes('__explorerDensityFlipDebug'));
 
@@ -1428,17 +1433,19 @@ test('density animation pipeline avoids ordinary-card enter-fade behavior and op
   assert.ok(content.includes('onInterrupt'));
 });
 
-test('density animation pipeline aggressively interrupts stale transitions before new layout animation', () => {
+test('density animation pipeline defers new starts until active density motion settles', () => {
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const content = fs.readFileSync(flipPath, 'utf8');
 
   assert.ok(content.includes('const previous = activeByGrid.get(gridEl);'));
-  assert.ok(content.includes('previous.kill();'));
-  assert.ok(content.includes('activeByGrid.delete(gridEl);'));
+  assert.ok(content.includes('queuedByGrid.set(gridEl, {'));
+  assert.ok(content.includes("updateDebug(gridEl, 'deferredStarts');"));
+  assert.ok(content.includes('const replayQueued = () => {'));
+  assert.ok(content.includes('const queuedReplay = replayQueued();'));
+  assert.ok(content.includes("onSettled?.({ invariantFixups, queuedReplay });"));
   assert.ok(content.includes('Flip.killFlipsOf(animationTargets);'));
   assert.ok(content.includes('gsap.killTweensOf(animationTargets);'));
   assert.ok(content.includes('const state = Flip.getState(animationTargets);'));
-  assert.ok(content.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
   assert.ok(content.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
 });
 
@@ -1449,7 +1456,7 @@ test('density animation sequencing explicitly captures old state before commit a
   const stateIndex = content.indexOf('const state = Flip.getState(animationTargets);');
   const commitIndex = content.indexOf('commitLayout();');
   const immediateIndex = content.indexOf("if (interactionMode === 'scrub' || interactionMode === 'pinch') {");
-  const delayedIndex = content.indexOf('window.requestAnimationFrame(() => {');
+  const delayedIndex = content.indexOf('window.requestAnimationFrame(() => {', immediateIndex + 1);
   const fromIndex = content.indexOf('const animation = Flip.from(state, {');
 
   assert.ok(stateIndex >= 0);
@@ -1588,9 +1595,9 @@ test('density flip cleanup path re-queries current masonry nodes to prevent stal
 
   assert.ok(content.includes('const clearTransforms = () => {'));
   assert.ok(content.includes('const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));'));
-  assert.ok(content.includes('if (!currentItems.length) return;'));
+  assert.ok(content.includes('if (!currentItems.length) return 0;'));
   assert.ok(content.includes("gsap.set(currentItems, { clearProps: 'transform' });"));
-  assert.ok(content.includes('if (isPinch) return;'));
+  assert.ok(content.includes('if (isPinch) return invariantFixups;'));
   assert.ok(content.includes('clearTransforms();'));
   assert.ok(content.includes('onComplete: () => {'));
   assert.ok(content.includes('onInterrupt: () => {'));
@@ -1601,8 +1608,7 @@ test('density flip no-item and stale-frame paths still enforce single settled la
   const content = fs.readFileSync(flipPath, 'utf8');
 
   assert.ok(content.includes('const previous = activeByGrid.get(gridEl);'));
-  assert.ok(content.includes('previous.kill();'));
-  assert.ok(content.includes('activeByGrid.delete(gridEl);'));
+  assert.ok(content.includes('queuedByGrid.set(gridEl, {'));
   assert.ok(content.includes('if (!items.length) {'));
   assert.ok(content.includes('const applyCommit = commitLayout;'));
   assert.ok(content.includes('applyCommit();'));
@@ -1640,14 +1646,14 @@ test('density controller/flip tuning keeps jump-distance-aware motion timing und
   assert.ok(controller.includes('const jumpDistance = Math.abs(safeColumns - currentColumns);'));
   assert.ok(controller.includes('jumpDistance,'));
   assert.ok(flip.includes('jumpDistance = 1'));
-  assert.ok(flip.includes('jumpDistance >= 2 ? 0.1 : 0.14'));
-  assert.ok(flip.includes('jumpDistance >= 2 ? 0.16 : 0.22'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.12 : 0.16'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.18 : 0.24'));
   assert.ok(flip.includes("jumpDistance >= 2 ? 'power4.out' : 'power3.out'"));
   assert.ok(flip.includes("jumpDistance >= 2 ? 'power3.out' : 'power2.out'"));
   assert.ok(flip.includes("if (interactionMode === 'scrub' || interactionMode === 'pinch') {"));
   assert.ok(flip.includes('scale: isPinch ? false : true,'));
   assert.ok(flip.includes('duration: isPinch'));
-  assert.ok(flip.includes('? 0.09'));
+  assert.ok(flip.includes('? 0.12'));
   assert.ok(flip.includes("? 'power2.out'"));
 });
 
