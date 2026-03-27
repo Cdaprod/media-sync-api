@@ -1048,8 +1048,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('absolute: false,'));
   assert.ok(flip.includes('nested: false,'));
   assert.ok(flip.includes('prune: false,'));
-  assert.ok(flip.includes('scale: isPinch ? false : true,'));
-  assert.ok(flip.includes('? 0.12'));
+  assert.ok(flip.includes('scale: false,'));
+  assert.ok(flip.includes('? 0.13'));
   assert.ok(flip.includes("? 'power2.out'"));
   assert.ok(flip.includes('if (isPinch) return invariantFixups;'));
   assert.ok(flip.includes('overwrite: true,'));
@@ -1212,7 +1212,7 @@ test('density flip pipeline is continuity-safe for persistent masonry cards', ()
   assert.ok(flip.includes('absolute: false,'));
   assert.ok(flip.includes('nested: false,'));
   assert.ok(flip.includes('prune: false,'));
-  assert.ok(flip.includes('scale: isPinch ? false : true,'));
+  assert.ok(flip.includes('scale: false,'));
   assert.ok(flip.includes('overwrite: true,'));
   assert.ok(flip.includes('Flip.killFlipsOf(animationTargets);'));
   assert.ok(flip.includes('gsap.killTweensOf(animationTargets);'));
@@ -1660,14 +1660,13 @@ test('density controller/flip tuning keeps jump-distance-aware motion timing und
   assert.ok(controller.includes('const jumpDistance = Math.abs(safeColumns - currentColumns);'));
   assert.ok(controller.includes('jumpDistance,'));
   assert.ok(flip.includes('jumpDistance = 1'));
-  assert.ok(flip.includes('jumpDistance >= 2 ? 0.12 : 0.16'));
-  assert.ok(flip.includes('jumpDistance >= 2 ? 0.18 : 0.24'));
-  assert.ok(flip.includes("jumpDistance >= 2 ? 'power4.out' : 'power3.out'"));
-  assert.ok(flip.includes("jumpDistance >= 2 ? 'power3.out' : 'power2.out'"));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.14 : 0.18'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.2 : 0.26'));
+  assert.ok(flip.includes("? 'power2.out'"));
   assert.ok(flip.includes("if (interactionMode === 'scrub' || interactionMode === 'pinch') {"));
-  assert.ok(flip.includes('scale: isPinch ? false : true,'));
+  assert.ok(flip.includes('scale: false,'));
   assert.ok(flip.includes('duration: isPinch'));
-  assert.ok(flip.includes('? 0.12'));
+  assert.ok(flip.includes('? 0.13'));
   assert.ok(flip.includes("? 'power2.out'"));
 });
 

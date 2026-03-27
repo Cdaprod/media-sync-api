@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-27)
+- Completed a truth-locked density animation quality pass focused only on motion feel (no authority-chain or gesture-semantic rewrites).
+- FLIP now uses `scale: false` across density modes to reduce rubbery resize artifacts on mobile positioned masonry cards.
+- Density timing/ease profile was retuned to calmer/restrained motion (`pinch 0.13`, `scrub 0.14/0.18`, `settle 0.20/0.26`, `power2.out`) while preserving pinch immediate-start path and existing correctness invariants.
+
+### Latest Implementation Notes (2026-03-27)
 - Continued density-truth stabilization by fixing commit/render ordering at the Explorer app boundary: density commit callback now uses `flushSync(setGridColumnCount)` so updated absolute masonry geometry is committed before FLIP continuation.
 - Preserved controller truth model where committed columns advance only in `commitLayoutColumns(...)` (no pre-commit `currentColumns` advancement).
 - Added explicit runtime density layout snapshot hook in `AssetGrid` (`globalThis.__explorerDensityLayoutDebug.getSnapshot()`) for device verification of column count, stage height, sampled card geometry, and FLIP-active status.

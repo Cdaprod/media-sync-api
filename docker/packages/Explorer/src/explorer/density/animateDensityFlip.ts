@@ -139,17 +139,17 @@ export function animateDensityFlip({
       absolute: false,
       nested: false,
       prune: false,
-      scale: isPinch ? false : true,
+      scale: false,
       duration: isPinch
-        ? 0.12
+        ? 0.13
         : interactionMode === 'scrub'
-          ? (jumpDistance >= 2 ? 0.12 : 0.16)
-          : (jumpDistance >= 2 ? 0.18 : 0.24),
+          ? (jumpDistance >= 2 ? 0.14 : 0.18)
+          : (jumpDistance >= 2 ? 0.2 : 0.26),
       ease: isPinch
         ? 'power2.out'
         : interactionMode === 'scrub'
-          ? (jumpDistance >= 2 ? 'power4.out' : 'power3.out')
-          : (jumpDistance >= 2 ? 'power3.out' : 'power2.out'),
+          ? 'power2.out'
+          : 'power2.out',
       simple: true,
       overwrite: true,
       onComplete: () => {

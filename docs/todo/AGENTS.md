@@ -1,3 +1,11 @@
+## 2026-03-27 — Density motion-quality pass (truth-locked) (new)
+- [x] Kept density correctness pipeline unchanged (commit/render synchronization + no pre-commit truth advancement) and limited this pass to FLIP motion profile quality tuning.
+- [x] Disabled FLIP scale interpolation for all density modes (`scale:false`) to remove rubbery resize artifacts on positioned masonry cards.
+- [x] Retuned density timings to calmer mobile-friendly values: pinch `0.13`, scrub `0.14/0.18`, settle `0.20/0.26` with restrained `power2.out` easing.
+- [x] Preserved pinch dedicated immediate-start path and avoided queue/replay or partial-target reintroduction.
+- [x] Updated static contracts to lock the new scale/timing/ease profile and revalidated Explorer static suite pass.
+- [ ] Next: on-device verify flicker/chop reduction while confirming density truth remains locked under rapid 1↔6 and pinch notch changes.
+
 ## 2026-03-27 — Density commit/render ordering stabilization (new)
 - [x] Root-caused remaining density desync to commit/render boundary timing: FLIP could start while React had not yet committed updated absolute card geometry for the new `gridColumnCount`.
 - [x] Updated Explorer density commit callback path to `flushSync` the `setGridColumnCount(...)` update so committed density state and rendered masonry geometry are synchronized before FLIP continuation.
