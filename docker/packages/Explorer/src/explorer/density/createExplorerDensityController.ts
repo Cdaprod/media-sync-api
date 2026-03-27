@@ -45,6 +45,26 @@ export function createExplorerDensityController(options: ExplorerDensityControll
   let destroyed = false;
   let scrubFrameId = 0;
   let pendingScrubColumns: number | null = null;
+  let pinchAnimationActive = false;
+  let queuedPinchColumns: number | null = null;
+  let pinchStartAt = 0;
+  const pinchPerfDebug = {
+    active: false,
+    lastTargetCount: 0,
+    lastDurationMs: 0,
+    videoPreviewActive: false,
+    droppedCommits: 0,
+    queuedCommits: 0,
+  };
+
+  const exposePinchPerfDebug = () => {
+    (globalThis as typeof globalThis & {
+      __explorerPinchPerfDebug?: { getStats: () => typeof pinchPerfDebug };
+    }).__explorerPinchPerfDebug = {
+      getStats: () => ({ ...pinchPerfDebug }),
+    };
+  };
+  exposePinchPerfDebug();
 
   function syncSlider(columns: number) {
     if (sliderEl && sliderEl.value !== String(columns)) {
@@ -70,6 +90,26 @@ export function createExplorerDensityController(options: ExplorerDensityControll
       gridEl,
       interactionMode,
       jumpDistance,
+      onStart: (targetCount) => {
+        if (interactionMode !== 'pinch') return;
+        pinchAnimationActive = true;
+        pinchStartAt = performance.now();
+        pinchPerfDebug.active = true;
+        pinchPerfDebug.lastTargetCount = targetCount;
+        pinchPerfDebug.videoPreviewActive = Boolean(gridEl.querySelector('video.asset-thumb-preview'));
+        exposePinchPerfDebug();
+      },
+      onSettled: () => {
+        if (interactionMode !== 'pinch') return;
+        pinchAnimationActive = false;
+        pinchPerfDebug.active = false;
+        pinchPerfDebug.lastDurationMs = Math.max(0, performance.now() - pinchStartAt);
+        exposePinchPerfDebug();
+        const queued = queuedPinchColumns;
+        queuedPinchColumns = null;
+        if (queued == null || queued === currentColumns) return;
+        runAnimatedCommit(queued, 'pinch');
+      },
       commitLayout: () => {
         commitLayoutColumns(safeColumns);
       },
@@ -111,6 +151,16 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     if (destroyed) return;
     const safeColumns = clampColumns(nextColumns, minColumns, maxColumns);
     if (safeColumns === currentColumns) return;
+    if (pinchAnimationActive) {
+      if (queuedPinchColumns === safeColumns) {
+        pinchPerfDebug.droppedCommits += 1;
+      } else {
+        queuedPinchColumns = safeColumns;
+        pinchPerfDebug.queuedCommits += 1;
+      }
+      exposePinchPerfDebug();
+      return;
+    }
     runAnimatedCommit(safeColumns, 'pinch');
   }
 
@@ -127,6 +177,10 @@ export function createExplorerDensityController(options: ExplorerDensityControll
       scrubFrameId = 0;
     }
     pendingScrubColumns = null;
+    pinchAnimationActive = false;
+    queuedPinchColumns = null;
+    pinchPerfDebug.active = false;
+    exposePinchPerfDebug();
   }
 
   commitLayoutColumns(currentColumns);

@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-27)
+- Added pinch-focused runtime performance guards in density control: pinch commits are now in-flight gated with a single queued next target (`queuedPinchColumns`) and lightweight global runtime stats are exposed via `globalThis.__explorerPinchPerfDebug.getStats()`.
+- Pinch FLIP target workload is now reduced by selecting near-viewport masonry cards for pinch mode (`pickPinchTargets`, buffered viewport window + capped target count), while layout truth remains full-commit authoritative.
+- Explorer now applies temporary pinch performance mode (`.pinch-perf-active`) during pinch steps, hiding thumbnail preview video layers briefly to reduce repaint cost during pinch FLIP.
+
+### Latest Implementation Notes (2026-03-27)
 - Pinch motion-quality follow-up simplified the pinch FLIP profile for mobile smoothness: pinch now uses a fixed fast duration (`0.09`) with a simpler firmer ease (`power2.out`) while retaining immediate-start and `scale: false`.
 - Reduced pinch-path cleanup work in `animateDensityFlip`: transform clear now short-circuits the heavy transition-reset loop for pinch mode (`if (isPinch) return;`) to lower per-card write overhead during pinch commits.
 - Preserved dedicated pinch routing and overlay node latch behavior; updated static contracts to lock the simplified pinch timing/ease and pinch cleanup short-circuit.

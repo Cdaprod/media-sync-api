@@ -813,6 +813,10 @@ select.control{
   opacity: 0.98;
   mix-blend-mode: normal;
 }
+.content.pinch-perf-active .asset-thumb-preview{
+  visibility: hidden;
+  opacity: 0;
+}
 .thumb .fallback{
   font-size: 12px;
   color: var(--muted);

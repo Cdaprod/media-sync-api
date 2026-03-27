@@ -366,6 +366,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [pinchDisplayNodeCount, setPinchDisplayNodeCount] = useState(DEFAULT_COLUMNS_MOBILE);
   const pinchOverlayGestureActiveRef = useRef(false);
   const pinchOverlayPendingNodeCountRef = useRef<number | null>(null);
+  const [pinchPerfActive, setPinchPerfActive] = useState(false);
+  const pinchPerfTimeoutRef = useRef<number | null>(null);
   const [tapOverlayPoint, setTapOverlayPoint] = useState<PinchOverlayPoint>(null);
   const [tapOverlayTrigger, setTapOverlayTrigger] = useState(0);
   const [holdOverlayPoint, setHoldOverlayPoint] = useState<PinchOverlayPoint>(null);
@@ -2147,6 +2149,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         },
         onPinchStep: (dir) => {
           pinchPulseTriggerRef.current?.(dir);
+          if (pinchPerfTimeoutRef.current) {
+            window.clearTimeout(pinchPerfTimeoutRef.current);
+            pinchPerfTimeoutRef.current = null;
+          }
+          setPinchPerfActive(true);
         },
         onPinchRelease: () => {
           pinchOverlayGestureActiveRef.current = false;
@@ -2156,6 +2163,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           window.requestAnimationFrame(() => {
             setPinchDisplayNodeCount(nextNodeCount);
           });
+          if (pinchPerfTimeoutRef.current) {
+            window.clearTimeout(pinchPerfTimeoutRef.current);
+          }
+          pinchPerfTimeoutRef.current = window.setTimeout(() => {
+            setPinchPerfActive(false);
+            pinchPerfTimeoutRef.current = null;
+          }, 150);
           setPinchOverlayActive(false);
         },
       });
@@ -2170,6 +2184,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       densityControllerRef.current = null;
       pinchOverlayGestureActiveRef.current = false;
       pinchOverlayPendingNodeCountRef.current = null;
+      if (pinchPerfTimeoutRef.current) {
+        window.clearTimeout(pinchPerfTimeoutRef.current);
+        pinchPerfTimeoutRef.current = null;
+      }
+      setPinchPerfActive(false);
       setPinchOverlayActive(false);
     };
   }, [gridSurfaceEl, isMobile, view]);
@@ -2649,7 +2668,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
         <section
           ref={mediaContentRef}
-          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''}`}
+          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''} ${pinchPerfActive ? 'pinch-perf-active' : ''}`}
           onContextMenuCapture={(event) => {
             const target = event.target as HTMLElement | null;
             if (!target?.closest('.asset, .row')) return;

@@ -1,3 +1,12 @@
+## 2026-03-27 — Pinch-density performance guard pass
+- [x] Added pinch in-flight gating with single queued next pinch target in `createExplorerDensityController` to avoid re-entrant pinch FLIP churn.
+- [x] Added lightweight runtime instrumentation hook `globalThis.__explorerPinchPerfDebug.getStats()` (active state, target count, duration, preview-active flag, dropped/queued counts).
+- [x] Reduced pinch FLIP target set to near-viewport cards with a bounded cap while keeping full layout commit truth.
+- [x] Added temporary pinch performance mode in `ExplorerApp` + CSS (`.content.pinch-perf-active .asset-thumb-preview`) to hide preview video layers during pinch motion.
+- [x] Updated static regression assertions for pinch target reduction, in-flight gating/queueing, instrumentation, and preview suppression contract.
+- [x] Re-ran Explorer static suite with all tests passing.
+- [ ] Next: on-device validate pinch perf debug counters during repeated notch gestures and confirm no perceptible hitch on video-heavy datasets.
+
 ## 2026-03-27 — Pinch motion-quality simplification pass
 - [x] Simplified pinch FLIP timing to a fixed fast profile (`duration: 0.09`, `ease: power2.out`) while preserving immediate start and `scale: false`.
 - [x] Reduced pinch cleanup overhead by short-circuiting heavy per-card transition-reset loop in `clearTransforms()` for pinch mode.
