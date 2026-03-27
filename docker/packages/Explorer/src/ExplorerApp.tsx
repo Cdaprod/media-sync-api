@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
@@ -2129,7 +2130,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ?? DEFAULT_COLUMNS_MOBILE,
       onColumnsCommit: (nextColumns) => {
         lastCommittedColumnsRef.current = nextColumns;
-        setGridColumnCount(nextColumns);
+        flushSync(() => {
+          setGridColumnCount(nextColumns);
+        });
       },
       minColumns: MIN_COLUMNS_MOBILE,
       maxColumns: MAX_COLUMNS_MOBILE,

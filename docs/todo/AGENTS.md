@@ -1,3 +1,11 @@
+## 2026-03-27 — Density commit/render ordering stabilization (new)
+- [x] Root-caused remaining density desync to commit/render boundary timing: FLIP could start while React had not yet committed updated absolute card geometry for the new `gridColumnCount`.
+- [x] Updated Explorer density commit callback path to `flushSync` the `setGridColumnCount(...)` update so committed density state and rendered masonry geometry are synchronized before FLIP continuation.
+- [x] Kept density truth authority in `commitLayoutColumns(...)` (no pre-commit column advancement) and retained pinch path constraints (`immediate`, `scale:false`, dedicated pinch route).
+- [x] Added runtime layout snapshot instrumentation (`__explorerDensityLayoutDebug.getSnapshot()`) with card geometry samples + flip-active signal for on-device truth verification.
+- [x] Updated static contracts to lock flushSync commit behavior and layout debug hook presence; re-ran Explorer static suite with passing results.
+- [ ] Next: on-device verify no stale 3-column residue or malformed gaps at density 1/2/4/6 using the new debug snapshot after settle.
+
 ## 2026-03-27 — Density layout-truth regression recovery (new)
 - [x] Reverted risky density FLIP optimizations that could leave mixed old/new masonry geometry under rapid density changes.
 - [x] Removed partial-target pinch FLIP path and restored full-card-set FLIP targets so all `.masonry-card` nodes reconcile each density commit.

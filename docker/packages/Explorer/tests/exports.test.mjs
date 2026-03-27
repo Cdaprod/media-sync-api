@@ -983,6 +983,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("const modeQuery = window.matchMedia('(max-width: 860px)');"));
   assert.ok(content.includes("modeQuery.addEventListener('change', handleModeChange);"));
   assert.ok(content.includes('inspectorOpenRef.current = inspectorOpen;'));
+  assert.ok(content.includes("import { flushSync } from 'react-dom';"));
   assert.ok(content.includes('if (hasBootstrappedExplorerSession) return;'));
   assert.ok(content.includes('hasBootstrappedExplorerSession = true;'));
   assert.ok(content.includes('if (!node) return;'));
@@ -1010,6 +1011,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes('scrubFrameId = window.requestAnimationFrame(() => {'));
   assert.ok(densityController.includes('runAnimatedCommit(nextColumns, \'scrub\');'));
   assert.ok(densityController.includes('window.cancelAnimationFrame(scrubFrameId);'));
+  assert.ok(content.includes('flushSync(() => {'));
+  assert.ok(content.includes('setGridColumnCount(nextColumns);'));
   assert.ok(!densityController.includes('setTimeout('));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));

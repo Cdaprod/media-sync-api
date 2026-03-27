@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-27)
+- Continued density-truth stabilization by fixing commit/render ordering at the Explorer app boundary: density commit callback now uses `flushSync(setGridColumnCount)` so updated absolute masonry geometry is committed before FLIP continuation.
+- Preserved controller truth model where committed columns advance only in `commitLayoutColumns(...)` (no pre-commit `currentColumns` advancement).
+- Added explicit runtime density layout snapshot hook in `AssetGrid` (`globalThis.__explorerDensityLayoutDebug.getSnapshot()`) for device verification of column count, stage height, sampled card geometry, and FLIP-active status.
+
+### Latest Implementation Notes (2026-03-27)
 - Prioritized correctness recovery for density regression with mixed old/new masonry geometry and stale gaps after pinch/slider changes.
 - Removed queue/replay lane and restored immediate retarget-kill sequencing in `animateDensityFlip` so winning density targets always commit and reconcile visibly.
 - Removed pinch partial-target FLIP reduction and returned to full-card FLIP targets per commit to guarantee whole-grid layout truth at settle.
