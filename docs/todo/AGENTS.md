@@ -1,3 +1,10 @@
+## 2026-03-27 — Density stuck-at-3 regression fix (new)
+- [x] Root-caused the “animation flashes but grid remains 3 columns” regression to queued replay ordering in `animateDensityFlip`: queued runs could be re-deferred because `activeByGrid` was cleared *after* replay scheduling.
+- [x] Fixed completion/interrupt ordering so active transform ownership is cleared before queued replay starts.
+- [x] Added static regression assertions locking replay-after-active-clear ordering for both `onComplete` and `onInterrupt` paths.
+- [x] Re-ran Explorer static suite (`node --test tests/exports.test.mjs`) with passing results.
+- [ ] Next: runtime pinch + slider QA to confirm visible grid columns always reconcile with committed density/readout across repeated changes.
+
 ## 2026-03-27 — Density motion-lane choreography hardening (new)
 - [x] Audited active density choreography collisions (in-flight FLIP overlap, pinch target handoff timing, transform cleanup/start ordering) and confirmed retarget-kill overlap was the primary readability conflict.
 - [x] Added per-grid deferred-start lane control in `animateDensityFlip` so new density commits queue (`queuedByGrid`) while an active density animation owns card transforms.

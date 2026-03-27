@@ -1449,6 +1449,22 @@ test('density animation pipeline defers new starts until active density motion s
   assert.ok(content.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
 });
 
+test('density queued replay clears active ownership before launching the queued run', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  const completeDeleteIndex = content.indexOf('activeByGrid.delete(gridEl);');
+  const completeReplayIndex = content.indexOf('const queuedReplay = replayQueued();', completeDeleteIndex);
+  const interruptIndex = content.indexOf('onInterrupt: () => {');
+  const interruptDeleteIndex = content.indexOf('activeByGrid.delete(gridEl);', interruptIndex);
+  const interruptReplayIndex = content.indexOf('const queuedReplay = replayQueued();', interruptIndex);
+
+  assert.ok(completeDeleteIndex >= 0);
+  assert.ok(completeReplayIndex > completeDeleteIndex);
+  assert.ok(interruptDeleteIndex > interruptIndex);
+  assert.ok(interruptReplayIndex > interruptDeleteIndex);
+});
+
 test('density animation sequencing explicitly captures old state before commit and starts animation after commit path', () => {
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const content = fs.readFileSync(flipPath, 'utf8');

@@ -196,11 +196,11 @@ export function animateDensityFlip({
       onComplete: () => {
         updateDebug(gridEl, 'completes');
         const invariantFixups = clearTransforms();
-        const queuedReplay = replayQueued();
-        onSettled?.({ invariantFixups, queuedReplay });
         if (activeByGrid.get(gridEl) === animation) {
           activeByGrid.delete(gridEl);
         }
+        const queuedReplay = replayQueued();
+        onSettled?.({ invariantFixups, queuedReplay });
       },
       onInterrupt: () => {
         updateDebug(gridEl, 'interrupts');
@@ -208,11 +208,11 @@ export function animateDensityFlip({
         if (!suppressInterruptCleanupByGrid.get(gridEl)) {
           invariantFixups = clearTransforms();
         }
-        const queuedReplay = replayQueued();
-        onSettled?.({ invariantFixups, queuedReplay });
         if (activeByGrid.get(gridEl) === animation) {
           activeByGrid.delete(gridEl);
         }
+        const queuedReplay = replayQueued();
+        onSettled?.({ invariantFixups, queuedReplay });
       },
     });
     onStart?.({
