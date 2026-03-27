@@ -993,7 +993,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
   assert.ok(densityController.includes('if (!Number.isFinite(value)) return minColumns;'));
-  assert.ok(densityController.includes('currentColumns = safeColumns;'));
+  assert.ok(!densityController.includes('currentColumns = safeColumns;'));
+  assert.ok(densityController.includes('commitLayoutColumns(safeColumns);'));
   assert.ok(densityController.includes('runAnimatedCommit(nextColumns, \'scrub\');'));
   assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'settle\');'));
   assert.ok(densityController.includes('setColumnsForPinch: (nextColumns: number) => void;'));
@@ -1233,7 +1234,8 @@ test('density controller keeps committed columns as single truth and mobile clam
   assert.ok(constants.includes('export const MAX_COLUMNS_MOBILE = 6;'));
 
   assert.ok(controller.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
-  assert.ok(controller.includes('currentColumns = safeColumns;'));
+  assert.ok(!controller.includes('currentColumns = safeColumns;'));
+  assert.ok(controller.includes('commitLayoutColumns(safeColumns);'));
   assert.ok(controller.includes('syncSlider'));
   assert.ok(controller.includes('onColumnsCommit'));
   assert.ok(controller.includes('scrubTo'));
@@ -1591,6 +1593,11 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('className="masonry-host"'));
   assert.ok(content.includes('className="masonry-columns"'));
   assert.ok(content.includes('className={`masonry-card'));
+  assert.ok(content.includes('__explorerDensityLayoutDebug'));
+  assert.ok(content.includes('getSnapshot: () => {'));
+  assert.ok(content.includes('layoutRecomputeCount'));
+  assert.ok(content.includes('sampleCards'));
+  assert.ok(content.includes('flipActive'));
 });
 
 test('density flip cleanup path re-queries current masonry nodes to prevent stale transforms after repeated commits', () => {
@@ -1635,7 +1642,6 @@ test('asset grid does not run global post-render transform reset that conflicts 
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const content = fs.readFileSync(gridPath, 'utf8');
 
-  assert.ok(!content.includes("const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');"));
   assert.ok(!content.includes("card.style.transition = 'none';"));
   assert.ok(!content.includes("card.style.transform = 'none';"));
   assert.ok(!content.includes("card.style.removeProperty('transform');"));

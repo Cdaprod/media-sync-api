@@ -90,7 +90,6 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     const safeColumns = clampColumns(nextColumns, minColumns, maxColumns);
     if (safeColumns === currentColumns) return;
     const jumpDistance = Math.abs(safeColumns - currentColumns);
-    currentColumns = safeColumns;
     animateDensityFlip({
       gridEl,
       interactionMode,

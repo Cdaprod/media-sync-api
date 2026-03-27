@@ -68,6 +68,7 @@ function AssetGridComponent({
   onDismissPendingJob,
 }: AssetGridProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const layoutCommitCountRef = useRef(0);
   const [hostWidth, setHostWidth] = useState(0);
   const measureHostWidth = useCallback(() => {
     const node = hostRef.current;
@@ -110,6 +111,53 @@ function AssetGridComponent({
     }),
     [gridColumnCount, gridItems, hostWidth],
   );
+
+  useLayoutEffect(() => {
+    layoutCommitCountRef.current += 1;
+    (globalThis as typeof globalThis & {
+      __explorerDensityLayoutDebug?: {
+        getSnapshot: () => {
+          gridColumnCount: number;
+          renderedCardCount: number;
+          layoutRecomputeCount: number;
+          layoutStageHeight: number;
+          flipActive: boolean;
+          sampleCards: Array<{
+            cardId: string;
+            left: string;
+            width: string;
+            top: string;
+          }>;
+        };
+      };
+      __explorerDensityFlipDebug?: { getStats: () => Array<Record<string, number>> };
+    }).__explorerDensityLayoutDebug = {
+      getSnapshot: () => {
+        const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');
+        const cards = Array.from(stage?.querySelectorAll<HTMLElement>('.masonry-card') ?? []);
+        const stats = (globalThis as typeof globalThis & {
+          __explorerDensityFlipDebug?: { getStats: () => Array<Record<string, number>> };
+        }).__explorerDensityFlipDebug?.getStats?.() ?? [];
+        const totals = stats.reduce((acc, row) => ({
+          starts: acc.starts + Number(row.starts ?? 0),
+          settles: acc.settles + Number(row.completes ?? 0) + Number(row.interrupts ?? 0),
+        }), { starts: 0, settles: 0 });
+        return {
+          gridColumnCount,
+          renderedCardCount: cards.length,
+          layoutRecomputeCount: layoutCommitCountRef.current,
+          layoutStageHeight: Math.max(layout.stageHeight, 0),
+          flipActive: totals.starts > totals.settles,
+          sampleCards: cards.slice(0, 6).map((card) => ({
+            cardId: card.dataset.cardId ?? '',
+            left: card.style.left,
+            width: card.style.width,
+            top: card.style.top,
+          })),
+        };
+      },
+    };
+  }, [gridColumnCount, layout.stageHeight, layout.items]);
 
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
