@@ -1,3 +1,86 @@
+## 2026-03-27 — Pinch density motion desync + node-flash stabilization
+- [x] Added a dedicated pinch density commit path (`setColumnsForPinch`) so pinch threshold steps no longer route through delayed settle choreography.
+- [x] Updated density FLIP to support explicit `'pinch'` interaction mode with immediate start and pinch-specific motion tuning.
+- [x] Disabled Flip scaling for pinch transitions (`scale: false`) to reduce choppy resize interpolation on mobile masonry cards.
+- [x] Added pinch overlay node-count latch in `ExplorerApp` so node display buffers while pinch is active and flushes at release boundary.
+- [x] Updated static regression assertions for pinch path routing, pinch Flip mode, and overlay latch timing contracts.
+- [x] Re-ran Explorer static suite (`node --test tests/exports.test.mjs`) with passing results.
+- [ ] Next: runtime-device QA pass to verify perceived pinch notch timing and bridge node-count stability across repeated 1↔6 transitions.
+
+## 2026-03-26 — Pointer session init-order hotfix (tap/second-tap restore)
+- [x] Root-caused missing first-tap/second-tap behavior to pointer session reset ordering in `handlePointerDown`.
+- [x] Moved `clearPendingLongPress()` ahead of pointer session assignment so new session values are not immediately nulled.
+- [x] Added static regression assertion to lock init-order (`clearPendingLongPress` must precede `session.pointerId = event.pointerId`).
+- [x] Re-ran Explorer static suite and confirmed all contracts pass.
+- [ ] Next: verify on-device that first tap restores purple border and second tap reliably opens/activates preview video.
+
+## 2026-03-26 — Tap/second-tap regression recovery after hold-progress pass
+- [x] Root-caused tap regression to per-render local pointer variables in `useAssetInteractions` being reset by hold-progress-driven rerenders.
+- [x] Replaced local pointer-tracking variables with stable `pointerSessionRef` state so `pointerup` can always match the active pointer and cancel long-press correctly.
+- [x] Kept pre-threshold hold progress/threshold completion split while preserving pinch suppression and drag handoff behavior.
+- [x] Updated static assertions to reflect session-based hold-start coordinate wiring (`session.pressX/session.pressY`).
+- [x] Re-ran Explorer static suite to confirm tap/second-tap contract and shader lifecycle assertions all pass.
+- [ ] Next: run on-device touch QA focused on rapid tap, double-tap, and long-press transitions under active overlay animation.
+
+## 2026-03-26 — Hold timing + exclusive thumbnail preview ownership
+- [x] Added pre-threshold long-press progress updates in `useAssetInteractions` (RAF-driven progress sampled against `LONG_PRESS_MS`) instead of spending the hold effect only at completion.
+- [x] Triggered hold completion beat strictly from the actual long-press timeout path and canceled progress RAF on completion/cancel to keep gesture lifecycle deterministic.
+- [x] Retuned hold shader to separate pre-hold activity from completion confirmation (`u_active` + `u_confirm`) and lengthened confirmation visibility decay for a clear post-threshold payoff.
+- [x] Introduced preview ownership commit path in `ExplorerApp` and cleared preview ownership on first-tap focus transitions so previous video previews stop immediately when activation changes.
+- [x] Added preview remount keying in `AssetGrid` and `AssetList` so ownership transitions force old preview `<video>` instances to unmount.
+- [x] Updated `exports.test.mjs` assertions for hold timing split and exclusive preview ownership/remount contracts.
+- [ ] Next: run device-level touch QA to tune final hold confirmation duration feel (if needed) without increasing bloom/noise.
+
+## 2026-03-26 — Gesture arbitration + pinch overlay polish follow-up
+- [x] Added pinch-win gesture exclusivity in `useAssetInteractions` so second-touch escalation cancels pending long-press/context-menu and suppresses single-touch actions until all touches end.
+- [x] Reorganized shader directories into categorized structure (`core/`, `pinch/`, `tap/`, `hold/`, `shared/`) and moved pinch overlay modules into `shaders/pinch/`.
+- [x] Fixed release artifact path by preserving last valid pinch finger anchors during fade-out (no null-center fallback on release path).
+- [x] Added density-aware node count wiring (`gridColumnCount` -> overlay `nodeCount` -> shader `u_nodes`) so bridge internal nodes reflect committed columns.
+- [x] Retuned pulse ring behavior for tighter threshold-notch readability and kept overlay visual-only/pointer-events-none layering.
+- [ ] Next: capture new runtime trace verifying zero pinch-triggered context-menu opens and no center-flash artifacts on release.
+
+## 2026-03-26 — WebGL pinch-feedback overlay integration (visual-only layer)
+- [x] Added fullscreen shader overlay modules (`pinchFeedback.vert`, `pinchFeedback.frag`, `usePinchShaderOverlay`, `PinchShaderOverlay`) with WebGL alpha blending and JS-driven fade/pulse decay.
+- [x] Mounted overlay in `ExplorerApp` above grid content and below topbar with `pointer-events: none` so it cannot capture interactions or own state.
+- [x] Wired existing pinch controller callbacks to feed live finger points and threshold-step pulses (`+1`/`-1`) into overlay without changing density thresholds/commit logic.
+- [x] Added static regression assertions for overlay mount wiring, shader hook lifecycle, pulse safety contract, and canvas overlay presence/unmount cleanup markers.
+- [ ] Next: capture device runtime metrics/screens to confirm pulse/readability over real content across portrait/landscape.
+
+## 2026-03-25 — Slider event sequencing fix for backwards-FLIP/double-pass symptom
+- [x] Switched density slider live input wiring from `setColumns(..., true)` to `scrubTo(...)` so drag updates use scrub semantics instead of delayed settle semantics.
+- [x] Added explicit scrub settle hooks on slider release/focus end (`onPointerUp`, `onKeyUp`, `onBlur`) via `settleScrub()`.
+- [x] Updated static assertions to lock slider scrub wiring and settle hook presence.
+- [ ] Next: re-check runtime 3→2 interaction for “target flashes first, jumps back, animates again” symptom after scrub/settle event split.
+
+## 2026-03-25 — Scrub retarget churn reduction (ease visibility follow-up)
+- [x] Added density scrub frame coalescing in `createExplorerDensityController` so rapid scrub input commits latest target once per frame.
+- [x] Added pending-target + RAF lifecycle cleanup (`pendingScrubColumns`, `scrubFrameId`, destroy-time cancel) for idempotent scrub scheduling.
+- [x] Updated static regression assertions to lock frame-coalesced scrub behavior and avoid accidental return to per-event scrub commits.
+- [ ] Next: rerun runtime trace and compare `retargetKills`/`interrupts` before vs after coalescing to validate reduced mid-animation overpower peaks.
+
+## 2026-03-25 — Density FLIP retarget lifecycle + responsiveness instrumentation pass
+- [x] Moved FLIP state capture ahead of active animation kill so retarget commits read current visible geometry before interruption.
+- [x] Added interrupt-cleanup suppression gate during intentional retarget kill to avoid flattening transforms between back-to-back density commits.
+- [x] Switched scrub-start timing to immediate post-commit Flip start while retaining delayed settle-start path.
+- [x] Tightened jump-distance motion tuning to firmer/faster durations/eases for both scrub and settle commits.
+- [x] Added runtime debug stats hook (`globalThis.__explorerDensityFlipDebug.getStats()`) to count starts/completes/interrupts/retarget kills/stale-frame drops/no-item commits.
+- [x] Updated static assertions for the new retarget and timing contracts.
+- [ ] Next: collect before/after on-device metrics for `interrupts / starts` and `staleFrameDrops` under rapid 1↔6 scrubs.
+
+## 2026-03-25 — Masonry transform ownership conflict fix (CSS vs FLIP)
+- [x] Reviewed runtime DevTools density instrumentation output showing high `transitioncancel` churn and active baseline `transition: transform ...` on masonry cards.
+- [x] Added masonry-specific CSS override to remove baseline transform transition ownership from `.masonry-card.asset` while preserving filter/border-color micro-interactions.
+- [x] Disabled masonry-card hover transform offset (`.masonry-card.asset:hover { transform: none; }`) to avoid transform contention with density FLIP.
+- [x] Added static regression assertions to lock the masonry transform-ownership CSS contract.
+- [ ] Next: run another on-device 1→6→1 density trace and compare `transitioncancel` / `transitionend` ratios after CSS ownership isolation.
+
+## 2026-03-25 — Density live-geometry interrupt continuity pass
+- [x] Removed the `AssetGrid` post-render global transform/transition reset effect so render commits no longer cancel active FLIP motion.
+- [x] Kept settle cleanup under `animateDensityFlip` as the motion-layer owner of transform lifecycle (`complete`/`interrupt`/no-item paths).
+- [x] Added jump-distance-aware animation tuning (`jumpDistance`) so large density jumps are shorter/firmer and small jumps keep richer easing.
+- [x] Updated Explorer static regression assertions to lock the no-render-reset contract and jump-distance timing/easing wiring.
+- [ ] Next: add a runtime/browser continuity check (rapid 1↔6 scrubs) asserting no horizontal drift and monotonic visible-card continuity across interrupts.
+
 ## 2026-03-25 — Final settle invariant pass (geometry truth vs render truth)
 - [x] Added forced transform reset + temporary transition suppression in `animateDensityFlip` cleanup (`complete`, `interrupt`, and no-item paths) using live node re-query.
 - [x] Added an `AssetGrid` post-layout `useLayoutEffect` settle pass that re-clears transform/transition residue on all `.masonry-card` nodes after render commit.

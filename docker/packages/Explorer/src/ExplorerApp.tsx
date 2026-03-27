@@ -50,6 +50,9 @@ import { createModalMotion } from './ui/motion/modalMotion';
 import { createExplorerDensityController } from './explorer/density/createExplorerDensityController';
 import { createPinchDensityController } from './explorer/density/createPinchDensityController';
 import { DEFAULT_COLUMNS_MOBILE, MAX_COLUMNS_MOBILE, MIN_COLUMNS_MOBILE } from './explorer/density/constants';
+import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
+import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
+import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -58,6 +61,7 @@ interface ExplorerAppProps {
 type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
 type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
 type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
+type PinchOverlayPoint = { x: number; y: number } | null;
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -286,6 +290,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
   const [activeAssetKey, setActiveAssetKey] = useState('');
+  const [previewActivationKey, setPreviewActivationKey] = useState('');
+  const [previewPlaybackToken, setPreviewPlaybackToken] = useState(0);
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -353,6 +359,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const densitySliderRef = useRef<HTMLInputElement | null>(null);
   const densityControllerRef = useRef<ReturnType<typeof createExplorerDensityController> | null>(null);
   const pinchDensityRef = useRef<ReturnType<typeof createPinchDensityController> | null>(null);
+  const pinchPulseTriggerRef = useRef<((dir: number) => void) | null>(null);
+  const [pinchOverlayActive, setPinchOverlayActive] = useState(false);
+  const [pinchFingerA, setPinchFingerA] = useState<PinchOverlayPoint>(null);
+  const [pinchFingerB, setPinchFingerB] = useState<PinchOverlayPoint>(null);
+  const [pinchDisplayNodeCount, setPinchDisplayNodeCount] = useState(DEFAULT_COLUMNS_MOBILE);
+  const pinchOverlayGestureActiveRef = useRef(false);
+  const pinchOverlayPendingNodeCountRef = useRef<number | null>(null);
+  const [tapOverlayPoint, setTapOverlayPoint] = useState<PinchOverlayPoint>(null);
+  const [tapOverlayTrigger, setTapOverlayTrigger] = useState(0);
+  const [holdOverlayPoint, setHoldOverlayPoint] = useState<PinchOverlayPoint>(null);
+  const [holdOverlayActive, setHoldOverlayActive] = useState(false);
+  const [holdOverlayProgress, setHoldOverlayProgress] = useState(0);
+  const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
+  const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
+  const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
   const composeCardRef = useRef<HTMLFormElement | null>(null);
@@ -361,6 +382,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (pinchOverlayGestureActiveRef.current) {
+      pinchOverlayPendingNodeCountRef.current = gridColumnCount;
+      return;
+    }
+    const rafId = window.requestAnimationFrame(() => {
+      setPinchDisplayNodeCount(gridColumnCount);
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [gridColumnCount]);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
     const itemOrient = inferOrientationFromItem(item);
@@ -426,6 +458,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const clearActiveAsset = useCallback(() => {
     setActiveAssetKey('');
+    commitPreviewActivationKey('');
+    setPreviewPlaybackToken((prev) => prev + 1);
     setFocused(null);
     setPreviewDetailsOpen(false);
   }, []);
@@ -607,6 +641,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       gridSurfaceEl.dataset.columns = String(safeColumns);
     }
   }, [clampDensityColumns, gridSurfaceEl]);
+
+  const scrubDensityColumns = useCallback((nextColumns: number) => {
+    const density = densityControllerRef.current;
+    if (density) {
+      density.scrubTo(nextColumns);
+      return;
+    }
+    commitDensityColumns(nextColumns, true);
+  }, [commitDensityColumns]);
+
+  const settleDensityScrub = useCallback(() => {
+    const density = densityControllerRef.current;
+    density?.settleScrub();
+  }, []);
 
   useEffect(() => {
     setGridColumnCount((current) => clampDensityColumns(current));
@@ -942,6 +990,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setPreviewDetailsOpen(false);
   }, []);
 
+  const commitPreviewActivationKey = useCallback((nextKey: string) => {
+    setPreviewActivationKey((prev) => {
+      if (prev !== nextKey) {
+        setPreviewPlaybackToken((token) => token + 1);
+      }
+      return nextKey;
+    });
+  }, []);
+
   const focusRelative = useCallback((offset: number) => {
     if (!focused || !filteredMedia.length) return;
     const currentKey = assetSelectionKey(focused, activeProject);
@@ -951,8 +1008,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const nextItem = filteredMedia[nextIndex] || focused;
     setFocused(nextItem);
     setActiveAssetKey(assetSelectionKey(nextItem, activeProject));
+    commitPreviewActivationKey(assetSelectionKey(nextItem, activeProject));
     setPreviewAutoPlayToken((prev) => prev + 1);
-  }, [activeProject, assetSelectionKey, filteredMedia, focused]);
+  }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;
@@ -1036,10 +1094,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!activeAssetKey) return;
     if (itemsBySelectionKey.has(activeAssetKey)) return;
     setActiveAssetKey('');
+    commitPreviewActivationKey('');
     if (!inspectorOpen) {
       setFocused(null);
     }
-  }, [activeAssetKey, inspectorOpen, itemsBySelectionKey]);
+  }, [activeAssetKey, commitPreviewActivationKey, inspectorOpen, itemsBySelectionKey]);
 
   const performDeleteMediaSelection = useCallback(
     async (selectionKeys: string[]) => {
@@ -1545,7 +1604,46 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     projects,
     selected,
     selectedKeysOrdered,
+    onTapFeedback: (point) => {
+      setTapOverlayPoint(point);
+      setTapOverlayTrigger((prev) => prev + 1);
+    },
+    onHoldFeedback: (point, active, progress, completed) => {
+      if (point) setHoldOverlayPoint(point);
+      setHoldOverlayActive(active);
+      setHoldOverlayProgress(progress);
+      if (completed) {
+        setHoldOverlayCompleteBeat((prev) => prev + 1);
+      }
+    },
+    onTapStage: (stage, itemKey) => {
+      if (stage === 'second') {
+        setActiveAssetKey(itemKey);
+        commitPreviewActivationKey(itemKey);
+        setReinforcedActiveKey(itemKey);
+        return;
+      }
+      setActiveAssetKey(itemKey);
+      commitPreviewActivationKey('');
+      setReinforcedActiveKey('');
+    },
+    onHoldEmphasis: (itemKey, active) => {
+      if (!active || !itemKey) {
+        setHoldEmphasisKey('');
+        return;
+      }
+      setHoldEmphasisKey(itemKey);
+      commitPreviewActivationKey(itemKey);
+    },
   });
+
+  useEffect(() => {
+    if (!reinforcedActiveKey) return;
+    const timeoutId = window.setTimeout(() => {
+      setReinforcedActiveKey((prev) => (prev === reinforcedActiveKey ? '' : prev));
+    }, 680);
+    return () => window.clearTimeout(timeoutId);
+  }, [reinforcedActiveKey]);
 
   const handlePreviewSelected = useCallback(() => {
     const first = selectionItems[0];
@@ -2041,6 +2139,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         gestureSurfaceEl: scrollerEl,
         visualScaleTargetEl: gridEl,
         density,
+        onPinchFrame: (a, b, active) => {
+          pinchOverlayGestureActiveRef.current = active;
+          setPinchFingerA(a);
+          setPinchFingerB(b);
+          setPinchOverlayActive(active);
+        },
+        onPinchStep: (dir) => {
+          pinchPulseTriggerRef.current?.(dir);
+        },
+        onPinchRelease: () => {
+          pinchOverlayGestureActiveRef.current = false;
+          const pendingCount = pinchOverlayPendingNodeCountRef.current;
+          pinchOverlayPendingNodeCountRef.current = null;
+          const nextNodeCount = pendingCount ?? density.getColumns();
+          window.requestAnimationFrame(() => {
+            setPinchDisplayNodeCount(nextNodeCount);
+          });
+          setPinchOverlayActive(false);
+        },
       });
       pinch.attach();
       pinchDensityRef.current = pinch;
@@ -2051,6 +2168,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       density.destroy();
       pinchDensityRef.current = null;
       densityControllerRef.current = null;
+      pinchOverlayGestureActiveRef.current = false;
+      pinchOverlayPendingNodeCountRef.current = null;
+      setPinchOverlayActive(false);
     };
   }, [gridSurfaceEl, isMobile, view]);
 
@@ -2255,11 +2375,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
+    const isActivated = previewActivationKey === selectionKey;
+    const isSecondTapReinforced = reinforcedActiveKey === selectionKey;
+    const isHoldEmphasis = holdEmphasisKey === selectionKey;
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
+    const activeVideoPreviewUrl = (
+      isActivated && kind === 'video'
+        ? resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || ''))
+        : undefined
+    );
+    const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';
 
     return {
+      activeVideoPreviewUrl,
       fallbackThumb,
       isActive,
+      isSecondTapReinforced,
+      isHoldEmphasis,
       isSelected,
       item,
       kind,
@@ -2267,6 +2399,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       orient,
       orientLocked,
       pointerHandlers,
+      previewPlaybackKey,
       renderKey,
       safeThumbUrl,
       selectionKey,
@@ -2285,7 +2418,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     buildAssetPointerHandlers,
     dynamicOrientations,
     getCachedOrientation,
+    holdEmphasisKey,
     projectLabel,
+    previewActivationKey,
+    previewPlaybackToken,
+    reinforcedActiveKey,
     resolveAssetUrl,
     resolveItemOrientation,
     selected,
@@ -2545,6 +2682,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <div className="spinner"></div>
             <div>Preparing thumbnails…</div>
           </div>
+          <PinchShaderOverlay
+            active={pinchOverlayActive}
+            fingerA={pinchFingerA}
+            fingerB={pinchFingerB}
+            nodeCount={pinchDisplayNodeCount}
+            onPulse={(trigger) => {
+              pinchPulseTriggerRef.current = trigger;
+            }}
+          />
+          <TapShaderOverlay tapPoint={tapOverlayPoint} tapTrigger={tapOverlayTrigger} />
+          <HoldShaderOverlay
+            holdPoint={holdOverlayPoint}
+            active={holdOverlayActive}
+            progress={holdOverlayProgress}
+            completionBeat={holdOverlayCompleteBeat}
+          />
           <div
             ref={mediaScrollViewportRef}
             className="scroll"
@@ -2666,8 +2819,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             data-topbar-control="true"
                             onInput={(event: React.FormEvent<HTMLInputElement>) => {
                               const nextColumns = Number(event.currentTarget.value || DEFAULT_COLUMNS_MOBILE);
-                              commitDensityColumns(nextColumns, true);
+                              scrubDensityColumns(nextColumns);
                             }}
+                            onPointerUp={settleDensityScrub}
+                            onBlur={settleDensityScrub}
+                            onKeyUp={settleDensityScrub}
                           />
                         </label>
                         <select

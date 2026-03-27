@@ -13,6 +13,8 @@ export interface ExplorerAssetViewModel {
   renderKey: string;
   selectionKey: string;
   isActive: boolean;
+  isSecondTapReinforced: boolean;
+  isHoldEmphasis: boolean;
   isSelected: boolean;
   size: string;
   sub: string;
@@ -22,6 +24,8 @@ export interface ExplorerAssetViewModel {
   title: string;
   fallbackThumb: string;
   safeThumbUrl: string;
+  activeVideoPreviewUrl?: string;
+  previewPlaybackKey: string;
   pointerHandlers: AssetPointerHandlers;
   kindBadgeClassName: string;
   selectionOrderLabel: string;
@@ -107,24 +111,6 @@ function AssetGridComponent({
     [gridColumnCount, gridItems, hostWidth],
   );
 
-  useLayoutEffect(() => {
-    const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');
-    if (!stage) return;
-    const cards = Array.from(stage.querySelectorAll<HTMLElement>('.masonry-card'));
-    if (!cards.length) return;
-    for (const card of cards) {
-      card.style.transition = 'none';
-      card.style.transform = 'none';
-      card.style.removeProperty('transform');
-    }
-    const rafId = window.requestAnimationFrame(() => {
-      for (const card of cards) {
-        card.style.removeProperty('transition');
-      }
-    });
-    return () => window.cancelAnimationFrame(rafId);
-  }, [gridColumnCount, hostWidth, layout.items]);
-
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
   ) => {
@@ -179,7 +165,7 @@ function AssetGridComponent({
           return (
             <div
               key={viewModel.renderKey}
-              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
+              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSecondTapReinforced ? 'is-active-reinforced' : ''} ${viewModel.isHoldEmphasis ? 'is-hold-emphasis' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
               style={positionedStyle}
               data-kind={viewModel.kind}
               data-orient={viewModel.orient}
@@ -211,6 +197,21 @@ function AssetGridComponent({
                   data-thumb-fallback={viewModel.fallbackThumb}
                   data-thumb-job-key={viewModel.thumbJobKey}
                 />
+                {viewModel.activeVideoPreviewUrl ? (
+                  <video
+                    key={viewModel.previewPlaybackKey}
+                    className="asset-thumb-preview"
+                    src={viewModel.activeVideoPreviewUrl}
+                    muted
+                    autoPlay
+                    loop
+                    playsInline
+                    preload="metadata"
+                    disablePictureInPicture
+                    controls={false}
+                    aria-hidden="true"
+                  />
+                ) : null}
                 <div className="asset-overlay">
                   <div className="asset-ol-tl">
                     <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>

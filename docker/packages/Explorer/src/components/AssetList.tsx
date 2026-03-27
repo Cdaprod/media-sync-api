@@ -47,7 +47,7 @@ function AssetListComponent({
 
         return (
           <div
-            className={`row asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
+            className={`row asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSecondTapReinforced ? 'is-active-reinforced' : ''} ${viewModel.isHoldEmphasis ? 'is-hold-emphasis' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
             key={`row-${viewModel.renderKey}`}
             data-select-key={viewModel.selectionKey}
             data-active={viewModel.isActive ? 'true' : 'false'}
@@ -69,6 +69,21 @@ function AssetListComponent({
                 data-thumb-fallback={viewModel.fallbackThumb}
                 data-thumb-job-key={viewModel.thumbJobKey}
               />
+              {viewModel.activeVideoPreviewUrl ? (
+                <video
+                  key={viewModel.previewPlaybackKey}
+                  className="asset-thumb-preview"
+                  src={viewModel.activeVideoPreviewUrl}
+                  muted
+                  autoPlay
+                  loop
+                  playsInline
+                  preload="metadata"
+                  disablePictureInPicture
+                  controls={false}
+                  aria-hidden="true"
+                />
+              ) : null}
             </div>
             <div className="info">
               <div className="t tile-ui-text">{viewModel.title}</div>
