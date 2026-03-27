@@ -1,3 +1,12 @@
+## 2026-03-27 — Density layout-truth regression recovery (new)
+- [x] Reverted risky density FLIP optimizations that could leave mixed old/new masonry geometry under rapid density changes.
+- [x] Removed partial-target pinch FLIP path and restored full-card-set FLIP targets so all `.masonry-card` nodes reconcile each density commit.
+- [x] Removed deferred queue/replay lane in `animateDensityFlip` and restored immediate retarget-kill sequencing so winning target commits always execute.
+- [x] Kept dedicated pinch path + immediate start + `scale:false` while prioritizing final visible layout truth over motion-lane experimentation.
+- [x] Updated static assertions to lock full-target pinch behavior and no queued-replay path.
+- [x] Re-ran Explorer static suite (`node --test tests/exports.test.mjs`) with passing results.
+- [ ] Next: run runtime device QA (pinch + slider stress) to confirm no stale-card gaps and no “stuck at 3 columns” behavior.
+
 ## 2026-03-27 — Density stuck-at-3 regression fix (new)
 - [x] Root-caused the “animation flashes but grid remains 3 columns” regression to queued replay ordering in `animateDensityFlip`: queued runs could be re-deferred because `activeByGrid` was cleared *after* replay scheduling.
 - [x] Fixed completion/interrupt ordering so active transform ownership is cleared before queued replay starts.

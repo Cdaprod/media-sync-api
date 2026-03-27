@@ -18,7 +18,6 @@ export type AnimateDensityFlipOptions = {
 };
 
 const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
-const queuedByGrid = new WeakMap<HTMLElement, Omit<AnimateDensityFlipOptions, 'gridEl'>>();
 const runIdByGrid = new WeakMap<HTMLElement, number>();
 const suppressInterruptCleanupByGrid = new WeakMap<HTMLElement, boolean>();
 const debugByGrid = new Map<HTMLElement, {
@@ -32,13 +31,11 @@ const debugByGrid = new Map<HTMLElement, {
   captures: number;
   immediateStarts: number;
   delayedStarts: number;
-  deferredStarts: number;
-  queuedReplays: number;
 }>();
 
 function updateDebug(
   gridEl: HTMLElement,
-  key: 'starts' | 'completes' | 'interrupts' | 'retargetKills' | 'staleFrameDrops' | 'noItemCommits' | 'startWithActive' | 'captures' | 'immediateStarts' | 'delayedStarts' | 'deferredStarts' | 'queuedReplays',
+  key: 'starts' | 'completes' | 'interrupts' | 'retargetKills' | 'staleFrameDrops' | 'noItemCommits' | 'startWithActive' | 'captures' | 'immediateStarts' | 'delayedStarts',
 ) {
   const current = debugByGrid.get(gridEl) ?? {
     starts: 0,
@@ -51,8 +48,6 @@ function updateDebug(
     captures: 0,
     immediateStarts: 0,
     delayedStarts: 0,
-    deferredStarts: 0,
-    queuedReplays: 0,
   };
   current[key] += 1;
   debugByGrid.set(gridEl, current);
@@ -79,34 +74,6 @@ export function animateDensityFlip({
   onSettled,
 }: AnimateDensityFlipOptions): void {
   const isPinch = interactionMode === 'pinch';
-  const pickPinchTargets = (items: HTMLElement[]): HTMLElement[] => {
-    const scrollHost = gridEl.closest<HTMLElement>('.scroll');
-    if (!scrollHost) return items;
-    const viewportTop = scrollHost.scrollTop;
-    const viewportBottom = viewportTop + scrollHost.clientHeight;
-    const bufferPx = 280;
-    const maxTargets = 56;
-    const visible = items.filter((card) => {
-      const top = Number(card.dataset.layoutTop ?? card.offsetTop ?? 0);
-      const bottom = Number(card.dataset.layoutBottom ?? (top + card.offsetHeight));
-      return bottom >= (viewportTop - bufferPx) && top <= (viewportBottom + bufferPx);
-    });
-    if (!visible.length) return items.slice(0, maxTargets);
-    return visible.slice(0, maxTargets);
-  };
-  const replayQueued = () => {
-    const queued = queuedByGrid.get(gridEl);
-    if (!queued) return false;
-    queuedByGrid.delete(gridEl);
-    updateDebug(gridEl, 'queuedReplays');
-    window.requestAnimationFrame(() => {
-      animateDensityFlip({
-        ...queued,
-        gridEl,
-      });
-    });
-    return true;
-  };
   const clearTransforms = () => {
     const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
     if (!currentItems.length) return 0;
@@ -130,35 +97,28 @@ export function animateDensityFlip({
     return invariantFixups;
   };
 
-  const previous = activeByGrid.get(gridEl);
-  if (previous) {
-    updateDebug(gridEl, 'startWithActive');
-    updateDebug(gridEl, 'deferredStarts');
-    queuedByGrid.set(gridEl, {
-      itemSelector,
-      commitLayout,
-      interactionMode,
-      jumpDistance,
-      onStart,
-      onSettled,
-    });
-    return;
-  }
-
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
-  const animationTargets = isPinch ? pickPinchTargets(items) : items;
+  const animationTargets = items;
   if (!items.length) {
     const applyCommit = commitLayout;
     applyCommit();
     updateDebug(gridEl, 'noItemCommits');
     const invariantFixups = clearTransforms();
-    const queuedReplay = replayQueued();
-    onSettled?.({ invariantFixups, queuedReplay });
+    onSettled?.({ invariantFixups, queuedReplay: false });
     return;
   }
 
   updateDebug(gridEl, 'captures');
   const state = Flip.getState(animationTargets);
+  const previous = activeByGrid.get(gridEl);
+  if (previous) {
+    updateDebug(gridEl, 'startWithActive');
+    suppressInterruptCleanupByGrid.set(gridEl, true);
+    previous.kill();
+    suppressInterruptCleanupByGrid.set(gridEl, false);
+    activeByGrid.delete(gridEl);
+    updateDebug(gridEl, 'retargetKills');
+  }
 
   Flip.killFlipsOf(animationTargets);
   gsap.killTweensOf(animationTargets);
@@ -171,8 +131,7 @@ export function animateDensityFlip({
     if (runIdByGrid.get(gridEl) !== nextRunId) {
       updateDebug(gridEl, 'staleFrameDrops');
       const invariantFixups = clearTransforms();
-      const queuedReplay = replayQueued();
-      onSettled?.({ invariantFixups, queuedReplay });
+      onSettled?.({ invariantFixups, queuedReplay: false });
       return;
     }
     const animation = Flip.from(state, {
@@ -196,11 +155,10 @@ export function animateDensityFlip({
       onComplete: () => {
         updateDebug(gridEl, 'completes');
         const invariantFixups = clearTransforms();
+        onSettled?.({ invariantFixups, queuedReplay: false });
         if (activeByGrid.get(gridEl) === animation) {
           activeByGrid.delete(gridEl);
         }
-        const queuedReplay = replayQueued();
-        onSettled?.({ invariantFixups, queuedReplay });
       },
       onInterrupt: () => {
         updateDebug(gridEl, 'interrupts');
@@ -208,11 +166,10 @@ export function animateDensityFlip({
         if (!suppressInterruptCleanupByGrid.get(gridEl)) {
           invariantFixups = clearTransforms();
         }
+        onSettled?.({ invariantFixups, queuedReplay: false });
         if (activeByGrid.get(gridEl) === animation) {
           activeByGrid.delete(gridEl);
         }
-        const queuedReplay = replayQueued();
-        onSettled?.({ invariantFixups, queuedReplay });
       },
     });
     onStart?.({
@@ -235,8 +192,7 @@ export function animateDensityFlip({
     if (runIdByGrid.get(gridEl) !== nextRunId) {
       updateDebug(gridEl, 'staleFrameDrops');
       const invariantFixups = clearTransforms();
-      const queuedReplay = replayQueued();
-      onSettled?.({ invariantFixups, queuedReplay });
+      onSettled?.({ invariantFixups, queuedReplay: false });
       return;
     }
     window.requestAnimationFrame(() => {

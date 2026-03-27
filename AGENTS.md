@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-27)
+- Prioritized correctness recovery for density regression with mixed old/new masonry geometry and stale gaps after pinch/slider changes.
+- Removed queue/replay lane and restored immediate retarget-kill sequencing in `animateDensityFlip` so winning density targets always commit and reconcile visibly.
+- Removed pinch partial-target FLIP reduction and returned to full-card FLIP targets per commit to guarantee whole-grid layout truth at settle.
+
+### Latest Implementation Notes (2026-03-27)
 - Fixed a hard density regression where pinch/slider changes could flash FLIP but leave the grid visually stuck at 3 columns.
 - Root cause was queued replay ordering in `animateDensityFlip`: replay could run while prior animation was still marked active, causing the queued target to defer again instead of becoming final layout truth.
 - Updated completion/interrupt sequencing to clear `activeByGrid` before invoking queued replay, restoring commit-to-visible-grid reconciliation after density changes.

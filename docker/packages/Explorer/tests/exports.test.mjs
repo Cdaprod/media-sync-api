@@ -1024,15 +1024,13 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
   assert.ok(flip.includes("if (interactionMode === 'scrub' || interactionMode === 'pinch') {"));
   assert.ok(flip.includes('startFlip();'));
-  assert.ok(flip.includes('const queuedByGrid = new WeakMap<HTMLElement, Omit<AnimateDensityFlipOptions, \'gridEl\'>>();'));
-  assert.ok(flip.includes('queuedByGrid.set(gridEl, {'));
-  assert.ok(flip.includes('const replayQueued = () => {'));
-  assert.ok(flip.includes("updateDebug(gridEl, 'deferredStarts');"));
-  assert.ok(flip.includes("updateDebug(gridEl, 'queuedReplays');"));
+  assert.ok(!flip.includes('const queuedByGrid = new WeakMap<HTMLElement, Omit<AnimateDensityFlipOptions, \'gridEl\'>>();'));
+  assert.ok(!flip.includes('queuedByGrid.set(gridEl, {'));
+  assert.ok(!flip.includes('const replayQueued = () => {'));
   assert.ok(flip.includes('const state = Flip.getState(animationTargets);'));
-  assert.ok(flip.includes('const animationTargets = isPinch ? pickPinchTargets(items) : items;'));
-  assert.ok(flip.includes('const maxTargets = 56;'));
-  assert.ok(flip.includes('const bufferPx = 280;'));
+  assert.ok(flip.includes('const animationTargets = items;'));
+  assert.ok(!flip.includes('const maxTargets = 56;'));
+  assert.ok(!flip.includes('const bufferPx = 280;'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
   assert.ok(flip.includes('if (runIdByGrid.get(gridEl) !== nextRunId) {'));
@@ -1054,8 +1052,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes("clearProps: 'transform'"));
   assert.ok(!flip.includes('onEnter: (elements) => {'));
   assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));
-  assert.ok(!flip.includes('previous.kill();'));
-  assert.ok(!flip.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
+  assert.ok(flip.includes('previous.kill();'));
+  assert.ok(flip.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
   assert.ok(flip.includes('onInterrupt: () => {'));
   assert.ok(flip.includes('__explorerDensityFlipDebug'));
 
@@ -1433,36 +1431,26 @@ test('density animation pipeline avoids ordinary-card enter-fade behavior and op
   assert.ok(content.includes('onInterrupt'));
 });
 
-test('density animation pipeline defers new starts until active density motion settles', () => {
+test('density animation pipeline interrupts stale transitions before new layout animation', () => {
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const content = fs.readFileSync(flipPath, 'utf8');
 
   assert.ok(content.includes('const previous = activeByGrid.get(gridEl);'));
-  assert.ok(content.includes('queuedByGrid.set(gridEl, {'));
-  assert.ok(content.includes("updateDebug(gridEl, 'deferredStarts');"));
-  assert.ok(content.includes('const replayQueued = () => {'));
-  assert.ok(content.includes('const queuedReplay = replayQueued();'));
-  assert.ok(content.includes("onSettled?.({ invariantFixups, queuedReplay });"));
+  assert.ok(content.includes('previous.kill();'));
+  assert.ok(content.includes('activeByGrid.delete(gridEl);'));
+  assert.ok(content.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
   assert.ok(content.includes('Flip.killFlipsOf(animationTargets);'));
   assert.ok(content.includes('gsap.killTweensOf(animationTargets);'));
   assert.ok(content.includes('const state = Flip.getState(animationTargets);'));
   assert.ok(content.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
 });
 
-test('density queued replay clears active ownership before launching the queued run', () => {
+test('density settle callbacks explicitly report no queued replay in immediate retarget mode', () => {
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const content = fs.readFileSync(flipPath, 'utf8');
 
-  const completeDeleteIndex = content.indexOf('activeByGrid.delete(gridEl);');
-  const completeReplayIndex = content.indexOf('const queuedReplay = replayQueued();', completeDeleteIndex);
-  const interruptIndex = content.indexOf('onInterrupt: () => {');
-  const interruptDeleteIndex = content.indexOf('activeByGrid.delete(gridEl);', interruptIndex);
-  const interruptReplayIndex = content.indexOf('const queuedReplay = replayQueued();', interruptIndex);
-
-  assert.ok(completeDeleteIndex >= 0);
-  assert.ok(completeReplayIndex > completeDeleteIndex);
-  assert.ok(interruptDeleteIndex > interruptIndex);
-  assert.ok(interruptReplayIndex > interruptDeleteIndex);
+  assert.ok(content.includes('onSettled?.({ invariantFixups, queuedReplay: false });'));
+  assert.ok(!content.includes('const queuedReplay = replayQueued();'));
 });
 
 test('density animation sequencing explicitly captures old state before commit and starts animation after commit path', () => {
@@ -1624,7 +1612,8 @@ test('density flip no-item and stale-frame paths still enforce single settled la
   const content = fs.readFileSync(flipPath, 'utf8');
 
   assert.ok(content.includes('const previous = activeByGrid.get(gridEl);'));
-  assert.ok(content.includes('queuedByGrid.set(gridEl, {'));
+  assert.ok(content.includes('previous.kill();'));
+  assert.ok(content.includes('activeByGrid.delete(gridEl);'));
   assert.ok(content.includes('if (!items.length) {'));
   assert.ok(content.includes('const applyCommit = commitLayout;'));
   assert.ok(content.includes('applyCommit();'));
