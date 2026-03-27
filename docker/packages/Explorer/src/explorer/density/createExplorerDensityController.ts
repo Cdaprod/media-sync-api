@@ -51,10 +51,15 @@ export function createExplorerDensityController(options: ExplorerDensityControll
   const pinchPerfDebug = {
     active: false,
     lastTargetCount: 0,
+    totalCardCount: 0,
+    targetReductionActive: false,
     lastDurationMs: 0,
     videoPreviewActive: false,
     droppedCommits: 0,
     queuedCommits: 0,
+    queuedFlushes: 0,
+    pinchSettles: 0,
+    pinchInvariantFixups: 0,
   };
 
   const exposePinchPerfDebug = () => {
@@ -90,24 +95,30 @@ export function createExplorerDensityController(options: ExplorerDensityControll
       gridEl,
       interactionMode,
       jumpDistance,
-      onStart: (targetCount) => {
+      onStart: ({ targetCount, totalCount, targetReductionActive }) => {
         if (interactionMode !== 'pinch') return;
         pinchAnimationActive = true;
         pinchStartAt = performance.now();
         pinchPerfDebug.active = true;
         pinchPerfDebug.lastTargetCount = targetCount;
+        pinchPerfDebug.totalCardCount = totalCount;
+        pinchPerfDebug.targetReductionActive = targetReductionActive;
         pinchPerfDebug.videoPreviewActive = Boolean(gridEl.querySelector('video.asset-thumb-preview'));
         exposePinchPerfDebug();
       },
-      onSettled: () => {
+      onSettled: ({ invariantFixups = 0 }) => {
         if (interactionMode !== 'pinch') return;
         pinchAnimationActive = false;
         pinchPerfDebug.active = false;
         pinchPerfDebug.lastDurationMs = Math.max(0, performance.now() - pinchStartAt);
+        pinchPerfDebug.pinchSettles += 1;
+        pinchPerfDebug.pinchInvariantFixups += invariantFixups;
         exposePinchPerfDebug();
         const queued = queuedPinchColumns;
         queuedPinchColumns = null;
         if (queued == null || queued === currentColumns) return;
+        pinchPerfDebug.queuedFlushes += 1;
+        exposePinchPerfDebug();
         runAnimatedCommit(queued, 'pinch');
       },
       commitLayout: () => {
