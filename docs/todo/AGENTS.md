@@ -1,3 +1,11 @@
+## 2026-03-27 — Pinch motion-quality simplification pass
+- [x] Simplified pinch FLIP timing to a fixed fast profile (`duration: 0.09`, `ease: power2.out`) while preserving immediate start and `scale: false`.
+- [x] Reduced pinch cleanup overhead by short-circuiting heavy per-card transition-reset loop in `clearTransforms()` for pinch mode.
+- [x] Kept dedicated pinch routing (`setColumnsForPinch`) and node-count latch behavior intact.
+- [x] Updated static assertions to lock pinch timing/ease and pinch cleanup short-circuit contract.
+- [x] Re-ran Explorer static suite with all tests passing.
+- [ ] Next: verify on-device perceived smoothness on repeated fast pinch notches across dense media sets (video + image mix).
+
 ## 2026-03-27 — Pinch density motion desync + node-flash stabilization
 - [x] Added a dedicated pinch density commit path (`setColumnsForPinch`) so pinch threshold steps no longer route through delayed settle choreography.
 - [x] Updated density FLIP to support explicit `'pinch'` interaction mode with immediate start and pinch-specific motion tuning.

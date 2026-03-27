@@ -1034,6 +1034,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('nested: false,'));
   assert.ok(flip.includes('prune: false,'));
   assert.ok(flip.includes('scale: isPinch ? false : true,'));
+  assert.ok(flip.includes('? 0.09'));
+  assert.ok(flip.includes("? 'power2.out'"));
+  assert.ok(flip.includes('if (isPinch) return;'));
   assert.ok(flip.includes('overwrite: true,'));
   assert.ok(flip.includes("clearProps: 'transform'"));
   assert.ok(!flip.includes('onEnter: (elements) => {'));
@@ -1577,8 +1580,9 @@ test('density flip cleanup path re-queries current masonry nodes to prevent stal
 
   assert.ok(content.includes('const clearTransforms = () => {'));
   assert.ok(content.includes('const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));'));
-  assert.ok(content.includes('if (currentItems.length) {'));
+  assert.ok(content.includes('if (!currentItems.length) return;'));
   assert.ok(content.includes("gsap.set(currentItems, { clearProps: 'transform' });"));
+  assert.ok(content.includes('if (isPinch) return;'));
   assert.ok(content.includes('clearTransforms();'));
   assert.ok(content.includes('onComplete: () => {'));
   assert.ok(content.includes('onInterrupt: () => {'));
@@ -1634,7 +1638,9 @@ test('density controller/flip tuning keeps jump-distance-aware motion timing und
   assert.ok(flip.includes("jumpDistance >= 2 ? 'power3.out' : 'power2.out'"));
   assert.ok(flip.includes("if (interactionMode === 'scrub' || interactionMode === 'pinch') {"));
   assert.ok(flip.includes('scale: isPinch ? false : true,'));
-  assert.ok(flip.includes("duration: isPinch"));
+  assert.ok(flip.includes('duration: isPinch'));
+  assert.ok(flip.includes('? 0.09'));
+  assert.ok(flip.includes("? 'power2.out'"));
 });
 
 test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/release lifecycle', () => {

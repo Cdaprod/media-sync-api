@@ -65,18 +65,18 @@ export function animateDensityFlip({
   const isPinch = interactionMode === 'pinch';
   const clearTransforms = () => {
     const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
-    if (currentItems.length) {
-      gsap.set(currentItems, { clearProps: 'transform' });
-      for (const card of currentItems) {
-        card.style.transition = 'none';
-        card.style.transform = 'none';
-      }
-      queueMicrotask(() => {
-        for (const card of currentItems) {
-          card.style.removeProperty('transition');
-        }
-      });
+    if (!currentItems.length) return;
+    gsap.set(currentItems, { clearProps: 'transform' });
+    if (isPinch) return;
+    for (const card of currentItems) {
+      card.style.transition = 'none';
+      card.style.transform = 'none';
     }
+    queueMicrotask(() => {
+      for (const card of currentItems) {
+        card.style.removeProperty('transition');
+      }
+    });
   };
 
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
@@ -120,12 +120,12 @@ export function animateDensityFlip({
       prune: false,
       scale: isPinch ? false : true,
       duration: isPinch
-        ? (jumpDistance >= 2 ? 0.08 : 0.11)
+        ? 0.09
         : interactionMode === 'scrub'
           ? (jumpDistance >= 2 ? 0.1 : 0.14)
           : (jumpDistance >= 2 ? 0.16 : 0.22),
       ease: isPinch
-        ? 'power4.out'
+        ? 'power2.out'
         : interactionMode === 'scrub'
           ? (jumpDistance >= 2 ? 'power4.out' : 'power3.out')
           : (jumpDistance >= 2 ? 'power3.out' : 'power2.out'),

@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-27)
+- Pinch motion-quality follow-up simplified the pinch FLIP profile for mobile smoothness: pinch now uses a fixed fast duration (`0.09`) with a simpler firmer ease (`power2.out`) while retaining immediate-start and `scale: false`.
+- Reduced pinch-path cleanup work in `animateDensityFlip`: transform clear now short-circuits the heavy transition-reset loop for pinch mode (`if (isPinch) return;`) to lower per-card write overhead during pinch commits.
+- Preserved dedicated pinch routing and overlay node latch behavior; updated static contracts to lock the simplified pinch timing/ease and pinch cleanup short-circuit.
+
+### Latest Implementation Notes (2026-03-27)
 - Addressed remaining pinch-density desync by introducing a dedicated controller path `setColumnsForPinch(...)` that routes to a new animation interaction mode (`'pinch'`) instead of reusing delayed `'settle'`.
 - Density FLIP now treats pinch as an immediate-start mode (no delayed double-rAF) with lower-cost geometry interpolation for pinch (`scale: false`) and shorter/firmer timing to match one-step pinch notch behavior.
 - Pinch overlay node display now uses a gesture-latched display state in `ExplorerApp`: committed `gridColumnCount` updates are buffered while pinch is active and flushed on release, preventing bridge node-count flash/flicker during in-flight density transition.
