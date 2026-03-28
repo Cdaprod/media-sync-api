@@ -653,7 +653,9 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('dynamicOrientations'));
   assert.ok(content.includes('resolveItemOrientation'));
   assert.ok(gridContent.includes('computeMasonryLayout({'));
-  assert.ok(gridContent.includes('layout.items.map(({ item, x, y, width, height }, index) => {'));
+  assert.ok(gridContent.includes('renderedLayoutItems.map(({ item, x, y, width, height }, index) => {'));
+  assert.ok(gridContent.includes('const renderedLayoutItems = useMemo(() => {'));
+  assert.ok(gridContent.includes('const windowTop = renderWindow.top - RENDER_BUFFER_PX;'));
   assert.ok(gridContent.includes('if (width > 0 && height > 0) {'));
   assert.ok(gridContent.includes('return Math.max(0.3, height / width);'));
   assert.ok(gridContent.includes('data-layout-top={layoutTop}'));

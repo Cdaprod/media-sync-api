@@ -69,7 +69,9 @@ function AssetGridComponent({
 }: AssetGridProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const layoutCommitCountRef = useRef(0);
+  const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
   const [hostWidth, setHostWidth] = useState(0);
+  const RENDER_BUFFER_PX = 720;
   const measureHostWidth = useCallback(() => {
     const node = hostRef.current;
     if (!node) return;
@@ -93,6 +95,42 @@ function AssetGridComponent({
     return () => window.cancelAnimationFrame(rafId);
   }, [entries.length, gridColumnCount, measureHostWidth]);
 
+  const measureRenderWindow = useCallback(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const scrollHost = host.closest<HTMLElement>('.scroll');
+    if (!scrollHost) {
+      setRenderWindow((prev) => (
+        prev.top === 0 && prev.bottom === Number.MAX_SAFE_INTEGER
+          ? prev
+          : { top: 0, bottom: Number.MAX_SAFE_INTEGER }
+      ));
+      return;
+    }
+    const nextTop = scrollHost.scrollTop;
+    const nextBottom = nextTop + scrollHost.clientHeight;
+    setRenderWindow((prev) => (
+      Math.abs(prev.top - nextTop) < 0.5 && Math.abs(prev.bottom - nextBottom) < 0.5
+        ? prev
+        : { top: nextTop, bottom: nextBottom }
+    ));
+  }, []);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const scrollHost = host.closest<HTMLElement>('.scroll');
+    measureRenderWindow();
+    if (!scrollHost) return;
+    const onScroll = () => measureRenderWindow();
+    scrollHost.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      scrollHost.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [measureRenderWindow]);
+
   const gridItems = useMemo(() => entries.map((entry) => {
     if (entry.kind === 'pending') {
       return { entry } as const;
@@ -112,6 +150,18 @@ function AssetGridComponent({
     [gridColumnCount, gridItems, hostWidth],
   );
 
+  const renderedLayoutItems = useMemo(() => {
+    if (!layout.items.length) return layout.items;
+    const windowTop = renderWindow.top - RENDER_BUFFER_PX;
+    const windowBottom = renderWindow.bottom + RENDER_BUFFER_PX;
+    const bounded = layout.items.filter(({ y, height }) => {
+      const top = y;
+      const bottom = y + height;
+      return bottom >= windowTop && top <= windowBottom;
+    });
+    return bounded.length ? bounded : layout.items;
+  }, [layout.items, renderWindow.bottom, renderWindow.top]);
+
   useLayoutEffect(() => {
     layoutCommitCountRef.current += 1;
     (globalThis as typeof globalThis & {
@@ -121,6 +171,13 @@ function AssetGridComponent({
           renderedCardCount: number;
           layoutRecomputeCount: number;
           layoutStageHeight: number;
+          totalLogicalCount: number;
+          renderedItemCount: number;
+          visibleRenderedItemCount: number;
+          boundedRenderingActive: boolean;
+          renderWindowTop: number;
+          renderWindowBottom: number;
+          renderBufferPx: number;
           flipActive: boolean;
           sampleCards: Array<{
             cardId: string;
@@ -147,6 +204,17 @@ function AssetGridComponent({
           renderedCardCount: cards.length,
           layoutRecomputeCount: layoutCommitCountRef.current,
           layoutStageHeight: Math.max(layout.stageHeight, 0),
+          totalLogicalCount: layout.items.length,
+          renderedItemCount: renderedLayoutItems.length,
+          visibleRenderedItemCount: renderedLayoutItems.filter(({ y, height }) => {
+            const top = y;
+            const bottom = y + height;
+            return bottom >= renderWindow.top && top <= renderWindow.bottom;
+          }).length,
+          boundedRenderingActive: renderedLayoutItems.length < layout.items.length,
+          renderWindowTop: renderWindow.top,
+          renderWindowBottom: renderWindow.bottom,
+          renderBufferPx: RENDER_BUFFER_PX,
           flipActive: totals.starts > totals.settles,
           sampleCards: cards.slice(0, 6).map((card) => ({
             cardId: card.dataset.cardId ?? '',
@@ -157,7 +225,7 @@ function AssetGridComponent({
         };
       },
     };
-  }, [gridColumnCount, layout.stageHeight, layout.items]);
+  }, [gridColumnCount, layout.items, layout.stageHeight, renderWindow.top, renderWindow.bottom, renderedLayoutItems]);
 
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
@@ -177,7 +245,7 @@ function AssetGridComponent({
           height: `${Math.max(layout.stageHeight, 0)}px`,
         } as React.CSSProperties}
       >
-        {layout.items.map(({ item, x, y, width, height }, index) => {
+        {renderedLayoutItems.map(({ item, x, y, width, height }, index) => {
           const { entry } = item;
           const layoutTop = Math.max(0, Math.round(y));
           const layoutBottom = Math.max(layoutTop, Math.round(y + height));
