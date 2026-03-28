@@ -22,6 +22,7 @@ const runIdByGrid = new WeakMap<HTMLElement, number>();
 const suppressInterruptCleanupByGrid = new WeakMap<HTMLElement, boolean>();
 const motionStartAtByGrid = new WeakMap<HTMLElement, number>();
 const lastRunUsedFlipByGrid = new WeakMap<HTMLElement, boolean>();
+const activeIllusionCleanupByGrid = new WeakMap<HTMLElement, () => void>();
 const motionDebugByGrid = new Map<HTMLElement, {
   totalCardCount: number;
   animatedTargetCount: number;
@@ -35,6 +36,9 @@ const motionDebugByGrid = new Map<HTMLElement, {
   lastDurationMs: number;
   flipIsolationEnabled: boolean;
   lastRunUsedFlip: boolean;
+  illusionLayerEnabled: boolean;
+  illusionCardCount: number;
+  lastRunUsedIllusion: boolean;
 }>();
 const debugByGrid = new Map<HTMLElement, {
   starts: number;
@@ -95,6 +99,9 @@ function updateMotionDebug(
     lastDurationMs: number;
     flipIsolationEnabled: boolean;
     lastRunUsedFlip: boolean;
+    illusionLayerEnabled: boolean;
+    illusionCardCount: number;
+    lastRunUsedIllusion: boolean;
   },
 ) {
   motionDebugByGrid.set(gridEl, stats);
@@ -121,6 +128,7 @@ export function animateDensityFlip({
   onSettled,
 }: AnimateDensityFlipOptions): void {
   const ENABLE_DENSITY_FLIP_ANIMATION = false;
+  const ENABLE_VISIBLE_ILLUSION_LAYER = true;
   const isPinch = interactionMode === 'pinch';
   const setDensityMotionActive = (active: boolean) => {
     const contentEl = gridEl.closest<HTMLElement>('.content');
@@ -133,6 +141,66 @@ export function animateDensityFlip({
     contentEl.classList.remove('density-motion-active');
     motionStartAtByGrid.delete(gridEl);
   };
+  const createVisibleIllusionLayer = (cards: HTMLElement[]) => {
+    if (!ENABLE_VISIBLE_ILLUSION_LAYER) return { count: 0, remove: () => {}, animation: null as gsap.core.Tween | null };
+    const scrollHost = gridEl.closest<HTMLElement>('.scroll');
+    if (!scrollHost) return { count: 0, remove: () => {}, animation: null as gsap.core.Tween | null };
+    const viewportTop = scrollHost.scrollTop;
+    const viewportBottom = viewportTop + scrollHost.clientHeight;
+    const visible = cards.filter((card) => {
+      const top = Number(card.dataset.layoutTop ?? card.offsetTop ?? 0);
+      const bottom = Number(card.dataset.layoutBottom ?? (top + card.offsetHeight));
+      return bottom >= viewportTop && top <= viewportBottom;
+    });
+    if (!visible.length) return { count: 0, remove: () => {}, animation: null as gsap.core.Tween | null };
+
+    const stageRect = gridEl.getBoundingClientRect();
+    const layer = document.createElement('div');
+    layer.className = 'density-illusion-layer';
+    layer.style.position = 'absolute';
+    layer.style.inset = '0';
+    layer.style.pointerEvents = 'none';
+    layer.style.zIndex = '9';
+    layer.style.contain = 'layout style paint';
+
+    for (const card of visible) {
+      const rect = card.getBoundingClientRect();
+      const shell = document.createElement('div');
+      shell.className = 'density-illusion-card';
+      shell.style.position = 'absolute';
+      shell.style.left = `${rect.left - stageRect.left}px`;
+      shell.style.top = `${rect.top - stageRect.top}px`;
+      shell.style.width = `${rect.width}px`;
+      shell.style.height = `${rect.height}px`;
+      shell.style.borderRadius = '12px';
+      shell.style.background = '#1a1d25';
+      shell.style.opacity = '0.96';
+      shell.style.boxShadow = '0 8px 20px rgba(0,0,0,0.2)';
+      const thumb = card.querySelector<HTMLImageElement>('img.asset-thumb');
+      if (thumb?.currentSrc || thumb?.src) {
+        shell.style.backgroundImage = `url("${thumb.currentSrc || thumb.src}")`;
+        shell.style.backgroundSize = 'cover';
+        shell.style.backgroundPosition = 'center';
+      }
+      layer.appendChild(shell);
+    }
+
+    gridEl.appendChild(layer);
+    const animation = gsap.to(layer.children, {
+      opacity: 0,
+      scale: 0.985,
+      y: 8,
+      duration: 0.16,
+      ease: 'power1.out',
+      stagger: 0.004,
+    });
+    const remove = () => {
+      animation.kill();
+      layer.remove();
+    };
+    return { count: visible.length, remove, animation };
+  };
+
   const pickAnimatedTargets = (items: HTMLElement[]) => {
     const scrollHost = gridEl.closest<HTMLElement>('.scroll');
     if (!scrollHost) {
@@ -149,6 +217,9 @@ export function animateDensityFlip({
         lastDurationMs: 0,
         flipIsolationEnabled: !ENABLE_DENSITY_FLIP_ANIMATION,
         lastRunUsedFlip: lastRunUsedFlipByGrid.get(gridEl) ?? true,
+        illusionLayerEnabled: ENABLE_VISIBLE_ILLUSION_LAYER,
+        illusionCardCount: 0,
+        lastRunUsedIllusion: false,
       });
       return items;
     }
@@ -184,6 +255,9 @@ export function animateDensityFlip({
       lastDurationMs: 0,
       flipIsolationEnabled: !ENABLE_DENSITY_FLIP_ANIMATION,
       lastRunUsedFlip: lastRunUsedFlipByGrid.get(gridEl) ?? true,
+      illusionLayerEnabled: ENABLE_VISIBLE_ILLUSION_LAYER,
+      illusionCardCount: 0,
+      lastRunUsedIllusion: false,
     });
     return reducedTargets;
   };
@@ -224,15 +298,17 @@ export function animateDensityFlip({
   }
 
   if (!ENABLE_DENSITY_FLIP_ANIMATION) {
+    activeIllusionCleanupByGrid.get(gridEl)?.();
     const previous = activeByGrid.get(gridEl);
     if (previous) {
       previous.kill();
       activeByGrid.delete(gridEl);
     }
-    const applyCommit = commitLayout;
-    applyCommit();
     updateDebug(gridEl, 'noItemCommits');
-    lastRunUsedFlipByGrid.set(gridEl, false);
+    const illusion = createVisibleIllusionLayer(items);
+    if (illusion.count > 0) {
+      activeIllusionCleanupByGrid.set(gridEl, illusion.remove);
+    }
     const snapshot = motionDebugByGrid.get(gridEl);
     if (snapshot) {
       motionDebugByGrid.set(gridEl, {
@@ -241,16 +317,27 @@ export function animateDensityFlip({
         lastDurationMs: 0,
         flipIsolationEnabled: true,
         lastRunUsedFlip: false,
+        illusionLayerEnabled: ENABLE_VISIBLE_ILLUSION_LAYER,
+        illusionCardCount: illusion.count,
+        lastRunUsedIllusion: illusion.count > 0,
       });
     }
-    const invariantFixups = clearTransforms();
-    setDensityMotionActive(false);
+    const settleDelayMs = 56;
+    lastRunUsedFlipByGrid.set(gridEl, false);
     onStart?.({
       targetCount: animationTargets.length,
       totalCount: items.length,
       targetReductionActive: animationTargets.length !== items.length,
     });
-    onSettled?.({ invariantFixups, queuedReplay: false });
+    window.setTimeout(() => {
+      const applyCommit = commitLayout;
+      applyCommit();
+      const invariantFixups = clearTransforms();
+      setDensityMotionActive(false);
+      illusion.remove();
+      activeIllusionCleanupByGrid.delete(gridEl);
+      onSettled?.({ invariantFixups, queuedReplay: false });
+    }, settleDelayMs);
     return;
   }
 

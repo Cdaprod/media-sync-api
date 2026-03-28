@@ -1,3 +1,10 @@
+## 2026-03-28 — Visible-card density illusion layer pass (new)
+- [x] Added a minimal visible-card illusion shell in `animateDensityFlip` (no-FLIP isolation path) that captures only viewport-visible rendered cards and animates cheap transform/opacity on temporary absolute shells.
+- [x] Moved real density truth commit in the no-FLIP branch to a short settle boundary (`setTimeout(..., 56)`) so illusion shells bridge perceived motion before the real remap lands.
+- [x] Added motion debug fields to confirm illusion participation (`illusionLayerEnabled`, `illusionCardCount`, `lastRunUsedIllusion`) while preserving existing diagnostics.
+- [x] Updated static contracts for illusion-layer branch markers and diagnostics fields; Explorer static suite passing.
+- [ ] Next: run the density follow-up probe and compare frame pacing with illusion path active vs baseline no-illusion direct commit.
+
 ## 2026-03-28 — AssetGrid subtree simplification isolation pass (new)
 - [x] Added `AssetGrid` isolation toggle (`ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION = true`) that temporarily renders a minimal card subtree during density transitions (thumbnail-only, no overlay chrome, no selector UI, no preview video).
 - [x] Preserved card identity, geometry truth, density truth, bounded layout, and bounded rendering while simplifying only subtree complexity for bottleneck isolation.
