@@ -1,3 +1,10 @@
+## 2026-03-28 — Density regression isolation toggle pass (new)
+- [x] Added a conservative isolation toggle in `AssetGrid` (`ENABLE_MOTION_AWARE_BUFFER = false`) so motion-aware buffer switching can be disabled without touching density correctness or windowed layout authority.
+- [x] Kept bounded layout/render behavior intact while removing motion-class-driven state churn from the hot path in default isolation mode.
+- [x] Added layout debug counters for regression triage (`motionObserverCallbackCount`, `renderWindowUpdateCount`) and explicit toggle visibility (`isolationMotionAwareBufferEnabled`) in `__explorerDensityLayoutDebug.getSnapshot()`.
+- [x] Updated static contracts to lock the new isolation toggle + diagnostics fields and re-ran Explorer static suite pass.
+- [ ] Next: rerun the density follow-up probe with this isolation default and compare frame metrics against the pre-isolation baseline; if improved, re-enable motion-aware buffer behind a safer non-reactive path.
+
 ## 2026-03-28 — Scrub pre-roll regression rollback (new)
 - [x] Rolled back scrub FLIP pre-roll (`requestAnimationFrame(startFlip)`) in `animateDensityFlip` after runtime evidence showed severe frame pacing regression while correctness remained intact.
 - [x] Restored immediate scrub FLIP start after commit to recover tight first/last FLIP timing and avoid extra pre-animation layout/paint churn.

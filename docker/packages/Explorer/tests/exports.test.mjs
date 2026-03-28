@@ -655,7 +655,7 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(gridContent.includes('computeMasonryLayout({'));
   assert.ok(gridContent.includes('renderedLayoutItems.map(({ item, x, y, width, height }, index) => {'));
   assert.ok(gridContent.includes('const renderedLayoutItems = layout.items;'));
-  assert.ok(gridContent.includes('const renderBufferPx = densityMotionActive ? MOTION_RENDER_BUFFER_PX : BASE_RENDER_BUFFER_PX;'));
+  assert.ok(gridContent.includes('const renderBufferPx = ENABLE_MOTION_AWARE_BUFFER && densityMotionActive'));
   assert.ok(gridContent.includes('const renderWindowTop = renderWindow.top - renderBufferPx;'));
   assert.ok(gridContent.includes('const renderWindowBottom = renderWindow.bottom + renderBufferPx;'));
   assert.ok(gridContent.includes('if (width > 0 && height > 0) {'));
@@ -1632,9 +1632,13 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('lastBufferModeUsedRef'));
   assert.ok(content.includes('lastLayoutScopeUsedRef'));
   assert.ok(content.includes('lastMotionActiveAtMsRef'));
+  assert.ok(content.includes('const ENABLE_MOTION_AWARE_BUFFER = false;'));
   assert.ok(content.includes('motionBufferEverUsed: motionBufferEverUsedRef.current'));
   assert.ok(content.includes('lastBufferModeUsed: lastBufferModeUsedRef.current'));
   assert.ok(content.includes('lastLayoutScopeUsed: lastLayoutScopeUsedRef.current'));
+  assert.ok(content.includes('isolationMotionAwareBufferEnabled'));
+  assert.ok(content.includes('motionObserverCallbackCount'));
+  assert.ok(content.includes('renderWindowUpdateCount'));
   assert.ok(content.includes('renderBufferMode'));
   assert.ok(content.includes("contentEl.classList.contains('density-motion-active')"));
   assert.ok(content.includes('sampleCards'));

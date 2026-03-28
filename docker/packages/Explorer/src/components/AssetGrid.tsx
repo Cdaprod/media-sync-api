@@ -69,10 +69,13 @@ function AssetGridComponent({
 }: AssetGridProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const layoutCommitCountRef = useRef(0);
+  const renderWindowUpdateCountRef = useRef(0);
+  const motionObserverCallbackCountRef = useRef(0);
   const motionBufferEverUsedRef = useRef(false);
   const lastBufferModeUsedRef = useRef<'idle' | 'density-motion'>('idle');
   const lastLayoutScopeUsedRef = useRef<'global' | 'windowed'>('global');
   const lastMotionActiveAtMsRef = useRef<number | null>(null);
+  const ENABLE_MOTION_AWARE_BUFFER = false;
   const [densityMotionActive, setDensityMotionActive] = useState(false);
   const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
   const [hostWidth, setHostWidth] = useState(0);
@@ -102,6 +105,10 @@ function AssetGridComponent({
   }, [entries.length, gridColumnCount, measureHostWidth]);
 
   useLayoutEffect(() => {
+    if (!ENABLE_MOTION_AWARE_BUFFER) {
+      setDensityMotionActive(false);
+      return;
+    }
     const host = hostRef.current;
     if (!host) return;
     const contentEl = host.closest<HTMLElement>('.content');
@@ -110,6 +117,7 @@ function AssetGridComponent({
       return;
     }
     const syncDensityMotionState = () => {
+      motionObserverCallbackCountRef.current += 1;
       const isActive = contentEl.classList.contains('density-motion-active');
       setDensityMotionActive((prev) => (prev === isActive ? prev : isActive));
     };
@@ -117,7 +125,7 @@ function AssetGridComponent({
     const observer = new MutationObserver(syncDensityMotionState);
     observer.observe(contentEl, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
-  }, []);
+  }, [ENABLE_MOTION_AWARE_BUFFER]);
 
   const measureRenderWindow = useCallback(() => {
     const host = hostRef.current;
@@ -136,7 +144,10 @@ function AssetGridComponent({
     setRenderWindow((prev) => (
       Math.abs(prev.top - nextTop) < 0.5 && Math.abs(prev.bottom - nextBottom) < 0.5
         ? prev
-        : { top: nextTop, bottom: nextBottom }
+        : (() => {
+          renderWindowUpdateCountRef.current += 1;
+          return { top: nextTop, bottom: nextBottom };
+        })()
     ));
   }, []);
 
@@ -163,7 +174,9 @@ function AssetGridComponent({
     return { entry, viewModel } as const;
   }), [buildAssetViewModel, entries]);
 
-  const renderBufferPx = densityMotionActive ? MOTION_RENDER_BUFFER_PX : BASE_RENDER_BUFFER_PX;
+  const renderBufferPx = ENABLE_MOTION_AWARE_BUFFER && densityMotionActive
+    ? MOTION_RENDER_BUFFER_PX
+    : BASE_RENDER_BUFFER_PX;
   const renderWindowTop = renderWindow.top - renderBufferPx;
   const renderWindowBottom = renderWindow.bottom + renderBufferPx;
 
@@ -218,6 +231,9 @@ function AssetGridComponent({
           lastBufferModeUsed: 'idle' | 'density-motion';
           lastLayoutScopeUsed: 'global' | 'windowed';
           lastMotionActiveAtMs: number | null;
+          isolationMotionAwareBufferEnabled: boolean;
+          motionObserverCallbackCount: number;
+          renderWindowUpdateCount: number;
           flipActive: boolean;
           sampleCards: Array<{
             cardId: string;
@@ -262,6 +278,9 @@ function AssetGridComponent({
           lastBufferModeUsed: lastBufferModeUsedRef.current,
           lastLayoutScopeUsed: lastLayoutScopeUsedRef.current,
           lastMotionActiveAtMs: lastMotionActiveAtMsRef.current,
+          isolationMotionAwareBufferEnabled: ENABLE_MOTION_AWARE_BUFFER,
+          motionObserverCallbackCount: motionObserverCallbackCountRef.current,
+          renderWindowUpdateCount: renderWindowUpdateCountRef.current,
           flipActive: totals.starts > totals.settles,
           sampleCards: cards.slice(0, 6).map((card) => ({
             cardId: card.dataset.cardId ?? '',
@@ -272,7 +291,7 @@ function AssetGridComponent({
         };
       },
     };
-  }, [densityMotionActive, gridColumnCount, layout.includedItemCount, layout.items, layout.stageHeight, layout.totalItemCount, layoutComputationScope, renderBufferPx, renderWindow.bottom, renderWindow.top, renderedLayoutItems]);
+  }, [densityMotionActive, ENABLE_MOTION_AWARE_BUFFER, gridColumnCount, layout.includedItemCount, layout.items, layout.stageHeight, layout.totalItemCount, layoutComputationScope, renderBufferPx, renderWindow.bottom, renderWindow.top, renderedLayoutItems]);
 
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
