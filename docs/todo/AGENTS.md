@@ -1,3 +1,10 @@
+## 2026-03-28 — Density bounded-layout computation pass (new)
+- [x] Extended `computeMasonryLayout(...)` with optional inclusion gating (`shouldIncludeItem`) so stage-height truth can remain global while per-card layout object materialization is window-bounded.
+- [x] Updated `AssetGrid` to apply the render window at layout-compute time (instead of post-layout filtering), reducing `layoutComputedItemCount` under ordinary density transitions while preserving absolute geometry semantics for rendered cards.
+- [x] Expanded layout debug snapshot semantics to report bounded layout scope (`layoutComputationScope: 'windowed' | 'global'`) and compute counts sourced from `computeMasonryLayout` totals/included metrics.
+- [x] Updated Explorer static contracts to lock bounded-layout gating + diagnostics and re-ran Explorer static suite pass.
+- [ ] Next: rerun the on-device density follow-up probe and verify `layoutCount < logical` on non-trivial targets; if frame pacing remains poor, evaluate a second pass that bounds height-ratio evaluation itself for far-off rows.
+
 ## 2026-03-28 — Density render-window cost follow-up (new)
 - [x] Added motion-aware bounded rendering policy in `AssetGrid`: idle uses a moderate viewport buffer while active density motion uses a tighter buffer to reduce high-density rendered-card count.
 - [x] Added runtime class-observer wiring for `.density-motion-active` so bounded rendering can react to real motion-state transitions without changing density authority or gesture semantics.

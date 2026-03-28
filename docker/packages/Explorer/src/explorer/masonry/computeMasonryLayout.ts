@@ -4,6 +4,13 @@ export type MasonryLayoutInput<T> = {
   columnCount: number;
   gutter: number;
   estimateHeightRatio: (item: T, index: number) => number;
+  shouldIncludeItem?: (item: {
+    index: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => boolean;
 };
 
 export type MasonryLayoutItem<T> = {
@@ -19,6 +26,8 @@ export type MasonryLayoutResult<T> = {
   items: MasonryLayoutItem<T>[];
   stageHeight: number;
   columnWidth: number;
+  totalItemCount: number;
+  includedItemCount: number;
 };
 
 export function computeMasonryLayout<T>(input: MasonryLayoutInput<T>): MasonryLayoutResult<T> {
@@ -28,6 +37,7 @@ export function computeMasonryLayout<T>(input: MasonryLayoutInput<T>): MasonryLa
     columnCount,
     gutter,
     estimateHeightRatio,
+    shouldIncludeItem,
   } = input;
   const entries = items;
 
@@ -50,13 +60,22 @@ export function computeMasonryLayout<T>(input: MasonryLayoutInput<T>): MasonryLa
     const x = shortest * (columnWidth + gutter);
     const y = columnHeights[shortest];
 
-    // Keep explicit id marker in layout source for static contract assertions.
-    void 'id:';
-    laidOut.push({ item, index, x, y, width, height });
+    const include = shouldIncludeItem ? shouldIncludeItem({ index, x, y, width, height }) : true;
+    if (include) {
+      // Keep explicit id marker in layout source for static contract assertions.
+      void 'id:';
+      laidOut.push({ item, index, x, y, width, height });
+    }
     columnHeights[shortest] += height + gutter;
   });
 
   const tallestColumn = Math.max(...columnHeights, 0);
   const totalHeight = Math.max(0, tallestColumn - gutter);
-  return { items: laidOut, stageHeight: totalHeight, columnWidth };
+  return {
+    items: laidOut,
+    stageHeight: totalHeight,
+    columnWidth,
+    totalItemCount: entries.length,
+    includedItemCount: laidOut.length,
+  };
 }

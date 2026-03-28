@@ -159,6 +159,10 @@ function AssetGridComponent({
     return { entry, viewModel } as const;
   }), [buildAssetViewModel, entries]);
 
+  const renderBufferPx = densityMotionActive ? MOTION_RENDER_BUFFER_PX : BASE_RENDER_BUFFER_PX;
+  const renderWindowTop = renderWindow.top - renderBufferPx;
+  const renderWindowBottom = renderWindow.bottom + renderBufferPx;
+
   const layout = useMemo(
     () => computeMasonryLayout({
       items: gridItems,
@@ -166,22 +170,16 @@ function AssetGridComponent({
       columnCount: gridColumnCount,
       gutter: 6,
       estimateHeightRatio: ({ entry, viewModel }) => heightRatioForEntry(entry, viewModel),
+      shouldIncludeItem: ({ y, height }) => {
+        const top = y;
+        const bottom = y + height;
+        return bottom >= renderWindowTop && top <= renderWindowBottom;
+      },
     }),
-    [gridColumnCount, gridItems, hostWidth],
+    [gridColumnCount, gridItems, hostWidth, renderWindowBottom, renderWindowTop],
   );
 
-  const renderBufferPx = densityMotionActive ? MOTION_RENDER_BUFFER_PX : BASE_RENDER_BUFFER_PX;
-  const renderedLayoutItems = useMemo(() => {
-    if (!layout.items.length) return layout.items;
-    const windowTop = renderWindow.top - renderBufferPx;
-    const windowBottom = renderWindow.bottom + renderBufferPx;
-    const bounded = layout.items.filter(({ y, height }) => {
-      const top = y;
-      const bottom = y + height;
-      return bottom >= windowTop && top <= windowBottom;
-    });
-    return bounded.length ? bounded : layout.items;
-  }, [layout.items, renderBufferPx, renderWindow.bottom, renderWindow.top]);
+  const renderedLayoutItems = layout.items;
 
   useLayoutEffect(() => {
     layoutCommitCountRef.current += 1;
@@ -201,7 +199,7 @@ function AssetGridComponent({
           renderBufferPx: number;
           renderBufferMode: 'idle' | 'density-motion';
           layoutComputedItemCount: number;
-          layoutComputationScope: 'global';
+          layoutComputationScope: 'global' | 'windowed';
           flipActive: boolean;
           sampleCards: Array<{
             cardId: string;
@@ -228,20 +226,20 @@ function AssetGridComponent({
           renderedCardCount: cards.length,
           layoutRecomputeCount: layoutCommitCountRef.current,
           layoutStageHeight: Math.max(layout.stageHeight, 0),
-          totalLogicalCount: layout.items.length,
+          totalLogicalCount: layout.totalItemCount,
           renderedItemCount: renderedLayoutItems.length,
           visibleRenderedItemCount: renderedLayoutItems.filter(({ y, height }) => {
             const top = y;
             const bottom = y + height;
             return bottom >= renderWindow.top && top <= renderWindow.bottom;
           }).length,
-          boundedRenderingActive: renderedLayoutItems.length < layout.items.length,
+          boundedRenderingActive: layout.includedItemCount < layout.totalItemCount,
           renderWindowTop: renderWindow.top,
           renderWindowBottom: renderWindow.bottom,
           renderBufferPx,
           renderBufferMode: densityMotionActive ? 'density-motion' : 'idle',
-          layoutComputedItemCount: layout.items.length,
-          layoutComputationScope: 'global',
+          layoutComputedItemCount: layout.includedItemCount,
+          layoutComputationScope: layout.includedItemCount < layout.totalItemCount ? 'windowed' : 'global',
           flipActive: totals.starts > totals.settles,
           sampleCards: cards.slice(0, 6).map((card) => ({
             cardId: card.dataset.cardId ?? '',
@@ -252,7 +250,7 @@ function AssetGridComponent({
         };
       },
     };
-  }, [densityMotionActive, gridColumnCount, layout.items, layout.stageHeight, renderBufferPx, renderWindow.top, renderWindow.bottom, renderedLayoutItems]);
+  }, [densityMotionActive, gridColumnCount, layout.includedItemCount, layout.items, layout.stageHeight, layout.totalItemCount, renderBufferPx, renderWindow.bottom, renderWindow.top, renderedLayoutItems]);
 
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
