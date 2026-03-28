@@ -1,3 +1,11 @@
+## 2026-03-28 — Density motion-active simplification mode pass (new)
+- [x] Added dedicated runtime density motion mode (`.density-motion-active`) that enables only during density FLIP and disables on settle/interrupt/no-item/stale-drop paths.
+- [x] Added temporary card-surface simplification under density motion mode (mute bottom metadata chrome + soften top chrome visibility) while preserving thumbnail plane and layout truth.
+- [x] Expanded density motion instrumentation with active/simplified state and duration tracking in `__explorerDensityMotionDebug.getSnapshot()`.
+- [x] Preserved density correctness pipeline and pinch constraints (no gesture-semantic changes, no queue/replay reintroduction, no authority regressions).
+- [x] Updated static contracts to lock density-motion-active class toggling + simplification CSS + instrumentation fields; Explorer static suite passing.
+- [ ] Next: on-device validate frame-budget improvement during density transitions with motion mode active, then decide whether shell-layer approach is still necessary.
+
 ## 2026-03-28 — Density animation scope reduction pass (new)
 - [x] Confirmed probe evidence that density FLIP was still paying whole-dataset motion cost (all cards moved/resized), causing harsh mobile motion despite correct density truth.
 - [x] Added visible/near-visible FLIP target reduction in `animateDensityFlip` (`maxTargets=72`, viewport buffer `320px`) while preserving global layout commit for all cards.

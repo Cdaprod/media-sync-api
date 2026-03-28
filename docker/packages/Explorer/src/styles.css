@@ -817,6 +817,17 @@ select.control{
   visibility: hidden;
   opacity: 0;
 }
+.content.density-motion-active .asset .asset-ol-bottom,
+.content.density-motion-active .asset .asset-ol-bl{
+  opacity: 0;
+}
+.content.density-motion-active .asset .asset-ol-tl,
+.content.density-motion-active .asset .asset-ol-tr{
+  opacity: 0.35;
+}
+.content.density-motion-active .asset .asset-overlay{
+  transition: none !important;
+}
 .thumb .fallback{
   font-size: 12px;
   color: var(--muted);

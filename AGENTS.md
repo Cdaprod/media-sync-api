@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-03-28)
+- Added explicit density motion state toggling in FLIP runtime (`.density-motion-active`) that turns on during density animation and reliably turns off on settle/interruption.
+- Added temporary density-motion card simplification CSS to reduce overlay/chrome pressure during active density motion while keeping layout truth + thumbnail plane intact.
+- Extended density motion debug hook to report motion active/simplified flags and last duration in addition to target-reduction/viewport stats.
+
+### Latest Implementation Notes (2026-03-28)
 - Integrated density FLIP target-scope reduction for motion quality: animation now targets visible/near-visible masonry cards only (buffered viewport + capped target count), while global layout truth still commits for the full dataset.
 - Added runtime motion-scope diagnostics via `globalThis.__explorerDensityMotionDebug.getSnapshot()` (total cards, visible cards, animated target count, reduction flag, viewport bounds).
 - Preserved density correctness authority chain and pinch constraints (immediate pinch path, no queue/replay lane reintroduction, no pre-commit truth advancement).
