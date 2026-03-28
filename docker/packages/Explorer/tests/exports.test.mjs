@@ -1032,7 +1032,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
   assert.ok(flip.includes('const ENABLE_DENSITY_FLIP_ANIMATION = false;'));
   assert.ok(flip.includes('const ENABLE_VISIBLE_ILLUSION_LAYER = true;'));
-  assert.ok(flip.includes('const ILLUSION_MAX_CARDS = 16;'));
+  assert.ok(flip.includes('const ILLUSION_MAX_CARDS = 8;'));
   assert.ok(flip.includes('const ILLUSION_SETTLE_MS = 36;'));
   assert.ok(flip.includes('const createVisibleIllusionLayer = (cards: HTMLElement[]) => {'));
   assert.ok(flip.includes("const scrollHost = gridEl.closest<HTMLElement>('.scroll');"));

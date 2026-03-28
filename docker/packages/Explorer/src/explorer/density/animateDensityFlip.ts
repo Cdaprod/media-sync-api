@@ -129,7 +129,7 @@ export function animateDensityFlip({
 }: AnimateDensityFlipOptions): void {
   const ENABLE_DENSITY_FLIP_ANIMATION = false;
   const ENABLE_VISIBLE_ILLUSION_LAYER = true;
-  const ILLUSION_MAX_CARDS = 16;
+  const ILLUSION_MAX_CARDS = 8;
   const ILLUSION_SETTLE_MS = 36;
   const isPinch = interactionMode === 'pinch';
   const setDensityMotionActive = (active: boolean) => {

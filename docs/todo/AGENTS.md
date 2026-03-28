@@ -1,3 +1,11 @@
+## 2026-03-28 — Illusion-layer ultra-small subset pass (new)
+- [x] Kept no-FLIP illusion architecture enabled with visible-card-only participation and bounded layout/render authority unchanged.
+- [x] Reduced illusion shell cap further from 16 to 8 cards (`ILLUSION_MAX_CARDS = 8`) to treat density motion as a small accent instead of a full visible-window carry.
+- [x] Preserved center-of-viewport prioritization path (`rankedVisible` sorted by viewport-center distance before `slice(0, ILLUSION_MAX_CARDS)`), so only the highest-impact visible cards animate.
+- [x] Preserved transform-only illusion motion and short settle boundary (`ILLUSION_SETTLE_MS = 36`) before committing real layout truth.
+- [x] Updated static contract expectations for the tighter illusion cap and re-ran Explorer static suite.
+- [ ] Next: rerun illusion validation probe and compare average frame pacing against prior run (`worstAvgFrameMs: 52.59`) with the new 8-card cap.
+
 ## 2026-03-28 — Illusion-layer cost reduction pass (new)
 - [x] Reduced illusion shell workload in `animateDensityFlip` by capping shell cards (`ILLUSION_MAX_CARDS = 16`) and prioritizing viewport-center visible cards instead of animating every visible card.
 - [x] Shortened illusion bridge timing (`ILLUSION_SETTLE_MS = 36`) to commit real density truth sooner and reduce overlap cost.
