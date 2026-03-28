@@ -1,3 +1,12 @@
+## 2026-03-28 — Pinch repeated-notch rearm pass (new)
+- [x] Replaced one-shot pinch step lock (`stepped`) with a baseline-reset notch controller in `createPinchDensityController`.
+- [x] Added re-arm hysteresis band (`rearmMin = 0.96`, `rearmMax = 1.04`) so each notch requires returning near neutral before the next step.
+- [x] Added notch cooldown (`STEP_COOLDOWN_MS = 80`) to prevent noisy double-fires while preserving repeated one-gesture snapping.
+- [x] Updated pinch thresholds to more notchy defaults (`outwardThreshold = 1.1`, `inwardThreshold = 0.9`).
+- [x] Preserved existing density truth path (`density.setColumnsForPinch(...)`), overlay callbacks, and settle-on-release behavior.
+- [x] Updated static contracts to assert repeated-notch guards and prevent regression to one-shot stepping; Explorer static suite passing.
+- [ ] Next: run on-device pinch cadence check to tune thresholds/cooldown only if needed.
+
 ## 2026-03-28 — Illusion-layer ultra-small subset pass (new)
 - [x] Kept no-FLIP illusion architecture enabled with visible-card-only participation and bounded layout/render authority unchanged.
 - [x] Reduced illusion shell cap further from 16 to 8 cards (`ILLUSION_MAX_CARDS = 8`) to treat density motion as a small accent instead of a full visible-window carry.

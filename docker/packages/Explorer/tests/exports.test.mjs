@@ -1022,12 +1022,17 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
   assert.ok(densityConstants.includes('export const MIN_COLUMNS_MOBILE = 1;'));
   assert.ok(densityConstants.includes('export const MAX_COLUMNS_MOBILE = 6;'));
-  assert.ok(pinchController.includes('outwardThreshold = 1.12'));
-  assert.ok(pinchController.includes('inwardThreshold = 0.88'));
-  assert.ok(pinchController.includes('let stepped = false;'));
-  assert.ok(pinchController.includes('if (stepped) return;'));
-  assert.ok(pinchController.includes('density.setColumnsForPinch(initialColumns - 1);'));
-  assert.ok(pinchController.includes('density.setColumnsForPinch(initialColumns + 1);'));
+  assert.ok(pinchController.includes('outwardThreshold = 1.1'));
+  assert.ok(pinchController.includes('inwardThreshold = 0.9'));
+  assert.ok(pinchController.includes('const STEP_COOLDOWN_MS = 80;'));
+  assert.ok(pinchController.includes('const rearmMin = 0.96;'));
+  assert.ok(pinchController.includes('const rearmMax = 1.04;'));
+  assert.ok(pinchController.includes('let canStep = true;'));
+  assert.ok(pinchController.includes('if (!canStep) {'));
+  assert.ok(pinchController.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;'));
+  assert.ok(pinchController.includes('density.setColumnsForPinch(currentColumns - 1);'));
+  assert.ok(pinchController.includes('density.setColumnsForPinch(currentColumns + 1);'));
+  assert.ok(!pinchController.includes('let stepped = false;'));
 
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
   assert.ok(flip.includes('const ENABLE_DENSITY_FLIP_ANIMATION = false;'));
@@ -1544,16 +1549,20 @@ test('committed density value is mirrored consistently into layout UI attributes
   assert.ok(controller.includes('if (sliderEl && sliderEl.value !== String(columns))'));
 });
 
-test('pinch density path is discrete and routes through one-step-per-gesture thresholds', () => {
+test('pinch density path is discrete and supports repeated notch snaps within one gesture', () => {
   const pinchPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts');
   const content = fs.readFileSync(pinchPath, 'utf8');
 
-  assert.ok(content.includes('outwardThreshold = 1.12'));
-  assert.ok(content.includes('inwardThreshold = 0.88'));
-  assert.ok(content.includes('let stepped = false;'));
-  assert.ok(content.includes('if (stepped) return;'));
-  assert.ok(content.includes('density.setColumnsForPinch(initialColumns - 1);'));
-  assert.ok(content.includes('density.setColumnsForPinch(initialColumns + 1);'));
+  assert.ok(content.includes('outwardThreshold = 1.1'));
+  assert.ok(content.includes('inwardThreshold = 0.9'));
+  assert.ok(content.includes('let canStep = true;'));
+  assert.ok(content.includes('if (!canStep) {'));
+  assert.ok(content.includes('ratio >= rearmMin && ratio <= rearmMax'));
+  assert.ok(content.includes('const STEP_COOLDOWN_MS = 80;'));
+  assert.ok(content.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;'));
+  assert.ok(content.includes('density.setColumnsForPinch(currentColumns - 1);'));
+  assert.ok(content.includes('density.setColumnsForPinch(currentColumns + 1);'));
+  assert.ok(!content.includes('let stepped = false;'));
   assert.ok(!content.includes('quickSetter'));
   assert.ok(!content.includes('scaleThresholdPerStep'));
 });

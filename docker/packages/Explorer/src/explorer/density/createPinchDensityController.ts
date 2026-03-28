@@ -27,18 +27,22 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     gestureSurfaceEl,
     visualScaleTargetEl,
     density,
-    outwardThreshold = 1.12,
-    inwardThreshold = 0.88,
+    outwardThreshold = 1.1,
+    inwardThreshold = 0.9,
     onPinchFrame,
     onPinchStep,
     onPinchRelease,
   } = options;
   void visualScaleTargetEl;
 
+  const STEP_COOLDOWN_MS = 80;
+  const rearmMin = 0.96;
+  const rearmMax = 1.04;
+
   let active = false;
-  let stepped = false;
-  let initialDistance = 0;
-  let initialColumns = density.getColumns();
+  let canStep = true;
+  let baselineDistance = 0;
+  let lastStepAt = 0;
 
   function getTouchPair(evt: TouchEvent): TouchPair | null {
     if (evt.touches.length < 2) return null;
@@ -56,9 +60,9 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     if (!pair) return;
 
     active = true;
-    stepped = false;
-    initialDistance = distance(pair);
-    initialColumns = density.getColumns();
+    canStep = true;
+    baselineDistance = Math.max(distance(pair), 1);
+    lastStepAt = 0;
     onPinchFrame?.(
       { x: pair.a.clientX, y: pair.a.clientY },
       { x: pair.b.clientX, y: pair.b.clientY },
@@ -80,28 +84,45 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     );
 
     evt.preventDefault();
-    if (stepped) return;
+    const currentDistance = Math.max(distance(pair), 1);
+    const ratio = currentDistance / Math.max(baselineDistance, 1);
 
-    const nextDistance = distance(pair);
-    const ratio = nextDistance / Math.max(initialDistance, 1);
+    if (!canStep) {
+      if (ratio >= rearmMin && ratio <= rearmMax) {
+        canStep = true;
+        baselineDistance = currentDistance;
+      }
+      return;
+    }
+
+    const now = performance.now();
+    if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;
 
     if (ratio >= outwardThreshold) {
-      density.setColumnsForPinch(initialColumns - 1);
+      const currentColumns = density.getColumns();
+      density.setColumnsForPinch(currentColumns - 1);
       onPinchStep?.(1);
-      stepped = true;
+      baselineDistance = currentDistance;
+      canStep = false;
+      lastStepAt = now;
       return;
     }
     if (ratio <= inwardThreshold) {
-      density.setColumnsForPinch(initialColumns + 1);
+      const currentColumns = density.getColumns();
+      density.setColumnsForPinch(currentColumns + 1);
       onPinchStep?.(-1);
-      stepped = true;
+      baselineDistance = currentDistance;
+      canStep = false;
+      lastStepAt = now;
     }
   }
 
   function onTouchEnd() {
     if (!active) return;
     active = false;
-    stepped = false;
+    canStep = true;
+    baselineDistance = 0;
+    lastStepAt = 0;
     density.settleScrub();
     onPinchFrame?.(null, null, false);
     onPinchRelease?.();
