@@ -1623,9 +1623,17 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('getSnapshot: () => {'));
   assert.ok(content.includes('layoutRecomputeCount'));
   assert.ok(content.includes('layoutComputedItemCount'));
-  assert.ok(content.includes("layoutComputationScope: layout.includedItemCount < layout.totalItemCount ? 'windowed' : 'global'"));
+  assert.ok(content.includes("const layoutComputationScope = layout.includedItemCount < layout.totalItemCount ? 'windowed' : 'global';"));
+  assert.ok(content.includes('layoutComputationScope,'));
   assert.ok(content.includes('totalLogicalCount: layout.totalItemCount'));
   assert.ok(content.includes('layoutComputedItemCount: layout.includedItemCount'));
+  assert.ok(content.includes('motionBufferEverUsedRef'));
+  assert.ok(content.includes('lastBufferModeUsedRef'));
+  assert.ok(content.includes('lastLayoutScopeUsedRef'));
+  assert.ok(content.includes('lastMotionActiveAtMsRef'));
+  assert.ok(content.includes('motionBufferEverUsed: motionBufferEverUsedRef.current'));
+  assert.ok(content.includes('lastBufferModeUsed: lastBufferModeUsedRef.current'));
+  assert.ok(content.includes('lastLayoutScopeUsed: lastLayoutScopeUsedRef.current'));
   assert.ok(content.includes('renderBufferMode'));
   assert.ok(content.includes("contentEl.classList.contains('density-motion-active')"));
   assert.ok(content.includes('sampleCards'));

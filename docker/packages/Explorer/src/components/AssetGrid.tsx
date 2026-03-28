@@ -69,6 +69,10 @@ function AssetGridComponent({
 }: AssetGridProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const layoutCommitCountRef = useRef(0);
+  const motionBufferEverUsedRef = useRef(false);
+  const lastBufferModeUsedRef = useRef<'idle' | 'density-motion'>('idle');
+  const lastLayoutScopeUsedRef = useRef<'global' | 'windowed'>('global');
+  const lastMotionActiveAtMsRef = useRef<number | null>(null);
   const [densityMotionActive, setDensityMotionActive] = useState(false);
   const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
   const [hostWidth, setHostWidth] = useState(0);
@@ -180,6 +184,16 @@ function AssetGridComponent({
   );
 
   const renderedLayoutItems = layout.items;
+  const layoutComputationScope = layout.includedItemCount < layout.totalItemCount ? 'windowed' : 'global';
+
+  useLayoutEffect(() => {
+    const mode = densityMotionActive ? 'density-motion' : 'idle';
+    lastBufferModeUsedRef.current = mode;
+    lastLayoutScopeUsedRef.current = layoutComputationScope;
+    if (!densityMotionActive) return;
+    motionBufferEverUsedRef.current = true;
+    lastMotionActiveAtMsRef.current = Date.now();
+  }, [densityMotionActive, layoutComputationScope]);
 
   useLayoutEffect(() => {
     layoutCommitCountRef.current += 1;
@@ -200,6 +214,10 @@ function AssetGridComponent({
           renderBufferMode: 'idle' | 'density-motion';
           layoutComputedItemCount: number;
           layoutComputationScope: 'global' | 'windowed';
+          motionBufferEverUsed: boolean;
+          lastBufferModeUsed: 'idle' | 'density-motion';
+          lastLayoutScopeUsed: 'global' | 'windowed';
+          lastMotionActiveAtMs: number | null;
           flipActive: boolean;
           sampleCards: Array<{
             cardId: string;
@@ -239,7 +257,11 @@ function AssetGridComponent({
           renderBufferPx,
           renderBufferMode: densityMotionActive ? 'density-motion' : 'idle',
           layoutComputedItemCount: layout.includedItemCount,
-          layoutComputationScope: layout.includedItemCount < layout.totalItemCount ? 'windowed' : 'global',
+          layoutComputationScope,
+          motionBufferEverUsed: motionBufferEverUsedRef.current,
+          lastBufferModeUsed: lastBufferModeUsedRef.current,
+          lastLayoutScopeUsed: lastLayoutScopeUsedRef.current,
+          lastMotionActiveAtMs: lastMotionActiveAtMsRef.current,
           flipActive: totals.starts > totals.settles,
           sampleCards: cards.slice(0, 6).map((card) => ({
             cardId: card.dataset.cardId ?? '',
@@ -250,7 +272,7 @@ function AssetGridComponent({
         };
       },
     };
-  }, [densityMotionActive, gridColumnCount, layout.includedItemCount, layout.items, layout.stageHeight, layout.totalItemCount, renderBufferPx, renderWindow.bottom, renderWindow.top, renderedLayoutItems]);
+  }, [densityMotionActive, gridColumnCount, layout.includedItemCount, layout.items, layout.stageHeight, layout.totalItemCount, layoutComputationScope, renderBufferPx, renderWindow.bottom, renderWindow.top, renderedLayoutItems]);
 
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,

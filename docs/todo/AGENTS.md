@@ -1,3 +1,10 @@
+## 2026-03-28 — Density motion-buffer observability polish (new)
+- [x] Added latched layout debug markers in `AssetGrid` to preserve transition-time truth beyond settle snapshots (`motionBufferEverUsed`, `lastBufferModeUsed`, `lastLayoutScopeUsed`, `lastMotionActiveAtMs`).
+- [x] Preserved current bounded layout/render pipeline while making post-settle probes able to confirm whether density-motion buffer mode was ever active during the latest transition.
+- [x] Updated Explorer static contracts to lock the new observability fields/refs in the layout debug hook.
+- [x] Re-ran Explorer static suite pass.
+- [ ] Next: rerun the density follow-up probe and confirm `bufferMode` may settle to idle while `motionBufferEverUsed` + `lastBufferModeUsed` still prove active density-motion participation.
+
 ## 2026-03-28 — Density bounded-layout computation pass (new)
 - [x] Extended `computeMasonryLayout(...)` with optional inclusion gating (`shouldIncludeItem`) so stage-height truth can remain global while per-card layout object materialization is window-bounded.
 - [x] Updated `AssetGrid` to apply the render window at layout-compute time (instead of post-layout filtering), reducing `layoutComputedItemCount` under ordinary density transitions while preserving absolute geometry semantics for rendered cards.
