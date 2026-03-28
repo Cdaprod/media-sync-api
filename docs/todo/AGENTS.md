@@ -1,3 +1,10 @@
+## 2026-03-28 — Density FLIP isolation branch pass (new)
+- [x] Added an explicit density animation isolation toggle in `animateDensityFlip` (`ENABLE_DENSITY_FLIP_ANIMATION = false`) to allow direct commit + cleanup path without GSAP Flip while preserving density correctness.
+- [x] Added direct-commit no-FLIP branch instrumentation updates (`flipIsolationEnabled`, `lastRunUsedFlip`) in `__explorerDensityMotionDebug` so runtime probes can confirm whether transitions used Flip or the isolation path.
+- [x] Preserved bounded layout/render and gesture semantics; this pass only isolates the animation layer for bottleneck confirmation.
+- [x] Updated static contracts for the isolation toggle and no-FLIP branch diagnostics; Explorer static suite passing.
+- [ ] Next: rerun the density follow-up probe and compare no-FLIP frame pacing against current Flip path to confirm whether Flip is the primary remaining bottleneck.
+
 ## 2026-03-28 — Density regression isolation toggle pass (new)
 - [x] Added a conservative isolation toggle in `AssetGrid` (`ENABLE_MOTION_AWARE_BUFFER = false`) so motion-aware buffer switching can be disabled without touching density correctness or windowed layout authority.
 - [x] Kept bounded layout/render behavior intact while removing motion-class-driven state churn from the hot path in default isolation mode.

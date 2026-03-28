@@ -1030,6 +1030,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('density.setColumnsForPinch(initialColumns + 1);'));
 
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
+  assert.ok(flip.includes('const ENABLE_DENSITY_FLIP_ANIMATION = false;'));
+  assert.ok(flip.includes('if (!ENABLE_DENSITY_FLIP_ANIMATION) {'));
+  assert.ok(flip.includes('lastRunUsedFlipByGrid.set(gridEl, false);'));
+  assert.ok(flip.includes('flipIsolationEnabled: true,'));
+  assert.ok(flip.includes('lastRunUsedFlip: false,'));
   assert.ok(flip.includes("if (interactionMode === 'pinch') {"));
   assert.ok(flip.includes("if (interactionMode === 'scrub') {"));
   assert.ok(flip.includes('startFlip();'));
@@ -1068,6 +1073,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
   assert.ok(flip.includes('onInterrupt: () => {'));
   assert.ok(flip.includes('__explorerDensityFlipDebug'));
+  assert.ok(flip.includes('lastRunUsedFlipByGrid.set(gridEl, true);'));
 
   assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));
   assert.ok(drawerMotion.includes("if (mode === 'sheet') {"));

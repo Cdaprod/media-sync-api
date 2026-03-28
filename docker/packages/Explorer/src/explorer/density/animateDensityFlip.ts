@@ -21,6 +21,7 @@ const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
 const runIdByGrid = new WeakMap<HTMLElement, number>();
 const suppressInterruptCleanupByGrid = new WeakMap<HTMLElement, boolean>();
 const motionStartAtByGrid = new WeakMap<HTMLElement, number>();
+const lastRunUsedFlipByGrid = new WeakMap<HTMLElement, boolean>();
 const motionDebugByGrid = new Map<HTMLElement, {
   totalCardCount: number;
   animatedTargetCount: number;
@@ -32,6 +33,8 @@ const motionDebugByGrid = new Map<HTMLElement, {
   motionActive: boolean;
   simplifiedCardMode: boolean;
   lastDurationMs: number;
+  flipIsolationEnabled: boolean;
+  lastRunUsedFlip: boolean;
 }>();
 const debugByGrid = new Map<HTMLElement, {
   starts: number;
@@ -90,6 +93,8 @@ function updateMotionDebug(
     motionActive: boolean;
     simplifiedCardMode: boolean;
     lastDurationMs: number;
+    flipIsolationEnabled: boolean;
+    lastRunUsedFlip: boolean;
   },
 ) {
   motionDebugByGrid.set(gridEl, stats);
@@ -115,6 +120,7 @@ export function animateDensityFlip({
   onStart,
   onSettled,
 }: AnimateDensityFlipOptions): void {
+  const ENABLE_DENSITY_FLIP_ANIMATION = false;
   const isPinch = interactionMode === 'pinch';
   const setDensityMotionActive = (active: boolean) => {
     const contentEl = gridEl.closest<HTMLElement>('.content');
@@ -141,6 +147,8 @@ export function animateDensityFlip({
         motionActive: Boolean(activeByGrid.get(gridEl)),
         simplifiedCardMode: true,
         lastDurationMs: 0,
+        flipIsolationEnabled: !ENABLE_DENSITY_FLIP_ANIMATION,
+        lastRunUsedFlip: lastRunUsedFlipByGrid.get(gridEl) ?? true,
       });
       return items;
     }
@@ -174,6 +182,8 @@ export function animateDensityFlip({
       motionActive: Boolean(activeByGrid.get(gridEl)),
       simplifiedCardMode: true,
       lastDurationMs: 0,
+      flipIsolationEnabled: !ENABLE_DENSITY_FLIP_ANIMATION,
+      lastRunUsedFlip: lastRunUsedFlipByGrid.get(gridEl) ?? true,
     });
     return reducedTargets;
   };
@@ -206,13 +216,46 @@ export function animateDensityFlip({
     const applyCommit = commitLayout;
     applyCommit();
     updateDebug(gridEl, 'noItemCommits');
+    lastRunUsedFlipByGrid.set(gridEl, false);
     const invariantFixups = clearTransforms();
     setDensityMotionActive(false);
     onSettled?.({ invariantFixups, queuedReplay: false });
     return;
   }
 
+  if (!ENABLE_DENSITY_FLIP_ANIMATION) {
+    const previous = activeByGrid.get(gridEl);
+    if (previous) {
+      previous.kill();
+      activeByGrid.delete(gridEl);
+    }
+    const applyCommit = commitLayout;
+    applyCommit();
+    updateDebug(gridEl, 'noItemCommits');
+    lastRunUsedFlipByGrid.set(gridEl, false);
+    const snapshot = motionDebugByGrid.get(gridEl);
+    if (snapshot) {
+      motionDebugByGrid.set(gridEl, {
+        ...snapshot,
+        motionActive: false,
+        lastDurationMs: 0,
+        flipIsolationEnabled: true,
+        lastRunUsedFlip: false,
+      });
+    }
+    const invariantFixups = clearTransforms();
+    setDensityMotionActive(false);
+    onStart?.({
+      targetCount: animationTargets.length,
+      totalCount: items.length,
+      targetReductionActive: animationTargets.length !== items.length,
+    });
+    onSettled?.({ invariantFixups, queuedReplay: false });
+    return;
+  }
+
   updateDebug(gridEl, 'captures');
+  lastRunUsedFlipByGrid.set(gridEl, true);
   const state = Flip.getState(animationTargets);
   const previous = activeByGrid.get(gridEl);
   if (previous) {
