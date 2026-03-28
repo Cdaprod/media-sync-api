@@ -320,9 +320,7 @@ export function animateDensityFlip({
 
   if (interactionMode === 'scrub') {
     updateDebug(gridEl, 'immediateStarts');
-    window.requestAnimationFrame(() => {
-      startFlip();
-    });
+    startFlip();
     return;
   }
 

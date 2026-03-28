@@ -1,3 +1,10 @@
+## 2026-03-28 — Scrub pre-roll regression rollback (new)
+- [x] Rolled back scrub FLIP pre-roll (`requestAnimationFrame(startFlip)`) in `animateDensityFlip` after runtime evidence showed severe frame pacing regression while correctness remained intact.
+- [x] Restored immediate scrub FLIP start after commit to recover tight first/last FLIP timing and avoid extra pre-animation layout/paint churn.
+- [x] Kept the calmer timing profile from the previous pass (pinch `0.14`, scrub `0.16/0.20`, settle `0.22/0.28`) and preserved all bounded layout/render correctness invariants.
+- [x] Re-ran Explorer static suite pass.
+- [ ] Next: rerun the density follow-up probe and compare worst avg/max frame timing against the pre-regression baseline (~23ms avg class).
+
 ## 2026-03-28 — Density motion feel polish pass (new)
 - [x] Kept all density correctness + bounded layout/render invariants intact and limited this pass strictly to motion feel tuning in `animateDensityFlip`.
 - [x] Added a one-frame scrub pre-roll (`requestAnimationFrame(startFlip)`) so rapid scrub updates start on a cleaner visual boundary without reintroducing queue/replay choreography.
