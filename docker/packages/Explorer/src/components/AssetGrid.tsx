@@ -75,8 +75,13 @@ function AssetGridComponent({
   const lastBufferModeUsedRef = useRef<'idle' | 'density-motion'>('idle');
   const lastLayoutScopeUsedRef = useRef<'global' | 'windowed'>('global');
   const lastMotionActiveAtMsRef = useRef<number | null>(null);
+  const lastDensityTransitionUsedSimplifiedRef = useRef(false);
+  const prevGridColumnsRef = useRef<number | null>(null);
+  const simplifyTimeoutRef = useRef<number | null>(null);
   const ENABLE_MOTION_AWARE_BUFFER = false;
+  const ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION = true;
   const [densityMotionActive, setDensityMotionActive] = useState(false);
+  const [simplifiedCardSubtreeActive, setSimplifiedCardSubtreeActive] = useState(false);
   const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
   const [hostWidth, setHostWidth] = useState(0);
   const BASE_RENDER_BUFFER_PX = 420;
@@ -103,6 +108,31 @@ function AssetGridComponent({
     const rafId = window.requestAnimationFrame(() => measureHostWidth());
     return () => window.cancelAnimationFrame(rafId);
   }, [entries.length, gridColumnCount, measureHostWidth]);
+
+  useLayoutEffect(() => {
+    if (!ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION) {
+      setSimplifiedCardSubtreeActive(false);
+      return;
+    }
+    const previous = prevGridColumnsRef.current;
+    prevGridColumnsRef.current = gridColumnCount;
+    if (previous == null || previous === gridColumnCount) return;
+    lastDensityTransitionUsedSimplifiedRef.current = true;
+    setSimplifiedCardSubtreeActive(true);
+    if (simplifyTimeoutRef.current != null) {
+      window.clearTimeout(simplifyTimeoutRef.current);
+    }
+    simplifyTimeoutRef.current = window.setTimeout(() => {
+      setSimplifiedCardSubtreeActive(false);
+      simplifyTimeoutRef.current = null;
+    }, 420);
+    return () => {
+      if (simplifyTimeoutRef.current != null) {
+        window.clearTimeout(simplifyTimeoutRef.current);
+        simplifyTimeoutRef.current = null;
+      }
+    };
+  }, [ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION, gridColumnCount]);
 
   useLayoutEffect(() => {
     if (!ENABLE_MOTION_AWARE_BUFFER) {
@@ -234,6 +264,10 @@ function AssetGridComponent({
           isolationMotionAwareBufferEnabled: boolean;
           motionObserverCallbackCount: number;
           renderWindowUpdateCount: number;
+          simplifiedCardIsolationEnabled: boolean;
+          simplifiedCardSubtreeActive: boolean;
+          lastDensityTransitionUsedSimplified: boolean;
+          cardSubtreeMode: 'full' | 'simplified';
           flipActive: boolean;
           sampleCards: Array<{
             cardId: string;
@@ -281,6 +315,10 @@ function AssetGridComponent({
           isolationMotionAwareBufferEnabled: ENABLE_MOTION_AWARE_BUFFER,
           motionObserverCallbackCount: motionObserverCallbackCountRef.current,
           renderWindowUpdateCount: renderWindowUpdateCountRef.current,
+          simplifiedCardIsolationEnabled: ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION,
+          simplifiedCardSubtreeActive,
+          lastDensityTransitionUsedSimplified: lastDensityTransitionUsedSimplifiedRef.current,
+          cardSubtreeMode: simplifiedCardSubtreeActive ? 'simplified' : 'full',
           flipActive: totals.starts > totals.settles,
           sampleCards: cards.slice(0, 6).map((card) => ({
             cardId: card.dataset.cardId ?? '',
@@ -291,7 +329,7 @@ function AssetGridComponent({
         };
       },
     };
-  }, [densityMotionActive, ENABLE_MOTION_AWARE_BUFFER, gridColumnCount, layout.includedItemCount, layout.items, layout.stageHeight, layout.totalItemCount, layoutComputationScope, renderBufferPx, renderWindow.bottom, renderWindow.top, renderedLayoutItems]);
+  }, [densityMotionActive, ENABLE_MOTION_AWARE_BUFFER, ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION, gridColumnCount, layout.includedItemCount, layout.items, layout.stageHeight, layout.totalItemCount, layoutComputationScope, renderBufferPx, renderWindow.bottom, renderWindow.top, renderedLayoutItems, simplifiedCardSubtreeActive]);
 
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
@@ -379,7 +417,7 @@ function AssetGridComponent({
                   data-thumb-fallback={viewModel.fallbackThumb}
                   data-thumb-job-key={viewModel.thumbJobKey}
                 />
-                {viewModel.activeVideoPreviewUrl ? (
+                {!simplifiedCardSubtreeActive && viewModel.activeVideoPreviewUrl ? (
                   <video
                     key={viewModel.previewPlaybackKey}
                     className="asset-thumb-preview"
@@ -394,6 +432,7 @@ function AssetGridComponent({
                     aria-hidden="true"
                   />
                 ) : null}
+                {simplifiedCardSubtreeActive ? null : (
                 <div className="asset-overlay">
                   <div className="asset-ol-tl">
                     <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>
@@ -441,6 +480,7 @@ function AssetGridComponent({
                     <div className="asset-subtitle tile-ui-text">{viewModel.sub}</div>
                   </div>
                 </div>
+                )}
               </div>
             </div>
           );

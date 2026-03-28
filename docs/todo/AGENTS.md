@@ -1,3 +1,10 @@
+## 2026-03-28 — AssetGrid subtree simplification isolation pass (new)
+- [x] Added `AssetGrid` isolation toggle (`ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION = true`) that temporarily renders a minimal card subtree during density transitions (thumbnail-only, no overlay chrome, no selector UI, no preview video).
+- [x] Preserved card identity, geometry truth, density truth, bounded layout, and bounded rendering while simplifying only subtree complexity for bottleneck isolation.
+- [x] Added runtime debug snapshot diagnostics for subtree isolation (`simplifiedCardIsolationEnabled`, `simplifiedCardSubtreeActive`, `lastDensityTransitionUsedSimplified`, `cardSubtreeMode`).
+- [x] Updated static contracts to lock simplified subtree branch + diagnostics and re-ran Explorer static suite pass.
+- [ ] Next: rerun density follow-up probe and compare frame pacing against no-simplification baseline to confirm whether card subtree complexity is the primary remaining bottleneck.
+
 ## 2026-03-28 — Density FLIP isolation branch pass (new)
 - [x] Added an explicit density animation isolation toggle in `animateDensityFlip` (`ENABLE_DENSITY_FLIP_ANIMATION = false`) to allow direct commit + cleanup path without GSAP Flip while preserving density correctness.
 - [x] Added direct-commit no-FLIP branch instrumentation updates (`flipIsolationEnabled`, `lastRunUsedFlip`) in `__explorerDensityMotionDebug` so runtime probes can confirm whether transitions used Flip or the isolation path.
