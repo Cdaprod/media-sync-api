@@ -129,6 +129,8 @@ export function animateDensityFlip({
 }: AnimateDensityFlipOptions): void {
   const ENABLE_DENSITY_FLIP_ANIMATION = false;
   const ENABLE_VISIBLE_ILLUSION_LAYER = true;
+  const ILLUSION_MAX_CARDS = 16;
+  const ILLUSION_SETTLE_MS = 36;
   const isPinch = interactionMode === 'pinch';
   const setDensityMotionActive = (active: boolean) => {
     const contentEl = gridEl.closest<HTMLElement>('.content');
@@ -153,6 +155,17 @@ export function animateDensityFlip({
       return bottom >= viewportTop && top <= viewportBottom;
     });
     if (!visible.length) return { count: 0, remove: () => {}, animation: null as gsap.core.Tween | null };
+    const viewportCenter = viewportTop + ((viewportBottom - viewportTop) * 0.5);
+    const rankedVisible = [...visible].sort((a, b) => {
+      const aTop = Number(a.dataset.layoutTop ?? a.offsetTop ?? 0);
+      const aBottom = Number(a.dataset.layoutBottom ?? (aTop + a.offsetHeight));
+      const bTop = Number(b.dataset.layoutTop ?? b.offsetTop ?? 0);
+      const bBottom = Number(b.dataset.layoutBottom ?? (bTop + b.offsetHeight));
+      const aCenterDist = Math.abs(((aTop + aBottom) * 0.5) - viewportCenter);
+      const bCenterDist = Math.abs(((bTop + bBottom) * 0.5) - viewportCenter);
+      return aCenterDist - bCenterDist;
+    });
+    const visibleSlice = rankedVisible.slice(0, ILLUSION_MAX_CARDS);
 
     const stageRect = gridEl.getBoundingClientRect();
     const layer = document.createElement('div');
@@ -163,7 +176,7 @@ export function animateDensityFlip({
     layer.style.zIndex = '9';
     layer.style.contain = 'layout style paint';
 
-    for (const card of visible) {
+    for (const card of visibleSlice) {
       const rect = card.getBoundingClientRect();
       const shell = document.createElement('div');
       shell.className = 'density-illusion-card';
@@ -172,10 +185,8 @@ export function animateDensityFlip({
       shell.style.top = `${rect.top - stageRect.top}px`;
       shell.style.width = `${rect.width}px`;
       shell.style.height = `${rect.height}px`;
-      shell.style.borderRadius = '12px';
+      shell.style.borderRadius = '10px';
       shell.style.background = '#1a1d25';
-      shell.style.opacity = '0.96';
-      shell.style.boxShadow = '0 8px 20px rgba(0,0,0,0.2)';
       const thumb = card.querySelector<HTMLImageElement>('img.asset-thumb');
       if (thumb?.currentSrc || thumb?.src) {
         shell.style.backgroundImage = `url("${thumb.currentSrc || thumb.src}")`;
@@ -187,18 +198,17 @@ export function animateDensityFlip({
 
     gridEl.appendChild(layer);
     const animation = gsap.to(layer.children, {
-      opacity: 0,
-      scale: 0.985,
-      y: 8,
-      duration: 0.16,
+      scale: 0.992,
+      y: 4,
+      duration: 0.1,
       ease: 'power1.out',
-      stagger: 0.004,
+      stagger: 0.002,
     });
     const remove = () => {
       animation.kill();
       layer.remove();
     };
-    return { count: visible.length, remove, animation };
+    return { count: visibleSlice.length, remove, animation };
   };
 
   const pickAnimatedTargets = (items: HTMLElement[]) => {
@@ -322,7 +332,7 @@ export function animateDensityFlip({
         lastRunUsedIllusion: illusion.count > 0,
       });
     }
-    const settleDelayMs = 56;
+    const settleDelayMs = ILLUSION_SETTLE_MS;
     lastRunUsedFlipByGrid.set(gridEl, false);
     onStart?.({
       targetCount: animationTargets.length,

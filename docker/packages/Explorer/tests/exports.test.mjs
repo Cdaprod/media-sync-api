@@ -1032,8 +1032,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
   assert.ok(flip.includes('const ENABLE_DENSITY_FLIP_ANIMATION = false;'));
   assert.ok(flip.includes('const ENABLE_VISIBLE_ILLUSION_LAYER = true;'));
+  assert.ok(flip.includes('const ILLUSION_MAX_CARDS = 16;'));
+  assert.ok(flip.includes('const ILLUSION_SETTLE_MS = 36;'));
   assert.ok(flip.includes('const createVisibleIllusionLayer = (cards: HTMLElement[]) => {'));
   assert.ok(flip.includes("const scrollHost = gridEl.closest<HTMLElement>('.scroll');"));
+  assert.ok(flip.includes('const visibleSlice = rankedVisible.slice(0, ILLUSION_MAX_CARDS);'));
   assert.ok(flip.includes("layer.className = 'density-illusion-layer';"));
   assert.ok(flip.includes("shell.className = 'density-illusion-card';"));
   assert.ok(flip.includes('illusionCardCount'));
@@ -1042,7 +1045,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('lastRunUsedFlipByGrid.set(gridEl, false);'));
   assert.ok(flip.includes('flipIsolationEnabled: true,'));
   assert.ok(flip.includes('lastRunUsedFlip: false,'));
-  assert.ok(flip.includes('const settleDelayMs = 56;'));
+  assert.ok(flip.includes('const settleDelayMs = ILLUSION_SETTLE_MS;'));
   assert.ok(flip.includes('window.setTimeout(() => {'));
   assert.ok(flip.includes("if (interactionMode === 'pinch') {"));
   assert.ok(flip.includes("if (interactionMode === 'scrub') {"));
@@ -1454,7 +1457,7 @@ test('density animation pipeline avoids ordinary-card enter-fade behavior and op
   assert.ok(!content.includes('onEnter:'));
   assert.ok(!content.includes('autoAlpha'));
   assert.ok(!content.includes("clearProps: 'opacity'"));
-  assert.ok(content.includes("shell.style.opacity = '0.96';"));
+  assert.ok(!content.includes("shell.style.opacity = '0.96';"));
   assert.ok(content.includes("clearProps: 'transform'"));
   assert.ok(content.includes('onComplete'));
   assert.ok(content.includes('onInterrupt'));

@@ -1,3 +1,10 @@
+## 2026-03-28 — Illusion-layer cost reduction pass (new)
+- [x] Reduced illusion shell workload in `animateDensityFlip` by capping shell cards (`ILLUSION_MAX_CARDS = 16`) and prioritizing viewport-center visible cards instead of animating every visible card.
+- [x] Shortened illusion bridge timing (`ILLUSION_SETTLE_MS = 36`) to commit real density truth sooner and reduce overlap cost.
+- [x] Simplified illusion animation to transform-only motion (`scale` + `y`) with shorter duration and lighter shell styling (removed opacity fade + heavy shadow path).
+- [x] Updated static contracts for illusion cap/settle constants and transform-only branch markers; Explorer static suite passing.
+- [ ] Next: rerun illusion validation probe and compare max illusion card count + frame pacing against prior (max 37, worst avg ~48ms) baseline.
+
 ## 2026-03-28 — Visible-card density illusion layer pass (new)
 - [x] Added a minimal visible-card illusion shell in `animateDensityFlip` (no-FLIP isolation path) that captures only viewport-visible rendered cards and animates cheap transform/opacity on temporary absolute shells.
 - [x] Moved real density truth commit in the no-FLIP branch to a short settle boundary (`setTimeout(..., 56)`) so illusion shells bridge perceived motion before the real remap lands.
