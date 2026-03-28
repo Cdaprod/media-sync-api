@@ -655,7 +655,8 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(gridContent.includes('computeMasonryLayout({'));
   assert.ok(gridContent.includes('renderedLayoutItems.map(({ item, x, y, width, height }, index) => {'));
   assert.ok(gridContent.includes('const renderedLayoutItems = useMemo(() => {'));
-  assert.ok(gridContent.includes('const windowTop = renderWindow.top - RENDER_BUFFER_PX;'));
+  assert.ok(gridContent.includes('const renderBufferPx = densityMotionActive ? MOTION_RENDER_BUFFER_PX : BASE_RENDER_BUFFER_PX;'));
+  assert.ok(gridContent.includes('const windowTop = renderWindow.top - renderBufferPx;'));
   assert.ok(gridContent.includes('if (width > 0 && height > 0) {'));
   assert.ok(gridContent.includes('return Math.max(0.3, height / width);'));
   assert.ok(gridContent.includes('data-layout-top={layoutTop}'));
@@ -1617,6 +1618,10 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('__explorerDensityLayoutDebug'));
   assert.ok(content.includes('getSnapshot: () => {'));
   assert.ok(content.includes('layoutRecomputeCount'));
+  assert.ok(content.includes('layoutComputedItemCount'));
+  assert.ok(content.includes("layoutComputationScope: 'global'"));
+  assert.ok(content.includes('renderBufferMode'));
+  assert.ok(content.includes("contentEl.classList.contains('density-motion-active')"));
   assert.ok(content.includes('sampleCards'));
   assert.ok(content.includes('flipActive'));
 });

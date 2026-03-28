@@ -69,9 +69,11 @@ function AssetGridComponent({
 }: AssetGridProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const layoutCommitCountRef = useRef(0);
+  const [densityMotionActive, setDensityMotionActive] = useState(false);
   const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
   const [hostWidth, setHostWidth] = useState(0);
-  const RENDER_BUFFER_PX = 720;
+  const BASE_RENDER_BUFFER_PX = 420;
+  const MOTION_RENDER_BUFFER_PX = 180;
   const measureHostWidth = useCallback(() => {
     const node = hostRef.current;
     if (!node) return;
@@ -94,6 +96,24 @@ function AssetGridComponent({
     const rafId = window.requestAnimationFrame(() => measureHostWidth());
     return () => window.cancelAnimationFrame(rafId);
   }, [entries.length, gridColumnCount, measureHostWidth]);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const contentEl = host.closest<HTMLElement>('.content');
+    if (!contentEl) {
+      setDensityMotionActive(false);
+      return;
+    }
+    const syncDensityMotionState = () => {
+      const isActive = contentEl.classList.contains('density-motion-active');
+      setDensityMotionActive((prev) => (prev === isActive ? prev : isActive));
+    };
+    syncDensityMotionState();
+    const observer = new MutationObserver(syncDensityMotionState);
+    observer.observe(contentEl, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const measureRenderWindow = useCallback(() => {
     const host = hostRef.current;
@@ -150,17 +170,18 @@ function AssetGridComponent({
     [gridColumnCount, gridItems, hostWidth],
   );
 
+  const renderBufferPx = densityMotionActive ? MOTION_RENDER_BUFFER_PX : BASE_RENDER_BUFFER_PX;
   const renderedLayoutItems = useMemo(() => {
     if (!layout.items.length) return layout.items;
-    const windowTop = renderWindow.top - RENDER_BUFFER_PX;
-    const windowBottom = renderWindow.bottom + RENDER_BUFFER_PX;
+    const windowTop = renderWindow.top - renderBufferPx;
+    const windowBottom = renderWindow.bottom + renderBufferPx;
     const bounded = layout.items.filter(({ y, height }) => {
       const top = y;
       const bottom = y + height;
       return bottom >= windowTop && top <= windowBottom;
     });
     return bounded.length ? bounded : layout.items;
-  }, [layout.items, renderWindow.bottom, renderWindow.top]);
+  }, [layout.items, renderBufferPx, renderWindow.bottom, renderWindow.top]);
 
   useLayoutEffect(() => {
     layoutCommitCountRef.current += 1;
@@ -178,6 +199,9 @@ function AssetGridComponent({
           renderWindowTop: number;
           renderWindowBottom: number;
           renderBufferPx: number;
+          renderBufferMode: 'idle' | 'density-motion';
+          layoutComputedItemCount: number;
+          layoutComputationScope: 'global';
           flipActive: boolean;
           sampleCards: Array<{
             cardId: string;
@@ -214,7 +238,10 @@ function AssetGridComponent({
           boundedRenderingActive: renderedLayoutItems.length < layout.items.length,
           renderWindowTop: renderWindow.top,
           renderWindowBottom: renderWindow.bottom,
-          renderBufferPx: RENDER_BUFFER_PX,
+          renderBufferPx,
+          renderBufferMode: densityMotionActive ? 'density-motion' : 'idle',
+          layoutComputedItemCount: layout.items.length,
+          layoutComputationScope: 'global',
           flipActive: totals.starts > totals.settles,
           sampleCards: cards.slice(0, 6).map((card) => ({
             cardId: card.dataset.cardId ?? '',
@@ -225,7 +252,7 @@ function AssetGridComponent({
         };
       },
     };
-  }, [gridColumnCount, layout.items, layout.stageHeight, renderWindow.top, renderWindow.bottom, renderedLayoutItems]);
+  }, [densityMotionActive, gridColumnCount, layout.items, layout.stageHeight, renderBufferPx, renderWindow.top, renderWindow.bottom, renderedLayoutItems]);
 
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,

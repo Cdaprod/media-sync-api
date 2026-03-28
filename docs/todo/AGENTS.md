@@ -1,3 +1,10 @@
+## 2026-03-28 — Density render-window cost follow-up (new)
+- [x] Added motion-aware bounded rendering policy in `AssetGrid`: idle uses a moderate viewport buffer while active density motion uses a tighter buffer to reduce high-density rendered-card count.
+- [x] Added runtime class-observer wiring for `.density-motion-active` so bounded rendering can react to real motion-state transitions without changing density authority or gesture semantics.
+- [x] Expanded `__explorerDensityLayoutDebug.getSnapshot()` with explicit layout-scope diagnostics (`layoutComputedItemCount`, `layoutComputationScope`) and render-mode diagnostics (`renderBufferMode`, active `renderBufferPx`).
+- [x] Updated Explorer static contracts to lock the motion-aware buffer path and new layout/render diagnostics fields; re-ran Explorer static suite pass.
+- [ ] Next: run the density one-shot probe on device again and compare density-5 rendered counts/avg frame time before deciding on further buffer tightening or layout-window computation changes.
+
 ## 2026-03-28 — Density motion-active simplification mode pass (new)
 - [x] Added dedicated runtime density motion mode (`.density-motion-active`) that enables only during density FLIP and disables on settle/interrupt/no-item/stale-drop paths.
 - [x] Added temporary card-surface simplification under density motion mode (mute bottom metadata chrome + soften top chrome visibility) while preserving thumbnail plane and layout truth.
