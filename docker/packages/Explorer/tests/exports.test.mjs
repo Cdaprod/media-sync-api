@@ -1697,8 +1697,13 @@ test('density motion debug hook exposes target-reduction and viewport bounds', (
   assert.ok(content.includes('simplifiedCardMode'));
   assert.ok(content.includes('setDensityMotionActive(true);'));
   assert.ok(content.includes('setDensityMotionActive(false);'));
+  assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));
   assert.ok(content.includes("contentEl.classList.add('density-motion-active');"));
   assert.ok(content.includes("contentEl.classList.remove('density-motion-active');"));
+  assert.ok(content.includes("contentEl.classList.add('density-motion-settling');"));
+  assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));
+  assert.ok(content.includes('const settleTimer = window.setTimeout(() => {'));
+  assert.ok(content.includes('}, 360);'));
 });
 
 test('density flip cleanup path re-queries current masonry nodes to prevent stale transforms after repeated commits', () => {
@@ -1933,7 +1938,12 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(styles.includes('.asset-thumb-preview{'));
   assert.ok(styles.includes('.content.pinch-perf-active .asset-thumb-preview{'));
   assert.ok(styles.includes('.content.density-motion-active .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('.content.density-motion-active .asset .asset-ol-tr{'));
+  assert.ok(styles.includes('transform: translateY(4px);'));
   assert.ok(styles.includes('.content.density-motion-active .asset .asset-overlay{'));
+  assert.ok(styles.includes('.content.density-motion-settling .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('opacity 220ms ease 140ms,'));
+  assert.ok(styles.includes('transform 220ms ease 140ms;'));
   assert.ok(styles.includes('.tap-debug-marker{'));
   assert.ok(grid.includes('className="asset-thumb-preview"'));
   assert.ok(styles.includes('.masonry-card.asset{'));

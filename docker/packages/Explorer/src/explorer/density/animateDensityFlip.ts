@@ -21,6 +21,7 @@ const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
 const runIdByGrid = new WeakMap<HTMLElement, number>();
 const suppressInterruptCleanupByGrid = new WeakMap<HTMLElement, boolean>();
 const motionStartAtByGrid = new WeakMap<HTMLElement, number>();
+const motionSettleTimerByGrid = new WeakMap<HTMLElement, number>();
 const lastRunUsedFlipByGrid = new WeakMap<HTMLElement, boolean>();
 const activeIllusionCleanupByGrid = new WeakMap<HTMLElement, () => void>();
 const motionDebugByGrid = new Map<HTMLElement, {
@@ -135,12 +136,28 @@ export function animateDensityFlip({
   const setDensityMotionActive = (active: boolean) => {
     const contentEl = gridEl.closest<HTMLElement>('.content');
     if (!contentEl) return;
+    const clearSettlingTimer = () => {
+      const pendingTimer = motionSettleTimerByGrid.get(gridEl);
+      if (pendingTimer != null) {
+        window.clearTimeout(pendingTimer);
+        motionSettleTimerByGrid.delete(gridEl);
+      }
+    };
     if (active) {
+      clearSettlingTimer();
+      contentEl.classList.remove('density-motion-settling');
       contentEl.classList.add('density-motion-active');
       motionStartAtByGrid.set(gridEl, performance.now());
       return;
     }
     contentEl.classList.remove('density-motion-active');
+    contentEl.classList.add('density-motion-settling');
+    clearSettlingTimer();
+    const settleTimer = window.setTimeout(() => {
+      contentEl.classList.remove('density-motion-settling');
+      motionSettleTimerByGrid.delete(gridEl);
+    }, 360);
+    motionSettleTimerByGrid.set(gridEl, settleTimer);
     motionStartAtByGrid.delete(gridEl);
   };
   const createVisibleIllusionLayer = (cards: HTMLElement[]) => {

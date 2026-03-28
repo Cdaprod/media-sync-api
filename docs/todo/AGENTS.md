@@ -1,3 +1,12 @@
+## 2026-03-28 — Post-density settle chrome fade-back pass (new)
+- [x] Added a dedicated post-motion settling state (`.density-motion-settling`) in `animateDensityFlip` so card chrome can return after density motion stops.
+- [x] Updated density-motion class orchestration: motion start clears settling state; motion end removes active state, adds settling state, then clears settling state after `360ms`.
+- [x] Updated density-motion chrome CSS to keep non-essential card UI hidden during active motion and fade/slide it back in with delayed settle timing.
+- [x] Fade-back timing set to delay `140ms` + duration `220ms` (`opacity` + `transform`) for bottom metadata, size badge, top-left kind badge, and top-right selector cluster.
+- [x] Preserved media plane stability (thumbnail unchanged) and existing density correctness/illusion diagnostics.
+- [x] Updated static contracts to lock settling class path and delayed fade-back CSS markers; Explorer static suite passing.
+- [ ] Next: verify on-device feel for settle return timing and adjust only delay/duration constants if needed.
+
 ## 2026-03-28 — Pinch repeated-notch rearm pass (new)
 - [x] Replaced one-shot pinch step lock (`stepped`) with a baseline-reset notch controller in `createPinchDensityController`.
 - [x] Added re-arm hysteresis band (`rearmMin = 0.96`, `rearmMax = 1.04`) so each notch requires returning near neutral before the next step.
