@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-03-28)
+- Integrated density FLIP target-scope reduction for motion quality: animation now targets visible/near-visible masonry cards only (buffered viewport + capped target count), while global layout truth still commits for the full dataset.
+- Added runtime motion-scope diagnostics via `globalThis.__explorerDensityMotionDebug.getSnapshot()` (total cards, visible cards, animated target count, reduction flag, viewport bounds).
+- Preserved density correctness authority chain and pinch constraints (immediate pinch path, no queue/replay lane reintroduction, no pre-commit truth advancement).
+
 ### Latest Implementation Notes (2026-03-27)
 - Completed a truth-locked density animation quality pass focused only on motion feel (no authority-chain or gesture-semantic rewrites).
 - FLIP now uses `scale: false` across density modes to reduce rubbery resize artifacts on mobile positioned masonry cards.

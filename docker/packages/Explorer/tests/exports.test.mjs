@@ -1032,9 +1032,12 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(!flip.includes('queuedByGrid.set(gridEl, {'));
   assert.ok(!flip.includes('const replayQueued = () => {'));
   assert.ok(flip.includes('const state = Flip.getState(animationTargets);'));
-  assert.ok(flip.includes('const animationTargets = items;'));
-  assert.ok(!flip.includes('const maxTargets = 56;'));
-  assert.ok(!flip.includes('const bufferPx = 280;'));
+  assert.ok(flip.includes('const animationTargets = pickAnimatedTargets(items);'));
+  assert.ok(flip.includes('const maxTargets = 72;'));
+  assert.ok(flip.includes('const bufferPx = 320;'));
+  assert.ok(flip.includes('__explorerDensityMotionDebug'));
+  assert.ok(flip.includes('animatedTargetCount'));
+  assert.ok(flip.includes('targetReductionActive'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
   assert.ok(flip.includes('if (runIdByGrid.get(gridEl) !== nextRunId) {'));
@@ -1458,6 +1461,19 @@ test('density settle callbacks explicitly report no queued replay in immediate r
   assert.ok(!content.includes('const queuedReplay = replayQueued();'));
 });
 
+test('density animation targets are reduced to visible/near-visible cards while keeping global layout commits', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes('const pickAnimatedTargets = (items: HTMLElement[]) => {'));
+  assert.ok(content.includes("const scrollHost = gridEl.closest<HTMLElement>('.scroll');"));
+  assert.ok(content.includes('const maxTargets = 72;'));
+  assert.ok(content.includes('const bufferPx = 320;'));
+  assert.ok(content.includes('const reducedTargets = targets.length ? targets : items.slice(0, maxTargets);'));
+  assert.ok(content.includes('const animationTargets = pickAnimatedTargets(items);'));
+  assert.ok(content.includes('commitLayout();'));
+});
+
 test('density animation sequencing explicitly captures old state before commit and starts animation after commit path', () => {
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const content = fs.readFileSync(flipPath, 'utf8');
@@ -1601,6 +1617,20 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('layoutRecomputeCount'));
   assert.ok(content.includes('sampleCards'));
   assert.ok(content.includes('flipActive'));
+});
+
+test('density motion debug hook exposes target-reduction and viewport bounds', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes('__explorerDensityMotionDebug'));
+  assert.ok(content.includes('getSnapshot: () => {'));
+  assert.ok(content.includes('totalCardCount'));
+  assert.ok(content.includes('animatedTargetCount'));
+  assert.ok(content.includes('visibleCardCount'));
+  assert.ok(content.includes('targetReductionActive'));
+  assert.ok(content.includes('viewportTop'));
+  assert.ok(content.includes('viewportBottom'));
 });
 
 test('density flip cleanup path re-queries current masonry nodes to prevent stale transforms after repeated commits', () => {

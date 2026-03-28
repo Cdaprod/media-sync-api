@@ -20,6 +20,15 @@ export type AnimateDensityFlipOptions = {
 const activeByGrid = new WeakMap<HTMLElement, gsap.core.Animation>();
 const runIdByGrid = new WeakMap<HTMLElement, number>();
 const suppressInterruptCleanupByGrid = new WeakMap<HTMLElement, boolean>();
+const motionDebugByGrid = new Map<HTMLElement, {
+  totalCardCount: number;
+  animatedTargetCount: number;
+  visibleCardCount: number;
+  targetReductionActive: boolean;
+  viewportTop: number;
+  viewportBottom: number;
+  bufferPx: number;
+}>();
 const debugByGrid = new Map<HTMLElement, {
   starts: number;
   completes: number;
@@ -64,6 +73,32 @@ function updateDebug(
   };
 }
 
+function updateMotionDebug(
+  gridEl: HTMLElement,
+  stats: {
+    totalCardCount: number;
+    animatedTargetCount: number;
+    visibleCardCount: number;
+    targetReductionActive: boolean;
+    viewportTop: number;
+    viewportBottom: number;
+    bufferPx: number;
+  },
+) {
+  motionDebugByGrid.set(gridEl, stats);
+  (globalThis as typeof globalThis & {
+    __explorerDensityMotionDebug?: { getSnapshot: () => Array<Record<string, number | boolean>> };
+  }).__explorerDensityMotionDebug = {
+    getSnapshot: () => {
+      const snapshots: Array<Record<string, number | boolean>> = [];
+      motionDebugByGrid.forEach((value) => {
+        snapshots.push({ ...value });
+      });
+      return snapshots;
+    },
+  };
+}
+
 export function animateDensityFlip({
   gridEl,
   itemSelector = '.masonry-card',
@@ -74,6 +109,50 @@ export function animateDensityFlip({
   onSettled,
 }: AnimateDensityFlipOptions): void {
   const isPinch = interactionMode === 'pinch';
+  const pickAnimatedTargets = (items: HTMLElement[]) => {
+    const scrollHost = gridEl.closest<HTMLElement>('.scroll');
+    if (!scrollHost) {
+      updateMotionDebug(gridEl, {
+        totalCardCount: items.length,
+        animatedTargetCount: items.length,
+        visibleCardCount: items.length,
+        targetReductionActive: false,
+        viewportTop: 0,
+        viewportBottom: 0,
+        bufferPx: 0,
+      });
+      return items;
+    }
+    const viewportTop = scrollHost.scrollTop;
+    const viewportBottom = viewportTop + scrollHost.clientHeight;
+    const bufferPx = 320;
+    const maxTargets = 72;
+    const readBounds = (card: HTMLElement) => {
+      const top = Number(card.dataset.layoutTop ?? card.offsetTop ?? 0);
+      const bottom = Number(card.dataset.layoutBottom ?? (top + card.offsetHeight));
+      return { top, bottom };
+    };
+    const visible = items.filter((card) => {
+      const { top, bottom } = readBounds(card);
+      return bottom >= viewportTop && top <= viewportBottom;
+    });
+    const nearVisible = items.filter((card) => {
+      const { top, bottom } = readBounds(card);
+      return bottom >= (viewportTop - bufferPx) && top <= (viewportBottom + bufferPx);
+    });
+    const targets = (nearVisible.length ? nearVisible : visible).slice(0, maxTargets);
+    const reducedTargets = targets.length ? targets : items.slice(0, maxTargets);
+    updateMotionDebug(gridEl, {
+      totalCardCount: items.length,
+      animatedTargetCount: reducedTargets.length,
+      visibleCardCount: visible.length,
+      targetReductionActive: reducedTargets.length !== items.length,
+      viewportTop,
+      viewportBottom,
+      bufferPx,
+    });
+    return reducedTargets;
+  };
   const clearTransforms = () => {
     const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
     if (!currentItems.length) return 0;
@@ -98,7 +177,7 @@ export function animateDensityFlip({
   };
 
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
-  const animationTargets = items;
+  const animationTargets = pickAnimatedTargets(items);
   if (!items.length) {
     const applyCommit = commitLayout;
     applyCommit();

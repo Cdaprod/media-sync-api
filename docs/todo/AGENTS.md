@@ -1,3 +1,11 @@
+## 2026-03-28 — Density animation scope reduction pass (new)
+- [x] Confirmed probe evidence that density FLIP was still paying whole-dataset motion cost (all cards moved/resized), causing harsh mobile motion despite correct density truth.
+- [x] Added visible/near-visible FLIP target reduction in `animateDensityFlip` (`maxTargets=72`, viewport buffer `320px`) while preserving global layout commit for all cards.
+- [x] Added runtime motion-scope instrumentation hook `globalThis.__explorerDensityMotionDebug.getSnapshot()` exposing total/visible/animated counts and viewport bounds.
+- [x] Kept density correctness invariants unchanged (no queue/replay reintroduction, no pre-commit truth advancement regression, pinch immediate path preserved).
+- [x] Updated static contracts to lock reduced FLIP target selection + instrumentation + existing correctness behavior; re-ran Explorer static suite pass.
+- [ ] Next: on-device verify smoother density transitions while offscreen cards snap silently and visible cards animate cleanly.
+
 ## 2026-03-27 — Density motion-quality pass (truth-locked) (new)
 - [x] Kept density correctness pipeline unchanged (commit/render synchronization + no pre-commit truth advancement) and limited this pass to FLIP motion profile quality tuning.
 - [x] Disabled FLIP scale interpolation for all density modes (`scale:false`) to remove rubbery resize artifacts on positioned masonry cards.
