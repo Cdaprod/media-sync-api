@@ -1030,7 +1030,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('density.setColumnsForPinch(initialColumns + 1);'));
 
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
-  assert.ok(flip.includes("if (interactionMode === 'scrub' || interactionMode === 'pinch') {"));
+  assert.ok(flip.includes("if (interactionMode === 'pinch') {"));
+  assert.ok(flip.includes("if (interactionMode === 'scrub') {"));
   assert.ok(flip.includes('startFlip();'));
   assert.ok(!flip.includes('const queuedByGrid = new WeakMap<HTMLElement, Omit<AnimateDensityFlipOptions, \'gridEl\'>>();'));
   assert.ok(!flip.includes('queuedByGrid.set(gridEl, {'));
@@ -1056,7 +1057,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('nested: false,'));
   assert.ok(flip.includes('prune: false,'));
   assert.ok(flip.includes('scale: false,'));
-  assert.ok(flip.includes('? 0.13'));
+  assert.ok(flip.includes('? 0.14'));
   assert.ok(flip.includes("? 'power2.out'"));
   assert.ok(flip.includes('if (isPinch) return invariantFixups;'));
   assert.ok(flip.includes('overwrite: true,'));
@@ -1484,7 +1485,7 @@ test('density animation sequencing explicitly captures old state before commit a
 
   const stateIndex = content.indexOf('const state = Flip.getState(animationTargets);');
   const commitIndex = content.indexOf('commitLayout();');
-  const immediateIndex = content.indexOf("if (interactionMode === 'scrub' || interactionMode === 'pinch') {");
+  const immediateIndex = content.indexOf("if (interactionMode === 'pinch') {");
   const delayedIndex = content.indexOf('window.requestAnimationFrame(() => {', immediateIndex + 1);
   const fromIndex = content.indexOf('const animation = Flip.from(state, {');
 
@@ -1717,13 +1718,14 @@ test('density controller/flip tuning keeps jump-distance-aware motion timing und
   assert.ok(controller.includes('const jumpDistance = Math.abs(safeColumns - currentColumns);'));
   assert.ok(controller.includes('jumpDistance,'));
   assert.ok(flip.includes('jumpDistance = 1'));
-  assert.ok(flip.includes('jumpDistance >= 2 ? 0.14 : 0.18'));
-  assert.ok(flip.includes('jumpDistance >= 2 ? 0.2 : 0.26'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.16 : 0.2'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.22 : 0.28'));
   assert.ok(flip.includes("? 'power2.out'"));
-  assert.ok(flip.includes("if (interactionMode === 'scrub' || interactionMode === 'pinch') {"));
+  assert.ok(flip.includes("if (interactionMode === 'pinch') {"));
+  assert.ok(flip.includes("if (interactionMode === 'scrub') {"));
   assert.ok(flip.includes('scale: false,'));
   assert.ok(flip.includes('duration: isPinch'));
-  assert.ok(flip.includes('? 0.13'));
+  assert.ok(flip.includes('? 0.14'));
   assert.ok(flip.includes("? 'power2.out'"));
 });
 

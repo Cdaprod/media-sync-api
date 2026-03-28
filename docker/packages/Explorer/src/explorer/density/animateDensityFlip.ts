@@ -254,10 +254,10 @@ export function animateDensityFlip({
       prune: false,
       scale: false,
       duration: isPinch
-        ? 0.13
+        ? 0.14
         : interactionMode === 'scrub'
-          ? (jumpDistance >= 2 ? 0.14 : 0.18)
-          : (jumpDistance >= 2 ? 0.2 : 0.26),
+          ? (jumpDistance >= 2 ? 0.16 : 0.2)
+          : (jumpDistance >= 2 ? 0.22 : 0.28),
       ease: isPinch
         ? 'power2.out'
         : interactionMode === 'scrub'
@@ -312,9 +312,17 @@ export function animateDensityFlip({
     activeByGrid.set(gridEl, animation);
   };
 
-  if (interactionMode === 'scrub' || interactionMode === 'pinch') {
+  if (interactionMode === 'pinch') {
     updateDebug(gridEl, 'immediateStarts');
     startFlip();
+    return;
+  }
+
+  if (interactionMode === 'scrub') {
+    updateDebug(gridEl, 'immediateStarts');
+    window.requestAnimationFrame(() => {
+      startFlip();
+    });
     return;
   }
 

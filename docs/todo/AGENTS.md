@@ -1,3 +1,10 @@
+## 2026-03-28 — Density motion feel polish pass (new)
+- [x] Kept all density correctness + bounded layout/render invariants intact and limited this pass strictly to motion feel tuning in `animateDensityFlip`.
+- [x] Added a one-frame scrub pre-roll (`requestAnimationFrame(startFlip)`) so rapid scrub updates start on a cleaner visual boundary without reintroducing queue/replay choreography.
+- [x] Retuned density FLIP timing to calmer values while preserving mode-specific semantics: pinch `0.14`, scrub `0.16/0.20`, settle `0.22/0.28`, easing unchanged (`power2.out`).
+- [x] Updated static contracts for the split pinch/scrub start branches and revised timing markers; Explorer static suite passing.
+- [ ] Next: rerun density follow-up on device and compare worst frame spikes for 5→2/4 transitions against the prior baseline.
+
 ## 2026-03-28 — Density motion-buffer observability polish (new)
 - [x] Added latched layout debug markers in `AssetGrid` to preserve transition-time truth beyond settle snapshots (`motionBufferEverUsed`, `lastBufferModeUsed`, `lastLayoutScopeUsed`, `lastMotionActiveAtMs`).
 - [x] Preserved current bounded layout/render pipeline while making post-settle probes able to confirm whether density-motion buffer mode was ever active during the latest transition.
