@@ -823,10 +823,14 @@ select.control{
 .content.density-motion-active .asset .asset-ol-tr{
   opacity: 0;
   transform: translateY(4px);
-  transition: none !important;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 .content.density-motion-active .asset .asset-overlay{
-  transition: none !important;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 .content.density-motion-settling .asset .asset-ol-bottom,
 .content.density-motion-settling .asset .asset-ol-bl,

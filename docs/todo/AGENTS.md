@@ -1,3 +1,12 @@
+## 2026-03-29 — Density gesture chrome fade-out/in polish pass (new)
+- [x] Kept density motion class orchestration (`.density-motion-active` → `.density-motion-settling`) and preserved layout/illusion correctness path.
+- [x] Updated asset-card chrome behavior to fade out on density motion start (active state) instead of instantly snapping hidden.
+- [x] Fade-out targets remain non-media chrome only: selector UI (`.asset-ol-tr`), type badge cluster (`.asset-ol-tl`), size badge (`.asset-ol-bl`), and metadata text block (`.asset-ol-bottom`).
+- [x] Fade-out timing set to `120ms` (`opacity` + `transform`), while settle fade-back remains delayed/staggered (`140ms + index*12ms`, duration `220ms`).
+- [x] Kept thumbnail/video media plane stable throughout (no media-plane opacity choreography introduced).
+- [x] Updated static contracts to lock fade-out and fade-back timing markers; Explorer static suite passing.
+- [ ] Next: on-device verify whether fade-out should be slightly faster (`100ms`) on low-end devices without changing settle cadence.
+
 ## 2026-03-29 — Card-index CSS variable typing build-fix pass (new)
 - [x] Fixed TypeScript build break in `AssetGrid.tsx` by extending the inline style type to include custom CSS variable `--card-index`.
 - [x] Preserved behavior (same stagger variable value/path) and applied only a type-safe declaration update (`React.CSSProperties & { '--card-index': string }`).
