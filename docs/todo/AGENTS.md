@@ -1,3 +1,10 @@
+## 2026-03-29 — Fast-scroll render window expansion pass (new)
+- [x] Increased masonry render-window buffers in `AssetGrid` (`BASE_RENDER_BUFFER_PX: 1200`, `MOTION_RENDER_BUFFER_PX: 640`) to pre-render more cards and reduce empty-space gaps during fast mobile scroll.
+- [x] Relaxed scroll-reveal observer gating (`threshold: 0`, expanded `rootMargin: 240px 0px 360px 0px`) so cards reveal earlier before they enter viewport.
+- [x] Reduced scroll-reveal delay step (`12ms`, capped at 6 cards) to lower visible lag while preserving a subtle cascade.
+- [x] Updated static contracts for the new fast-scroll reveal/buffer markers.
+- [ ] Next: validate on-device with high-velocity flick scroll and tune buffer values against memory pressure on lower-end devices.
+
 ## 2026-03-29 — Demo-motion mapping pass (new)
 - [x] Refined persistent overlay toggle animation timing to demo profile (`300ms`, `cubic-bezier(0.76, 0, 0.24, 1)`) across all overlay chrome nodes.
 - [x] Added explicit density overlay choreography ownership in runtime (`animateDensityFlip`): motion start now applies `density-overlay-out`, and motion end applies `density-overlay-in` with `140ms`/`210ms` timing.

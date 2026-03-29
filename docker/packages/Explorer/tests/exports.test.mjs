@@ -1708,12 +1708,12 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('const [pageLoadEntranceActive, setPageLoadEntranceActive] = useState(true);'));
   assert.ok(content.includes('const [revealedCards, setRevealedCards] = useState<Set<string>>(() => new Set());'));
   assert.ok(content.includes('new IntersectionObserver((entries) => {'));
-  assert.ok(content.includes("threshold: 0.05,"));
-  assert.ok(content.includes("rootMargin: '0px 0px -20px 0px',"));
+  assert.ok(content.includes("threshold: 0,"));
+  assert.ok(content.includes("rootMargin: '240px 0px 360px 0px',"));
   assert.ok(content.includes("pageLoadEntranceActive ? 'page-load-enter' : ''"));
   assert.ok(content.includes("!isScrollRevealVisible ? 'scroll-reveal-pending' : 'scroll-reveal-visible'"));
   assert.ok(content.includes("'--page-load-delay': `${pageLoadDelayMs}ms`"));
-  assert.ok(content.includes("'--scroll-reveal-delay': `${Math.min(index, 12) * 35}ms`"));
+  assert.ok(content.includes("'--scroll-reveal-delay': `${Math.min(index, 6) * 12}ms`"));
   assert.ok(content.includes('lastDensityTransitionUsedSimplifiedRef'));
   assert.ok(content.includes('motionBufferEverUsed: motionBufferEverUsedRef.current'));
   assert.ok(content.includes('lastBufferModeUsed: lastBufferModeUsedRef.current'));

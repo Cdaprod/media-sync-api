@@ -87,8 +87,8 @@ function AssetGridComponent({
   const [revealedCards, setRevealedCards] = useState<Set<string>>(() => new Set());
   const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
   const [hostWidth, setHostWidth] = useState(0);
-  const BASE_RENDER_BUFFER_PX = 420;
-  const MOTION_RENDER_BUFFER_PX = 180;
+  const BASE_RENDER_BUFFER_PX = 1200;
+  const MOTION_RENDER_BUFFER_PX = 640;
   const measureHostWidth = useCallback(() => {
     const node = hostRef.current;
     if (!node) return;
@@ -275,8 +275,8 @@ function AssetGridComponent({
       }, 16);
     }, {
       root: scrollHost,
-      rootMargin: '0px 0px -20px 0px',
-      threshold: 0.05,
+      threshold: 0,
+      rootMargin: '240px 0px 360px 0px',
     });
     const cards = Array.from(host.querySelectorAll<HTMLElement>('.masonry-card[data-card-id]'));
     cards.forEach((card) => {
@@ -456,7 +456,7 @@ function AssetGridComponent({
               style={{
                 ...positionedStyle,
                 '--page-load-delay': `${pageLoadDelayMs}ms`,
-                '--scroll-reveal-delay': `${Math.min(index, 12) * 35}ms`,
+                '--scroll-reveal-delay': `${Math.min(index, 6) * 12}ms`,
               } as React.CSSProperties}
               data-kind={viewModel.kind}
               data-orient={viewModel.orient}
