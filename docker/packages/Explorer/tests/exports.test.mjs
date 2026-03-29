@@ -1033,6 +1033,12 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('const setGestureActiveClass = (gestureActive: boolean) => {'));
   assert.ok(pinchController.includes("contentEl.classList.add('density-gesture-active');"));
   assert.ok(pinchController.includes("contentEl.classList.remove('density-gesture-active');"));
+  assert.ok(pinchController.includes('const handoffMotionAfterRelease = () => {'));
+  assert.ok(pinchController.includes("if (!contentEl.classList.contains('density-motion-active')) return;"));
+  assert.ok(pinchController.includes("contentEl.classList.remove('density-motion-active');"));
+  assert.ok(pinchController.includes("contentEl.classList.add('density-motion-settling');"));
+  assert.ok(pinchController.includes('releaseMotionHandoffTimer = window.setTimeout(() => {'));
+  assert.ok(pinchController.includes('handoffMotionAfterRelease();'));
   assert.ok(pinchController.includes('if (!canStep) {'));
   assert.ok(pinchController.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;'));
   assert.ok(pinchController.includes('density.setColumnsForPinch(currentColumns - 1);'));
@@ -1054,6 +1060,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('if (!ENABLE_DENSITY_FLIP_ANIMATION) {'));
   assert.ok(flip.includes('setDensityMotionActive(true);'));
   assert.ok(!pinchController.includes('requestAnimationFrame'));
+  assert.ok(pinchController.includes("contentEl.classList.remove('density-motion-active');"));
 
   const noFlipGateIndex = flip.indexOf('if (!ENABLE_DENSITY_FLIP_ANIMATION) {');
   const earlyMotionIndex = flip.indexOf('setDensityMotionActive(true);', noFlipGateIndex);

@@ -1,3 +1,10 @@
+## 2026-03-29 — Pinch release settling handoff fix (new)
+- [x] Fixed release lifecycle hole where motion could remain active after pinch release in no-FLIP mode if release occurred before a clean motion-end handoff.
+- [x] Added a release fallback handoff timer in `createPinchDensityController` that clears `.density-motion-active` and enters `.density-motion-settling` when gesture is no longer active.
+- [x] Kept active-gesture blocking behavior intact (settling still blocked while `.density-gesture-active` is present).
+- [x] Updated static contracts to lock release-handoff markers and motion-active clear behavior.
+- [ ] Next: rerun overlay probe and confirm `settlingSeen: true` plus final host class without lingering `.density-motion-active`.
+
 ## 2026-03-29 — Density class-lifecycle ordering fix (new)
 - [x] Moved no-FLIP motion lifecycle activation earlier so `setDensityMotionActive(true)` runs immediately at the no-FLIP gate before card queries, target-picking, or illusion-shell creation.
 - [x] Kept CSS/timing/selector behavior unchanged; this pass is ordering-only to hide chrome before density mutation work begins.
