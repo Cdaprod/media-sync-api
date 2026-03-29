@@ -151,6 +151,10 @@ export function animateDensityFlip({
       return;
     }
     contentEl.classList.remove('density-motion-active');
+    if (contentEl.classList.contains('density-gesture-active')) {
+      motionStartAtByGrid.delete(gridEl);
+      return;
+    }
     void contentEl.offsetHeight;
     contentEl.classList.add('density-motion-settling');
     clearSettlingTimer();

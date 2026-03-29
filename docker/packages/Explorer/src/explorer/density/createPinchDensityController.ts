@@ -33,7 +33,7 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     onPinchStep,
     onPinchRelease,
   } = options;
-  void visualScaleTargetEl;
+  const contentEl = visualScaleTargetEl.closest<HTMLElement>('.content');
 
   const STEP_COOLDOWN_MS = 80;
   const rearmMin = 0.96;
@@ -43,6 +43,31 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   let canStep = true;
   let baselineDistance = 0;
   let lastStepAt = 0;
+  let settleClassTimer = 0;
+
+  const clearSettleClassTimer = () => {
+    if (!settleClassTimer) return;
+    window.clearTimeout(settleClassTimer);
+    settleClassTimer = 0;
+  };
+
+  const setGestureActiveClass = (gestureActive: boolean) => {
+    if (!contentEl) return;
+    if (gestureActive) {
+      clearSettleClassTimer();
+      contentEl.classList.remove('density-motion-settling');
+      contentEl.classList.add('density-gesture-active');
+      return;
+    }
+    contentEl.classList.remove('density-gesture-active');
+    if (contentEl.classList.contains('density-motion-active')) return;
+    if (contentEl.classList.contains('density-motion-settling')) return;
+    contentEl.classList.add('density-motion-settling');
+    settleClassTimer = window.setTimeout(() => {
+      contentEl.classList.remove('density-motion-settling');
+      settleClassTimer = 0;
+    }, 360);
+  };
 
   function getTouchPair(evt: TouchEvent): TouchPair | null {
     if (evt.touches.length < 2) return null;
@@ -63,6 +88,7 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     canStep = true;
     baselineDistance = Math.max(distance(pair), 1);
     lastStepAt = 0;
+    setGestureActiveClass(true);
     onPinchFrame?.(
       { x: pair.a.clientX, y: pair.a.clientY },
       { x: pair.b.clientX, y: pair.b.clientY },
@@ -123,6 +149,7 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     canStep = true;
     baselineDistance = 0;
     lastStepAt = 0;
+    setGestureActiveClass(false);
     density.settleScrub();
     onPinchFrame?.(null, null, false);
     onPinchRelease?.();
@@ -143,6 +170,11 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   }
 
   function destroy() {
+    clearSettleClassTimer();
+    if (contentEl) {
+      contentEl.classList.remove('density-gesture-active');
+      contentEl.classList.remove('density-motion-settling');
+    }
     detach();
   }
 

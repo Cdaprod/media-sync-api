@@ -820,7 +820,11 @@ select.control{
 .content.density-motion-active .asset .asset-ol-bottom,
 .content.density-motion-active .asset .asset-ol-bl,
 .content.density-motion-active .asset .asset-ol-tl,
-.content.density-motion-active .asset .asset-ol-tr{
+.content.density-motion-active .asset .asset-ol-tr,
+.content.density-gesture-active .asset .asset-ol-bottom,
+.content.density-gesture-active .asset .asset-ol-bl,
+.content.density-gesture-active .asset .asset-ol-tl,
+.content.density-gesture-active .asset .asset-ol-tr{
   opacity: 0;
   transform: translateY(4px);
   transition:
@@ -832,10 +836,10 @@ select.control{
     opacity 120ms ease,
     transform 120ms ease;
 }
-.content.density-motion-settling .asset .asset-ol-bottom,
-.content.density-motion-settling .asset .asset-ol-bl,
-.content.density-motion-settling .asset .asset-ol-tl,
-.content.density-motion-settling .asset .asset-ol-tr{
+.content.density-motion-settling:not(.density-gesture-active) .asset .asset-ol-bottom,
+.content.density-motion-settling:not(.density-gesture-active) .asset .asset-ol-bl,
+.content.density-motion-settling:not(.density-gesture-active) .asset .asset-ol-tl,
+.content.density-motion-settling:not(.density-gesture-active) .asset .asset-ol-tr{
   opacity: 1;
   transform: translateY(0);
   transition:

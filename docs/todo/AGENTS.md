@@ -1,3 +1,13 @@
+## 2026-03-29 — Held-gesture chrome holdback pass (new)
+- [x] Added explicit held-gesture state class (`.density-gesture-active`) driven by pinch gesture lifecycle in `createPinchDensityController`.
+- [x] Chrome hide rules now include held-gesture class, ensuring selector/type/size/metadata overlays remain hidden for the full duration of touch hold.
+- [x] `animateDensityFlip` settling path now blocks settle-class entry while held gesture class is active, preventing premature fade-back during active touches.
+- [x] On gesture release, pinch controller clears held-gesture class and only starts settle fade-back when density motion is no longer active.
+- [x] Settling fade-back selectors now guard with `:not(.density-gesture-active)` so fade-in cannot start until hold state is cleared.
+- [x] Preserved media plane behavior and existing density correctness/illusion architecture/diagnostics.
+- [x] Updated static contracts to lock held-gesture gating and settle-start conditions; Explorer static suite passing.
+- [ ] Next: verify multi-step held pinch on device to confirm overlays stay hidden between repeated notch commits until finger release.
+
 ## 2026-03-29 — Density gesture chrome fade-out/in polish pass (new)
 - [x] Kept density motion class orchestration (`.density-motion-active` → `.density-motion-settling`) and preserved layout/illusion correctness path.
 - [x] Updated asset-card chrome behavior to fade out on density motion start (active state) instead of instantly snapping hidden.

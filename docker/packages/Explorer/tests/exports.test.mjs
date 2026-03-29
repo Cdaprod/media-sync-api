@@ -1028,6 +1028,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('const rearmMin = 0.96;'));
   assert.ok(pinchController.includes('const rearmMax = 1.04;'));
   assert.ok(pinchController.includes('let canStep = true;'));
+  assert.ok(pinchController.includes("const contentEl = visualScaleTargetEl.closest<HTMLElement>('.content');"));
+  assert.ok(pinchController.includes('const setGestureActiveClass = (gestureActive: boolean) => {'));
+  assert.ok(pinchController.includes("contentEl.classList.add('density-gesture-active');"));
+  assert.ok(pinchController.includes("contentEl.classList.remove('density-gesture-active');"));
   assert.ok(pinchController.includes('if (!canStep) {'));
   assert.ok(pinchController.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;'));
   assert.ok(pinchController.includes('density.setColumnsForPinch(currentColumns - 1);'));
@@ -1701,6 +1705,7 @@ test('density motion debug hook exposes target-reduction and viewport bounds', (
   assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));
   assert.ok(content.includes("contentEl.classList.add('density-motion-active');"));
   assert.ok(content.includes("contentEl.classList.remove('density-motion-active');"));
+  assert.ok(content.includes("if (contentEl.classList.contains('density-gesture-active')) {"));
   assert.ok(content.includes('void contentEl.offsetHeight;'));
   assert.ok(content.includes("contentEl.classList.add('density-motion-settling');"));
   assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));
@@ -1940,12 +1945,13 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(styles.includes('.asset-thumb-preview{'));
   assert.ok(styles.includes('.content.pinch-perf-active .asset-thumb-preview{'));
   assert.ok(styles.includes('.content.density-motion-active .asset .asset-ol-bottom,'));
-  assert.ok(styles.includes('.content.density-motion-active .asset .asset-ol-tr{'));
+  assert.ok(styles.includes('.content.density-gesture-active .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('.content.density-motion-active .asset .asset-ol-tr,'));
   assert.ok(styles.includes('transform: translateY(4px);'));
   assert.ok(styles.includes('opacity 120ms ease,'));
   assert.ok(styles.includes('transform 120ms ease;'));
   assert.ok(styles.includes('.content.density-motion-active .asset .asset-overlay{'));
-  assert.ok(styles.includes('.content.density-motion-settling .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('.content.density-motion-settling:not(.density-gesture-active) .asset .asset-ol-bottom,'));
   assert.ok(styles.includes('opacity 220ms ease calc(140ms + var(--card-index, 0) * 12ms),'));
   assert.ok(styles.includes('transform 220ms ease calc(140ms + var(--card-index, 0) * 12ms);'));
   assert.ok(styles.includes('.tap-debug-marker{'));
