@@ -1,3 +1,10 @@
+## 2026-03-29 — No-FLIP motion-active lifecycle parity fix (new)
+- [x] Identified root cause for missing live motion class: no-FLIP illusion branch in `animateDensityFlip` did not enter `setDensityMotionActive(true)`, so `.density-motion-active` never appeared during active density changes on that path.
+- [x] Updated no-FLIP branch to enter motion-active before illusion settle timing and to record `motionActive: true` in motion debug snapshot during active phase.
+- [x] Kept existing settle handoff (`setDensityMotionActive(false)`), gesture-class ownership, illusion architecture, and timing values unchanged.
+- [x] Updated static contracts to assert no-FLIP branch enters motion-active and retains explicit active motion debug marker.
+- [ ] Next: rerun runtime recorder and confirm `motionSeen/debugMotionSeen` flip true during active density change.
+
 ## 2026-03-29 — Motion snapshot record typing widen pass (new)
 - [x] Fixed `animateDensityFlip` debug snapshot typing to allow string-valued host fields (`classHostTag`, `classHostClassName`) in `__explorerDensityMotionDebug.getSnapshot()`.
 - [x] Updated snapshot array/declaration types from `Record<string, number | boolean>` to `Record<string, string | number | boolean>` with no runtime behavior change.

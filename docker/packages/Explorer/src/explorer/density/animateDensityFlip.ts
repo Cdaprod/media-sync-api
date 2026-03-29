@@ -363,6 +363,7 @@ export function animateDensityFlip({
     }
     updateDebug(gridEl, 'noItemCommits');
     const illusion = createVisibleIllusionLayer(items);
+    setDensityMotionActive(true);
     if (illusion.count > 0) {
       activeIllusionCleanupByGrid.set(gridEl, illusion.remove);
     }
@@ -370,13 +371,14 @@ export function animateDensityFlip({
     if (snapshot) {
       motionDebugByGrid.set(gridEl, {
         ...snapshot,
-        motionActive: false,
+        motionActive: true,
         lastDurationMs: 0,
         flipIsolationEnabled: true,
         lastRunUsedFlip: false,
         illusionLayerEnabled: ENABLE_VISIBLE_ILLUSION_LAYER,
         illusionCardCount: illusion.count,
         lastRunUsedIllusion: illusion.count > 0,
+        ...readClassHostState(),
       });
     }
     const settleDelayMs = ILLUSION_SETTLE_MS;

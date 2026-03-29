@@ -1052,6 +1052,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('illusionCardCount'));
   assert.ok(flip.includes('lastRunUsedIllusion'));
   assert.ok(flip.includes('if (!ENABLE_DENSITY_FLIP_ANIMATION) {'));
+  assert.ok(flip.includes('setDensityMotionActive(true);'));
+  assert.ok(flip.includes('motionActive: true,'));
   assert.ok(flip.includes('lastRunUsedFlipByGrid.set(gridEl, false);'));
   assert.ok(flip.includes('flipIsolationEnabled: true,'));
   assert.ok(flip.includes('lastRunUsedFlip: false,'));
