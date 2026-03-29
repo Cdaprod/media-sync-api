@@ -77,6 +77,7 @@ function AssetGridComponent({
   const lastMotionActiveAtMsRef = useRef<number | null>(null);
   const lastDensityTransitionUsedSimplifiedRef = useRef(false);
   const scrollRevealBatchTimerRef = useRef<number | null>(null);
+  const revealFailSafeTimersRef = useRef<Map<string, number>>(new Map());
   const prevGridColumnsRef = useRef<number | null>(null);
   const simplifyTimeoutRef = useRef<number | null>(null);
   const ENABLE_MOTION_AWARE_BUFFER = false;
@@ -264,6 +265,11 @@ function AssetGridComponent({
         const key = card.dataset.cardId;
         if (!key) continue;
         pending.add(key);
+        const pendingFailSafe = revealFailSafeTimersRef.current.get(key);
+        if (pendingFailSafe != null) {
+          window.clearTimeout(pendingFailSafe);
+          revealFailSafeTimersRef.current.delete(key);
+        }
         observer.unobserve(card);
       }
       if (scrollRevealBatchTimerRef.current != null) {
@@ -279,11 +285,31 @@ function AssetGridComponent({
       rootMargin: '240px 0px 360px 0px',
     });
     const cards = Array.from(host.querySelectorAll<HTMLElement>('.masonry-card[data-card-id]'));
+    const viewportTop = scrollHost?.scrollTop ?? 0;
+    const viewportBottom = viewportTop + (scrollHost?.clientHeight ?? 0);
     cards.forEach((card) => {
       const key = card.dataset.cardId;
       if (!key || revealedCards.has(key)) return;
+      const top = Number(card.dataset.layoutTop ?? 0);
+      const bottom = Number(card.dataset.layoutBottom ?? top);
+      const inPrewarmViewport = bottom >= (viewportTop - 80) && top <= (viewportBottom + 160);
+      if (inPrewarmViewport) {
+        pending.add(key);
+      } else if (!revealFailSafeTimersRef.current.has(key)) {
+        const failSafeTimer = window.setTimeout(() => {
+          revealFailSafeTimersRef.current.delete(key);
+          setRevealedCards((prev) => {
+            if (prev.has(key)) return prev;
+            const next = new Set(prev);
+            next.add(key);
+            return next;
+          });
+        }, 220);
+        revealFailSafeTimersRef.current.set(key, failSafeTimer);
+      }
       observer.observe(card);
     });
+    flushPending();
     return () => {
       observer.disconnect();
       if (scrollRevealBatchTimerRef.current != null) {
@@ -292,6 +318,11 @@ function AssetGridComponent({
       }
     };
   }, [renderedLayoutItems, revealedCards]);
+
+  useLayoutEffect(() => () => {
+    revealFailSafeTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    revealFailSafeTimersRef.current.clear();
+  }, []);
 
   useLayoutEffect(() => {
     const mode = densityMotionActive ? 'density-motion' : 'idle';

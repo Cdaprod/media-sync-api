@@ -1,3 +1,11 @@
+## 2026-03-29 — Scroll-reveal stale-hidden fail-safe pass (new)
+- [x] Fixed blank-window risk from stale scroll-reveal hidden state by adding a bounded fail-safe reveal timer per card (`220ms`) in `AssetGrid`.
+- [x] Added viewport prewarm reveal criteria so near-viewport cards are marked visible immediately before observer callbacks (`viewportTop-80` to `viewportBottom+160`).
+- [x] Observer reveal path now clears pending fail-safe timers when cards are revealed normally to avoid duplicate work.
+- [x] Added unmount cleanup for outstanding reveal fail-safe timers to keep lifecycle idempotent.
+- [x] Updated static contracts to lock fail-safe markers and prewarm criteria.
+- [ ] Next: on-device verify no persistent blank holes during aggressive flick scroll + reverse scroll in long project lists.
+
 ## 2026-03-29 — Fast-scroll render window expansion pass (new)
 - [x] Increased masonry render-window buffers in `AssetGrid` (`BASE_RENDER_BUFFER_PX: 1200`, `MOTION_RENDER_BUFFER_PX: 640`) to pre-render more cards and reduce empty-space gaps during fast mobile scroll.
 - [x] Relaxed scroll-reveal observer gating (`threshold: 0`, expanded `rootMargin: 240px 0px 360px 0px`) so cards reveal earlier before they enter viewport.

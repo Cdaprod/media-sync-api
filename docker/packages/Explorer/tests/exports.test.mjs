@@ -1707,6 +1707,7 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('const [simplifiedCardSubtreeActive, setSimplifiedCardSubtreeActive] = useState(false);'));
   assert.ok(content.includes('const [pageLoadEntranceActive, setPageLoadEntranceActive] = useState(true);'));
   assert.ok(content.includes('const [revealedCards, setRevealedCards] = useState<Set<string>>(() => new Set());'));
+  assert.ok(content.includes('const revealFailSafeTimersRef = useRef<Map<string, number>>(new Map());'));
   assert.ok(content.includes('new IntersectionObserver((entries) => {'));
   assert.ok(content.includes("threshold: 0,"));
   assert.ok(content.includes("rootMargin: '240px 0px 360px 0px',"));
@@ -1714,6 +1715,10 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes("!isScrollRevealVisible ? 'scroll-reveal-pending' : 'scroll-reveal-visible'"));
   assert.ok(content.includes("'--page-load-delay': `${pageLoadDelayMs}ms`"));
   assert.ok(content.includes("'--scroll-reveal-delay': `${Math.min(index, 6) * 12}ms`"));
+  assert.ok(content.includes('const inPrewarmViewport = bottom >= (viewportTop - 80) && top <= (viewportBottom + 160);'));
+  assert.ok(content.includes('const failSafeTimer = window.setTimeout(() => {'));
+  assert.ok(content.includes('}, 220);'));
+  assert.ok(content.includes('revealFailSafeTimersRef.current.forEach((timer) => window.clearTimeout(timer));'));
   assert.ok(content.includes('lastDensityTransitionUsedSimplifiedRef'));
   assert.ok(content.includes('motionBufferEverUsed: motionBufferEverUsedRef.current'));
   assert.ok(content.includes('lastBufferModeUsed: lastBufferModeUsedRef.current'));
