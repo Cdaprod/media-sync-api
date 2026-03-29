@@ -109,6 +109,11 @@ function updateMotionDebug(
     illusionLayerEnabled: boolean;
     illusionCardCount: number;
     lastRunUsedIllusion: boolean;
+    classHostTag: string;
+    classHostClassName: string;
+    gestureClassApplied: boolean;
+    motionClassApplied: boolean;
+    settlingClassApplied: boolean;
   },
 ) {
   motionDebugByGrid.set(gridEl, stats);

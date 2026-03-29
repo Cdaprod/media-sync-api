@@ -1,3 +1,9 @@
+## 2026-03-29 — Motion-debug shape compile fix pass (new)
+- [x] Fixed `animateDensityFlip` TypeScript mismatch by extending `updateMotionDebug(...)` input shape to include host-class diagnostics fields required by `motionDebugByGrid`.
+- [x] Kept runtime behavior unchanged; this pass aligns helper typing with already-written snapshot payload fields (`classHostTag`, `classHostClassName`, `gestureClassApplied`, `motionClassApplied`, `settlingClassApplied`).
+- [x] Re-ran Explorer static contract suite after the typing fix.
+- [ ] Next: verify containerized `npm run build` in environment with `next` binary available.
+
 ## 2026-03-29 — Density class-host wiring fix pass (new)
 - [x] Fixed state-to-DOM wiring by passing explicit class-host resolver (`getClassHostEl: () => mediaContentRef.current`) from `ExplorerApp` into density + pinch controllers.
 - [x] Density lifecycle classes (`density-gesture-active`, `density-motion-active`, `density-motion-settling`) are now applied against the same real `.content` host element instead of relying only on nearest-node assumptions.
