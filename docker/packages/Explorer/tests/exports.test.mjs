@@ -1436,6 +1436,7 @@ test('positioned masonry renderer keeps card geometry in data attributes for con
   assert.ok(content.includes('data-card-id=') || content.includes('data-card-id={'));
   assert.ok(content.includes('data-layout-top={layoutTop}'));
   assert.ok(content.includes('data-layout-bottom={layoutBottom}'));
+  assert.ok(content.includes("'--card-index': String(index)"));
   assert.ok(content.includes('data-density-columns=') || content.includes('data-density-columns={'));
   assert.ok(content.includes('left: x'));
   assert.ok(content.includes('top: y'));
@@ -1700,6 +1701,7 @@ test('density motion debug hook exposes target-reduction and viewport bounds', (
   assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));
   assert.ok(content.includes("contentEl.classList.add('density-motion-active');"));
   assert.ok(content.includes("contentEl.classList.remove('density-motion-active');"));
+  assert.ok(content.includes('void contentEl.offsetHeight;'));
   assert.ok(content.includes("contentEl.classList.add('density-motion-settling');"));
   assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));
   assert.ok(content.includes('const settleTimer = window.setTimeout(() => {'));
@@ -1942,8 +1944,8 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(styles.includes('transform: translateY(4px);'));
   assert.ok(styles.includes('.content.density-motion-active .asset .asset-overlay{'));
   assert.ok(styles.includes('.content.density-motion-settling .asset .asset-ol-bottom,'));
-  assert.ok(styles.includes('opacity 220ms ease 140ms,'));
-  assert.ok(styles.includes('transform 220ms ease 140ms;'));
+  assert.ok(styles.includes('opacity 220ms ease calc(140ms + var(--card-index, 0) * 12ms),'));
+  assert.ok(styles.includes('transform 220ms ease calc(140ms + var(--card-index, 0) * 12ms);'));
   assert.ok(styles.includes('.tap-debug-marker{'));
   assert.ok(grid.includes('className="asset-thumb-preview"'));
   assert.ok(styles.includes('.masonry-card.asset{'));

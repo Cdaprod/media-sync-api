@@ -835,8 +835,8 @@ select.control{
   opacity: 1;
   transform: translateY(0);
   transition:
-    opacity 220ms ease 140ms,
-    transform 220ms ease 140ms;
+    opacity 220ms ease calc(140ms + var(--card-index, 0) * 12ms),
+    transform 220ms ease calc(140ms + var(--card-index, 0) * 12ms);
 }
 .thumb .fallback{
   font-size: 12px;

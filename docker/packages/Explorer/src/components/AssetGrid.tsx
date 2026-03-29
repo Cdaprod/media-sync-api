@@ -360,6 +360,7 @@ function AssetGridComponent({
             width,
             minHeight: `${height}px`,
             height,
+            '--card-index': String(index),
           };
 
           if (entry.kind === 'pending') {

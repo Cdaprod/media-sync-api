@@ -1,3 +1,12 @@
+## 2026-03-29 — Density settle stagger cascade pass (new)
+- [x] Added per-card stagger support for settle chrome return by stamping `--card-index` on positioned masonry cards in `AssetGrid`.
+- [x] Updated settle CSS timing to use index-based delay (`calc(140ms + var(--card-index, 0) * 12ms)`) so card chrome no longer fades back synchronously.
+- [x] Kept active-motion suppression strict (`opacity: 0`, `translateY(4px)`, `transition: none`) for targeted overlay chrome while preserving thumbnail/media plane stability.
+- [x] Added reflow enforcement (`void contentEl.offsetHeight`) before applying `.density-motion-settling` to ensure transitions reliably fire after active-state removal.
+- [x] Preserved density correctness, illusion architecture, bounded layout/render, and diagnostics surfaces.
+- [x] Updated static contracts to lock stagger variable wiring, reflow marker, and staggered settle transition strings; Explorer static suite passing.
+- [ ] Next: run on-device review to tune stagger step (currently `12ms`) only if visual cadence still feels too dense at high card counts.
+
 ## 2026-03-28 — Post-density settle chrome fade-back pass (new)
 - [x] Added a dedicated post-motion settling state (`.density-motion-settling`) in `animateDensityFlip` so card chrome can return after density motion stops.
 - [x] Updated density-motion class orchestration: motion start clears settling state; motion end removes active state, adds settling state, then clears settling state after `360ms`.

@@ -151,6 +151,7 @@ export function animateDensityFlip({
       return;
     }
     contentEl.classList.remove('density-motion-active');
+    void contentEl.offsetHeight;
     contentEl.classList.add('density-motion-settling');
     clearSettlingTimer();
     const settleTimer = window.setTimeout(() => {
