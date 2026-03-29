@@ -1,3 +1,10 @@
+## 2026-03-29 — Density class-lifecycle ordering fix (new)
+- [x] Moved no-FLIP motion lifecycle activation earlier so `setDensityMotionActive(true)` runs immediately at the no-FLIP gate before card queries, target-picking, or illusion-shell creation.
+- [x] Kept CSS/timing/selector behavior unchanged; this pass is ordering-only to hide chrome before density mutation work begins.
+- [x] Reconfirmed pinch gesture class path remains synchronous at touch-start (`setGestureActiveClass(true)` directly in `onTouchStart`, no rAF deferral).
+- [x] Extended static contracts to lock early motion activation ordering and forbid rAF-delayed gesture-class application in pinch controller.
+- [ ] Next: rerun the runtime probe and confirm first sampled active frame already reports `gesture:true` and `motion:true` before visible density remap.
+
 ## 2026-03-29 — Density active hidden-state precedence fix (new)
 - [x] Tightened active motion/gesture chrome-hide selectors so hidden state wins immediately by forcing overlay chrome `opacity`/`transform` with `!important`.
 - [x] Removed active-phase overlay transition ownership (`transition: none !important`) for both `.density-motion-active` and `.density-gesture-active` hosts to avoid first-frame leakage from broader transition rules.

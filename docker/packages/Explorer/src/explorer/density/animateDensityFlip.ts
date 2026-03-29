@@ -341,6 +341,10 @@ export function animateDensityFlip({
     return invariantFixups;
   };
 
+  if (!ENABLE_DENSITY_FLIP_ANIMATION) {
+    setDensityMotionActive(true);
+  }
+
   const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));
   const animationTargets = pickAnimatedTargets(items);
   if (!items.length) {
@@ -363,7 +367,6 @@ export function animateDensityFlip({
     }
     updateDebug(gridEl, 'noItemCommits');
     const illusion = createVisibleIllusionLayer(items);
-    setDensityMotionActive(true);
     if (illusion.count > 0) {
       activeIllusionCleanupByGrid.set(gridEl, illusion.remove);
     }

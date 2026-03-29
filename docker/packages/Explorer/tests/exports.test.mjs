@@ -1053,6 +1053,18 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(flip.includes('lastRunUsedIllusion'));
   assert.ok(flip.includes('if (!ENABLE_DENSITY_FLIP_ANIMATION) {'));
   assert.ok(flip.includes('setDensityMotionActive(true);'));
+  assert.ok(!pinchController.includes('requestAnimationFrame'));
+
+  const noFlipGateIndex = flip.indexOf('if (!ENABLE_DENSITY_FLIP_ANIMATION) {');
+  const earlyMotionIndex = flip.indexOf('setDensityMotionActive(true);', noFlipGateIndex);
+  const itemsQueryIndex = flip.indexOf('const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));', noFlipGateIndex);
+  const targetPickIndex = flip.indexOf('const animationTargets = pickAnimatedTargets(items);', noFlipGateIndex);
+  const illusionIndex = flip.indexOf('const illusion = createVisibleIllusionLayer(items);', noFlipGateIndex);
+  assert.ok(noFlipGateIndex >= 0);
+  assert.ok(earlyMotionIndex > noFlipGateIndex);
+  assert.ok(itemsQueryIndex > earlyMotionIndex);
+  assert.ok(targetPickIndex > earlyMotionIndex);
+  assert.ok(illusionIndex > earlyMotionIndex);
   assert.ok(flip.includes('motionActive: true,'));
   assert.ok(flip.includes('lastRunUsedFlipByGrid.set(gridEl, false);'));
   assert.ok(flip.includes('flipIsolationEnabled: true,'));
