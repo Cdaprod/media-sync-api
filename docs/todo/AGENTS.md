@@ -1,3 +1,11 @@
+## 2026-03-29 — React #185 reveal-loop guard fix (new)
+- [x] Root cause identified in `AssetGrid` scroll-reveal effect: synchronous prewarm `flushPending()` in layout effect could repeatedly enqueue immediate state updates during reveal churn.
+- [x] Added strict no-op guards for reveal state transitions (`return changed ? next : prev`) so observer/prewarm callbacks do not trigger renders when nothing changed.
+- [x] Replaced synchronous prewarm state write with next-frame flush (`requestAnimationFrame`) to break nested layout-effect update chains.
+- [x] Decoupled reveal observer effect from `revealedCards` dependency by introducing `revealedCardsRef` mirror, preventing re-subscribe churn on every reveal update.
+- [x] Added RAF cleanup and kept fail-safe timer cleanup to preserve idempotent lifecycle behavior.
+- [ ] Next: confirm on-device that React #185 no longer appears under aggressive scroll while blank-card fail-safe remains effective.
+
 ## 2026-03-29 — Scroll-reveal stale-hidden fail-safe pass (new)
 - [x] Fixed blank-window risk from stale scroll-reveal hidden state by adding a bounded fail-safe reveal timer per card (`220ms`) in `AssetGrid`.
 - [x] Added viewport prewarm reveal criteria so near-viewport cards are marked visible immediately before observer callbacks (`viewportTop-80` to `viewportBottom+160`).

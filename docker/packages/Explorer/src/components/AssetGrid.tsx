@@ -78,6 +78,7 @@ function AssetGridComponent({
   const lastDensityTransitionUsedSimplifiedRef = useRef(false);
   const scrollRevealBatchTimerRef = useRef<number | null>(null);
   const revealFailSafeTimersRef = useRef<Map<string, number>>(new Map());
+  const revealedCardsRef = useRef<Set<string>>(new Set());
   const prevGridColumnsRef = useRef<number | null>(null);
   const simplifyTimeoutRef = useRef<number | null>(null);
   const ENABLE_MOTION_AWARE_BUFFER = false;
@@ -252,12 +253,18 @@ function AssetGridComponent({
     const flushPending = () => {
       if (!pending.size) return;
       setRevealedCards((prev) => {
+        let changed = false;
         const next = new Set(prev);
-        pending.forEach((key) => next.add(key));
-        return next;
+        pending.forEach((key) => {
+          if (next.has(key)) return;
+          next.add(key);
+          changed = true;
+        });
+        return changed ? next : prev;
       });
       pending.clear();
     };
+    let prewarmFlushRafId = 0;
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
@@ -289,7 +296,7 @@ function AssetGridComponent({
     const viewportBottom = viewportTop + (scrollHost?.clientHeight ?? 0);
     cards.forEach((card) => {
       const key = card.dataset.cardId;
-      if (!key || revealedCards.has(key)) return;
+      if (!key || revealedCardsRef.current.has(key)) return;
       const top = Number(card.dataset.layoutTop ?? 0);
       const bottom = Number(card.dataset.layoutBottom ?? top);
       const inPrewarmViewport = bottom >= (viewportTop - 80) && top <= (viewportBottom + 160);
@@ -309,15 +316,23 @@ function AssetGridComponent({
       }
       observer.observe(card);
     });
-    flushPending();
+    if (pending.size) {
+      prewarmFlushRafId = window.requestAnimationFrame(() => {
+        prewarmFlushRafId = 0;
+        flushPending();
+      });
+    }
     return () => {
       observer.disconnect();
       if (scrollRevealBatchTimerRef.current != null) {
         window.clearTimeout(scrollRevealBatchTimerRef.current);
         scrollRevealBatchTimerRef.current = null;
       }
+      if (prewarmFlushRafId) {
+        window.cancelAnimationFrame(prewarmFlushRafId);
+      }
     };
-  }, [renderedLayoutItems, revealedCards]);
+  }, [renderedLayoutItems]);
 
   useLayoutEffect(() => () => {
     revealFailSafeTimersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -593,3 +608,6 @@ function AssetGridComponent({
 }
 
 export const AssetGrid = memo(AssetGridComponent);
+  useLayoutEffect(() => {
+    revealedCardsRef.current = revealedCards;
+  }, [revealedCards]);
