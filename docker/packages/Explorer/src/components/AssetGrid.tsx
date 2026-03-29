@@ -13,6 +13,8 @@ export interface ExplorerAssetViewModel {
   renderKey: string;
   selectionKey: string;
   isActive: boolean;
+  isSecondTapReinforced: boolean;
+  isHoldEmphasis: boolean;
   isSelected: boolean;
   size: string;
   sub: string;
@@ -22,6 +24,8 @@ export interface ExplorerAssetViewModel {
   title: string;
   fallbackThumb: string;
   safeThumbUrl: string;
+  activeVideoPreviewUrl?: string;
+  previewPlaybackKey: string;
   pointerHandlers: AssetPointerHandlers;
   kindBadgeClassName: string;
   selectionOrderLabel: string;
@@ -64,7 +68,27 @@ function AssetGridComponent({
   onDismissPendingJob,
 }: AssetGridProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const layoutCommitCountRef = useRef(0);
+  const renderWindowUpdateCountRef = useRef(0);
+  const motionObserverCallbackCountRef = useRef(0);
+  const motionBufferEverUsedRef = useRef(false);
+  const lastBufferModeUsedRef = useRef<'idle' | 'density-motion'>('idle');
+  const lastLayoutScopeUsedRef = useRef<'global' | 'windowed'>('global');
+  const lastMotionActiveAtMsRef = useRef<number | null>(null);
+  const lastDensityTransitionUsedSimplifiedRef = useRef(false);
+  const scrollRevealBatchTimerRef = useRef<number | null>(null);
+  const prevGridColumnsRef = useRef<number | null>(null);
+  const simplifyTimeoutRef = useRef<number | null>(null);
+  const ENABLE_MOTION_AWARE_BUFFER = false;
+  const ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION = true;
+  const [densityMotionActive, setDensityMotionActive] = useState(false);
+  const [simplifiedCardSubtreeActive, setSimplifiedCardSubtreeActive] = useState(false);
+  const [pageLoadEntranceActive, setPageLoadEntranceActive] = useState(true);
+  const [revealedCards, setRevealedCards] = useState<Set<string>>(() => new Set());
+  const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
   const [hostWidth, setHostWidth] = useState(0);
+  const BASE_RENDER_BUFFER_PX = 420;
+  const MOTION_RENDER_BUFFER_PX = 180;
   const measureHostWidth = useCallback(() => {
     const node = hostRef.current;
     if (!node) return;
@@ -88,6 +112,93 @@ function AssetGridComponent({
     return () => window.cancelAnimationFrame(rafId);
   }, [entries.length, gridColumnCount, measureHostWidth]);
 
+  useLayoutEffect(() => {
+    if (!ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION) {
+      setSimplifiedCardSubtreeActive(false);
+      return;
+    }
+    const previous = prevGridColumnsRef.current;
+    prevGridColumnsRef.current = gridColumnCount;
+    if (previous == null || previous === gridColumnCount) return;
+    lastDensityTransitionUsedSimplifiedRef.current = true;
+    setSimplifiedCardSubtreeActive(true);
+    if (simplifyTimeoutRef.current != null) {
+      window.clearTimeout(simplifyTimeoutRef.current);
+    }
+    simplifyTimeoutRef.current = window.setTimeout(() => {
+      setSimplifiedCardSubtreeActive(false);
+      simplifyTimeoutRef.current = null;
+    }, 420);
+    return () => {
+      if (simplifyTimeoutRef.current != null) {
+        window.clearTimeout(simplifyTimeoutRef.current);
+        simplifyTimeoutRef.current = null;
+      }
+    };
+  }, [ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION, gridColumnCount]);
+
+  useLayoutEffect(() => {
+    if (!ENABLE_MOTION_AWARE_BUFFER) {
+      setDensityMotionActive(false);
+      return;
+    }
+    const host = hostRef.current;
+    if (!host) return;
+    const contentEl = host.closest<HTMLElement>('.content');
+    if (!contentEl) {
+      setDensityMotionActive(false);
+      return;
+    }
+    const syncDensityMotionState = () => {
+      motionObserverCallbackCountRef.current += 1;
+      const isActive = contentEl.classList.contains('density-motion-active');
+      setDensityMotionActive((prev) => (prev === isActive ? prev : isActive));
+    };
+    syncDensityMotionState();
+    const observer = new MutationObserver(syncDensityMotionState);
+    observer.observe(contentEl, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [ENABLE_MOTION_AWARE_BUFFER]);
+
+  const measureRenderWindow = useCallback(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const scrollHost = host.closest<HTMLElement>('.scroll');
+    if (!scrollHost) {
+      setRenderWindow((prev) => (
+        prev.top === 0 && prev.bottom === Number.MAX_SAFE_INTEGER
+          ? prev
+          : { top: 0, bottom: Number.MAX_SAFE_INTEGER }
+      ));
+      return;
+    }
+    const nextTop = scrollHost.scrollTop;
+    const nextBottom = nextTop + scrollHost.clientHeight;
+    setRenderWindow((prev) => (
+      Math.abs(prev.top - nextTop) < 0.5 && Math.abs(prev.bottom - nextBottom) < 0.5
+        ? prev
+        : (() => {
+          renderWindowUpdateCountRef.current += 1;
+          return { top: nextTop, bottom: nextBottom };
+        })()
+    ));
+  }, []);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const scrollHost = host.closest<HTMLElement>('.scroll');
+    measureRenderWindow();
+    if (!scrollHost) return;
+    const onScroll = () => measureRenderWindow();
+    scrollHost.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      scrollHost.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [measureRenderWindow]);
+
   const gridItems = useMemo(() => entries.map((entry) => {
     if (entry.kind === 'pending') {
       return { entry } as const;
@@ -96,6 +207,12 @@ function AssetGridComponent({
     return { entry, viewModel } as const;
   }), [buildAssetViewModel, entries]);
 
+  const renderBufferPx = ENABLE_MOTION_AWARE_BUFFER && densityMotionActive
+    ? MOTION_RENDER_BUFFER_PX
+    : BASE_RENDER_BUFFER_PX;
+  const renderWindowTop = renderWindow.top - renderBufferPx;
+  const renderWindowBottom = renderWindow.bottom + renderBufferPx;
+
   const layout = useMemo(
     () => computeMasonryLayout({
       items: gridItems,
@@ -103,27 +220,180 @@ function AssetGridComponent({
       columnCount: gridColumnCount,
       gutter: 6,
       estimateHeightRatio: ({ entry, viewModel }) => heightRatioForEntry(entry, viewModel),
+      shouldIncludeItem: ({ y, height }) => {
+        const top = y;
+        const bottom = y + height;
+        return bottom >= renderWindowTop && top <= renderWindowBottom;
+      },
     }),
-    [gridColumnCount, gridItems, hostWidth],
+    [gridColumnCount, gridItems, hostWidth, renderWindowBottom, renderWindowTop],
   );
 
+  const renderedLayoutItems = layout.items;
+  const layoutComputationScope = layout.includedItemCount < layout.totalItemCount ? 'windowed' : 'global';
+
   useLayoutEffect(() => {
-    const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');
-    if (!stage) return;
-    const cards = Array.from(stage.querySelectorAll<HTMLElement>('.masonry-card'));
-    if (!cards.length) return;
-    for (const card of cards) {
-      card.style.transition = 'none';
-      card.style.transform = 'none';
-      card.style.removeProperty('transform');
-    }
-    const rafId = window.requestAnimationFrame(() => {
-      for (const card of cards) {
-        card.style.removeProperty('transition');
+    if (!pageLoadEntranceActive) return;
+    if (!renderedLayoutItems.length) return;
+    const maxIndex = Math.max(0, renderedLayoutItems.length - 1);
+    const totalDelayMs = 80 + (Math.min(maxIndex, 18) * 28) + 320;
+    const timer = window.setTimeout(() => {
+      setPageLoadEntranceActive(false);
+    }, totalDelayMs);
+    return () => window.clearTimeout(timer);
+  }, [pageLoadEntranceActive, renderedLayoutItems.length]);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const scrollHost = host.closest<HTMLElement>('.scroll');
+    const pending = new Set<string>();
+    const flushPending = () => {
+      if (!pending.size) return;
+      setRevealedCards((prev) => {
+        const next = new Set(prev);
+        pending.forEach((key) => next.add(key));
+        return next;
+      });
+      pending.clear();
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const card = entry.target as HTMLElement;
+        const key = card.dataset.cardId;
+        if (!key) continue;
+        pending.add(key);
+        observer.unobserve(card);
       }
+      if (scrollRevealBatchTimerRef.current != null) {
+        window.clearTimeout(scrollRevealBatchTimerRef.current);
+      }
+      scrollRevealBatchTimerRef.current = window.setTimeout(() => {
+        scrollRevealBatchTimerRef.current = null;
+        flushPending();
+      }, 16);
+    }, {
+      root: scrollHost,
+      rootMargin: '0px 0px -20px 0px',
+      threshold: 0.05,
     });
-    return () => window.cancelAnimationFrame(rafId);
-  }, [gridColumnCount, hostWidth, layout.items]);
+    const cards = Array.from(host.querySelectorAll<HTMLElement>('.masonry-card[data-card-id]'));
+    cards.forEach((card) => {
+      const key = card.dataset.cardId;
+      if (!key || revealedCards.has(key)) return;
+      observer.observe(card);
+    });
+    return () => {
+      observer.disconnect();
+      if (scrollRevealBatchTimerRef.current != null) {
+        window.clearTimeout(scrollRevealBatchTimerRef.current);
+        scrollRevealBatchTimerRef.current = null;
+      }
+    };
+  }, [renderedLayoutItems, revealedCards]);
+
+  useLayoutEffect(() => {
+    const mode = densityMotionActive ? 'density-motion' : 'idle';
+    lastBufferModeUsedRef.current = mode;
+    lastLayoutScopeUsedRef.current = layoutComputationScope;
+    if (!densityMotionActive) return;
+    motionBufferEverUsedRef.current = true;
+    lastMotionActiveAtMsRef.current = Date.now();
+  }, [densityMotionActive, layoutComputationScope]);
+
+  useLayoutEffect(() => {
+    layoutCommitCountRef.current += 1;
+    (globalThis as typeof globalThis & {
+      __explorerDensityLayoutDebug?: {
+        getSnapshot: () => {
+          gridColumnCount: number;
+          renderedCardCount: number;
+          layoutRecomputeCount: number;
+          layoutStageHeight: number;
+          totalLogicalCount: number;
+          renderedItemCount: number;
+          visibleRenderedItemCount: number;
+          boundedRenderingActive: boolean;
+          renderWindowTop: number;
+          renderWindowBottom: number;
+          renderBufferPx: number;
+          renderBufferMode: 'idle' | 'density-motion';
+          layoutComputedItemCount: number;
+          layoutComputationScope: 'global' | 'windowed';
+          motionBufferEverUsed: boolean;
+          lastBufferModeUsed: 'idle' | 'density-motion';
+          lastLayoutScopeUsed: 'global' | 'windowed';
+          lastMotionActiveAtMs: number | null;
+          isolationMotionAwareBufferEnabled: boolean;
+          motionObserverCallbackCount: number;
+          renderWindowUpdateCount: number;
+          simplifiedCardIsolationEnabled: boolean;
+          simplifiedCardSubtreeActive: boolean;
+          lastDensityTransitionUsedSimplified: boolean;
+          cardSubtreeMode: 'full' | 'simplified';
+          flipActive: boolean;
+          sampleCards: Array<{
+            cardId: string;
+            left: string;
+            width: string;
+            top: string;
+          }>;
+        };
+      };
+      __explorerDensityFlipDebug?: { getStats: () => Array<Record<string, number>> };
+    }).__explorerDensityLayoutDebug = {
+      getSnapshot: () => {
+        const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');
+        const cards = Array.from(stage?.querySelectorAll<HTMLElement>('.masonry-card') ?? []);
+        const stats = (globalThis as typeof globalThis & {
+          __explorerDensityFlipDebug?: { getStats: () => Array<Record<string, number>> };
+        }).__explorerDensityFlipDebug?.getStats?.() ?? [];
+        const totals = stats.reduce((acc, row) => ({
+          starts: acc.starts + Number(row.starts ?? 0),
+          settles: acc.settles + Number(row.completes ?? 0) + Number(row.interrupts ?? 0),
+        }), { starts: 0, settles: 0 });
+        return {
+          gridColumnCount,
+          renderedCardCount: cards.length,
+          layoutRecomputeCount: layoutCommitCountRef.current,
+          layoutStageHeight: Math.max(layout.stageHeight, 0),
+          totalLogicalCount: layout.totalItemCount,
+          renderedItemCount: renderedLayoutItems.length,
+          visibleRenderedItemCount: renderedLayoutItems.filter(({ y, height }) => {
+            const top = y;
+            const bottom = y + height;
+            return bottom >= renderWindow.top && top <= renderWindow.bottom;
+          }).length,
+          boundedRenderingActive: layout.includedItemCount < layout.totalItemCount,
+          renderWindowTop: renderWindow.top,
+          renderWindowBottom: renderWindow.bottom,
+          renderBufferPx,
+          renderBufferMode: densityMotionActive ? 'density-motion' : 'idle',
+          layoutComputedItemCount: layout.includedItemCount,
+          layoutComputationScope,
+          motionBufferEverUsed: motionBufferEverUsedRef.current,
+          lastBufferModeUsed: lastBufferModeUsedRef.current,
+          lastLayoutScopeUsed: lastLayoutScopeUsedRef.current,
+          lastMotionActiveAtMs: lastMotionActiveAtMsRef.current,
+          isolationMotionAwareBufferEnabled: ENABLE_MOTION_AWARE_BUFFER,
+          motionObserverCallbackCount: motionObserverCallbackCountRef.current,
+          renderWindowUpdateCount: renderWindowUpdateCountRef.current,
+          simplifiedCardIsolationEnabled: ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION,
+          simplifiedCardSubtreeActive,
+          lastDensityTransitionUsedSimplified: lastDensityTransitionUsedSimplifiedRef.current,
+          cardSubtreeMode: simplifiedCardSubtreeActive ? 'simplified' : 'full',
+          flipActive: totals.starts > totals.settles,
+          sampleCards: cards.slice(0, 6).map((card) => ({
+            cardId: card.dataset.cardId ?? '',
+            left: card.style.left,
+            width: card.style.width,
+            top: card.style.top,
+          })),
+        };
+      },
+    };
+  }, [densityMotionActive, ENABLE_MOTION_AWARE_BUFFER, ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION, gridColumnCount, layout.includedItemCount, layout.items, layout.stageHeight, layout.totalItemCount, layoutComputationScope, renderBufferPx, renderWindow.bottom, renderWindow.top, renderedLayoutItems, simplifiedCardSubtreeActive]);
 
   const handleTogglePointerDown = (
     event: React.PointerEvent<HTMLDivElement | HTMLInputElement>,
@@ -143,17 +413,18 @@ function AssetGridComponent({
           height: `${Math.max(layout.stageHeight, 0)}px`,
         } as React.CSSProperties}
       >
-        {layout.items.map(({ item, x, y, width, height }, index) => {
+        {renderedLayoutItems.map(({ item, x, y, width, height }, index) => {
           const { entry } = item;
           const layoutTop = Math.max(0, Math.round(y));
           const layoutBottom = Math.max(layoutTop, Math.round(y + height));
-          const positionedStyle: React.CSSProperties = {
+          const positionedStyle: React.CSSProperties & { '--card-index': string } = {
             position: 'absolute',
             left: x,
             top: y,
             width,
             minHeight: `${height}px`,
             height,
+            '--card-index': String(index),
           };
 
           if (entry.kind === 'pending') {
@@ -176,11 +447,17 @@ function AssetGridComponent({
 
           const viewModel = item.viewModel;
           if (!viewModel) return null;
+          const isScrollRevealVisible = revealedCards.has(viewModel.selectionKey);
+          const pageLoadDelayMs = 80 + (Math.min(index, 18) * 28);
           return (
             <div
               key={viewModel.renderKey}
-              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSelected ? 'is-selected' : ''}`}
-              style={positionedStyle}
+              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSecondTapReinforced ? 'is-active-reinforced' : ''} ${viewModel.isHoldEmphasis ? 'is-hold-emphasis' : ''} ${viewModel.isSelected ? 'is-selected' : ''} ${pageLoadEntranceActive ? 'page-load-enter' : ''} ${!isScrollRevealVisible ? 'scroll-reveal-pending' : 'scroll-reveal-visible'}`}
+              style={{
+                ...positionedStyle,
+                '--page-load-delay': `${pageLoadDelayMs}ms`,
+                '--scroll-reveal-delay': `${Math.min(index, 12) * 35}ms`,
+              } as React.CSSProperties}
               data-kind={viewModel.kind}
               data-orient={viewModel.orient}
               data-orient-locked={viewModel.orientLocked ? 'true' : 'false'}
@@ -211,6 +488,22 @@ function AssetGridComponent({
                   data-thumb-fallback={viewModel.fallbackThumb}
                   data-thumb-job-key={viewModel.thumbJobKey}
                 />
+                {!simplifiedCardSubtreeActive && viewModel.activeVideoPreviewUrl ? (
+                  <video
+                    key={viewModel.previewPlaybackKey}
+                    className="asset-thumb-preview"
+                    src={viewModel.activeVideoPreviewUrl}
+                    muted
+                    autoPlay
+                    loop
+                    playsInline
+                    preload="metadata"
+                    disablePictureInPicture
+                    controls={false}
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {simplifiedCardSubtreeActive ? null : (
                 <div className="asset-overlay">
                   <div className="asset-ol-tl">
                     <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>
@@ -258,6 +551,7 @@ function AssetGridComponent({
                     <div className="asset-subtitle tile-ui-text">{viewModel.sub}</div>
                   </div>
                 </div>
+                )}
               </div>
             </div>
           );

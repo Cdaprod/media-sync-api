@@ -223,9 +223,18 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(hookContent.includes('lastTileTapRef'));
   assert.ok(hookContent.includes('const isSecondTap = prevTap.key === itemKey'));
   assert.ok(hookContent.includes('focusAsset(item, itemKey);'));
+  assert.ok(!hookContent.includes('focusAsset(item, itemKey);\n        onTapFeedback?.({ x: event.clientX, y: event.clientY });'));
+  assert.ok(hookContent.includes('focusAsset(item, itemKey);'));
   assert.ok(hookContent.includes('if (isSecondTap) {'));
+  assert.ok(hookContent.includes("focusAsset(item, itemKey);\n          onTapStage?.('second', itemKey);"));
   assert.ok(hookContent.includes('openDrawer(item);'));
+  assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
+  assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
+  assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
   assert.ok(explorer.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
+  assert.ok(explorer.includes("const [previewActivationKey, setPreviewActivationKey] = useState('');"));
+  assert.ok(explorer.includes('const commitPreviewActivationKey = useCallback((nextKey: string) => {'));
+  assert.ok(explorer.includes('setTapOverlayTrigger((prev) => prev + 1);'));
   assert.ok(explorer.includes('const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {'));
   assert.ok(explorer.includes('setActiveAssetKey(nextKey);'));
   assert.ok(!explorer.includes(`const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {
@@ -236,14 +245,27 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('if (!inspectorOpen || !focused) return null;'));
   assert.ok(explorer.includes('if (!inspectorOpen || !focused) return [];'));
   assert.ok(explorer.includes('const isActive = activeAssetKey === selectionKey;'));
+  assert.ok(explorer.includes('const isSecondTapReinforced = reinforcedActiveKey === selectionKey;'));
+  assert.ok(explorer.includes('const isHoldEmphasis = holdEmphasisKey === selectionKey;'));
+  assert.ok(explorer.includes('const isActivated = previewActivationKey === selectionKey;'));
+  assert.ok(explorer.includes("const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';"));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
   assert.ok(grid.includes('<img'));
-  assert.ok(!grid.includes('<video'));
+  assert.ok(grid.includes('activeVideoPreviewUrl'));
+  assert.ok(explorer.includes("isActivated && kind === 'video'"));
+  assert.ok(grid.includes('className="asset-thumb-preview"'));
+  assert.ok(grid.includes('key={viewModel.previewPlaybackKey}'));
   assert.ok(list.includes('<img'));
-  assert.ok(!list.includes('<video'));
+  assert.ok(list.includes('activeVideoPreviewUrl'));
+  assert.ok(list.includes('className="asset-thumb-preview"'));
+  assert.ok(list.includes('key={viewModel.previewPlaybackKey}'));
   assert.ok(grid.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
   assert.ok(list.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
+  assert.ok(explorer.includes("commitPreviewActivationKey('');"));
+  assert.ok(explorer.includes('commitPreviewActivationKey(itemKey);'));
   assert.ok(list.includes('data-no-preview="1"'));
+  assert.ok(grid.includes('is-active-reinforced'));
+  assert.ok(grid.includes('is-hold-emphasis'));
 });
 
 test('topbar interaction boundaries protect header controls and nearby asset selectors', () => {
@@ -631,7 +653,11 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('dynamicOrientations'));
   assert.ok(content.includes('resolveItemOrientation'));
   assert.ok(gridContent.includes('computeMasonryLayout({'));
-  assert.ok(gridContent.includes('layout.items.map(({ item, x, y, width, height }, index) => {'));
+  assert.ok(gridContent.includes('renderedLayoutItems.map(({ item, x, y, width, height }, index) => {'));
+  assert.ok(gridContent.includes('const renderedLayoutItems = layout.items;'));
+  assert.ok(gridContent.includes('const renderBufferPx = ENABLE_MOTION_AWARE_BUFFER && densityMotionActive'));
+  assert.ok(gridContent.includes('const renderWindowTop = renderWindow.top - renderBufferPx;'));
+  assert.ok(gridContent.includes('const renderWindowBottom = renderWindow.bottom + renderBufferPx;'));
   assert.ok(gridContent.includes('if (width > 0 && height > 0) {'));
   assert.ok(gridContent.includes('return Math.max(0.3, height / width);'));
   assert.ok(gridContent.includes('data-layout-top={layoutTop}'));
@@ -779,6 +805,9 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   assert.ok(hookContent.includes('if (inspectorOpen) {'));
   assert.ok(hookContent.includes('closeDrawer();'));
   assert.ok(hookContent.includes('openDrawer(item);'));
+  assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
+  assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
+  assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
   assert.ok(content.includes('toggleSelectionWithOrder'));
   assert.ok(content.includes('selectionOrderIndexMap'));
   assert.ok(content.includes('selectedOrderMap.get(selectionKey)'));
@@ -852,7 +881,14 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('if (!liveIds.has(key)) toastExitingRef.current.delete(key);'));
   assert.ok(content.includes('createExplorerDensityController({'));
   assert.ok(content.includes('createPinchDensityController({'));
+  assert.ok(content.includes('getClassHostEl: () => mediaContentRef.current,'));
   assert.ok(content.includes('id="asset-density-slider"'));
+  assert.ok(content.includes('const OVERLAY_VIS_PREFS_KEY = \'media-sync-explorer-overlay-enabled-v1\';'));
+  assert.ok(content.includes('const [overlayEnabled, setOverlayEnabled] = useState(true);'));
+  assert.ok(content.includes('window.localStorage.getItem(OVERLAY_VIS_PREFS_KEY)'));
+  assert.ok(content.includes('window.localStorage.setItem(OVERLAY_VIS_PREFS_KEY, overlayEnabled ? \'1\' : \'0\');'));
+  assert.ok(content.includes('Overlays: {overlayEnabled ? \'On\' : \'Off\'}'));
+  assert.ok(content.includes("overlayEnabled ? '' : 'overlay-hidden'"));
   assert.ok(content.includes('data-density-pinch-surface="true"'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
   assert.ok(hookContent.includes('const TOPBAR_REVEAL_HYSTERESIS_PX = 20;'));
@@ -942,7 +978,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("if (view !== 'grid') {"));
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
   assert.ok(content.includes('const commitDensityColumns = useCallback((nextColumns: number, animated = true) => {'));
-  assert.ok(content.includes('commitDensityColumns(nextColumns, true);'));
+  assert.ok(content.includes('const scrubDensityColumns = useCallback((nextColumns: number) => {'));
+  assert.ok(content.includes('density.scrubTo(nextColumns);'));
+  assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
+  assert.ok(content.includes('density?.settleScrub();'));
   assert.ok(content.includes('step={1}'));
   assert.ok(content.includes('if (isMobile) {'));
   assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
@@ -955,6 +994,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("const modeQuery = window.matchMedia('(max-width: 860px)');"));
   assert.ok(content.includes("modeQuery.addEventListener('change', handleModeChange);"));
   assert.ok(content.includes('inspectorOpenRef.current = inspectorOpen;'));
+  assert.ok(content.includes("import { flushSync } from 'react-dom';"));
   assert.ok(content.includes('if (hasBootstrappedExplorerSession) return;'));
   assert.ok(content.includes('hasBootstrappedExplorerSession = true;'));
   assert.ok(content.includes('if (!node) return;'));
@@ -965,47 +1005,128 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
   assert.ok(densityController.includes('scrubTo: (nextValue: number) => void;'));
   assert.ok(densityController.includes('if (!Number.isFinite(value)) return minColumns;'));
-  assert.ok(densityController.includes('currentColumns = safeColumns;'));
-  assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'scrub\');'));
+  assert.ok(!densityController.includes('currentColumns = safeColumns;'));
+  assert.ok(densityController.includes('commitLayoutColumns(safeColumns);'));
+  assert.ok(densityController.includes('runAnimatedCommit(nextColumns, \'scrub\');'));
   assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'settle\');'));
+  assert.ok(densityController.includes('setColumnsForPinch: (nextColumns: number) => void;'));
+  assert.ok(densityController.includes('runAnimatedCommit(safeColumns, \'pinch\');'));
+  assert.ok(densityController.includes('let pinchAnimationActive = false;'));
+  assert.ok(densityController.includes('let queuedPinchColumns: number | null = null;'));
+  assert.ok(densityController.includes('__explorerPinchPerfDebug'));
+  assert.ok(densityController.includes('if (pinchAnimationActive) {'));
+  assert.ok(densityController.includes('queuedPinchColumns = safeColumns;'));
   assert.ok(densityController.includes('destroyed = true;'));
-  assert.ok(!densityController.includes('requestAnimationFrame('));
+  assert.ok(densityController.includes('let scrubFrameId = 0;'));
+  assert.ok(densityController.includes('pendingScrubColumns: number | null = null;'));
+  assert.ok(densityController.includes('scrubFrameId = window.requestAnimationFrame(() => {'));
+  assert.ok(densityController.includes('runAnimatedCommit(nextColumns, \'scrub\');'));
+  assert.ok(densityController.includes('window.cancelAnimationFrame(scrubFrameId);'));
+  assert.ok(content.includes('flushSync(() => {'));
+  assert.ok(content.includes('setGridColumnCount(nextColumns);'));
   assert.ok(!densityController.includes('setTimeout('));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
   assert.ok(densityConstants.includes('export const MIN_COLUMNS_MOBILE = 1;'));
   assert.ok(densityConstants.includes('export const MAX_COLUMNS_MOBILE = 6;'));
-  assert.ok(pinchController.includes('outwardThreshold = 1.12'));
-  assert.ok(pinchController.includes('inwardThreshold = 0.88'));
-  assert.ok(pinchController.includes('let stepped = false;'));
-  assert.ok(pinchController.includes('if (stepped) return;'));
-  assert.ok(pinchController.includes('density.setColumns(initialColumns - 1, true);'));
-  assert.ok(pinchController.includes('density.setColumns(initialColumns + 1, true);'));
+  assert.ok(pinchController.includes('outwardThreshold = 1.1'));
+  assert.ok(pinchController.includes('inwardThreshold = 0.9'));
+  assert.ok(pinchController.includes('const STEP_COOLDOWN_MS = 80;'));
+  assert.ok(pinchController.includes('const rearmMin = 0.96;'));
+  assert.ok(pinchController.includes('const rearmMax = 1.04;'));
+  assert.ok(pinchController.includes('let canStep = true;'));
+  assert.ok(pinchController.includes('const resolveClassHostEl = () => getClassHostEl?.() ?? visualScaleTargetEl.closest<HTMLElement>(\'.content\');'));
+  assert.ok(pinchController.includes('const setGestureActiveClass = (gestureActive: boolean) => {'));
+  assert.ok(pinchController.includes("contentEl.classList.add('density-gesture-active');"));
+  assert.ok(pinchController.includes("contentEl.classList.remove('density-gesture-active');"));
+  assert.ok(pinchController.includes('const handoffMotionAfterRelease = () => {'));
+  assert.ok(pinchController.includes("if (!contentEl.classList.contains('density-motion-active')) return;"));
+  assert.ok(pinchController.includes("contentEl.classList.remove('density-motion-active');"));
+  assert.ok(pinchController.includes("contentEl.classList.add('density-motion-settling');"));
+  assert.ok(pinchController.includes('releaseMotionHandoffTimer = window.setTimeout(() => {'));
+  assert.ok(pinchController.includes('handoffMotionAfterRelease();'));
+  assert.ok(pinchController.includes('if (!canStep) {'));
+  assert.ok(pinchController.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;'));
+  assert.ok(pinchController.includes('density.setColumnsForPinch(currentColumns - 1);'));
+  assert.ok(pinchController.includes('density.setColumnsForPinch(currentColumns + 1);'));
+  assert.ok(!pinchController.includes('let stepped = false;'));
 
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
-  assert.ok(flip.includes('window.requestAnimationFrame(() => {\n      if (runIdByGrid.get(gridEl) !== nextRunId) return;'));
-  assert.ok(flip.includes('const state = Flip.getState(items);'));
+  assert.ok(flip.includes('const ENABLE_DENSITY_FLIP_ANIMATION = false;'));
+  assert.ok(flip.includes('const ENABLE_VISIBLE_ILLUSION_LAYER = true;'));
+  assert.ok(flip.includes('const ILLUSION_MAX_CARDS = 8;'));
+  assert.ok(flip.includes('const ILLUSION_SETTLE_MS = 36;'));
+  assert.ok(flip.includes('const createVisibleIllusionLayer = (cards: HTMLElement[]) => {'));
+  assert.ok(flip.includes("const scrollHost = gridEl.closest<HTMLElement>('.scroll');"));
+  assert.ok(flip.includes('const visibleSlice = rankedVisible.slice(0, ILLUSION_MAX_CARDS);'));
+  assert.ok(flip.includes("layer.className = 'density-illusion-layer';"));
+  assert.ok(flip.includes("shell.className = 'density-illusion-card';"));
+  assert.ok(flip.includes('illusionCardCount'));
+  assert.ok(flip.includes('lastRunUsedIllusion'));
+  assert.ok(flip.includes('if (!ENABLE_DENSITY_FLIP_ANIMATION) {'));
+  assert.ok(flip.includes('setDensityMotionActive(true);'));
+  assert.ok(flip.includes("contentEl.classList.add('density-overlay-out');"));
+  assert.ok(flip.includes("contentEl.classList.remove('density-overlay-out');"));
+  assert.ok(flip.includes("contentEl.classList.add('density-overlay-in');"));
+  assert.ok(flip.includes('}, 210);'));
+  assert.ok(!pinchController.includes('requestAnimationFrame'));
+  assert.ok(pinchController.includes("contentEl.classList.remove('density-motion-active');"));
+
+  const noFlipGateIndex = flip.indexOf('if (!ENABLE_DENSITY_FLIP_ANIMATION) {');
+  const earlyMotionIndex = flip.indexOf('setDensityMotionActive(true);', noFlipGateIndex);
+  const itemsQueryIndex = flip.indexOf('const items = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));', noFlipGateIndex);
+  const targetPickIndex = flip.indexOf('const animationTargets = pickAnimatedTargets(items);', noFlipGateIndex);
+  const illusionIndex = flip.indexOf('const illusion = createVisibleIllusionLayer(items);', noFlipGateIndex);
+  assert.ok(noFlipGateIndex >= 0);
+  assert.ok(earlyMotionIndex > noFlipGateIndex);
+  assert.ok(itemsQueryIndex > earlyMotionIndex);
+  assert.ok(targetPickIndex > earlyMotionIndex);
+  assert.ok(illusionIndex > earlyMotionIndex);
+  assert.ok(flip.includes('motionActive: true,'));
+  assert.ok(flip.includes('lastRunUsedFlipByGrid.set(gridEl, false);'));
+  assert.ok(flip.includes('flipIsolationEnabled: true,'));
+  assert.ok(flip.includes('lastRunUsedFlip: false,'));
+  assert.ok(flip.includes('const settleDelayMs = ILLUSION_SETTLE_MS;'));
+  assert.ok(flip.includes('window.setTimeout(() => {'));
+  assert.ok(flip.includes("if (interactionMode === 'pinch') {"));
+  assert.ok(flip.includes("if (interactionMode === 'scrub') {"));
+  assert.ok(flip.includes('startFlip();'));
+  assert.ok(!flip.includes('const queuedByGrid = new WeakMap<HTMLElement, Omit<AnimateDensityFlipOptions, \'gridEl\'>>();'));
+  assert.ok(!flip.includes('queuedByGrid.set(gridEl, {'));
+  assert.ok(!flip.includes('const replayQueued = () => {'));
+  assert.ok(flip.includes('const state = Flip.getState(animationTargets);'));
+  assert.ok(flip.includes('const animationTargets = pickAnimatedTargets(items);'));
+  assert.ok(flip.includes('const maxTargets = 72;'));
+  assert.ok(flip.includes('const bufferPx = 320;'));
+  assert.ok(flip.includes('__explorerDensityMotionDebug'));
+  assert.ok(flip.includes('animatedTargetCount'));
+  assert.ok(flip.includes('targetReductionActive'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
-  assert.ok(flip.includes('if (runIdByGrid.get(gridEl) !== nextRunId) return;'));
+  assert.ok(flip.includes('if (runIdByGrid.get(gridEl) !== nextRunId) {'));
   assert.ok(flip.includes('Flip.from(state, {'));
   assert.ok(flip.includes("itemSelector = '.masonry-card'"));
   assert.ok(!flip.includes('MAX_ANIMATED_ITEMS'));
   assert.ok(!flip.includes('pickVisibleAnimationTargets'));
-  assert.ok(flip.includes('Flip.killFlipsOf(items);'));
-  assert.ok(flip.includes('gsap.killTweensOf(items);'));
-  assert.ok(flip.includes('targets: items,'));
+  assert.ok(flip.includes('Flip.killFlipsOf(animationTargets);'));
+  assert.ok(flip.includes('gsap.killTweensOf(animationTargets);'));
+  assert.ok(flip.includes('targets: animationTargets,'));
   assert.ok(flip.includes('absolute: false,'));
   assert.ok(flip.includes('nested: false,'));
   assert.ok(flip.includes('prune: false,'));
-  assert.ok(flip.includes('scale: true,'));
+  assert.ok(flip.includes('scale: false,'));
+  assert.ok(flip.includes('? 0.14'));
+  assert.ok(flip.includes("? 'power2.out'"));
+  assert.ok(flip.includes('if (isPinch) return invariantFixups;'));
   assert.ok(flip.includes('overwrite: true,'));
   assert.ok(flip.includes("clearProps: 'transform'"));
   assert.ok(!flip.includes('onEnter: (elements) => {'));
   assert.ok(flip.includes('const previous = activeByGrid.get(gridEl);'));
   assert.ok(flip.includes('previous.kill();'));
-  assert.ok(flip.includes("gsap.set(items, { clearProps: 'transform' });"));
+  assert.ok(flip.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
   assert.ok(flip.includes('onInterrupt: () => {'));
+  assert.ok(flip.includes('__explorerDensityFlipDebug'));
+  assert.ok(flip.includes('lastRunUsedFlipByGrid.set(gridEl, true);'));
 
   assert.ok(drawerMotion.includes("export type DrawerPresentationMode = 'side' | 'sheet';"));
   assert.ok(drawerMotion.includes("if (mode === 'sheet') {"));
@@ -1026,7 +1147,7 @@ test('local density/context/preview interactions stay network-quiet and do not i
   const sliderStart = content.indexOf('const commitDensityColumns = useCallback((nextColumns: number, animated = true) => {');
   const sliderBlock = sliderStart >= 0 ? content.slice(sliderStart, sliderStart + 420) : '';
   assert.ok(sliderBlock.includes('density.setColumns(nextColumns, animated);'));
-  assert.ok(content.includes('commitDensityColumns(nextColumns, true);'));
+  assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(!sliderBlock.includes('loadSources('));
   assert.ok(!sliderBlock.includes('loadProjects('));
   assert.ok(!sliderBlock.includes('loadMedia('));
@@ -1150,18 +1271,18 @@ test('density flip pipeline is continuity-safe for persistent masonry cards', ()
   const flip = fs.readFileSync(flipPath, 'utf8');
 
   assert.ok(flip.includes("itemSelector = '.masonry-card'"));
-  assert.ok(flip.includes('const state = Flip.getState(items);'));
+  assert.ok(flip.includes('const state = Flip.getState(animationTargets);'));
   assert.ok(flip.includes('commitLayout();'));
   assert.ok(flip.includes('window.requestAnimationFrame(() => {'));
   assert.ok(flip.includes('Flip.from(state, {'));
-  assert.ok(flip.includes('targets: items,'));
+  assert.ok(flip.includes('targets: animationTargets,'));
   assert.ok(flip.includes('absolute: false,'));
   assert.ok(flip.includes('nested: false,'));
   assert.ok(flip.includes('prune: false,'));
-  assert.ok(flip.includes('scale: true,'));
+  assert.ok(flip.includes('scale: false,'));
   assert.ok(flip.includes('overwrite: true,'));
-  assert.ok(flip.includes('Flip.killFlipsOf(items);'));
-  assert.ok(flip.includes('gsap.killTweensOf(items);'));
+  assert.ok(flip.includes('Flip.killFlipsOf(animationTargets);'));
+  assert.ok(flip.includes('gsap.killTweensOf(animationTargets);'));
   assert.ok(flip.includes("clearProps: 'transform'"));
   assert.ok(!flip.includes('onEnter: (elements) => {'));
   assert.ok(!flip.includes("clearProps: 'transform,opacity'"));
@@ -1183,7 +1304,8 @@ test('density controller keeps committed columns as single truth and mobile clam
   assert.ok(constants.includes('export const MAX_COLUMNS_MOBILE = 6;'));
 
   assert.ok(controller.includes("gridEl.style.setProperty('--masonry-column-count', String(currentColumns));"));
-  assert.ok(controller.includes('currentColumns = safeColumns;'));
+  assert.ok(!controller.includes('currentColumns = safeColumns;'));
+  assert.ok(controller.includes('commitLayoutColumns(safeColumns);'));
   assert.ok(controller.includes('syncSlider'));
   assert.ok(controller.includes('onColumnsCommit'));
   assert.ok(controller.includes('scrubTo'));
@@ -1285,6 +1407,21 @@ test('masonry stage and scroll container explicitly suppress horizontal overflow
   assert.ok(styles.includes('max-width: 100%;') || styles.includes('overflow-x: clip;'));
 });
 
+test('masonry cards do not keep baseline CSS transform transitions that conflict with density flip ownership', () => {
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.ok(styles.includes('.masonry-card.asset{'));
+  assert.ok(styles.includes('transition: filter 120ms ease, border-color 120ms ease;'));
+  assert.ok(styles.includes('.masonry-card.asset:hover{'));
+  assert.ok(styles.includes('transform: none;'));
+  assert.ok(styles.includes('.masonry-card.page-load-enter{'));
+  assert.ok(styles.includes('animation: masonryPageLoadIn 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;'));
+  assert.ok(styles.includes('.masonry-card.scroll-reveal-pending.scroll-reveal-visible{'));
+  assert.ok(styles.includes('opacity 380ms cubic-bezier(0.16, 1, 0.3, 1),'));
+  assert.ok(styles.includes('@keyframes masonryPageLoadIn{'));
+});
+
 test('computeMasonryLayout unit contracts are present for deterministic geometry output', () => {
   const layoutPath = path.join(packageRoot, 'src', 'explorer', 'masonry', 'computeMasonryLayout.ts');
   const content = fs.readFileSync(layoutPath, 'utf8');
@@ -1340,6 +1477,7 @@ test('positioned masonry renderer keeps card geometry in data attributes for con
   assert.ok(content.includes('data-card-id=') || content.includes('data-card-id={'));
   assert.ok(content.includes('data-layout-top={layoutTop}'));
   assert.ok(content.includes('data-layout-bottom={layoutBottom}'));
+  assert.ok(content.includes("'--card-index': String(index)"));
   assert.ok(content.includes('data-density-columns=') || content.includes('data-density-columns={'));
   assert.ok(content.includes('left: x'));
   assert.ok(content.includes('top: y'));
@@ -1365,38 +1503,63 @@ test('density animation pipeline avoids ordinary-card enter-fade behavior and op
 
   assert.ok(!content.includes('onEnter:'));
   assert.ok(!content.includes('autoAlpha'));
-  assert.ok(!content.includes('opacity'));
+  assert.ok(!content.includes("clearProps: 'opacity'"));
+  assert.ok(!content.includes("shell.style.opacity = '0.96';"));
   assert.ok(content.includes("clearProps: 'transform'"));
   assert.ok(content.includes('onComplete'));
   assert.ok(content.includes('onInterrupt'));
 });
 
-test('density animation pipeline aggressively interrupts stale transitions before new layout animation', () => {
+test('density animation pipeline interrupts stale transitions before new layout animation', () => {
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const content = fs.readFileSync(flipPath, 'utf8');
 
   assert.ok(content.includes('const previous = activeByGrid.get(gridEl);'));
   assert.ok(content.includes('previous.kill();'));
   assert.ok(content.includes('activeByGrid.delete(gridEl);'));
-  assert.ok(content.includes('Flip.killFlipsOf(items);'));
-  assert.ok(content.includes('gsap.killTweensOf(items);'));
-  assert.ok(content.includes("gsap.set(items, { clearProps: 'transform' });"));
+  assert.ok(content.includes("suppressInterruptCleanupByGrid.set(gridEl, true);"));
+  assert.ok(content.includes('Flip.killFlipsOf(animationTargets);'));
+  assert.ok(content.includes('gsap.killTweensOf(animationTargets);'));
+  assert.ok(content.includes('const state = Flip.getState(animationTargets);'));
   assert.ok(content.includes('const runIdByGrid = new WeakMap<HTMLElement, number>();'));
+});
+
+test('density settle callbacks explicitly report no queued replay in immediate retarget mode', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes('onSettled?.({ invariantFixups, queuedReplay: false });'));
+  assert.ok(!content.includes('const queuedReplay = replayQueued();'));
+});
+
+test('density animation targets are reduced to visible/near-visible cards while keeping global layout commits', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes('const pickAnimatedTargets = (items: HTMLElement[]) => {'));
+  assert.ok(content.includes("const scrollHost = gridEl.closest<HTMLElement>('.scroll');"));
+  assert.ok(content.includes('const maxTargets = 72;'));
+  assert.ok(content.includes('const bufferPx = 320;'));
+  assert.ok(content.includes('const reducedTargets = targets.length ? targets : items.slice(0, maxTargets);'));
+  assert.ok(content.includes('const animationTargets = pickAnimatedTargets(items);'));
+  assert.ok(content.includes('commitLayout();'));
 });
 
 test('density animation sequencing explicitly captures old state before commit and starts animation after commit path', () => {
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const content = fs.readFileSync(flipPath, 'utf8');
 
-  const stateIndex = content.indexOf('const state = Flip.getState(items);');
+  const stateIndex = content.indexOf('const state = Flip.getState(animationTargets);');
   const commitIndex = content.indexOf('commitLayout();');
-  const rafIndex = content.indexOf('window.requestAnimationFrame(() => {');
-  const fromIndex = content.indexOf('Flip.from(state, {');
+  const immediateIndex = content.indexOf("if (interactionMode === 'pinch') {");
+  const delayedIndex = content.indexOf('window.requestAnimationFrame(() => {', immediateIndex + 1);
+  const fromIndex = content.indexOf('const animation = Flip.from(state, {');
 
   assert.ok(stateIndex >= 0);
   assert.ok(commitIndex > stateIndex);
-  assert.ok(rafIndex > commitIndex);
-  assert.ok(fromIndex > rafIndex);
+  assert.ok(immediateIndex > commitIndex);
+  assert.ok(delayedIndex > immediateIndex);
+  assert.ok(fromIndex > commitIndex);
 });
 
 test('density controls preserve slider UI and do not regress to mobile stepper-only control', () => {
@@ -1428,16 +1591,20 @@ test('committed density value is mirrored consistently into layout UI attributes
   assert.ok(controller.includes('if (sliderEl && sliderEl.value !== String(columns))'));
 });
 
-test('pinch density path is discrete and routes through one-step-per-gesture thresholds', () => {
+test('pinch density path is discrete and supports repeated notch snaps within one gesture', () => {
   const pinchPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts');
   const content = fs.readFileSync(pinchPath, 'utf8');
 
-  assert.ok(content.includes('outwardThreshold = 1.12'));
-  assert.ok(content.includes('inwardThreshold = 0.88'));
-  assert.ok(content.includes('let stepped = false;'));
-  assert.ok(content.includes('if (stepped) return;'));
-  assert.ok(content.includes('density.setColumns(initialColumns - 1, true);'));
-  assert.ok(content.includes('density.setColumns(initialColumns + 1, true);'));
+  assert.ok(content.includes('outwardThreshold = 1.1'));
+  assert.ok(content.includes('inwardThreshold = 0.9'));
+  assert.ok(content.includes('let canStep = true;'));
+  assert.ok(content.includes('if (!canStep) {'));
+  assert.ok(content.includes('ratio >= rearmMin && ratio <= rearmMax'));
+  assert.ok(content.includes('const STEP_COOLDOWN_MS = 80;'));
+  assert.ok(content.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;'));
+  assert.ok(content.includes('density.setColumnsForPinch(currentColumns - 1);'));
+  assert.ok(content.includes('density.setColumnsForPinch(currentColumns + 1);'));
+  assert.ok(!content.includes('let stepped = false;'));
   assert.ok(!content.includes('quickSetter'));
   assert.ok(!content.includes('scaleThresholdPerStep'));
 });
@@ -1505,6 +1672,9 @@ test('host width + layout recompute path remains coupled to density and entry-co
   assert.ok(content.includes('gridColumnCount'));
   assert.ok(content.includes('const layout = useMemo('));
   assert.ok(content.includes('computeMasonryLayout({'));
+  assert.ok(content.includes('shouldIncludeItem: ({ y, height }) => {'));
+  assert.ok(content.includes('renderWindowTop'));
+  assert.ok(content.includes('renderWindowBottom'));
   assert.ok(content.includes('containerWidth: hostWidth') || content.includes('containerWidth:'));
 });
 
@@ -1520,6 +1690,78 @@ test('positioned masonry stage exposes enough hooks for future real runtime test
   assert.ok(content.includes('className="masonry-host"'));
   assert.ok(content.includes('className="masonry-columns"'));
   assert.ok(content.includes('className={`masonry-card'));
+  assert.ok(content.includes('__explorerDensityLayoutDebug'));
+  assert.ok(content.includes('getSnapshot: () => {'));
+  assert.ok(content.includes('layoutRecomputeCount'));
+  assert.ok(content.includes('layoutComputedItemCount'));
+  assert.ok(content.includes("const layoutComputationScope = layout.includedItemCount < layout.totalItemCount ? 'windowed' : 'global';"));
+  assert.ok(content.includes('layoutComputationScope,'));
+  assert.ok(content.includes('totalLogicalCount: layout.totalItemCount'));
+  assert.ok(content.includes('layoutComputedItemCount: layout.includedItemCount'));
+  assert.ok(content.includes('motionBufferEverUsedRef'));
+  assert.ok(content.includes('lastBufferModeUsedRef'));
+  assert.ok(content.includes('lastLayoutScopeUsedRef'));
+  assert.ok(content.includes('lastMotionActiveAtMsRef'));
+  assert.ok(content.includes('const ENABLE_MOTION_AWARE_BUFFER = false;'));
+  assert.ok(content.includes('const ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION = true;'));
+  assert.ok(content.includes('const [simplifiedCardSubtreeActive, setSimplifiedCardSubtreeActive] = useState(false);'));
+  assert.ok(content.includes('const [pageLoadEntranceActive, setPageLoadEntranceActive] = useState(true);'));
+  assert.ok(content.includes('const [revealedCards, setRevealedCards] = useState<Set<string>>(() => new Set());'));
+  assert.ok(content.includes('new IntersectionObserver((entries) => {'));
+  assert.ok(content.includes("threshold: 0.05,"));
+  assert.ok(content.includes("rootMargin: '0px 0px -20px 0px',"));
+  assert.ok(content.includes("pageLoadEntranceActive ? 'page-load-enter' : ''"));
+  assert.ok(content.includes("!isScrollRevealVisible ? 'scroll-reveal-pending' : 'scroll-reveal-visible'"));
+  assert.ok(content.includes("'--page-load-delay': `${pageLoadDelayMs}ms`"));
+  assert.ok(content.includes("'--scroll-reveal-delay': `${Math.min(index, 12) * 35}ms`"));
+  assert.ok(content.includes('lastDensityTransitionUsedSimplifiedRef'));
+  assert.ok(content.includes('motionBufferEverUsed: motionBufferEverUsedRef.current'));
+  assert.ok(content.includes('lastBufferModeUsed: lastBufferModeUsedRef.current'));
+  assert.ok(content.includes('lastLayoutScopeUsed: lastLayoutScopeUsedRef.current'));
+  assert.ok(content.includes('isolationMotionAwareBufferEnabled'));
+  assert.ok(content.includes('motionObserverCallbackCount'));
+  assert.ok(content.includes('renderWindowUpdateCount'));
+  assert.ok(content.includes('simplifiedCardIsolationEnabled'));
+  assert.ok(content.includes('simplifiedCardSubtreeActive'));
+  assert.ok(content.includes('lastDensityTransitionUsedSimplified'));
+  assert.ok(content.includes("cardSubtreeMode: simplifiedCardSubtreeActive ? 'simplified' : 'full'"));
+  assert.ok(content.includes('{simplifiedCardSubtreeActive ? null : ('));
+  assert.ok(content.includes('renderBufferMode'));
+  assert.ok(content.includes("contentEl.classList.contains('density-motion-active')"));
+  assert.ok(content.includes('sampleCards'));
+  assert.ok(content.includes('flipActive'));
+});
+
+test('density motion debug hook exposes target-reduction and viewport bounds', () => {
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const content = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(content.includes('__explorerDensityMotionDebug'));
+  assert.ok(content.includes('getSnapshot: () => {'));
+  assert.ok(content.includes('totalCardCount'));
+  assert.ok(content.includes('animatedTargetCount'));
+  assert.ok(content.includes('visibleCardCount'));
+  assert.ok(content.includes('targetReductionActive'));
+  assert.ok(content.includes('viewportTop'));
+  assert.ok(content.includes('viewportBottom'));
+  assert.ok(content.includes('motionActive'));
+  assert.ok(content.includes('simplifiedCardMode'));
+  assert.ok(content.includes('classHostTag'));
+  assert.ok(content.includes('classHostClassName'));
+  assert.ok(content.includes('gestureClassApplied'));
+  assert.ok(content.includes('motionClassApplied'));
+  assert.ok(content.includes('settlingClassApplied'));
+  assert.ok(content.includes('setDensityMotionActive(true);'));
+  assert.ok(content.includes('setDensityMotionActive(false);'));
+  assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));
+  assert.ok(content.includes("contentEl.classList.add('density-motion-active');"));
+  assert.ok(content.includes("contentEl.classList.remove('density-motion-active');"));
+  assert.ok(content.includes("if (contentEl.classList.contains('density-gesture-active')) {"));
+  assert.ok(content.includes('void contentEl.offsetHeight;'));
+  assert.ok(content.includes("contentEl.classList.add('density-motion-settling');"));
+  assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));
+  assert.ok(content.includes('const settleTimer = window.setTimeout(() => {'));
+  assert.ok(content.includes('}, 360);'));
 });
 
 test('density flip cleanup path re-queries current masonry nodes to prevent stale transforms after repeated commits', () => {
@@ -1528,8 +1770,9 @@ test('density flip cleanup path re-queries current masonry nodes to prevent stal
 
   assert.ok(content.includes('const clearTransforms = () => {'));
   assert.ok(content.includes('const currentItems = Array.from(gridEl.querySelectorAll<HTMLElement>(itemSelector));'));
-  assert.ok(content.includes('if (currentItems.length) {'));
+  assert.ok(content.includes('if (!currentItems.length) return 0;'));
   assert.ok(content.includes("gsap.set(currentItems, { clearProps: 'transform' });"));
+  assert.ok(content.includes('if (isPinch) return invariantFixups;'));
   assert.ok(content.includes('clearTransforms();'));
   assert.ok(content.includes('onComplete: () => {'));
   assert.ok(content.includes('onInterrupt: () => {'));
@@ -1559,15 +1802,226 @@ test('density flip clear path explicitly forces transform/transition reset on li
   assert.ok(content.includes('window.requestAnimationFrame(() => {'));
 });
 
-test('asset grid applies post-layout settle pass to enforce final card truth after re-render', () => {
+test('asset grid does not run global post-render transform reset that conflicts with flip motion ownership', () => {
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const content = fs.readFileSync(gridPath, 'utf8');
 
-  assert.ok(content.includes("const stage = hostRef.current?.querySelector<HTMLElement>('.masonry-columns');"));
-  assert.ok(content.includes("const cards = Array.from(stage.querySelectorAll<HTMLElement>('.masonry-card'));"));
-  assert.ok(content.includes("card.style.transition = 'none';"));
-  assert.ok(content.includes("card.style.transform = 'none';"));
-  assert.ok(content.includes("card.style.removeProperty('transform');"));
-  assert.ok(content.includes("card.style.removeProperty('transition');"));
-  assert.ok(content.includes('window.requestAnimationFrame(() => {'));
+  assert.ok(!content.includes("card.style.transition = 'none';"));
+  assert.ok(!content.includes("card.style.transform = 'none';"));
+  assert.ok(!content.includes("card.style.removeProperty('transform');"));
+  assert.ok(!content.includes("card.style.removeProperty('transition');"));
+});
+
+test('density controller/flip tuning keeps jump-distance-aware motion timing under animation-layer ownership', () => {
+  const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts');
+  const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
+  const controller = fs.readFileSync(controllerPath, 'utf8');
+  const flip = fs.readFileSync(flipPath, 'utf8');
+
+  assert.ok(controller.includes('const jumpDistance = Math.abs(safeColumns - currentColumns);'));
+  assert.ok(controller.includes('jumpDistance,'));
+  assert.ok(flip.includes('jumpDistance = 1'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.16 : 0.2'));
+  assert.ok(flip.includes('jumpDistance >= 2 ? 0.22 : 0.28'));
+  assert.ok(flip.includes("? 'power2.out'"));
+  assert.ok(flip.includes("if (interactionMode === 'pinch') {"));
+  assert.ok(flip.includes("if (interactionMode === 'scrub') {"));
+  assert.ok(flip.includes('scale: false,'));
+  assert.ok(flip.includes('duration: isPinch'));
+  assert.ok(flip.includes('? 0.14'));
+  assert.ok(flip.includes("? 'power2.out'"));
+});
+
+test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/release lifecycle', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts');
+  const hookPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinch', 'usePinchShaderOverlay.ts');
+  const overlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinch', 'PinchShaderOverlay.tsx');
+  const vertPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinch', 'pinchFeedback.vert');
+  const fragPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'pinch', 'pinchFeedback.frag');
+  const coreDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'core');
+  const tapDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'tap');
+  const holdDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold');
+  const sharedDir = path.join(packageRoot, 'src', 'ui', 'shaders', 'shared');
+  const tapHookPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'tap', 'useTapShaderOverlay.ts');
+  const tapOverlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'tap', 'TapShaderOverlay.tsx');
+  const holdHookPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold', 'useHoldShaderOverlay.ts');
+  const holdOverlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold', 'HoldShaderOverlay.tsx');
+  const coreHelperPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'core', 'createFullscreenWebGLProgram.ts');
+  const sharedTypesPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'shared', 'interactionShaderTypes.ts');
+  const interactionsPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+
+  assert.ok(fs.existsSync(vertPath));
+  assert.ok(fs.existsSync(fragPath));
+  assert.ok(fs.existsSync(hookPath));
+  assert.ok(fs.existsSync(overlayPath));
+  assert.ok(fs.existsSync(coreDir));
+  assert.ok(fs.existsSync(tapDir));
+  assert.ok(fs.existsSync(holdDir));
+  assert.ok(fs.existsSync(sharedDir));
+  assert.ok(fs.existsSync(tapHookPath));
+  assert.ok(fs.existsSync(tapOverlayPath));
+  assert.ok(fs.existsSync(holdHookPath));
+  assert.ok(fs.existsSync(holdOverlayPath));
+  assert.ok(fs.existsSync(coreHelperPath));
+  assert.ok(fs.existsSync(sharedTypesPath));
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const controller = fs.readFileSync(controllerPath, 'utf8');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const overlay = fs.readFileSync(overlayPath, 'utf8');
+  const interactions = fs.readFileSync(interactionsPath, 'utf8');
+  const tapHook = fs.readFileSync(tapHookPath, 'utf8');
+  const tapOverlay = fs.readFileSync(tapOverlayPath, 'utf8');
+  const holdHook = fs.readFileSync(holdHookPath, 'utf8');
+  const holdOverlay = fs.readFileSync(holdOverlayPath, 'utf8');
+  const coreHelper = fs.readFileSync(coreHelperPath, 'utf8');
+  const sharedTypes = fs.readFileSync(sharedTypesPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+
+  assert.ok(explorer.includes('<PinchShaderOverlay'));
+  assert.ok(explorer.includes('<TapShaderOverlay'));
+  assert.ok(explorer.includes('tapTrigger={tapOverlayTrigger}'));
+  assert.ok(explorer.includes('<HoldShaderOverlay'));
+  assert.ok(explorer.includes('progress={holdOverlayProgress}'));
+  assert.ok(explorer.includes('completionBeat={holdOverlayCompleteBeat}'));
+  assert.ok(explorer.includes("import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';"));
+  assert.ok(explorer.includes("import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';"));
+  assert.ok(explorer.includes("import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';"));
+  assert.ok(explorer.includes('onPulse={(trigger) => {'));
+  assert.ok(explorer.includes('pinchPulseTriggerRef.current?.(dir);'));
+  assert.ok(explorer.includes('fingerA={pinchFingerA}'));
+  assert.ok(explorer.includes('fingerB={pinchFingerB}'));
+  assert.ok(explorer.includes('nodeCount={pinchDisplayNodeCount}'));
+  assert.ok(explorer.includes('pinchOverlayGestureActiveRef.current'));
+  assert.ok(explorer.includes('pinchOverlayPendingNodeCountRef.current = gridColumnCount;'));
+  assert.ok(explorer.includes('const pendingCount = pinchOverlayPendingNodeCountRef.current;'));
+  assert.ok(explorer.includes('const nextNodeCount = pendingCount ?? density.getColumns();'));
+  assert.ok(explorer.includes('setPinchPerfActive(true);'));
+  assert.ok(explorer.includes("pinchPerfTimeoutRef.current = window.setTimeout(() => {"));
+  assert.ok(explorer.includes('pinch-perf-active'));
+  assert.ok(explorer.includes('window.requestAnimationFrame(() => {'));
+
+  assert.ok(controller.includes('onPinchFrame?:'));
+  assert.ok(controller.includes('onPinchStep?:'));
+  assert.ok(controller.includes('onPinchRelease?:'));
+  assert.ok(controller.includes('onPinchFrame?.('));
+  assert.ok(controller.includes('onPinchStep?.(1);'));
+  assert.ok(controller.includes('onPinchStep?.(-1);'));
+  assert.ok(controller.includes('onPinchFrame?.(null, null, false);'));
+
+  assert.ok(hook.includes('alpha: true, premultipliedAlpha: false'));
+  assert.ok(hook.includes('gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);'));
+  assert.ok(hook.includes('uniform float u_nodes;'));
+  assert.ok(hook.includes('float nodeCount=max(0.,min(u_nodes,12.));'));
+  assert.ok(hook.includes('state.pulse = Math.max(0, state.pulse - dt * 5.6);'));
+  assert.ok(hook.includes('state.fade = Math.max(0, state.fade - dt * 5.5);'));
+  assert.ok(hook.includes('const setNodeCount = useCallback((count: number) => {'));
+  assert.ok(hook.includes('const triggerPulse = useCallback((dir: number) => {'));
+  assert.ok(hook.includes('state.pulse = Math.max(state.pulse, 0.76);'));
+  assert.ok(hook.includes('const release = useCallback(() => {'));
+  assert.ok(!hook.includes('state.fingerA = null;'));
+  assert.ok(!hook.includes('state.fingerB = null;'));
+  assert.ok(hook.includes('window.cancelAnimationFrame(rafId);'));
+
+  assert.ok(overlay.includes('data-pinch-shader-overlay=\"true\"'));
+  assert.ok(overlay.includes("pointerEvents: 'none'"));
+  assert.ok(overlay.includes('position: \'fixed\''));
+  assert.ok(overlay.includes('nodeCount: number;'));
+  assert.ok(overlay.includes('setNodeCount(nodeCount);'));
+  assert.ok(overlay.includes('if (active) return;'));
+  assert.ok(overlay.includes('release();'));
+
+  assert.ok(interactions.includes("type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';"));
+  assert.ok(interactions.includes('pinchSuppressRef.current = true;'));
+  assert.ok(interactions.includes("const wasPinchGesture = gestureModeRef.current === 'pinch' || pinchSuppressRef.current;"));
+  assert.ok(interactions.includes('if (wasPinchGesture) {'));
+  assert.ok(interactions.includes('pinchSuppressUntilRef.current = Date.now() + 220;'));
+  assert.ok(interactions.includes('pinchSuppressRef.current'));
+  assert.ok(interactions.includes("gestureModeRef.current === 'pinch'"));
+  assert.ok(interactions.includes('Date.now() < pinchSuppressUntilRef.current'));
+  assert.ok(interactions.includes('onTapFeedback?.({ x: event.clientX, y: event.clientY });'));
+  assert.ok(interactions.includes('onHoldFeedback?.(holdPoint, true, 1, true);'));
+  assert.ok(interactions.includes('onHoldFeedback?.({ x: session.pressX, y: session.pressY }, true, 0, false);'));
+  assert.ok(interactions.includes('const progress = Math.max(0, Math.min(0.92, elapsed / LONG_PRESS_MS));'));
+  assert.ok(interactions.includes('longPressProgressFrameRef.current = window.requestAnimationFrame(updateHoldProgress);'));
+  assert.ok(interactions.includes('onHoldFeedback?.(null, false, 0, false);'));
+  assert.ok(interactions.includes('clearPendingLongPress();'));
+  assert.ok(interactions.indexOf('clearPendingLongPress();') < interactions.indexOf('session.pointerId = event.pointerId;'));
+
+  assert.ok(coreHelper.includes('export function createFullscreenWebGLProgram('));
+  assert.ok(coreHelper.includes('gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);'));
+  assert.ok(sharedTypes.includes('export type OverlayPoint = { x: number; y: number } | null;'));
+  assert.ok(tapHook.includes('createFullscreenWebGLProgram'));
+  assert.ok(tapHook.includes('const triggerTap = useCallback'));
+  assert.ok(tapHook.includes('float ringR = mix(0.022, 0.040, u_phase);'));
+  assert.ok(tapHook.includes('float coreR = mix(0.012, 0.007, u_phase);'));
+  assert.ok(tapHook.includes('intensityRef.current = Math.max(0, intensityRef.current - dt * 4.8);'));
+  assert.ok(tapHook.includes('uniform float u_phase;'));
+  assert.ok(tapHook.includes('phaseRef.current = 0;'));
+  assert.ok(tapHook.includes('if (uPhase) gl.uniform1f(uPhase, phaseRef.current);'));
+  assert.ok(tapOverlay.includes('data-tap-shader-overlay="true"'));
+  assert.ok(tapOverlay.includes('tapTrigger: number;'));
+  assert.ok(tapOverlay.includes('className="tap-debug-marker"'));
+  assert.ok(tapOverlay.includes('zIndex: 160'));
+  assert.ok(tapOverlay.includes('triggerTap(tapPoint);'));
+  assert.ok(tapOverlay.includes('[tapPoint, tapTrigger, triggerTap]'));
+  assert.ok(holdHook.includes('createFullscreenWebGLProgram'));
+  assert.ok(holdHook.includes('uniform float u_progress;'));
+  assert.ok(holdHook.includes('uniform float u_complete;'));
+  assert.ok(holdHook.includes('uniform float u_confirm;'));
+  assert.ok(holdHook.includes('float clockwise = fract(1.25 - angle / (2.0 * pi));'));
+  assert.ok(holdHook.includes('float head = clamp(u_progress, 0.0, 1.0);'));
+  assert.ok(holdHook.includes('float completionSweep = ring * u_confirm * 0.78;'));
+  assert.ok(holdHook.includes('float completionPop = u_complete * (0.55 + halo * 0.55);'));
+  assert.ok(holdHook.includes('float visibility = max(u_active * 0.85, u_confirm);'));
+  assert.ok(holdHook.includes('completionRef.current = Math.max(0, completionRef.current - dt * 3.8);'));
+  assert.ok(holdHook.includes('completionVisibilityRef.current = Math.max(0, completionVisibilityRef.current - dt * 2.1);'));
+  assert.ok(holdHook.includes('if (uConfirm) gl.uniform1f(uConfirm, completionVisibilityRef.current);'));
+  assert.ok(holdHook.includes('completionRef.current = 1;'));
+  assert.ok(holdHook.includes('completionVisibilityRef.current = 1;'));
+  assert.ok(holdHook.includes('const setHoldState = useCallback((point: OverlayPoint, active: boolean, progress: number, completionBeat: number) => {'));
+  assert.ok(holdOverlay.includes('data-hold-shader-overlay="true"'));
+  assert.ok(holdOverlay.includes('setHoldState(holdPoint, active, progress, completionBeat);'));
+  assert.ok(styles.includes('.asset[data-active="true"] .thumb::after{'));
+  assert.ok(styles.includes('.asset.is-active:not(.is-selected){'));
+  assert.ok(styles.includes('.asset.is-active-reinforced:not(.is-selected){'));
+  assert.ok(styles.includes('.asset.is-hold-emphasis:not(.is-selected){'));
+  assert.ok(styles.includes('.row.is-active-reinforced:not(.is-selected){'));
+  assert.ok(styles.includes('.row.is-hold-emphasis:not(.is-selected){'));
+  assert.ok(styles.includes('.asset.is-selected .thumb::before{'));
+  assert.ok(styles.includes('.asset-thumb-preview{'));
+  assert.ok(styles.includes('.content.pinch-perf-active .asset-thumb-preview{'));
+  assert.ok(styles.includes('.content.overlay-hidden .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('.content.density-overlay-out .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('.content.density-overlay-in:not(.density-overlay-out):not(.density-motion-active):not(.density-gesture-active):not(.overlay-hidden) .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('--overlay-fade-duration: 300ms;'));
+  assert.ok(styles.includes('--density-overlay-out-duration: 140ms;'));
+  assert.ok(styles.includes('--density-overlay-in-duration: 210ms;'));
+  assert.ok(styles.includes('--overlay-fade-ease: cubic-bezier(0.76, 0, 0.24, 1);'));
+  assert.ok(styles.includes('.content.density-motion-active .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('.content.density-gesture-active .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('.content.density-motion-active .asset .asset-ol-tr,'));
+  assert.ok(styles.includes('transform: translateY(4px) !important;'));
+  assert.ok(styles.includes('transition: none !important;'));
+  assert.ok(styles.includes('.asset .asset-ol-tl{'));
+  assert.ok(styles.includes('.asset .asset-ol-tr{'));
+  assert.ok(styles.includes('.asset .asset-ol-bl{'));
+  assert.ok(styles.includes('.asset .asset-ol-bottom{'));
+  assert.ok(styles.includes('opacity var(--overlay-fade-duration) var(--overlay-fade-ease),'));
+  assert.ok(styles.includes('transform var(--overlay-fade-duration) var(--overlay-fade-ease);'));
+  assert.ok(styles.includes('.content.density-motion-active .asset .asset-overlay,'));
+  assert.ok(styles.includes('.content.density-gesture-active .asset .asset-overlay{'));
+  assert.ok(styles.includes('.content.density-motion-settling:not(.density-gesture-active) .asset .asset-ol-bottom,'));
+  assert.ok(styles.includes('opacity 220ms ease calc(140ms + var(--card-index, 0) * 12ms),'));
+  assert.ok(styles.includes('transform 220ms ease calc(140ms + var(--card-index, 0) * 12ms);'));
+  assert.ok(styles.includes('.tap-debug-marker{'));
+  assert.ok(grid.includes('className="asset-thumb-preview"'));
+  assert.ok(styles.includes('.masonry-card.asset{'));
+  assert.ok(styles.includes('transition: filter 120ms ease, border-color 120ms ease;'));
+  assert.ok(styles.includes('.masonry-card.asset:hover{'));
+  assert.ok(styles.includes('transform: none;'));
 });

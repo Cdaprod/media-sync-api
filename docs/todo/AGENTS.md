@@ -1,3 +1,355 @@
+## 2026-03-29 — Demo-motion mapping pass (new)
+- [x] Refined persistent overlay toggle animation timing to demo profile (`300ms`, `cubic-bezier(0.76, 0, 0.24, 1)`) across all overlay chrome nodes.
+- [x] Added explicit density overlay choreography ownership in runtime (`animateDensityFlip`): motion start now applies `density-overlay-out`, and motion end applies `density-overlay-in` with `140ms`/`210ms` timing.
+- [x] Added scroll-in reveal lane in `AssetGrid` using `IntersectionObserver` batching (`16ms`) with per-card delay markers (`35ms` step) and `380ms` ease-out transitions.
+- [x] Added first-load page entrance lane in `AssetGrid` with `80ms` lead + `28ms` stagger and `320ms` rise/fade keyframe.
+- [x] Updated static contracts to lock the new timing markers/classes and runtime ownership strings.
+- [ ] Next: on-device tune reveal stagger caps for very large grids while preserving virtualization/windowing guarantees.
+
+## 2026-03-29 — Persistent overlay toggle + gesture layering pass (new)
+- [x] Added persistent overlay visibility preference (`OVERLAY_VIS_PREFS_KEY`) in `ExplorerApp` with localStorage hydration/persist (`'1'/'0'`).
+- [x] Added an action-menu toggle beside density (`Overlays: On/Off`) that flips only persistent overlay visibility and does not mutate gesture lifecycle classes.
+- [x] Applied host class layering (`.overlay-hidden`) so manual toggle has highest precedence; gesture lifecycle classes remain temporary choreography only.
+- [x] Added smooth manual toggle fade support by restoring base overlay transition ownership on overlay chrome nodes while keeping density active-state overrides intact.
+- [x] Updated static contract assertions to lock storage key/state wiring, toggle UI presence, host class application, and overlay transition markers.
+- [ ] Next: run runtime probe to confirm (a) toggle OFF keeps overlays hidden regardless of gesture and (b) toggle ON preserves gesture hide + settle fade-back behavior.
+
+## 2026-03-29 — Pinch release settling handoff fix (new)
+- [x] Fixed release lifecycle hole where motion could remain active after pinch release in no-FLIP mode if release occurred before a clean motion-end handoff.
+- [x] Added a release fallback handoff timer in `createPinchDensityController` that clears `.density-motion-active` and enters `.density-motion-settling` when gesture is no longer active.
+- [x] Kept active-gesture blocking behavior intact (settling still blocked while `.density-gesture-active` is present).
+- [x] Updated static contracts to lock release-handoff markers and motion-active clear behavior.
+- [ ] Next: rerun overlay probe and confirm `settlingSeen: true` plus final host class without lingering `.density-motion-active`.
+
+## 2026-03-29 — Density class-lifecycle ordering fix (new)
+- [x] Moved no-FLIP motion lifecycle activation earlier so `setDensityMotionActive(true)` runs immediately at the no-FLIP gate before card queries, target-picking, or illusion-shell creation.
+- [x] Kept CSS/timing/selector behavior unchanged; this pass is ordering-only to hide chrome before density mutation work begins.
+- [x] Reconfirmed pinch gesture class path remains synchronous at touch-start (`setGestureActiveClass(true)` directly in `onTouchStart`, no rAF deferral).
+- [x] Extended static contracts to lock early motion activation ordering and forbid rAF-delayed gesture-class application in pinch controller.
+- [ ] Next: rerun the runtime probe and confirm first sampled active frame already reports `gesture:true` and `motion:true` before visible density remap.
+
+## 2026-03-29 — Density active hidden-state precedence fix (new)
+- [x] Tightened active motion/gesture chrome-hide selectors so hidden state wins immediately by forcing overlay chrome `opacity`/`transform` with `!important`.
+- [x] Removed active-phase overlay transition ownership (`transition: none !important`) for both `.density-motion-active` and `.density-gesture-active` hosts to avoid first-frame leakage from broader transition rules.
+- [x] Preserved settle cascade choreography (`.density-motion-settling:not(.density-gesture-active)`) and existing stagger return timing contracts.
+- [x] Updated static style contracts to lock the new active hide precedence markers.
+- [ ] Next: rerun on-device recorder to confirm active-phase overlay computed style is immediately hidden (`opacity: 0`, translated) during held gesture + motion.
+
+## 2026-03-29 — No-FLIP motion-active lifecycle parity fix (new)
+- [x] Identified root cause for missing live motion class: no-FLIP illusion branch in `animateDensityFlip` did not enter `setDensityMotionActive(true)`, so `.density-motion-active` never appeared during active density changes on that path.
+- [x] Updated no-FLIP branch to enter motion-active before illusion settle timing and to record `motionActive: true` in motion debug snapshot during active phase.
+- [x] Kept existing settle handoff (`setDensityMotionActive(false)`), gesture-class ownership, illusion architecture, and timing values unchanged.
+- [x] Updated static contracts to assert no-FLIP branch enters motion-active and retains explicit active motion debug marker.
+- [ ] Next: rerun runtime recorder and confirm `motionSeen/debugMotionSeen` flip true during active density change.
+
+## 2026-03-29 — Motion snapshot record typing widen pass (new)
+- [x] Fixed `animateDensityFlip` debug snapshot typing to allow string-valued host fields (`classHostTag`, `classHostClassName`) in `__explorerDensityMotionDebug.getSnapshot()`.
+- [x] Updated snapshot array/declaration types from `Record<string, number | boolean>` to `Record<string, string | number | boolean>` with no runtime behavior change.
+- [x] Re-ran Explorer build after fix in this environment (build completed successfully; font optimization warning from Google Fonts fetch remains non-fatal).
+- [ ] Next: keep debug-snapshot typed aliases centralized if further host/runtime fields are added.
+
+## 2026-03-29 — Motion-debug shape compile fix pass (new)
+- [x] Fixed `animateDensityFlip` TypeScript mismatch by extending `updateMotionDebug(...)` input shape to include host-class diagnostics fields required by `motionDebugByGrid`.
+- [x] Kept runtime behavior unchanged; this pass aligns helper typing with already-written snapshot payload fields (`classHostTag`, `classHostClassName`, `gestureClassApplied`, `motionClassApplied`, `settlingClassApplied`).
+- [x] Re-ran Explorer static contract suite after the typing fix.
+- [ ] Next: verify containerized `npm run build` in environment with `next` binary available.
+
+## 2026-03-29 — Density class-host wiring fix pass (new)
+- [x] Fixed state-to-DOM wiring by passing explicit class-host resolver (`getClassHostEl: () => mediaContentRef.current`) from `ExplorerApp` into density + pinch controllers.
+- [x] Density lifecycle classes (`density-gesture-active`, `density-motion-active`, `density-motion-settling`) are now applied against the same real `.content` host element instead of relying only on nearest-node assumptions.
+- [x] Added motion debug snapshot fields for host verification (`classHostTag`, `classHostClassName`, `gestureClassApplied`, `motionClassApplied`, `settlingClassApplied`).
+- [x] Preserved CSS fade logic/timing, illusion architecture, bounded layout/render, and density correctness model.
+- [x] Updated static contracts to lock host resolver wiring and class-application diagnostics fields; Explorer static suite passing.
+- [ ] Next: re-run runtime recorder and confirm `.content` className contains lifecycle classes during held gesture + settle.
+
+## 2026-03-29 — Held-gesture chrome holdback pass (new)
+- [x] Added explicit held-gesture state class (`.density-gesture-active`) driven by pinch gesture lifecycle in `createPinchDensityController`.
+- [x] Chrome hide rules now include held-gesture class, ensuring selector/type/size/metadata overlays remain hidden for the full duration of touch hold.
+- [x] `animateDensityFlip` settling path now blocks settle-class entry while held gesture class is active, preventing premature fade-back during active touches.
+- [x] On gesture release, pinch controller clears held-gesture class and only starts settle fade-back when density motion is no longer active.
+- [x] Settling fade-back selectors now guard with `:not(.density-gesture-active)` so fade-in cannot start until hold state is cleared.
+- [x] Preserved media plane behavior and existing density correctness/illusion architecture/diagnostics.
+- [x] Updated static contracts to lock held-gesture gating and settle-start conditions; Explorer static suite passing.
+- [ ] Next: verify multi-step held pinch on device to confirm overlays stay hidden between repeated notch commits until finger release.
+
+## 2026-03-29 — Density gesture chrome fade-out/in polish pass (new)
+- [x] Kept density motion class orchestration (`.density-motion-active` → `.density-motion-settling`) and preserved layout/illusion correctness path.
+- [x] Updated asset-card chrome behavior to fade out on density motion start (active state) instead of instantly snapping hidden.
+- [x] Fade-out targets remain non-media chrome only: selector UI (`.asset-ol-tr`), type badge cluster (`.asset-ol-tl`), size badge (`.asset-ol-bl`), and metadata text block (`.asset-ol-bottom`).
+- [x] Fade-out timing set to `120ms` (`opacity` + `transform`), while settle fade-back remains delayed/staggered (`140ms + index*12ms`, duration `220ms`).
+- [x] Kept thumbnail/video media plane stable throughout (no media-plane opacity choreography introduced).
+- [x] Updated static contracts to lock fade-out and fade-back timing markers; Explorer static suite passing.
+- [ ] Next: on-device verify whether fade-out should be slightly faster (`100ms`) on low-end devices without changing settle cadence.
+
+## 2026-03-29 — Card-index CSS variable typing build-fix pass (new)
+- [x] Fixed TypeScript build break in `AssetGrid.tsx` by extending the inline style type to include custom CSS variable `--card-index`.
+- [x] Preserved behavior (same stagger variable value/path) and applied only a type-safe declaration update (`React.CSSProperties & { '--card-index': string }`).
+- [x] Re-ran Explorer package build check; current environment reports missing `next` binary, but the `--card-index` type error is resolved in source.
+- [ ] Next: keep an eye on future custom CSS variables in inline style objects and type them explicitly when introduced.
+
+## 2026-03-29 — Density settle stagger cascade pass (new)
+- [x] Added per-card stagger support for settle chrome return by stamping `--card-index` on positioned masonry cards in `AssetGrid`.
+- [x] Updated settle CSS timing to use index-based delay (`calc(140ms + var(--card-index, 0) * 12ms)`) so card chrome no longer fades back synchronously.
+- [x] Kept active-motion suppression strict (`opacity: 0`, `translateY(4px)`, `transition: none`) for targeted overlay chrome while preserving thumbnail/media plane stability.
+- [x] Added reflow enforcement (`void contentEl.offsetHeight`) before applying `.density-motion-settling` to ensure transitions reliably fire after active-state removal.
+- [x] Preserved density correctness, illusion architecture, bounded layout/render, and diagnostics surfaces.
+- [x] Updated static contracts to lock stagger variable wiring, reflow marker, and staggered settle transition strings; Explorer static suite passing.
+- [ ] Next: run on-device review to tune stagger step (currently `12ms`) only if visual cadence still feels too dense at high card counts.
+
+## 2026-03-28 — Post-density settle chrome fade-back pass (new)
+- [x] Added a dedicated post-motion settling state (`.density-motion-settling`) in `animateDensityFlip` so card chrome can return after density motion stops.
+- [x] Updated density-motion class orchestration: motion start clears settling state; motion end removes active state, adds settling state, then clears settling state after `360ms`.
+- [x] Updated density-motion chrome CSS to keep non-essential card UI hidden during active motion and fade/slide it back in with delayed settle timing.
+- [x] Fade-back timing set to delay `140ms` + duration `220ms` (`opacity` + `transform`) for bottom metadata, size badge, top-left kind badge, and top-right selector cluster.
+- [x] Preserved media plane stability (thumbnail unchanged) and existing density correctness/illusion diagnostics.
+- [x] Updated static contracts to lock settling class path and delayed fade-back CSS markers; Explorer static suite passing.
+- [ ] Next: verify on-device feel for settle return timing and adjust only delay/duration constants if needed.
+
+## 2026-03-28 — Pinch repeated-notch rearm pass (new)
+- [x] Replaced one-shot pinch step lock (`stepped`) with a baseline-reset notch controller in `createPinchDensityController`.
+- [x] Added re-arm hysteresis band (`rearmMin = 0.96`, `rearmMax = 1.04`) so each notch requires returning near neutral before the next step.
+- [x] Added notch cooldown (`STEP_COOLDOWN_MS = 80`) to prevent noisy double-fires while preserving repeated one-gesture snapping.
+- [x] Updated pinch thresholds to more notchy defaults (`outwardThreshold = 1.1`, `inwardThreshold = 0.9`).
+- [x] Preserved existing density truth path (`density.setColumnsForPinch(...)`), overlay callbacks, and settle-on-release behavior.
+- [x] Updated static contracts to assert repeated-notch guards and prevent regression to one-shot stepping; Explorer static suite passing.
+- [ ] Next: run on-device pinch cadence check to tune thresholds/cooldown only if needed.
+
+## 2026-03-28 — Illusion-layer ultra-small subset pass (new)
+- [x] Kept no-FLIP illusion architecture enabled with visible-card-only participation and bounded layout/render authority unchanged.
+- [x] Reduced illusion shell cap further from 16 to 8 cards (`ILLUSION_MAX_CARDS = 8`) to treat density motion as a small accent instead of a full visible-window carry.
+- [x] Preserved center-of-viewport prioritization path (`rankedVisible` sorted by viewport-center distance before `slice(0, ILLUSION_MAX_CARDS)`), so only the highest-impact visible cards animate.
+- [x] Preserved transform-only illusion motion and short settle boundary (`ILLUSION_SETTLE_MS = 36`) before committing real layout truth.
+- [x] Updated static contract expectations for the tighter illusion cap and re-ran Explorer static suite.
+- [ ] Next: rerun illusion validation probe and compare average frame pacing against prior run (`worstAvgFrameMs: 52.59`) with the new 8-card cap.
+
+## 2026-03-28 — Illusion-layer cost reduction pass (new)
+- [x] Reduced illusion shell workload in `animateDensityFlip` by capping shell cards (`ILLUSION_MAX_CARDS = 16`) and prioritizing viewport-center visible cards instead of animating every visible card.
+- [x] Shortened illusion bridge timing (`ILLUSION_SETTLE_MS = 36`) to commit real density truth sooner and reduce overlap cost.
+- [x] Simplified illusion animation to transform-only motion (`scale` + `y`) with shorter duration and lighter shell styling (removed opacity fade + heavy shadow path).
+- [x] Updated static contracts for illusion cap/settle constants and transform-only branch markers; Explorer static suite passing.
+- [ ] Next: rerun illusion validation probe and compare max illusion card count + frame pacing against prior (max 37, worst avg ~48ms) baseline.
+
+## 2026-03-28 — Visible-card density illusion layer pass (new)
+- [x] Added a minimal visible-card illusion shell in `animateDensityFlip` (no-FLIP isolation path) that captures only viewport-visible rendered cards and animates cheap transform/opacity on temporary absolute shells.
+- [x] Moved real density truth commit in the no-FLIP branch to a short settle boundary (`setTimeout(..., 56)`) so illusion shells bridge perceived motion before the real remap lands.
+- [x] Added motion debug fields to confirm illusion participation (`illusionLayerEnabled`, `illusionCardCount`, `lastRunUsedIllusion`) while preserving existing diagnostics.
+- [x] Updated static contracts for illusion-layer branch markers and diagnostics fields; Explorer static suite passing.
+- [ ] Next: run the density follow-up probe and compare frame pacing with illusion path active vs baseline no-illusion direct commit.
+
+## 2026-03-28 — AssetGrid subtree simplification isolation pass (new)
+- [x] Added `AssetGrid` isolation toggle (`ENABLE_SIMPLIFIED_CARD_SUBTREE_ISOLATION = true`) that temporarily renders a minimal card subtree during density transitions (thumbnail-only, no overlay chrome, no selector UI, no preview video).
+- [x] Preserved card identity, geometry truth, density truth, bounded layout, and bounded rendering while simplifying only subtree complexity for bottleneck isolation.
+- [x] Added runtime debug snapshot diagnostics for subtree isolation (`simplifiedCardIsolationEnabled`, `simplifiedCardSubtreeActive`, `lastDensityTransitionUsedSimplified`, `cardSubtreeMode`).
+- [x] Updated static contracts to lock simplified subtree branch + diagnostics and re-ran Explorer static suite pass.
+- [ ] Next: rerun density follow-up probe and compare frame pacing against no-simplification baseline to confirm whether card subtree complexity is the primary remaining bottleneck.
+
+## 2026-03-28 — Density FLIP isolation branch pass (new)
+- [x] Added an explicit density animation isolation toggle in `animateDensityFlip` (`ENABLE_DENSITY_FLIP_ANIMATION = false`) to allow direct commit + cleanup path without GSAP Flip while preserving density correctness.
+- [x] Added direct-commit no-FLIP branch instrumentation updates (`flipIsolationEnabled`, `lastRunUsedFlip`) in `__explorerDensityMotionDebug` so runtime probes can confirm whether transitions used Flip or the isolation path.
+- [x] Preserved bounded layout/render and gesture semantics; this pass only isolates the animation layer for bottleneck confirmation.
+- [x] Updated static contracts for the isolation toggle and no-FLIP branch diagnostics; Explorer static suite passing.
+- [ ] Next: rerun the density follow-up probe and compare no-FLIP frame pacing against current Flip path to confirm whether Flip is the primary remaining bottleneck.
+
+## 2026-03-28 — Density regression isolation toggle pass (new)
+- [x] Added a conservative isolation toggle in `AssetGrid` (`ENABLE_MOTION_AWARE_BUFFER = false`) so motion-aware buffer switching can be disabled without touching density correctness or windowed layout authority.
+- [x] Kept bounded layout/render behavior intact while removing motion-class-driven state churn from the hot path in default isolation mode.
+- [x] Added layout debug counters for regression triage (`motionObserverCallbackCount`, `renderWindowUpdateCount`) and explicit toggle visibility (`isolationMotionAwareBufferEnabled`) in `__explorerDensityLayoutDebug.getSnapshot()`.
+- [x] Updated static contracts to lock the new isolation toggle + diagnostics fields and re-ran Explorer static suite pass.
+- [ ] Next: rerun the density follow-up probe with this isolation default and compare frame metrics against the pre-isolation baseline; if improved, re-enable motion-aware buffer behind a safer non-reactive path.
+
+## 2026-03-28 — Scrub pre-roll regression rollback (new)
+- [x] Rolled back scrub FLIP pre-roll (`requestAnimationFrame(startFlip)`) in `animateDensityFlip` after runtime evidence showed severe frame pacing regression while correctness remained intact.
+- [x] Restored immediate scrub FLIP start after commit to recover tight first/last FLIP timing and avoid extra pre-animation layout/paint churn.
+- [x] Kept the calmer timing profile from the previous pass (pinch `0.14`, scrub `0.16/0.20`, settle `0.22/0.28`) and preserved all bounded layout/render correctness invariants.
+- [x] Re-ran Explorer static suite pass.
+- [ ] Next: rerun the density follow-up probe and compare worst avg/max frame timing against the pre-regression baseline (~23ms avg class).
+
+## 2026-03-28 — Density motion feel polish pass (new)
+- [x] Kept all density correctness + bounded layout/render invariants intact and limited this pass strictly to motion feel tuning in `animateDensityFlip`.
+- [x] Added a one-frame scrub pre-roll (`requestAnimationFrame(startFlip)`) so rapid scrub updates start on a cleaner visual boundary without reintroducing queue/replay choreography.
+- [x] Retuned density FLIP timing to calmer values while preserving mode-specific semantics: pinch `0.14`, scrub `0.16/0.20`, settle `0.22/0.28`, easing unchanged (`power2.out`).
+- [x] Updated static contracts for the split pinch/scrub start branches and revised timing markers; Explorer static suite passing.
+- [ ] Next: rerun density follow-up on device and compare worst frame spikes for 5→2/4 transitions against the prior baseline.
+
+## 2026-03-28 — Density motion-buffer observability polish (new)
+- [x] Added latched layout debug markers in `AssetGrid` to preserve transition-time truth beyond settle snapshots (`motionBufferEverUsed`, `lastBufferModeUsed`, `lastLayoutScopeUsed`, `lastMotionActiveAtMs`).
+- [x] Preserved current bounded layout/render pipeline while making post-settle probes able to confirm whether density-motion buffer mode was ever active during the latest transition.
+- [x] Updated Explorer static contracts to lock the new observability fields/refs in the layout debug hook.
+- [x] Re-ran Explorer static suite pass.
+- [ ] Next: rerun the density follow-up probe and confirm `bufferMode` may settle to idle while `motionBufferEverUsed` + `lastBufferModeUsed` still prove active density-motion participation.
+
+## 2026-03-28 — Density bounded-layout computation pass (new)
+- [x] Extended `computeMasonryLayout(...)` with optional inclusion gating (`shouldIncludeItem`) so stage-height truth can remain global while per-card layout object materialization is window-bounded.
+- [x] Updated `AssetGrid` to apply the render window at layout-compute time (instead of post-layout filtering), reducing `layoutComputedItemCount` under ordinary density transitions while preserving absolute geometry semantics for rendered cards.
+- [x] Expanded layout debug snapshot semantics to report bounded layout scope (`layoutComputationScope: 'windowed' | 'global'`) and compute counts sourced from `computeMasonryLayout` totals/included metrics.
+- [x] Updated Explorer static contracts to lock bounded-layout gating + diagnostics and re-ran Explorer static suite pass.
+- [ ] Next: rerun the on-device density follow-up probe and verify `layoutCount < logical` on non-trivial targets; if frame pacing remains poor, evaluate a second pass that bounds height-ratio evaluation itself for far-off rows.
+
+## 2026-03-28 — Density render-window cost follow-up (new)
+- [x] Added motion-aware bounded rendering policy in `AssetGrid`: idle uses a moderate viewport buffer while active density motion uses a tighter buffer to reduce high-density rendered-card count.
+- [x] Added runtime class-observer wiring for `.density-motion-active` so bounded rendering can react to real motion-state transitions without changing density authority or gesture semantics.
+- [x] Expanded `__explorerDensityLayoutDebug.getSnapshot()` with explicit layout-scope diagnostics (`layoutComputedItemCount`, `layoutComputationScope`) and render-mode diagnostics (`renderBufferMode`, active `renderBufferPx`).
+- [x] Updated Explorer static contracts to lock the motion-aware buffer path and new layout/render diagnostics fields; re-ran Explorer static suite pass.
+- [ ] Next: run the density one-shot probe on device again and compare density-5 rendered counts/avg frame time before deciding on further buffer tightening or layout-window computation changes.
+
+## 2026-03-28 — Density motion-active simplification mode pass (new)
+- [x] Added dedicated runtime density motion mode (`.density-motion-active`) that enables only during density FLIP and disables on settle/interrupt/no-item/stale-drop paths.
+- [x] Added temporary card-surface simplification under density motion mode (mute bottom metadata chrome + soften top chrome visibility) while preserving thumbnail plane and layout truth.
+- [x] Expanded density motion instrumentation with active/simplified state and duration tracking in `__explorerDensityMotionDebug.getSnapshot()`.
+- [x] Preserved density correctness pipeline and pinch constraints (no gesture-semantic changes, no queue/replay reintroduction, no authority regressions).
+- [x] Updated static contracts to lock density-motion-active class toggling + simplification CSS + instrumentation fields; Explorer static suite passing.
+- [ ] Next: on-device validate frame-budget improvement during density transitions with motion mode active, then decide whether shell-layer approach is still necessary.
+
+## 2026-03-28 — Density animation scope reduction pass (new)
+- [x] Confirmed probe evidence that density FLIP was still paying whole-dataset motion cost (all cards moved/resized), causing harsh mobile motion despite correct density truth.
+- [x] Added visible/near-visible FLIP target reduction in `animateDensityFlip` (`maxTargets=72`, viewport buffer `320px`) while preserving global layout commit for all cards.
+- [x] Added runtime motion-scope instrumentation hook `globalThis.__explorerDensityMotionDebug.getSnapshot()` exposing total/visible/animated counts and viewport bounds.
+- [x] Kept density correctness invariants unchanged (no queue/replay reintroduction, no pre-commit truth advancement regression, pinch immediate path preserved).
+- [x] Updated static contracts to lock reduced FLIP target selection + instrumentation + existing correctness behavior; re-ran Explorer static suite pass.
+- [ ] Next: on-device verify smoother density transitions while offscreen cards snap silently and visible cards animate cleanly.
+
+## 2026-03-27 — Density motion-quality pass (truth-locked) (new)
+- [x] Kept density correctness pipeline unchanged (commit/render synchronization + no pre-commit truth advancement) and limited this pass to FLIP motion profile quality tuning.
+- [x] Disabled FLIP scale interpolation for all density modes (`scale:false`) to remove rubbery resize artifacts on positioned masonry cards.
+- [x] Retuned density timings to calmer mobile-friendly values: pinch `0.13`, scrub `0.14/0.18`, settle `0.20/0.26` with restrained `power2.out` easing.
+- [x] Preserved pinch dedicated immediate-start path and avoided queue/replay or partial-target reintroduction.
+- [x] Updated static contracts to lock the new scale/timing/ease profile and revalidated Explorer static suite pass.
+- [ ] Next: on-device verify flicker/chop reduction while confirming density truth remains locked under rapid 1↔6 and pinch notch changes.
+
+## 2026-03-27 — Density commit/render ordering stabilization (new)
+- [x] Root-caused remaining density desync to commit/render boundary timing: FLIP could start while React had not yet committed updated absolute card geometry for the new `gridColumnCount`.
+- [x] Updated Explorer density commit callback path to `flushSync` the `setGridColumnCount(...)` update so committed density state and rendered masonry geometry are synchronized before FLIP continuation.
+- [x] Kept density truth authority in `commitLayoutColumns(...)` (no pre-commit column advancement) and retained pinch path constraints (`immediate`, `scale:false`, dedicated pinch route).
+- [x] Added runtime layout snapshot instrumentation (`__explorerDensityLayoutDebug.getSnapshot()`) with card geometry samples + flip-active signal for on-device truth verification.
+- [x] Updated static contracts to lock flushSync commit behavior and layout debug hook presence; re-ran Explorer static suite with passing results.
+- [ ] Next: on-device verify no stale 3-column residue or malformed gaps at density 1/2/4/6 using the new debug snapshot after settle.
+
+## 2026-03-27 — Density layout-truth regression recovery (new)
+- [x] Reverted risky density FLIP optimizations that could leave mixed old/new masonry geometry under rapid density changes.
+- [x] Removed partial-target pinch FLIP path and restored full-card-set FLIP targets so all `.masonry-card` nodes reconcile each density commit.
+- [x] Removed deferred queue/replay lane in `animateDensityFlip` and restored immediate retarget-kill sequencing so winning target commits always execute.
+- [x] Kept dedicated pinch path + immediate start + `scale:false` while prioritizing final visible layout truth over motion-lane experimentation.
+- [x] Updated static assertions to lock full-target pinch behavior and no queued-replay path.
+- [x] Re-ran Explorer static suite (`node --test tests/exports.test.mjs`) with passing results.
+- [ ] Next: run runtime device QA (pinch + slider stress) to confirm no stale-card gaps and no “stuck at 3 columns” behavior.
+
+## 2026-03-27 — Density stuck-at-3 regression fix (new)
+- [x] Root-caused the “animation flashes but grid remains 3 columns” regression to queued replay ordering in `animateDensityFlip`: queued runs could be re-deferred because `activeByGrid` was cleared *after* replay scheduling.
+- [x] Fixed completion/interrupt ordering so active transform ownership is cleared before queued replay starts.
+- [x] Added static regression assertions locking replay-after-active-clear ordering for both `onComplete` and `onInterrupt` paths.
+- [x] Re-ran Explorer static suite (`node --test tests/exports.test.mjs`) with passing results.
+- [ ] Next: runtime pinch + slider QA to confirm visible grid columns always reconcile with committed density/readout across repeated changes.
+
+## 2026-03-27 — Density motion-lane choreography hardening (new)
+- [x] Audited active density choreography collisions (in-flight FLIP overlap, pinch target handoff timing, transform cleanup/start ordering) and confirmed retarget-kill overlap was the primary readability conflict.
+- [x] Added per-grid deferred-start lane control in `animateDensityFlip` so new density commits queue (`queuedByGrid`) while an active density animation owns card transforms.
+- [x] Added queued replay handoff (`replayQueued`) that starts the latest queued density target on the next frame after settle cleanup, keeping a single readable resize/reflow pass.
+- [x] Preserved pinch path guarantees: dedicated pinch interaction mode, no settle-mode delay regression, `scale: false`, and existing pinch controller queue/gating behavior.
+- [x] Retuned density motion profile to remain responsive but more legible (`pinch 0.12`, scrub `0.12/0.16`, settle `0.18/0.24`; easing unchanged).
+- [x] Extended static contracts for deferred/queued lane behavior, explicit timing profile, and settle reconciliation callback payload (`invariantFixups`, `queuedReplay`).
+- [x] Re-ran Explorer static suite (`node --test tests/exports.test.mjs`) with passing results.
+- [ ] Next: run on-device QA focused on rapid pinch + slider changes to confirm queued replay reads as deliberate and non-colliding on mobile Safari.
+
+## 2026-03-27 — Pinch-density performance guard pass
+- [x] Added pinch in-flight gating with single queued next pinch target in `createExplorerDensityController` to avoid re-entrant pinch FLIP churn.
+- [x] Added lightweight runtime instrumentation hook `globalThis.__explorerPinchPerfDebug.getStats()` (active state, target count, duration, preview-active flag, dropped/queued counts).
+- [x] Reduced pinch FLIP target set to near-viewport cards with a bounded cap while keeping full layout commit truth.
+- [x] Added temporary pinch performance mode in `ExplorerApp` + CSS (`.content.pinch-perf-active .asset-thumb-preview`) to hide preview video layers during pinch motion.
+- [x] Updated static regression assertions for pinch target reduction, in-flight gating/queueing, instrumentation, and preview suppression contract.
+- [x] Re-ran Explorer static suite with all tests passing.
+- [ ] Next: on-device validate pinch perf debug counters during repeated notch gestures and confirm no perceptible hitch on video-heavy datasets.
+
+## 2026-03-27 — Pinch motion-quality simplification pass
+- [x] Simplified pinch FLIP timing to a fixed fast profile (`duration: 0.09`, `ease: power2.out`) while preserving immediate start and `scale: false`.
+- [x] Reduced pinch cleanup overhead by short-circuiting heavy per-card transition-reset loop in `clearTransforms()` for pinch mode.
+- [x] Kept dedicated pinch routing (`setColumnsForPinch`) and node-count latch behavior intact.
+- [x] Updated static assertions to lock pinch timing/ease and pinch cleanup short-circuit contract.
+- [x] Re-ran Explorer static suite with all tests passing.
+- [ ] Next: verify on-device perceived smoothness on repeated fast pinch notches across dense media sets (video + image mix).
+
+## 2026-03-27 — Pinch density motion desync + node-flash stabilization
+- [x] Added a dedicated pinch density commit path (`setColumnsForPinch`) so pinch threshold steps no longer route through delayed settle choreography.
+- [x] Updated density FLIP to support explicit `'pinch'` interaction mode with immediate start and pinch-specific motion tuning.
+- [x] Disabled Flip scaling for pinch transitions (`scale: false`) to reduce choppy resize interpolation on mobile masonry cards.
+- [x] Added pinch overlay node-count latch in `ExplorerApp` so node display buffers while pinch is active and flushes at release boundary.
+- [x] Updated static regression assertions for pinch path routing, pinch Flip mode, and overlay latch timing contracts.
+- [x] Re-ran Explorer static suite (`node --test tests/exports.test.mjs`) with passing results.
+- [ ] Next: runtime-device QA pass to verify perceived pinch notch timing and bridge node-count stability across repeated 1↔6 transitions.
+
+## 2026-03-26 — Pointer session init-order hotfix (tap/second-tap restore)
+- [x] Root-caused missing first-tap/second-tap behavior to pointer session reset ordering in `handlePointerDown`.
+- [x] Moved `clearPendingLongPress()` ahead of pointer session assignment so new session values are not immediately nulled.
+- [x] Added static regression assertion to lock init-order (`clearPendingLongPress` must precede `session.pointerId = event.pointerId`).
+- [x] Re-ran Explorer static suite and confirmed all contracts pass.
+- [ ] Next: verify on-device that first tap restores purple border and second tap reliably opens/activates preview video.
+
+## 2026-03-26 — Tap/second-tap regression recovery after hold-progress pass
+- [x] Root-caused tap regression to per-render local pointer variables in `useAssetInteractions` being reset by hold-progress-driven rerenders.
+- [x] Replaced local pointer-tracking variables with stable `pointerSessionRef` state so `pointerup` can always match the active pointer and cancel long-press correctly.
+- [x] Kept pre-threshold hold progress/threshold completion split while preserving pinch suppression and drag handoff behavior.
+- [x] Updated static assertions to reflect session-based hold-start coordinate wiring (`session.pressX/session.pressY`).
+- [x] Re-ran Explorer static suite to confirm tap/second-tap contract and shader lifecycle assertions all pass.
+- [ ] Next: run on-device touch QA focused on rapid tap, double-tap, and long-press transitions under active overlay animation.
+
+## 2026-03-26 — Hold timing + exclusive thumbnail preview ownership
+- [x] Added pre-threshold long-press progress updates in `useAssetInteractions` (RAF-driven progress sampled against `LONG_PRESS_MS`) instead of spending the hold effect only at completion.
+- [x] Triggered hold completion beat strictly from the actual long-press timeout path and canceled progress RAF on completion/cancel to keep gesture lifecycle deterministic.
+- [x] Retuned hold shader to separate pre-hold activity from completion confirmation (`u_active` + `u_confirm`) and lengthened confirmation visibility decay for a clear post-threshold payoff.
+- [x] Introduced preview ownership commit path in `ExplorerApp` and cleared preview ownership on first-tap focus transitions so previous video previews stop immediately when activation changes.
+- [x] Added preview remount keying in `AssetGrid` and `AssetList` so ownership transitions force old preview `<video>` instances to unmount.
+- [x] Updated `exports.test.mjs` assertions for hold timing split and exclusive preview ownership/remount contracts.
+- [ ] Next: run device-level touch QA to tune final hold confirmation duration feel (if needed) without increasing bloom/noise.
+
+## 2026-03-26 — Gesture arbitration + pinch overlay polish follow-up
+- [x] Added pinch-win gesture exclusivity in `useAssetInteractions` so second-touch escalation cancels pending long-press/context-menu and suppresses single-touch actions until all touches end.
+- [x] Reorganized shader directories into categorized structure (`core/`, `pinch/`, `tap/`, `hold/`, `shared/`) and moved pinch overlay modules into `shaders/pinch/`.
+- [x] Fixed release artifact path by preserving last valid pinch finger anchors during fade-out (no null-center fallback on release path).
+- [x] Added density-aware node count wiring (`gridColumnCount` -> overlay `nodeCount` -> shader `u_nodes`) so bridge internal nodes reflect committed columns.
+- [x] Retuned pulse ring behavior for tighter threshold-notch readability and kept overlay visual-only/pointer-events-none layering.
+- [ ] Next: capture new runtime trace verifying zero pinch-triggered context-menu opens and no center-flash artifacts on release.
+
+## 2026-03-26 — WebGL pinch-feedback overlay integration (visual-only layer)
+- [x] Added fullscreen shader overlay modules (`pinchFeedback.vert`, `pinchFeedback.frag`, `usePinchShaderOverlay`, `PinchShaderOverlay`) with WebGL alpha blending and JS-driven fade/pulse decay.
+- [x] Mounted overlay in `ExplorerApp` above grid content and below topbar with `pointer-events: none` so it cannot capture interactions or own state.
+- [x] Wired existing pinch controller callbacks to feed live finger points and threshold-step pulses (`+1`/`-1`) into overlay without changing density thresholds/commit logic.
+- [x] Added static regression assertions for overlay mount wiring, shader hook lifecycle, pulse safety contract, and canvas overlay presence/unmount cleanup markers.
+- [ ] Next: capture device runtime metrics/screens to confirm pulse/readability over real content across portrait/landscape.
+
+## 2026-03-25 — Slider event sequencing fix for backwards-FLIP/double-pass symptom
+- [x] Switched density slider live input wiring from `setColumns(..., true)` to `scrubTo(...)` so drag updates use scrub semantics instead of delayed settle semantics.
+- [x] Added explicit scrub settle hooks on slider release/focus end (`onPointerUp`, `onKeyUp`, `onBlur`) via `settleScrub()`.
+- [x] Updated static assertions to lock slider scrub wiring and settle hook presence.
+- [ ] Next: re-check runtime 3→2 interaction for “target flashes first, jumps back, animates again” symptom after scrub/settle event split.
+
+## 2026-03-25 — Scrub retarget churn reduction (ease visibility follow-up)
+- [x] Added density scrub frame coalescing in `createExplorerDensityController` so rapid scrub input commits latest target once per frame.
+- [x] Added pending-target + RAF lifecycle cleanup (`pendingScrubColumns`, `scrubFrameId`, destroy-time cancel) for idempotent scrub scheduling.
+- [x] Updated static regression assertions to lock frame-coalesced scrub behavior and avoid accidental return to per-event scrub commits.
+- [ ] Next: rerun runtime trace and compare `retargetKills`/`interrupts` before vs after coalescing to validate reduced mid-animation overpower peaks.
+
+## 2026-03-25 — Density FLIP retarget lifecycle + responsiveness instrumentation pass
+- [x] Moved FLIP state capture ahead of active animation kill so retarget commits read current visible geometry before interruption.
+- [x] Added interrupt-cleanup suppression gate during intentional retarget kill to avoid flattening transforms between back-to-back density commits.
+- [x] Switched scrub-start timing to immediate post-commit Flip start while retaining delayed settle-start path.
+- [x] Tightened jump-distance motion tuning to firmer/faster durations/eases for both scrub and settle commits.
+- [x] Added runtime debug stats hook (`globalThis.__explorerDensityFlipDebug.getStats()`) to count starts/completes/interrupts/retarget kills/stale-frame drops/no-item commits.
+- [x] Updated static assertions for the new retarget and timing contracts.
+- [ ] Next: collect before/after on-device metrics for `interrupts / starts` and `staleFrameDrops` under rapid 1↔6 scrubs.
+
+## 2026-03-25 — Masonry transform ownership conflict fix (CSS vs FLIP)
+- [x] Reviewed runtime DevTools density instrumentation output showing high `transitioncancel` churn and active baseline `transition: transform ...` on masonry cards.
+- [x] Added masonry-specific CSS override to remove baseline transform transition ownership from `.masonry-card.asset` while preserving filter/border-color micro-interactions.
+- [x] Disabled masonry-card hover transform offset (`.masonry-card.asset:hover { transform: none; }`) to avoid transform contention with density FLIP.
+- [x] Added static regression assertions to lock the masonry transform-ownership CSS contract.
+- [ ] Next: run another on-device 1→6→1 density trace and compare `transitioncancel` / `transitionend` ratios after CSS ownership isolation.
+
+## 2026-03-25 — Density live-geometry interrupt continuity pass
+- [x] Removed the `AssetGrid` post-render global transform/transition reset effect so render commits no longer cancel active FLIP motion.
+- [x] Kept settle cleanup under `animateDensityFlip` as the motion-layer owner of transform lifecycle (`complete`/`interrupt`/no-item paths).
+- [x] Added jump-distance-aware animation tuning (`jumpDistance`) so large density jumps are shorter/firmer and small jumps keep richer easing.
+- [x] Updated Explorer static regression assertions to lock the no-render-reset contract and jump-distance timing/easing wiring.
+- [ ] Next: add a runtime/browser continuity check (rapid 1↔6 scrubs) asserting no horizontal drift and monotonic visible-card continuity across interrupts.
+
 ## 2026-03-25 — Final settle invariant pass (geometry truth vs render truth)
 - [x] Added forced transform reset + temporary transition suppression in `animateDensityFlip` cleanup (`complete`, `interrupt`, and no-item paths) using live node re-query.
 - [x] Added an `AssetGrid` post-layout `useLayoutEffect` settle pass that re-clears transform/transition residue on all `.masonry-card` nodes after render commit.

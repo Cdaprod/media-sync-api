@@ -1,3 +1,112 @@
+### Latest Implementation Notes (2026-03-28)
+- Added explicit density motion state toggling in FLIP runtime (`.density-motion-active`) that turns on during density animation and reliably turns off on settle/interruption.
+- Added temporary density-motion card simplification CSS to reduce overlay/chrome pressure during active density motion while keeping layout truth + thumbnail plane intact.
+- Extended density motion debug hook to report motion active/simplified flags and last duration in addition to target-reduction/viewport stats.
+
+### Latest Implementation Notes (2026-03-28)
+- Integrated density FLIP target-scope reduction for motion quality: animation now targets visible/near-visible masonry cards only (buffered viewport + capped target count), while global layout truth still commits for the full dataset.
+- Added runtime motion-scope diagnostics via `globalThis.__explorerDensityMotionDebug.getSnapshot()` (total cards, visible cards, animated target count, reduction flag, viewport bounds).
+- Preserved density correctness authority chain and pinch constraints (immediate pinch path, no queue/replay lane reintroduction, no pre-commit truth advancement).
+
+### Latest Implementation Notes (2026-03-27)
+- Completed a truth-locked density animation quality pass focused only on motion feel (no authority-chain or gesture-semantic rewrites).
+- FLIP now uses `scale: false` across density modes to reduce rubbery resize artifacts on mobile positioned masonry cards.
+- Density timing/ease profile was retuned to calmer/restrained motion (`pinch 0.13`, `scrub 0.14/0.18`, `settle 0.20/0.26`, `power2.out`) while preserving pinch immediate-start path and existing correctness invariants.
+
+### Latest Implementation Notes (2026-03-27)
+- Continued density-truth stabilization by fixing commit/render ordering at the Explorer app boundary: density commit callback now uses `flushSync(setGridColumnCount)` so updated absolute masonry geometry is committed before FLIP continuation.
+- Preserved controller truth model where committed columns advance only in `commitLayoutColumns(...)` (no pre-commit `currentColumns` advancement).
+- Added explicit runtime density layout snapshot hook in `AssetGrid` (`globalThis.__explorerDensityLayoutDebug.getSnapshot()`) for device verification of column count, stage height, sampled card geometry, and FLIP-active status.
+
+### Latest Implementation Notes (2026-03-27)
+- Prioritized correctness recovery for density regression with mixed old/new masonry geometry and stale gaps after pinch/slider changes.
+- Removed queue/replay lane and restored immediate retarget-kill sequencing in `animateDensityFlip` so winning density targets always commit and reconcile visibly.
+- Removed pinch partial-target FLIP reduction and returned to full-card FLIP targets per commit to guarantee whole-grid layout truth at settle.
+
+### Latest Implementation Notes (2026-03-27)
+- Fixed a hard density regression where pinch/slider changes could flash FLIP but leave the grid visually stuck at 3 columns.
+- Root cause was queued replay ordering in `animateDensityFlip`: replay could run while prior animation was still marked active, causing the queued target to defer again instead of becoming final layout truth.
+- Updated completion/interrupt sequencing to clear `activeByGrid` before invoking queued replay, restoring commit-to-visible-grid reconciliation after density changes.
+
+### Latest Implementation Notes (2026-03-27)
+- Refined density transition choreography to prevent overlapping transform ownership: new density commits now defer when an active density FLIP is running, using a per-grid latest-target queue (`queuedByGrid`) in `animateDensityFlip`.
+- Added queued replay handoff (`replayQueued`) so the next density animation starts only after settle cleanup on the next frame, yielding one clean resize/reflow pass instead of kill-and-overlap retarget churn.
+- Preserved pinch path guarantees (dedicated pinch mode, immediate path/no settle-delay regression, `scale: false`, controller pinch queue/gating) while retuning density timing slightly slower for readability (`pinch 0.12`, scrub `0.12/0.16`, settle `0.18/0.24`).
+
+### Latest Implementation Notes (2026-03-27)
+- Added pinch-focused runtime performance guards in density control: pinch commits are now in-flight gated with a single queued next target (`queuedPinchColumns`) and lightweight global runtime stats are exposed via `globalThis.__explorerPinchPerfDebug.getStats()`.
+- Pinch FLIP target workload is now reduced by selecting near-viewport masonry cards for pinch mode (`pickPinchTargets`, buffered viewport window + capped target count), while layout truth remains full-commit authoritative.
+- Explorer now applies temporary pinch performance mode (`.pinch-perf-active`) during pinch steps, hiding thumbnail preview video layers briefly to reduce repaint cost during pinch FLIP.
+
+### Latest Implementation Notes (2026-03-27)
+- Pinch motion-quality follow-up simplified the pinch FLIP profile for mobile smoothness: pinch now uses a fixed fast duration (`0.09`) with a simpler firmer ease (`power2.out`) while retaining immediate-start and `scale: false`.
+- Reduced pinch-path cleanup work in `animateDensityFlip`: transform clear now short-circuits the heavy transition-reset loop for pinch mode (`if (isPinch) return;`) to lower per-card write overhead during pinch commits.
+- Preserved dedicated pinch routing and overlay node latch behavior; updated static contracts to lock the simplified pinch timing/ease and pinch cleanup short-circuit.
+
+### Latest Implementation Notes (2026-03-27)
+- Addressed remaining pinch-density desync by introducing a dedicated controller path `setColumnsForPinch(...)` that routes to a new animation interaction mode (`'pinch'`) instead of reusing delayed `'settle'`.
+- Density FLIP now treats pinch as an immediate-start mode (no delayed double-rAF) with lower-cost geometry interpolation for pinch (`scale: false`) and shorter/firmer timing to match one-step pinch notch behavior.
+- Pinch overlay node display now uses a gesture-latched display state in `ExplorerApp`: committed `gridColumnCount` updates are buffered while pinch is active and flushed on release, preventing bridge node-count flash/flicker during in-flight density transition.
+
+### Latest Implementation Notes (2026-03-26)
+- Fixed a follow-up tap regression in `useAssetInteractions`: `clearPendingLongPress()` was being called *after* assigning `pointerSessionRef` on pointer-down, which immediately nulled the newly assigned pointer session and caused `pointerup` mismatches (no first-tap activation / no second-tap preview open).
+- Reordered pointer-down setup so pending-hold cleanup executes first, then the new pointer session is assigned, restoring single-tap active border and second-tap preview activation semantics.
+- Added a static ordering assertion in the Explorer contract suite to lock this call-order invariant (`clearPendingLongPress` before `session.pointerId` assignment).
+
+### Latest Implementation Notes (2026-03-26)
+- Fixed a hold-progress induced pointer-handler regression: pre-threshold hold RAF updates were causing React rerenders that replaced per-render local pointer variables, so `pointerup` could miss active pointer IDs and let long-press timers fire on ordinary taps.
+- `useAssetInteractions` now stores pointer session state in stable refs (`pointerSessionRef`) instead of per-render locals, so pointer identity/move tracking survives rerenders and restores correct tap/second-tap behavior while keeping hold progress updates.
+- Updated static contract assertions for the session-based hold start coordinates (`session.pressX/session.pressY`) and reverified the Explorer contract suite pass.
+
+### Latest Implementation Notes (2026-03-26)
+- Fixed long-press visual timing by splitting hold feedback into pre-threshold progress updates (RAF-driven against `LONG_PRESS_MS`) and threshold-confirmation trigger at the actual timeout fire, so completion is no longer front-loaded before long-press commitment.
+- Updated hold shader response to keep confirmation visible after timeout with a dedicated confirmation-visibility channel (`u_confirm`) separate from active pre-hold progress, plus slower completion decay for a noticeable post-threshold beat.
+- Hardened thumbnail preview exclusivity by introducing activation commits through a single preview-owner path (`commitPreviewActivationKey`), clearing prior ownership on first-tap re-focus, and keying preview video instances by activation token so old preview nodes unmount immediately when ownership changes.
+
+### Latest Implementation Notes (2026-03-26)
+- Tap feedback visibility/retrigger hardening landed for Explorer: tap overlay now includes a trigger-keyed replay path (`tapTrigger`) and shader phase reset (`u_phase`) so rapid repeated taps always restart visibly instead of decaying invisibly between close events.
+- Tap visual readability was increased (brighter ring/core mix and slower intensity decay), overlay z-layer raised above card surfaces, and a short-lived fixed-position `.tap-debug-marker` was added at tap coordinates for runtime coordinate/stacking verification.
+- Activation ownership wiring was clarified so thumbnail preview visibility keys off explicit activation state (`previewActivationKey`) rather than long-press emphasis, with regression assertions updated to lock the new tap/activation contracts.
+
+### Latest Implementation Notes (2026-03-26)
+- Per handoff contract, refreshed `AGENTS.md` for this commit with no additional code-path changes; latest Explorer gesture/density/shader notes above remain the authoritative implementation state.
+- No source files outside this handoff document were modified in this pass.
+
+### Latest Implementation Notes (2026-03-26)
+- Follow-up gesture arbitration fix introduced explicit pinch exclusivity in `useAssetInteractions` via `GestureMode` + multi-touch suppression refs: second-touch escalation now cancels pending long-press/context-menu candidates and blocks single-touch actions while pinch is active.
+- Reorganized shader layout under categorized subdirectories (`core/`, `pinch/`, `tap/`, `hold/`, `shared/`) and moved pinch overlay modules into `shaders/pinch/` for clean future tap/hold additions.
+- Pinch overlay polish: release no longer nulls finger anchors (prevents center flash), pulse tuned for tighter notch feel, and bridge waypoint count is now driven by committed column count (`nodeCount={gridColumnCount}` -> `u_nodes`).
+
+### Latest Implementation Notes (2026-03-26)
+- Added a visual-only fullscreen WebGL pinch-feedback overlay (`PinchShaderOverlay` + `usePinchShaderOverlay`) mounted above Explorer cards and below topbar chrome; overlay is pointer-events disabled and safe to unmount without owning layout/density truth.
+- Added shader assets (`pinchFeedback.vert` / `pinchFeedback.frag`) and hooked pinch gesture telemetry through optional callbacks in `createPinchDensityController` (`onPinchFrame`, `onPinchStep`, `onPinchRelease`) so overlay receives live finger positions and pulse triggers from existing threshold commits only.
+- Marked prior scrub/FLIP sequencing stabilization as retained: no changes to masonry math, FLIP commit path ownership, or density truth model; this pass is strictly visual feedback layering.
+
+### Latest Implementation Notes (2026-03-25)
+- Fixed a density slider sequencing mismatch that could create apparent double-pass/backwards-FLIP behavior: slider `onInput` now routes through controller `scrubTo(...)` (frame-coalesced scrub path) instead of `setColumns(..., true)` settle commits on every input event.
+- Added explicit slider settle hooks (`onPointerUp`/`onKeyUp`/`onBlur`) to call `settleScrub()` so scrub lifecycle closes cleanly without injecting an extra delayed settle animation pass per input delta.
+- This aligns UI event semantics with density controller intent (scrub during drag, settle on release) and reduces target-render-first then jump-back artifacts caused by settle choreography being used as live scrub transport.
+
+### Latest Implementation Notes (2026-03-25)
+- Follow-up motion-quality pass targets mid-animation overpower peaks by reducing scrub-time retarget churn at the source: density scrub commits are now frame-coalesced in `createExplorerDensityController` (latest-target-per-frame) instead of firing every input event.
+- Scrub controller now tracks `pendingScrubColumns` + `scrubFrameId`, emits at most one animated scrub commit per frame, and cancels pending RAF work on destroy for idempotent lifecycle cleanup.
+- This is intended to reduce excessive retarget-kill cadence (and corresponding interrupt spikes) so easing can read perceptually instead of being dominated by intra-gesture restart corrections.
+
+### Latest Implementation Notes (2026-03-25)
+- Retuned density FLIP lifecycle toward retarget continuity: state capture now occurs before killing any active animation, and interrupt cleanup is suppression-gated during retarget kills so mid-flight visual geometry can hand off into the next Flip run.
+- Scrub interactions now start Flip immediately after commit (no double-rAF), while settle interactions keep delayed start gating; this reduces input-to-motion latency for rapid slider/pinch updates.
+- Added runtime density instrumentation plumbing (`globalThis.__explorerDensityFlipDebug.getStats()`) plus tighter jump-distance timing/easing (`0.10/0.14` scrub, `0.16/0.22` settle; firmer power eases) to audit kill/start/interrupt behavior and responsiveness.
+
+### Latest Implementation Notes (2026-03-25)
+- Runtime DevTools instrumentation review showed high density-transition cancel churn (`transitioncancel` dominating `transitionend`) with cards reporting baseline `transition: transform ...` while FLIP also controls transform.
+- Added masonry-specific CSS motion ownership guard: `.masonry-card.asset` now removes baseline transform transition (keeps filter/border-color only), and `.masonry-card.asset:hover` no longer applies transform offset.
+- This isolates transform animation authority to `animateDensityFlip` during density reflow and avoids CSS+GSAP dual ownership on the same masonry card nodes.
+
+### Latest Implementation Notes (2026-03-25)
+- Removed `AssetGrid`’s post-layout global `.masonry-card` transform/transition reset `useLayoutEffect` so ordinary render commits no longer flatten active FLIP motion mid-transition.
+- Kept density final-settle ownership in `animateDensityFlip` and retained interruptible capture→commit→double-rAF→`Flip.from(...)` sequencing so new commits continue from live on-screen card geometry.
+- Added jump-distance-aware density timing/easing (`createExplorerDensityController` passes `jumpDistance`) so large column jumps animate shorter/firmer while single-step moves remain slightly richer.
+
 ### Latest Implementation Notes (2026-03-25)
 - Implemented an explicit post-animation/post-render settle invariant for masonry cards: density flip cleanup now forces `transform: none` + temporary `transition: none` on live queried card nodes, then drops transition on microtask to prevent transform/layout drift under rapid density toggles.
 - `AssetGrid` now runs a layout-effect settle pass after layout commits that re-queries `.masonry-card` nodes and clears transform/transition residue again, ensuring final render truth wins even when React/GSAP timing interleaves.

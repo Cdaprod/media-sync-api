@@ -9,9 +9,13 @@ export type PinchDensityController = {
 export type PinchDensityControllerOptions = {
   gestureSurfaceEl: HTMLElement;
   visualScaleTargetEl: HTMLElement;
+  getClassHostEl?: () => HTMLElement | null;
   density: ExplorerDensityController;
   outwardThreshold?: number;
   inwardThreshold?: number;
+  onPinchFrame?: (a: { x: number; y: number } | null, b: { x: number; y: number } | null, active: boolean) => void;
+  onPinchStep?: (dir: 1 | -1) => void;
+  onPinchRelease?: () => void;
 };
 
 type TouchPair = {
@@ -23,16 +27,71 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   const {
     gestureSurfaceEl,
     visualScaleTargetEl,
+    getClassHostEl,
     density,
-    outwardThreshold = 1.12,
-    inwardThreshold = 0.88,
+    outwardThreshold = 1.1,
+    inwardThreshold = 0.9,
+    onPinchFrame,
+    onPinchStep,
+    onPinchRelease,
   } = options;
-  void visualScaleTargetEl;
+  const resolveClassHostEl = () => getClassHostEl?.() ?? visualScaleTargetEl.closest<HTMLElement>('.content');
+
+  const STEP_COOLDOWN_MS = 80;
+  const rearmMin = 0.96;
+  const rearmMax = 1.04;
 
   let active = false;
-  let stepped = false;
-  let initialDistance = 0;
-  let initialColumns = density.getColumns();
+  let canStep = true;
+  let baselineDistance = 0;
+  let lastStepAt = 0;
+  let settleClassTimer = 0;
+  let releaseMotionHandoffTimer = 0;
+
+  const clearSettleClassTimer = () => {
+    if (!settleClassTimer) return;
+    window.clearTimeout(settleClassTimer);
+    settleClassTimer = 0;
+  };
+
+  const clearReleaseMotionHandoffTimer = () => {
+    if (!releaseMotionHandoffTimer) return;
+    window.clearTimeout(releaseMotionHandoffTimer);
+    releaseMotionHandoffTimer = 0;
+  };
+
+  const enterSettlingClass = (contentEl: HTMLElement) => {
+    if (contentEl.classList.contains('density-motion-settling')) return;
+    contentEl.classList.add('density-motion-settling');
+    settleClassTimer = window.setTimeout(() => {
+      contentEl.classList.remove('density-motion-settling');
+      settleClassTimer = 0;
+    }, 360);
+  };
+
+  const handoffMotionAfterRelease = () => {
+    const contentEl = resolveClassHostEl();
+    if (!contentEl) return;
+    if (contentEl.classList.contains('density-gesture-active')) return;
+    if (!contentEl.classList.contains('density-motion-active')) return;
+    contentEl.classList.remove('density-motion-active');
+    enterSettlingClass(contentEl);
+  };
+
+  const setGestureActiveClass = (gestureActive: boolean) => {
+    const contentEl = resolveClassHostEl();
+    if (!contentEl) return;
+    if (gestureActive) {
+      clearSettleClassTimer();
+      clearReleaseMotionHandoffTimer();
+      contentEl.classList.remove('density-motion-settling');
+      contentEl.classList.add('density-gesture-active');
+      return;
+    }
+    contentEl.classList.remove('density-gesture-active');
+    if (contentEl.classList.contains('density-motion-active')) return;
+    enterSettlingClass(contentEl);
+  };
 
   function getTouchPair(evt: TouchEvent): TouchPair | null {
     if (evt.touches.length < 2) return null;
@@ -50,38 +109,79 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     if (!pair) return;
 
     active = true;
-    stepped = false;
-    initialDistance = distance(pair);
-    initialColumns = density.getColumns();
+    canStep = true;
+    baselineDistance = Math.max(distance(pair), 1);
+    lastStepAt = 0;
+    setGestureActiveClass(true);
+    onPinchFrame?.(
+      { x: pair.a.clientX, y: pair.a.clientY },
+      { x: pair.b.clientX, y: pair.b.clientY },
+      true,
+    );
   }
 
   function onTouchMove(evt: TouchEvent) {
     if (!active) return;
     const pair = getTouchPair(evt);
-    if (!pair) return;
+    if (!pair) {
+      onTouchEnd();
+      return;
+    }
+    onPinchFrame?.(
+      { x: pair.a.clientX, y: pair.a.clientY },
+      { x: pair.b.clientX, y: pair.b.clientY },
+      true,
+    );
 
     evt.preventDefault();
-    if (stepped) return;
+    const currentDistance = Math.max(distance(pair), 1);
+    const ratio = currentDistance / Math.max(baselineDistance, 1);
 
-    const nextDistance = distance(pair);
-    const ratio = nextDistance / Math.max(initialDistance, 1);
+    if (!canStep) {
+      if (ratio >= rearmMin && ratio <= rearmMax) {
+        canStep = true;
+        baselineDistance = currentDistance;
+      }
+      return;
+    }
+
+    const now = performance.now();
+    if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;
 
     if (ratio >= outwardThreshold) {
-      density.setColumns(initialColumns - 1, true);
-      stepped = true;
+      const currentColumns = density.getColumns();
+      density.setColumnsForPinch(currentColumns - 1);
+      onPinchStep?.(1);
+      baselineDistance = currentDistance;
+      canStep = false;
+      lastStepAt = now;
       return;
     }
     if (ratio <= inwardThreshold) {
-      density.setColumns(initialColumns + 1, true);
-      stepped = true;
+      const currentColumns = density.getColumns();
+      density.setColumnsForPinch(currentColumns + 1);
+      onPinchStep?.(-1);
+      baselineDistance = currentDistance;
+      canStep = false;
+      lastStepAt = now;
     }
   }
 
   function onTouchEnd() {
     if (!active) return;
     active = false;
-    stepped = false;
+    canStep = true;
+    baselineDistance = 0;
+    lastStepAt = 0;
+    setGestureActiveClass(false);
     density.settleScrub();
+    clearReleaseMotionHandoffTimer();
+    releaseMotionHandoffTimer = window.setTimeout(() => {
+      releaseMotionHandoffTimer = 0;
+      handoffMotionAfterRelease();
+    }, 120);
+    onPinchFrame?.(null, null, false);
+    onPinchRelease?.();
   }
 
   function attach() {
@@ -99,6 +199,14 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   }
 
   function destroy() {
+    clearSettleClassTimer();
+    clearReleaseMotionHandoffTimer();
+    const contentEl = resolveClassHostEl();
+    if (contentEl) {
+      contentEl.classList.remove('density-gesture-active');
+      contentEl.classList.remove('density-motion-active');
+      contentEl.classList.remove('density-motion-settling');
+    }
     detach();
   }
 
