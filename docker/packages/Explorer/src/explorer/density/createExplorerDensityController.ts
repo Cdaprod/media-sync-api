@@ -18,6 +18,7 @@ export type ExplorerDensityController = {
 
 export type ExplorerDensityControllerOptions = {
   gridEl: HTMLElement;
+  getClassHostEl?: () => HTMLElement | null;
   sliderEl?: HTMLInputElement | null;
   initialColumns: number;
   onColumnsCommit: (columns: number) => void;
@@ -33,6 +34,7 @@ function clampColumns(value: number, minColumns: number, maxColumns: number): nu
 export function createExplorerDensityController(options: ExplorerDensityControllerOptions): ExplorerDensityController {
   const {
     gridEl,
+    getClassHostEl,
     sliderEl,
     initialColumns,
     onColumnsCommit,
@@ -92,6 +94,7 @@ export function createExplorerDensityController(options: ExplorerDensityControll
     const jumpDistance = Math.abs(safeColumns - currentColumns);
     animateDensityFlip({
       gridEl,
+      getClassHostEl,
       interactionMode,
       jumpDistance,
       onStart: ({ targetCount, totalCount, targetReductionActive }) => {

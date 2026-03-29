@@ -2123,6 +2123,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
     const density = createExplorerDensityController({
       gridEl,
+      getClassHostEl: () => mediaContentRef.current,
       sliderEl: densitySliderRef.current,
       initialColumns: densityControllerRef.current?.getColumns()
         ?? lastCommittedColumnsRef.current
@@ -2143,6 +2144,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const pinch = createPinchDensityController({
         gestureSurfaceEl: scrollerEl,
         visualScaleTargetEl: gridEl,
+        getClassHostEl: () => mediaContentRef.current,
         density,
         onPinchFrame: (a, b, active) => {
           pinchOverlayGestureActiveRef.current = active;

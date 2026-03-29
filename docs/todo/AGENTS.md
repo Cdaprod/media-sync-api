@@ -1,3 +1,11 @@
+## 2026-03-29 — Density class-host wiring fix pass (new)
+- [x] Fixed state-to-DOM wiring by passing explicit class-host resolver (`getClassHostEl: () => mediaContentRef.current`) from `ExplorerApp` into density + pinch controllers.
+- [x] Density lifecycle classes (`density-gesture-active`, `density-motion-active`, `density-motion-settling`) are now applied against the same real `.content` host element instead of relying only on nearest-node assumptions.
+- [x] Added motion debug snapshot fields for host verification (`classHostTag`, `classHostClassName`, `gestureClassApplied`, `motionClassApplied`, `settlingClassApplied`).
+- [x] Preserved CSS fade logic/timing, illusion architecture, bounded layout/render, and density correctness model.
+- [x] Updated static contracts to lock host resolver wiring and class-application diagnostics fields; Explorer static suite passing.
+- [ ] Next: re-run runtime recorder and confirm `.content` className contains lifecycle classes during held gesture + settle.
+
 ## 2026-03-29 — Held-gesture chrome holdback pass (new)
 - [x] Added explicit held-gesture state class (`.density-gesture-active`) driven by pinch gesture lifecycle in `createPinchDensityController`.
 - [x] Chrome hide rules now include held-gesture class, ensuring selector/type/size/metadata overlays remain hidden for the full duration of touch hold.

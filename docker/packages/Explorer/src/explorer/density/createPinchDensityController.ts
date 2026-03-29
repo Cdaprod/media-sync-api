@@ -9,6 +9,7 @@ export type PinchDensityController = {
 export type PinchDensityControllerOptions = {
   gestureSurfaceEl: HTMLElement;
   visualScaleTargetEl: HTMLElement;
+  getClassHostEl?: () => HTMLElement | null;
   density: ExplorerDensityController;
   outwardThreshold?: number;
   inwardThreshold?: number;
@@ -26,6 +27,7 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   const {
     gestureSurfaceEl,
     visualScaleTargetEl,
+    getClassHostEl,
     density,
     outwardThreshold = 1.1,
     inwardThreshold = 0.9,
@@ -33,7 +35,7 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     onPinchStep,
     onPinchRelease,
   } = options;
-  const contentEl = visualScaleTargetEl.closest<HTMLElement>('.content');
+  const resolveClassHostEl = () => getClassHostEl?.() ?? visualScaleTargetEl.closest<HTMLElement>('.content');
 
   const STEP_COOLDOWN_MS = 80;
   const rearmMin = 0.96;
@@ -52,6 +54,7 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   };
 
   const setGestureActiveClass = (gestureActive: boolean) => {
+    const contentEl = resolveClassHostEl();
     if (!contentEl) return;
     if (gestureActive) {
       clearSettleClassTimer();
@@ -171,6 +174,7 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
 
   function destroy() {
     clearSettleClassTimer();
+    const contentEl = resolveClassHostEl();
     if (contentEl) {
       contentEl.classList.remove('density-gesture-active');
       contentEl.classList.remove('density-motion-settling');

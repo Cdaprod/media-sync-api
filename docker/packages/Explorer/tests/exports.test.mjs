@@ -881,6 +881,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('if (!liveIds.has(key)) toastExitingRef.current.delete(key);'));
   assert.ok(content.includes('createExplorerDensityController({'));
   assert.ok(content.includes('createPinchDensityController({'));
+  assert.ok(content.includes('getClassHostEl: () => mediaContentRef.current,'));
   assert.ok(content.includes('id="asset-density-slider"'));
   assert.ok(content.includes('data-density-pinch-surface="true"'));
   assert.ok(hookContent.includes('window.requestAnimationFrame(processScroll)'));
@@ -1028,7 +1029,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('const rearmMin = 0.96;'));
   assert.ok(pinchController.includes('const rearmMax = 1.04;'));
   assert.ok(pinchController.includes('let canStep = true;'));
-  assert.ok(pinchController.includes("const contentEl = visualScaleTargetEl.closest<HTMLElement>('.content');"));
+  assert.ok(pinchController.includes('const resolveClassHostEl = () => getClassHostEl?.() ?? visualScaleTargetEl.closest<HTMLElement>(\'.content\');'));
   assert.ok(pinchController.includes('const setGestureActiveClass = (gestureActive: boolean) => {'));
   assert.ok(pinchController.includes("contentEl.classList.add('density-gesture-active');"));
   assert.ok(pinchController.includes("contentEl.classList.remove('density-gesture-active');"));
@@ -1700,6 +1701,11 @@ test('density motion debug hook exposes target-reduction and viewport bounds', (
   assert.ok(content.includes('viewportBottom'));
   assert.ok(content.includes('motionActive'));
   assert.ok(content.includes('simplifiedCardMode'));
+  assert.ok(content.includes('classHostTag'));
+  assert.ok(content.includes('classHostClassName'));
+  assert.ok(content.includes('gestureClassApplied'));
+  assert.ok(content.includes('motionClassApplied'));
+  assert.ok(content.includes('settlingClassApplied'));
   assert.ok(content.includes('setDensityMotionActive(true);'));
   assert.ok(content.includes('setDensityMotionActive(false);'));
   assert.ok(content.includes("contentEl.classList.remove('density-motion-settling');"));

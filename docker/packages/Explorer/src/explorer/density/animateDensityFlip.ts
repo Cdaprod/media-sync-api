@@ -2,6 +2,7 @@ import { Flip, gsap } from '../../lib/gsap';
 
 export type AnimateDensityFlipOptions = {
   gridEl: HTMLElement;
+  getClassHostEl?: () => HTMLElement | null;
   itemSelector?: string;
   commitLayout: () => void;
   interactionMode?: 'scrub' | 'settle' | 'pinch';
@@ -40,6 +41,11 @@ const motionDebugByGrid = new Map<HTMLElement, {
   illusionLayerEnabled: boolean;
   illusionCardCount: number;
   lastRunUsedIllusion: boolean;
+  classHostTag: string;
+  classHostClassName: string;
+  gestureClassApplied: boolean;
+  motionClassApplied: boolean;
+  settlingClassApplied: boolean;
 }>();
 const debugByGrid = new Map<HTMLElement, {
   starts: number;
@@ -121,6 +127,7 @@ function updateMotionDebug(
 
 export function animateDensityFlip({
   gridEl,
+  getClassHostEl,
   itemSelector = '.masonry-card',
   commitLayout,
   interactionMode = 'scrub',
@@ -133,8 +140,19 @@ export function animateDensityFlip({
   const ILLUSION_MAX_CARDS = 8;
   const ILLUSION_SETTLE_MS = 36;
   const isPinch = interactionMode === 'pinch';
+  const resolveClassHostEl = () => getClassHostEl?.() ?? gridEl.closest<HTMLElement>('.content');
+  const readClassHostState = () => {
+    const contentEl = resolveClassHostEl();
+    return {
+      classHostTag: contentEl?.tagName?.toLowerCase?.() ?? '',
+      classHostClassName: contentEl?.className ?? '',
+      gestureClassApplied: Boolean(contentEl?.classList.contains('density-gesture-active')),
+      motionClassApplied: Boolean(contentEl?.classList.contains('density-motion-active')),
+      settlingClassApplied: Boolean(contentEl?.classList.contains('density-motion-settling')),
+    };
+  };
   const setDensityMotionActive = (active: boolean) => {
-    const contentEl = gridEl.closest<HTMLElement>('.content');
+    const contentEl = resolveClassHostEl();
     if (!contentEl) return;
     const clearSettlingTimer = () => {
       const pendingTimer = motionSettleTimerByGrid.get(gridEl);
@@ -252,6 +270,7 @@ export function animateDensityFlip({
         illusionLayerEnabled: ENABLE_VISIBLE_ILLUSION_LAYER,
         illusionCardCount: 0,
         lastRunUsedIllusion: false,
+        ...readClassHostState(),
       });
       return items;
     }
@@ -290,6 +309,7 @@ export function animateDensityFlip({
       illusionLayerEnabled: ENABLE_VISIBLE_ILLUSION_LAYER,
       illusionCardCount: 0,
       lastRunUsedIllusion: false,
+      ...readClassHostState(),
     });
     return reducedTargets;
   };
