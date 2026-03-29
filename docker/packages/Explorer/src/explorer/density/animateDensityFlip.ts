@@ -118,10 +118,10 @@ function updateMotionDebug(
 ) {
   motionDebugByGrid.set(gridEl, stats);
   (globalThis as typeof globalThis & {
-    __explorerDensityMotionDebug?: { getSnapshot: () => Array<Record<string, number | boolean>> };
+    __explorerDensityMotionDebug?: { getSnapshot: () => Array<Record<string, string | number | boolean>> };
   }).__explorerDensityMotionDebug = {
     getSnapshot: () => {
-      const snapshots: Array<Record<string, number | boolean>> = [];
+      const snapshots: Array<Record<string, string | number | boolean>> = [];
       motionDebugByGrid.forEach((value) => {
         snapshots.push({ ...value });
       });

@@ -1,3 +1,9 @@
+## 2026-03-29 — Motion snapshot record typing widen pass (new)
+- [x] Fixed `animateDensityFlip` debug snapshot typing to allow string-valued host fields (`classHostTag`, `classHostClassName`) in `__explorerDensityMotionDebug.getSnapshot()`.
+- [x] Updated snapshot array/declaration types from `Record<string, number | boolean>` to `Record<string, string | number | boolean>` with no runtime behavior change.
+- [x] Re-ran Explorer build after fix in this environment (build completed successfully; font optimization warning from Google Fonts fetch remains non-fatal).
+- [ ] Next: keep debug-snapshot typed aliases centralized if further host/runtime fields are added.
+
 ## 2026-03-29 — Motion-debug shape compile fix pass (new)
 - [x] Fixed `animateDensityFlip` TypeScript mismatch by extending `updateMotionDebug(...)` input shape to include host-class diagnostics fields required by `motionDebugByGrid`.
 - [x] Kept runtime behavior unchanged; this pass aligns helper typing with already-written snapshot payload fields (`classHostTag`, `classHostClassName`, `gestureClassApplied`, `motionClassApplied`, `settlingClassApplied`).
