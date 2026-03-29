@@ -88,6 +88,10 @@ function AssetGridComponent({
   const [pageLoadEntranceActive, setPageLoadEntranceActive] = useState(true);
   const [revealedCards, setRevealedCards] = useState<Set<string>>(() => new Set());
   const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
+
+  useLayoutEffect(() => {
+    revealedCardsRef.current = revealedCards;
+  }, [revealedCards]);
   const [hostWidth, setHostWidth] = useState(0);
   const BASE_RENDER_BUFFER_PX = 1200;
   const MOTION_RENDER_BUFFER_PX = 640;
@@ -608,6 +612,3 @@ function AssetGridComponent({
 }
 
 export const AssetGrid = memo(AssetGridComponent);
-  useLayoutEffect(() => {
-    revealedCardsRef.current = revealedCards;
-  }, [revealedCards]);

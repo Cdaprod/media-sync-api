@@ -1,3 +1,10 @@
+## 2026-03-29 — AssetGrid build break hook-scope fix (new)
+- [x] Fixed Explorer build failure in `AssetGrid.tsx` where `revealedCardsRef` sync hook was accidentally left below `export const AssetGrid = memo(AssetGridComponent);`.
+- [x] Moved `useLayoutEffect(() => { revealedCardsRef.current = revealedCards; }, [revealedCards])` back inside `AssetGridComponent` to restore valid hook scope and lexical access.
+- [x] Confirmed `revealedCardsRef` remains intentionally declared and used for scroll-reveal observer freshness without effect dependency churn.
+- [x] Re-ran Explorer build and static contracts; both pass.
+- [ ] Next: run on-device aggressive scroll verification to ensure reveal behavior remains stable after hook relocation.
+
 ## 2026-03-29 — React #185 reveal-loop guard fix (new)
 - [x] Root cause identified in `AssetGrid` scroll-reveal effect: synchronous prewarm `flushPending()` in layout effect could repeatedly enqueue immediate state updates during reveal churn.
 - [x] Added strict no-op guards for reveal state transitions (`return changed ? next : prev`) so observer/prewarm callbacks do not trigger renders when nothing changed.
