@@ -353,7 +353,7 @@ function AssetGridComponent({
           const { entry } = item;
           const layoutTop = Math.max(0, Math.round(y));
           const layoutBottom = Math.max(layoutTop, Math.round(y + height));
-          const positionedStyle: React.CSSProperties = {
+          const positionedStyle: React.CSSProperties & { '--card-index': string } = {
             position: 'absolute',
             left: x,
             top: y,

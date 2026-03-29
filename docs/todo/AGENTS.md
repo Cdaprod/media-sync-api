@@ -1,3 +1,9 @@
+## 2026-03-29 — Card-index CSS variable typing build-fix pass (new)
+- [x] Fixed TypeScript build break in `AssetGrid.tsx` by extending the inline style type to include custom CSS variable `--card-index`.
+- [x] Preserved behavior (same stagger variable value/path) and applied only a type-safe declaration update (`React.CSSProperties & { '--card-index': string }`).
+- [x] Re-ran Explorer package build check; current environment reports missing `next` binary, but the `--card-index` type error is resolved in source.
+- [ ] Next: keep an eye on future custom CSS variables in inline style objects and type them explicitly when introduced.
+
 ## 2026-03-29 — Density settle stagger cascade pass (new)
 - [x] Added per-card stagger support for settle chrome return by stamping `--card-index` on positioned masonry cards in `AssetGrid`.
 - [x] Updated settle CSS timing to use index-based delay (`calc(140ms + var(--card-index, 0) * 12ms)`) so card chrome no longer fades back synchronously.
