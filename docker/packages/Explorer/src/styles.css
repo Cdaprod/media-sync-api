@@ -825,16 +825,13 @@ select.control{
 .content.density-gesture-active .asset .asset-ol-bl,
 .content.density-gesture-active .asset .asset-ol-tl,
 .content.density-gesture-active .asset .asset-ol-tr{
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease;
+  opacity: 0 !important;
+  transform: translateY(4px) !important;
+  transition: none !important;
 }
-.content.density-motion-active .asset .asset-overlay{
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease;
+.content.density-motion-active .asset .asset-overlay,
+.content.density-gesture-active .asset .asset-overlay{
+  transition: none !important;
 }
 .content.density-motion-settling:not(.density-gesture-active) .asset .asset-ol-bottom,
 .content.density-motion-settling:not(.density-gesture-active) .asset .asset-ol-bl,

@@ -1,3 +1,10 @@
+## 2026-03-29 — Density active hidden-state precedence fix (new)
+- [x] Tightened active motion/gesture chrome-hide selectors so hidden state wins immediately by forcing overlay chrome `opacity`/`transform` with `!important`.
+- [x] Removed active-phase overlay transition ownership (`transition: none !important`) for both `.density-motion-active` and `.density-gesture-active` hosts to avoid first-frame leakage from broader transition rules.
+- [x] Preserved settle cascade choreography (`.density-motion-settling:not(.density-gesture-active)`) and existing stagger return timing contracts.
+- [x] Updated static style contracts to lock the new active hide precedence markers.
+- [ ] Next: rerun on-device recorder to confirm active-phase overlay computed style is immediately hidden (`opacity: 0`, translated) during held gesture + motion.
+
 ## 2026-03-29 — No-FLIP motion-active lifecycle parity fix (new)
 - [x] Identified root cause for missing live motion class: no-FLIP illusion branch in `animateDensityFlip` did not enter `setDensityMotionActive(true)`, so `.density-motion-active` never appeared during active density changes on that path.
 - [x] Updated no-FLIP branch to enter motion-active before illusion settle timing and to record `motionActive: true` in motion debug snapshot during active phase.
