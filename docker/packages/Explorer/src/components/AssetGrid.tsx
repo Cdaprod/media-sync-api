@@ -78,7 +78,9 @@ function AssetGridComponent({
   const lastDensityTransitionUsedSimplifiedRef = useRef(false);
   const scrollRevealBatchTimerRef = useRef<number | null>(null);
   const revealFailSafeTimersRef = useRef<Map<string, number>>(new Map());
+  const revealVisibilityRafByKeyRef = useRef<Map<string, { raf1: number; raf2: number }>>(new Map());
   const revealedCardsRef = useRef<Set<string>>(new Set());
+  const visibleCardsRef = useRef<Set<string>>(new Set());
   const prevGridColumnsRef = useRef<number | null>(null);
   const simplifyTimeoutRef = useRef<number | null>(null);
   const ENABLE_MOTION_AWARE_BUFFER = false;
@@ -87,11 +89,16 @@ function AssetGridComponent({
   const [simplifiedCardSubtreeActive, setSimplifiedCardSubtreeActive] = useState(false);
   const [pageLoadEntranceActive, setPageLoadEntranceActive] = useState(true);
   const [revealedCards, setRevealedCards] = useState<Set<string>>(() => new Set());
+  const [visibleCards, setVisibleCards] = useState<Set<string>>(() => new Set());
   const [renderWindow, setRenderWindow] = useState({ top: 0, bottom: 0 });
 
   useLayoutEffect(() => {
     revealedCardsRef.current = revealedCards;
   }, [revealedCards]);
+
+  useLayoutEffect(() => {
+    visibleCardsRef.current = visibleCards;
+  }, [visibleCards]);
   const [hostWidth, setHostWidth] = useState(0);
   const BASE_RENDER_BUFFER_PX = 1200;
   const MOTION_RENDER_BUFFER_PX = 640;
@@ -250,6 +257,28 @@ function AssetGridComponent({
   }, [pageLoadEntranceActive, renderedLayoutItems.length]);
 
   useLayoutEffect(() => {
+    revealedCards.forEach((key) => {
+      if (visibleCardsRef.current.has(key)) return;
+      if (revealVisibilityRafByKeyRef.current.has(key)) return;
+      const scheduled = { raf1: 0, raf2: 0 };
+      scheduled.raf1 = window.requestAnimationFrame(() => {
+        scheduled.raf1 = 0;
+        scheduled.raf2 = window.requestAnimationFrame(() => {
+          scheduled.raf2 = 0;
+          revealVisibilityRafByKeyRef.current.delete(key);
+          setVisibleCards((prev) => {
+            if (prev.has(key)) return prev;
+            const next = new Set(prev);
+            next.add(key);
+            return next;
+          });
+        });
+      });
+      revealVisibilityRafByKeyRef.current.set(key, scheduled);
+    });
+  }, [revealedCards]);
+
+  useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const scrollHost = host.closest<HTMLElement>('.scroll');
@@ -341,6 +370,11 @@ function AssetGridComponent({
   useLayoutEffect(() => () => {
     revealFailSafeTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     revealFailSafeTimersRef.current.clear();
+    revealVisibilityRafByKeyRef.current.forEach(({ raf1, raf2 }) => {
+      if (raf1) window.cancelAnimationFrame(raf1);
+      if (raf2) window.cancelAnimationFrame(raf2);
+    });
+    revealVisibilityRafByKeyRef.current.clear();
   }, []);
 
   useLayoutEffect(() => {
@@ -497,12 +531,12 @@ function AssetGridComponent({
 
           const viewModel = item.viewModel;
           if (!viewModel) return null;
-          const isScrollRevealVisible = revealedCards.has(viewModel.selectionKey);
+          const isScrollRevealVisible = visibleCards.has(viewModel.selectionKey);
           const pageLoadDelayMs = 80 + (Math.min(index, 18) * 28);
           return (
             <div
               key={viewModel.renderKey}
-              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSecondTapReinforced ? 'is-active-reinforced' : ''} ${viewModel.isHoldEmphasis ? 'is-hold-emphasis' : ''} ${viewModel.isSelected ? 'is-selected' : ''} ${pageLoadEntranceActive ? 'page-load-enter' : ''} ${!isScrollRevealVisible ? 'scroll-reveal-pending' : 'scroll-reveal-visible'}`}
+              className={`masonry-card asset asset-interactive-surface ${viewModel.isActive ? 'is-active' : ''} ${viewModel.isSecondTapReinforced ? 'is-active-reinforced' : ''} ${viewModel.isHoldEmphasis ? 'is-hold-emphasis' : ''} ${viewModel.isSelected ? 'is-selected' : ''} ${pageLoadEntranceActive ? 'page-load-enter' : ''} ${!isScrollRevealVisible ? 'scroll-reveal-pending' : ''} ${isScrollRevealVisible ? 'scroll-reveal-visible' : ''}`}
               style={{
                 ...positionedStyle,
                 '--page-load-delay': `${pageLoadDelayMs}ms`,
@@ -553,8 +587,7 @@ function AssetGridComponent({
                     aria-hidden="true"
                   />
                 ) : null}
-                {simplifiedCardSubtreeActive ? null : (
-                <div className="asset-overlay">
+                <div className={`asset-overlay ${simplifiedCardSubtreeActive ? 'is-simplified' : ''}`}>
                   <div className="asset-ol-tl">
                     <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>
                   </div>
@@ -601,7 +634,6 @@ function AssetGridComponent({
                     <div className="asset-subtitle tile-ui-text">{viewModel.sub}</div>
                   </div>
                 </div>
-                )}
               </div>
             </div>
           );

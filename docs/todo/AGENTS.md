@@ -1,3 +1,11 @@
+## 2026-03-29 — Reveal tween restoration + overlay fade continuity pass (new)
+- [x] Converted `AssetGrid` scroll reveal from one-stage visibility to a two-stage pipeline (`revealedCards` -> double-rAF `visibleCards`) so cards paint pending state before entering visible tween state.
+- [x] Kept fail-safe reveal semantics but routed final visual entry through staged visibility scheduling to avoid snap-in on first paint.
+- [x] Preserved overlay DOM during simplification by replacing conditional unmount with a persistent `.asset-overlay` plus `.is-simplified` class for opacity-based fade suppression.
+- [x] Updated Explorer static contracts for staged reveal state/refs, overlay simplification class contract, and revised reveal class markers.
+- [x] Re-ran Explorer static contracts and production build in this environment.
+- [ ] Next: on-device validate scroll reveal interpolation under fast flick + reverse scroll and verify simplification fade behavior under density motion.
+
 ## 2026-03-29 — AssetGrid build break hook-scope fix (new)
 - [x] Fixed Explorer build failure in `AssetGrid.tsx` where `revealedCardsRef` sync hook was accidentally left below `export const AssetGrid = memo(AssetGridComponent);`.
 - [x] Moved `useLayoutEffect(() => { revealedCardsRef.current = revealedCards; }, [revealedCards])` back inside `AssetGridComponent` to restore valid hook scope and lexical access.

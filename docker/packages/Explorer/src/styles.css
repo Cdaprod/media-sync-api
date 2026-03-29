@@ -759,7 +759,7 @@ select.control{
   opacity: 0;
   transform: translateY(14px);
 }
-.masonry-card.scroll-reveal-pending.scroll-reveal-visible{
+.masonry-card.scroll-reveal-visible{
   opacity: 1;
   transform: translateY(0);
   transition:
@@ -920,6 +920,16 @@ select.control{
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.asset .asset-overlay.is-simplified{
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 .asset .asset-ol-tl{
   position: absolute;
