@@ -817,6 +817,13 @@ select.control{
   visibility: hidden;
   opacity: 0;
 }
+.content.overlay-hidden .asset .asset-ol-bottom,
+.content.overlay-hidden .asset .asset-ol-bl,
+.content.overlay-hidden .asset .asset-ol-tl,
+.content.overlay-hidden .asset .asset-ol-tr{
+  opacity: 0 !important;
+  transform: translateY(4px) !important;
+}
 .content.density-motion-active .asset .asset-ol-bottom,
 .content.density-motion-active .asset .asset-ol-bl,
 .content.density-motion-active .asset .asset-ol-tl,
@@ -867,12 +874,14 @@ select.control{
   flex-wrap: wrap;
   max-width: calc(100% - 20px);
   pointer-events: auto;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 .asset .asset-ol-tr{
   position: absolute;
   right: 8px;
   top: 8px;
   pointer-events: auto;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 .asset .asset-ol-bl{
   position: absolute;
@@ -881,6 +890,7 @@ select.control{
   display:flex;
   gap: 6px;
   pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 .asset .asset-ol-bottom{
   position: absolute;
@@ -892,6 +902,7 @@ select.control{
   gap: 4px;
   background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.2), rgba(0,0,0,0));
   pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 .asset .asset-title{
   font-size: 12px;

@@ -184,6 +184,7 @@ const buildThumbFallback = (label: string) => {
 const CONTENT_LOADING_DELAY_MS = 180;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
+const OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
 
 const buildComposeTimestampName = () => {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
@@ -305,6 +306,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [contentLoading, setContentLoading] = useState(false);
   const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
   const [gridColumnCount, setGridColumnCount] = useState(DEFAULT_COLUMNS_MOBILE);
+  const [overlayEnabled, setOverlayEnabled] = useState(true);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);
   const contentLoadingTokenRef = useRef(0);
@@ -694,6 +696,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
     window.localStorage.setItem(FILTER_PREFS_KEY, JSON.stringify(payload));
   }, [typeFilter, sortKey, selectedOnly, untaggedOnly]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(OVERLAY_VIS_PREFS_KEY);
+      if (raw == null) return;
+      setOverlayEnabled(raw !== '0');
+    } catch {
+      // ignore malformed prefs
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(OVERLAY_VIS_PREFS_KEY, overlayEnabled ? '1' : '0');
+    } catch {
+      // ignore storage errors
+    }
+  }, [overlayEnabled]);
 
   useEffect(() => {
     if (typeFilter === 'overlay' && !mediaMeta.types.has('overlay')) {
@@ -2673,7 +2695,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
         <section
           ref={mediaContentRef}
-          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''} ${pinchPerfActive ? 'pinch-perf-active' : ''}`}
+          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''} ${pinchPerfActive ? 'pinch-perf-active' : ''} ${overlayEnabled ? '' : 'overlay-hidden'}`}
           onContextMenuCapture={(event) => {
             const target = event.target as HTMLElement | null;
             if (!target?.closest('.asset, .row')) return;
@@ -2850,6 +2872,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             onKeyUp={settleDensityScrub}
                           />
                         </label>
+                        <button
+                          className={`btn toggle-btn ${overlayEnabled ? 'is-on' : ''}`}
+                          type="button"
+                          data-interactive="true"
+                          data-topbar-control="true"
+                          onClick={() => setOverlayEnabled((prev) => !prev)}
+                        >
+                          Overlays: {overlayEnabled ? 'On' : 'Off'}
+                        </button>
                         <select
                           ref={sortSelectRef}
                           className="control visually-hidden"

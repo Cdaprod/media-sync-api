@@ -1,3 +1,11 @@
+## 2026-03-29 — Persistent overlay toggle + gesture layering pass (new)
+- [x] Added persistent overlay visibility preference (`OVERLAY_VIS_PREFS_KEY`) in `ExplorerApp` with localStorage hydration/persist (`'1'/'0'`).
+- [x] Added an action-menu toggle beside density (`Overlays: On/Off`) that flips only persistent overlay visibility and does not mutate gesture lifecycle classes.
+- [x] Applied host class layering (`.overlay-hidden`) so manual toggle has highest precedence; gesture lifecycle classes remain temporary choreography only.
+- [x] Added smooth manual toggle fade support by restoring base overlay transition ownership on overlay chrome nodes while keeping density active-state overrides intact.
+- [x] Updated static contract assertions to lock storage key/state wiring, toggle UI presence, host class application, and overlay transition markers.
+- [ ] Next: run runtime probe to confirm (a) toggle OFF keeps overlays hidden regardless of gesture and (b) toggle ON preserves gesture hide + settle fade-back behavior.
+
 ## 2026-03-29 — Pinch release settling handoff fix (new)
 - [x] Fixed release lifecycle hole where motion could remain active after pinch release in no-FLIP mode if release occurred before a clean motion-end handoff.
 - [x] Added a release fallback handoff timer in `createPinchDensityController` that clears `.density-motion-active` and enters `.density-motion-settling` when gesture is no longer active.
