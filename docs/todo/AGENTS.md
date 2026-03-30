@@ -1,3 +1,12 @@
+## 2026-03-30 — Gesture portability audit instrumentation pass (new)
+- [x] Added runtime gesture diagnostics in `useAssetInteractions` via `globalThis.__explorerGestureDebug` with `getSnapshot()`/`clear()` to capture event stream and cancellation reasons.
+- [x] Instrumentation now records pointer type, viewport size, orientation, DPR, card geometry, gesture start target zone (overlay/thumb/interactive), mode, and threshold/cancel reasons.
+- [x] Added explicit event markers for pointer down/move/up/cancel plus threshold-driven long-press cancellation and drag-start (`LONG_PRESS_MOVE_CANCEL_PX`, `POINTER_THRESHOLD`).
+- [x] Kept this pass audit-only: no threshold normalization or behavior rewrites were introduced.
+- [x] Updated static contracts to lock debug-hook/event-marker presence.
+- [x] Re-ran Explorer static contracts and build.
+- [ ] Next: collect portrait vs landscape vs desktop snapshots and map highest-frequency cancel reasons before threshold normalization changes.
+
 ## 2026-03-30 — Pointer session vs long-press cancellation split fix (new)
 - [x] Fixed `useAssetInteractions` regression where movement-driven long-press cancellation could clear active pointer session and break later pointerup completion.
 - [x] Split helpers into `cancelPendingLongPress()` (timer/progress/emphasis reset only) and `resetPointerSession()` (terminal pointer teardown only).

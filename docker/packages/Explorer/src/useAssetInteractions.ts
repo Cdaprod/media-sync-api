@@ -8,6 +8,24 @@ const LONG_PRESS_MOVE_CANCEL_PX = 12;
 const LONG_PRESS_MS = 620;
 type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';
 
+type GestureDebugEvent = {
+  ts: number;
+  kind: string;
+  pointerType: string;
+  pointerId: number | null;
+  itemKey: string;
+  mode: GestureMode;
+  viewportWidth: number;
+  viewportHeight: number;
+  orientation: 'portrait' | 'landscape';
+  dpr: number;
+  startTarget: 'overlay' | 'thumb' | 'interactive' | 'unknown';
+  cancelReason: string | null;
+  thresholdReason: string | null;
+  cardWidth: number;
+  cardHeight: number;
+};
+
 export type AssetPointerHandlers = Pick<
   React.HTMLAttributes<HTMLElement>,
   'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'onContextMenu'
@@ -98,6 +116,82 @@ export function useAssetInteractions({
   const gestureModeRef = useRef<GestureMode>('idle');
   const pinchSuppressRef = useRef(false);
   const pinchSuppressUntilRef = useRef(0);
+  const gestureDebugEventsRef = useRef<GestureDebugEvent[]>([]);
+  const gestureStartZoneByPointerIdRef = useRef<Map<number, 'overlay' | 'thumb' | 'interactive' | 'unknown'>>(new Map());
+
+  const classifyTargetZone = useCallback((target: EventTarget | null): 'overlay' | 'thumb' | 'interactive' | 'unknown' => {
+    const node = target as HTMLElement | null;
+    if (!node) return 'unknown';
+    if (isInteractiveTarget(target)) return 'interactive';
+    if (node.closest('.asset-overlay, .asset-ol-tl, .asset-ol-tr, .asset-ol-bl, .asset-ol-bottom')) return 'overlay';
+    if (node.closest('.thumb, .asset-thumb, .asset-thumb-preview')) return 'thumb';
+    return 'unknown';
+  }, []);
+
+  const recordGestureDebugEvent = useCallback((params: {
+    kind: string;
+    pointerType?: string;
+    pointerId?: number | null;
+    itemKey?: string;
+    target?: EventTarget | null;
+    currentTarget?: EventTarget | null;
+    cancelReason?: string | null;
+    thresholdReason?: string | null;
+  }) => {
+    const width = window.innerWidth || 0;
+    const height = window.innerHeight || 0;
+    const currentTargetEl = params.currentTarget as HTMLElement | null;
+    const rect = currentTargetEl?.getBoundingClientRect?.();
+    const startTarget = params.pointerId != null
+      ? (gestureStartZoneByPointerIdRef.current.get(params.pointerId) ?? classifyTargetZone(params.target ?? null))
+      : classifyTargetZone(params.target ?? null);
+    const entry: GestureDebugEvent = {
+      ts: Date.now(),
+      kind: params.kind,
+      pointerType: params.pointerType ?? 'unknown',
+      pointerId: params.pointerId ?? null,
+      itemKey: params.itemKey ?? '',
+      mode: gestureModeRef.current,
+      viewportWidth: width,
+      viewportHeight: height,
+      orientation: width >= height ? 'landscape' : 'portrait',
+      dpr: window.devicePixelRatio || 1,
+      startTarget,
+      cancelReason: params.cancelReason ?? null,
+      thresholdReason: params.thresholdReason ?? null,
+      cardWidth: rect?.width ?? 0,
+      cardHeight: rect?.height ?? 0,
+    };
+    gestureDebugEventsRef.current.push(entry);
+    if (gestureDebugEventsRef.current.length > 200) {
+      gestureDebugEventsRef.current.shift();
+    }
+  }, [classifyTargetZone]);
+
+  useEffect(() => {
+    (globalThis as typeof globalThis & {
+      __explorerGestureDebug?: {
+        getSnapshot: () => {
+          recentEvents: GestureDebugEvent[];
+          eventCount: number;
+          lastEvent: GestureDebugEvent | null;
+        };
+        clear: () => void;
+      };
+    }).__explorerGestureDebug = {
+      getSnapshot: () => ({
+        recentEvents: gestureDebugEventsRef.current.slice(-32),
+        eventCount: gestureDebugEventsRef.current.length,
+        lastEvent: gestureDebugEventsRef.current.at(-1) ?? null,
+      }),
+      clear: () => {
+        gestureDebugEventsRef.current = [];
+      },
+    };
+    return () => {
+      delete (globalThis as typeof globalThis & { __explorerGestureDebug?: unknown }).__explorerGestureDebug;
+    };
+  }, []);
 
   const cancelPendingLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -180,6 +274,15 @@ export function useAssetInteractions({
         : [item]);
 
       const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
+        recordGestureDebugEvent({
+          kind: 'pointerdown:start',
+          pointerType: event.pointerType,
+          pointerId: event.pointerId,
+          itemKey,
+          target: event.target,
+          currentTarget: event.currentTarget,
+        });
+        gestureStartZoneByPointerIdRef.current.set(event.pointerId, classifyTargetZone(event.target));
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         if (inNoPreviewZone(event.target)) return;
         if (isInteractiveTarget(event.target)) return;
@@ -187,7 +290,22 @@ export function useAssetInteractions({
           pinchSuppressRef.current
           || gestureModeRef.current === 'pinch'
           || Date.now() < pinchSuppressUntilRef.current
-        ) return;
+        ) {
+          recordGestureDebugEvent({
+            kind: 'pointerdown:blocked',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+            cancelReason: pinchSuppressRef.current
+              ? 'pinch_suppress_active'
+              : gestureModeRef.current === 'pinch'
+                ? 'gesture_mode_pinch'
+                : 'pinch_suppress_cooldown',
+          });
+          return;
+        }
         clearPendingLongPress();
         const session = pointerSessionRef.current;
         session.pointerId = event.pointerId;
@@ -250,6 +368,15 @@ export function useAssetInteractions({
         const session = pointerSessionRef.current;
         if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;
         if (inNoPreviewZone(event.target) || isInteractiveTarget(event.target)) {
+          recordGestureDebugEvent({
+            kind: 'pointermove:cancel_long_press',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+            cancelReason: inNoPreviewZone(event.target) ? 'no_preview_zone' : 'interactive_target',
+          });
           cancelPendingLongPress();
           return;
         }
@@ -258,6 +385,16 @@ export function useAssetInteractions({
         const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;
         if (movedFar) {
           session.moved = true;
+          recordGestureDebugEvent({
+            kind: 'pointermove:cancel_long_press',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+            cancelReason: 'moved_far',
+            thresholdReason: `long_press_move_cancel>${LONG_PRESS_MOVE_CANCEL_PX}px`,
+          });
           cancelPendingLongPress();
         }
         if (!session.moved) return;
@@ -265,6 +402,15 @@ export function useAssetInteractions({
           return;
         }
         if ((dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
+          recordGestureDebugEvent({
+            kind: 'pointermove:drag_start',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+            thresholdReason: `drag_start>${POINTER_THRESHOLD}px`,
+          });
           gestureModeRef.current = 'drag';
           setDragging(true);
           setAssetDragActive(true);
@@ -278,10 +424,19 @@ export function useAssetInteractions({
       const handlePointerUp = (event: React.PointerEvent<HTMLElement>) => {
         const session = pointerSessionRef.current;
         if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;
+        recordGestureDebugEvent({
+          kind: 'pointerup',
+          pointerType: event.pointerType,
+          pointerId: event.pointerId,
+          itemKey,
+          target: event.target,
+          currentTarget: event.currentTarget,
+        });
         const longPressFired = longPressFiredRef.current;
         const movedBeforeRelease = session.moved;
         cancelPendingLongPress();
         resetPointerSession();
+        gestureStartZoneByPointerIdRef.current.delete(event.pointerId);
         if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') {
           gestureModeRef.current = 'idle';
           return;
@@ -331,8 +486,20 @@ export function useAssetInteractions({
       };
 
       const handlePointerCancel = () => {
+        const pointerId = pointerSessionRef.current.pointerId;
+        const currentItemKey = pointerSessionRef.current.itemKey;
+        recordGestureDebugEvent({
+          kind: 'pointercancel',
+          pointerType: 'unknown',
+          pointerId,
+          itemKey: currentItemKey,
+          cancelReason: 'pointer_cancel',
+        });
         cancelPendingLongPress();
         resetPointerSession();
+        if (pointerId != null) {
+          gestureStartZoneByPointerIdRef.current.delete(pointerId);
+        }
         gestureModeRef.current = 'idle';
         stopAssetDrag();
       };

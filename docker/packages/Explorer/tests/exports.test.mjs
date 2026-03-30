@@ -714,6 +714,7 @@ test('package explorer context menu opens only on deliberate long press or conte
   assert.ok(block.includes('if (movedFar) {'));
   assert.ok(block.includes('session.moved = true;'));
   assert.ok(block.includes('cancelPendingLongPress();'));
+  assert.ok(block.includes('thresholdReason: `long_press_move_cancel>${LONG_PRESS_MOVE_CANCEL_PX}px`,'));
   assert.ok(block.includes('const session = pointerSessionRef.current;'));
   assert.ok(block.includes('if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;'));
   assert.ok(block.includes('if (longPressFired) {'));
@@ -1974,9 +1975,17 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('onHoldFeedback?.(null, false, 0, false);'));
   assert.ok(interactions.includes('const cancelPendingLongPress = useCallback(() => {'));
   assert.ok(interactions.includes('const resetPointerSession = useCallback(() => {'));
+  assert.ok(interactions.includes('const classifyTargetZone = useCallback((target: EventTarget | null):'));
+  assert.ok(interactions.includes('const recordGestureDebugEvent = useCallback((params: {'));
+  assert.ok(interactions.includes('__explorerGestureDebug'));
+  assert.ok(interactions.includes("kind: 'pointerdown:start'"));
+  assert.ok(interactions.includes("kind: 'pointermove:cancel_long_press'"));
+  assert.ok(interactions.includes("kind: 'pointermove:drag_start'"));
   assert.ok(interactions.includes('cancelPendingLongPress();'));
   assert.ok(interactions.includes('resetPointerSession();'));
-  assert.ok(interactions.includes('if (movedFar) {\n          session.moved = true;\n          cancelPendingLongPress();\n        }'));
+  assert.ok(interactions.includes('if (movedFar) {'));
+  assert.ok(interactions.includes('session.moved = true;'));
+  assert.ok(interactions.includes("kind: 'pointermove:cancel_long_press'"));
   assert.ok(interactions.includes('clearPendingLongPress();'));
   assert.ok(interactions.indexOf('clearPendingLongPress();') < interactions.indexOf('session.pointerId = event.pointerId;'));
 
