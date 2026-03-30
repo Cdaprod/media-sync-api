@@ -1607,6 +1607,14 @@ test('pinch density path is discrete and supports repeated notch snaps within on
 
   assert.ok(content.includes('outwardThreshold = 1.1'));
   assert.ok(content.includes('inwardThreshold = 0.9'));
+  assert.ok(content.includes('function onViewportBoundaryChange() {'));
+  assert.ok(content.includes("window.addEventListener('resize', onViewportBoundaryChange, { passive: true });"));
+  assert.ok(content.includes("window.addEventListener('orientationchange', onViewportBoundaryChange, { passive: true });"));
+  assert.ok(content.includes("window.removeEventListener('resize', onViewportBoundaryChange);"));
+  assert.ok(content.includes("window.removeEventListener('orientationchange', onViewportBoundaryChange);"));
+  assert.ok(content.includes('const resetGestureLifecycle = () => {'));
+  assert.ok(content.includes("contentEl.classList.remove('density-gesture-active');"));
+  assert.ok(content.includes('density.settleScrub();'));
   assert.ok(content.includes('let canStep = true;'));
   assert.ok(content.includes('if (!canStep) {'));
   assert.ok(content.includes('ratio >= rearmMin && ratio <= rearmMax'));

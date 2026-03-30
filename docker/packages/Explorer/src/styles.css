@@ -797,7 +797,7 @@ select.control{
   transition: filter 120ms ease, border-color 120ms ease;
 }
 .masonry-card.asset.asset-interactive-surface{
-  touch-action: none;
+  touch-action: pan-y;
 }
 .masonry-card.asset:hover{
   transform: none;
@@ -815,7 +815,7 @@ select.control{
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  touch-action: none;
+  touch-action: pan-y;
 }
 .asset[data-kind="image"] .thumb,
 .asset[data-kind="video"] .thumb{

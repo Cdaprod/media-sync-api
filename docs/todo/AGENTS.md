@@ -1,3 +1,11 @@
+## 2026-03-30 — Scroll-safety rollback for touch-action regression (new)
+- [x] Rolled back over-constrained touch ownership on main card/thumb surfaces to restore reliable vertical scrolling in both portrait and landscape (`touch-action: pan-y` on interactive card/thumb planes).
+- [x] Kept overlay layer non-owning (`pointer-events: none`, `touch-action: none`) to avoid overlay interception.
+- [x] Added pinch controller viewport-boundary reset on `resize` / `orientationchange` to clear transient gesture/motion classes and settle scrub state after rotate.
+- [x] Preserved pointer-capture and diagnostics work from prior pass.
+- [x] Updated static contracts and re-ran Explorer static contracts/build.
+- [ ] Next: device-verify landscape→portrait rotation no longer leaves scrolling stuck; then resume pinch-specific debugging separately.
+
 ## 2026-03-30 — Pointer-capture + DPR threshold normalization pass (new)
 - [x] Added explicit pointer capture lifecycle in `useAssetInteractions` (`setPointerCapture` on pointerdown, release on pointerup) with debug markers for capture success/failure.
 - [x] Normalized drag and long-press move-cancel thresholds by DPR (`POINTER_THRESHOLD_BASE`, `LONG_PRESS_MOVE_CANCEL_PX_BASE` scaled at runtime) and updated threshold debug reasons accordingly.

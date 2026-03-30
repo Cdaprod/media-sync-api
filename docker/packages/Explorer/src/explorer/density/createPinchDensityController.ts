@@ -47,6 +47,8 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   let lastStepAt = 0;
   let settleClassTimer = 0;
   let releaseMotionHandoffTimer = 0;
+  let lastViewportWidth = typeof window === 'undefined' ? 0 : window.innerWidth;
+  let lastViewportHeight = typeof window === 'undefined' ? 0 : window.innerHeight;
 
   const clearSettleClassTimer = () => {
     if (!settleClassTimer) return;
@@ -91,6 +93,22 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     contentEl.classList.remove('density-gesture-active');
     if (contentEl.classList.contains('density-motion-active')) return;
     enterSettlingClass(contentEl);
+  };
+
+  const resetGestureLifecycle = () => {
+    active = false;
+    canStep = true;
+    baselineDistance = 0;
+    lastStepAt = 0;
+    clearReleaseMotionHandoffTimer();
+    const contentEl = resolveClassHostEl();
+    if (contentEl) {
+      contentEl.classList.remove('density-gesture-active');
+      contentEl.classList.remove('density-motion-active');
+      contentEl.classList.remove('density-motion-settling');
+    }
+    density.settleScrub();
+    onPinchFrame?.(null, null, false);
   };
 
   function getTouchPair(evt: TouchEvent): TouchPair | null {
@@ -184,11 +202,22 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     onPinchRelease?.();
   }
 
+  function onViewportBoundaryChange() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    if (width === lastViewportWidth && height === lastViewportHeight) return;
+    lastViewportWidth = width;
+    lastViewportHeight = height;
+    resetGestureLifecycle();
+  }
+
   function attach() {
     gestureSurfaceEl.addEventListener('touchstart', onTouchStart, { passive: true });
     gestureSurfaceEl.addEventListener('touchmove', onTouchMove, { passive: false });
     gestureSurfaceEl.addEventListener('touchend', onTouchEnd, { passive: true });
     gestureSurfaceEl.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    window.addEventListener('resize', onViewportBoundaryChange, { passive: true });
+    window.addEventListener('orientationchange', onViewportBoundaryChange, { passive: true });
   }
 
   function detach() {
@@ -196,6 +225,8 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     gestureSurfaceEl.removeEventListener('touchmove', onTouchMove);
     gestureSurfaceEl.removeEventListener('touchend', onTouchEnd);
     gestureSurfaceEl.removeEventListener('touchcancel', onTouchEnd);
+    window.removeEventListener('resize', onViewportBoundaryChange);
+    window.removeEventListener('orientationchange', onViewportBoundaryChange);
   }
 
   function destroy() {
