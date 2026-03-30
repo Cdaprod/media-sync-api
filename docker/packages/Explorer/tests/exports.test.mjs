@@ -712,6 +712,10 @@ test('package explorer context menu opens only on deliberate long press or conte
   assert.ok(block.includes('longPressFiredRef.current = true;'));
   assert.ok(block.includes('const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;'));
   assert.ok(block.includes('if (movedFar) {'));
+  assert.ok(block.includes('session.moved = true;'));
+  assert.ok(block.includes('cancelPendingLongPress();'));
+  assert.ok(block.includes('const session = pointerSessionRef.current;'));
+  assert.ok(block.includes('if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;'));
   assert.ok(block.includes('if (longPressFired) {'));
   assert.ok(block.includes('if (event.pointerType === \'touch\' || event.pointerType === \'pen\') {'));
   assert.ok(block.includes('if (event.pointerType === \'mouse\' && event.button !== 0) return;'));
@@ -1968,6 +1972,11 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('const progress = Math.max(0, Math.min(0.92, elapsed / LONG_PRESS_MS));'));
   assert.ok(interactions.includes('longPressProgressFrameRef.current = window.requestAnimationFrame(updateHoldProgress);'));
   assert.ok(interactions.includes('onHoldFeedback?.(null, false, 0, false);'));
+  assert.ok(interactions.includes('const cancelPendingLongPress = useCallback(() => {'));
+  assert.ok(interactions.includes('const resetPointerSession = useCallback(() => {'));
+  assert.ok(interactions.includes('cancelPendingLongPress();'));
+  assert.ok(interactions.includes('resetPointerSession();'));
+  assert.ok(interactions.includes('if (movedFar) {\n          session.moved = true;\n          cancelPendingLongPress();\n        }'));
   assert.ok(interactions.includes('clearPendingLongPress();'));
   assert.ok(interactions.indexOf('clearPendingLongPress();') < interactions.indexOf('session.pointerId = event.pointerId;'));
 

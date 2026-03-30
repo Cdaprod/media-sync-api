@@ -1,3 +1,12 @@
+## 2026-03-30 — Pointer session vs long-press cancellation split fix (new)
+- [x] Fixed `useAssetInteractions` regression where movement-driven long-press cancellation could clear active pointer session and break later pointerup completion.
+- [x] Split helpers into `cancelPendingLongPress()` (timer/progress/emphasis reset only) and `resetPointerSession()` (terminal pointer teardown only).
+- [x] Updated move-threshold path to preserve session identity (`pointerId`/`itemKey`) while marking `session.moved = true` and canceling only long-press machinery.
+- [x] Kept full pointer-session reset on terminal paths (`pointerup`, `pointercancel`, explicit teardown via existing `clearPendingLongPress`).
+- [x] Updated static contracts to lock helper split + move-path ordering/session-guard expectations.
+- [x] Re-ran Explorer static contract suite and build.
+- [ ] Next: run on-device smoke test for tap, second-tap preview, drag/drop completion, long-press, and pinch arbitration.
+
 ## 2026-03-29 — Reveal tween restoration + overlay fade continuity pass (new)
 - [x] Converted `AssetGrid` scroll reveal from one-stage visibility to a two-stage pipeline (`revealedCards` -> double-rAF `visibleCards`) so cards paint pending state before entering visible tween state.
 - [x] Kept fail-safe reveal semantics but routed final visual entry through staged visibility scheduling to avoid snap-in on first paint.

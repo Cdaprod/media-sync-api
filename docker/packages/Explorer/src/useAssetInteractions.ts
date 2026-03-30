@@ -99,7 +99,7 @@ export function useAssetInteractions({
   const pinchSuppressRef = useRef(false);
   const pinchSuppressUntilRef = useRef(0);
 
-  const clearPendingLongPress = useCallback(() => {
+  const cancelPendingLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
       window.clearTimeout(longPressTimerRef.current);
     }
@@ -111,13 +111,25 @@ export function useAssetInteractions({
     longPressPointerRef.current = null;
     longPressStartAtRef.current = 0;
     longPressPointRef.current = null;
-    pointerSessionRef.current.pointerId = null;
-    pointerSessionRef.current.itemKey = '';
-    pointerSessionRef.current.moved = false;
     longPressFiredRef.current = false;
     onHoldFeedback?.(null, false, 0, false);
     onHoldEmphasis?.(null, false);
   }, [onHoldEmphasis, onHoldFeedback]);
+
+  const resetPointerSession = useCallback(() => {
+    pointerSessionRef.current.pointerId = null;
+    pointerSessionRef.current.itemKey = '';
+    pointerSessionRef.current.moved = false;
+    pointerSessionRef.current.startX = 0;
+    pointerSessionRef.current.startY = 0;
+    pointerSessionRef.current.pressX = 0;
+    pointerSessionRef.current.pressY = 0;
+  }, []);
+
+  const clearPendingLongPress = useCallback(() => {
+    cancelPendingLongPress();
+    resetPointerSession();
+  }, [cancelPendingLongPress, resetPointerSession]);
 
   const stopAssetDrag = useCallback(() => {
     setDragging(false);
@@ -238,7 +250,7 @@ export function useAssetInteractions({
         const session = pointerSessionRef.current;
         if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;
         if (inNoPreviewZone(event.target) || isInteractiveTarget(event.target)) {
-          clearPendingLongPress();
+          cancelPendingLongPress();
           return;
         }
         const dx = event.clientX - session.startX;
@@ -246,7 +258,7 @@ export function useAssetInteractions({
         const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;
         if (movedFar) {
           session.moved = true;
-          clearPendingLongPress();
+          cancelPendingLongPress();
         }
         if (!session.moved) return;
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
@@ -268,7 +280,8 @@ export function useAssetInteractions({
         if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;
         const longPressFired = longPressFiredRef.current;
         const movedBeforeRelease = session.moved;
-        clearPendingLongPress();
+        cancelPendingLongPress();
+        resetPointerSession();
         if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') {
           gestureModeRef.current = 'idle';
           return;
@@ -318,7 +331,8 @@ export function useAssetInteractions({
       };
 
       const handlePointerCancel = () => {
-        clearPendingLongPress();
+        cancelPendingLongPress();
+        resetPointerSession();
         gestureModeRef.current = 'idle';
         stopAssetDrag();
       };
@@ -352,6 +366,7 @@ export function useAssetInteractions({
       activeProject,
       assetDragActive,
       assetSelectionKey,
+      cancelPendingLongPress,
       clearPendingLongPress,
       closeDrawer,
       focusAsset,
@@ -366,6 +381,7 @@ export function useAssetInteractions({
       projects,
       selected,
       selectedKeysOrdered,
+      resetPointerSession,
       stopAssetDrag,
     ],
   );
