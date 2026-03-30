@@ -1,3 +1,11 @@
+## 2026-03-30 — Pointer-capture + DPR threshold normalization pass (new)
+- [x] Added explicit pointer capture lifecycle in `useAssetInteractions` (`setPointerCapture` on pointerdown, release on pointerup) with debug markers for capture success/failure.
+- [x] Normalized drag and long-press move-cancel thresholds by DPR (`POINTER_THRESHOLD_BASE`, `LONG_PRESS_MOVE_CANCEL_PX_BASE` scaled at runtime) and updated threshold debug reasons accordingly.
+- [x] Updated card interaction touch-action ownership to `none` on card/interactive/thumb surfaces to reduce mid-stream browser arbitration; overlay remains non-owning.
+- [x] Expanded static contracts for pointer-capture and DPR-threshold markers.
+- [x] Re-ran Explorer static contracts and build.
+- [ ] Next: verify landscape trace shows `pointercapture:set` followed by more complete `pointerup` paths and fewer `pointercancel` interruptions.
+
 ## 2026-03-30 — Gesture ownership/touch-action hardening pass (new)
 - [x] Added app-level pointerdown blocked-reason diagnostics (`no_preview_zone`, `interactive_target`, non-primary mouse, pinch suppression) to confirm whether handlers fire before pointer cancellation.
 - [x] Extended gesture debug payload with touched element tag/class and computed `touch-action` for both target and current gesture surface.

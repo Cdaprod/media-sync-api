@@ -3,8 +3,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { MediaItem, Project } from './types';
 import { isInteractiveTarget } from './utils';
 
-const POINTER_THRESHOLD = 8;
-const LONG_PRESS_MOVE_CANCEL_PX = 12;
+const POINTER_THRESHOLD_BASE = 8;
+const LONG_PRESS_MOVE_CANCEL_PX_BASE = 12;
 const LONG_PRESS_MS = 620;
 type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';
 
@@ -177,6 +177,11 @@ export function useAssetInteractions({
     }
   }, [classifyTargetZone]);
 
+  const getGestureThresholdScale = useCallback(() => {
+    const dpr = window.devicePixelRatio || 1;
+    return Math.max(1, Math.min(3, dpr));
+  }, []);
+
   useEffect(() => {
     (globalThis as typeof globalThis & {
       __explorerGestureDebug?: {
@@ -348,6 +353,26 @@ export function useAssetInteractions({
           });
           return;
         }
+        try {
+          (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+          recordGestureDebugEvent({
+            kind: 'pointercapture:set',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+          });
+        } catch {
+          recordGestureDebugEvent({
+            kind: 'pointercapture:set_failed',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+          });
+        }
         clearPendingLongPress();
         const session = pointerSessionRef.current;
         session.pointerId = event.pointerId;
@@ -424,7 +449,9 @@ export function useAssetInteractions({
         }
         const dx = event.clientX - session.startX;
         const dy = event.clientY - session.startY;
-        const movedFar = (dx * dx + dy * dy) > LONG_PRESS_MOVE_CANCEL_PX * LONG_PRESS_MOVE_CANCEL_PX;
+        const thresholdScale = getGestureThresholdScale();
+        const longPressMoveCancelPx = LONG_PRESS_MOVE_CANCEL_PX_BASE * thresholdScale;
+        const movedFar = (dx * dx + dy * dy) > longPressMoveCancelPx * longPressMoveCancelPx;
         if (movedFar) {
           session.moved = true;
           recordGestureDebugEvent({
@@ -435,7 +462,7 @@ export function useAssetInteractions({
             target: event.target,
             currentTarget: event.currentTarget,
             cancelReason: 'moved_far',
-            thresholdReason: `long_press_move_cancel>${LONG_PRESS_MOVE_CANCEL_PX}px`,
+            thresholdReason: `long_press_move_cancel>${longPressMoveCancelPx}px`,
           });
           cancelPendingLongPress();
         }
@@ -443,7 +470,8 @@ export function useAssetInteractions({
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
           return;
         }
-        if ((dx * dx + dy * dy) > POINTER_THRESHOLD * POINTER_THRESHOLD) {
+        const pointerThresholdPx = POINTER_THRESHOLD_BASE * thresholdScale;
+        if ((dx * dx + dy * dy) > pointerThresholdPx * pointerThresholdPx) {
           recordGestureDebugEvent({
             kind: 'pointermove:drag_start',
             pointerType: event.pointerType,
@@ -451,7 +479,7 @@ export function useAssetInteractions({
             itemKey,
             target: event.target,
             currentTarget: event.currentTarget,
-            thresholdReason: `drag_start>${POINTER_THRESHOLD}px`,
+            thresholdReason: `drag_start>${pointerThresholdPx}px`,
           });
           gestureModeRef.current = 'drag';
           setDragging(true);
@@ -477,6 +505,26 @@ export function useAssetInteractions({
         const longPressFired = longPressFiredRef.current;
         const movedBeforeRelease = session.moved;
         cancelPendingLongPress();
+        try {
+          (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+          recordGestureDebugEvent({
+            kind: 'pointercapture:release',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+          });
+        } catch {
+          recordGestureDebugEvent({
+            kind: 'pointercapture:release_failed',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+          });
+        }
         resetPointerSession();
         gestureStartZoneByPointerIdRef.current.delete(event.pointerId);
         if (pinchSuppressRef.current || gestureModeRef.current === 'pinch') {
