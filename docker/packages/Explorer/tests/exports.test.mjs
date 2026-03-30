@@ -338,7 +338,7 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('data-interactive="true"'));
   assert.ok(explorer.includes('<div className="search" role="search" data-interactive="true" data-topbar-control="true">'));
   assert.ok(explorer.includes('className={`actions-panel ${actionsOpen ? \'open\' : \'\'}`} role="region" aria-label="Explorer actions" data-interactive="true" data-topbar-panel="true"'));
-  assert.ok(hook.includes('if (isInteractiveTarget(event.target)) return;'));
+  assert.ok(hook.includes('if (isInteractiveTarget(event.target)) {'));
   assert.ok(grid.includes('onPointerDown={handleTogglePointerDown}'));
   assert.ok(grid.includes('event.stopPropagation();'));
   assert.ok(list.includes('data-interactive="true"'));
@@ -719,7 +719,7 @@ test('package explorer context menu opens only on deliberate long press or conte
   assert.ok(block.includes('if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;'));
   assert.ok(block.includes('if (longPressFired) {'));
   assert.ok(block.includes('if (event.pointerType === \'touch\' || event.pointerType === \'pen\') {'));
-  assert.ok(block.includes('if (event.pointerType === \'mouse\' && event.button !== 0) return;'));
+  assert.ok(block.includes('if (event.pointerType === \'mouse\' && event.button !== 0) {'));
   assert.ok(explorerContent.includes('onScroll={clearPendingLongPress}'));
 });
 
@@ -806,7 +806,7 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const gridContent = fs.readFileSync(gridPath, 'utf8');
   assert.ok(gridContent.includes('data-no-preview="1"'));
-  assert.ok(hookContent.includes('if (inNoPreviewZone(event.target)) return;'));
+  assert.ok(hookContent.includes('if (inNoPreviewZone(event.target)) {'));
   assert.ok(hookContent.includes('if (inspectorOpen) {'));
   assert.ok(hookContent.includes('closeDrawer();'));
   assert.ok(hookContent.includes('openDrawer(item);'));
@@ -1418,12 +1418,16 @@ test('masonry cards do not keep baseline CSS transform transitions that conflict
 
   assert.ok(styles.includes('.masonry-card.asset{'));
   assert.ok(styles.includes('transition: filter 120ms ease, border-color 120ms ease;'));
+  assert.ok(styles.includes('.masonry-card.asset.asset-interactive-surface{'));
+  assert.ok(styles.includes('touch-action: pan-y;'));
   assert.ok(styles.includes('.masonry-card.asset:hover{'));
   assert.ok(styles.includes('transform: none;'));
   assert.ok(styles.includes('.masonry-card.page-load-enter{'));
   assert.ok(styles.includes('animation: masonryPageLoadIn 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;'));
   assert.ok(styles.includes('.masonry-card.scroll-reveal-visible{'));
   assert.ok(styles.includes('opacity 380ms cubic-bezier(0.16, 1, 0.3, 1),'));
+  assert.ok(styles.includes('.asset .asset-overlay{'));
+  assert.ok(styles.includes('touch-action: none;'));
   assert.ok(styles.includes('@keyframes masonryPageLoadIn{'));
 });
 
@@ -1978,7 +1982,10 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('const classifyTargetZone = useCallback((target: EventTarget | null):'));
   assert.ok(interactions.includes('const recordGestureDebugEvent = useCallback((params: {'));
   assert.ok(interactions.includes('__explorerGestureDebug'));
+  assert.ok(interactions.includes('touchActionTarget: targetEl ? window.getComputedStyle(targetEl).touchAction : \'unknown\','));
+  assert.ok(interactions.includes('touchActionCurrent: currentTargetEl ? window.getComputedStyle(currentTargetEl).touchAction : \'unknown\','));
   assert.ok(interactions.includes("kind: 'pointerdown:start'"));
+  assert.ok(interactions.includes("kind: 'pointerdown:blocked'"));
   assert.ok(interactions.includes("kind: 'pointermove:cancel_long_press'"));
   assert.ok(interactions.includes("kind: 'pointermove:drag_start'"));
   assert.ok(interactions.includes('cancelPendingLongPress();'));

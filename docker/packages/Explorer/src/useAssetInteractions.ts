@@ -24,6 +24,10 @@ type GestureDebugEvent = {
   thresholdReason: string | null;
   cardWidth: number;
   cardHeight: number;
+  targetTag: string;
+  targetClass: string;
+  touchActionTarget: string;
+  touchActionCurrent: string;
 };
 
 export type AssetPointerHandlers = Pick<
@@ -141,6 +145,7 @@ export function useAssetInteractions({
     const width = window.innerWidth || 0;
     const height = window.innerHeight || 0;
     const currentTargetEl = params.currentTarget as HTMLElement | null;
+    const targetEl = params.target as HTMLElement | null;
     const rect = currentTargetEl?.getBoundingClientRect?.();
     const startTarget = params.pointerId != null
       ? (gestureStartZoneByPointerIdRef.current.get(params.pointerId) ?? classifyTargetZone(params.target ?? null))
@@ -161,6 +166,10 @@ export function useAssetInteractions({
       thresholdReason: params.thresholdReason ?? null,
       cardWidth: rect?.width ?? 0,
       cardHeight: rect?.height ?? 0,
+      targetTag: targetEl?.tagName?.toLowerCase?.() ?? 'unknown',
+      targetClass: targetEl?.className?.toString?.() ?? '',
+      touchActionTarget: targetEl ? window.getComputedStyle(targetEl).touchAction : 'unknown',
+      touchActionCurrent: currentTargetEl ? window.getComputedStyle(currentTargetEl).touchAction : 'unknown',
     };
     gestureDebugEventsRef.current.push(entry);
     if (gestureDebugEventsRef.current.length > 200) {
@@ -283,9 +292,42 @@ export function useAssetInteractions({
           currentTarget: event.currentTarget,
         });
         gestureStartZoneByPointerIdRef.current.set(event.pointerId, classifyTargetZone(event.target));
-        if (event.pointerType === 'mouse' && event.button !== 0) return;
-        if (inNoPreviewZone(event.target)) return;
-        if (isInteractiveTarget(event.target)) return;
+        if (event.pointerType === 'mouse' && event.button !== 0) {
+          recordGestureDebugEvent({
+            kind: 'pointerdown:blocked',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+            cancelReason: 'mouse_non_primary_button',
+          });
+          return;
+        }
+        if (inNoPreviewZone(event.target)) {
+          recordGestureDebugEvent({
+            kind: 'pointerdown:blocked',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+            cancelReason: 'no_preview_zone',
+          });
+          return;
+        }
+        if (isInteractiveTarget(event.target)) {
+          recordGestureDebugEvent({
+            kind: 'pointerdown:blocked',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+            cancelReason: 'interactive_target',
+          });
+          return;
+        }
         if (
           pinchSuppressRef.current
           || gestureModeRef.current === 'pinch'

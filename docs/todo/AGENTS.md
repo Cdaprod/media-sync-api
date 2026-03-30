@@ -1,3 +1,11 @@
+## 2026-03-30 — Gesture ownership/touch-action hardening pass (new)
+- [x] Added app-level pointerdown blocked-reason diagnostics (`no_preview_zone`, `interactive_target`, non-primary mouse, pinch suppression) to confirm whether handlers fire before pointer cancellation.
+- [x] Extended gesture debug payload with touched element tag/class and computed `touch-action` for both target and current gesture surface.
+- [x] Updated gesture-surface CSS ownership on Explorer cards/thumb plane to explicit `touch-action: pan-y` and added `.asset-overlay { touch-action: none; }` for clearer browser/app gesture responsibility.
+- [x] Updated static contracts to lock touch-action and new gesture ownership diagnostics markers.
+- [x] Re-ran Explorer static contracts and build.
+- [ ] Next: capture landscape traces from `__explorerGestureDebug.getSnapshot()` and verify blocked/cancel reasons drop after touch-action hardening.
+
 ## 2026-03-30 — Gesture portability audit instrumentation pass (new)
 - [x] Added runtime gesture diagnostics in `useAssetInteractions` via `globalThis.__explorerGestureDebug` with `getSnapshot()`/`clear()` to capture event stream and cancellation reasons.
 - [x] Instrumentation now records pointer type, viewport size, orientation, DPR, card geometry, gesture start target zone (overlay/thumb/interactive), mode, and threshold/cancel reasons.

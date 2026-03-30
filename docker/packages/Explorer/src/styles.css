@@ -788,13 +788,16 @@ select.control{
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  touch-action: pan-y;
   contain: layout paint style;
   transform: translateZ(0);
   will-change: transform;
 }
 .masonry-card.asset{
   transition: filter 120ms ease, border-color 120ms ease;
+}
+.masonry-card.asset.asset-interactive-surface{
+  touch-action: pan-y;
 }
 .masonry-card.asset:hover{
   transform: none;
@@ -812,6 +815,7 @@ select.control{
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
 }
 .asset[data-kind="image"] .thumb,
 .asset[data-kind="video"] .thumb{
@@ -922,6 +926,7 @@ select.control{
   user-select: none;
   opacity: 1;
   transition: opacity 180ms ease;
+  touch-action: none;
 }
 
 .asset .asset-overlay.is-simplified{
