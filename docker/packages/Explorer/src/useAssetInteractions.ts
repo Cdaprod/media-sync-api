@@ -5,6 +5,7 @@ import { isInteractiveTarget } from './utils';
 
 const POINTER_THRESHOLD_BASE = 8;
 const LONG_PRESS_MOVE_CANCEL_PX_BASE = 12;
+const TOUCH_TAP_CANCEL_PX_BASE = 18;
 const LONG_PRESS_MS = 620;
 type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';
 
@@ -177,9 +178,10 @@ export function useAssetInteractions({
     }
   }, [classifyTargetZone]);
 
-  const getGestureThresholdScale = useCallback(() => {
+  const getGestureThresholdScale = useCallback((pointerType: string) => {
+    if (pointerType === 'mouse') return 1;
     const dpr = window.devicePixelRatio || 1;
-    return Math.max(1, Math.min(3, dpr));
+    return Math.max(1, Math.min(2.25, dpr));
   }, []);
 
   useEffect(() => {
@@ -449,11 +451,11 @@ export function useAssetInteractions({
         }
         const dx = event.clientX - session.startX;
         const dy = event.clientY - session.startY;
-        const thresholdScale = getGestureThresholdScale();
+        const thresholdScale = getGestureThresholdScale(event.pointerType);
         const longPressMoveCancelPx = LONG_PRESS_MOVE_CANCEL_PX_BASE * thresholdScale;
+        const touchTapCancelPx = TOUCH_TAP_CANCEL_PX_BASE * thresholdScale;
         const movedFar = (dx * dx + dy * dy) > longPressMoveCancelPx * longPressMoveCancelPx;
         if (movedFar) {
-          session.moved = true;
           recordGestureDebugEvent({
             kind: 'pointermove:cancel_long_press',
             pointerType: event.pointerType,
@@ -466,12 +468,26 @@ export function useAssetInteractions({
           });
           cancelPendingLongPress();
         }
-        if (!session.moved) return;
         if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+          const touchMovedTooFarForTap = (dx * dx + dy * dy) > touchTapCancelPx * touchTapCancelPx;
+          if (touchMovedTooFarForTap) {
+            session.moved = true;
+            recordGestureDebugEvent({
+              kind: 'pointermove:tap_cancel',
+              pointerType: event.pointerType,
+              pointerId: event.pointerId,
+              itemKey,
+              target: event.target,
+              currentTarget: event.currentTarget,
+              cancelReason: 'touch_move_exceeded_tap_cancel',
+              thresholdReason: `touch_tap_cancel>${touchTapCancelPx}px`,
+            });
+          }
           return;
         }
         const pointerThresholdPx = POINTER_THRESHOLD_BASE * thresholdScale;
         if ((dx * dx + dy * dy) > pointerThresholdPx * pointerThresholdPx) {
+          session.moved = true;
           recordGestureDebugEvent({
             kind: 'pointermove:drag_start',
             pointerType: event.pointerType,
@@ -540,6 +556,10 @@ export function useAssetInteractions({
           return;
         }
         if (movedBeforeRelease) {
+          if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+            gestureModeRef.current = 'idle';
+            return;
+          }
           stopAssetDrag();
           const dropEl = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.chip') as HTMLElement | null;
           if (dropEl?.dataset?.project) {

@@ -707,15 +707,19 @@ test('package explorer context menu opens only on deliberate long press or conte
   const block = content.slice(start, end);
   assert.ok(content.includes('const LONG_PRESS_MS = 620;'));
   assert.ok(content.includes('const LONG_PRESS_MOVE_CANCEL_PX_BASE = 12;'));
+  assert.ok(content.includes('const TOUCH_TAP_CANCEL_PX_BASE = 18;'));
   assert.ok(block.includes("if (event.pointerType === 'touch' || event.pointerType === 'pen')"));
   assert.ok(block.includes('longPressTimerRef.current = window.setTimeout(() => {'));
   assert.ok(block.includes('longPressFiredRef.current = true;'));
   assert.ok(block.includes('const longPressMoveCancelPx = LONG_PRESS_MOVE_CANCEL_PX_BASE * thresholdScale;'));
+  assert.ok(block.includes('const touchTapCancelPx = TOUCH_TAP_CANCEL_PX_BASE * thresholdScale;'));
   assert.ok(block.includes('const movedFar = (dx * dx + dy * dy) > longPressMoveCancelPx * longPressMoveCancelPx;'));
   assert.ok(block.includes('if (movedFar) {'));
   assert.ok(block.includes('session.moved = true;'));
   assert.ok(block.includes('cancelPendingLongPress();'));
   assert.ok(block.includes('thresholdReason: `long_press_move_cancel>${longPressMoveCancelPx}px`,'));
+  assert.ok(block.includes("kind: 'pointermove:tap_cancel'"));
+  assert.ok(block.includes('thresholdReason: `touch_tap_cancel>${touchTapCancelPx}px`,'));
   assert.ok(block.includes('const session = pointerSessionRef.current;'));
   assert.ok(block.includes('if (session.pointerId !== event.pointerId || session.itemKey !== itemKey) return;'));
   assert.ok(block.includes('if (longPressFired) {'));
@@ -1991,7 +1995,8 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('const classifyTargetZone = useCallback((target: EventTarget | null):'));
   assert.ok(interactions.includes('const recordGestureDebugEvent = useCallback((params: {'));
   assert.ok(interactions.includes('__explorerGestureDebug'));
-  assert.ok(interactions.includes('const getGestureThresholdScale = useCallback(() => {'));
+  assert.ok(interactions.includes('const getGestureThresholdScale = useCallback((pointerType: string) => {'));
+  assert.ok(interactions.includes("if (pointerType === 'mouse') return 1;"));
   assert.ok(interactions.includes('const dpr = window.devicePixelRatio || 1;'));
   assert.ok(interactions.includes('touchActionTarget: targetEl ? window.getComputedStyle(targetEl).touchAction : \'unknown\','));
   assert.ok(interactions.includes('touchActionCurrent: currentTargetEl ? window.getComputedStyle(currentTargetEl).touchAction : \'unknown\','));
@@ -2001,6 +2006,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes("kind: 'pointercapture:release'"));
   assert.ok(interactions.includes("kind: 'pointermove:cancel_long_press'"));
   assert.ok(interactions.includes("kind: 'pointermove:drag_start'"));
+  assert.ok(interactions.includes("kind: 'pointermove:tap_cancel'"));
   assert.ok(interactions.includes('thresholdReason: `drag_start>${pointerThresholdPx}px`,'));
   assert.ok(interactions.includes('cancelPendingLongPress();'));
   assert.ok(interactions.includes('resetPointerSession();'));

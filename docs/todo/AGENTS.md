@@ -1,3 +1,11 @@
+## 2026-03-31 — Gesture promotion fix pass (post-scroll rollback) (new)
+- [x] Identified promotion-path blocker in `useAssetInteractions`: long-press move-cancel threshold was also setting `session.moved`, causing touch interactions to be treated as moved/canceled before tap completion.
+- [x] Separated thresholds by intent: long-press cancel still cancels hold, but touch tap-cancel now uses its own larger threshold (`TOUCH_TAP_CANCEL_PX_BASE`) and emits dedicated `pointermove:tap_cancel` debug marker.
+- [x] Updated threshold scale policy to avoid over-scaling mouse interactions (`getGestureThresholdScale(pointerType)` returns `1` for mouse, DPR-scaled for touch/pen only).
+- [x] Added touch pointerup moved-path guard to avoid routing touch jitter into desktop drag/drop completion path.
+- [x] Updated static contracts and re-ran Explorer static contracts/build.
+- [ ] Next: on-device verify landscape tap/second-tap/drag promotion improvements and capture updated `__explorerGestureDebug` traces for pinch-arming diagnosis.
+
 ## 2026-03-30 — Scroll-safety rollback for touch-action regression (new)
 - [x] Rolled back over-constrained touch ownership on main card/thumb surfaces to restore reliable vertical scrolling in both portrait and landscape (`touch-action: pan-y` on interactive card/thumb planes).
 - [x] Kept overlay layer non-owning (`pointer-events: none`, `touch-action: none`) to avoid overlay interception.
