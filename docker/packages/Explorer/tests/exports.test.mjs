@@ -310,7 +310,6 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes("document.addEventListener('gesturechange', blockGesture, listenerOptions);"));
   assert.ok(explorer.includes("document.addEventListener('gestureend', blockGesture, listenerOptions);"));
   assert.ok(explorer.includes("document.addEventListener('touchstart', blockMultiTouch, listenerOptions);"));
-  assert.ok(explorer.includes("document.addEventListener('touchend', blockDoubleTap, listenerOptions);"));
   assert.ok(explorer.includes('const topbarGap = Number.parseFloat(styles.getPropertyValue(\'--topbar-gap\')) || 0;'));
   assert.ok(explorer.includes('const nextInset = Math.max(0, topbarMeasuredHeight + topbarGap);'));
   assert.ok(explorer.includes('const delta = nextInset - topbarInsetPrevRef.current;'));
@@ -875,7 +874,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(!styles.includes('.scroll-content.topbar-hidden{'));
   assert.ok(styles.includes('.content .scroll{'));
   assert.ok(styles.includes('padding: 0;'));
-  assert.ok(styles.includes('touch-action: none;'));
+  assert.ok(styles.includes('touch-action: pan-y;'));
   assert.ok(content.includes('useTopbarScrollState({'));
   assert.ok(content.includes('createTopbarMotion(topbarEl)'));
   assert.ok(content.includes('createTopbarSnapBand({'));
@@ -1994,6 +1993,9 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('const resetPointerSession = useCallback(() => {'));
   assert.ok(interactions.includes('const classifyTargetZone = useCallback((target: EventTarget | null):'));
   assert.ok(interactions.includes('const recordGestureDebugEvent = useCallback((params: {'));
+  assert.ok(interactions.includes('const trackMoveStateUpdate = useCallback((reason: \'dragging\' | \'asset_drag_active\') => {'));
+  assert.ok(interactions.includes("kind: 'viewport_boundary_reset'"));
+  assert.ok(interactions.includes('window.addEventListener(\'orientationchange\', clearTransientGestureState, { passive: true });'));
   assert.ok(interactions.includes('__explorerGestureDebug'));
   assert.ok(interactions.includes('computePointerMoveMetrics'));
   assert.ok(interactions.includes('touchActionTarget: targetEl ? window.getComputedStyle(targetEl).touchAction : \'unknown\','));

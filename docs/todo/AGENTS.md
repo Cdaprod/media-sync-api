@@ -1,3 +1,13 @@
+## 2026-03-31 — Scroll + landscape interaction ownership stabilization (new)
+- [x] Block 0 baseline reconciliation completed from source: identified scroll lock risk in `.content .scroll { touch-action: none; }`, broad touch ownership override (`.asset/.row { touch-action: manipulation; }`), and global iOS double-tap suppression handler.
+- [x] Block 1 scroll safety pass: restored scroll surface ownership to `touch-action: pan-y` and removed broad asset/list-row manipulation override so browser panning remains available on interactive card planes.
+- [x] Block 2 loop-protection pass in `useAssetInteractions`: added per-frame move-update diagnostics (`trackMoveStateUpdate`) and idempotent state updates for drag flags to reduce render-loop risk under repeated move events.
+- [x] Block 3 pointer promotion hardening: drag promotion now short-circuits repeat promotions once mode is already `'drag'`; touch moved-path teardown uses shared `isTouchLikePointer(...)` path.
+- [x] Block 4 landscape ownership adjustment: removed iOS document-level double-tap suppression hook that could intercept ordinary tap/scroll progression; retained gesture/multi-touch suppression outside density pinch surface.
+- [x] Block 5/6 transient boundary safety: added resize/orientation transient gesture reset in `useAssetInteractions` and emits `viewport_boundary_reset` debug marker for traceability.
+- [x] Updated Explorer static contract assertions for the new ownership/diagnostic markers and reran suite.
+- [ ] Next: on-device verify updated matrix (portrait+landscape scroll, tap/hold promotion) and capture `__explorerGestureDebug.getSnapshot()` during rotation + pinch attempts.
+
 ## 2026-03-31 — Gesture promotion fix pass (post-scroll rollback) (new)
 - [x] Identified promotion-path blocker in `useAssetInteractions`: long-press move-cancel threshold was also setting `session.moved`, causing touch interactions to be treated as moved/canceled before tap completion.
 - [x] Separated thresholds by intent: long-press cancel still cancels hold, but touch tap-cancel now uses its own larger threshold (`TOUCH_TAP_CANCEL_PX_BASE`) and emits dedicated `pointermove:tap_cancel` debug marker.

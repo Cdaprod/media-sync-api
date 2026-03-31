@@ -636,7 +636,7 @@ select.control{
   padding: 0;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  touch-action: none;
+  touch-action: pan-y;
   position: relative;
   z-index: 0;
 }
@@ -1569,8 +1569,6 @@ select.control{
 .btn,
 .control,
 .dropdown-menu button,
-.asset,
-.row,
 .selector,
 .context-menu button{
   touch-action: manipulation;

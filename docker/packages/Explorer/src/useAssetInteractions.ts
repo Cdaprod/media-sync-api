@@ -117,6 +117,30 @@ export function useAssetInteractions({
   const pinchSuppressUntilRef = useRef(0);
   const gestureDebugEventsRef = useRef<GestureDebugEvent[]>([]);
   const gestureStartZoneByPointerIdRef = useRef<Map<number, 'overlay' | 'thumb' | 'interactive' | 'unknown'>>(new Map());
+  const moveUpdateFrameRef = useRef<number | null>(null);
+  const moveUpdateCountRef = useRef(0);
+
+  const trackMoveStateUpdate = useCallback((reason: 'dragging' | 'asset_drag_active') => {
+    const frameAt = moveUpdateFrameRef.current;
+    if (frameAt == null) {
+      moveUpdateFrameRef.current = performance.now();
+      moveUpdateCountRef.current = 1;
+      return;
+    }
+    const now = performance.now();
+    if ((now - frameAt) > 16.7) {
+      moveUpdateFrameRef.current = now;
+      moveUpdateCountRef.current = 1;
+      return;
+    }
+    moveUpdateCountRef.current += 1;
+    if (moveUpdateCountRef.current > 10) {
+      console.warn('[explorer/gesture] high move-state update frequency', {
+        reason,
+        updatesInFrame: moveUpdateCountRef.current,
+      });
+    }
+  }, []);
 
   const classifyTargetZone = useCallback((target: EventTarget | null): 'overlay' | 'thumb' | 'interactive' | 'unknown' => {
     const node = target as HTMLElement | null;
@@ -229,8 +253,8 @@ export function useAssetInteractions({
   }, [cancelPendingLongPress, resetPointerSession]);
 
   const stopAssetDrag = useCallback(() => {
-    setDragging(false);
-    setAssetDragActive(false);
+    setDragging((prev) => (prev ? false : prev));
+    setAssetDragActive((prev) => (prev ? false : prev));
     if (gestureModeRef.current === 'drag') {
       gestureModeRef.current = 'idle';
     }
@@ -269,6 +293,27 @@ export function useAssetInteractions({
       document.removeEventListener('touchcancel', onTouchEndCapture, { capture: true });
     };
   }, [clearPendingLongPress]);
+
+  useEffect(() => {
+    const clearTransientGestureState = () => {
+      clearPendingLongPress();
+      pinchSuppressRef.current = false;
+      pinchSuppressUntilRef.current = 0;
+      pinchSessionRef.current.active = false;
+      pinchSessionRef.current.pointerIds = [];
+      gestureModeRef.current = 'idle';
+      recordGestureDebugEvent({
+        kind: 'viewport_boundary_reset',
+        cancelReason: 'resize_or_orientationchange',
+      });
+    };
+    window.addEventListener('resize', clearTransientGestureState, { passive: true });
+    window.addEventListener('orientationchange', clearTransientGestureState, { passive: true });
+    return () => {
+      window.removeEventListener('resize', clearTransientGestureState);
+      window.removeEventListener('orientationchange', clearTransientGestureState);
+    };
+  }, [clearPendingLongPress, recordGestureDebugEvent]);
 
   const buildAssetPointerHandlers = useCallback(
     (item: MediaItem): AssetPointerHandlers => {
@@ -476,6 +521,7 @@ export function useAssetInteractions({
           return;
         }
         if (metrics.movedFarForDrag) {
+          if (gestureModeRef.current === 'drag') return;
           session.moved = true;
           recordGestureDebugEvent({
             kind: 'pointermove:drag_start',
@@ -487,8 +533,10 @@ export function useAssetInteractions({
             thresholdReason: `drag_start>${metrics.pointerThresholdPx}px`,
           });
           gestureModeRef.current = 'drag';
-          setDragging(true);
-          setAssetDragActive(true);
+          trackMoveStateUpdate('dragging');
+          setDragging((prev) => (prev ? prev : true));
+          trackMoveStateUpdate('asset_drag_active');
+          setAssetDragActive((prev) => (prev ? prev : true));
           dragPathsRef.current = selected.has(itemKey)
             ? selectedKeysOrdered
             : [itemKey];
@@ -545,7 +593,7 @@ export function useAssetInteractions({
           return;
         }
         if (movedBeforeRelease) {
-          if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+          if (isTouchLikePointer(event.pointerType)) {
             gestureModeRef.current = 'idle';
             return;
           }
@@ -649,6 +697,7 @@ export function useAssetInteractions({
       selectedKeysOrdered,
       resetPointerSession,
       stopAssetDrag,
+      trackMoveStateUpdate,
     ],
   );
 
