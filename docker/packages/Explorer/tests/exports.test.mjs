@@ -992,7 +992,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(content.includes('density?.settleScrub();'));
   assert.ok(content.includes('step={1}'));
-  assert.ok(content.includes('if (isMobile) {'));
+  assert.ok(content.includes('if (touchPinchCapable) {'));
   assert.ok(content.includes('toastMotionRef.current?.exit(node, () => removeToast(toast.id));'));
   assert.ok(content.includes('if (inDensityPinchSurface(event.target)) return;'));
   assert.ok(content.includes('data-density-pinch-surface="true"'));
@@ -1033,6 +1033,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes('window.cancelAnimationFrame(scrubFrameId);'));
   assert.ok(content.includes('flushSync(() => {'));
   assert.ok(content.includes('setGridColumnCount(nextColumns);'));
+  assert.ok(content.includes('const [touchPinchCapable, setTouchPinchCapable] = useState(false);'));
+  assert.ok(content.includes('const hasMultiTouch = (window.navigator.maxTouchPoints || 0) > 1;'));
+  assert.ok(content.includes('setTouchPinchCapable(coarsePointer || hasMultiTouch);'));
   assert.ok(!densityController.includes('setTimeout('));
   assert.ok(!densityController.includes("quickSetter(gridEl, 'scale')"));
   assert.ok(!densityController.includes('DENSITY_STEP_HYSTERESIS'));
@@ -1055,7 +1058,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(pinchController.includes('releaseMotionHandoffTimer = window.setTimeout(() => {'));
   assert.ok(pinchController.includes('handoffMotionAfterRelease();'));
   assert.ok(pinchController.includes('if (!canStep) {'));
-  assert.ok(pinchController.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;'));
+  assert.ok(pinchController.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) {'));
   assert.ok(pinchController.includes('density.setColumnsForPinch(currentColumns - 1);'));
   assert.ok(pinchController.includes('density.setColumnsForPinch(currentColumns + 1);'));
   assert.ok(!pinchController.includes('let stepped = false;'));
@@ -1189,7 +1192,7 @@ test('density setup rebinds on grid surface availability and hidden topbar refre
   assert.ok(explorer.includes('const bindGridSurface = useCallback((node: HTMLDivElement | null) => {'));
   assert.ok(explorer.includes('const gridEl = gridSurfaceEl;'));
   assert.ok(explorer.includes('if (!gridEl || !scrollerEl) return;'));
-  assert.ok(explorer.includes('}, [gridSurfaceEl, isMobile, view]);'));
+  assert.ok(explorer.includes('}, [gridSurfaceEl, touchPinchCapable, view]);'));
 
   assert.ok(explorer.includes('if (!topbarHidden) return;'));
   assert.ok(explorer.includes('topbarMotionRef.current?.refresh();'));
@@ -1622,9 +1625,14 @@ test('pinch density path is discrete and supports repeated notch snaps within on
   assert.ok(content.includes('if (!canStep) {'));
   assert.ok(content.includes('ratio >= rearmMin && ratio <= rearmMax'));
   assert.ok(content.includes('const STEP_COOLDOWN_MS = 80;'));
-  assert.ok(content.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;'));
+  assert.ok(content.includes('if ((now - lastStepAt) < STEP_COOLDOWN_MS) {'));
   assert.ok(content.includes('density.setColumnsForPinch(currentColumns - 1);'));
   assert.ok(content.includes('density.setColumnsForPinch(currentColumns + 1);'));
+  assert.ok(content.includes('__explorerPinchDebug'));
+  assert.ok(content.includes('startsRejectedSingleTouch'));
+  assert.ok(content.includes("pinchDebug.lastReason = 'touchstart_without_pair';"));
+  assert.ok(content.includes("pinchDebug.lastReason = 'step_out';"));
+  assert.ok(content.includes("pinchDebug.lastReason = 'step_in';"));
   assert.ok(!content.includes('let stepped = false;'));
   assert.ok(!content.includes('quickSetter'));
   assert.ok(!content.includes('scaleThresholdPerStep'));

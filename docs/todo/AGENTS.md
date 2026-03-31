@@ -1,3 +1,13 @@
+## 2026-03-31 — Pinch/density cross-orientation stabilization (phase 2) (new)
+- [x] Block 0 baseline reconciliation completed: root cause identified as pinch controller attachment being gated by `isMobile` (viewport width), so landscape tablet/desktop-like widths skipped pinch controller attach entirely.
+- [x] Block 1 pinch activation lane fix: `ExplorerApp` now computes a touch-capability gate (`coarse pointer || maxTouchPoints > 1`) and attaches pinch controller on touch-capable surfaces independent of mobile width.
+- [x] Block 2 cross-orientation audit instrumentation: added pinch runtime diagnostics hook `globalThis.__explorerPinchDebug.getSnapshot()` (start rejects, move/step counts, cooldown/rearm skips, viewport resets, last reason/ratio/touch count).
+- [x] Block 3 desktop-like handling: preserved touch-only pinch semantics (no fake desktop pinch), while enabling touch-capable desktop-like devices to use the same pinch lane; non-touch desktop continues using slider path.
+- [x] Block 4 density commit observability: pinch debug now records threshold-crossing step intents (`step_out`/`step_in`) so commit-path reachability can be validated alongside existing `__explorerPinchPerfDebug`.
+- [x] Block 5 rotation/transient safety preserved via existing viewport boundary reset lane in pinch controller and interaction hook.
+- [x] Updated static contracts for the new touch-capable attach gate and pinch diagnostics.
+- [ ] Next: on-device validate landscape + desktop-like touch hardware with `__explorerPinchDebug` + `__explorerPinchPerfDebug` snapshots to confirm activation and commit counts increase during pinch.
+
 ## 2026-03-31 — Scroll + landscape interaction ownership stabilization (new)
 - [x] Block 0 baseline reconciliation completed from source: identified scroll lock risk in `.content .scroll { touch-action: none; }`, broad touch ownership override (`.asset/.row { touch-action: manipulation; }`), and global iOS double-tap suppression handler.
 - [x] Block 1 scroll safety pass: restored scroll surface ownership to `touch-action: pan-y` and removed broad asset/list-row manipulation override so browser panning remains available on interactive card planes.

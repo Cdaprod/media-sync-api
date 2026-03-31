@@ -299,6 +299,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [touchPinchCapable, setTouchPinchCapable] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [dragActive, setDragActive] = useState(false);
@@ -622,7 +623,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const updateSidebarMode = useCallback(() => {
     const mobile = window.matchMedia('(max-width: 860px)').matches;
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const hasMultiTouch = (window.navigator.maxTouchPoints || 0) > 1;
     setIsMobile(mobile);
+    setTouchPinchCapable(coarsePointer || hasMultiTouch);
     if (!mobile) {
       setSidebarOpen(false);
     }
@@ -2151,7 +2155,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     });
     densityControllerRef.current = density;
 
-    if (isMobile) {
+    if (touchPinchCapable) {
       const pinch = createPinchDensityController({
         gestureSurfaceEl: scrollerEl,
         visualScaleTargetEl: gridEl,
@@ -2207,7 +2211,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setPinchPerfActive(false);
       setPinchOverlayActive(false);
     };
-  }, [gridSurfaceEl, isMobile, view]);
+  }, [gridSurfaceEl, touchPinchCapable, view]);
 
   useEffect(() => {
     if (composeModalOpen) setComposeModalRendered(true);

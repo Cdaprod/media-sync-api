@@ -49,6 +49,31 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
   let releaseMotionHandoffTimer = 0;
   let lastViewportWidth = typeof window === 'undefined' ? 0 : window.innerWidth;
   let lastViewportHeight = typeof window === 'undefined' ? 0 : window.innerHeight;
+  const pinchDebug = {
+    attached: false,
+    starts: 0,
+    startsRejectedSingleTouch: 0,
+    moves: 0,
+    movesWithoutPair: 0,
+    stepsOut: 0,
+    stepsIn: 0,
+    cooldownSkips: 0,
+    rearmSkips: 0,
+    releaseCount: 0,
+    viewportResets: 0,
+    lastRatio: 1,
+    lastTouchCount: 0,
+    lastReason: 'init' as string,
+  };
+
+  const exposePinchDebug = () => {
+    (globalThis as typeof globalThis & {
+      __explorerPinchDebug?: { getSnapshot: () => typeof pinchDebug };
+    }).__explorerPinchDebug = {
+      getSnapshot: () => ({ ...pinchDebug }),
+    };
+  };
+  exposePinchDebug();
 
   const clearSettleClassTimer = () => {
     if (!settleClassTimer) return;
@@ -124,9 +149,17 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
 
   function onTouchStart(evt: TouchEvent) {
     const pair = getTouchPair(evt);
-    if (!pair) return;
+    pinchDebug.lastTouchCount = evt.touches.length;
+    if (!pair) {
+      pinchDebug.startsRejectedSingleTouch += 1;
+      pinchDebug.lastReason = 'touchstart_without_pair';
+      exposePinchDebug();
+      return;
+    }
 
     active = true;
+    pinchDebug.starts += 1;
+    pinchDebug.lastReason = 'touchstart_armed';
     canStep = true;
     baselineDistance = Math.max(distance(pair), 1);
     lastStepAt = 0;
@@ -136,12 +169,18 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
       { x: pair.b.clientX, y: pair.b.clientY },
       true,
     );
+    exposePinchDebug();
   }
 
   function onTouchMove(evt: TouchEvent) {
     if (!active) return;
+    pinchDebug.moves += 1;
+    pinchDebug.lastTouchCount = evt.touches.length;
     const pair = getTouchPair(evt);
     if (!pair) {
+      pinchDebug.movesWithoutPair += 1;
+      pinchDebug.lastReason = 'touchmove_pair_lost';
+      exposePinchDebug();
       onTouchEnd();
       return;
     }
@@ -154,35 +193,56 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     evt.preventDefault();
     const currentDistance = Math.max(distance(pair), 1);
     const ratio = currentDistance / Math.max(baselineDistance, 1);
+    pinchDebug.lastRatio = ratio;
 
     if (!canStep) {
       if (ratio >= rearmMin && ratio <= rearmMax) {
         canStep = true;
         baselineDistance = currentDistance;
+        pinchDebug.lastReason = 'rearmed';
+        exposePinchDebug();
+      } else {
+        pinchDebug.rearmSkips += 1;
+        pinchDebug.lastReason = 'awaiting_rearm_band';
+        exposePinchDebug();
       }
       return;
     }
 
     const now = performance.now();
-    if ((now - lastStepAt) < STEP_COOLDOWN_MS) return;
+    if ((now - lastStepAt) < STEP_COOLDOWN_MS) {
+      pinchDebug.cooldownSkips += 1;
+      pinchDebug.lastReason = 'cooldown_skip';
+      exposePinchDebug();
+      return;
+    }
 
     if (ratio >= outwardThreshold) {
       const currentColumns = density.getColumns();
       density.setColumnsForPinch(currentColumns - 1);
       onPinchStep?.(1);
+      pinchDebug.stepsOut += 1;
+      pinchDebug.lastReason = 'step_out';
       baselineDistance = currentDistance;
       canStep = false;
       lastStepAt = now;
+      exposePinchDebug();
       return;
     }
     if (ratio <= inwardThreshold) {
       const currentColumns = density.getColumns();
       density.setColumnsForPinch(currentColumns + 1);
       onPinchStep?.(-1);
+      pinchDebug.stepsIn += 1;
+      pinchDebug.lastReason = 'step_in';
       baselineDistance = currentDistance;
       canStep = false;
       lastStepAt = now;
+      exposePinchDebug();
+      return;
     }
+    pinchDebug.lastReason = 'move_no_threshold_cross';
+    exposePinchDebug();
   }
 
   function onTouchEnd() {
@@ -194,12 +254,15 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     setGestureActiveClass(false);
     density.settleScrub();
     clearReleaseMotionHandoffTimer();
+    pinchDebug.releaseCount += 1;
+    pinchDebug.lastReason = 'touchend_release';
     releaseMotionHandoffTimer = window.setTimeout(() => {
       releaseMotionHandoffTimer = 0;
       handoffMotionAfterRelease();
     }, 120);
     onPinchFrame?.(null, null, false);
     onPinchRelease?.();
+    exposePinchDebug();
   }
 
   function onViewportBoundaryChange() {
@@ -208,6 +271,9 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     if (width === lastViewportWidth && height === lastViewportHeight) return;
     lastViewportWidth = width;
     lastViewportHeight = height;
+    pinchDebug.viewportResets += 1;
+    pinchDebug.lastReason = 'viewport_boundary_reset';
+    exposePinchDebug();
     resetGestureLifecycle();
   }
 
@@ -218,6 +284,9 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     gestureSurfaceEl.addEventListener('touchcancel', onTouchEnd, { passive: true });
     window.addEventListener('resize', onViewportBoundaryChange, { passive: true });
     window.addEventListener('orientationchange', onViewportBoundaryChange, { passive: true });
+    pinchDebug.attached = true;
+    pinchDebug.lastReason = 'attached';
+    exposePinchDebug();
   }
 
   function detach() {
@@ -227,6 +296,9 @@ export function createPinchDensityController(options: PinchDensityControllerOpti
     gestureSurfaceEl.removeEventListener('touchcancel', onTouchEnd);
     window.removeEventListener('resize', onViewportBoundaryChange);
     window.removeEventListener('orientationchange', onViewportBoundaryChange);
+    pinchDebug.attached = false;
+    pinchDebug.lastReason = 'detached';
+    exposePinchDebug();
   }
 
   function destroy() {
