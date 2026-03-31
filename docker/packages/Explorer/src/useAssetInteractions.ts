@@ -1,13 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  assertInteractionInvariants,
+  createPinchSession,
+  type InteractionMode,
+  type PointerSession,
+} from './explorer/interactions/gestureContract';
+import {
+  assignPointerDownSession,
+  computePointerMoveMetrics,
+  createPointerSessionState,
+  isTouchLikePointer,
+  resetPointerSessionState,
+} from './explorer/interactions/pointerSession';
 import type { MediaItem, Project } from './types';
 import { isInteractiveTarget } from './utils';
-
-const POINTER_THRESHOLD_BASE = 8;
-const LONG_PRESS_MOVE_CANCEL_PX_BASE = 12;
-const TOUCH_TAP_CANCEL_PX_BASE = 18;
 const LONG_PRESS_MS = 620;
-type GestureMode = 'idle' | 'tap_candidate' | 'hold_candidate' | 'drag' | 'pinch';
+type GestureMode = Exclude<InteractionMode, 'cancelled'>;
 
 type GestureDebugEvent = {
   ts: number;
@@ -100,25 +109,10 @@ export function useAssetInteractions({
   const longPressProgressFrameRef = useRef<number | null>(null);
   const longPressStartAtRef = useRef(0);
   const longPressPointRef = useRef<{ x: number; y: number } | null>(null);
-  const pointerSessionRef = useRef<{
-    pointerId: number | null;
-    startX: number;
-    startY: number;
-    moved: boolean;
-    pressX: number;
-    pressY: number;
-    itemKey: string;
-  }>({
-    pointerId: null,
-    startX: 0,
-    startY: 0,
-    moved: false,
-    pressX: 0,
-    pressY: 0,
-    itemKey: '',
-  });
+  const pointerSessionRef = useRef<PointerSession>(createPointerSessionState());
   const longPressFiredRef = useRef(false);
   const gestureModeRef = useRef<GestureMode>('idle');
+  const pinchSessionRef = useRef(createPinchSession());
   const pinchSuppressRef = useRef(false);
   const pinchSuppressUntilRef = useRef(0);
   const gestureDebugEventsRef = useRef<GestureDebugEvent[]>([]);
@@ -176,13 +170,12 @@ export function useAssetInteractions({
     if (gestureDebugEventsRef.current.length > 200) {
       gestureDebugEventsRef.current.shift();
     }
+    assertInteractionInvariants({
+      mode: gestureModeRef.current,
+      pointerSession: pointerSessionRef.current,
+      pinchSession: pinchSessionRef.current.active ? pinchSessionRef.current : null,
+    });
   }, [classifyTargetZone]);
-
-  const getGestureThresholdScale = useCallback((pointerType: string) => {
-    if (pointerType === 'mouse') return 1;
-    const dpr = window.devicePixelRatio || 1;
-    return Math.max(1, Math.min(2.25, dpr));
-  }, []);
 
   useEffect(() => {
     (globalThis as typeof globalThis & {
@@ -227,13 +220,7 @@ export function useAssetInteractions({
   }, [onHoldEmphasis, onHoldFeedback]);
 
   const resetPointerSession = useCallback(() => {
-    pointerSessionRef.current.pointerId = null;
-    pointerSessionRef.current.itemKey = '';
-    pointerSessionRef.current.moved = false;
-    pointerSessionRef.current.startX = 0;
-    pointerSessionRef.current.startY = 0;
-    pointerSessionRef.current.pressX = 0;
-    pointerSessionRef.current.pressY = 0;
+    resetPointerSessionState(pointerSessionRef.current);
   }, []);
 
   const clearPendingLongPress = useCallback(() => {
@@ -254,6 +241,8 @@ export function useAssetInteractions({
       if (event.touches.length < 2) return;
       pinchSuppressRef.current = true;
       gestureModeRef.current = 'pinch';
+      pinchSessionRef.current.active = true;
+      pinchSessionRef.current.pointerIds = Array.from(event.touches).map((touch) => touch.identifier);
       clearPendingLongPress();
     };
 
@@ -264,6 +253,8 @@ export function useAssetInteractions({
       if (wasPinchGesture) {
         pinchSuppressUntilRef.current = Date.now() + 220;
       }
+      pinchSessionRef.current.active = false;
+      pinchSessionRef.current.pointerIds = [];
       if (gestureModeRef.current === 'pinch') {
         gestureModeRef.current = 'idle';
       }
@@ -377,15 +368,15 @@ export function useAssetInteractions({
         }
         clearPendingLongPress();
         const session = pointerSessionRef.current;
-        session.pointerId = event.pointerId;
-        session.startX = event.clientX;
-        session.startY = event.clientY;
-        session.pressX = event.clientX;
-        session.pressY = event.clientY;
-        session.moved = false;
-        session.itemKey = itemKey;
+        assignPointerDownSession(session, {
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+          itemKey,
+          x: event.clientX,
+          y: event.clientY,
+        });
         gestureModeRef.current = 'tap_candidate';
-        if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+        if (isTouchLikePointer(event.pointerType)) {
           gestureModeRef.current = 'hold_candidate';
           longPressPointerRef.current = event.pointerId;
           longPressStartAtRef.current = performance.now();
@@ -449,13 +440,13 @@ export function useAssetInteractions({
           cancelPendingLongPress();
           return;
         }
-        const dx = event.clientX - session.startX;
-        const dy = event.clientY - session.startY;
-        const thresholdScale = getGestureThresholdScale(event.pointerType);
-        const longPressMoveCancelPx = LONG_PRESS_MOVE_CANCEL_PX_BASE * thresholdScale;
-        const touchTapCancelPx = TOUCH_TAP_CANCEL_PX_BASE * thresholdScale;
-        const movedFar = (dx * dx + dy * dy) > longPressMoveCancelPx * longPressMoveCancelPx;
-        if (movedFar) {
+        const metrics = computePointerMoveMetrics(session, {
+          x: event.clientX,
+          y: event.clientY,
+          pointerType: event.pointerType,
+          devicePixelRatio: window.devicePixelRatio || 1,
+        });
+        if (metrics.movedFarForLongPress) {
           recordGestureDebugEvent({
             kind: 'pointermove:cancel_long_press',
             pointerType: event.pointerType,
@@ -464,13 +455,12 @@ export function useAssetInteractions({
             target: event.target,
             currentTarget: event.currentTarget,
             cancelReason: 'moved_far',
-            thresholdReason: `long_press_move_cancel>${longPressMoveCancelPx}px`,
+            thresholdReason: `long_press_move_cancel>${metrics.longPressMoveCancelPx}px`,
           });
           cancelPendingLongPress();
         }
-        if (event.pointerType === 'touch' || event.pointerType === 'pen') {
-          const touchMovedTooFarForTap = (dx * dx + dy * dy) > touchTapCancelPx * touchTapCancelPx;
-          if (touchMovedTooFarForTap) {
+        if (isTouchLikePointer(event.pointerType)) {
+          if (metrics.movedFarForTouchTapCancel) {
             session.moved = true;
             recordGestureDebugEvent({
               kind: 'pointermove:tap_cancel',
@@ -480,13 +470,12 @@ export function useAssetInteractions({
               target: event.target,
               currentTarget: event.currentTarget,
               cancelReason: 'touch_move_exceeded_tap_cancel',
-              thresholdReason: `touch_tap_cancel>${touchTapCancelPx}px`,
+              thresholdReason: `touch_tap_cancel>${metrics.touchTapCancelPx}px`,
             });
           }
           return;
         }
-        const pointerThresholdPx = POINTER_THRESHOLD_BASE * thresholdScale;
-        if ((dx * dx + dy * dy) > pointerThresholdPx * pointerThresholdPx) {
+        if (metrics.movedFarForDrag) {
           session.moved = true;
           recordGestureDebugEvent({
             kind: 'pointermove:drag_start',
@@ -495,7 +484,7 @@ export function useAssetInteractions({
             itemKey,
             target: event.target,
             currentTarget: event.currentTarget,
-            thresholdReason: `drag_start>${pointerThresholdPx}px`,
+            thresholdReason: `drag_start>${metrics.pointerThresholdPx}px`,
           });
           gestureModeRef.current = 'drag';
           setDragging(true);
