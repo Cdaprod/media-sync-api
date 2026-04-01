@@ -1,3 +1,22 @@
+## 2026-04-01 — PR #141 close-out baseline handoff (new)
+- [x] Final close-out audit completed for PR #141 with scope kept to stabilization baseline only (no cinematic zoom/detail feature work introduced).
+- [x] Confirmed stabilized interaction contract posture for merge:
+  - pointer session lifecycle formalized via extracted interaction contract/session helpers,
+  - pinch lane isolated from single-touch pointer lane,
+  - touch-capable cross-orientation pinch attachment is not width-gated,
+  - scroll safety preserved in portrait/landscape,
+  - rotation/transient reset paths retained to prevent interaction poisoning.
+- [x] Retained useful runtime diagnostics (`__explorerGestureDebug`, `__explorerPinchDebug`, `__explorerPinchPerfDebug`, density/layout debug hooks) as intentional regression surfaces; no valuable debug channel removed in close-out.
+- [x] Completed in PR #141 (stabilization baseline):
+  - interaction contract extraction,
+  - pointer session alignment,
+  - scroll safety restoration,
+  - landscape/desktop-like touch pinch attachment fix,
+  - cross-orientation interaction stabilization (tap/hold/pinch/scroll parity).
+- [x] Explicitly deferred to next phase (out of PR #141 scope):
+  - cinematic zoom/detail motion and any preview-system feature expansion.
+- [ ] Next phase stub: open a new PR dedicated to cinematic zoom/detail behavior with independent acceptance criteria and regression guardrails separate from interaction baseline.
+
 ## 2026-03-31 — Pinch/density cross-orientation stabilization (phase 2) (new)
 - [x] Block 0 baseline reconciliation completed: root cause identified as pinch controller attachment being gated by `isMobile` (viewport width), so landscape tablet/desktop-like widths skipped pinch controller attach entirely.
 - [x] Block 1 pinch activation lane fix: `ExplorerApp` now computes a touch-capability gate (`coarse pointer || maxTouchPoints > 1`) and attaches pinch controller on touch-capable surfaces independent of mobile width.
