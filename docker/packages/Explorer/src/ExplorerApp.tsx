@@ -665,6 +665,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     density?.settleScrub();
   }, []);
 
+  const stepDensityFromCtrlWheel = useCallback((wheelDeltaY: number) => {
+    const density = densityControllerRef.current;
+    if (!density || !Number.isFinite(wheelDeltaY) || wheelDeltaY === 0) return;
+    const currentColumns = density.getColumns();
+    if (wheelDeltaY < 0) {
+      density.setColumnsForPinch(currentColumns - 1);
+      return;
+    }
+    density.setColumnsForPinch(currentColumns + 1);
+  }, []);
+
   useEffect(() => {
     setGridColumnCount((current) => clampDensityColumns(current));
   }, [clampDensityColumns]);
@@ -2212,6 +2223,57 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setPinchOverlayActive(false);
     };
   }, [gridSurfaceEl, touchPinchCapable, view]);
+
+  useEffect(() => {
+    if (view !== 'grid') return;
+    const scrollerEl = mediaScrollViewportRef.current;
+    if (!scrollerEl) return;
+    let wheelDeltaAccumulator = 0;
+    const WHEEL_STEP_THRESHOLD = 48;
+    const wheelDebug = {
+      attached: true,
+      ctrlWheelEvents: 0,
+      preventedDefault: 0,
+      densityStepOut: 0,
+      densityStepIn: 0,
+      lastDeltaY: 0,
+    };
+    const exposeWheelDebug = () => {
+      (globalThis as typeof globalThis & {
+        __explorerCtrlWheelDensityDebug?: { getSnapshot: () => typeof wheelDebug };
+      }).__explorerCtrlWheelDensityDebug = {
+        getSnapshot: () => ({ ...wheelDebug }),
+      };
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      wheelDebug.ctrlWheelEvents += 1;
+      wheelDebug.lastDeltaY = event.deltaY;
+      event.preventDefault();
+      wheelDebug.preventedDefault += 1;
+      wheelDeltaAccumulator += event.deltaY;
+      while (Math.abs(wheelDeltaAccumulator) >= WHEEL_STEP_THRESHOLD) {
+        const nextStep = wheelDeltaAccumulator > 0 ? WHEEL_STEP_THRESHOLD : -WHEEL_STEP_THRESHOLD;
+        wheelDeltaAccumulator -= nextStep;
+        stepDensityFromCtrlWheel(nextStep);
+        if (nextStep < 0) {
+          wheelDebug.densityStepOut += 1;
+        } else {
+          wheelDebug.densityStepIn += 1;
+        }
+      }
+      exposeWheelDebug();
+    };
+
+    exposeWheelDebug();
+    scrollerEl.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      wheelDebug.attached = false;
+      exposeWheelDebug();
+      scrollerEl.removeEventListener('wheel', onWheel);
+      delete (globalThis as typeof globalThis & { __explorerCtrlWheelDensityDebug?: unknown }).__explorerCtrlWheelDensityDebug;
+    };
+  }, [stepDensityFromCtrlWheel, view]);
 
   useEffect(() => {
     if (composeModalOpen) setComposeModalRendered(true);

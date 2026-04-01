@@ -1,3 +1,12 @@
+## 2026-04-01 — Desktop Ctrl+wheel density input lane correction (new)
+- [x] Separated synthetic wheel lane from pointer-session invariant checks by passing `pointerSession` to gesture-contract assertions only when a real pointer session is active (`pointerId != null`).
+- [x] Added dedicated desktop Ctrl+wheel density adapter in `ExplorerApp` with a non-passive `wheel` listener on the grid scroll surface.
+- [x] Ctrl+wheel now calls `preventDefault()` only for the Ctrl gesture path, accumulates wheel deltas to thresholded steps, and forwards discrete steps into the existing density pinch commit path (`setColumnsForPinch(...)`).
+- [x] Plain wheel scrolling path remains untouched (no preventDefault, no density routing without Ctrl).
+- [x] Retained runtime diagnostics by adding `globalThis.__explorerCtrlWheelDensityDebug.getSnapshot()` for event/step visibility.
+- [x] Updated static contract assertions to lock the new Ctrl+wheel lane and pointer-session invariant narrowing.
+- [ ] Device-verify on desktop trackpad + mouse wheel across Chromium/Safari/Firefox that Ctrl+wheel suppresses browser zoom and drives density steps consistently.
+
 ## 2026-04-01 — PR #141 close-out baseline handoff (new)
 - [x] Final close-out audit completed for PR #141 with scope kept to stabilization baseline only (no cinematic zoom/detail feature work introduced).
 - [x] Confirmed stabilized interaction contract posture for merge:

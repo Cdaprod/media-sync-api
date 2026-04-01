@@ -194,9 +194,10 @@ export function useAssetInteractions({
     if (gestureDebugEventsRef.current.length > 200) {
       gestureDebugEventsRef.current.shift();
     }
+    const pointerSession = pointerSessionRef.current.pointerId == null ? null : pointerSessionRef.current;
     assertInteractionInvariants({
       mode: gestureModeRef.current,
-      pointerSession: pointerSessionRef.current,
+      pointerSession,
       pinchSession: pinchSessionRef.current.active ? pinchSessionRef.current : null,
     });
   }, [classifyTargetZone]);

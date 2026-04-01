@@ -1952,6 +1952,12 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(explorer.includes("pinchPerfTimeoutRef.current = window.setTimeout(() => {"));
   assert.ok(explorer.includes('pinch-perf-active'));
   assert.ok(explorer.includes('window.requestAnimationFrame(() => {'));
+  assert.ok(explorer.includes("scrollerEl.addEventListener('wheel', onWheel, { passive: false });"));
+  assert.ok(explorer.includes('if (!event.ctrlKey) return;'));
+  assert.ok(explorer.includes('event.preventDefault();'));
+  assert.ok(explorer.includes('density.setColumnsForPinch(currentColumns - 1);'));
+  assert.ok(explorer.includes('density.setColumnsForPinch(currentColumns + 1);'));
+  assert.ok(explorer.includes('__explorerCtrlWheelDensityDebug'));
 
   assert.ok(controller.includes('onPinchFrame?:'));
   assert.ok(controller.includes('onPinchStep?:'));
@@ -2001,6 +2007,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('const resetPointerSession = useCallback(() => {'));
   assert.ok(interactions.includes('const classifyTargetZone = useCallback((target: EventTarget | null):'));
   assert.ok(interactions.includes('const recordGestureDebugEvent = useCallback((params: {'));
+  assert.ok(interactions.includes('const pointerSession = pointerSessionRef.current.pointerId == null ? null : pointerSessionRef.current;'));
   assert.ok(interactions.includes('const trackMoveStateUpdate = useCallback((reason: \'dragging\' | \'asset_drag_active\') => {'));
   assert.ok(interactions.includes("kind: 'viewport_boundary_reset'"));
   assert.ok(interactions.includes('window.addEventListener(\'orientationchange\', clearTransientGestureState, { passive: true });'));

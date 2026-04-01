@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-04-01)
+- Fixed desktop Ctrl+wheel density input routing by adding a dedicated non-pointer wheel lane in `ExplorerApp` that intercepts only `event.ctrlKey` wheel events, calls `preventDefault()` in that lane, normalizes deltas to discrete density steps, and routes those steps into the existing density pinch commit path (`setColumnsForPinch`).
+- Preserved ordinary wheel behavior: non-Ctrl wheel events are no-op for density handling and continue through native scroll behavior.
+- Narrowed gesture invariant enforcement in `useAssetInteractions` so pointer-session validity checks only run when a real pointer session is active (`pointerId != null`), preventing false `[gestureContract] invalid pointer session: pointerId missing` warnings from non-pointer debug events.
+
 ### Latest Implementation Notes (2026-03-28)
 - Added explicit density motion state toggling in FLIP runtime (`.density-motion-active`) that turns on during density animation and reliably turns off on settle/interruption.
 - Added temporary density-motion card simplification CSS to reduce overlay/chrome pressure during active density motion while keeping layout truth + thumbnail plane intact.
