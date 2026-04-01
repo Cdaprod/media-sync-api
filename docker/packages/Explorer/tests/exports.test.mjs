@@ -1955,8 +1955,14 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(explorer.includes("scrollerEl.addEventListener('wheel', onWheel, { passive: false });"));
   assert.ok(explorer.includes('if (!event.ctrlKey) return;'));
   assert.ok(explorer.includes('event.preventDefault();'));
-  assert.ok(explorer.includes('density.setColumnsForPinch(currentColumns - 1);'));
-  assert.ok(explorer.includes('density.setColumnsForPinch(currentColumns + 1);'));
+  assert.ok(explorer.includes('let ctrlWheelPendingColumns: number | null = null;'));
+  assert.ok(explorer.includes('const deltaColumns = nextStep < 0 ? -1 : 1;'));
+  assert.ok(explorer.includes('const nextColumns = clampDensityColumns(seededColumns + deltaColumns);'));
+  assert.ok(explorer.includes('ctrlWheelPendingColumns = nextColumns;'));
+  assert.ok(explorer.includes('densityControllerRef.current?.setColumnsForPinch(nextColumns);'));
+  assert.ok(explorer.includes('const CTRL_WHEEL_IDLE_RESET_MS = 140;'));
+  assert.ok(explorer.includes('ctrlWheelIdleTimer = window.setTimeout(() => {'));
+  assert.ok(explorer.includes('resetCtrlWheelSession();'));
   assert.ok(explorer.includes('__explorerCtrlWheelDensityDebug'));
 
   assert.ok(controller.includes('onPinchFrame?:'));

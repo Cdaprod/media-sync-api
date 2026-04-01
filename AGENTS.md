@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-01)
+- Follow-up fixed Ctrl+wheel multi-threshold under-reaction: wheel bursts now track a local pending column target (`ctrlWheelPendingColumns`) so each threshold crossing advances from pending intent, not repeatedly from deferred committed columns.
+- Ctrl+wheel session state now resets on short idle timeout and cleanup (`CTRL_WHEEL_IDLE_RESET_MS`) to reseed pending intent from committed density at the start of the next burst.
+- Preserved lane boundaries and authority model: Ctrl+wheel remains synthetic/non-pointer with conditional `preventDefault`, plain wheel scroll remains native, and commits continue through `setColumnsForPinch(...)`.
+
+### Latest Implementation Notes (2026-04-01)
 - Fixed desktop Ctrl+wheel density input routing by adding a dedicated non-pointer wheel lane in `ExplorerApp` that intercepts only `event.ctrlKey` wheel events, calls `preventDefault()` in that lane, normalizes deltas to discrete density steps, and routes those steps into the existing density pinch commit path (`setColumnsForPinch`).
 - Preserved ordinary wheel behavior: non-Ctrl wheel events are no-op for density handling and continue through native scroll behavior.
 - Narrowed gesture invariant enforcement in `useAssetInteractions` so pointer-session validity checks only run when a real pointer session is active (`pointerId != null`), preventing false `[gestureContract] invalid pointer session: pointerId missing` warnings from non-pointer debug events.

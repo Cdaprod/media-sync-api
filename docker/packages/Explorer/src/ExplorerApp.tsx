@@ -665,17 +665,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     density?.settleScrub();
   }, []);
 
-  const stepDensityFromCtrlWheel = useCallback((wheelDeltaY: number) => {
-    const density = densityControllerRef.current;
-    if (!density || !Number.isFinite(wheelDeltaY) || wheelDeltaY === 0) return;
-    const currentColumns = density.getColumns();
-    if (wheelDeltaY < 0) {
-      density.setColumnsForPinch(currentColumns - 1);
-      return;
-    }
-    density.setColumnsForPinch(currentColumns + 1);
-  }, []);
-
   useEffect(() => {
     setGridColumnCount((current) => clampDensityColumns(current));
   }, [clampDensityColumns]);
@@ -2229,7 +2218,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const scrollerEl = mediaScrollViewportRef.current;
     if (!scrollerEl) return;
     let wheelDeltaAccumulator = 0;
+    let ctrlWheelPendingColumns: number | null = null;
+    let ctrlWheelIdleTimer = 0;
     const WHEEL_STEP_THRESHOLD = 48;
+    const CTRL_WHEEL_IDLE_RESET_MS = 140;
     const wheelDebug = {
       attached: true,
       ctrlWheelEvents: 0,
@@ -2237,6 +2229,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       densityStepOut: 0,
       densityStepIn: 0,
       lastDeltaY: 0,
+      pendingColumns: 0,
+      pendingResets: 0,
+    };
+    const clearCtrlWheelIdleTimer = () => {
+      if (!ctrlWheelIdleTimer) return;
+      window.clearTimeout(ctrlWheelIdleTimer);
+      ctrlWheelIdleTimer = 0;
+    };
+    const resetCtrlWheelSession = () => {
+      ctrlWheelPendingColumns = null;
+      wheelDeltaAccumulator = 0;
+      wheelDebug.pendingColumns = 0;
+      wheelDebug.pendingResets += 1;
+      clearCtrlWheelIdleTimer();
     };
     const exposeWheelDebug = () => {
       (globalThis as typeof globalThis & {
@@ -2251,29 +2257,44 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       wheelDebug.lastDeltaY = event.deltaY;
       event.preventDefault();
       wheelDebug.preventedDefault += 1;
+      if (ctrlWheelPendingColumns == null) {
+        ctrlWheelPendingColumns = densityControllerRef.current?.getColumns() ?? gridColumnCount;
+      }
       wheelDeltaAccumulator += event.deltaY;
       while (Math.abs(wheelDeltaAccumulator) >= WHEEL_STEP_THRESHOLD) {
         const nextStep = wheelDeltaAccumulator > 0 ? WHEEL_STEP_THRESHOLD : -WHEEL_STEP_THRESHOLD;
         wheelDeltaAccumulator -= nextStep;
-        stepDensityFromCtrlWheel(nextStep);
+        if (!Number.isFinite(nextStep) || nextStep === 0) continue;
+        const deltaColumns = nextStep < 0 ? -1 : 1;
+        const seededColumns = ctrlWheelPendingColumns ?? densityControllerRef.current?.getColumns() ?? gridColumnCount;
+        const nextColumns = clampDensityColumns(seededColumns + deltaColumns);
+        ctrlWheelPendingColumns = nextColumns;
+        wheelDebug.pendingColumns = nextColumns;
+        densityControllerRef.current?.setColumnsForPinch(nextColumns);
         if (nextStep < 0) {
           wheelDebug.densityStepOut += 1;
         } else {
           wheelDebug.densityStepIn += 1;
         }
       }
+      clearCtrlWheelIdleTimer();
+      ctrlWheelIdleTimer = window.setTimeout(() => {
+        resetCtrlWheelSession();
+        exposeWheelDebug();
+      }, CTRL_WHEEL_IDLE_RESET_MS);
       exposeWheelDebug();
     };
 
     exposeWheelDebug();
     scrollerEl.addEventListener('wheel', onWheel, { passive: false });
     return () => {
+      resetCtrlWheelSession();
       wheelDebug.attached = false;
       exposeWheelDebug();
       scrollerEl.removeEventListener('wheel', onWheel);
       delete (globalThis as typeof globalThis & { __explorerCtrlWheelDensityDebug?: unknown }).__explorerCtrlWheelDensityDebug;
     };
-  }, [stepDensityFromCtrlWheel, view]);
+  }, [clampDensityColumns, gridColumnCount, view]);
 
   useEffect(() => {
     if (composeModalOpen) setComposeModalRendered(true);

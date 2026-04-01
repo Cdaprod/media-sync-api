@@ -1,3 +1,11 @@
+## 2026-04-01 — Ctrl+wheel pending-target correctness follow-up (new)
+- [x] Addressed P2 review finding where multi-threshold Ctrl+wheel bursts could under-react due to rereading committed columns while pinch commits were deferred.
+- [x] Added local pending target tracking for active Ctrl+wheel bursts (`ctrlWheelPendingColumns`) so each threshold crossing advances one column from pending intent.
+- [x] Added burst/session idle reset (`CTRL_WHEEL_IDLE_RESET_MS`) to clear pending target and accumulator between Ctrl+wheel gesture bursts.
+- [x] Kept non-pointer lane boundaries and authority flow unchanged (`preventDefault` only for Ctrl+wheel, density updates still via `setColumnsForPinch`).
+- [x] Updated static contract assertions to lock pending-target stepping and idle reset markers.
+- [ ] Device-verify high-delta Ctrl+wheel bursts to confirm monotonic multi-step behavior (e.g., `5→4→3→2`) across desktop wheel + trackpad hardware.
+
 ## 2026-04-01 — Desktop Ctrl+wheel density input lane correction (new)
 - [x] Separated synthetic wheel lane from pointer-session invariant checks by passing `pointerSession` to gesture-contract assertions only when a real pointer session is active (`pointerId != null`).
 - [x] Added dedicated desktop Ctrl+wheel density adapter in `ExplorerApp` with a non-passive `wheel` listener on the grid scroll surface.
