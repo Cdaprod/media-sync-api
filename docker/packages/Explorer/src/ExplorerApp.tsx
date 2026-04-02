@@ -51,6 +51,12 @@ import { createModalMotion } from './ui/motion/modalMotion';
 import { createExplorerDensityController } from './explorer/density/createExplorerDensityController';
 import { createPinchDensityController } from './explorer/density/createPinchDensityController';
 import { DEFAULT_COLUMNS_MOBILE, MAX_COLUMNS_MOBILE, MIN_COLUMNS_MOBILE } from './explorer/density/constants';
+import {
+  computeFocusWorldTransform as computeFocusWorldTransformFromRects,
+  FOCUS_OVERLAY_REVEAL_DELAY_MS,
+  FOCUS_WORLD_OPEN_DURATION_MS,
+  type FocusWorldTransform,
+} from './explorer/focus/focusWorldMotion';
 import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
@@ -63,6 +69,13 @@ type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
 type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
 type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
 type PinchOverlayPoint = { x: number; y: number } | null;
+type FocusPresentationState =
+  | { mode: 'idle' }
+  | { mode: 'world-focus'; key: string; overlayReady: boolean }
+  | { mode: 'drawer-fallback'; key: string };
+type StartFocusMotionResult =
+  | { ok: true }
+  | { ok: false; reason: 'not-grid' | 'density-unsafe' | 'missing-target' };
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -380,7 +393,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
+  const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
+  const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0 });
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
+  const focusOverlayRevealTimerRef = useRef<number | null>(null);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
   const composeCardRef = useRef<HTMLFormElement | null>(null);
   const confirmModalRef = useRef<HTMLDivElement | null>(null);
@@ -388,6 +404,58 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+
+  const clearFocusOverlayRevealTimer = useCallback(() => {
+    if (!focusOverlayRevealTimerRef.current) return;
+    window.clearTimeout(focusOverlayRevealTimerRef.current);
+    focusOverlayRevealTimerRef.current = null;
+  }, []);
+
+  const resetFocusPresentationToIdle = useCallback(() => {
+    clearFocusOverlayRevealTimer();
+    setFocusPresentationState({ mode: 'idle' });
+    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+  }, [clearFocusOverlayRevealTimer]);
+
+  const computeFocusWorldTransform = useCallback((selectionKey: string) => {
+    const scrollViewport = mediaScrollViewportRef.current;
+    const gridEl = gridRef.current;
+    if (!scrollViewport || !gridEl) return null;
+    const card = gridEl.querySelector<HTMLElement>(`.masonry-card[data-select-key="${CSS.escape(selectionKey)}"]`);
+    if (!card) return null;
+    return computeFocusWorldTransformFromRects({
+      cardRect: card.getBoundingClientRect(),
+      viewportRect: scrollViewport.getBoundingClientRect(),
+      mobileLayout: window.matchMedia('(max-width: 860px)').matches,
+    });
+  }, []);
+
+  const startFocusMotionForSelectionKey = useCallback((selectionKey: string): StartFocusMotionResult => {
+    const host = mediaContentRef.current;
+    const densityMotionUnsafe = host?.classList.contains('density-motion-active')
+      || host?.classList.contains('density-gesture-active');
+    if (view !== 'grid') return { ok: false, reason: 'not-grid' };
+    if (densityMotionUnsafe) return { ok: false, reason: 'density-unsafe' };
+    const initial = computeFocusWorldTransform(selectionKey);
+    if (!initial) return { ok: false, reason: 'missing-target' };
+    clearFocusOverlayRevealTimer();
+    setFocusWorldTransform(initial);
+    setFocusPresentationState({ mode: 'world-focus', key: selectionKey, overlayReady: false });
+    window.requestAnimationFrame(() => {
+      const next = computeFocusWorldTransform(selectionKey);
+      if (!next) return;
+      setFocusWorldTransform(next);
+    });
+    focusOverlayRevealTimerRef.current = window.setTimeout(() => {
+      setFocusPresentationState((prev) => (
+        prev.mode === 'world-focus' && prev.key === selectionKey
+          ? { ...prev, overlayReady: true }
+          : prev
+      ));
+      focusOverlayRevealTimerRef.current = null;
+    }, FOCUS_OVERLAY_REVEAL_DELAY_MS);
+    return { ok: true };
+  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, view]);
 
   useEffect(() => {
     if (pinchOverlayGestureActiveRef.current) {
@@ -1007,17 +1075,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, assetSelectionKey]);
 
   const openDrawer = useCallback((item: MediaItem) => {
-    focusAsset(item);
+    const nextKey = assetSelectionKey(item, activeProject);
+    if (!nextKey) return;
+    focusAsset(item, nextKey);
     setFocused(item);
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
-  }, [focusAsset]);
+    const focusStart = startFocusMotionForSelectionKey(nextKey);
+    if (!focusStart.ok) {
+      clearFocusOverlayRevealTimer();
+      setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+      setFocusPresentationState({ mode: 'drawer-fallback', key: nextKey });
+    }
+  }, [activeProject, assetSelectionKey, clearFocusOverlayRevealTimer, focusAsset, startFocusMotionForSelectionKey]);
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
     setFocused(null);
     setPreviewDetailsOpen(false);
-  }, []);
+    resetFocusPresentationToIdle();
+  }, [resetFocusPresentationToIdle]);
 
   const commitPreviewActivationKey = useCallback((nextKey: string) => {
     setPreviewActivationKey((prev) => {
@@ -1035,11 +1112,58 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (currentIndex < 0) return;
     const nextIndex = (currentIndex + offset + filteredMedia.length) % filteredMedia.length;
     const nextItem = filteredMedia[nextIndex] || focused;
+    const nextKey = assetSelectionKey(nextItem, activeProject);
+    if (!nextKey) return;
     setFocused(nextItem);
-    setActiveAssetKey(assetSelectionKey(nextItem, activeProject));
-    commitPreviewActivationKey(assetSelectionKey(nextItem, activeProject));
+    setActiveAssetKey(nextKey);
+    commitPreviewActivationKey(nextKey);
+    const focusStart = startFocusMotionForSelectionKey(nextKey);
+    if (!focusStart.ok) {
+      clearFocusOverlayRevealTimer();
+      setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+      setFocusPresentationState({ mode: 'drawer-fallback', key: nextKey });
+    }
     setPreviewAutoPlayToken((prev) => prev + 1);
-  }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused]);
+  }, [activeProject, assetSelectionKey, clearFocusOverlayRevealTimer, commitPreviewActivationKey, filteredMedia, focused, startFocusMotionForSelectionKey]);
+
+  useEffect(() => {
+    if (!inspectorOpen || !activeAssetKey) return;
+    if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
+    const rafId = window.requestAnimationFrame(() => {
+      const next = computeFocusWorldTransform(activeAssetKey);
+      if (!next) {
+        clearFocusOverlayRevealTimer();
+        setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+        setFocusPresentationState({ mode: 'drawer-fallback', key: activeAssetKey });
+        return;
+      }
+      setFocusWorldTransform(next);
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [activeAssetKey, clearFocusOverlayRevealTimer, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, pendingEntries.length]);
+
+  useEffect(() => () => {
+    resetFocusPresentationToIdle();
+  }, [resetFocusPresentationToIdle]);
+
+  useEffect(() => {
+    if (focusPresentationState.mode === 'idle') return;
+    if (!inspectorOpen) {
+      resetFocusPresentationToIdle();
+      return;
+    }
+    if (focusPresentationState.mode !== 'world-focus') return;
+    const keyMismatch = !activeAssetKey || focusPresentationState.key !== activeAssetKey;
+    if (view === 'grid' && !keyMismatch) return;
+    clearFocusOverlayRevealTimer();
+    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+    const fallbackKey = activeAssetKey || focusPresentationState.key;
+    if (fallbackKey) {
+      setFocusPresentationState({ mode: 'drawer-fallback', key: fallbackKey });
+      return;
+    }
+    resetFocusPresentationToIdle();
+  }, [activeAssetKey, clearFocusOverlayRevealTimer, focusPresentationState, inspectorOpen, resetFocusPresentationToIdle, view]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;
@@ -2555,6 +2679,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setSidebarOpen((prev) => !prev);
   }, []);
 
+  const focusWorldActive = (
+    inspectorOpen
+    && view === 'grid'
+    && focusPresentationState.mode === 'world-focus'
+    && Boolean(activeAssetKey)
+    && focusPresentationState.key === activeAssetKey
+  );
+  const focusOverlayReady = (
+    focusPresentationState.mode === 'world-focus'
+      ? focusPresentationState.overlayReady
+      : focusPresentationState.mode === 'drawer-fallback'
+  );
+
   return (
     <div className="app">
       <div className="main">
@@ -2771,7 +2908,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
         <section
           ref={mediaContentRef}
-          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''} ${pinchPerfActive ? 'pinch-perf-active' : ''} ${overlayEnabled ? '' : 'overlay-hidden'}`}
+          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''} ${pinchPerfActive ? 'pinch-perf-active' : ''} ${overlayEnabled ? '' : 'overlay-hidden'} ${focusWorldActive ? 'focus-world-active' : ''}`}
           onContextMenuCapture={(event) => {
             const target = event.target as HTMLElement | null;
             if (!target?.closest('.asset, .row')) return;
@@ -3024,51 +3161,62 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 } as React.CSSProperties
               }
             >
-              <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
-                {!activeProject && mediaScope !== 'all' ? (
-                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                    Select a project to view media.
-                  </div>
-                ) : renderedMediaEntries.length === 0 ? (
-                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                    {mediaScope === 'all'
-                      ? 'No indexed files yet across all projects.'
-                      : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
-                  </div>
-                ) : (
-                  <AssetGrid
-                    buildAssetViewModel={buildAssetViewModel}
-                    canSelect={canSelect}
-                    gridColumnCount={gridColumnCount}
-                    gridRef={bindGridSurface}
-                    entries={renderedMediaEntries}
-                    onToggleSelected={toggleSelected}
-                    onDismissPendingJob={removePendingJob}
-                  />
-                )}
-              </div>
+              <div
+                className="focus-world-stage"
+                data-focus-world={focusWorldActive ? 'true' : 'false'}
+                style={{
+                  '--focus-world-scale': String(focusWorldTransform.scale),
+                  '--focus-world-translate-x': `${focusWorldTransform.x}px`,
+                  '--focus-world-translate-y': `${focusWorldTransform.y}px`,
+                  '--focus-world-duration': `${FOCUS_WORLD_OPEN_DURATION_MS}ms`,
+                } as React.CSSProperties}
+              >
+                <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
+                  {!activeProject && mediaScope !== 'all' ? (
+                    <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                      Select a project to view media.
+                    </div>
+                  ) : renderedMediaEntries.length === 0 ? (
+                    <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                      {mediaScope === 'all'
+                        ? 'No indexed files yet across all projects.'
+                        : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
+                    </div>
+                  ) : (
+                    <AssetGrid
+                      buildAssetViewModel={buildAssetViewModel}
+                      canSelect={canSelect}
+                      gridColumnCount={gridColumnCount}
+                      gridRef={bindGridSurface}
+                      entries={renderedMediaEntries}
+                      onToggleSelected={toggleSelected}
+                      onDismissPendingJob={removePendingJob}
+                    />
+                  )}
+                </div>
 
-              <div className="list" style={{ display: view === 'list' ? '' : 'none' }}>
-                {!activeProject && mediaScope !== 'all' ? (
-                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                    Select a project to view media.
-                  </div>
-                ) : renderedMediaEntries.length === 0 ? (
-                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                    {mediaScope === 'all'
-                      ? 'No indexed files yet across all projects.'
-                      : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
-                  </div>
-                ) : (
-                  <AssetList
-                    buildAssetViewModel={buildAssetViewModel}
-                    canSelect={canSelect}
-                    items={renderedMediaEntries}
-                    onOpenDrawer={openDrawer}
-                    onToggleSelected={toggleSelected}
-                    onDismissPendingJob={removePendingJob}
-                  />
-                )}
+                <div className="list" style={{ display: view === 'list' ? '' : 'none' }}>
+                  {!activeProject && mediaScope !== 'all' ? (
+                    <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                      Select a project to view media.
+                    </div>
+                  ) : renderedMediaEntries.length === 0 ? (
+                    <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                      {mediaScope === 'all'
+                        ? 'No indexed files yet across all projects.'
+                        : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
+                    </div>
+                  ) : (
+                    <AssetList
+                      buildAssetViewModel={buildAssetViewModel}
+                      canSelect={canSelect}
+                      items={renderedMediaEntries}
+                      onOpenDrawer={openDrawer}
+                      onToggleSelected={toggleSelected}
+                      onDismissPendingJob={removePendingJob}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -3120,7 +3268,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
       </div>
 
-      <aside className="drawer" data-inspector-drawer="true" aria-hidden={!inspectorOpen}>
+      <aside className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''}`} data-inspector-drawer="true" aria-hidden={!inspectorOpen}>
         <div className="drawer-body custom-ui-surface">
           <AssetPreviewPanel
               asset={normalizedPreviewAsset}
@@ -3298,7 +3446,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onClick={() => setSidebarOpen(false)}
       ></div>
       <div
-        className="backdrop inspector-backdrop"
+        className={`backdrop inspector-backdrop ${focusOverlayReady ? 'focus-overlay-ready' : ''}`}
         ref={inspectorBackdropRef}
         data-inspector-backdrop="true"
         aria-hidden={!inspectorOpen}

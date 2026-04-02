@@ -31,6 +31,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'topbarSnapBand.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -812,7 +813,7 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   assert.ok(gridContent.includes('data-no-preview="1"'));
   assert.ok(hookContent.includes('if (inNoPreviewZone(event.target)) {'));
   assert.ok(hookContent.includes('if (inspectorOpen) {'));
-  assert.ok(hookContent.includes('closeDrawer();'));
+  assert.ok(!hookContent.includes('closeDrawer();'));
   assert.ok(hookContent.includes('openDrawer(item);'));
   assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
   assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
@@ -976,6 +977,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const drawerMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts');
   const topbarMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts');
+  const focusMotionPath = path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const densityController = fs.readFileSync(densityControllerPath, 'utf8');
   const pinchController = fs.readFileSync(pinchControllerPath, 'utf8');
@@ -983,11 +985,33 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   const flip = fs.readFileSync(flipPath, 'utf8');
   const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
   const topbarMotion = fs.readFileSync(topbarMotionPath, 'utf8');
+  const focusMotion = fs.readFileSync(focusMotionPath, 'utf8');
 
   assert.ok(content.includes("if (view !== 'grid') {"));
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
   assert.ok(content.includes('const commitDensityColumns = useCallback((nextColumns: number, animated = true) => {'));
   assert.ok(content.includes('const scrubDensityColumns = useCallback((nextColumns: number) => {'));
+  assert.ok(content.includes('const computeFocusWorldTransform = useCallback((selectionKey: string) => {'));
+  assert.ok(content.includes('const startFocusMotionForSelectionKey = useCallback((selectionKey: string): StartFocusMotionResult => {'));
+  assert.ok(content.includes("type FocusPresentationState ="));
+  assert.ok(content.includes("type StartFocusMotionResult ="));
+  assert.ok(content.includes("{ ok: false; reason: 'not-grid' | 'density-unsafe' | 'missing-target' };"));
+  assert.ok(content.includes("{ mode: 'world-focus'; key: string; overlayReady: boolean }"));
+  assert.ok(content.includes("{ mode: 'drawer-fallback'; key: string }"));
+  assert.ok(content.includes('const focusWorldActive = ('));
+  assert.ok(content.includes('&& view === \'grid\''));
+  assert.ok(content.includes('&& focusPresentationState.mode === \'world-focus\''));
+  assert.ok(content.includes('&& focusPresentationState.key === activeAssetKey'));
+  assert.ok(content.includes('if (!inspectorOpen) {'));
+  assert.ok(content.includes('setFocusPresentationState({ mode: \'drawer-fallback\', key: fallbackKey });'));
+  assert.ok(content.includes('const focusStart = startFocusMotionForSelectionKey(nextKey);'));
+  assert.ok(content.includes('if (!focusStart.ok) {'));
+  assert.ok(content.includes('setFocusPresentationState({ mode: \'drawer-fallback\', key: nextKey });'));
+  assert.ok(content.includes("from './explorer/focus/focusWorldMotion'"));
+  assert.ok(content.includes('className="focus-world-stage"'));
+  assert.ok(content.includes("data-focus-world={focusWorldActive ? 'true' : 'false'}"));
+  assert.ok(focusMotion.includes('export function computeFocusWorldTransform'));
+  assert.ok(focusMotion.includes('FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX = 320'));
   assert.ok(content.includes('density.scrubTo(nextColumns);'));
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(content.includes('density?.settleScrub();'));
@@ -997,7 +1021,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('if (inDensityPinchSurface(event.target)) return;'));
   assert.ok(content.includes('data-density-pinch-surface="true"'));
   assert.ok(content.includes('topbarMotionRef.current?.refresh();'));
-  assert.ok(content.includes('className="backdrop inspector-backdrop"'));
+  assert.ok(content.includes('inspector-backdrop'));
   assert.ok(content.includes('data-inspector-backdrop="true"'));
   assert.ok(content.includes('data-inspector-drawer="true"'));
   assert.ok(content.includes("const modeQuery = window.matchMedia('(max-width: 860px)');"));
@@ -1371,7 +1395,7 @@ test('preview drawer and inspector backdrop maintain explicit ownership contract
   const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
 
-  assert.ok(explorer.includes('className="backdrop inspector-backdrop"'));
+  assert.ok(explorer.includes('inspector-backdrop'));
   assert.ok(explorer.includes('data-inspector-backdrop="true"'));
   assert.ok(explorer.includes('data-inspector-drawer="true"'));
   assert.ok(explorer.includes('createDrawerMotion(drawerEl, backdropEl, {'));
@@ -1649,7 +1673,7 @@ test('preview/backdrop styles and ownership markers remain explicit enough to pr
 
   assert.ok(explorer.includes('data-inspector-backdrop="true"'));
   assert.ok(explorer.includes('data-inspector-drawer="true"'));
-  assert.ok(explorer.includes('className="backdrop inspector-backdrop"'));
+  assert.ok(explorer.includes('inspector-backdrop'));
   assert.ok(drawerMotion.includes("drawerEl.dataset.drawerMotionOwned = 'true';"));
   assert.ok(drawerMotion.includes("backdropEl.dataset.drawerMotionOwned = 'true';"));
   assert.ok(styles.includes('.inspector-backdrop'));

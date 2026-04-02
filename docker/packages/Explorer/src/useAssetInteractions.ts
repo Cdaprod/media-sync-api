@@ -613,7 +613,7 @@ export function useAssetInteractions({
         const now = Date.now();
         if (inspectorOpen) {
           focusAsset(item, itemKey);
-          closeDrawer();
+          openDrawer(item);
           lastTileTapRef.current = { key: '', at: 0 };
           return;
         }
