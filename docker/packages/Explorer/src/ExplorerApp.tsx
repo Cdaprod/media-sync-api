@@ -182,6 +182,14 @@ const buildThumbFallback = (label: string) => {
 };
 
 const CONTENT_LOADING_DELAY_MS = 180;
+const FOCUS_WORLD_OPEN_DURATION_MS = 340;
+const FOCUS_OVERLAY_REVEAL_DELAY_MS = 220;
+const FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX = 28;
+const FOCUS_SAFE_FRAME_VERTICAL_PAD_PX = 32;
+const FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX = 320;
+const FOCUS_SAFE_FRAME_TOPBAR_RESERVE_PX = 88;
+const FOCUS_WORLD_MAX_SCALE = 2.85;
+const FOCUS_WORLD_MIN_SCALE = 1;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 const OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
@@ -380,7 +388,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
+  const [focusWorldActive, setFocusWorldActive] = useState(false);
+  const [focusOverlayReady, setFocusOverlayReady] = useState(false);
+  const [focusWorldTransform, setFocusWorldTransform] = useState({ scale: 1, x: 0, y: 0 });
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
+  const focusOverlayRevealTimerRef = useRef<number | null>(null);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
   const composeCardRef = useRef<HTMLFormElement | null>(null);
   const confirmModalRef = useRef<HTMLDivElement | null>(null);
@@ -388,6 +400,63 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+
+  const clearFocusOverlayRevealTimer = useCallback(() => {
+    if (!focusOverlayRevealTimerRef.current) return;
+    window.clearTimeout(focusOverlayRevealTimerRef.current);
+    focusOverlayRevealTimerRef.current = null;
+  }, []);
+
+  const computeFocusWorldTransform = useCallback((selectionKey: string) => {
+    const scrollViewport = mediaScrollViewportRef.current;
+    const gridEl = gridRef.current;
+    if (!scrollViewport || !gridEl) return null;
+    const card = gridEl.querySelector<HTMLElement>(`.masonry-card[data-select-key="${CSS.escape(selectionKey)}"]`);
+    if (!card) return null;
+    const cardRect = card.getBoundingClientRect();
+    if (cardRect.width <= 1 || cardRect.height <= 1) return null;
+    const viewportRect = scrollViewport.getBoundingClientRect();
+    const mobileLayout = window.matchMedia('(max-width: 860px)').matches;
+    const safeLeft = viewportRect.left + FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX;
+    const safeRight = viewportRect.right - FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX - (mobileLayout ? 0 : FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX);
+    const safeTop = viewportRect.top + FOCUS_SAFE_FRAME_TOPBAR_RESERVE_PX;
+    const safeBottom = viewportRect.bottom - FOCUS_SAFE_FRAME_VERTICAL_PAD_PX - (mobileLayout ? 220 : 0);
+    const safeWidth = Math.max(120, safeRight - safeLeft);
+    const safeHeight = Math.max(120, safeBottom - safeTop);
+    const safeCenterX = safeLeft + (safeWidth / 2);
+    const safeCenterY = safeTop + (safeHeight / 2);
+    const cardCenterX = cardRect.left + (cardRect.width / 2);
+    const cardCenterY = cardRect.top + (cardRect.height / 2);
+    const scale = Math.max(
+      FOCUS_WORLD_MIN_SCALE,
+      Math.min(FOCUS_WORLD_MAX_SCALE, safeWidth / cardRect.width, safeHeight / cardRect.height),
+    );
+    return {
+      scale,
+      x: (safeCenterX - cardCenterX) / scale,
+      y: (safeCenterY - cardCenterY) / scale,
+    };
+  }, []);
+
+  const startFocusMotionForSelectionKey = useCallback((selectionKey: string) => {
+    setFocusWorldActive(true);
+    clearFocusOverlayRevealTimer();
+    setFocusOverlayReady(false);
+    const apply = () => {
+      const next = computeFocusWorldTransform(selectionKey);
+      if (!next) return;
+      setFocusWorldTransform(next);
+    };
+    apply();
+    const rafId = window.requestAnimationFrame(apply);
+    focusOverlayRevealTimerRef.current = window.setTimeout(() => {
+      setFocusOverlayReady(true);
+      focusOverlayRevealTimerRef.current = null;
+    }, FOCUS_OVERLAY_REVEAL_DELAY_MS);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform]);
 
   useEffect(() => {
     if (pinchOverlayGestureActiveRef.current) {
@@ -1007,17 +1076,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, assetSelectionKey]);
 
   const openDrawer = useCallback((item: MediaItem) => {
-    focusAsset(item);
+    const nextKey = assetSelectionKey(item, activeProject);
+    if (!nextKey) return;
+    focusAsset(item, nextKey);
     setFocused(item);
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
-  }, [focusAsset]);
+    startFocusMotionForSelectionKey(nextKey);
+  }, [activeProject, assetSelectionKey, focusAsset, startFocusMotionForSelectionKey]);
 
   const closeDrawer = useCallback(() => {
+    clearFocusOverlayRevealTimer();
     setInspectorOpen(false);
     setFocused(null);
     setPreviewDetailsOpen(false);
-  }, []);
+    setFocusOverlayReady(false);
+    setFocusWorldActive(false);
+    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+  }, [clearFocusOverlayRevealTimer]);
 
   const commitPreviewActivationKey = useCallback((nextKey: string) => {
     setPreviewActivationKey((prev) => {
@@ -1035,11 +1111,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (currentIndex < 0) return;
     const nextIndex = (currentIndex + offset + filteredMedia.length) % filteredMedia.length;
     const nextItem = filteredMedia[nextIndex] || focused;
+    const nextKey = assetSelectionKey(nextItem, activeProject);
+    if (!nextKey) return;
     setFocused(nextItem);
-    setActiveAssetKey(assetSelectionKey(nextItem, activeProject));
-    commitPreviewActivationKey(assetSelectionKey(nextItem, activeProject));
+    setActiveAssetKey(nextKey);
+    commitPreviewActivationKey(nextKey);
+    startFocusMotionForSelectionKey(nextKey);
     setPreviewAutoPlayToken((prev) => prev + 1);
-  }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused]);
+  }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused, startFocusMotionForSelectionKey]);
+
+  useEffect(() => {
+    if (!inspectorOpen || !activeAssetKey) return;
+    const rafId = window.requestAnimationFrame(() => {
+      const next = computeFocusWorldTransform(activeAssetKey);
+      if (!next) return;
+      setFocusWorldTransform(next);
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [activeAssetKey, computeFocusWorldTransform, gridColumnCount, inspectorOpen, renderedMediaEntries.length]);
+
+  useEffect(() => () => {
+    clearFocusOverlayRevealTimer();
+  }, [clearFocusOverlayRevealTimer]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;
@@ -2771,7 +2864,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
         <section
           ref={mediaContentRef}
-          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''} ${pinchPerfActive ? 'pinch-perf-active' : ''} ${overlayEnabled ? '' : 'overlay-hidden'}`}
+          className={`content custom-ui-surface ${dragActive ? 'drag-active' : ''} ${contentLoading ? 'is-loading' : ''} ${pinchPerfActive ? 'pinch-perf-active' : ''} ${overlayEnabled ? '' : 'overlay-hidden'} ${focusWorldActive ? 'focus-world-active' : ''}`}
           onContextMenuCapture={(event) => {
             const target = event.target as HTMLElement | null;
             if (!target?.closest('.asset, .row')) return;
@@ -3024,51 +3117,62 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 } as React.CSSProperties
               }
             >
-              <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
-                {!activeProject && mediaScope !== 'all' ? (
-                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                    Select a project to view media.
-                  </div>
-                ) : renderedMediaEntries.length === 0 ? (
-                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                    {mediaScope === 'all'
-                      ? 'No indexed files yet across all projects.'
-                      : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
-                  </div>
-                ) : (
-                  <AssetGrid
-                    buildAssetViewModel={buildAssetViewModel}
-                    canSelect={canSelect}
-                    gridColumnCount={gridColumnCount}
-                    gridRef={bindGridSurface}
-                    entries={renderedMediaEntries}
-                    onToggleSelected={toggleSelected}
-                    onDismissPendingJob={removePendingJob}
-                  />
-                )}
-              </div>
+              <div
+                className="focus-world-stage"
+                data-focus-world={focusWorldActive ? 'true' : 'false'}
+                style={{
+                  '--focus-world-scale': String(focusWorldTransform.scale),
+                  '--focus-world-translate-x': `${focusWorldTransform.x}px`,
+                  '--focus-world-translate-y': `${focusWorldTransform.y}px`,
+                  '--focus-world-duration': `${FOCUS_WORLD_OPEN_DURATION_MS}ms`,
+                } as React.CSSProperties}
+              >
+                <div className="grid" style={{ display: view === 'grid' ? '' : 'none' }}>
+                  {!activeProject && mediaScope !== 'all' ? (
+                    <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                      Select a project to view media.
+                    </div>
+                  ) : renderedMediaEntries.length === 0 ? (
+                    <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                      {mediaScope === 'all'
+                        ? 'No indexed files yet across all projects.'
+                        : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
+                    </div>
+                  ) : (
+                    <AssetGrid
+                      buildAssetViewModel={buildAssetViewModel}
+                      canSelect={canSelect}
+                      gridColumnCount={gridColumnCount}
+                      gridRef={bindGridSurface}
+                      entries={renderedMediaEntries}
+                      onToggleSelected={toggleSelected}
+                      onDismissPendingJob={removePendingJob}
+                    />
+                  )}
+                </div>
 
-              <div className="list" style={{ display: view === 'list' ? '' : 'none' }}>
-                {!activeProject && mediaScope !== 'all' ? (
-                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                    Select a project to view media.
-                  </div>
-                ) : renderedMediaEntries.length === 0 ? (
-                  <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
-                    {mediaScope === 'all'
-                      ? 'No indexed files yet across all projects.'
-                      : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
-                  </div>
-                ) : (
-                  <AssetList
-                    buildAssetViewModel={buildAssetViewModel}
-                    canSelect={canSelect}
-                    items={renderedMediaEntries}
-                    onOpenDrawer={openDrawer}
-                    onToggleSelected={toggleSelected}
-                    onDismissPendingJob={removePendingJob}
-                  />
-                )}
+                <div className="list" style={{ display: view === 'list' ? '' : 'none' }}>
+                  {!activeProject && mediaScope !== 'all' ? (
+                    <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                      Select a project to view media.
+                    </div>
+                  ) : renderedMediaEntries.length === 0 ? (
+                    <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '12px' }}>
+                      {mediaScope === 'all'
+                        ? 'No indexed files yet across all projects.'
+                        : <>No indexed files yet. Upload then run <code>/reindex</code>.</>}
+                    </div>
+                  ) : (
+                    <AssetList
+                      buildAssetViewModel={buildAssetViewModel}
+                      canSelect={canSelect}
+                      items={renderedMediaEntries}
+                      onOpenDrawer={openDrawer}
+                      onToggleSelected={toggleSelected}
+                      onDismissPendingJob={removePendingJob}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -3120,7 +3224,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
       </div>
 
-      <aside className="drawer" data-inspector-drawer="true" aria-hidden={!inspectorOpen}>
+      <aside className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''}`} data-inspector-drawer="true" aria-hidden={!inspectorOpen}>
         <div className="drawer-body custom-ui-surface">
           <AssetPreviewPanel
               asset={normalizedPreviewAsset}
@@ -3298,7 +3402,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onClick={() => setSidebarOpen(false)}
       ></div>
       <div
-        className="backdrop inspector-backdrop"
+        className={`backdrop inspector-backdrop ${focusOverlayReady ? 'focus-overlay-ready' : ''}`}
         ref={inspectorBackdropRef}
         data-inspector-backdrop="true"
         aria-hidden={!inspectorOpen}

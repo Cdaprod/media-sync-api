@@ -1,3 +1,16 @@
+## 2026-04-02 — Explorer focus-world follow-up alignment (active)
+- [x] Re-scoped focus-world transforms from `.scroll-content` to dedicated `.focus-world-stage` so topbar/chrome stay stable while the grid/list world moves.
+- [x] Kept dynamic fit endpoint path centered on real masonry card bounds (`.masonry-card[data-select-key]`) and shared open/refocus math.
+- [x] Added static assertions for focus-world contracts (fit helper, start helper, focus constants, and stage marker).
+- [ ] Device-check focused motion continuity across density changes and list↔grid toggles with `inspectorOpen` true.
+
+## 2026-04-02 — Explorer focus-world motion integration (active)
+- [x] Analyze current Explorer seams (`ExplorerApp`, `AssetGrid`, `AssetPreviewPanel`, interaction hooks, and contracts) before patching motion behavior.
+- [x] Added dynamic fit-endpoint focus-world transform (safe-frame + width/height limiting side) to keep grid as world during open/refocus.
+- [x] Preserved `AssetPreviewPanel` semantic surface while delaying focused overlay chrome reveal until late in focus motion.
+- [x] Updated in-focus tap behavior to refocus in place instead of close-then-reopen.
+- [ ] Add or extend static contract assertions for focus-world motion/reveal classes once motion contract strings are finalized.
+
 ## 2026-04-01 — Ctrl+wheel pending-target correctness follow-up (new)
 - [x] Addressed P2 review finding where multi-threshold Ctrl+wheel bursts could under-react due to rereading committed columns while pinch commits were deferred.
 - [x] Added local pending target tracking for active Ctrl+wheel bursts (`ctrlWheelPendingColumns`) so each threshold crossing advances one column from pending intent.
