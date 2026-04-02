@@ -29,6 +29,26 @@
 - [x] Preserved `AssetPreviewPanel` semantic surface while delaying focused overlay chrome reveal until late in focus motion.
 - [x] Updated in-focus tap behavior to refocus in place instead of close-then-reopen.
 - [ ] Add or extend static contract assertions for focus-world motion/reveal classes once motion contract strings are finalized.
+## 2026-04-02 — Explorer prod public-dir invariant hotfix (new)
+- [x] Restored builder-stage invariant for prod image by creating `public/` (`RUN mkdir -p public`) before build so runner `COPY --from=builder .../public` cannot fail when repo omits `public`.
+- [x] Kept dev/prod profile split unchanged; fix is scoped to prod build stability only.
+- [ ] Validate `docker compose -f docker/docker-compose.explorer.yaml --profile prod up --build` succeeds on host with no `COPY .../public` missing-path failure.
+
+## 2026-04-02 — Explorer Docker mode-switch follow-up (new)
+- [x] Restored explicit production container lane (build + runtime) in `docker/Explorer/Dockerfile` while keeping dedicated dev/HMR target.
+- [x] Updated compose to expose two profile-driven services (`explorer-dev`, `explorer-prod`) so mode selection is a compose property (`--profile dev|prod`) instead of rewriting files.
+- [x] Kept dev bind-mount + named `node_modules` volume + polling watcher flags isolated to dev profile only.
+- [x] Kept production API-base environment wiring on the prod profile lane.
+- [ ] Validate both profile commands end-to-end on host (`--profile dev` Fast Refresh, `--profile prod` packaged runtime).
+
+## 2026-04-02 — Explorer Next.js hot-reload container lane (new)
+- [x] Reworked `docker/docker-compose.explorer.yaml` into a dedicated `explorer-dev` Next.js Fast Refresh service on port `3000`.
+- [x] Added bind-mount + isolated named `node_modules` volume to preserve host edits without masking container dependencies.
+- [x] Enabled Docker-friendly file watching via `WATCHPACK_POLLING` and `CHOKIDAR_USEPOLLING` environment defaults.
+- [x] Converted `docker/Explorer/Dockerfile` to a dev-friendly image (`node:20-bookworm`, `npm install`, `npm run dev`) aligned with the Next package workdir.
+- [x] Updated Explorer package scripts to expose dev/start on `0.0.0.0:3000` for container-accessible HMR.
+- [x] Added webpack watch polling fallback in `docker/packages/Explorer/next.config.js` for unreliable filesystem event forwarding.
+- [ ] Device-verify Fast Refresh from host edits (`app/page.tsx`, `src/ExplorerApp.tsx`) while running `docker compose -f docker/docker-compose.explorer.yaml up --build`.
 
 ## 2026-04-01 — Ctrl+wheel pending-target correctness follow-up (new)
 - [x] Addressed P2 review finding where multi-threshold Ctrl+wheel bursts could under-react due to rereading committed columns while pinch commits were deferred.
