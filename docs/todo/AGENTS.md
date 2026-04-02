@@ -1,3 +1,20 @@
+## 2026-04-01 — Ctrl+wheel pending-target correctness follow-up (new)
+- [x] Addressed P2 review finding where multi-threshold Ctrl+wheel bursts could under-react due to rereading committed columns while pinch commits were deferred.
+- [x] Added local pending target tracking for active Ctrl+wheel bursts (`ctrlWheelPendingColumns`) so each threshold crossing advances one column from pending intent.
+- [x] Added burst/session idle reset (`CTRL_WHEEL_IDLE_RESET_MS`) to clear pending target and accumulator between Ctrl+wheel gesture bursts.
+- [x] Kept non-pointer lane boundaries and authority flow unchanged (`preventDefault` only for Ctrl+wheel, density updates still via `setColumnsForPinch`).
+- [x] Updated static contract assertions to lock pending-target stepping and idle reset markers.
+- [ ] Device-verify high-delta Ctrl+wheel bursts to confirm monotonic multi-step behavior (e.g., `5→4→3→2`) across desktop wheel + trackpad hardware.
+
+## 2026-04-01 — Desktop Ctrl+wheel density input lane correction (new)
+- [x] Separated synthetic wheel lane from pointer-session invariant checks by passing `pointerSession` to gesture-contract assertions only when a real pointer session is active (`pointerId != null`).
+- [x] Added dedicated desktop Ctrl+wheel density adapter in `ExplorerApp` with a non-passive `wheel` listener on the grid scroll surface.
+- [x] Ctrl+wheel now calls `preventDefault()` only for the Ctrl gesture path, accumulates wheel deltas to thresholded steps, and forwards discrete steps into the existing density pinch commit path (`setColumnsForPinch(...)`).
+- [x] Plain wheel scrolling path remains untouched (no preventDefault, no density routing without Ctrl).
+- [x] Retained runtime diagnostics by adding `globalThis.__explorerCtrlWheelDensityDebug.getSnapshot()` for event/step visibility.
+- [x] Updated static contract assertions to lock the new Ctrl+wheel lane and pointer-session invariant narrowing.
+- [ ] Device-verify on desktop trackpad + mouse wheel across Chromium/Safari/Firefox that Ctrl+wheel suppresses browser zoom and drives density steps consistently.
+
 ## 2026-04-01 — PR #141 close-out baseline handoff (new)
 - [x] Final close-out audit completed for PR #141 with scope kept to stabilization baseline only (no cinematic zoom/detail feature work introduced).
 - [x] Confirmed stabilized interaction contract posture for merge:

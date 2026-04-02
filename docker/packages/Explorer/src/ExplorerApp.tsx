@@ -2214,6 +2214,89 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [gridSurfaceEl, touchPinchCapable, view]);
 
   useEffect(() => {
+    if (view !== 'grid') return;
+    const scrollerEl = mediaScrollViewportRef.current;
+    if (!scrollerEl) return;
+    let wheelDeltaAccumulator = 0;
+    let ctrlWheelPendingColumns: number | null = null;
+    let ctrlWheelIdleTimer = 0;
+    const WHEEL_STEP_THRESHOLD = 48;
+    const CTRL_WHEEL_IDLE_RESET_MS = 140;
+    const wheelDebug = {
+      attached: true,
+      ctrlWheelEvents: 0,
+      preventedDefault: 0,
+      densityStepOut: 0,
+      densityStepIn: 0,
+      lastDeltaY: 0,
+      pendingColumns: 0,
+      pendingResets: 0,
+    };
+    const clearCtrlWheelIdleTimer = () => {
+      if (!ctrlWheelIdleTimer) return;
+      window.clearTimeout(ctrlWheelIdleTimer);
+      ctrlWheelIdleTimer = 0;
+    };
+    const resetCtrlWheelSession = () => {
+      ctrlWheelPendingColumns = null;
+      wheelDeltaAccumulator = 0;
+      wheelDebug.pendingColumns = 0;
+      wheelDebug.pendingResets += 1;
+      clearCtrlWheelIdleTimer();
+    };
+    const exposeWheelDebug = () => {
+      (globalThis as typeof globalThis & {
+        __explorerCtrlWheelDensityDebug?: { getSnapshot: () => typeof wheelDebug };
+      }).__explorerCtrlWheelDensityDebug = {
+        getSnapshot: () => ({ ...wheelDebug }),
+      };
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      wheelDebug.ctrlWheelEvents += 1;
+      wheelDebug.lastDeltaY = event.deltaY;
+      event.preventDefault();
+      wheelDebug.preventedDefault += 1;
+      if (ctrlWheelPendingColumns == null) {
+        ctrlWheelPendingColumns = densityControllerRef.current?.getColumns() ?? gridColumnCount;
+      }
+      wheelDeltaAccumulator += event.deltaY;
+      while (Math.abs(wheelDeltaAccumulator) >= WHEEL_STEP_THRESHOLD) {
+        const nextStep = wheelDeltaAccumulator > 0 ? WHEEL_STEP_THRESHOLD : -WHEEL_STEP_THRESHOLD;
+        wheelDeltaAccumulator -= nextStep;
+        if (!Number.isFinite(nextStep) || nextStep === 0) continue;
+        const deltaColumns = nextStep < 0 ? -1 : 1;
+        const seededColumns = ctrlWheelPendingColumns ?? densityControllerRef.current?.getColumns() ?? gridColumnCount;
+        const nextColumns = clampDensityColumns(seededColumns + deltaColumns);
+        ctrlWheelPendingColumns = nextColumns;
+        wheelDebug.pendingColumns = nextColumns;
+        densityControllerRef.current?.setColumnsForPinch(nextColumns);
+        if (nextStep < 0) {
+          wheelDebug.densityStepOut += 1;
+        } else {
+          wheelDebug.densityStepIn += 1;
+        }
+      }
+      clearCtrlWheelIdleTimer();
+      ctrlWheelIdleTimer = window.setTimeout(() => {
+        resetCtrlWheelSession();
+        exposeWheelDebug();
+      }, CTRL_WHEEL_IDLE_RESET_MS);
+      exposeWheelDebug();
+    };
+
+    exposeWheelDebug();
+    scrollerEl.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      resetCtrlWheelSession();
+      wheelDebug.attached = false;
+      exposeWheelDebug();
+      scrollerEl.removeEventListener('wheel', onWheel);
+      delete (globalThis as typeof globalThis & { __explorerCtrlWheelDensityDebug?: unknown }).__explorerCtrlWheelDensityDebug;
+    };
+  }, [clampDensityColumns, gridColumnCount, view]);
+
+  useEffect(() => {
     if (composeModalOpen) setComposeModalRendered(true);
   }, [composeModalOpen]);
 

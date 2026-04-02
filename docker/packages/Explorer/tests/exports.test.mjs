@@ -1952,6 +1952,18 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(explorer.includes("pinchPerfTimeoutRef.current = window.setTimeout(() => {"));
   assert.ok(explorer.includes('pinch-perf-active'));
   assert.ok(explorer.includes('window.requestAnimationFrame(() => {'));
+  assert.ok(explorer.includes("scrollerEl.addEventListener('wheel', onWheel, { passive: false });"));
+  assert.ok(explorer.includes('if (!event.ctrlKey) return;'));
+  assert.ok(explorer.includes('event.preventDefault();'));
+  assert.ok(explorer.includes('let ctrlWheelPendingColumns: number | null = null;'));
+  assert.ok(explorer.includes('const deltaColumns = nextStep < 0 ? -1 : 1;'));
+  assert.ok(explorer.includes('const nextColumns = clampDensityColumns(seededColumns + deltaColumns);'));
+  assert.ok(explorer.includes('ctrlWheelPendingColumns = nextColumns;'));
+  assert.ok(explorer.includes('densityControllerRef.current?.setColumnsForPinch(nextColumns);'));
+  assert.ok(explorer.includes('const CTRL_WHEEL_IDLE_RESET_MS = 140;'));
+  assert.ok(explorer.includes('ctrlWheelIdleTimer = window.setTimeout(() => {'));
+  assert.ok(explorer.includes('resetCtrlWheelSession();'));
+  assert.ok(explorer.includes('__explorerCtrlWheelDensityDebug'));
 
   assert.ok(controller.includes('onPinchFrame?:'));
   assert.ok(controller.includes('onPinchStep?:'));
@@ -2001,6 +2013,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(interactions.includes('const resetPointerSession = useCallback(() => {'));
   assert.ok(interactions.includes('const classifyTargetZone = useCallback((target: EventTarget | null):'));
   assert.ok(interactions.includes('const recordGestureDebugEvent = useCallback((params: {'));
+  assert.ok(interactions.includes('const pointerSession = pointerSessionRef.current.pointerId == null ? null : pointerSessionRef.current;'));
   assert.ok(interactions.includes('const trackMoveStateUpdate = useCallback((reason: \'dragging\' | \'asset_drag_active\') => {'));
   assert.ok(interactions.includes("kind: 'viewport_boundary_reset'"));
   assert.ok(interactions.includes('window.addEventListener(\'orientationchange\', clearTransientGestureState, { passive: true });'));
