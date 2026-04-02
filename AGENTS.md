@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-04-02)
+- Focus preview ownership phase-1 now uses explicit presentation transitions in `ExplorerApp` (`idle` / `world-focus` / `drawer-fallback`) with centralized invalidation fallback-or-idle teardown.
+- World-focus refocus measurement now samples card geometry from a temporary identity stage transform (`focus-world-stage`), preventing transformed-geometry recenter drift while inspector remains open.
+- Drawer motion now supports world-focus suppression (`getSuppressOpen`) so drawer semantics can remain mounted without visual sheet/side ownership during world-focus presentation.
+
 ### Latest Implementation Notes (2026-04-01)
 - Follow-up fixed Ctrl+wheel multi-threshold under-reaction: wheel bursts now track a local pending column target (`ctrlWheelPendingColumns`) so each threshold crossing advances from pending intent, not repeatedly from deferred committed columns.
 - Ctrl+wheel session state now resets on short idle timeout and cleanup (`CTRL_WHEEL_IDLE_RESET_MS`) to reseed pending intent from committed density at the start of the next burst.

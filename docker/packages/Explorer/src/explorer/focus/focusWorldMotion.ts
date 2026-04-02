@@ -7,6 +7,7 @@ export const FOCUS_SAFE_FRAME_TOPBAR_RESERVE_PX = 88;
 export const FOCUS_SAFE_FRAME_MOBILE_BOTTOM_RESERVE_PX = 220;
 export const FOCUS_WORLD_MAX_SCALE = 2.85;
 export const FOCUS_WORLD_MIN_SCALE = 1;
+const MAX_TRANSLATE_VIEWPORT_FACTOR = 1.5;
 
 export interface FocusWorldTransform {
   scale: number;
@@ -40,9 +41,14 @@ export function computeFocusWorldTransform({
     FOCUS_WORLD_MIN_SCALE,
     Math.min(FOCUS_WORLD_MAX_SCALE, safeWidth / cardRect.width, safeHeight / cardRect.height),
   );
+  const rawX = safeCenterX - cardCenterX;
+  const rawY = safeCenterY - cardCenterY;
+  const maxAbsX = Math.max(1, viewportRect.width * MAX_TRANSLATE_VIEWPORT_FACTOR);
+  const maxAbsY = Math.max(1, viewportRect.height * MAX_TRANSLATE_VIEWPORT_FACTOR);
+  if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || !Number.isFinite(scale)) return null;
   return {
     scale,
-    x: safeCenterX - cardCenterX,
-    y: safeCenterY - cardCenterY,
+    x: Math.max(-maxAbsX, Math.min(maxAbsX, rawX)),
+    y: Math.max(-maxAbsY, Math.min(maxAbsY, rawY)),
   };
 }

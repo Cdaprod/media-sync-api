@@ -10,6 +10,7 @@ export type DrawerMotionController = OpenCloseController & {
 
 export type DrawerMotionOptions = {
   getMode: () => DrawerPresentationMode;
+  getSuppressOpen?: () => boolean;
 };
 
 export function createDrawerMotion(
@@ -17,7 +18,7 @@ export function createDrawerMotion(
   backdropEl: HTMLElement,
   options: DrawerMotionOptions,
 ): DrawerMotionController {
-  const { getMode } = options;
+  const { getMode, getSuppressOpen } = options;
   let mode = getMode();
   let tween: gsap.core.Tween | null = null;
 
@@ -47,11 +48,27 @@ export function createDrawerMotion(
     gsap.set(backdropEl, { autoAlpha: 0, pointerEvents: 'none', zIndex: 70 });
   };
 
+  const setSuppressedOpenState = () => {
+    const closed = closedVector();
+    gsap.set(drawerEl, {
+      x: closed.x,
+      y: closed.y,
+      autoAlpha: 0,
+      pointerEvents: 'none',
+      zIndex: 80,
+    });
+    deactivateBackdrop();
+  };
+
   function open() {
     syncLayoutMode();
     stop();
+    if (getSuppressOpen?.()) {
+      setSuppressedOpenState();
+      return;
+    }
     activateBackdrop();
-    gsap.set(drawerEl, { pointerEvents: 'auto', zIndex: 80 });
+    gsap.set(drawerEl, { autoAlpha: 1, pointerEvents: 'auto', zIndex: 80 });
     tween = gsap.to(drawerEl, {
       x: 0,
       y: 0,
@@ -86,6 +103,7 @@ export function createDrawerMotion(
     gsap.set(drawerEl, {
       x: closed.x,
       y: closed.y,
+      autoAlpha: 1,
       pointerEvents: 'none',
       zIndex: 80,
     });

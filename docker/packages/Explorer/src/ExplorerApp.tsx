@@ -76,6 +76,7 @@ type FocusPresentationState =
 type StartFocusMotionResult =
   | { ok: true }
   | { ok: false; reason: 'not-grid' | 'density-unsafe' | 'missing-target' };
+type FocusMeasurementResult = FocusWorldTransform | null;
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -395,6 +396,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
   const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
   const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0 });
+  const focusWorldStageRef = useRef<HTMLDivElement | null>(null);
+  const focusPresentationStateRef = useRef<FocusPresentationState>({ mode: 'idle' });
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
   const focusOverlayRevealTimerRef = useRef<number | null>(null);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
@@ -417,23 +420,52 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
   }, [clearFocusOverlayRevealTimer]);
 
+  const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null) => {
+    clearFocusOverlayRevealTimer();
+    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+    if (candidateKey) {
+      setFocusPresentationState({ mode: 'drawer-fallback', key: candidateKey });
+      return;
+    }
+    setFocusPresentationState({ mode: 'idle' });
+  }, [clearFocusOverlayRevealTimer]);
+
+  const computeFromUntransformedFocusWorldStage = useCallback((measure: () => FocusMeasurementResult): FocusMeasurementResult => {
+    const stageEl = focusWorldStageRef.current;
+    if (!stageEl || stageEl.dataset.focusWorld !== 'true') return measure();
+    const prevTransition = stageEl.style.transition;
+    const prevTransform = stageEl.style.transform;
+    stageEl.style.transition = 'none';
+    stageEl.style.transform = 'none';
+    void stageEl.offsetWidth;
+    try {
+      return measure();
+    } finally {
+      stageEl.style.transition = prevTransition;
+      stageEl.style.transform = prevTransform;
+    }
+  }, []);
+
   const computeFocusWorldTransform = useCallback((selectionKey: string) => {
     const scrollViewport = mediaScrollViewportRef.current;
     const gridEl = gridRef.current;
     if (!scrollViewport || !gridEl) return null;
-    const card = gridEl.querySelector<HTMLElement>(`.masonry-card[data-select-key="${CSS.escape(selectionKey)}"]`);
-    if (!card) return null;
-    return computeFocusWorldTransformFromRects({
-      cardRect: card.getBoundingClientRect(),
-      viewportRect: scrollViewport.getBoundingClientRect(),
-      mobileLayout: window.matchMedia('(max-width: 860px)').matches,
+    return computeFromUntransformedFocusWorldStage(() => {
+      const card = gridEl.querySelector<HTMLElement>(`.masonry-card[data-select-key="${CSS.escape(selectionKey)}"]`);
+      if (!card) return null;
+      return computeFocusWorldTransformFromRects({
+        cardRect: card.getBoundingClientRect(),
+        viewportRect: scrollViewport.getBoundingClientRect(),
+        mobileLayout: window.matchMedia('(max-width: 860px)').matches,
+      });
     });
-  }, []);
+  }, [computeFromUntransformedFocusWorldStage]);
 
   const startFocusMotionForSelectionKey = useCallback((selectionKey: string): StartFocusMotionResult => {
     const host = mediaContentRef.current;
     const densityMotionUnsafe = host?.classList.contains('density-motion-active')
       || host?.classList.contains('density-gesture-active');
+    if (!inspectorOpenRef.current) return { ok: false, reason: 'missing-target' };
     if (view !== 'grid') return { ok: false, reason: 'not-grid' };
     if (densityMotionUnsafe) return { ok: false, reason: 'density-unsafe' };
     const initial = computeFocusWorldTransform(selectionKey);
@@ -1081,16 +1113,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused(item);
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
+    inspectorOpenRef.current = true;
     const focusStart = startFocusMotionForSelectionKey(nextKey);
     if (!focusStart.ok) {
-      clearFocusOverlayRevealTimer();
-      setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
-      setFocusPresentationState({ mode: 'drawer-fallback', key: nextKey });
+      moveFocusPresentationToFallbackOrIdle(nextKey);
     }
-  }, [activeProject, assetSelectionKey, clearFocusOverlayRevealTimer, focusAsset, startFocusMotionForSelectionKey]);
+  }, [activeProject, assetSelectionKey, focusAsset, moveFocusPresentationToFallbackOrIdle, startFocusMotionForSelectionKey]);
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
+    inspectorOpenRef.current = false;
     setFocused(null);
     setPreviewDetailsOpen(false);
     resetFocusPresentationToIdle();
@@ -1119,12 +1151,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     commitPreviewActivationKey(nextKey);
     const focusStart = startFocusMotionForSelectionKey(nextKey);
     if (!focusStart.ok) {
-      clearFocusOverlayRevealTimer();
-      setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
-      setFocusPresentationState({ mode: 'drawer-fallback', key: nextKey });
+      moveFocusPresentationToFallbackOrIdle(nextKey);
     }
     setPreviewAutoPlayToken((prev) => prev + 1);
-  }, [activeProject, assetSelectionKey, clearFocusOverlayRevealTimer, commitPreviewActivationKey, filteredMedia, focused, startFocusMotionForSelectionKey]);
+  }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused, moveFocusPresentationToFallbackOrIdle, startFocusMotionForSelectionKey]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
@@ -1132,15 +1162,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const rafId = window.requestAnimationFrame(() => {
       const next = computeFocusWorldTransform(activeAssetKey);
       if (!next) {
-        clearFocusOverlayRevealTimer();
-        setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
-        setFocusPresentationState({ mode: 'drawer-fallback', key: activeAssetKey });
+        moveFocusPresentationToFallbackOrIdle(activeAssetKey);
         return;
       }
       setFocusWorldTransform(next);
     });
     return () => window.cancelAnimationFrame(rafId);
-  }, [activeAssetKey, clearFocusOverlayRevealTimer, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, pendingEntries.length]);
+  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length]);
 
   useEffect(() => () => {
     resetFocusPresentationToIdle();
@@ -1155,15 +1183,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (focusPresentationState.mode !== 'world-focus') return;
     const keyMismatch = !activeAssetKey || focusPresentationState.key !== activeAssetKey;
     if (view === 'grid' && !keyMismatch) return;
-    clearFocusOverlayRevealTimer();
-    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
     const fallbackKey = activeAssetKey || focusPresentationState.key;
-    if (fallbackKey) {
-      setFocusPresentationState({ mode: 'drawer-fallback', key: fallbackKey });
-      return;
-    }
-    resetFocusPresentationToIdle();
-  }, [activeAssetKey, clearFocusOverlayRevealTimer, focusPresentationState, inspectorOpen, resetFocusPresentationToIdle, view]);
+    moveFocusPresentationToFallbackOrIdle(fallbackKey);
+  }, [activeAssetKey, focusPresentationState, inspectorOpen, moveFocusPresentationToFallbackOrIdle, resetFocusPresentationToIdle, view]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;
@@ -1931,6 +1953,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   });
   topbarHiddenRef.current = topbarHidden;
   inspectorOpenRef.current = inspectorOpen;
+  focusPresentationStateRef.current = focusPresentationState;
 
   useEffect(() => {
     const topbarEl = topbarRef.current;
@@ -1992,6 +2015,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const modeQuery = window.matchMedia('(max-width: 860px)');
     const controller = createDrawerMotion(drawerEl, backdropEl, {
       getMode: () => (modeQuery.matches ? 'sheet' : 'side'),
+      getSuppressOpen: () => focusPresentationStateRef.current.mode === 'world-focus',
     });
     drawerMotionRef.current = controller;
     if (inspectorOpenRef.current) controller.open();
@@ -2021,7 +2045,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     else controller.close(() => {
       controller.setClosedState();
     });
-  }, [inspectorOpen]);
+  }, [focusPresentationState.mode, inspectorOpen]);
 
   useEffect(() => {
     const toastMotion = createToastMotion();
@@ -3163,6 +3187,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             >
               <div
                 className="focus-world-stage"
+                ref={focusWorldStageRef}
                 data-focus-world={focusWorldActive ? 'true' : 'false'}
                 style={{
                   '--focus-world-scale': String(focusWorldTransform.scale),
@@ -3268,7 +3293,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
       </div>
 
-      <aside className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''}`} data-inspector-drawer="true" aria-hidden={!inspectorOpen}>
+      <aside
+        className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}
+        data-inspector-drawer="true"
+        aria-hidden={!inspectorOpen}
+      >
         <div className="drawer-body custom-ui-surface">
           <AssetPreviewPanel
               asset={normalizedPreviewAsset}

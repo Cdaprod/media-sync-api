@@ -652,7 +652,10 @@ select.control{
 }
 .focus-world-stage{
   position: relative;
+  min-height: 100%;
+  overflow: clip;
   transform-origin: center center;
+  z-index: 1;
 }
 .content.focus-world-active .focus-world-stage{
   transform:
@@ -1255,6 +1258,11 @@ select.control{
   pointer-events: none;
 }
 .drawer.open{ transform: translateX(0%); pointer-events: auto; }
+.drawer.world-focus-suppressed{
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: none;
+}
 .content.focus-world-active ~ .drawer{
   background: linear-gradient(180deg, rgba(11,16,32,0.62), rgba(11,16,32,0.9));
   backdrop-filter: blur(6px);

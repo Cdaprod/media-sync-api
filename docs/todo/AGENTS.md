@@ -1,3 +1,11 @@
+## 2026-04-02 — Focus presentation ownership phase-1 (new)
+- [x] Introduced explicit focus presentation ownership transitions in `ExplorerApp` using `idle` / `world-focus` / `drawer-fallback` with centralized fallback-or-idle teardown helper.
+- [x] Added untransformed-card measurement path for world-focus refocus (`focus-world-stage` temporary identity sampling) to avoid transformed-geometry recenter drift.
+- [x] Added drawer-motion suppression hook for world-focus (`getSuppressOpen`) so inspector semantics can stay mounted without sheet/side visual ownership.
+- [x] Added world-focus suppression class wiring on drawer and bounded focus-world stage CSS so world transform remains isolated to stage.
+- [x] Strengthened static Explorer contracts for explicit presentation-state ownership, suppression path, and focus transform guard helpers.
+- [ ] Run on-device validation pass (grid open/refocus/list-switch/close/missing-target) and capture evidence for world-focus ownership parity.
+
 ## 2026-04-02 — World-focus validity gating pass (active)
 - [x] Tightened `focusWorldActive` gating to require real presentation context (`inspectorOpen`, `view==='grid'`, mode `world-focus`, and key alignment with `activeAssetKey`).
 - [x] Added focused presentation invalidation effect to force clean transition when context breaks (inspector closes, key mismatch, non-grid view).
