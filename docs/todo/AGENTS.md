@@ -1,3 +1,10 @@
+## 2026-04-02 — Focus world transform landing fix (new)
+- [x] Updated focus measurement to neutralize `.focus-world-stage` transform before reading stage/card/viewport rects and restore styles immediately.
+- [x] Added stage-aware transform safety guard in `focusWorldMotion` so impossible projected landings return `null` and trigger explicit fallback.
+- [x] Added dev diagnostics surface `__explorerFocusWorldDebug.lastMeasurement` with neutralized rect snapshots and fallback decision.
+- [x] Expanded static contracts for neutralized measurement path + unsafe-transform fallback path.
+- [ ] Validate runtime on top-left asset tap + refocus sequence to confirm no off-screen world push and clean fallback on invalid targets.
+
 ## 2026-04-02 — Focus presentation ownership phase-1 (new)
 - [x] Introduced explicit focus presentation ownership transitions in `ExplorerApp` using `idle` / `world-focus` / `drawer-fallback` with centralized fallback-or-idle teardown helper.
 - [x] Added untransformed-card measurement path for world-focus refocus (`focus-world-stage` temporary identity sampling) to avoid transformed-geometry recenter drift.

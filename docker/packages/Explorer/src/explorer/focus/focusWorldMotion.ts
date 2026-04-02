@@ -17,16 +17,58 @@ export interface FocusWorldTransform {
 
 export interface FocusWorldTransformInput {
   cardRect: DOMRect;
+  stageRect: DOMRect;
   viewportRect: DOMRect;
   mobileLayout: boolean;
 }
 
+const FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX = -96;
+
+function isProjectedCardWithinSaneBounds({
+  cardRect,
+  stageRect,
+  viewportRect,
+  scale,
+  x,
+  y,
+}: {
+  cardRect: DOMRect;
+  stageRect: DOMRect;
+  viewportRect: DOMRect;
+  scale: number;
+  x: number;
+  y: number;
+}): boolean {
+  const stageCenterX = stageRect.left + (stageRect.width / 2);
+  const stageCenterY = stageRect.top + (stageRect.height / 2);
+  const cardCenterX = cardRect.left + (cardRect.width / 2);
+  const cardCenterY = cardRect.top + (cardRect.height / 2);
+  const projectedCardCenterX = stageCenterX + ((cardCenterX - stageCenterX) * scale) + x;
+  const projectedCardCenterY = stageCenterY + ((cardCenterY - stageCenterY) * scale) + y;
+  const projectedHalfW = (cardRect.width * scale) / 2;
+  const projectedHalfH = (cardRect.height * scale) / 2;
+  const projectedLeft = projectedCardCenterX - projectedHalfW;
+  const projectedTop = projectedCardCenterY - projectedHalfH;
+  const projectedRight = projectedCardCenterX + projectedHalfW;
+  const projectedBottom = projectedCardCenterY + projectedHalfH;
+  const saneLeft = viewportRect.left + FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX;
+  const saneTop = viewportRect.top + FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX;
+  const saneRight = viewportRect.right - FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX;
+  const saneBottom = viewportRect.bottom - FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX;
+  return projectedRight >= saneLeft
+    && projectedBottom >= saneTop
+    && projectedLeft <= saneRight
+    && projectedTop <= saneBottom;
+}
+
 export function computeFocusWorldTransform({
   cardRect,
+  stageRect,
   viewportRect,
   mobileLayout,
 }: FocusWorldTransformInput): FocusWorldTransform | null {
   if (cardRect.width <= 1 || cardRect.height <= 1) return null;
+  if (stageRect.width <= 1 || stageRect.height <= 1) return null;
   const safeLeft = viewportRect.left + FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX;
   const safeRight = viewportRect.right - FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX - (mobileLayout ? 0 : FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX);
   const safeTop = viewportRect.top + FOCUS_SAFE_FRAME_TOPBAR_RESERVE_PX;
@@ -46,9 +88,20 @@ export function computeFocusWorldTransform({
   const maxAbsX = Math.max(1, viewportRect.width * MAX_TRANSLATE_VIEWPORT_FACTOR);
   const maxAbsY = Math.max(1, viewportRect.height * MAX_TRANSLATE_VIEWPORT_FACTOR);
   if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || !Number.isFinite(scale)) return null;
-  return {
+  const clamped = {
     scale,
     x: Math.max(-maxAbsX, Math.min(maxAbsX, rawX)),
     y: Math.max(-maxAbsY, Math.min(maxAbsY, rawY)),
   };
+  if (!isProjectedCardWithinSaneBounds({
+    cardRect,
+    stageRect,
+    viewportRect,
+    scale: clamped.scale,
+    x: clamped.x,
+    y: clamped.y,
+  })) {
+    return null;
+  }
+  return clamped;
 }

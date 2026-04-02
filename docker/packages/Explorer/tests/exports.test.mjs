@@ -1004,6 +1004,12 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('if (!inspectorOpenRef.current) return { ok: false, reason: \'missing-target\' };'));
   assert.ok(content.includes('const computeFromUntransformedFocusWorldStage = useCallback((measure: () => FocusMeasurementResult): FocusMeasurementResult => {'));
   assert.ok(content.includes("stageEl.style.transform = 'none';"));
+  assert.ok(content.includes('const stageRect = stageEl.getBoundingClientRect();'));
+  assert.ok(content.includes('stageRect,'));
+  assert.ok(content.includes('const shouldLogFocusMeasurement = () => ('));
+  assert.ok(content.includes('__explorerFocusWorldDebug'));
+  assert.ok(content.includes('fallback: !transform,'));
+  assert.ok(content.includes('if (!measurement && shouldLogFocusMeasurement()) {'));
   assert.ok(content.includes('const focusWorldActive = ('));
   assert.ok(content.includes('&& view === \'grid\''));
   assert.ok(content.includes('&& focusPresentationState.mode === \'world-focus\''));
@@ -1021,6 +1027,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(focusMotion.includes('export function computeFocusWorldTransform'));
   assert.ok(focusMotion.includes('FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX = 320'));
   assert.ok(focusMotion.includes('MAX_TRANSLATE_VIEWPORT_FACTOR = 1.5'));
+  assert.ok(focusMotion.includes('stageRect: DOMRect;'));
+  assert.ok(focusMotion.includes('isProjectedCardWithinSaneBounds'));
+  assert.ok(focusMotion.includes('if (!isProjectedCardWithinSaneBounds({'));
   assert.ok(focusMotion.includes('if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || !Number.isFinite(scale)) return null;'));
   assert.ok(content.includes('density.scrubTo(nextColumns);'));
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));

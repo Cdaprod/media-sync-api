@@ -77,6 +77,14 @@ type StartFocusMotionResult =
   | { ok: true }
   | { ok: false; reason: 'not-grid' | 'density-unsafe' | 'missing-target' };
 type FocusMeasurementResult = FocusWorldTransform | null;
+type FocusMeasurementSnapshot = {
+  selectionKey: string;
+  fallback: boolean;
+  stageRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
+  cardRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
+  viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
+  transform: FocusWorldTransform | null;
+};
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -211,6 +219,18 @@ const defaultComposeProject = (projects: Project[]): Project | null => {
   if (preferred) return preferred;
   return projects[0] || null;
 };
+
+const shouldLogFocusMeasurement = () => (
+  typeof window !== 'undefined'
+  && (process.env.NODE_ENV !== 'production' || window.location.search.includes('focusdebug=1'))
+);
+
+const toRectSnapshot = (rect: DOMRect): Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> => ({
+  left: rect.left,
+  top: rect.top,
+  width: rect.width,
+  height: rect.height,
+});
 
 const readOrientationCache = (): Map<string, string> => {
   if (typeof window === 'undefined') return new Map();
@@ -437,28 +457,63 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const prevTransform = stageEl.style.transform;
     stageEl.style.transition = 'none';
     stageEl.style.transform = 'none';
+    stageEl.style.willChange = 'auto';
     void stageEl.offsetWidth;
     try {
       return measure();
     } finally {
       stageEl.style.transition = prevTransition;
       stageEl.style.transform = prevTransform;
+      stageEl.style.removeProperty('will-change');
     }
   }, []);
 
   const computeFocusWorldTransform = useCallback((selectionKey: string) => {
     const scrollViewport = mediaScrollViewportRef.current;
     const gridEl = gridRef.current;
-    if (!scrollViewport || !gridEl) return null;
-    return computeFromUntransformedFocusWorldStage(() => {
+    const stageEl = focusWorldStageRef.current;
+    if (!scrollViewport || !gridEl || !stageEl) return null;
+    const measurement = computeFromUntransformedFocusWorldStage(() => {
       const card = gridEl.querySelector<HTMLElement>(`.masonry-card[data-select-key="${CSS.escape(selectionKey)}"]`);
       if (!card) return null;
-      return computeFocusWorldTransformFromRects({
-        cardRect: card.getBoundingClientRect(),
-        viewportRect: scrollViewport.getBoundingClientRect(),
+      const stageRect = stageEl.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      const viewportRect = scrollViewport.getBoundingClientRect();
+      const transform = computeFocusWorldTransformFromRects({
+        cardRect,
+        stageRect,
+        viewportRect,
         mobileLayout: window.matchMedia('(max-width: 860px)').matches,
       });
+      if (shouldLogFocusMeasurement()) {
+        const snapshot: FocusMeasurementSnapshot = {
+          selectionKey,
+          fallback: !transform,
+          stageRect: toRectSnapshot(stageRect),
+          cardRect: toRectSnapshot(cardRect),
+          viewportRect: toRectSnapshot(viewportRect),
+          transform,
+        };
+        (globalThis as typeof globalThis & { __explorerFocusWorldDebug?: { lastMeasurement: FocusMeasurementSnapshot } }).__explorerFocusWorldDebug = {
+          lastMeasurement: snapshot,
+        };
+      }
+      return transform;
     });
+    if (!measurement && shouldLogFocusMeasurement()) {
+      const snapshot: FocusMeasurementSnapshot = {
+        selectionKey,
+        fallback: true,
+        stageRect: null,
+        cardRect: null,
+        viewportRect: null,
+        transform: null,
+      };
+      (globalThis as typeof globalThis & { __explorerFocusWorldDebug?: { lastMeasurement: FocusMeasurementSnapshot } }).__explorerFocusWorldDebug = {
+        lastMeasurement: snapshot,
+      };
+    }
+    return measurement;
   }, [computeFromUntransformedFocusWorldStage]);
 
   const startFocusMotionForSelectionKey = useCallback((selectionKey: string): StartFocusMotionResult => {

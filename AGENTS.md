@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-02)
+- Focus world measurement now captures neutralized geometry from `.focus-world-stage` (stage/card/viewport rects measured with temporary identity transform) and restores stage style immediately after sampling.
+- `focusWorldMotion` now validates projected transformed card bounds using stage-aware geometry and returns `null` for unsafe landings so callers fall back cleanly instead of applying off-screen transforms.
+- Added dev-focused runtime diagnostics via `globalThis.__explorerFocusWorldDebug.lastMeasurement` (rect snapshots, computed transform, fallback flag) for on-device verification.
+
+### Latest Implementation Notes (2026-04-02)
 - Focus preview ownership phase-1 now uses explicit presentation transitions in `ExplorerApp` (`idle` / `world-focus` / `drawer-fallback`) with centralized invalidation fallback-or-idle teardown.
 - World-focus refocus measurement now samples card geometry from a temporary identity stage transform (`focus-world-stage`), preventing transformed-geometry recenter drift while inspector remains open.
 - Drawer motion now supports world-focus suppression (`getSuppressOpen`) so drawer semantics can remain mounted without visual sheet/side ownership during world-focus presentation.
