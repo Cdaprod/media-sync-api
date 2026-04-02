@@ -1,3 +1,8 @@
+## 2026-04-02 — Explorer prod public-dir invariant hotfix (new)
+- [x] Restored builder-stage invariant for prod image by creating `public/` (`RUN mkdir -p public`) before build so runner `COPY --from=builder .../public` cannot fail when repo omits `public`.
+- [x] Kept dev/prod profile split unchanged; fix is scoped to prod build stability only.
+- [ ] Validate `docker compose -f docker/docker-compose.explorer.yaml --profile prod up --build` succeeds on host with no `COPY .../public` missing-path failure.
+
 ## 2026-04-02 — Explorer Docker mode-switch follow-up (new)
 - [x] Restored explicit production container lane (build + runtime) in `docker/Explorer/Dockerfile` while keeping dedicated dev/HMR target.
 - [x] Updated compose to expose two profile-driven services (`explorer-dev`, `explorer-prod`) so mode selection is a compose property (`--profile dev|prod`) instead of rewriting files.

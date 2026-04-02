@@ -15,6 +15,7 @@ CMD ["npm", "run", "dev"]
 FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY docker/packages/Explorer ./
+RUN mkdir -p public
 RUN npm run build
 
 FROM node:20-bookworm AS runner
