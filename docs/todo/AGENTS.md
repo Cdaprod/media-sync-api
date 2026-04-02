@@ -1,3 +1,41 @@
+## 2026-04-02 — World-focus validity gating pass (active)
+- [x] Tightened `focusWorldActive` gating to require real presentation context (`inspectorOpen`, `view==='grid'`, mode `world-focus`, and key alignment with `activeAssetKey`).
+- [x] Added focused presentation invalidation effect to force clean transition when context breaks (inspector closes, key mismatch, non-grid view).
+- [x] Invalidation now resets world transform identity before switching to explicit drawer-fallback when possible.
+- [ ] Capture runtime notes validating no stale world transform after list/grid switches and direct inspector-close paths.
+
+## 2026-04-02 — Focus starter contract cleanup pass (active)
+- [x] Replaced mixed `startFocusMotionForSelectionKey` return contract (boolean/cleanup) with explicit structured result (`StartFocusMotionResult`).
+- [x] Updated open/refocus call sites to branch on `focusStart.ok` and keep fallback branch explicit/readable.
+- [x] Kept scope narrow: no motion tuning, no redesign, no new runtime harnesses.
+- [ ] Add runtime note proving fallback reason transitions (`not-grid`, `density-unsafe`, `missing-target`) are observable in dev diagnostics.
+
+## 2026-04-02 — Focus presentation state ownership pass (active)
+- [x] Introduced explicit focused presentation state union in `ExplorerApp` (`idle`, `world-focus`, `drawer-fallback`) to prevent stale/impossible boolean combinations.
+- [x] Updated open/refocus paths to choose world-focus vs explicit drawer-fallback based on measurable target safety; fallback now resets transform to identity first.
+- [x] Centralized teardown via `resetFocusPresentationToIdle()` so close/unmount paths always clear timers, transform, and presentation mode.
+- [x] Added static contract assertions for focus presentation state model markers and fallback transitions.
+- [ ] Add runtime/device verification notes for fallback transitions during density motion, list mode, and missing-card measurement cases.
+
+## 2026-04-02 — Focus-world extraction safety pass (active)
+- [x] Extracted focus-world safe-frame constants + transform math into `src/explorer/focus/focusWorldMotion.ts` to reduce `ExplorerApp` inline density and improve structural clarity.
+- [x] Updated `ExplorerApp` to consume extracted focus helpers and switched recompute effect dependencies to earlier-safe values (`filteredMedia.length`, `pendingEntries.length`) to avoid any declaration-order ambiguity.
+- [x] Extended static contracts to assert the new focus module and import wiring.
+- [ ] Add runtime verification notes for focus recompute behavior during live density changes while inspector remains open.
+
+## 2026-04-02 — Explorer focus-world follow-up alignment (active)
+- [x] Re-scoped focus-world transforms from `.scroll-content` to dedicated `.focus-world-stage` so topbar/chrome stay stable while the grid/list world moves.
+- [x] Kept dynamic fit endpoint path centered on real masonry card bounds (`.masonry-card[data-select-key]`) and shared open/refocus math.
+- [x] Added static assertions for focus-world contracts (fit helper, start helper, focus constants, and stage marker).
+- [ ] Device-check focused motion continuity across density changes and list↔grid toggles with `inspectorOpen` true.
+
+## 2026-04-02 — Explorer focus-world motion integration (active)
+- [x] Analyze current Explorer seams (`ExplorerApp`, `AssetGrid`, `AssetPreviewPanel`, interaction hooks, and contracts) before patching motion behavior.
+- [x] Added dynamic fit-endpoint focus-world transform (safe-frame + width/height limiting side) to keep grid as world during open/refocus.
+- [x] Preserved `AssetPreviewPanel` semantic surface while delaying focused overlay chrome reveal until late in focus motion.
+- [x] Updated in-focus tap behavior to refocus in place instead of close-then-reopen.
+- [ ] Add or extend static contract assertions for focus-world motion/reveal classes once motion contract strings are finalized.
+
 ## 2026-04-01 — Ctrl+wheel pending-target correctness follow-up (new)
 - [x] Addressed P2 review finding where multi-threshold Ctrl+wheel bursts could under-react due to rereading committed columns while pinch commits were deferred.
 - [x] Added local pending target tracking for active Ctrl+wheel bursts (`ctrlWheelPendingColumns`) so each threshold crossing advances one column from pending intent.
