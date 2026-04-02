@@ -1,22 +1,45 @@
-## Explorer UI (Next.js)
-# Usage:
-#   docker compose -f docker/docker-compose.explorer.yaml up -d
-#   docker compose -f docker/docker-compose.explorer.yaml ps
+## Explorer UI (Next.js dual-lane compose: dev + prod)
+# Usage (dev/HMR):
+#   docker compose -f docker/docker-compose.explorer.yaml --profile dev up --build
+# Usage (prod image lane):
+#   docker compose -f docker/docker-compose.explorer.yaml --profile prod up --build
+
+x-explorer-build: &explorer_build
+  context: ..
+  dockerfile: docker/Explorer/Dockerfile
+
 services:
-  explorer-ui:
+  explorer-dev:
+    profiles: ["dev"]
     build:
-      context: ..
-      dockerfile: docker/Explorer/Dockerfile
-    container_name: media-sync-explorer
-    pull_policy: never
-    restart: always
+      <<: *explorer_build
+      target: dev
+    working_dir: /workspace/docker/packages/Explorer
+    command: npm run dev
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ..:/workspace
+      - explorer_node_modules:/workspace/docker/packages/Explorer/node_modules
+
+  explorer-prod:
+    profiles: ["prod"]
+    build:
+      <<: *explorer_build
+      target: runner
+    working_dir: /workspace/docker/packages/Explorer
+    command: npm run start
     ports:
       - "8790:3000"
     environment:
-      - NEXT_PUBLIC_MEDIA_SYNC_API_BASE=http://192.168.0.25:8787
-      - NEXT_TELEMETRY_DISABLED=1
-    volumes:
-      - "B:/Video/Projects:/data/projects"
-    depends_on:
-      - media-sync-api
-      - resolve-postgres
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_MEDIA_SYNC_API_BASE: ${NEXT_PUBLIC_MEDIA_SYNC_API_BASE:-http://192.168.0.25:8787}
+
+volumes:
+  explorer_node_modules:
