@@ -1,3 +1,9 @@
+## 2026-04-02 — Focus-world extraction safety pass (active)
+- [x] Extracted focus-world safe-frame constants + transform math into `src/explorer/focus/focusWorldMotion.ts` to reduce `ExplorerApp` inline density and improve structural clarity.
+- [x] Updated `ExplorerApp` to consume extracted focus helpers and switched recompute effect dependencies to earlier-safe values (`filteredMedia.length`, `pendingEntries.length`) to avoid any declaration-order ambiguity.
+- [x] Extended static contracts to assert the new focus module and import wiring.
+- [ ] Add runtime verification notes for focus recompute behavior during live density changes while inspector remains open.
+
 ## 2026-04-02 — Explorer focus-world follow-up alignment (active)
 - [x] Re-scoped focus-world transforms from `.scroll-content` to dedicated `.focus-world-stage` so topbar/chrome stay stable while the grid/list world moves.
 - [x] Kept dynamic fit endpoint path centered on real masonry card bounds (`.masonry-card[data-select-key]`) and shared open/refocus math.

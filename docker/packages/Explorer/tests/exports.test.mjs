@@ -31,6 +31,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'topbarSnapBand.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -976,6 +977,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   const flipPath = path.join(packageRoot, 'src', 'explorer', 'density', 'animateDensityFlip.ts');
   const drawerMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts');
   const topbarMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts');
+  const focusMotionPath = path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const densityController = fs.readFileSync(densityControllerPath, 'utf8');
   const pinchController = fs.readFileSync(pinchControllerPath, 'utf8');
@@ -983,6 +985,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   const flip = fs.readFileSync(flipPath, 'utf8');
   const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
   const topbarMotion = fs.readFileSync(topbarMotionPath, 'utf8');
+  const focusMotion = fs.readFileSync(focusMotionPath, 'utf8');
 
   assert.ok(content.includes("if (view !== 'grid') {"));
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
@@ -990,9 +993,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('const scrubDensityColumns = useCallback((nextColumns: number) => {'));
   assert.ok(content.includes('const computeFocusWorldTransform = useCallback((selectionKey: string) => {'));
   assert.ok(content.includes('const startFocusMotionForSelectionKey = useCallback((selectionKey: string) => {'));
-  assert.ok(content.includes('const FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX = 320;'));
+  assert.ok(content.includes("from './explorer/focus/focusWorldMotion'"));
   assert.ok(content.includes('className="focus-world-stage"'));
   assert.ok(content.includes("data-focus-world={focusWorldActive ? 'true' : 'false'}"));
+  assert.ok(focusMotion.includes('export function computeFocusWorldTransform'));
+  assert.ok(focusMotion.includes('FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX = 320'));
   assert.ok(content.includes('density.scrubTo(nextColumns);'));
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(content.includes('density?.settleScrub();'));

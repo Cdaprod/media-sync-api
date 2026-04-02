@@ -51,6 +51,12 @@ import { createModalMotion } from './ui/motion/modalMotion';
 import { createExplorerDensityController } from './explorer/density/createExplorerDensityController';
 import { createPinchDensityController } from './explorer/density/createPinchDensityController';
 import { DEFAULT_COLUMNS_MOBILE, MAX_COLUMNS_MOBILE, MIN_COLUMNS_MOBILE } from './explorer/density/constants';
+import {
+  computeFocusWorldTransform as computeFocusWorldTransformFromRects,
+  FOCUS_OVERLAY_REVEAL_DELAY_MS,
+  FOCUS_WORLD_OPEN_DURATION_MS,
+  type FocusWorldTransform,
+} from './explorer/focus/focusWorldMotion';
 import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
@@ -182,14 +188,6 @@ const buildThumbFallback = (label: string) => {
 };
 
 const CONTENT_LOADING_DELAY_MS = 180;
-const FOCUS_WORLD_OPEN_DURATION_MS = 340;
-const FOCUS_OVERLAY_REVEAL_DELAY_MS = 220;
-const FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX = 28;
-const FOCUS_SAFE_FRAME_VERTICAL_PAD_PX = 32;
-const FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX = 320;
-const FOCUS_SAFE_FRAME_TOPBAR_RESERVE_PX = 88;
-const FOCUS_WORLD_MAX_SCALE = 2.85;
-const FOCUS_WORLD_MIN_SCALE = 1;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 const OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
@@ -390,7 +388,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
   const [focusWorldActive, setFocusWorldActive] = useState(false);
   const [focusOverlayReady, setFocusOverlayReady] = useState(false);
-  const [focusWorldTransform, setFocusWorldTransform] = useState({ scale: 1, x: 0, y: 0 });
+  const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0 });
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
   const focusOverlayRevealTimerRef = useRef<number | null>(null);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
@@ -413,29 +411,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!scrollViewport || !gridEl) return null;
     const card = gridEl.querySelector<HTMLElement>(`.masonry-card[data-select-key="${CSS.escape(selectionKey)}"]`);
     if (!card) return null;
-    const cardRect = card.getBoundingClientRect();
-    if (cardRect.width <= 1 || cardRect.height <= 1) return null;
-    const viewportRect = scrollViewport.getBoundingClientRect();
-    const mobileLayout = window.matchMedia('(max-width: 860px)').matches;
-    const safeLeft = viewportRect.left + FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX;
-    const safeRight = viewportRect.right - FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX - (mobileLayout ? 0 : FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX);
-    const safeTop = viewportRect.top + FOCUS_SAFE_FRAME_TOPBAR_RESERVE_PX;
-    const safeBottom = viewportRect.bottom - FOCUS_SAFE_FRAME_VERTICAL_PAD_PX - (mobileLayout ? 220 : 0);
-    const safeWidth = Math.max(120, safeRight - safeLeft);
-    const safeHeight = Math.max(120, safeBottom - safeTop);
-    const safeCenterX = safeLeft + (safeWidth / 2);
-    const safeCenterY = safeTop + (safeHeight / 2);
-    const cardCenterX = cardRect.left + (cardRect.width / 2);
-    const cardCenterY = cardRect.top + (cardRect.height / 2);
-    const scale = Math.max(
-      FOCUS_WORLD_MIN_SCALE,
-      Math.min(FOCUS_WORLD_MAX_SCALE, safeWidth / cardRect.width, safeHeight / cardRect.height),
-    );
-    return {
-      scale,
-      x: (safeCenterX - cardCenterX) / scale,
-      y: (safeCenterY - cardCenterY) / scale,
-    };
+    return computeFocusWorldTransformFromRects({
+      cardRect: card.getBoundingClientRect(),
+      viewportRect: scrollViewport.getBoundingClientRect(),
+      mobileLayout: window.matchMedia('(max-width: 860px)').matches,
+    });
   }, []);
 
   const startFocusMotionForSelectionKey = useCallback((selectionKey: string) => {
@@ -1128,7 +1108,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setFocusWorldTransform(next);
     });
     return () => window.cancelAnimationFrame(rafId);
-  }, [activeAssetKey, computeFocusWorldTransform, gridColumnCount, inspectorOpen, renderedMediaEntries.length]);
+  }, [activeAssetKey, computeFocusWorldTransform, gridColumnCount, inspectorOpen, filteredMedia.length, pendingEntries.length]);
 
   useEffect(() => () => {
     clearFocusOverlayRevealTimer();
