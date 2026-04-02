@@ -69,6 +69,10 @@ type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
 type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
 type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
 type PinchOverlayPoint = { x: number; y: number } | null;
+type FocusPresentationState =
+  | { mode: 'idle' }
+  | { mode: 'world-focus'; key: string; overlayReady: boolean }
+  | { mode: 'drawer-fallback'; key: string };
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -386,8 +390,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
-  const [focusWorldActive, setFocusWorldActive] = useState(false);
-  const [focusOverlayReady, setFocusOverlayReady] = useState(false);
+  const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
   const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0 });
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
   const focusOverlayRevealTimerRef = useRef<number | null>(null);
@@ -405,6 +408,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     focusOverlayRevealTimerRef.current = null;
   }, []);
 
+  const resetFocusPresentationToIdle = useCallback(() => {
+    clearFocusOverlayRevealTimer();
+    setFocusPresentationState({ mode: 'idle' });
+    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+  }, [clearFocusOverlayRevealTimer]);
+
   const computeFocusWorldTransform = useCallback((selectionKey: string) => {
     const scrollViewport = mediaScrollViewportRef.current;
     const gridEl = gridRef.current;
@@ -419,24 +428,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const startFocusMotionForSelectionKey = useCallback((selectionKey: string) => {
-    setFocusWorldActive(true);
+    const host = mediaContentRef.current;
+    const densityMotionUnsafe = host?.classList.contains('density-motion-active')
+      || host?.classList.contains('density-gesture-active');
+    if (view !== 'grid' || densityMotionUnsafe) return false;
+    const initial = computeFocusWorldTransform(selectionKey);
+    if (!initial) return false;
     clearFocusOverlayRevealTimer();
-    setFocusOverlayReady(false);
-    const apply = () => {
+    setFocusWorldTransform(initial);
+    setFocusPresentationState({ mode: 'world-focus', key: selectionKey, overlayReady: false });
+    const rafId = window.requestAnimationFrame(() => {
       const next = computeFocusWorldTransform(selectionKey);
       if (!next) return;
       setFocusWorldTransform(next);
-    };
-    apply();
-    const rafId = window.requestAnimationFrame(apply);
+    });
     focusOverlayRevealTimerRef.current = window.setTimeout(() => {
-      setFocusOverlayReady(true);
+      setFocusPresentationState((prev) => (
+        prev.mode === 'world-focus' && prev.key === selectionKey
+          ? { ...prev, overlayReady: true }
+          : prev
+      ));
       focusOverlayRevealTimerRef.current = null;
     }, FOCUS_OVERLAY_REVEAL_DELAY_MS);
     return () => {
       window.cancelAnimationFrame(rafId);
     };
-  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform]);
+  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, view]);
 
   useEffect(() => {
     if (pinchOverlayGestureActiveRef.current) {
@@ -1062,18 +1079,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused(item);
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
-    startFocusMotionForSelectionKey(nextKey);
-  }, [activeProject, assetSelectionKey, focusAsset, startFocusMotionForSelectionKey]);
+    const beganWorldFocus = startFocusMotionForSelectionKey(nextKey);
+    if (!beganWorldFocus) {
+      clearFocusOverlayRevealTimer();
+      setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+      setFocusPresentationState({ mode: 'drawer-fallback', key: nextKey });
+    }
+  }, [activeProject, assetSelectionKey, clearFocusOverlayRevealTimer, focusAsset, startFocusMotionForSelectionKey]);
 
   const closeDrawer = useCallback(() => {
-    clearFocusOverlayRevealTimer();
     setInspectorOpen(false);
     setFocused(null);
     setPreviewDetailsOpen(false);
-    setFocusOverlayReady(false);
-    setFocusWorldActive(false);
-    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
-  }, [clearFocusOverlayRevealTimer]);
+    resetFocusPresentationToIdle();
+  }, [resetFocusPresentationToIdle]);
 
   const commitPreviewActivationKey = useCallback((nextKey: string) => {
     setPreviewActivationKey((prev) => {
@@ -1096,23 +1115,34 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused(nextItem);
     setActiveAssetKey(nextKey);
     commitPreviewActivationKey(nextKey);
-    startFocusMotionForSelectionKey(nextKey);
+    const beganWorldFocus = startFocusMotionForSelectionKey(nextKey);
+    if (!beganWorldFocus) {
+      clearFocusOverlayRevealTimer();
+      setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+      setFocusPresentationState({ mode: 'drawer-fallback', key: nextKey });
+    }
     setPreviewAutoPlayToken((prev) => prev + 1);
-  }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused, startFocusMotionForSelectionKey]);
+  }, [activeProject, assetSelectionKey, clearFocusOverlayRevealTimer, commitPreviewActivationKey, filteredMedia, focused, startFocusMotionForSelectionKey]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
+    if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
     const rafId = window.requestAnimationFrame(() => {
       const next = computeFocusWorldTransform(activeAssetKey);
-      if (!next) return;
+      if (!next) {
+        clearFocusOverlayRevealTimer();
+        setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+        setFocusPresentationState({ mode: 'drawer-fallback', key: activeAssetKey });
+        return;
+      }
       setFocusWorldTransform(next);
     });
     return () => window.cancelAnimationFrame(rafId);
-  }, [activeAssetKey, computeFocusWorldTransform, gridColumnCount, inspectorOpen, filteredMedia.length, pendingEntries.length]);
+  }, [activeAssetKey, clearFocusOverlayRevealTimer, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, pendingEntries.length]);
 
   useEffect(() => () => {
-    clearFocusOverlayRevealTimer();
-  }, [clearFocusOverlayRevealTimer]);
+    resetFocusPresentationToIdle();
+  }, [resetFocusPresentationToIdle]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;
@@ -2627,6 +2657,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toggleSidebarOpen = useCallback(() => {
     setSidebarOpen((prev) => !prev);
   }, []);
+
+  const focusWorldActive = focusPresentationState.mode === 'world-focus';
+  const focusOverlayReady = (
+    focusPresentationState.mode === 'world-focus'
+      ? focusPresentationState.overlayReady
+      : focusPresentationState.mode === 'drawer-fallback'
+  );
 
   return (
     <div className="app">

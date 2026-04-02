@@ -1,3 +1,10 @@
+## 2026-04-02 — Focus presentation state ownership pass (active)
+- [x] Introduced explicit focused presentation state union in `ExplorerApp` (`idle`, `world-focus`, `drawer-fallback`) to prevent stale/impossible boolean combinations.
+- [x] Updated open/refocus paths to choose world-focus vs explicit drawer-fallback based on measurable target safety; fallback now resets transform to identity first.
+- [x] Centralized teardown via `resetFocusPresentationToIdle()` so close/unmount paths always clear timers, transform, and presentation mode.
+- [x] Added static contract assertions for focus presentation state model markers and fallback transitions.
+- [ ] Add runtime/device verification notes for fallback transitions during density motion, list mode, and missing-card measurement cases.
+
 ## 2026-04-02 — Focus-world extraction safety pass (active)
 - [x] Extracted focus-world safe-frame constants + transform math into `src/explorer/focus/focusWorldMotion.ts` to reduce `ExplorerApp` inline density and improve structural clarity.
 - [x] Updated `ExplorerApp` to consume extracted focus helpers and switched recompute effect dependencies to earlier-safe values (`filteredMedia.length`, `pendingEntries.length`) to avoid any declaration-order ambiguity.

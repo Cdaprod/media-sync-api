@@ -993,6 +993,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('const scrubDensityColumns = useCallback((nextColumns: number) => {'));
   assert.ok(content.includes('const computeFocusWorldTransform = useCallback((selectionKey: string) => {'));
   assert.ok(content.includes('const startFocusMotionForSelectionKey = useCallback((selectionKey: string) => {'));
+  assert.ok(content.includes("type FocusPresentationState ="));
+  assert.ok(content.includes("{ mode: 'world-focus'; key: string; overlayReady: boolean }"));
+  assert.ok(content.includes("{ mode: 'drawer-fallback'; key: string }"));
+  assert.ok(content.includes('const focusWorldActive = focusPresentationState.mode === \'world-focus\';'));
+  assert.ok(content.includes('setFocusPresentationState({ mode: \'drawer-fallback\', key: nextKey });'));
   assert.ok(content.includes("from './explorer/focus/focusWorldMotion'"));
   assert.ok(content.includes('className="focus-world-stage"'));
   assert.ok(content.includes("data-focus-world={focusWorldActive ? 'true' : 'false'}"));
