@@ -1014,9 +1014,12 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("{ ok: false; reason: 'not-grid' | 'density-unsafe' | 'missing-target' };"));
   assert.ok(content.includes("{ mode: 'world-focus'; key: string; overlayReady: boolean }"));
   assert.ok(content.includes("{ mode: 'drawer-fallback'; key: string }"));
-  assert.ok(content.includes('const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null) => {'));
+  assert.ok(content.includes('const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null, reason = \'unspecified\') => {'));
   assert.ok(content.includes("setFocusPresentationState({ mode: 'idle' });"));
   assert.ok(content.includes("setFocusPresentationState({ mode: 'drawer-fallback', key: candidateKey });"));
+  assert.ok(content.includes('__explorerPreviewDebug'));
+  assert.ok(content.includes("recordPreviewDebug({ stage: 'openPreview-request'"));
+  assert.ok(content.includes("reason: focusStart.ok ? undefined : focusStart.reason,"));
   assert.ok(content.includes('if (!inspectorOpenRef.current) return { ok: false, reason: \'missing-target\' };'));
   assert.ok(content.includes('const computeFromUntransformedFocusWorldStage = useCallback((measure: () => FocusMeasurementResult): FocusMeasurementResult => {'));
   assert.ok(content.includes("stageEl.style.transform = 'none';"));
@@ -1031,10 +1034,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('&& focusPresentationState.mode === \'world-focus\''));
   assert.ok(content.includes('&& focusPresentationState.key === activeAssetKey'));
   assert.ok(content.includes('if (!inspectorOpen) {'));
-  assert.ok(content.includes('moveFocusPresentationToFallbackOrIdle(fallbackKey);'));
+  assert.ok(content.includes("moveFocusPresentationToFallbackOrIdle(fallbackKey, keyMismatch ? 'key-mismatch' : 'presentation-invalidated');"));
   assert.ok(content.includes('const focusStart = startFocusMotionForSelectionKey(nextKey);'));
   assert.ok(content.includes('if (!focusStart.ok) {'));
-  assert.ok(content.includes('moveFocusPresentationToFallbackOrIdle(nextKey);'));
+  assert.ok(content.includes('moveFocusPresentationToFallbackOrIdle(nextKey, focusStart.reason);'));
   assert.ok(content.includes("from './explorer/focus/focusWorldMotion'"));
   assert.ok(content.includes('className="focus-world-stage"'));
   assert.ok(content.includes('ref={focusWorldStageRef}'));
@@ -1433,7 +1436,7 @@ test('density-related local interactions remain layout-only and do not trigger b
   assert.ok(!contextBlock.includes('loadProjects('));
 
   const previewStart = explorer.indexOf('const openPreview = useCallback');
-  const previewBlock = previewStart >= 0 ? explorer.slice(previewStart, previewStart + 320) : '';
+  const previewBlock = previewStart >= 0 ? explorer.slice(previewStart, previewStart + 900) : '';
   assert.ok(previewBlock.includes('setInspectorOpen(true);'));
   assert.ok(!previewBlock.includes('loadSources('));
   assert.ok(!previewBlock.includes('loadProjects('));

@@ -36,7 +36,7 @@ type FocusSafeFrame = {
   centerY: number;
 };
 
-const FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX = -96;
+const FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX = -220;
 
 function isProjectedCardWithinSaneBounds({
   cardRect,

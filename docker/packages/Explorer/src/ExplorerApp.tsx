@@ -85,6 +85,13 @@ type FocusMeasurementSnapshot = {
   viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
   transform: FocusWorldTransform | null;
 };
+type PreviewDebugEntry = {
+  stage: string;
+  selectionKey?: string;
+  requestedMode?: ExplorerView;
+  finalMode?: FocusPresentationState['mode'];
+  reason?: string;
+};
 type CinematicRevealState = {
   mediaVisible: boolean;
   topVisible: boolean;
@@ -289,14 +296,19 @@ function useToastQueue() {
   const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
   const timeouts = useRef<number[]>([]);
 
+  const beginToastExit = useCallback((id: string) => {
+    setToasts((prev) => prev.map((toast) => (toast.id === id ? { ...toast, exiting: true } : toast)));
+  }, []);
+
   const addToast = useCallback((type: ToastMessage['type'], title: string, message: string) => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setToasts((prev) => [...prev, { id, type, title, message, exiting: false }]);
     const timeout = window.setTimeout(() => {
-      setToasts((prev) => prev.map((toast) => (toast.id === id ? { ...toast, exiting: true } : toast)));
+      beginToastExit(id);
     }, 3100);
     timeouts.current.push(timeout);
-  }, []);
+    return id;
+  }, [beginToastExit]);
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
@@ -308,7 +320,7 @@ function useToastQueue() {
     };
   }, []);
 
-  return { toasts, addToast, removeToast };
+  return { toasts, addToast, removeToast, beginToastExit };
 }
 
 export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
@@ -317,7 +329,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     : inferApiBaseUrl(apiBaseUrl, window.location);
   const [resolvedApiBase, setResolvedApiBase] = useState(initialApiBase);
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
-  const { toasts, addToast, removeToast } = useToastQueue();
+  const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [sources, setSources] = useState([] as Awaited<ReturnType<typeof api.listSources>>);
@@ -442,6 +454,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+  const previewDebugLogRef = useRef<PreviewDebugEntry[]>([]);
+
+  const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
+    const debugEntry = { ...entry };
+    previewDebugLogRef.current = [...previewDebugLogRef.current.slice(-31), debugEntry];
+    (globalThis as typeof globalThis & {
+      __explorerPreviewDebug?: {
+        last: PreviewDebugEntry;
+        events: PreviewDebugEntry[];
+      };
+    }).__explorerPreviewDebug = {
+      last: debugEntry,
+      events: previewDebugLogRef.current,
+    };
+  }, []);
 
   const clearCinematicRevealTimers = useCallback(() => {
     cinematicRevealTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
@@ -492,16 +519,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     resetCinematicRevealState();
   }, [clearFocusOverlayRevealTimer, resetCinematicRevealState]);
 
-  const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null) => {
+  const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null, reason = 'unspecified') => {
     clearFocusOverlayRevealTimer();
     setFocusWorldTransform({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
     resetCinematicRevealState();
     if (candidateKey) {
       setFocusPresentationState({ mode: 'drawer-fallback', key: candidateKey });
+      recordPreviewDebug({ stage: 'fallback', selectionKey: candidateKey, finalMode: 'drawer-fallback', reason });
       return;
     }
     setFocusPresentationState({ mode: 'idle' });
-  }, [clearFocusOverlayRevealTimer, resetCinematicRevealState]);
+    recordPreviewDebug({ stage: 'fallback', finalMode: 'idle', reason });
+  }, [clearFocusOverlayRevealTimer, recordPreviewDebug, resetCinematicRevealState]);
 
   const computeFromUntransformedFocusWorldStage = useCallback((measure: () => FocusMeasurementResult): FocusMeasurementResult => {
     const stageEl = focusWorldStageRef.current;
@@ -596,8 +625,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ));
       focusOverlayRevealTimerRef.current = null;
     }, FOCUS_OVERLAY_REVEAL_DELAY_MS);
+    recordPreviewDebug({ stage: 'focus-start', selectionKey, finalMode: 'world-focus' });
     return { ok: true };
-  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, stageCinematicReveal, view]);
+  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, recordPreviewDebug, stageCinematicReveal, view]);
 
   useEffect(() => {
     if (pinchOverlayGestureActiveRef.current) {
@@ -1219,20 +1249,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const openPreview = useCallback((item: MediaItem) => {
     const nextKey = assetSelectionKey(item, activeProject);
     if (!nextKey) return;
+    recordPreviewDebug({ stage: 'openPreview-request', selectionKey: nextKey, requestedMode: view });
     focusAsset(item, nextKey);
     setFocused(item);
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
     inspectorOpenRef.current = true;
     if (view === 'list') {
-      moveFocusPresentationToFallbackOrIdle(nextKey);
+      moveFocusPresentationToFallbackOrIdle(nextKey, 'not-grid');
       return;
     }
     const focusStart = startFocusMotionForSelectionKey(nextKey);
+    recordPreviewDebug({
+      stage: 'openPreview-focus-attempt',
+      selectionKey: nextKey,
+      requestedMode: view,
+      finalMode: focusStart.ok ? 'world-focus' : 'drawer-fallback',
+      reason: focusStart.ok ? undefined : focusStart.reason,
+    });
     if (!focusStart.ok) {
-      moveFocusPresentationToFallbackOrIdle(nextKey);
+      moveFocusPresentationToFallbackOrIdle(nextKey, focusStart.reason);
     }
-  }, [activeProject, assetSelectionKey, focusAsset, moveFocusPresentationToFallbackOrIdle, startFocusMotionForSelectionKey, view]);
+  }, [activeProject, assetSelectionKey, focusAsset, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, startFocusMotionForSelectionKey, view]);
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
@@ -1265,7 +1303,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     commitPreviewActivationKey(nextKey);
     const focusStart = startFocusMotionForSelectionKey(nextKey);
     if (!focusStart.ok) {
-      moveFocusPresentationToFallbackOrIdle(nextKey);
+      moveFocusPresentationToFallbackOrIdle(nextKey, focusStart.reason);
     }
     setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused, moveFocusPresentationToFallbackOrIdle, startFocusMotionForSelectionKey]);
@@ -1298,7 +1336,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const keyMismatch = !activeAssetKey || focusPresentationState.key !== activeAssetKey;
     if (view === 'grid' && !keyMismatch) return;
     const fallbackKey = activeAssetKey || focusPresentationState.key;
-    moveFocusPresentationToFallbackOrIdle(fallbackKey);
+    moveFocusPresentationToFallbackOrIdle(fallbackKey, keyMismatch ? 'key-mismatch' : 'presentation-invalidated');
   }, [activeAssetKey, focusPresentationState, inspectorOpen, moveFocusPresentationToFallbackOrIdle, resetFocusPresentationToIdle, view]);
 
   const handleUpload = useCallback(async () => {
@@ -2195,10 +2233,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (hasBootstrappedExplorerSession) return;
     hasBootstrappedExplorerSession = true;
-    addToast('good', 'Boot', 'Loading sources + projects…');
-    void loadSources();
-    void loadProjects();
-  }, []);
+    const bootToastId = addToast('good', 'Boot', 'Loading sources + projects…');
+    void Promise.allSettled([loadSources(), loadProjects()]).finally(() => {
+      beginToastExit(bootToastId);
+    });
+  }, [addToast, beginToastExit, loadProjects, loadSources]);
 
   useEffect(() => {
     if (activeProject) {

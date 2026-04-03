@@ -1,3 +1,10 @@
+## 2026-04-03 — Preview routing diagnostics + boot-toast dismissal parity (active)
+- [x] Added runtime preview diagnostics hook (`__explorerPreviewDebug`) in `ExplorerApp` to record open request mode, world-focus attempt outcome, and explicit fallback reasons.
+- [x] Updated preview fallback helper to carry reason metadata (`not-grid`, `density-unsafe`, `missing-target`, invalidation cases) into debug snapshots.
+- [x] Ensured boot toast follows an explicit completion-driven exit path using `beginToastExit(...)` after startup loaders settle.
+- [x] Relaxed focus-world projected-bound margin to reduce false-negative grid preview fallback for viable transforms.
+- [ ] Device-verify fallback reason traces and confirm boot toast consistently exits on slower mobile startup runs.
+
 ## 2026-04-03 — openDrawer stale-symbol crash fix (new)
 - [x] Removed stale `openDrawer` dependency entry from `useAssetInteractions` callback deps.
 - [x] Confirmed hook options/destructuring/internal calls already use `openPreview`.

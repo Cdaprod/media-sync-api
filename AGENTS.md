@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-03)
+- Added runtime preview-routing diagnostics via `globalThis.__explorerPreviewDebug` in `ExplorerApp` (request mode, focus-attempt outcome, fallback reason, final presentation mode) so grid/list ownership transitions are inspectable on-device.
+- Boot toast lifecycle now uses explicit completion-triggered exit (`beginToastExit`) after `loadSources()` + `loadProjects()` settle, matching normal success-toast dismissal behavior even when startup work is delayed.
+- Focus-world transform safety margin was relaxed in `focusWorldMotion` (`FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX`) to reduce false `missing-target` fallbacks for valid grid-card opens while preserving finite/bounds checks.
+
+### Latest Implementation Notes (2026-04-03)
 - Fixed a runtime crash (`ReferenceError: openDrawer`) by removing the last stale `openDrawer` symbol in `useAssetInteractions` callback dependencies and keeping the hook consistently on `openPreview` naming.
 - Re-verified source-level stale symbol sweep for `openDrawer` call/dependency/type patterns under `docker/packages/Explorer/src` after the cleanup.
 
