@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-03)
+- Runtime debug evidence confirmed grid preview demotion was failing before motion start (`drawer-fallback` with `reason: missing-target` and null focus measurement rects), indicating measurement-readiness timing rather than drawer visual ownership.
+- `ExplorerApp` focus measurement now reports explicit failure reasons (`missing-stage`, `missing-viewport`, `missing-grid`, `missing-card`, `unsafe-transform`) plus presence flags (`stagePresent`, `viewportPresent`, `gridPresent`, `cardPresent`) in `__explorerFocusWorldDebug.lastMeasurement`.
+- Grid preview focus start now performs a single deferred retry for readiness-related failures before entering drawer fallback, preserving list-mode drawer behavior and avoiding immediate demotion on first-tick ref unavailability.
+
+### Latest Implementation Notes (2026-04-03)
 - Removed lifecycle-unsafe `flushSync(...)` usage from Explorer density commit path (`onColumnsCommit`) and replaced it with microtask-coalesced state commits (`scheduleGridColumnCommit`) to avoid React lifecycle flush warnings in Safari.
 - Added lightweight runtime marker `globalThis.__explorerFlushSyncDebug` to confirm the new non-`flushSync` commit strategy is active and count committed column updates.
 - Kept scope narrow to correctness only: no cinematic preview redesign, no motion/easing retune, no ownership-model changes.

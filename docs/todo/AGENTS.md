@@ -1,3 +1,10 @@
+## 2026-04-03 — Grid focus measurement-readiness retry fix (active)
+- [x] Reconciled runtime evidence (`drawer-fallback` + `missing-target` + null measurement rects) as measurement-readiness timing failure instead of drawer visual ownership failure.
+- [x] Split focus measurement failures into explicit reasons (`missing-stage`, `missing-viewport`, `missing-grid`, `missing-card`, `unsafe-transform`) with presence flags for stage/viewport/grid/card.
+- [x] Added one deferred grid-focus retry lane for readiness-related failures before fallback demotion, with retry diagnostics markers (`focus-retry-scheduled`, `focus-retry-attempt`).
+- [x] Kept scope narrow: no cinematic redesign, no easing retune, no list-view drawer behavior changes.
+- [ ] Device-verify first grid tap now enters world-focus on next-frame retry when refs were unavailable on initial tick.
+
 ## 2026-04-03 — flushSync lifecycle warning correctness pass (active)
 - [x] Identified the only `flushSync(...)` call path in Explorer (`ExplorerApp` density `onColumnsCommit`) as lifecycle-adjacent and warning-prone in Safari.
 - [x] Replaced direct `flushSync(setGridColumnCount)` with microtask-coalesced commit scheduling (`scheduleGridColumnCommit`) to avoid sync flushes while preserving latest-target density truth.
