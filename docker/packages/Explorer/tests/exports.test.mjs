@@ -690,6 +690,9 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(styles.includes('.grid-cinematic-bottom{'));
   assert.ok(styles.includes('.grid-cinematic-bars{'));
   assert.ok(styles.includes('.grid-cinematic-bar.top'));
+  assert.ok(styles.includes('.focus-proxy-root{'));
+  assert.ok(styles.includes('.proxy-render-world{'));
+  assert.ok(styles.includes('.scroll.focus-proxy-scroll-lock{'));
   assert.ok(styles.includes('overflow-x: hidden;'));
   assert.ok(styles.includes('overflow-x: clip;'));
   assert.ok(styles.includes('-webkit-touch-callout: none;'));
@@ -1002,6 +1005,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   const drawerMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts');
   const topbarMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts');
   const focusMotionPath = path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts');
+  const renderTypesPath = path.join(packageRoot, 'src', 'render', 'renderTypes.ts');
+  const sceneSnapshotPath = path.join(packageRoot, 'src', 'render', 'SceneSnapshot.ts');
+  const cameraControllerPath = path.join(packageRoot, 'src', 'render', 'CameraController.ts');
+  const proxyRendererPath = path.join(packageRoot, 'src', 'render', 'ViewportProxyRenderer.ts');
+  const orchestratorPath = path.join(packageRoot, 'src', 'render', 'FocusTransitionOrchestrator.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const densityController = fs.readFileSync(densityControllerPath, 'utf8');
   const pinchController = fs.readFileSync(pinchControllerPath, 'utf8');
@@ -1010,6 +1018,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
   const topbarMotion = fs.readFileSync(topbarMotionPath, 'utf8');
   const focusMotion = fs.readFileSync(focusMotionPath, 'utf8');
+  const renderTypes = fs.readFileSync(renderTypesPath, 'utf8');
+  const sceneSnapshot = fs.readFileSync(sceneSnapshotPath, 'utf8');
+  const cameraController = fs.readFileSync(cameraControllerPath, 'utf8');
+  const proxyRenderer = fs.readFileSync(proxyRendererPath, 'utf8');
+  const orchestrator = fs.readFileSync(orchestratorPath, 'utf8');
 
   assert.ok(content.includes("if (view !== 'grid') {"));
   assert.ok(content.includes('const gridEl = gridSurfaceEl;'));
@@ -1068,8 +1081,14 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('const createGridCinematicTimeline = ({'));
   assert.ok(content.includes('const stageCinematicReveal = useCallback((mode: \'open\' | \'refocus\' = \'open\') => {'));
   assert.ok(content.includes('gridCinematicTimelineRef.current?.playClose();'));
-  assert.ok(content.includes('const gridCinematicActive = focusWorldActive && view === \'grid\';'));
-  assert.ok(content.includes('const drawerVisibleOwner = inspectorOpen && (view === \'list\' || focusPresentationState.mode === \'drawer-fallback\');'));
+  assert.ok(content.includes('const [proxyTransitionActive, setProxyTransitionActive] = useState(false);'));
+  assert.ok(content.includes('const focusOrchestratorRef = useRef<FocusTransitionOrchestrator | null>(null);'));
+  assert.ok(content.includes('const runProxyFocusTransition = useCallback((selectionKey: string, onComplete?: () => void) => {'));
+  assert.ok(content.includes('focusOrchestratorRef.current?.close();'));
+  assert.ok(content.includes('className={`focus-proxy-root ${proxyTransitionActive ? \'is-active\' : \'\'}`}'));
+  assert.ok(content.includes('data-grid-cinematic-nav="true"'));
+  assert.ok(content.includes('const gridCinematicActive = !proxyTransitionActive && focusWorldActive && view === \'grid\';'));
+  assert.ok(content.includes('const drawerVisibleOwner = !proxyTransitionActive && inspectorOpen && (view === \'list\' || focusPresentationState.mode === \'drawer-fallback\');'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
   assert.ok(content.includes("'--focus-world-origin-y': `${focusWorldTransform.originY}%`"));
   assert.ok(content.includes("focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''"));
@@ -1085,6 +1104,12 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(focusMotion.includes('computeFocusTransformOrigin'));
   assert.ok(focusMotion.includes('computeContinuityAdjustedTranslation'));
   assert.ok(focusMotion.includes('if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || !Number.isFinite(scale)) {'));
+  assert.ok(renderTypes.includes('export type FocusSceneSnapshot'));
+  assert.ok(sceneSnapshot.includes('export function captureFocusSceneSnapshot'));
+  assert.ok(cameraController.includes('export function computeCameraStateForTarget'));
+  assert.ok(proxyRenderer.includes('export class ViewportProxyRenderer'));
+  assert.ok(orchestrator.includes('export class FocusTransitionOrchestrator'));
+  assert.ok(orchestrator.includes('this.timeline = gsap.timeline('));
   assert.ok(content.includes('density.scrubTo(nextColumns);'));
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(content.includes('density?.settleScrub();'));

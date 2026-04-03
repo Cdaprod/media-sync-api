@@ -838,6 +838,59 @@ select.control{
 }
 .grid-cinematic-bar.top{ top: 0; }
 .grid-cinematic-bar.bottom{ bottom: 0; }
+.focus-proxy-root{
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  transition: opacity 120ms ease;
+}
+.focus-proxy-root.is-active{
+  opacity: 1;
+  pointer-events: auto;
+}
+.proxy-render-surface{
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: rgba(7,7,14,0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.proxy-render-world{
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+.proxy-render-card{
+  position: absolute;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 24px 72px rgba(0,0,0,0.34);
+}
+.proxy-render-card.is-active{
+  box-shadow: 0 30px 90px rgba(0,0,0,0.44);
+}
+.proxy-render-thumb,
+.proxy-render-thumb img{
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.proxy-render-fallback{
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scroll.focus-proxy-scroll-lock{
+  overflow: hidden;
+}
 .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
 .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
 .scroll::-webkit-scrollbar-track{ background: rgba(255,255,255,0.04); }

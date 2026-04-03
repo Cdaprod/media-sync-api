@@ -1,3 +1,10 @@
+## 2026-04-03 — Proxy render bridge seam for grid cinematic ownership (active)
+- [x] Added `src/render` bridge layer with snapshot, camera, proxy renderer, and GSAP orchestrator modules to isolate transition ownership from live masonry DOM.
+- [x] Wired `ExplorerApp` grid open/refocus path to attempt proxy transition first with scroll-lock lifecycle and close cleanup; preserved list drawer semantics.
+- [x] Removed duplicated cinematic nav ownership by replacing bottom panel Prev/Next with non-nav actions and keeping dedicated cinematic nav strip.
+- [x] Updated Explorer static contract assertions for new render seam and proxy ownership markers.
+- [ ] Device-verify proxy bridge transition reads as single moving owner (no duplicate panel leakage) across open, prev/next refocus, and close in mobile Safari.
+
 ## 2026-04-03 — Grid cinematic timeline authority + focus diagnostics pass (active)
 - [x] Centralized cinematic channel sequencing into `createGridCinematicTimeline` with explicit open/refocus/close ownership lanes.
 - [x] Upgraded focus transform guarding to diagnostics-first output (`guardFailureReason`, `guardDiagnostics`) while preserving fallback for pathological transform failures.

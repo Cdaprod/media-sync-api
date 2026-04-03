@@ -61,6 +61,7 @@ import {
 import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
+import { FocusTransitionOrchestrator } from './render/FocusTransitionOrchestrator';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -544,6 +545,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
   const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
   const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
+  const [proxyTransitionActive, setProxyTransitionActive] = useState(false);
   const [cinematicRevealState, setCinematicRevealState] = useState<CinematicRevealState>({
     worldVisible: false,
     headerVisible: false,
@@ -575,6 +577,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const pendingGridColumnCommitRef = useRef<number | null>(null);
   const gridColumnCommitScheduledRef = useRef(false);
   const previewDebugLogRef = useRef<PreviewDebugEntry[]>([]);
+  const focusProxyRootRef = useRef<HTMLDivElement | null>(null);
+  const focusOrchestratorRef = useRef<FocusTransitionOrchestrator | null>(null);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
@@ -638,6 +642,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!focusOverlayRevealTimerRef.current) return;
     window.clearTimeout(focusOverlayRevealTimerRef.current);
     focusOverlayRevealTimerRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!focusProxyRootRef.current) return;
+    focusOrchestratorRef.current = new FocusTransitionOrchestrator(focusProxyRootRef.current);
+    return () => {
+      focusOrchestratorRef.current = null;
+    };
   }, []);
 
   const clearFocusStartRetryFrame = useCallback(() => {
@@ -1479,6 +1491,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     });
   }, [clearFocusStartRetryFrame, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, startFocusMotionForSelectionKey]);
 
+  const runProxyFocusTransition = useCallback((selectionKey: string, onComplete?: () => void) => {
+    if (view !== 'grid') return false;
+    const gridRoot = gridRef.current;
+    const viewportEl = mediaScrollViewportRef.current;
+    const orchestrator = focusOrchestratorRef.current;
+    if (!gridRoot || !viewportEl || !orchestrator) return false;
+    const opened = orchestrator.open({
+      gridRoot,
+      viewportEl,
+      selectionKey,
+      onStart: () => {
+        setProxyTransitionActive(true);
+        viewportEl.classList.add('focus-proxy-scroll-lock');
+      },
+      onComplete: () => {
+        setProxyTransitionActive(false);
+        viewportEl.classList.remove('focus-proxy-scroll-lock');
+        onComplete?.();
+      },
+    });
+    if (!opened) {
+      setProxyTransitionActive(false);
+      viewportEl.classList.remove('focus-proxy-scroll-lock');
+    }
+    return opened;
+  }, [view]);
+
   const openPreview = useCallback((item: MediaItem) => {
     const nextKey = assetSelectionKey(item, activeProject);
     if (!nextKey) return;
@@ -1492,11 +1531,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       moveFocusPresentationToFallbackOrIdle(nextKey, 'not-grid');
       return;
     }
-    attemptGridFocusWithRetry(nextKey, view);
-  }, [activeProject, assetSelectionKey, attemptGridFocusWithRetry, focusAsset, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, view]);
+    const proxyOpened = runProxyFocusTransition(nextKey, () => {
+      attemptGridFocusWithRetry(nextKey, view);
+    });
+    if (!proxyOpened) {
+      attemptGridFocusWithRetry(nextKey, view);
+    }
+  }, [activeProject, assetSelectionKey, attemptGridFocusWithRetry, focusAsset, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, runProxyFocusTransition, view]);
 
   const closeDrawer = useCallback(() => {
     gridCinematicTimelineRef.current?.playClose();
+    focusOrchestratorRef.current?.close();
+    const viewportEl = mediaScrollViewportRef.current;
+    if (viewportEl) viewportEl.classList.remove('focus-proxy-scroll-lock');
+    setProxyTransitionActive(false);
     setInspectorOpen(false);
     inspectorOpenRef.current = false;
     setFocused(null);
@@ -1527,9 +1575,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused(nextItem);
     setActiveAssetKey(nextKey);
     commitPreviewActivationKey(nextKey);
-    attemptGridFocusWithRetry(nextKey, 'grid');
+    const proxyOpened = runProxyFocusTransition(nextKey, () => {
+      attemptGridFocusWithRetry(nextKey, 'grid');
+    });
+    if (!proxyOpened) {
+      attemptGridFocusWithRetry(nextKey, 'grid');
+    }
     setPreviewAutoPlayToken((prev) => prev + 1);
-  }, [activeProject, assetSelectionKey, attemptGridFocusWithRetry, commitPreviewActivationKey, filteredMedia, focused]);
+  }, [activeProject, assetSelectionKey, attemptGridFocusWithRetry, commitPreviewActivationKey, filteredMedia, focused, runProxyFocusTransition]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
@@ -3092,8 +3145,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ? focusPresentationState.overlayReady
       : focusPresentationState.mode === 'drawer-fallback'
   );
-  const gridCinematicActive = focusWorldActive && view === 'grid';
-  const drawerVisibleOwner = inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
+  const gridCinematicActive = !proxyTransitionActive && focusWorldActive && view === 'grid';
+  const drawerVisibleOwner = !proxyTransitionActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible
@@ -3675,8 +3728,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <div className={`grid-cinematic-bottom ${cinematicRevealState.bottomVisible ? 'is-visible' : ''}`} data-grid-cinematic-bottom="true">
                   <div className="meta">{normalizedPreviewAsset?.path || ''}</div>
                   <div className={`actions ${cinematicRevealState.actionsVisible ? 'is-visible' : ''}`} data-grid-cinematic-actions="true">
-                    <button className="btn" type="button" onClick={() => focusRelative(-1)}>Prev</button>
-                    <button className="btn" type="button" onClick={() => focusRelative(1)}>Next</button>
+                    <button className="btn" type="button" onClick={() => { if (focused) void handleCopyStream(focused); }}>Copy URL</button>
+                    <button className="btn" type="button" onClick={() => { if (focused) toggleSelected(focused); }}>
+                      {focused && selected.has(assetSelectionKey(focused, activeProject)) ? 'Deselect' : 'Select'}
+                    </button>
                   </div>
                 </div>
                 <button className={`grid-cinematic-close ${cinematicRevealState.closeVisible ? 'is-visible' : ''}`} type="button" onClick={closeDrawer} aria-label="Close cinematic preview">✕</button>
@@ -3730,6 +3785,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ✕ Clear
         </button>
       </div>
+
+      <div ref={focusProxyRootRef} className={`focus-proxy-root ${proxyTransitionActive ? 'is-active' : ''}`} aria-hidden="true" />
 
       <aside
         className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}

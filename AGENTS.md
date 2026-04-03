@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-03)
+- Added a bridge render seam under `docker/packages/Explorer/src/render/` (`renderTypes`, `SceneSnapshot`, `CameraController`, `ViewportProxyRenderer`, `FocusTransitionOrchestrator`) so grid focus/open transitions can be animated on a single GSAP-owned proxy world surface.
+- `ExplorerApp` grid preview open/refocus now attempts proxy transition ownership first (`runProxyFocusTransition`) with temporary scroll lock and explicit proxy-root lifecycle, while list preview remains drawer/panel-owned.
+- Grid cinematic UI was de-duplicated by removing bottom-panel Prev/Next duplication, keeping navigation in the dedicated cinematic nav lane, and suppressing drawer ownership while proxy transitions are active.
+
+### Latest Implementation Notes (2026-04-03)
 - Added dedicated grid cinematic timeline authority (`createGridCinematicTimeline`) to centralize channel sequencing for open/refocus/close and replace scattered reveal timer ownership.
 - Focus-world transform now exposes diagnostics-first guard output via `computeFocusWorldTransformWithDiagnostics` (raw/clamped translation and projected/sane bounds telemetry) and only hard-fails pathological transform states.
 - Extended grid cinematic surface + card shell markers (`header/chip/nav/close`, `data-card-shell-depth`, chip/nav UI markers) to keep in-grid scene-source parity and staged ownership explicit.
