@@ -672,16 +672,53 @@ select.control{
   pointer-events: none;
   transition: opacity 180ms ease;
 }
+.grid-cinematic-root.is-world-visible{
+  backdrop-filter: saturate(1.08);
+}
 .grid-cinematic-root.is-active{
   opacity: 1;
   pointer-events: auto;
 }
+.grid-cinematic-root.is-topbar-hidden{
+  --grid-cinematic-topbar-shift: -14px;
+}
+.grid-cinematic-header{
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 14px;
+  z-index: 1;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 160ms ease, transform 220ms ease;
+}
+.grid-cinematic-header.is-visible{
+  opacity: 1;
+  transform: translateY(0);
+}
+.grid-cinematic-chip{
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(166, 186, 237, 0.44);
+  border-radius: 999px;
+  background: rgba(8, 12, 22, 0.62);
+  color: #dbe6ff;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.grid-cinematic-chip.is-visible{ opacity: 1; }
 .grid-cinematic-media{
   position: absolute;
   inset: 0;
   opacity: 0;
   transform: scale(1.02);
   transition: opacity 180ms ease, transform 300ms cubic-bezier(0.2, 0.76, 0.24, 1);
+}
+.grid-cinematic-media.is-shell-visible{
+  filter: saturate(1.04) contrast(1.02);
 }
 .grid-cinematic-media.is-visible{
   opacity: 1;
@@ -709,11 +746,25 @@ select.control{
   transition: opacity 180ms ease, transform 220ms ease;
 }
 .grid-cinematic-top{
-  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  top: calc(env(safe-area-inset-top, 0px) + 14px + var(--grid-cinematic-topbar-shift, 0px));
   display: flex;
   justify-content: space-between;
   align-items: center;
   transform: translateY(-10px);
+}
+.grid-cinematic-nav{
+  position: absolute;
+  right: 16px;
+  top: calc(env(safe-area-inset-top, 0px) + 58px);
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+.grid-cinematic-nav.is-visible{
+  opacity: 1;
+  transform: translateY(0);
 }
 .grid-cinematic-top .title{
   font-size: 14px;
@@ -761,6 +812,13 @@ select.control{
   background: rgba(10, 14, 28, 0.72);
   color: #eff4ff;
   font-size: 16px;
+  opacity: 0;
+  transform: scale(0.94);
+  transition: opacity 160ms ease, transform 200ms ease;
+}
+.grid-cinematic-close.is-visible{
+  opacity: 1;
+  transform: scale(1);
 }
 .grid-cinematic-bars{
   position: absolute;
@@ -832,6 +890,10 @@ select.control{
   perspective: 900px;
   transform-style: preserve-3d;
 }
+.asset-cinematic-shell[data-card-shell-depth="true"] .thumb{
+  transform: translateZ(16px);
+  transform-style: preserve-3d;
+}
 .asset-cinematic-ui{
   position: absolute;
   left: 0;
@@ -849,6 +911,18 @@ select.control{
   right: 8px;
   bottom: 8px;
   opacity: 0.86;
+}
+.asset-cinematic-ui-chip{
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  opacity: 0.84;
+}
+.asset-cinematic-ui-nav{
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  opacity: 0.84;
 }
 
 /* Sources */

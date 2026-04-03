@@ -1,3 +1,15 @@
+## 2026-04-03 — Grid cinematic timeline authority + focus diagnostics pass (active)
+- [x] Centralized cinematic channel sequencing into `createGridCinematicTimeline` with explicit open/refocus/close ownership lanes.
+- [x] Upgraded focus transform guarding to diagnostics-first output (`guardFailureReason`, `guardDiagnostics`) while preserving fallback for pathological transform failures.
+- [x] Added cinematic parity surface markers in grid/card layers (`data-grid-cinematic-nav`, `data-card-ui-chip`, `data-card-ui-nav`, depth hook) and updated static contracts.
+- [ ] Device-verify world/header/bars/chip/shell/top/nav/bottom/actions/close pacing and validate topbar-hide/world-pulse feel on mobile Safari.
+
+## 2026-04-03 — Focus diagnostics + cinematic parity follow-up (active)
+- [x] Landed diagnostics-first focus guard path and wired extended guard telemetry into `__explorerFocusWorldDebug.lastMeasurement`.
+- [x] Expanded grid cinematic staged reveal sequencing (`bars -> media -> top -> bottom -> nav -> actions -> close`) and aligned cinematic shell/depth markers across `ExplorerApp`, `AssetGrid`, and Explorer styles.
+- [x] Updated Explorer static contracts to lock new diagnostics fields and staged cinematic sequencing markers.
+- [ ] On-device parity pass: validate grid cinematic reveal pacing and close choreography against list/drawer fallback ownership on mobile Safari.
+
 ## 2026-04-03 — Grid focus measurement-readiness retry fix (active)
 - [x] Reconciled runtime evidence (`drawer-fallback` + `missing-target` + null measurement rects) as measurement-readiness timing failure instead of drawer visual ownership failure.
 - [x] Split focus measurement failures into explicit reasons (`missing-stage`, `missing-viewport`, `missing-grid`, `missing-card`, `unsafe-transform`) with presence flags for stage/viewport/grid/card.

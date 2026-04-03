@@ -51,9 +51,11 @@ import { createExplorerDensityController } from './explorer/density/createExplor
 import { createPinchDensityController } from './explorer/density/createPinchDensityController';
 import { DEFAULT_COLUMNS_MOBILE, MAX_COLUMNS_MOBILE, MIN_COLUMNS_MOBILE } from './explorer/density/constants';
 import {
-  computeFocusWorldTransform as computeFocusWorldTransformFromRects,
+  computeFocusWorldTransformWithDiagnostics,
   FOCUS_OVERLAY_REVEAL_DELAY_MS,
   FOCUS_WORLD_OPEN_DURATION_MS,
+  type FocusWorldGuardDiagnostics,
+  type FocusWorldGuardFailureReason,
   type FocusWorldTransform,
 } from './explorer/focus/focusWorldMotion';
 import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
@@ -85,6 +87,8 @@ type StartFocusMotionResult =
 type FocusMeasurementResult = {
   transform: FocusWorldTransform | null;
   reason: FocusMeasurementFailureReason | null;
+  guardFailureReason: FocusWorldGuardFailureReason | null;
+  guardDiagnostics: FocusWorldGuardDiagnostics | null;
   stagePresent: boolean;
   viewportPresent: boolean;
   gridPresent: boolean;
@@ -97,6 +101,8 @@ type FocusMeasurementSnapshot = {
   selectionKey: string;
   fallback: boolean;
   reason: FocusMeasurementFailureReason | null;
+  guardFailureReason: FocusWorldGuardFailureReason | null;
+  guardDiagnostics: FocusWorldGuardDiagnostics | null;
   stagePresent: boolean;
   viewportPresent: boolean;
   gridPresent: boolean;
@@ -114,11 +120,19 @@ type PreviewDebugEntry = {
   reason?: string;
 };
 type CinematicRevealState = {
+  worldVisible: boolean;
+  headerVisible: boolean;
+  chipVisible: boolean;
+  shellVisible: boolean;
+  navVisible: boolean;
   mediaVisible: boolean;
   topVisible: boolean;
   bottomVisible: boolean;
   actionsVisible: boolean;
   barsVisible: boolean;
+  closeVisible: boolean;
+  topbarHidden: boolean;
+  worldPulseTick: number;
 };
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
@@ -261,6 +275,78 @@ const isReadinessFocusReason = (reason: StartFocusFailureReason) => (
   || reason === 'missing-grid'
   || reason === 'missing-card'
 );
+
+const createGridCinematicTimeline = ({
+  setState,
+  timerRegistryRef,
+}: {
+  setState: React.Dispatch<React.SetStateAction<CinematicRevealState>>;
+  timerRegistryRef: React.MutableRefObject<number[]>;
+}) => {
+  const clear = () => {
+    timerRegistryRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    timerRegistryRef.current = [];
+  };
+  const reset = () => {
+    clear();
+    setState((prev) => ({
+      worldVisible: false,
+      headerVisible: false,
+      barsVisible: false,
+      chipVisible: false,
+      shellVisible: false,
+      topVisible: false,
+      navVisible: false,
+      mediaVisible: false,
+      bottomVisible: false,
+      actionsVisible: false,
+      closeVisible: false,
+      topbarHidden: false,
+      worldPulseTick: prev.worldPulseTick,
+    }));
+  };
+  const schedule = (delay: number, apply: (prev: CinematicRevealState) => CinematicRevealState) => {
+    const timerId = window.setTimeout(() => setState(apply), delay);
+    timerRegistryRef.current.push(timerId);
+  };
+  const playOpen = () => {
+    reset();
+    schedule(0, (prev) => ({ ...prev, worldVisible: true, topbarHidden: true }));
+    schedule(22, (prev) => ({ ...prev, headerVisible: true, barsVisible: true }));
+    schedule(48, (prev) => ({ ...prev, chipVisible: true }));
+    schedule(74, (prev) => ({ ...prev, shellVisible: true }));
+    schedule(96, (prev) => ({ ...prev, topVisible: true }));
+    schedule(126, (prev) => ({ ...prev, navVisible: true }));
+    schedule(162, (prev) => ({ ...prev, mediaVisible: true, bottomVisible: true }));
+    schedule(208, (prev) => ({ ...prev, actionsVisible: true }));
+    schedule(248, (prev) => ({ ...prev, closeVisible: true }));
+  };
+  const playRefocus = () => {
+    setState((prev) => ({
+      ...prev,
+      worldVisible: true,
+      headerVisible: true,
+      barsVisible: true,
+      chipVisible: true,
+      shellVisible: true,
+      topVisible: true,
+      navVisible: true,
+      mediaVisible: true,
+      bottomVisible: true,
+      actionsVisible: true,
+      closeVisible: true,
+      topbarHidden: true,
+      worldPulseTick: prev.worldPulseTick + 1,
+    }));
+  };
+  const playClose = () => {
+    clear();
+    setState((prev) => ({ ...prev, closeVisible: false, actionsVisible: false, navVisible: false, topbarHidden: false }));
+    schedule(88, (prev) => ({ ...prev, topVisible: false, bottomVisible: false, mediaVisible: false, barsVisible: false }));
+    schedule(170, (prev) => ({ ...prev, chipVisible: false, shellVisible: false, worldVisible: false, headerVisible: false }));
+  };
+  return { clear, reset, playOpen, playRefocus, playClose };
+};
 
 const toRectSnapshot = (rect: DOMRect): Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> => ({
   left: rect.left,
@@ -459,11 +545,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
   const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
   const [cinematicRevealState, setCinematicRevealState] = useState<CinematicRevealState>({
+    worldVisible: false,
+    headerVisible: false,
+    chipVisible: false,
+    shellVisible: false,
+    navVisible: false,
     mediaVisible: false,
     topVisible: false,
     bottomVisible: false,
     actionsVisible: false,
     barsVisible: false,
+    closeVisible: false,
+    topbarHidden: false,
+    worldPulseTick: 0,
   });
   const focusWorldStageRef = useRef<HTMLDivElement | null>(null);
   const focusPresentationStateRef = useRef<FocusPresentationState>({ mode: 'idle' });
@@ -519,41 +613,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     });
   }, []);
 
+  const gridCinematicTimelineRef = useRef<ReturnType<typeof createGridCinematicTimeline> | null>(null);
+  if (!gridCinematicTimelineRef.current) {
+    gridCinematicTimelineRef.current = createGridCinematicTimeline({
+      setState: setCinematicRevealState,
+      timerRegistryRef: cinematicRevealTimersRef,
+    });
+  }
   const clearCinematicRevealTimers = useCallback(() => {
-    cinematicRevealTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
-    cinematicRevealTimersRef.current = [];
+    gridCinematicTimelineRef.current?.clear();
   }, []);
-
   const resetCinematicRevealState = useCallback(() => {
-    clearCinematicRevealTimers();
-    setCinematicRevealState({
-      mediaVisible: false,
-      topVisible: false,
-      bottomVisible: false,
-      actionsVisible: false,
-      barsVisible: false,
-    });
-  }, [clearCinematicRevealTimers]);
-
-  const stageCinematicReveal = useCallback(() => {
-    clearCinematicRevealTimers();
-    setCinematicRevealState({
-      mediaVisible: false,
-      topVisible: false,
-      bottomVisible: false,
-      actionsVisible: false,
-      barsVisible: false,
-    });
-    const schedule = (delay: number, apply: (prev: CinematicRevealState) => CinematicRevealState) => {
-      const timerId = window.setTimeout(() => setCinematicRevealState(apply), delay);
-      cinematicRevealTimersRef.current.push(timerId);
-    };
-    schedule(0, (prev) => ({ ...prev, barsVisible: true }));
-    schedule(40, (prev) => ({ ...prev, mediaVisible: true }));
-    schedule(130, (prev) => ({ ...prev, topVisible: true }));
-    schedule(210, (prev) => ({ ...prev, bottomVisible: true }));
-    schedule(290, (prev) => ({ ...prev, actionsVisible: true }));
-  }, [clearCinematicRevealTimers]);
+    gridCinematicTimelineRef.current?.reset();
+  }, []);
+  const stageCinematicReveal = useCallback((mode: 'open' | 'refocus' = 'open') => {
+    if (mode === 'refocus') {
+      gridCinematicTimelineRef.current?.playRefocus();
+      return;
+    }
+    gridCinematicTimelineRef.current?.playOpen();
+  }, []);
 
   const clearFocusOverlayRevealTimer = useCallback(() => {
     if (!focusOverlayRevealTimerRef.current) return;
@@ -624,6 +703,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         selectionKey,
         fallback: true,
         reason,
+        guardFailureReason: null,
+        guardDiagnostics: null,
         stagePresent,
         viewportPresent,
         gridPresent,
@@ -639,6 +720,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return {
         transform: null,
         reason,
+        guardFailureReason: null,
+        guardDiagnostics: null,
         stagePresent,
         viewportPresent,
         gridPresent,
@@ -654,6 +737,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return {
           transform: null,
           reason: 'missing-card',
+          guardFailureReason: null,
+          guardDiagnostics: null,
           stagePresent,
           viewportPresent,
           gridPresent,
@@ -666,7 +751,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const stageRect = stageEl.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
       const viewportRect = scrollViewport.getBoundingClientRect();
-      const transform = computeFocusWorldTransformFromRects({
+      const diagnostics = computeFocusWorldTransformWithDiagnostics({
         cardRect,
         stageRect,
         viewportRect,
@@ -674,8 +759,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         currentTransform: options?.continueFromCurrent ? focusWorldTransform : null,
       });
       return {
-        transform,
-        reason: transform ? null : 'unsafe-transform',
+        transform: diagnostics.transform,
+        reason: diagnostics.transform ? null : 'unsafe-transform',
+        guardFailureReason: diagnostics.guardFailureReason,
+        guardDiagnostics: diagnostics.guardDiagnostics,
         stagePresent,
         viewportPresent,
         gridPresent,
@@ -689,6 +776,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       selectionKey,
       fallback: !measurement.transform,
       reason: measurement.reason,
+      guardFailureReason: measurement.guardFailureReason,
+      guardDiagnostics: measurement.guardDiagnostics,
       stagePresent: measurement.stagePresent,
       viewportPresent: measurement.viewportPresent,
       gridPresent: measurement.gridPresent,
@@ -715,8 +804,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!initial.transform) return { ok: false, reason: initial.reason ?? 'unsafe-transform' };
     clearFocusOverlayRevealTimer();
     setFocusWorldTransform(initial.transform);
+    const isRefocus = focusPresentationStateRef.current.mode === 'world-focus'
+      && focusPresentationStateRef.current.key === selectionKey;
     setFocusPresentationState({ mode: 'world-focus', key: selectionKey, overlayReady: false });
-    stageCinematicReveal();
+    stageCinematicReveal(isRefocus ? 'refocus' : 'open');
     window.requestAnimationFrame(() => {
       const next = computeFocusWorldTransform(selectionKey, { continueFromCurrent: true });
       if (!next.transform) return;
@@ -1405,11 +1496,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, assetSelectionKey, attemptGridFocusWithRetry, focusAsset, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, view]);
 
   const closeDrawer = useCallback(() => {
+    gridCinematicTimelineRef.current?.playClose();
     setInspectorOpen(false);
     inspectorOpenRef.current = false;
     setFocused(null);
     setPreviewDetailsOpen(false);
-    resetFocusPresentationToIdle();
+    window.setTimeout(() => {
+      resetFocusPresentationToIdle();
+    }, 96);
   }, [resetFocusPresentationToIdle]);
 
   const commitPreviewActivationKey = useCallback((nextKey: string) => {
@@ -3537,15 +3631,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 </div>
               </div>
               <div
-                className={`grid-cinematic-root ${gridCinematicActive ? 'is-active' : ''} ${cinematicStageReady ? 'is-stage-ready' : ''}`}
+                className={`grid-cinematic-root ${gridCinematicActive ? 'is-active' : ''} ${cinematicStageReady ? 'is-stage-ready' : ''} ${cinematicRevealState.worldVisible ? 'is-world-visible' : ''} ${cinematicRevealState.topbarHidden ? 'is-topbar-hidden' : ''}`}
                 aria-hidden={!gridCinematicActive}
                 data-grid-cinematic-root="true"
+                data-world-pulse={String(cinematicRevealState.worldPulseTick)}
               >
+                <div className={`grid-cinematic-header ${cinematicRevealState.headerVisible ? 'is-visible' : ''}`} data-grid-cinematic-header="true">
+                  <span className={`grid-cinematic-chip ${cinematicRevealState.chipVisible ? 'is-visible' : ''}`} data-grid-cinematic-chip="true">Grid cinematic</span>
+                </div>
                 <div className={`grid-cinematic-bars ${cinematicRevealState.barsVisible ? 'is-visible' : ''}`} data-grid-cinematic-bars="true">
                   <div className="grid-cinematic-bar top"></div>
                   <div className="grid-cinematic-bar bottom"></div>
                 </div>
-                <div className={`grid-cinematic-media ${cinematicRevealState.mediaVisible ? 'is-visible' : ''}`} data-grid-cinematic-media="true">
+                <div className={`grid-cinematic-media ${cinematicRevealState.mediaVisible ? 'is-visible' : ''} ${cinematicRevealState.shellVisible ? 'is-shell-visible' : ''}`} data-grid-cinematic-media="true">
                   {normalizedPreviewAsset?.kind === 'video' ? (
                     <video
                       key={normalizedPreviewAsset.id}
@@ -3570,6 +3668,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   <div className="title">{normalizedPreviewAsset?.name || ''}</div>
                   <button className="btn" type="button" onClick={closeDrawer}>Close</button>
                 </div>
+                <div className={`grid-cinematic-nav ${cinematicRevealState.navVisible ? 'is-visible' : ''}`} data-grid-cinematic-nav="true">
+                  <button className="btn" type="button" onClick={() => focusRelative(-1)}>Prev</button>
+                  <button className="btn" type="button" onClick={() => focusRelative(1)}>Next</button>
+                </div>
                 <div className={`grid-cinematic-bottom ${cinematicRevealState.bottomVisible ? 'is-visible' : ''}`} data-grid-cinematic-bottom="true">
                   <div className="meta">{normalizedPreviewAsset?.path || ''}</div>
                   <div className={`actions ${cinematicRevealState.actionsVisible ? 'is-visible' : ''}`} data-grid-cinematic-actions="true">
@@ -3577,7 +3679,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     <button className="btn" type="button" onClick={() => focusRelative(1)}>Next</button>
                   </div>
                 </div>
-                <button className="grid-cinematic-close" type="button" onClick={closeDrawer} aria-label="Close cinematic preview">✕</button>
+                <button className={`grid-cinematic-close ${cinematicRevealState.closeVisible ? 'is-visible' : ''}`} type="button" onClick={closeDrawer} aria-label="Close cinematic preview">✕</button>
               </div>
             </div>
           </div>

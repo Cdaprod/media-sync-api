@@ -1,4 +1,14 @@
 ### Latest Implementation Notes (2026-04-03)
+- Added dedicated grid cinematic timeline authority (`createGridCinematicTimeline`) to centralize channel sequencing for open/refocus/close and replace scattered reveal timer ownership.
+- Focus-world transform now exposes diagnostics-first guard output via `computeFocusWorldTransformWithDiagnostics` (raw/clamped translation and projected/sane bounds telemetry) and only hard-fails pathological transform states.
+- Extended grid cinematic surface + card shell markers (`header/chip/nav/close`, `data-card-shell-depth`, chip/nav UI markers) to keep in-grid scene-source parity and staged ownership explicit.
+
+### Latest Implementation Notes (2026-04-03)
+- Reworked focus-world safety into a diagnostics-first path (`computeFocusWorldTransformWithDiagnostics`) that reports guard telemetry (`rawX/rawY`, `clampedX/clampedY`, projected bounds, sane bounds, and projected-within-sane-bounds) while only hard-failing pathological transform states (`invalid-scale`, `non-finite`, `absurd-translation`).
+- Explorer focus measurement debug snapshots now carry `guardFailureReason` and `guardDiagnostics` in `__explorerFocusWorldDebug.lastMeasurement`, preserving existing presentation fallback ownership flow.
+- Grid cinematic reveal choreography now uses the expanded staged channel order (`bars -> media -> top -> bottom -> nav -> actions -> close`) and `AssetGrid`/styles include explicit cinematic shell markers for parity-ready in-grid handoff depth.
+
+### Latest Implementation Notes (2026-04-03)
 - Runtime debug evidence confirmed grid preview demotion was failing before motion start (`drawer-fallback` with `reason: missing-target` and null focus measurement rects), indicating measurement-readiness timing rather than drawer visual ownership.
 - `ExplorerApp` focus measurement now reports explicit failure reasons (`missing-stage`, `missing-viewport`, `missing-grid`, `missing-card`, `unsafe-transform`) plus presence flags (`stagePresent`, `viewportPresent`, `gridPresent`, `cardPresent`) in `__explorerFocusWorldDebug.lastMeasurement`.
 - Grid preview focus start now performs a single deferred retry for readiness-related failures before entering drawer fallback, preserving list-mode drawer behavior and avoiding immediate demotion on first-tick ref unavailability.
