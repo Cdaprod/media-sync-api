@@ -1161,7 +1161,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setActiveAssetKey(nextKey);
   }, [activeProject, assetSelectionKey]);
 
-  const openDrawer = useCallback((item: MediaItem) => {
+  const openPreview = useCallback((item: MediaItem) => {
     const nextKey = assetSelectionKey(item, activeProject);
     if (!nextKey) return;
     focusAsset(item, nextKey);
@@ -1169,11 +1169,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setPreviewDetailsOpen(false);
     setInspectorOpen(true);
     inspectorOpenRef.current = true;
+    if (view === 'list') {
+      moveFocusPresentationToFallbackOrIdle(nextKey);
+      return;
+    }
     const focusStart = startFocusMotionForSelectionKey(nextKey);
     if (!focusStart.ok) {
       moveFocusPresentationToFallbackOrIdle(nextKey);
     }
-  }, [activeProject, assetSelectionKey, focusAsset, moveFocusPresentationToFallbackOrIdle, startFocusMotionForSelectionKey]);
+  }, [activeProject, assetSelectionKey, focusAsset, moveFocusPresentationToFallbackOrIdle, startFocusMotionForSelectionKey, view]);
 
   const closeDrawer = useCallback(() => {
     setInspectorOpen(false);
@@ -1779,7 +1783,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const actions: Array<{ id: string; label: string; handler: () => void }> = [];
 
     if (single) {
-      actions.push({ id: 'preview', label: 'Open preview', handler: () => openDrawer(item) });
+      actions.push({ id: 'preview', label: 'Open preview', handler: () => openPreview(item) });
       actions.push({ id: 'copy-stream', label: 'Copy stream URL', handler: () => void handleCopyStream(item) });
       actions.push({
         id: 'download',
@@ -1810,7 +1814,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       handler: () => deleteMediaSelection(resolveSelectionKeysForItems(items)),
     });
     return actions;
-  }, [deleteMediaSelection, handleCopySelectedUrls, handleCopyStream, openDrawer, resolveAssetUrl, resolveSelectionKeysForItems]);
+  }, [deleteMediaSelection, handleCopySelectedUrls, handleCopyStream, openPreview, resolveAssetUrl, resolveSelectionKeysForItems]);
 
   const {
     assetDragActive,
@@ -1829,7 +1833,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     moveMediaSelection,
     onRevealTopbar: () => topbarIntentRef.current?.setOpen(true),
     openContextMenu,
-    openDrawer,
+    openPreview,
     focusAsset,
     projects,
     selected,
@@ -1878,8 +1882,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const handlePreviewSelected = useCallback(() => {
     const first = selectionItems[0];
     const item = first || null;
-    if (item) openDrawer(item);
-  }, [openDrawer, selectionItems]);
+    if (item) openPreview(item);
+  }, [openPreview, selectionItems]);
 
   const pinTopbarTemporarily = useCallback((ms = 900) => {
     if (topbarPinTimeoutRef.current) {
@@ -2073,12 +2077,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       getSuppressOpen: () => focusPresentationStateRef.current.mode === 'world-focus',
     });
     drawerMotionRef.current = controller;
-    if (inspectorOpenRef.current) controller.open();
+    const shouldOpenDrawer = inspectorOpenRef.current && focusPresentationStateRef.current.mode !== 'world-focus';
+    if (shouldOpenDrawer) controller.open();
     else controller.setClosedState();
 
     const handleResize = () => {
       controller.syncLayoutMode();
-      if (inspectorOpenRef.current) controller.open();
+      const shouldOpenDrawer = inspectorOpenRef.current && focusPresentationStateRef.current.mode !== 'world-focus';
+      if (shouldOpenDrawer) controller.open();
       else controller.setClosedState();
     };
     const handleModeChange = () => handleResize();
@@ -2096,7 +2102,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     const controller = drawerMotionRef.current;
     if (!controller) return;
-    if (inspectorOpen) controller.open();
+    const shouldOpenDrawer = inspectorOpen && focusPresentationState.mode !== 'world-focus';
+    if (shouldOpenDrawer) controller.open();
     else controller.close(() => {
       controller.setClosedState();
     });
@@ -3291,7 +3298,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       buildAssetViewModel={buildAssetViewModel}
                       canSelect={canSelect}
                       items={renderedMediaEntries}
-                      onOpenDrawer={openDrawer}
+                      onOpenPreview={openPreview}
                       onToggleSelected={toggleSelected}
                       onDismissPendingJob={removePendingJob}
                     />

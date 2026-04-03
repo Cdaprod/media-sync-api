@@ -1,3 +1,11 @@
+## 2026-04-03 — Preview intent routing split (new)
+- [x] Replaced interaction-level drawer intent with preview intent (`openPreview`) in `useAssetInteractions`.
+- [x] Updated list row contract from `onOpenDrawer` to `onOpenPreview` and rewired `ExplorerApp` list rendering call site.
+- [x] Added view-based preview routing in `ExplorerApp` (`grid` → world-focus attempt, `list` → explicit drawer fallback).
+- [x] Gated drawer motion effect by presentation mode so `inspectorOpen` alone no longer implies drawer animation during world-focus.
+- [x] Updated static contracts for renamed preview intent strings and `openPreview` local-routing checks.
+- [ ] Runtime validation: verify grid tap no longer visually enters via drawer while list tap still uses drawer preview.
+
 ## 2026-04-02 — Focus world transform landing fix (new)
 - [x] Updated focus measurement to neutralize `.focus-world-stage` transform before reading stage/card/viewport rects and restore styles immediately.
 - [x] Added stage-aware transform safety guard in `focusWorldMotion` so impossible projected landings return `null` and trigger explicit fallback.

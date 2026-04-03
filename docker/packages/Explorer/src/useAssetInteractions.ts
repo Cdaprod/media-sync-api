@@ -65,7 +65,7 @@ interface UseAssetInteractionsOptions {
   moveMediaSelection: (selectionKeys: string[], project: Project) => Promise<void>;
   onRevealTopbar: () => void;
   openContextMenu: (x: number, y: number, items: MediaItem[]) => void;
-  openDrawer: (item: MediaItem) => void;
+  openPreview: (item: MediaItem) => void;
   projects: Project[];
   selected: Set<string>;
   selectedKeysOrdered: string[];
@@ -91,7 +91,7 @@ export function useAssetInteractions({
   moveMediaSelection,
   onRevealTopbar,
   openContextMenu,
-  openDrawer,
+  openPreview,
   projects,
   selected,
   selectedKeysOrdered,
@@ -613,7 +613,7 @@ export function useAssetInteractions({
         const now = Date.now();
         if (inspectorOpen) {
           focusAsset(item, itemKey);
-          openDrawer(item);
+          openPreview(item);
           lastTileTapRef.current = { key: '', at: 0 };
           return;
         }
@@ -623,7 +623,7 @@ export function useAssetInteractions({
         if (isSecondTap) {
           focusAsset(item, itemKey);
           onTapStage?.('second', itemKey);
-          openDrawer(item);
+          openPreview(item);
           lastTileTapRef.current = { key: '', at: 0 };
           gestureModeRef.current = 'idle';
           return;

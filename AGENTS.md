@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-04-03)
+- Preview intent is now routed through `openPreview(item)` in `ExplorerApp`: grid view attempts world-focus presentation while list view explicitly uses drawer fallback semantics.
+- Interaction entrypoints were decoupled from drawer naming (`useAssetInteractions` now calls `openPreview`), and list row wiring now passes `onOpenPreview` to keep list-specific drawer behavior without forcing drawer ownership in grid.
+- Drawer open effect now checks both `inspectorOpen` and presentation mode so world-focus mode no longer auto-opens drawer animation solely because inspector state is true.
+
 ### Latest Implementation Notes (2026-04-02)
 - Focus world measurement now captures neutralized geometry from `.focus-world-stage` (stage/card/viewport rects measured with temporary identity transform) and restores stage style immediately after sampling.
 - `focusWorldMotion` now validates projected transformed card bounds using stage-aware geometry and returns `null` for unsafe landings so callers fall back cleanly instead of applying off-screen transforms.

@@ -228,7 +228,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(hookContent.includes('focusAsset(item, itemKey);'));
   assert.ok(hookContent.includes('if (isSecondTap) {'));
   assert.ok(hookContent.includes("focusAsset(item, itemKey);\n          onTapStage?.('second', itemKey);"));
-  assert.ok(hookContent.includes('openDrawer(item);'));
+  assert.ok(hookContent.includes('openPreview(item);'));
   assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
   assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
   assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
@@ -688,7 +688,7 @@ test('package explorer interaction handlers do not trigger loading overlay state
   assert.ok(start >= 0);
   assert.ok(end > start);
   const block = content.slice(start, end);
-  assert.ok(block.includes('openDrawer(item);'));
+  assert.ok(block.includes('openPreview(item);'));
   assert.ok(block.includes('openContextMenu(event.clientX, event.clientY, resolveContextItems())'));
   assert.ok(block.includes('event.stopPropagation();'));
   assert.ok(!block.includes('setPendingDataLoadOverlay('));
@@ -814,7 +814,7 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   assert.ok(hookContent.includes('if (inNoPreviewZone(event.target)) {'));
   assert.ok(hookContent.includes('if (inspectorOpen) {'));
   assert.ok(!hookContent.includes('closeDrawer();'));
-  assert.ok(hookContent.includes('openDrawer(item);'));
+  assert.ok(hookContent.includes('openPreview(item);'));
   assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
   assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
   assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
@@ -1221,8 +1221,8 @@ test('local density/context/preview interactions stay network-quiet and do not i
   assert.ok(!contextBlock.includes('loadMedia('));
   assert.ok(!contextBlock.includes('loadAllMedia('));
 
-  const previewStart = content.indexOf('const openDrawer = useCallback((item: MediaItem) => {');
-  const previewBlock = previewStart >= 0 ? content.slice(previewStart, previewStart + 260) : '';
+  const previewStart = content.indexOf('const openPreview = useCallback((item: MediaItem) => {');
+  const previewBlock = previewStart >= 0 ? content.slice(previewStart, previewStart + 520) : '';
   assert.ok(previewBlock.includes('setInspectorOpen(true);'));
   assert.ok(!previewBlock.includes('loadSources('));
   assert.ok(!previewBlock.includes('loadProjects('));
@@ -1400,13 +1400,13 @@ test('density-related local interactions remain layout-only and do not trigger b
   assert.ok(!contextBlock.includes('loadSources('));
   assert.ok(!contextBlock.includes('loadProjects('));
 
-  const previewStart = explorer.indexOf('const openDrawer = useCallback');
+  const previewStart = explorer.indexOf('const openPreview = useCallback');
   const previewBlock = previewStart >= 0 ? explorer.slice(previewStart, previewStart + 320) : '';
   assert.ok(previewBlock.includes('setInspectorOpen(true);'));
   assert.ok(!previewBlock.includes('loadSources('));
   assert.ok(!previewBlock.includes('loadProjects('));
 
-  assert.ok(hook.includes('openDrawer(item);'));
+  assert.ok(hook.includes('openPreview(item);'));
   assert.ok(hook.includes('openContextMenu(event.clientX, event.clientY, resolveContextItems())'));
 });
 

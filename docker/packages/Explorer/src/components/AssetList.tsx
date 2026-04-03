@@ -11,7 +11,7 @@ interface AssetListProps {
     | { kind: 'asset'; item: MediaItem }
     | { kind: 'pending'; pendingItem: PendingComposeAsset }
   >;
-  onOpenDrawer: (item: MediaItem) => void;
+  onOpenPreview: (item: MediaItem) => void;
   onToggleSelected: (item: MediaItem) => void;
   onDismissPendingJob: (jobId: string) => void;
 }
@@ -20,7 +20,7 @@ function AssetListComponent({
   buildAssetViewModel,
   canSelect,
   items,
-  onOpenDrawer,
+  onOpenPreview,
   onToggleSelected,
   onDismissPendingJob,
 }: AssetListProps) {
@@ -111,7 +111,7 @@ function AssetListComponent({
                 data-interactive="true"
                 data-no-preview="1"
                 onPointerDown={handleInteractivePointerDown}
-                onClick={() => onOpenDrawer(item)}
+                onClick={() => onOpenPreview(item)}
               >
                 Preview
               </button>
