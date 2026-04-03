@@ -851,6 +851,10 @@ select.control{
   opacity: 1;
   pointer-events: auto;
 }
+.app:not(.grid-focused) .grid-cinematic-root{
+  opacity: 0;
+  pointer-events: none;
+}
 .app.proxy-travel-active .grid-cinematic-root{
   opacity: 0 !important;
   pointer-events: none !important;

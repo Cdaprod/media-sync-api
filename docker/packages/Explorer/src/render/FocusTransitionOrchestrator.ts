@@ -2,18 +2,22 @@ import { gsap } from '../lib/gsap';
 import { captureFocusSceneSnapshot } from './SceneSnapshot';
 import { computeCameraStateForTarget } from './CameraController';
 import { ViewportProxyRenderer } from './ViewportProxyRenderer';
+import type { ProxyCameraState } from './renderTypes';
 
 export class FocusTransitionOrchestrator {
   private renderer: ViewportProxyRenderer;
   private root: HTMLElement;
   private timeline: gsap.core.Timeline | null = null;
+  private currentCamera: ProxyCameraState = {
+    x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
+  };
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.renderer = new ViewportProxyRenderer(root);
   }
 
-  open(args: {
+  openFocusTransition(args: {
     gridRoot: HTMLElement;
     viewportEl: HTMLElement;
     selectionKey: string;
@@ -38,7 +42,8 @@ export class FocusTransitionOrchestrator {
       viewportHeight: snapshot.viewport.height,
     });
 
-    this.renderer.render(snapshot, { ...camera, scale: 1, x: 0, y: 0 });
+    const startCamera = { ...this.currentCamera, x: 0, y: 0, scale: 1 };
+    this.renderer.render(snapshot, startCamera);
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
 
@@ -50,6 +55,7 @@ export class FocusTransitionOrchestrator {
         args.onStart?.();
       },
       onComplete: () => {
+        this.currentCamera = { ...camera };
         args.onEvent?.('proxy-open-complete');
         args.onComplete?.();
       },
@@ -73,7 +79,7 @@ export class FocusTransitionOrchestrator {
     return true;
   }
 
-  refocus(args: {
+  refocusTransition(args: {
     gridRoot: HTMLElement;
     viewportEl: HTMLElement;
     selectionKey: string;
@@ -95,7 +101,7 @@ export class FocusTransitionOrchestrator {
       viewportWidth: snapshot.viewport.width,
       viewportHeight: snapshot.viewport.height,
     });
-    this.renderer.render(snapshot, camera);
+    this.renderer.render(snapshot, this.currentCamera);
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
     this.timeline?.kill();
@@ -110,6 +116,7 @@ export class FocusTransitionOrchestrator {
         args.onStart?.();
       },
       onComplete: () => {
+        this.currentCamera = { ...camera };
         args.onEvent?.('proxy-refocus-complete');
         args.onComplete?.();
       },
@@ -125,22 +132,32 @@ export class FocusTransitionOrchestrator {
     return true;
   }
 
-  close(onComplete?: () => void) {
+  closeFocusTransition(args?: {
+    onStart?: () => void;
+    onComplete?: () => void;
+  }) {
     const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
     if (!world) {
       this.root.style.opacity = '0';
       this.root.style.pointerEvents = 'none';
-      onComplete?.();
+      this.currentCamera = {
+        x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
+      };
+      args?.onComplete?.();
       return;
     }
 
     this.timeline?.kill();
     this.timeline = gsap.timeline({
+      onStart: () => args?.onStart?.(),
       onComplete: () => {
         this.root.style.opacity = '0';
         this.root.style.pointerEvents = 'none';
         this.renderer.unmount();
-        onComplete?.();
+        this.currentCamera = {
+          x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
+        };
+        args?.onComplete?.();
       },
     });
 

@@ -1,3 +1,10 @@
+## 2026-04-03 — Grid focused-state interaction completion pass (active)
+- [x] Introduced explicit grid cinematic mode state machine (`grid-rest/opening/focused/refocusing/closing`) and wired overlay visibility to settled focused mode.
+- [x] Added focused-mode pointer arbitration: different asset click -> refocus transition, non-asset click -> close transition to rest.
+- [x] Unified close button + outside-close onto the same proxy close travel path (`closeFocusTransition`) with rest-state handoff.
+- [x] Updated static contracts for new mode states, close/refocus methods, and focused hit arbitration markers.
+- [ ] Device-verify interaction contract: asset->focus open, focused->asset refocus, focused->outside close, and close-button motion-out parity.
+
 ## 2026-04-03 — Proxy ownership/continuity correction phase-2 (active)
 - [x] Added explicit proxy travel state lane in `ExplorerApp` and made proxy activity the gating source for cinematic/drawer visibility ownership.
 - [x] Extended `FocusTransitionOrchestrator` with explicit transition markers and dedicated refocus path to keep grid prev/next in the proxy camera lane.

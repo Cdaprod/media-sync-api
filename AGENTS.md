@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-03)
+- Added explicit grid cinematic focus-state machine lane in `ExplorerApp` (`grid-rest`, `grid-opening`, `grid-focused`, `grid-refocusing`, `grid-closing`) so overlay/chrome visibility and ownership are tied to settled focused state instead of open intent.
+- Grid focused interaction arbitration now distinguishes pointer hits on assets vs non-asset space: non-asset clicks trigger close travel to rest, while different-asset clicks route to proxy refocus travel.
+- `FocusTransitionOrchestrator` now exposes named transition methods (`openFocusTransition`, `refocusTransition`, `closeFocusTransition`) with continuity-aware camera state handoff and transition marker callbacks.
+
+### Latest Implementation Notes (2026-04-03)
 - Phase-2 ownership/continuity pass introduced explicit proxy travel lane state (`idle` / `open-travel` / `refocus-travel`) so proxy and cinematic owners cannot appear as competing active surfaces in grid mode.
 - Proxy orchestrator now emits explicit transition markers (`proxy-open-start`, `proxy-open-complete`, `proxy-refocus-start`, `proxy-refocus-complete`, `proxy-failed`) and Explorer preview debug logs capture those markers for runtime handoff traceability.
 - Snapshot filtering now prioritizes selected-card inclusion plus near-viewport neighbors, and proxy styles enforce grid cinematic + drawer suppression while proxy travel is active.

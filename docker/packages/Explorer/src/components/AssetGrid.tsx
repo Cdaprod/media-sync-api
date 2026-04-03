@@ -555,6 +555,7 @@ function AssetGridComponent({
               data-layout-bottom={layoutBottom}
               data-card-id={viewModel.selectionKey}
               data-cinematic-card="true"
+              data-cinematic-hit-target="true"
               {...viewModel.pointerHandlers}
             >
               <div className="asset-cinematic-shell" data-card-shell="true" data-card-shell-depth="true">
