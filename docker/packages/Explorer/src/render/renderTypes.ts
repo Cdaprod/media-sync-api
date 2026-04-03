@@ -8,6 +8,7 @@ export type RenderCardSnapshot = {
     height: number;
   };
   thumbUrl?: string;
+  mediaUrl?: string;
   kind: string;
   title?: string;
   active: boolean;

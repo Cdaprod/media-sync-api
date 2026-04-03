@@ -1651,6 +1651,50 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeAssetKey, activeProject, assetSelectionKey, attemptGridFocusWithRetry, closeDrawer, commitPreviewActivationKey, filteredMedia, gridCinematicMode, inspectorOpen, runProxyFocusTransition, view]);
 
   useEffect(() => {
+    if (view !== 'grid') return;
+    if (!inspectorOpen) return;
+    if (gridCinematicMode === 'grid-rest') return;
+    const proxyRoot = focusProxyRootRef.current;
+    if (!proxyRoot) return;
+    const handleProxyPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const action = target.closest<HTMLElement>('[data-proxy-action]')?.dataset.proxyAction;
+      if (action === 'close') {
+        event.preventDefault();
+        closeDrawer();
+        return;
+      }
+      if (action === 'prev') {
+        event.preventDefault();
+        focusRelative(-1);
+        return;
+      }
+      if (action === 'next') {
+        event.preventDefault();
+        focusRelative(1);
+        return;
+      }
+      const cardEl = target.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
+      if (!cardEl) {
+        if (gridCinematicMode === 'grid-focused') {
+          event.preventDefault();
+          closeDrawer();
+        }
+        return;
+      }
+      const nextKey = cardEl.dataset.selectionKey || '';
+      if (!nextKey || nextKey === activeAssetKey) return;
+      const nextItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === nextKey);
+      if (!nextItem) return;
+      event.preventDefault();
+      openPreview(nextItem);
+    };
+    proxyRoot.addEventListener('pointerdown', handleProxyPointerDown, true);
+    return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusRelative, gridCinematicMode, inspectorOpen, openPreview, view]);
+
+  useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
     if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
     const rafId = window.requestAnimationFrame(() => {
@@ -2304,6 +2348,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setHoldEmphasisKey(itemKey);
       commitPreviewActivationKey(itemKey);
     },
+    gridCinematicInteractionOwned: view === 'grid' && inspectorOpen && gridCinematicMode !== 'grid-rest',
   });
 
   useEffect(() => {
@@ -3212,7 +3257,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       : focusPresentationState.mode === 'drawer-fallback'
   );
   const proxyTravelActive = proxyTravelState !== 'idle';
-  const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === 'grid';
+  const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === 'grid' && gridCinematicMode === 'grid-rest';
   const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
@@ -3853,7 +3898,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
       </div>
 
-      <div ref={focusProxyRootRef} className={`focus-proxy-root ${proxyTravelActive ? 'is-active' : ''}`} aria-hidden="true" />
+      <div ref={focusProxyRootRef} className={`focus-proxy-root ${gridCinematicMode !== 'grid-rest' ? 'is-active' : ''}`} aria-hidden="true" />
 
       <aside
         className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}

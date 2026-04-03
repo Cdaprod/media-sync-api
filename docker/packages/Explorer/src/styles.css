@@ -897,6 +897,51 @@ select.control{
   display: block;
   object-fit: cover;
 }
+.proxy-render-video{
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.proxy-render-scrim{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(4,7,16,0.6) 0%, rgba(4,7,16,0.2) 40%, rgba(4,7,16,0.74) 100%);
+  pointer-events: none;
+}
+.proxy-render-top,
+.proxy-render-bottom{
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.proxy-render-top{ top: 10px; }
+.proxy-render-bottom{ bottom: 10px; }
+.proxy-render-kind{
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e2ecff;
+}
+.proxy-render-title{
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #f0f4ff;
+}
+.proxy-render-nav{ display: flex; gap: 8px; }
+.proxy-render-btn{
+  border: 1px solid rgba(165, 183, 232, 0.46);
+  border-radius: 999px;
+  background: rgba(9, 14, 28, 0.72);
+  color: #edf3ff;
+  padding: 6px 10px;
+}
 .proxy-render-fallback{
   width: 100%;
   height: 100%;

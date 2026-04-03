@@ -57,6 +57,7 @@ export function captureFocusSceneSnapshot(args: {
       selectionKey,
       rect: rectOf(el),
       thumbUrl: img?.currentSrc || img?.src || undefined,
+      mediaUrl: el.dataset.streamUrl || undefined,
       kind: el.dataset.kind || 'unknown',
       title: titleNode?.textContent?.trim() || '',
       active: selectionKey === activeSelectionKey,

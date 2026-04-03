@@ -1104,10 +1104,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('if (!cardEl) {'));
   assert.ok(content.includes('closeDrawer();'));
   assert.ok(content.includes("const proxyOpened = runProxyFocusTransition(nextKey, 'refocus', () => {"));
-  assert.ok(content.includes('className={`focus-proxy-root ${proxyTravelActive ? \'is-active\' : \'\'}`}'));
+  assert.ok(content.includes('className={`focus-proxy-root ${gridCinematicMode !== \'grid-rest\' ? \'is-active\' : \'\'}`}'));
   assert.ok(content.includes('className={`app ${proxyTravelActive ? \'proxy-travel-active\' : \'\'} ${gridCinematicMode}`}'));
   assert.ok(content.includes('data-grid-cinematic-nav="true"'));
-  assert.ok(content.includes('const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === \'grid\';'));
+  assert.ok(content.includes('const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === \'grid\' && gridCinematicMode === \'grid-rest\';'));
   assert.ok(content.includes('const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === \'list\' || focusPresentationState.mode === \'drawer-fallback\');'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
   assert.ok(content.includes("'--focus-world-origin-y': `${focusWorldTransform.originY}%`"));

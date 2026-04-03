@@ -38,9 +38,25 @@ export class ViewportProxyRenderer {
       .map((card) => {
         const activeClass = card.active ? 'is-active' : '';
         const selectedClass = card.selected ? 'is-selected' : '';
-        const thumb = card.thumbUrl
-          ? `<img src="${card.thumbUrl}" alt="">`
+        const thumb = (card.active && card.kind === 'video' && card.mediaUrl)
+          ? `<video class="proxy-render-video" src="${card.mediaUrl}" muted autoplay loop playsinline preload="metadata"></video>`
+          : card.thumbUrl
+            ? `<img src="${card.thumbUrl}" alt="">`
           : `<div class="proxy-render-fallback">${card.kind}</div>`;
+        const activeChrome = card.active
+          ? `<div class="proxy-render-scrim"></div>
+             <div class="proxy-render-top">
+               <span class="proxy-render-kind">${card.kind}</span>
+               <button type="button" class="proxy-render-btn" data-proxy-action="close">Close</button>
+             </div>
+             <div class="proxy-render-bottom">
+               <span class="proxy-render-title">${card.title || ''}</span>
+               <div class="proxy-render-nav">
+                 <button type="button" class="proxy-render-btn" data-proxy-action="prev">Prev</button>
+                 <button type="button" class="proxy-render-btn" data-proxy-action="next">Next</button>
+               </div>
+             </div>`
+          : '';
 
         return `
           <div
@@ -54,6 +70,7 @@ export class ViewportProxyRenderer {
             "
           >
             <div class="proxy-render-thumb">${thumb}</div>
+            ${activeChrome}
           </div>
         `;
       })

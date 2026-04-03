@@ -78,6 +78,7 @@ interface UseAssetInteractionsOptions {
   ) => void;
   onTapStage?: (stage: 'first' | 'second', itemKey: string) => void;
   onHoldEmphasis?: (itemKey: string | null, active: boolean) => void;
+  gridCinematicInteractionOwned?: boolean;
 }
 
 export function useAssetInteractions({
@@ -99,6 +100,7 @@ export function useAssetInteractions({
   onHoldFeedback,
   onTapStage,
   onHoldEmphasis,
+  gridCinematicInteractionOwned = false,
 }: UseAssetInteractionsOptions): UseAssetInteractionsResult {
   const [dragging, setDragging] = useState(false);
   const [assetDragActive, setAssetDragActive] = useState(false);
@@ -369,6 +371,18 @@ export function useAssetInteractions({
             target: event.target,
             currentTarget: event.currentTarget,
             cancelReason: 'interactive_target',
+          });
+          return;
+        }
+        if (gridCinematicInteractionOwned) {
+          recordGestureDebugEvent({
+            kind: 'pointerdown:blocked',
+            pointerType: event.pointerType,
+            pointerId: event.pointerId,
+            itemKey,
+            target: event.target,
+            currentTarget: event.currentTarget,
+            cancelReason: 'grid_cinematic_interaction_owned',
           });
           return;
         }
@@ -685,6 +699,7 @@ export function useAssetInteractions({
       clearPendingLongPress,
       closeDrawer,
       focusAsset,
+      gridCinematicInteractionOwned,
       dragging,
       inNoPreviewZone,
       inspectorOpen,
