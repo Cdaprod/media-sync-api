@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-03)
+- Added a dedicated grid-only cinematic preview surface in `ExplorerApp` (separate fixed media/scrim/top/bottom/actions/bars structure) while keeping drawer ownership for list mode and drawer-fallback mode.
+- Replaced single binary overlay reveal with staged cinematic reveal timers (`media`, `top`, `bottom`, `actions`, `bars`) and centralized cleanup/reset to keep close/invalidation/unmount paths deterministic.
+- Extended focus-world motion with origin-aware helpers (safe-frame/scale/origin/translation decomposition + continuity blend from current transform) and surfaced transform-origin CSS variables on `.focus-world-stage`.
+
+### Latest Implementation Notes (2026-04-03)
 - Preview intent is now routed through `openPreview(item)` in `ExplorerApp`: grid view attempts world-focus presentation while list view explicitly uses drawer fallback semantics.
 - Interaction entrypoints were decoupled from drawer naming (`useAssetInteractions` now calls `openPreview`), and list row wiring now passes `onOpenPreview` to keep list-specific drawer behavior without forcing drawer ownership in grid.
 - Drawer open effect now checks both `inspectorOpen` and presentation mode so world-focus mode no longer auto-opens drawer animation solely because inspector state is true.

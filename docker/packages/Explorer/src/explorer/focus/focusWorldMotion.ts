@@ -13,6 +13,8 @@ export interface FocusWorldTransform {
   scale: number;
   x: number;
   y: number;
+  originX: number;
+  originY: number;
 }
 
 export interface FocusWorldTransformInput {
@@ -20,7 +22,19 @@ export interface FocusWorldTransformInput {
   stageRect: DOMRect;
   viewportRect: DOMRect;
   mobileLayout: boolean;
+  currentTransform?: FocusWorldTransform | null;
 }
+
+type FocusSafeFrame = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+};
 
 const FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX = -96;
 
@@ -61,30 +75,79 @@ function isProjectedCardWithinSaneBounds({
     && projectedTop <= saneBottom;
 }
 
+function computeFocusSafeFrame(viewportRect: DOMRect, mobileLayout: boolean): FocusSafeFrame {
+  const left = viewportRect.left + FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX;
+  const right = viewportRect.right - FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX - (mobileLayout ? 0 : FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX);
+  const top = viewportRect.top + FOCUS_SAFE_FRAME_TOPBAR_RESERVE_PX;
+  const bottom = viewportRect.bottom - FOCUS_SAFE_FRAME_VERTICAL_PAD_PX - (mobileLayout ? FOCUS_SAFE_FRAME_MOBILE_BOTTOM_RESERVE_PX : 0);
+  const width = Math.max(120, right - left);
+  const height = Math.max(120, bottom - top);
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    width,
+    height,
+    centerX: left + (width / 2),
+    centerY: top + (height / 2),
+  };
+}
+
+function computeFocusScale(cardRect: DOMRect, safeFrame: FocusSafeFrame): number {
+  return Math.max(
+    FOCUS_WORLD_MIN_SCALE,
+    Math.min(FOCUS_WORLD_MAX_SCALE, safeFrame.width / cardRect.width, safeFrame.height / cardRect.height),
+  );
+}
+
+function computeFocusTransformOrigin(cardRect: DOMRect, stageRect: DOMRect): { originX: number; originY: number } {
+  const stageWidth = Math.max(1, stageRect.width);
+  const stageHeight = Math.max(1, stageRect.height);
+  const cardCenterX = cardRect.left + (cardRect.width / 2);
+  const cardCenterY = cardRect.top + (cardRect.height / 2);
+  const originX = ((cardCenterX - stageRect.left) / stageWidth) * 100;
+  const originY = ((cardCenterY - stageRect.top) / stageHeight) * 100;
+  return {
+    originX: Math.max(0, Math.min(100, originX)),
+    originY: Math.max(0, Math.min(100, originY)),
+  };
+}
+
+function computeFocusTranslation(cardRect: DOMRect, safeFrame: FocusSafeFrame): { x: number; y: number } {
+  const cardCenterX = cardRect.left + (cardRect.width / 2);
+  const cardCenterY = cardRect.top + (cardRect.height / 2);
+  return {
+    x: safeFrame.centerX - cardCenterX,
+    y: safeFrame.centerY - cardCenterY,
+  };
+}
+
+function computeContinuityAdjustedTranslation(target: { x: number; y: number }, currentTransform?: FocusWorldTransform | null): { x: number; y: number } {
+  if (!currentTransform) return target;
+  const blend = 0.72;
+  return {
+    x: currentTransform.x + ((target.x - currentTransform.x) * blend),
+    y: currentTransform.y + ((target.y - currentTransform.y) * blend),
+  };
+}
+
 export function computeFocusWorldTransform({
   cardRect,
   stageRect,
   viewportRect,
   mobileLayout,
+  currentTransform,
 }: FocusWorldTransformInput): FocusWorldTransform | null {
   if (cardRect.width <= 1 || cardRect.height <= 1) return null;
   if (stageRect.width <= 1 || stageRect.height <= 1) return null;
-  const safeLeft = viewportRect.left + FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX;
-  const safeRight = viewportRect.right - FOCUS_SAFE_FRAME_HORIZONTAL_PAD_PX - (mobileLayout ? 0 : FOCUS_SAFE_FRAME_DRAWER_RESERVE_PX);
-  const safeTop = viewportRect.top + FOCUS_SAFE_FRAME_TOPBAR_RESERVE_PX;
-  const safeBottom = viewportRect.bottom - FOCUS_SAFE_FRAME_VERTICAL_PAD_PX - (mobileLayout ? FOCUS_SAFE_FRAME_MOBILE_BOTTOM_RESERVE_PX : 0);
-  const safeWidth = Math.max(120, safeRight - safeLeft);
-  const safeHeight = Math.max(120, safeBottom - safeTop);
-  const safeCenterX = safeLeft + (safeWidth / 2);
-  const safeCenterY = safeTop + (safeHeight / 2);
-  const cardCenterX = cardRect.left + (cardRect.width / 2);
-  const cardCenterY = cardRect.top + (cardRect.height / 2);
-  const scale = Math.max(
-    FOCUS_WORLD_MIN_SCALE,
-    Math.min(FOCUS_WORLD_MAX_SCALE, safeWidth / cardRect.width, safeHeight / cardRect.height),
-  );
-  const rawX = safeCenterX - cardCenterX;
-  const rawY = safeCenterY - cardCenterY;
+  const safeFrame = computeFocusSafeFrame(viewportRect, mobileLayout);
+  const scale = computeFocusScale(cardRect, safeFrame);
+  const translation = computeFocusTranslation(cardRect, safeFrame);
+  const continuityTranslation = computeContinuityAdjustedTranslation(translation, currentTransform);
+  const { originX, originY } = computeFocusTransformOrigin(cardRect, stageRect);
+  const rawX = continuityTranslation.x;
+  const rawY = continuityTranslation.y;
   const maxAbsX = Math.max(1, viewportRect.width * MAX_TRANSLATE_VIEWPORT_FACTOR);
   const maxAbsY = Math.max(1, viewportRect.height * MAX_TRANSLATE_VIEWPORT_FACTOR);
   if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || !Number.isFinite(scale)) return null;
@@ -92,6 +155,8 @@ export function computeFocusWorldTransform({
     scale,
     x: Math.max(-maxAbsX, Math.min(maxAbsX, rawX)),
     y: Math.max(-maxAbsY, Math.min(maxAbsY, rawY)),
+    originX,
+    originY,
   };
   if (!isProjectedCardWithinSaneBounds({
     cardRect,

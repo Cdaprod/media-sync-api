@@ -554,8 +554,10 @@ function AssetGridComponent({
               data-layout-top={layoutTop}
               data-layout-bottom={layoutBottom}
               data-card-id={viewModel.selectionKey}
+              data-cinematic-card="true"
               {...viewModel.pointerHandlers}
             >
+              <div className="asset-cinematic-shell" data-card-shell="true">
               <div className="thumb">
                 <img
                   className="asset-thumb"
@@ -588,6 +590,7 @@ function AssetGridComponent({
                   />
                 ) : null}
                 <div className={`asset-overlay ${simplifiedCardSubtreeActive ? 'is-simplified' : ''}`}>
+                  <div className="asset-cinematic-ui asset-cinematic-ui-top" data-card-ui-top="true">
                   <div className="asset-ol-tl">
                     <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>
                   </div>
@@ -626,6 +629,8 @@ function AssetGridComponent({
                       </span>
                     </div>
                   </div>
+                  </div>
+                  <div className="asset-cinematic-ui asset-cinematic-ui-bottom" data-card-ui-bottom="true">
                   <div className="asset-ol-bl">
                     <span className="badge tile-ui-text">{viewModel.size}</span>
                   </div>
@@ -633,7 +638,12 @@ function AssetGridComponent({
                     <div className="asset-title tile-ui-text">{viewModel.title}</div>
                     <div className="asset-subtitle tile-ui-text">{viewModel.sub}</div>
                   </div>
+                  <div className="asset-cinematic-ui-actions" data-card-ui-actions="true">
+                    <span className="badge tile-ui-text">{viewModel.kind}</span>
+                  </div>
+                  </div>
                 </div>
+              </div>
               </div>
             </div>
           );

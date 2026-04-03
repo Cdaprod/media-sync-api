@@ -1,3 +1,12 @@
+## 2026-04-03 — Grid cinematic presentation pass (new)
+- [x] Added grid-only cinematic preview surface markup (fixed root + media + scrim + top HUD + bottom panel + actions + letterbox bars + close affordance).
+- [x] Kept list preview path in drawer and preserved drawer-fallback semantics while grid world-focus remains the visible owner.
+- [x] Introduced staged reveal timers/channels for cinematic open and centralized cleanup/reset in focus teardown helpers.
+- [x] Added per-card cinematic shell markers in `AssetGrid` (`data-card-shell`, top/bottom/action UI markers) for handoff/targeting stability.
+- [x] Upgraded focus motion helpers toward origin-aware continuity (safe-frame, scale, origin, continuity-adjusted translation, guarded output).
+- [x] Extended static contract assertions for cinematic structure markers and new focus helper decomposition.
+- [ ] Runtime follow-up: verify on-device sequencing quality (top/bottom/action staging timing), close behavior, and grid↔list preview ownership parity.
+
 ## 2026-04-03 — Preview intent routing split (new)
 - [x] Replaced interaction-level drawer intent with preview intent (`openPreview`) in `useAssetInteractions`.
 - [x] Updated list row contract from `onOpenDrawer` to `onOpenPreview` and rewired `ExplorerApp` list rendering call site.

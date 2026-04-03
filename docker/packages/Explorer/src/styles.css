@@ -654,7 +654,7 @@ select.control{
   position: relative;
   min-height: 100%;
   overflow: clip;
-  transform-origin: center center;
+  transform-origin: var(--focus-world-origin-x, 50%) var(--focus-world-origin-y, 50%);
   z-index: 1;
 }
 .content.focus-world-active .focus-world-stage{
@@ -664,6 +664,122 @@ select.control{
   transition: transform var(--focus-world-duration, 340ms) cubic-bezier(0.2, 0.84, 0.24, 1);
   will-change: transform;
 }
+.grid-cinematic-root{
+  position: fixed;
+  inset: 0;
+  z-index: 102;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.grid-cinematic-root.is-active{
+  opacity: 1;
+  pointer-events: auto;
+}
+.grid-cinematic-media{
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: scale(1.02);
+  transition: opacity 180ms ease, transform 300ms cubic-bezier(0.2, 0.76, 0.24, 1);
+}
+.grid-cinematic-media.is-visible{
+  opacity: 1;
+  transform: scale(1);
+}
+.grid-cinematic-media-el{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.grid-cinematic-scrim{
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(6,10,20,0.78) 0%, rgba(6,10,20,0.28) 32%, rgba(6,10,20,0.72) 100%),
+    radial-gradient(ellipse at center, rgba(142, 109, 255, 0.10), rgba(7,10,20,0.72));
+}
+.grid-cinematic-top,
+.grid-cinematic-bottom{
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  opacity: 0;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+.grid-cinematic-top{
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transform: translateY(-10px);
+}
+.grid-cinematic-top .title{
+  font-size: 14px;
+  font-weight: 680;
+  letter-spacing: 0.02em;
+}
+.grid-cinematic-bottom{
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  border: 1px solid rgba(157,178,236,0.28);
+  border-radius: 14px;
+  background: rgba(10, 14, 30, 0.68);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.42);
+  padding: 12px;
+  transform: translateY(16px);
+}
+.grid-cinematic-bottom .meta{
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.grid-cinematic-bottom .actions{
+  opacity: 0;
+  transform: translateY(8px);
+  display: flex;
+  gap: 8px;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+.grid-cinematic-bottom .actions.is-visible{
+  opacity: 1;
+  transform: translateY(0);
+}
+.grid-cinematic-root.is-active .grid-cinematic-top.is-visible,
+.grid-cinematic-root.is-active .grid-cinematic-bottom.is-visible{
+  opacity: 1;
+  transform: translateY(0);
+}
+.grid-cinematic-close{
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(166, 186, 237, 0.48);
+  background: rgba(10, 14, 28, 0.72);
+  color: #eff4ff;
+  font-size: 16px;
+}
+.grid-cinematic-bars{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.grid-cinematic-bar{
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: rgba(3,5,10,0.9);
+  transition: height 240ms ease;
+}
+.grid-cinematic-bars.is-visible .grid-cinematic-bar{
+  height: 9vh;
+}
+.grid-cinematic-bar.top{ top: 0; }
+.grid-cinematic-bar.bottom{ bottom: 0; }
 .scroll::-webkit-scrollbar{ width: 10px; height: 10px; }
 .scroll::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.14); border-radius: 999px; border: 2px solid rgba(0,0,0,0); background-clip: padding-box; }
 .scroll::-webkit-scrollbar-track{ background: rgba(255,255,255,0.04); }
@@ -707,6 +823,32 @@ select.control{
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 250px;
+}
+
+.asset-cinematic-shell{
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 900px;
+  transform-style: preserve-3d;
+}
+.asset-cinematic-ui{
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+.asset-cinematic-ui-top{
+  top: 0;
+}
+.asset-cinematic-ui-bottom{
+  bottom: 0;
+}
+.asset-cinematic-ui-actions{
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  opacity: 0.86;
 }
 
 /* Sources */

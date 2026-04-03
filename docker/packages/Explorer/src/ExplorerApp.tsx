@@ -85,6 +85,13 @@ type FocusMeasurementSnapshot = {
   viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
   transform: FocusWorldTransform | null;
 };
+type CinematicRevealState = {
+  mediaVisible: boolean;
+  topVisible: boolean;
+  bottomVisible: boolean;
+  actionsVisible: boolean;
+  barsVisible: boolean;
+};
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -415,11 +422,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
   const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
-  const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0 });
+  const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
+  const [cinematicRevealState, setCinematicRevealState] = useState<CinematicRevealState>({
+    mediaVisible: false,
+    topVisible: false,
+    bottomVisible: false,
+    actionsVisible: false,
+    barsVisible: false,
+  });
   const focusWorldStageRef = useRef<HTMLDivElement | null>(null);
   const focusPresentationStateRef = useRef<FocusPresentationState>({ mode: 'idle' });
   const inspectorBackdropRef = useRef<HTMLDivElement | null>(null);
   const focusOverlayRevealTimerRef = useRef<number | null>(null);
+  const cinematicRevealTimersRef = useRef<number[]>([]);
   const composeModalRef = useRef<HTMLDivElement | null>(null);
   const composeCardRef = useRef<HTMLFormElement | null>(null);
   const confirmModalRef = useRef<HTMLDivElement | null>(null);
@@ -427,6 +442,42 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+
+  const clearCinematicRevealTimers = useCallback(() => {
+    cinematicRevealTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    cinematicRevealTimersRef.current = [];
+  }, []);
+
+  const resetCinematicRevealState = useCallback(() => {
+    clearCinematicRevealTimers();
+    setCinematicRevealState({
+      mediaVisible: false,
+      topVisible: false,
+      bottomVisible: false,
+      actionsVisible: false,
+      barsVisible: false,
+    });
+  }, [clearCinematicRevealTimers]);
+
+  const stageCinematicReveal = useCallback(() => {
+    clearCinematicRevealTimers();
+    setCinematicRevealState({
+      mediaVisible: false,
+      topVisible: false,
+      bottomVisible: false,
+      actionsVisible: false,
+      barsVisible: false,
+    });
+    const schedule = (delay: number, apply: (prev: CinematicRevealState) => CinematicRevealState) => {
+      const timerId = window.setTimeout(() => setCinematicRevealState(apply), delay);
+      cinematicRevealTimersRef.current.push(timerId);
+    };
+    schedule(0, (prev) => ({ ...prev, barsVisible: true }));
+    schedule(40, (prev) => ({ ...prev, mediaVisible: true }));
+    schedule(130, (prev) => ({ ...prev, topVisible: true }));
+    schedule(210, (prev) => ({ ...prev, bottomVisible: true }));
+    schedule(290, (prev) => ({ ...prev, actionsVisible: true }));
+  }, [clearCinematicRevealTimers]);
 
   const clearFocusOverlayRevealTimer = useCallback(() => {
     if (!focusOverlayRevealTimerRef.current) return;
@@ -437,18 +488,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const resetFocusPresentationToIdle = useCallback(() => {
     clearFocusOverlayRevealTimer();
     setFocusPresentationState({ mode: 'idle' });
-    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
-  }, [clearFocusOverlayRevealTimer]);
+    setFocusWorldTransform({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
+    resetCinematicRevealState();
+  }, [clearFocusOverlayRevealTimer, resetCinematicRevealState]);
 
   const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null) => {
     clearFocusOverlayRevealTimer();
-    setFocusWorldTransform({ scale: 1, x: 0, y: 0 });
+    setFocusWorldTransform({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
+    resetCinematicRevealState();
     if (candidateKey) {
       setFocusPresentationState({ mode: 'drawer-fallback', key: candidateKey });
       return;
     }
     setFocusPresentationState({ mode: 'idle' });
-  }, [clearFocusOverlayRevealTimer]);
+  }, [clearFocusOverlayRevealTimer, resetCinematicRevealState]);
 
   const computeFromUntransformedFocusWorldStage = useCallback((measure: () => FocusMeasurementResult): FocusMeasurementResult => {
     const stageEl = focusWorldStageRef.current;
@@ -468,7 +521,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, []);
 
-  const computeFocusWorldTransform = useCallback((selectionKey: string) => {
+  const computeFocusWorldTransform = useCallback((selectionKey: string, options?: { continueFromCurrent?: boolean }) => {
     const scrollViewport = mediaScrollViewportRef.current;
     const gridEl = gridRef.current;
     const stageEl = focusWorldStageRef.current;
@@ -484,6 +537,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         stageRect,
         viewportRect,
         mobileLayout: window.matchMedia('(max-width: 860px)').matches,
+        currentTransform: options?.continueFromCurrent ? focusWorldTransform : null,
       });
       if (shouldLogFocusMeasurement()) {
         const snapshot: FocusMeasurementSnapshot = {
@@ -514,7 +568,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       };
     }
     return measurement;
-  }, [computeFromUntransformedFocusWorldStage]);
+  }, [computeFromUntransformedFocusWorldStage, focusWorldTransform]);
 
   const startFocusMotionForSelectionKey = useCallback((selectionKey: string): StartFocusMotionResult => {
     const host = mediaContentRef.current;
@@ -523,13 +577,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!inspectorOpenRef.current) return { ok: false, reason: 'missing-target' };
     if (view !== 'grid') return { ok: false, reason: 'not-grid' };
     if (densityMotionUnsafe) return { ok: false, reason: 'density-unsafe' };
-    const initial = computeFocusWorldTransform(selectionKey);
+    const initial = computeFocusWorldTransform(selectionKey, { continueFromCurrent: true });
     if (!initial) return { ok: false, reason: 'missing-target' };
     clearFocusOverlayRevealTimer();
     setFocusWorldTransform(initial);
     setFocusPresentationState({ mode: 'world-focus', key: selectionKey, overlayReady: false });
+    stageCinematicReveal();
     window.requestAnimationFrame(() => {
-      const next = computeFocusWorldTransform(selectionKey);
+      const next = computeFocusWorldTransform(selectionKey, { continueFromCurrent: true });
       if (!next) return;
       setFocusWorldTransform(next);
     });
@@ -542,7 +597,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       focusOverlayRevealTimerRef.current = null;
     }, FOCUS_OVERLAY_REVEAL_DELAY_MS);
     return { ok: true };
-  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, view]);
+  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, stageCinematicReveal, view]);
 
   useEffect(() => {
     if (pinchOverlayGestureActiveRef.current) {
@@ -1219,7 +1274,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!inspectorOpen || !activeAssetKey) return;
     if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
     const rafId = window.requestAnimationFrame(() => {
-      const next = computeFocusWorldTransform(activeAssetKey);
+      const next = computeFocusWorldTransform(activeAssetKey, { continueFromCurrent: true });
       if (!next) {
         moveFocusPresentationToFallbackOrIdle(activeAssetKey);
         return;
@@ -2777,6 +2832,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ? focusPresentationState.overlayReady
       : focusPresentationState.mode === 'drawer-fallback'
   );
+  const gridCinematicActive = focusWorldActive && view === 'grid';
+  const drawerVisibleOwner = inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
+  const cinematicStageReady = (
+    cinematicRevealState.mediaVisible
+    && cinematicRevealState.topVisible
+    && cinematicRevealState.bottomVisible
+    && cinematicRevealState.actionsVisible
+  );
 
   return (
     <div className="app">
@@ -3255,6 +3318,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   '--focus-world-scale': String(focusWorldTransform.scale),
                   '--focus-world-translate-x': `${focusWorldTransform.x}px`,
                   '--focus-world-translate-y': `${focusWorldTransform.y}px`,
+                  '--focus-world-origin-x': `${focusWorldTransform.originX}%`,
+                  '--focus-world-origin-y': `${focusWorldTransform.originY}%`,
                   '--focus-world-duration': `${FOCUS_WORLD_OPEN_DURATION_MS}ms`,
                 } as React.CSSProperties}
               >
@@ -3304,6 +3369,49 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     />
                   )}
                 </div>
+              </div>
+              <div
+                className={`grid-cinematic-root ${gridCinematicActive ? 'is-active' : ''} ${cinematicStageReady ? 'is-stage-ready' : ''}`}
+                aria-hidden={!gridCinematicActive}
+                data-grid-cinematic-root="true"
+              >
+                <div className={`grid-cinematic-bars ${cinematicRevealState.barsVisible ? 'is-visible' : ''}`} data-grid-cinematic-bars="true">
+                  <div className="grid-cinematic-bar top"></div>
+                  <div className="grid-cinematic-bar bottom"></div>
+                </div>
+                <div className={`grid-cinematic-media ${cinematicRevealState.mediaVisible ? 'is-visible' : ''}`} data-grid-cinematic-media="true">
+                  {normalizedPreviewAsset?.kind === 'video' ? (
+                    <video
+                      key={normalizedPreviewAsset.id}
+                      src={normalizedPreviewAsset.src}
+                      className="grid-cinematic-media-el"
+                      muted
+                      autoPlay
+                      loop
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : (
+                    <img
+                      src={normalizedPreviewAsset?.src || ''}
+                      alt={normalizedPreviewAsset?.name || 'Preview'}
+                      className="grid-cinematic-media-el"
+                    />
+                  )}
+                </div>
+                <div className="grid-cinematic-scrim" data-grid-cinematic-scrim="true"></div>
+                <div className={`grid-cinematic-top ${cinematicRevealState.topVisible ? 'is-visible' : ''}`} data-grid-cinematic-top="true">
+                  <div className="title">{normalizedPreviewAsset?.name || ''}</div>
+                  <button className="btn" type="button" onClick={closeDrawer}>Close</button>
+                </div>
+                <div className={`grid-cinematic-bottom ${cinematicRevealState.bottomVisible ? 'is-visible' : ''}`} data-grid-cinematic-bottom="true">
+                  <div className="meta">{normalizedPreviewAsset?.path || ''}</div>
+                  <div className={`actions ${cinematicRevealState.actionsVisible ? 'is-visible' : ''}`} data-grid-cinematic-actions="true">
+                    <button className="btn" type="button" onClick={() => focusRelative(-1)}>Prev</button>
+                    <button className="btn" type="button" onClick={() => focusRelative(1)}>Next</button>
+                  </div>
+                </div>
+                <button className="grid-cinematic-close" type="button" onClick={closeDrawer} aria-label="Close cinematic preview">✕</button>
               </div>
             </div>
           </div>
@@ -3358,7 +3466,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       <aside
         className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}
         data-inspector-drawer="true"
-        aria-hidden={!inspectorOpen}
+        aria-hidden={!drawerVisibleOwner}
       >
         <div className="drawer-body custom-ui-surface">
           <AssetPreviewPanel
