@@ -1,4 +1,8 @@
 ### Latest Implementation Notes (2026-04-03)
+- Fixed a runtime crash (`ReferenceError: openDrawer`) by removing the last stale `openDrawer` symbol in `useAssetInteractions` callback dependencies and keeping the hook consistently on `openPreview` naming.
+- Re-verified source-level stale symbol sweep for `openDrawer` call/dependency/type patterns under `docker/packages/Explorer/src` after the cleanup.
+
+### Latest Implementation Notes (2026-04-03)
 - Added a dedicated grid-only cinematic preview surface in `ExplorerApp` (separate fixed media/scrim/top/bottom/actions/bars structure) while keeping drawer ownership for list mode and drawer-fallback mode.
 - Replaced single binary overlay reveal with staged cinematic reveal timers (`media`, `top`, `bottom`, `actions`, `bars`) and centralized cleanup/reset to keep close/invalidation/unmount paths deterministic.
 - Extended focus-world motion with origin-aware helpers (safe-frame/scale/origin/translation decomposition + continuity blend from current transform) and surfaced transform-origin CSS variables on `.focus-world-stage`.

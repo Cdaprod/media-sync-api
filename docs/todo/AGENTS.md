@@ -1,3 +1,9 @@
+## 2026-04-03 — openDrawer stale-symbol crash fix (new)
+- [x] Removed stale `openDrawer` dependency entry from `useAssetInteractions` callback deps.
+- [x] Confirmed hook options/destructuring/internal calls already use `openPreview`.
+- [x] Re-ran repo-wide stale symbol search patterns for `openDrawer` under Explorer `src`.
+- [ ] Runtime smoke check on mobile Safari after rebuild to verify error overlay no longer appears.
+
 ## 2026-04-03 — Grid cinematic presentation pass (new)
 - [x] Added grid-only cinematic preview surface markup (fixed root + media + scrim + top HUD + bottom panel + actions + letterbox bars + close affordance).
 - [x] Kept list preview path in drawer and preserved drawer-fallback semantics while grid world-focus remains the visible owner.

@@ -692,7 +692,7 @@ export function useAssetInteractions({
       moveMediaSelection,
       onRevealTopbar,
       openContextMenu,
-      openDrawer,
+      openPreview,
       projects,
       selected,
       selectedKeysOrdered,
