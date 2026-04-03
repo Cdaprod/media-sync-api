@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
@@ -454,6 +453,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+  const pendingGridColumnCommitRef = useRef<number | null>(null);
+  const gridColumnCommitScheduledRef = useRef(false);
   const previewDebugLogRef = useRef<PreviewDebugEntry[]>([]);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
@@ -468,6 +469,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       last: debugEntry,
       events: previewDebugLogRef.current,
     };
+  }, []);
+
+  const scheduleGridColumnCommit = useCallback((nextColumns: number) => {
+    pendingGridColumnCommitRef.current = nextColumns;
+    if (gridColumnCommitScheduledRef.current) return;
+    gridColumnCommitScheduledRef.current = true;
+    queueMicrotask(() => {
+      gridColumnCommitScheduledRef.current = false;
+      const pendingColumns = pendingGridColumnCommitRef.current;
+      pendingGridColumnCommitRef.current = null;
+      if (typeof pendingColumns !== 'number' || !Number.isFinite(pendingColumns)) return;
+      setGridColumnCount((prev) => (prev === pendingColumns ? prev : pendingColumns));
+      const existing = (globalThis as typeof globalThis & {
+        __explorerFlushSyncDebug?: { strategy: string; commitCount: number; lastColumns: number };
+      }).__explorerFlushSyncDebug;
+      (globalThis as typeof globalThis & {
+        __explorerFlushSyncDebug?: { strategy: string; commitCount: number; lastColumns: number };
+      }).__explorerFlushSyncDebug = {
+        strategy: 'microtask-grid-column-commit',
+        commitCount: (existing?.commitCount ?? 0) + 1,
+        lastColumns: pendingColumns,
+      };
+    });
   }, []);
 
   const clearCinematicRevealTimers = useCallback(() => {
@@ -2450,9 +2474,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ?? DEFAULT_COLUMNS_MOBILE,
       onColumnsCommit: (nextColumns) => {
         lastCommittedColumnsRef.current = nextColumns;
-        flushSync(() => {
-          setGridColumnCount(nextColumns);
-        });
+        scheduleGridColumnCommit(nextColumns);
       },
       minColumns: MIN_COLUMNS_MOBILE,
       maxColumns: MAX_COLUMNS_MOBILE,
@@ -2515,7 +2537,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setPinchPerfActive(false);
       setPinchOverlayActive(false);
     };
-  }, [gridSurfaceEl, touchPinchCapable, view]);
+  }, [gridSurfaceEl, scheduleGridColumnCommit, touchPinchCapable, view]);
 
   useEffect(() => {
     if (view !== 'grid') return;

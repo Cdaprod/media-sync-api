@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-03)
+- Removed lifecycle-unsafe `flushSync(...)` usage from Explorer density commit path (`onColumnsCommit`) and replaced it with microtask-coalesced state commits (`scheduleGridColumnCommit`) to avoid React lifecycle flush warnings in Safari.
+- Added lightweight runtime marker `globalThis.__explorerFlushSyncDebug` to confirm the new non-`flushSync` commit strategy is active and count committed column updates.
+- Kept scope narrow to correctness only: no cinematic preview redesign, no motion/easing retune, no ownership-model changes.
+
+### Latest Implementation Notes (2026-04-03)
 - Added runtime preview-routing diagnostics via `globalThis.__explorerPreviewDebug` in `ExplorerApp` (request mode, focus-attempt outcome, fallback reason, final presentation mode) so grid/list ownership transitions are inspectable on-device.
 - Boot toast lifecycle now uses explicit completion-triggered exit (`beginToastExit`) after `loadSources()` + `loadProjects()` settle, matching normal success-toast dismissal behavior even when startup work is delayed.
 - Focus-world transform safety margin was relaxed in `focusWorldMotion` (`FOCUS_MIN_PROJECTED_EDGE_MARGIN_PX`) to reduce false `missing-target` fallbacks for valid grid-card opens while preserving finite/bounds checks.

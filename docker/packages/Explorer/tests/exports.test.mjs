@@ -1082,7 +1082,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("modeQuery.addEventListener('change', handleModeChange);"));
   assert.ok(content.includes('inspectorOpenRef.current = inspectorOpen;'));
   assert.ok(content.includes('focusPresentationStateRef.current = focusPresentationState;'));
-  assert.ok(content.includes("import { flushSync } from 'react-dom';"));
+  assert.ok(!content.includes("import { flushSync } from 'react-dom';"));
+  assert.ok(content.includes('__explorerFlushSyncDebug'));
+  assert.ok(content.includes("strategy: 'microtask-grid-column-commit'"));
   assert.ok(content.includes('if (hasBootstrappedExplorerSession) return;'));
   assert.ok(content.includes('hasBootstrappedExplorerSession = true;'));
   assert.ok(content.includes('if (!node) return;'));
@@ -1114,8 +1116,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes('scrubFrameId = window.requestAnimationFrame(() => {'));
   assert.ok(densityController.includes('runAnimatedCommit(nextColumns, \'scrub\');'));
   assert.ok(densityController.includes('window.cancelAnimationFrame(scrubFrameId);'));
-  assert.ok(content.includes('flushSync(() => {'));
-  assert.ok(content.includes('setGridColumnCount(nextColumns);'));
+  assert.ok(content.includes('scheduleGridColumnCommit(nextColumns);'));
+  assert.ok(content.includes('setGridColumnCount((prev) => (prev === pendingColumns ? prev : pendingColumns));'));
   assert.ok(content.includes('const [touchPinchCapable, setTouchPinchCapable] = useState(false);'));
   assert.ok(content.includes('const hasMultiTouch = (window.navigator.maxTouchPoints || 0) > 1;'));
   assert.ok(content.includes('setTouchPinchCapable(coarsePointer || hasMultiTouch);'));
@@ -1275,7 +1277,7 @@ test('density setup rebinds on grid surface availability and hidden topbar refre
   assert.ok(explorer.includes('const bindGridSurface = useCallback((node: HTMLDivElement | null) => {'));
   assert.ok(explorer.includes('const gridEl = gridSurfaceEl;'));
   assert.ok(explorer.includes('if (!gridEl || !scrollerEl) return;'));
-  assert.ok(explorer.includes('}, [gridSurfaceEl, touchPinchCapable, view]);'));
+  assert.ok(explorer.includes('}, [gridSurfaceEl, scheduleGridColumnCommit, touchPinchCapable, view]);'));
 
   assert.ok(explorer.includes('if (!topbarHidden) return;'));
   assert.ok(explorer.includes('topbarMotionRef.current?.refresh();'));

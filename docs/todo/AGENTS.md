@@ -1,3 +1,9 @@
+## 2026-04-03 — flushSync lifecycle warning correctness pass (active)
+- [x] Identified the only `flushSync(...)` call path in Explorer (`ExplorerApp` density `onColumnsCommit`) as lifecycle-adjacent and warning-prone in Safari.
+- [x] Replaced direct `flushSync(setGridColumnCount)` with microtask-coalesced commit scheduling (`scheduleGridColumnCommit`) to avoid sync flushes while preserving latest-target density truth.
+- [x] Added runtime marker `__explorerFlushSyncDebug` (strategy, commitCount, lastColumns) to verify old flush path is no longer used during device runs.
+- [ ] Device-verify Safari console no longer emits lifecycle `flushSync` warning during density/preview interactions.
+
 ## 2026-04-03 — Preview routing diagnostics + boot-toast dismissal parity (active)
 - [x] Added runtime preview diagnostics hook (`__explorerPreviewDebug`) in `ExplorerApp` to record open request mode, world-focus attempt outcome, and explicit fallback reasons.
 - [x] Updated preview fallback helper to carry reason metadata (`not-grid`, `density-unsafe`, `missing-target`, invalidation cases) into debug snapshots.
