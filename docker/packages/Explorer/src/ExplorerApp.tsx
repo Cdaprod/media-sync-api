@@ -135,6 +135,7 @@ type CinematicRevealState = {
   topbarHidden: boolean;
   worldPulseTick: number;
 };
+type ProxyTravelState = 'idle' | 'open-travel' | 'refocus-travel';
 
 const DEFAULT_VIEW: ExplorerView = 'grid';
 
@@ -545,7 +546,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
   const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
   const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
-  const [proxyTransitionActive, setProxyTransitionActive] = useState(false);
+  const [proxyTravelState, setProxyTravelState] = useState<ProxyTravelState>('idle');
   const [cinematicRevealState, setCinematicRevealState] = useState<CinematicRevealState>({
     worldVisible: false,
     headerVisible: false,
@@ -1491,32 +1492,46 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     });
   }, [clearFocusStartRetryFrame, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, startFocusMotionForSelectionKey]);
 
-  const runProxyFocusTransition = useCallback((selectionKey: string, onComplete?: () => void) => {
+  const runProxyFocusTransition = useCallback((
+    selectionKey: string,
+    mode: 'open' | 'refocus',
+    onComplete?: () => void,
+  ) => {
     if (view !== 'grid') return false;
     const gridRoot = gridRef.current;
     const viewportEl = mediaScrollViewportRef.current;
     const orchestrator = focusOrchestratorRef.current;
     if (!gridRoot || !viewportEl || !orchestrator) return false;
-    const opened = orchestrator.open({
+    const setTravelState = () => setProxyTravelState(mode === 'open' ? 'open-travel' : 'refocus-travel');
+    const clearTravelState = () => setProxyTravelState('idle');
+    const handleEvent = (event: string) => {
+      recordPreviewDebug({ stage: event, selectionKey, requestedMode: view });
+    };
+    const transitionArgs = {
       gridRoot,
       viewportEl,
       selectionKey,
       onStart: () => {
-        setProxyTransitionActive(true);
+        setTravelState();
         viewportEl.classList.add('focus-proxy-scroll-lock');
       },
       onComplete: () => {
-        setProxyTransitionActive(false);
+        clearTravelState();
         viewportEl.classList.remove('focus-proxy-scroll-lock');
         onComplete?.();
       },
-    });
+      onEvent: handleEvent,
+    };
+    const opened = mode === 'open'
+      ? orchestrator.open(transitionArgs)
+      : orchestrator.refocus(transitionArgs);
     if (!opened) {
-      setProxyTransitionActive(false);
+      clearTravelState();
       viewportEl.classList.remove('focus-proxy-scroll-lock');
+      handleEvent('proxy-failed');
     }
     return opened;
-  }, [view]);
+  }, [recordPreviewDebug, view]);
 
   const openPreview = useCallback((item: MediaItem) => {
     const nextKey = assetSelectionKey(item, activeProject);
@@ -1531,7 +1546,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       moveFocusPresentationToFallbackOrIdle(nextKey, 'not-grid');
       return;
     }
-    const proxyOpened = runProxyFocusTransition(nextKey, () => {
+    const proxyOpened = runProxyFocusTransition(nextKey, 'open', () => {
       attemptGridFocusWithRetry(nextKey, view);
     });
     if (!proxyOpened) {
@@ -1544,7 +1559,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     focusOrchestratorRef.current?.close();
     const viewportEl = mediaScrollViewportRef.current;
     if (viewportEl) viewportEl.classList.remove('focus-proxy-scroll-lock');
-    setProxyTransitionActive(false);
+    setProxyTravelState('idle');
     setInspectorOpen(false);
     inspectorOpenRef.current = false;
     setFocused(null);
@@ -1575,7 +1590,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused(nextItem);
     setActiveAssetKey(nextKey);
     commitPreviewActivationKey(nextKey);
-    const proxyOpened = runProxyFocusTransition(nextKey, () => {
+    const proxyOpened = runProxyFocusTransition(nextKey, 'refocus', () => {
       attemptGridFocusWithRetry(nextKey, 'grid');
     });
     if (!proxyOpened) {
@@ -3145,8 +3160,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ? focusPresentationState.overlayReady
       : focusPresentationState.mode === 'drawer-fallback'
   );
-  const gridCinematicActive = !proxyTransitionActive && focusWorldActive && view === 'grid';
-  const drawerVisibleOwner = !proxyTransitionActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
+  const proxyTravelActive = proxyTravelState !== 'idle';
+  const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === 'grid';
+  const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible
@@ -3155,7 +3171,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   );
 
   return (
-    <div className="app">
+    <div className={`app ${proxyTravelActive ? 'proxy-travel-active' : ''}`}>
       <div className="main">
         <aside className={`sidebar sidebar-drawer ${sidebarOpen ? 'is-open' : ''}`}>
           <div className="section-h">
@@ -3786,7 +3802,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
       </div>
 
-      <div ref={focusProxyRootRef} className={`focus-proxy-root ${proxyTransitionActive ? 'is-active' : ''}`} aria-hidden="true" />
+      <div ref={focusProxyRootRef} className={`focus-proxy-root ${proxyTravelActive ? 'is-active' : ''}`} aria-hidden="true" />
 
       <aside
         className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}

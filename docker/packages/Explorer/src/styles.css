@@ -851,6 +851,14 @@ select.control{
   opacity: 1;
   pointer-events: auto;
 }
+.app.proxy-travel-active .grid-cinematic-root{
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.app.proxy-travel-active .drawer{
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 .proxy-render-surface{
   position: absolute;
   inset: 0;
@@ -873,6 +881,10 @@ select.control{
 }
 .proxy-render-card.is-active{
   box-shadow: 0 30px 90px rgba(0,0,0,0.44);
+}
+.proxy-render-card.is-selected{
+  outline: 1px solid rgba(181, 198, 247, 0.72);
+  outline-offset: -1px;
 }
 .proxy-render-thumb,
 .proxy-render-thumb img{

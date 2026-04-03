@@ -37,13 +37,14 @@ export class ViewportProxyRenderer {
       .sort((a, b) => b.priority - a.priority)
       .map((card) => {
         const activeClass = card.active ? 'is-active' : '';
+        const selectedClass = card.selected ? 'is-selected' : '';
         const thumb = card.thumbUrl
           ? `<img src="${card.thumbUrl}" alt="">`
           : `<div class="proxy-render-fallback">${card.kind}</div>`;
 
         return `
           <div
-            class="proxy-render-card ${activeClass}"
+            class="proxy-render-card ${activeClass} ${selectedClass}"
             data-selection-key="${card.selectionKey}"
             style="
               left:${card.rect.left}px;

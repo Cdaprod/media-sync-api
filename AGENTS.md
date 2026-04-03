@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-03)
+- Phase-2 ownership/continuity pass introduced explicit proxy travel lane state (`idle` / `open-travel` / `refocus-travel`) so proxy and cinematic owners cannot appear as competing active surfaces in grid mode.
+- Proxy orchestrator now emits explicit transition markers (`proxy-open-start`, `proxy-open-complete`, `proxy-refocus-start`, `proxy-refocus-complete`, `proxy-failed`) and Explorer preview debug logs capture those markers for runtime handoff traceability.
+- Snapshot filtering now prioritizes selected-card inclusion plus near-viewport neighbors, and proxy styles enforce grid cinematic + drawer suppression while proxy travel is active.
+
+### Latest Implementation Notes (2026-04-03)
 - Added a bridge render seam under `docker/packages/Explorer/src/render/` (`renderTypes`, `SceneSnapshot`, `CameraController`, `ViewportProxyRenderer`, `FocusTransitionOrchestrator`) so grid focus/open transitions can be animated on a single GSAP-owned proxy world surface.
 - `ExplorerApp` grid preview open/refocus now attempts proxy transition ownership first (`runProxyFocusTransition`) with temporary scroll lock and explicit proxy-root lifecycle, while list preview remains drawer/panel-owned.
 - Grid cinematic UI was de-duplicated by removing bottom-panel Prev/Next duplication, keeping navigation in the dedicated cinematic nav lane, and suppressing drawer ownership while proxy transitions are active.

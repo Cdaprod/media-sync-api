@@ -17,12 +17,35 @@ export function captureFocusSceneSnapshot(args: {
   maxCards?: number;
 }): FocusSceneSnapshot {
   const { gridRoot, viewportEl, activeSelectionKey = null, maxCards = 24 } = args;
+  const viewportRect = viewportEl.getBoundingClientRect();
+  const bufferPx = 240;
+  const inBufferedViewport = (rect: { top: number; left: number; width: number; height: number }) => {
+    const bottom = rect.top + rect.height;
+    const right = rect.left + rect.width;
+    return bottom >= (viewportRect.top - bufferPx)
+      && rect.top <= (viewportRect.bottom + bufferPx)
+      && right >= (viewportRect.left - bufferPx)
+      && rect.left <= (viewportRect.right + bufferPx);
+  };
 
   const cardEls = Array.from(
     gridRoot.querySelectorAll<HTMLElement>('.masonry-card[data-select-key]'),
   );
 
-  const cards: RenderCardSnapshot[] = cardEls.slice(0, maxCards).map((el, index) => {
+  const prioritizedEls = activeSelectionKey
+    ? cardEls.sort((a, b) => {
+      const aActive = (a.dataset.selectKey || '') === activeSelectionKey ? 1 : 0;
+      const bActive = (b.dataset.selectKey || '') === activeSelectionKey ? 1 : 0;
+      return bActive - aActive;
+    })
+    : cardEls;
+  const focusedWindowEls = prioritizedEls.filter((el) => {
+    const rect = rectOf(el);
+    const key = el.dataset.selectKey || '';
+    return key === activeSelectionKey || inBufferedViewport(rect);
+  });
+
+  const cards: RenderCardSnapshot[] = focusedWindowEls.slice(0, maxCards).map((el, index) => {
     const selectionKey = el.dataset.selectKey || '';
     const img = el.querySelector<HTMLImageElement>('img.asset-thumb, .thumb img, img');
     const titleNode =
@@ -38,7 +61,7 @@ export function captureFocusSceneSnapshot(args: {
       title: titleNode?.textContent?.trim() || '',
       active: selectionKey === activeSelectionKey,
       selected: el.dataset.active === 'true',
-      priority: selectionKey === activeSelectionKey ? 1000 : 100 - index,
+      priority: selectionKey === activeSelectionKey ? 2000 : 100 - index,
     };
   });
 

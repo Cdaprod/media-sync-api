@@ -19,6 +19,7 @@ export class FocusTransitionOrchestrator {
     selectionKey: string;
     onStart?: () => void;
     onComplete?: () => void;
+    onEvent?: (event: 'proxy-open-start' | 'proxy-open-complete' | 'proxy-failed') => void;
   }) {
     const snapshot = captureFocusSceneSnapshot({
       gridRoot: args.gridRoot,
@@ -26,7 +27,10 @@ export class FocusTransitionOrchestrator {
       activeSelectionKey: args.selectionKey,
     });
 
-    if (!snapshot.target) return false;
+    if (!snapshot.target) {
+      args.onEvent?.('proxy-failed');
+      return false;
+    }
 
     const camera = computeCameraStateForTarget({
       target: snapshot.target,
@@ -39,13 +43,23 @@ export class FocusTransitionOrchestrator {
     this.root.style.pointerEvents = 'auto';
 
     this.timeline?.kill();
+    this.renderer.mount();
     this.timeline = gsap.timeline({
-      onStart: args.onStart,
-      onComplete: args.onComplete,
+      onStart: () => {
+        args.onEvent?.('proxy-open-start');
+        args.onStart?.();
+      },
+      onComplete: () => {
+        args.onEvent?.('proxy-open-complete');
+        args.onComplete?.();
+      },
     });
 
     const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
-    if (!world) return false;
+    if (!world) {
+      args.onEvent?.('proxy-failed');
+      return false;
+    }
 
     this.timeline.to(world, {
       x: camera.x,
@@ -56,6 +70,58 @@ export class FocusTransitionOrchestrator {
       overwrite: 'auto',
     });
 
+    return true;
+  }
+
+  refocus(args: {
+    gridRoot: HTMLElement;
+    viewportEl: HTMLElement;
+    selectionKey: string;
+    onStart?: () => void;
+    onComplete?: () => void;
+    onEvent?: (event: 'proxy-refocus-start' | 'proxy-refocus-complete' | 'proxy-failed') => void;
+  }) {
+    const snapshot = captureFocusSceneSnapshot({
+      gridRoot: args.gridRoot,
+      viewportEl: args.viewportEl,
+      activeSelectionKey: args.selectionKey,
+    });
+    if (!snapshot.target) {
+      args.onEvent?.('proxy-failed');
+      return false;
+    }
+    const camera = computeCameraStateForTarget({
+      target: snapshot.target,
+      viewportWidth: snapshot.viewport.width,
+      viewportHeight: snapshot.viewport.height,
+    });
+    this.renderer.render(snapshot, camera);
+    this.root.style.opacity = '1';
+    this.root.style.pointerEvents = 'auto';
+    this.timeline?.kill();
+    const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
+    if (!world) {
+      args.onEvent?.('proxy-failed');
+      return false;
+    }
+    this.timeline = gsap.timeline({
+      onStart: () => {
+        args.onEvent?.('proxy-refocus-start');
+        args.onStart?.();
+      },
+      onComplete: () => {
+        args.onEvent?.('proxy-refocus-complete');
+        args.onComplete?.();
+      },
+    });
+    this.timeline.to(world, {
+      x: camera.x,
+      y: camera.y,
+      scale: camera.scale,
+      duration: 0.48,
+      ease: 'power3.inOut',
+      overwrite: 'auto',
+    });
     return true;
   }
 

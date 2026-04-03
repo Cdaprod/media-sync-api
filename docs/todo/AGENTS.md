@@ -1,3 +1,10 @@
+## 2026-04-03 — Proxy ownership/continuity correction phase-2 (active)
+- [x] Added explicit proxy travel state lane in `ExplorerApp` and made proxy activity the gating source for cinematic/drawer visibility ownership.
+- [x] Extended `FocusTransitionOrchestrator` with explicit transition markers and dedicated refocus path to keep grid prev/next in the proxy camera lane.
+- [x] Updated snapshot + proxy renderer layering to prioritize active-card continuity and near-viewport scene context during travel.
+- [x] Added CSS ownership guards that force cinematic/drawer suppression while proxy travel is active.
+- [ ] Device-verify open/refocus handoff timing (proxy owner -> settled cinematic owner) has no visible dual-owner window on mobile Safari.
+
 ## 2026-04-03 — Proxy render bridge seam for grid cinematic ownership (active)
 - [x] Added `src/render` bridge layer with snapshot, camera, proxy renderer, and GSAP orchestrator modules to isolate transition ownership from live masonry DOM.
 - [x] Wired `ExplorerApp` grid open/refocus path to attempt proxy transition first with scroll-lock lifecycle and close cleanup; preserved list drawer semantics.
