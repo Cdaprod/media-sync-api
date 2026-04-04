@@ -1103,7 +1103,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("const cardEl = targetEl.closest<HTMLElement>('.masonry-card[data-select-key]');"));
   assert.ok(content.includes('if (!cardEl) {'));
   assert.ok(content.includes('closeDrawer();'));
-  assert.ok(content.includes("const proxyOpened = runProxyFocusTransition(nextKey, 'refocus', () => {"));
+  assert.ok(content.includes("const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');"));
+  assert.ok(content.includes('__explorerFocusLayerDebug'));
+  assert.ok(content.includes("recordPreviewDebug({ stage: 'proxy-open-failed-no-fallback', selectionKey: nextKey, requestedMode: view, finalMode: 'idle' });"));
   assert.ok(content.includes('className={`focus-proxy-root ${gridCinematicMode !== \'grid-rest\' ? \'is-active\' : \'\'}`}'));
   assert.ok(content.includes('data-focus-proxy-root="true"'));
   assert.ok(content.includes('className={`app ${proxyTravelActive ? \'proxy-travel-active\' : \'\'} ${gridCinematicMode}`}'));

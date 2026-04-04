@@ -1,3 +1,11 @@
+## 2026-04-04 — Focus owner collapse + visibility truth pass (active)
+- [x] Removed grid-mode proxy-open fallback into world-focus path; proxy-focus failure now exits back to idle instead of showing mixed ownership layers.
+- [x] Added runtime owner-mismatch inspector helper `globalThis.__explorerFocusLayerDebug.getSnapshot()` to enumerate visible focus-layer candidates with style/marker truth.
+- [x] Kept active proxy card markers as single-source owner hints (`data-proxy-active`, `data-select-key`) for runtime probes.
+- [x] Retuned proxy chrome scale model with card-relative clamps and non-blocking chrome containers to reduce page-scale control intrusion.
+- [x] Reduced proxy scrim aggression and tightened focused isolation (`.app.grid-focused .masonry-host` dim) to minimize grid visual competition behind focused media.
+- [ ] Capture a fresh runtime probe showing non-null `activeKey/activeRect/media` while proxy root is visible during settled focus.
+
 ## 2026-04-04 — Depth v4 conformity pass (active)
 - [x] Kept proxy camera math as safe-frame authoritative for open/refocus settle, including viewport-offset + scale-correct centering.
 - [x] Updated proxy render choreography so focused chrome is hidden during open/refocus travel and only rendered after settle.

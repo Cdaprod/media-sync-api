@@ -597,6 +597,51 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, []);
 
+  useEffect(() => {
+    const getSnapshot = () => {
+      const allCandidates = Array.from(document.querySelectorAll<HTMLElement>(
+        '.focus-proxy-root,.proxy-render-card,.focus-world-stage,.grid-cinematic-root,.drawer',
+      ));
+      const withStyle = allCandidates.map((el) => {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return {
+          node: el.className,
+          opacity: style.opacity,
+          display: style.display,
+          visibility: style.visibility,
+          pointerEvents: style.pointerEvents,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          top: Math.round(rect.top),
+          left: Math.round(rect.left),
+          proxyActive: el.dataset.proxyActive || null,
+          focusWorld: el.dataset.focusWorld || null,
+          cinematicRoot: el.dataset.gridCinematicRoot || null,
+        };
+      });
+      return {
+        focusPresentationMode: focusPresentationStateRef.current.mode,
+        gridCinematicMode,
+        proxyTravelState,
+        inspectorOpen: inspectorOpenRef.current,
+        candidates: withStyle,
+      };
+    };
+    (globalThis as typeof globalThis & {
+      __explorerFocusLayerDebug?: {
+        getSnapshot: () => ReturnType<typeof getSnapshot>;
+      };
+    }).__explorerFocusLayerDebug = { getSnapshot };
+    return () => {
+      delete (globalThis as typeof globalThis & {
+        __explorerFocusLayerDebug?: {
+          getSnapshot: () => ReturnType<typeof getSnapshot>;
+        };
+      }).__explorerFocusLayerDebug;
+    };
+  }, [gridCinematicMode, proxyTravelState]);
+
   const scheduleGridColumnCommit = useCallback((nextColumns: number) => {
     pendingGridColumnCommitRef.current = nextColumns;
     if (gridColumnCommitScheduledRef.current) return;
@@ -1552,13 +1597,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
     const isGridRefocus = gridCinematicMode === 'grid-focused' && activeAssetKey && activeAssetKey !== nextKey;
-    const proxyOpened = runProxyFocusTransition(nextKey, isGridRefocus ? 'refocus' : 'open', () => {
-      attemptGridFocusWithRetry(nextKey, view);
-    });
+    const proxyOpened = runProxyFocusTransition(nextKey, isGridRefocus ? 'refocus' : 'open');
     if (!proxyOpened) {
-      attemptGridFocusWithRetry(nextKey, view);
+      recordPreviewDebug({ stage: 'proxy-open-failed-no-fallback', selectionKey: nextKey, requestedMode: view, finalMode: 'idle' });
+      closeDrawer();
     }
-  }, [activeAssetKey, activeProject, assetSelectionKey, attemptGridFocusWithRetry, focusAsset, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, runProxyFocusTransition, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, focusAsset, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, runProxyFocusTransition, view]);
 
   const closeGridFocusToRest = useCallback(() => {
     gridCinematicTimelineRef.current?.playClose();
@@ -1607,14 +1651,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused(nextItem);
     setActiveAssetKey(nextKey);
     commitPreviewActivationKey(nextKey);
-    const proxyOpened = runProxyFocusTransition(nextKey, 'refocus', () => {
-      attemptGridFocusWithRetry(nextKey, 'grid');
-    });
-    if (!proxyOpened) {
-      attemptGridFocusWithRetry(nextKey, 'grid');
-    }
+    const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');
+    if (!proxyOpened) return;
     setPreviewAutoPlayToken((prev) => prev + 1);
-  }, [activeProject, assetSelectionKey, attemptGridFocusWithRetry, commitPreviewActivationKey, filteredMedia, focused, runProxyFocusTransition]);
+  }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused, runProxyFocusTransition]);
 
   useEffect(() => {
     if (view !== 'grid') return;
@@ -1639,16 +1679,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setFocused(nextItem);
       setActiveAssetKey(nextKey);
       commitPreviewActivationKey(nextKey);
-      const proxyOpened = runProxyFocusTransition(nextKey, 'refocus', () => {
-        attemptGridFocusWithRetry(nextKey, 'grid');
-      });
-      if (!proxyOpened) {
-        attemptGridFocusWithRetry(nextKey, 'grid');
-      }
+      const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');
+      if (!proxyOpened) return;
     };
     viewportEl.addEventListener('pointerdown', handlePointerDown, true);
     return () => viewportEl.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [activeAssetKey, activeProject, assetSelectionKey, attemptGridFocusWithRetry, closeDrawer, commitPreviewActivationKey, filteredMedia, gridCinematicMode, inspectorOpen, runProxyFocusTransition, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, commitPreviewActivationKey, filteredMedia, gridCinematicMode, inspectorOpen, runProxyFocusTransition, view]);
 
   useEffect(() => {
     if (view !== 'grid') return;
