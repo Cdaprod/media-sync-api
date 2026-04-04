@@ -1,3 +1,10 @@
+## 2026-04-04 — Proxy active-card layout budget + UI slot follow-up (active)
+- [x] Added dedicated active-card UI mount slot (`.proxy-render-ui-slot`) in proxy renderer so focused chrome portals into a stable in-card layer above scrim/video.
+- [x] Reduced focused full-surface scrim intensity to avoid washing out proxy video while preserving localized top/bottom readability.
+- [x] Switched active proxy video preload hint to `auto` for faster open-settle playback readiness.
+- [x] Tightened focused chrome container lane behavior (`display:flex`, `justify-content:space-between`, bounded horizontal overflow lanes) to reduce clipping/crowding in small-base-card layouts.
+- [ ] Device-verify transport/scrubber visibility and video readability in focused settle with current side-edge opens/refocus transitions.
+
 ## 2026-04-04 — Focused parity visibility follow-up (active)
 - [x] Reordered focused proxy bottom lanes so transport controls (time/scrubber/play/skip) render in a dedicated first row ahead of action pills.
 - [x] Added focused transport row styling to keep play/skip controls visible instead of being displaced by long action-pill sets.

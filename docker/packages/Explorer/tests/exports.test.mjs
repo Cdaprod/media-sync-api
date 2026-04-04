@@ -1143,7 +1143,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('const selectedClass = card.selected ? \'is-selected\' : \'\';'));
   assert.ok(proxyRenderer.includes('const showActiveChrome = opts?.showActiveChrome ?? true;'));
   assert.ok(proxyRenderer.includes('const activeChrome = showActiveChrome && card.active'));
-  assert.ok(proxyRenderer.includes('? \'<div class=\"proxy-render-scrim\"></div>\''));
+  assert.ok(proxyRenderer.includes('? \'<div class=\"proxy-render-scrim\"></div><div class=\"proxy-render-ui-slot\" data-proxy-ui-slot=\"true\"></div>\''));
   assert.ok(proxyRenderer.includes("const ambientClass = card.active ? '' : 'is-ambient';"));
   assert.ok(proxyRenderer.includes('class=\"proxy-render-card ${activeClass} ${ambientClass} ${selectedClass}\"'));
   assert.ok(proxyRenderer.includes('data-proxy-active="${activeMarker}"'));

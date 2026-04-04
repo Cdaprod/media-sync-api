@@ -47,13 +47,13 @@ export class ViewportProxyRenderer {
         const thumb = (card.active && card.kind === 'video' && card.mediaUrl)
           ? `
             ${card.thumbUrl ? `<img class="proxy-render-poster" src="${card.thumbUrl}" alt="">` : ''}
-            <video class="proxy-render-video" src="${card.mediaUrl}" muted autoplay loop playsinline preload="metadata"></video>
+            <video class="proxy-render-video" src="${card.mediaUrl}" muted autoplay loop playsinline preload="auto"></video>
           `
           : card.thumbUrl
             ? `<img src="${card.thumbUrl}" alt="">`
           : `<div class="proxy-render-fallback">${card.kind}</div>`;
         const activeChrome = showActiveChrome && card.active
-          ? '<div class="proxy-render-scrim"></div>'
+          ? '<div class="proxy-render-scrim"></div><div class="proxy-render-ui-slot" data-proxy-ui-slot="true"></div>'
           : '';
 
         return `

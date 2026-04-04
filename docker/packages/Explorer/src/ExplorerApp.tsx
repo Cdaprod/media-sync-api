@@ -489,6 +489,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
   const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
   const [activeProxyCardEl, setActiveProxyCardEl] = useState<HTMLElement | null>(null);
+  const [activeProxyUiSlotEl, setActiveProxyUiSlotEl] = useState<HTMLElement | null>(null);
   const [proxyPlaybackPlaying, setProxyPlaybackPlaying] = useState(false);
   const [proxyPlaybackCurrentTime, setProxyPlaybackCurrentTime] = useState(0);
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
@@ -3311,6 +3312,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (!proxyPreviewVisible) {
       setActiveProxyCardEl(null);
+      setActiveProxyUiSlotEl(null);
       setProxyPlaybackPlaying(false);
       setProxyPlaybackCurrentTime(0);
       setProxyPlaybackDuration(0);
@@ -3322,6 +3324,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const syncActiveCard = () => {
       const activeCard = root.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
       setActiveProxyCardEl((prev) => (prev === activeCard ? prev : activeCard));
+      const uiSlot = activeCard?.querySelector<HTMLElement>('.proxy-render-ui-slot[data-proxy-ui-slot="true"]') || null;
+      setActiveProxyUiSlotEl((prev) => (prev === uiSlot ? prev : uiSlot));
     };
     const tick = () => {
       syncActiveCard();
@@ -3405,6 +3409,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     proxyVideo.currentTime = next;
     setProxyPlaybackCurrentTime(next);
   }, [activeProxyCardEl, proxyPlaybackDuration]);
+  const proxyPreviewPortalTarget = activeProxyUiSlotEl ?? activeProxyCardEl;
 
   return (
     <div className={`app ${proxyTravelActive ? 'proxy-travel-active' : ''} ${gridCinematicMode}`}>
@@ -4044,7 +4049,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         data-focus-proxy-root="true"
         aria-hidden="true"
       >
-        {proxyPreviewVisible && activeProxyCardEl ? createPortal(
+        {proxyPreviewVisible && proxyPreviewPortalTarget ? createPortal(
           <div className="proxy-preview-ui" onPointerDown={(event) => event.stopPropagation()}>
             <ProxyFocusedChromeFullParity
               asset={normalizedPreviewAsset}
@@ -4073,7 +4078,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}
             />
           </div>,
-          activeProxyCardEl,
+          proxyPreviewPortalTarget,
         ) : null}
       </div>
 
