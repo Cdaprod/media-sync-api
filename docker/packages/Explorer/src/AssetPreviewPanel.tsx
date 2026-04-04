@@ -99,12 +99,14 @@ export function ProxyFocusedChromeFullParity({
               value={Math.min(currentTime, durationCap)}
               onChange={(event) => onSeek?.(parseFloat(event.currentTarget.value))}
             />
+            <div className="proxy-focused-transport-row preview-interactive">
+              <button className="proxy-focused-pill" type="button" onClick={onSkipBack}>↺ 10s</button>
+              <button className="proxy-focused-pill primary" type="button" onClick={onTogglePlay}>{isPlaying ? '❚❚ Pause' : '▶ Play'}</button>
+              <button className="proxy-focused-pill" type="button" onClick={onSkipForward}>10s ↻</button>
+            </div>
           </>
         ) : null}
         <div className="proxy-focused-control-row preview-interactive">
-          {playable ? <button className="proxy-focused-pill" type="button" onClick={onSkipBack}>↺ 10s</button> : null}
-          {playable ? <button className="proxy-focused-pill primary" type="button" onClick={onTogglePlay}>{isPlaying ? '❚❚ Pause' : '▶ Play'}</button> : null}
-          {playable ? <button className="proxy-focused-pill" type="button" onClick={onSkipForward}>10s ↻</button> : null}
           {onCopy ? <button className="proxy-focused-pill" type="button" onClick={onCopy}>⧉ Copy stream URL</button> : null}
           {onSelect ? <button className="proxy-focused-pill" type="button" onClick={onSelect}>{selected ? '− Deselect' : '+ Select'}</button> : null}
           {onDelete ? <button className="proxy-focused-pill danger" type="button" onClick={onDelete}>🗑 Delete</button> : null}

@@ -1057,12 +1057,18 @@ select.control{
   color: rgba(246, 248, 255, 0.96);
   text-shadow: 0 2px 22px rgba(0, 0, 0, 0.56);
   font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .proxy-focused-path{
   margin-top: 2px;
   color: rgba(210, 220, 244, 0.78);
   font-size: clamp(10px, 1.15vw, 13px);
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.56);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .proxy-focused-chip-row{
   display: flex;
@@ -1101,6 +1107,13 @@ select.control{
   pointer-events: auto;
   overflow-x: auto;
   scrollbar-width: none;
+  margin-top: 4px;
+}
+.proxy-focused-transport-row{
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+  margin-bottom: 4px;
 }
 .proxy-focused-pill{
   border: 1px solid rgba(171, 189, 233, 0.36);

@@ -1,3 +1,10 @@
+## 2026-04-04 — Focused parity visibility follow-up (active)
+- [x] Reordered focused proxy bottom lanes so transport controls (time/scrubber/play/skip) render in a dedicated first row ahead of action pills.
+- [x] Added focused transport row styling to keep play/skip controls visible instead of being displaced by long action-pill sets.
+- [x] Applied one-line ellipsis clamping for focused title/path so metadata no longer grows vertically and occludes central media.
+- [x] Kept autoplay enforcement in focused open path while preserving in-card media ownership and portal-mounted chrome.
+- [ ] Device-verify that scrubber + play/pause + ±10 controls are visibly present on focused settle and that video is already playing on open.
+
 ## 2026-04-04 — Focused HUD scale + autoplay tuning pass (active)
 - [x] Reduced focused proxy chrome scale density (smaller controls/text/gaps) while keeping feature parity controls present.
 - [x] Tightened top/bottom overlay anchoring and reduced gradient weight so media remains the dominant visual plane.
