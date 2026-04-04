@@ -643,36 +643,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, [gridCinematicMode, proxyTravelState]);
 
-  useEffect(() => {
-    if (!proxyPreviewVisible) {
-      setProxyPreviewFrame(null);
-      return;
-    }
-    const root = focusProxyRootRef.current;
-    if (!root) return;
-    let rafId = 0;
-    const syncFrame = () => {
-      const activeCard = root.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
-      if (!activeCard) {
-        setProxyPreviewFrame(null);
-        return;
-      }
-      const rect = activeCard.getBoundingClientRect();
-      setProxyPreviewFrame({
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-      });
-    };
-    const tick = () => {
-      syncFrame();
-      rafId = window.requestAnimationFrame(tick);
-    };
-    rafId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(rafId);
-  }, [proxyPreviewVisible]);
-
   const scheduleGridColumnCommit = useCallback((nextColumns: number) => {
     pendingGridColumnCommitRef.current = nextColumns;
     if (gridColumnCommitScheduledRef.current) return;
@@ -3334,6 +3304,35 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === 'grid' && gridCinematicMode === 'grid-rest';
   const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
   const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+  useEffect(() => {
+    if (!proxyPreviewVisible) {
+      setProxyPreviewFrame(null);
+      return;
+    }
+    const root = focusProxyRootRef.current;
+    if (!root) return;
+    let rafId = 0;
+    const syncFrame = () => {
+      const activeCard = root.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
+      if (!activeCard) {
+        setProxyPreviewFrame(null);
+        return;
+      }
+      const rect = activeCard.getBoundingClientRect();
+      setProxyPreviewFrame({
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+    const tick = () => {
+      syncFrame();
+      rafId = window.requestAnimationFrame(tick);
+    };
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [proxyPreviewVisible]);
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible

@@ -1,3 +1,9 @@
+## 2026-04-04 — Proxy preview frame TDZ hotfix (active)
+- [x] Identified root cause of boot regression: proxy preview rAF `useEffect` referenced `proxyPreviewVisible` before that `const` was initialized (TDZ in `ExplorerApp`).
+- [x] Reordered the proxy preview frame `useEffect` to run after `proxyPreviewVisible` declaration while preserving the same geometry-sync logic.
+- [x] Re-ran Explorer static contract suite to confirm startup-path source remains compile/runtime-safe.
+- [ ] Device-verify Explorer boots on iOS Safari without `ReferenceError: Cannot access uninitialized variable`.
+
 ## 2026-04-04 — Overlay model unification pass (A/B/C) (active)
 - [x] Removed legacy focused-grid proxy chrome controls/text (Overlay C) from proxy renderer output; kept only media + scrim atmosphere there.
 - [x] Reused list preview/player component family (`AssetPreviewPanel`) as focused grid preview UI (Overlay B-family) mounted in proxy root.
