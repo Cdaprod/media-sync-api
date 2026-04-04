@@ -1,3 +1,9 @@
+## 2026-04-04 — Boot regression fix (TDZ) (active)
+- [x] Fixed ExplorerApp startup crash (`ReferenceError: Cannot access uninitialized variable`) caused by `openPreview` referencing `closeDrawer` before `closeDrawer` initialization.
+- [x] Replaced the fail-closed branch call to later-declared `closeDrawer` with an inline idle-reset path using already-initialized setters + `resetFocusPresentationToIdle`.
+- [x] Re-ran Explorer static contract suite to confirm no regressions after the TDZ fix.
+- [ ] Device-verify Explorer now boots cleanly on iOS Safari and focus/runtime probes can execute.
+
 ## 2026-04-04 — Focus owner collapse + visibility truth pass (active)
 - [x] Removed grid-mode proxy-open fallback into world-focus path; proxy-focus failure now exits back to idle instead of showing mixed ownership layers.
 - [x] Added runtime owner-mismatch inspector helper `globalThis.__explorerFocusLayerDebug.getSnapshot()` to enumerate visible focus-layer candidates with style/marker truth.

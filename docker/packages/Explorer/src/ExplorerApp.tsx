@@ -1600,9 +1600,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const proxyOpened = runProxyFocusTransition(nextKey, isGridRefocus ? 'refocus' : 'open');
     if (!proxyOpened) {
       recordPreviewDebug({ stage: 'proxy-open-failed-no-fallback', selectionKey: nextKey, requestedMode: view, finalMode: 'idle' });
-      closeDrawer();
+      setGridCinematicMode('grid-rest');
+      setProxyTravelState('idle');
+      setInspectorOpen(false);
+      inspectorOpenRef.current = false;
+      setFocused(null);
+      setPreviewDetailsOpen(false);
+      resetFocusPresentationToIdle();
     }
-  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, focusAsset, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, runProxyFocusTransition, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, focusAsset, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, resetFocusPresentationToIdle, runProxyFocusTransition, view]);
 
   const closeGridFocusToRest = useCallback(() => {
     gridCinematicTimelineRef.current?.playClose();
