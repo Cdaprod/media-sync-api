@@ -1,3 +1,10 @@
+## 2026-04-04 — Focused HUD scale + autoplay tuning pass (active)
+- [x] Reduced focused proxy chrome scale density (smaller controls/text/gaps) while keeping feature parity controls present.
+- [x] Tightened top/bottom overlay anchoring and reduced gradient weight so media remains the dominant visual plane.
+- [x] Switched focused chip/action rows to single-line horizontal lanes with overflow scrolling to avoid center-frame stack takeover.
+- [x] Added focused-open autoplay enforcement for proxy active video (`muted + playsInline + play()` attempt) in proxy playback binding effect.
+- [ ] Device-verify focused settle now reads as HUD-sized overlay and video is already playing on open/refocus settle.
+
 ## 2026-04-04 — Full-parity proxy chrome + in-card parenting pass (active)
 - [x] Replaced focused proxy compact subset with full-parity proxy chrome (`ProxyFocusedChromeFullParity`) including transport lane, scrubber, play/pause, and skip ±10 controls.
 - [x] Moved focused proxy chrome ownership into the active proxy card transform tree by mounting chrome via React portal directly into `.proxy-render-card[data-proxy-active="true"]`.

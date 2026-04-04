@@ -1006,7 +1006,7 @@ select.control{
   position: absolute;
   left: 0;
   right: 0;
-  padding: 14px 14px 10px;
+  padding: 8px 10px 8px;
   pointer-events: none;
 }
 .proxy-focused-chrome-top{
@@ -1015,8 +1015,8 @@ select.control{
 }
 .proxy-focused-chrome-bottom{
   bottom: 0;
-  padding-top: 24px;
-  background: linear-gradient(0deg, rgba(5, 8, 18, 0.70) 0%, rgba(5, 8, 18, 0.14) 100%);
+  padding-top: 12px;
+  background: linear-gradient(0deg, rgba(5, 8, 18, 0.58) 0%, rgba(5, 8, 18, 0.10) 100%);
 }
 .proxy-focused-chrome-top-row{
   display: flex;
@@ -1027,82 +1027,89 @@ select.control{
 .proxy-focused-kind{
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #90e3ff;
   border: 1px solid rgba(74, 188, 230, 0.54);
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 3px 8px;
   background: rgba(5, 16, 29, 0.36);
 }
 .proxy-focused-nav{
   display: flex;
-  gap: 8px;
+  gap: 6px;
   pointer-events: auto;
 }
 .proxy-focused-icon-btn{
   border: 1px solid rgba(180, 196, 238, 0.34);
   background: rgba(4, 8, 18, 0.62);
   color: #eef3ff;
-  border-radius: 12px;
-  width: 44px;
-  height: 44px;
-  font-size: 24px;
+  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  font-size: 20px;
 }
 .proxy-focused-title{
-  margin-top: 10px;
-  font-size: clamp(20px, 2.4vw, 30px);
+  margin-top: 6px;
+  font-size: clamp(13px, 1.7vw, 18px);
   line-height: 1.2;
   color: rgba(246, 248, 255, 0.96);
   text-shadow: 0 2px 22px rgba(0, 0, 0, 0.56);
   font-weight: 650;
 }
 .proxy-focused-path{
-  margin-top: 4px;
+  margin-top: 2px;
   color: rgba(210, 220, 244, 0.78);
-  font-size: clamp(12px, 1.55vw, 17px);
+  font-size: clamp(10px, 1.15vw, 13px);
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.56);
 }
 .proxy-focused-chip-row{
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 .proxy-focused-chip{
   border: 1px solid rgba(188, 204, 239, 0.24);
   border-radius: 999px;
-  padding: 6px 11px;
+  padding: 4px 8px;
   color: rgba(231, 237, 252, 0.88);
   background: rgba(8, 14, 30, 0.5);
-  font-size: 12px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 .proxy-focused-time-row{
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: rgba(226, 235, 252, 0.86);
-  font-size: 12px;
-  margin-bottom: 6px;
+  font-size: 10px;
+  margin-bottom: 4px;
 }
 .proxy-focused-scrubber{
   width: 100%;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  height: 16px;
 }
 .proxy-focused-control-row{
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
   pointer-events: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 .proxy-focused-pill{
   border: 1px solid rgba(171, 189, 233, 0.36);
   border-radius: 999px;
-  padding: 8px 13px;
+  padding: 6px 10px;
   color: rgba(236, 242, 255, 0.95);
   background: rgba(6, 12, 24, 0.56);
-  font-size: 12px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 .proxy-focused-pill.primary{
   border-color: rgba(99, 195, 236, 0.58);

@@ -3345,6 +3345,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setProxyPlaybackDuration(Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0);
     };
 
+    proxyVideo.muted = true;
+    proxyVideo.playsInline = true;
+    if (proxyPreviewVisible) {
+      proxyVideo.play().catch(() => {
+        // Safari may still gate autoplay in edge cases; keep muted + playsInline state
+      });
+    }
+
     syncFromVideo();
     const onPlay = () => setProxyPlaybackPlaying(true);
     const onPause = () => setProxyPlaybackPlaying(false);
@@ -3362,7 +3370,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
       proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
     };
-  }, [activeProxyCardEl]);
+  }, [activeProxyCardEl, proxyPreviewVisible]);
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible
