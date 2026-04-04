@@ -3991,6 +3991,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           >
             <AssetPreviewPanel
               asset={normalizedPreviewAsset}
+              renderMedia={false}
               onPrev={() => focusRelative(-1)}
               onNext={() => focusRelative(1)}
               onClose={closeDrawer}

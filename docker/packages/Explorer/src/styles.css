@@ -910,6 +910,16 @@ select.control{
   z-index: 1;
   transform: translateZ(0);
 }
+.proxy-render-poster{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  z-index: 0;
+  transform: translateZ(0);
+}
 .proxy-render-video{
   position: absolute;
   inset: 0;
@@ -1091,6 +1101,7 @@ select.control{
   left: 0;
   right: 0;
   pointer-events: none;
+  display: none;
 }
 .asset-cinematic-ui-top{
   top: 0;

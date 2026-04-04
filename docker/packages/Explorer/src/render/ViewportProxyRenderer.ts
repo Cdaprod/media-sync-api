@@ -45,7 +45,10 @@ export class ViewportProxyRenderer {
         const activeMarker = card.active ? 'true' : 'false';
         const chromeScale = Math.max(0.72, Math.min(1, card.rect.width / 360));
         const thumb = (card.active && card.kind === 'video' && card.mediaUrl)
-          ? `<video class="proxy-render-video" src="${card.mediaUrl}" muted autoplay loop playsinline preload="metadata"></video>`
+          ? `
+            ${card.thumbUrl ? `<img class="proxy-render-poster" src="${card.thumbUrl}" alt="">` : ''}
+            <video class="proxy-render-video" src="${card.mediaUrl}" muted autoplay loop playsinline preload="metadata"></video>
+          `
           : card.thumbUrl
             ? `<img src="${card.thumbUrl}" alt="">`
           : `<div class="proxy-render-fallback">${card.kind}</div>`;

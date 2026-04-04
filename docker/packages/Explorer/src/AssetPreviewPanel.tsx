@@ -37,6 +37,7 @@ export function AssetPreviewPanel({
   onObsSlotChange,
   onObsExclusiveChange,
   playOnAssetChangeToken = 0,
+  renderMedia = true,
 }: {
   asset: PreviewAsset | null;
   onMediaReady?: (el: HTMLVideoElement | HTMLAudioElement | null) => void;
@@ -65,6 +66,7 @@ export function AssetPreviewPanel({
   onObsSlotChange?: (value: string) => void;
   onObsExclusiveChange?: (value: boolean) => void;
   playOnAssetChangeToken?: number;
+  renderMedia?: boolean;
 }) {
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -74,7 +76,7 @@ export function AssetPreviewPanel({
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
 
-  const playable = asset?.kind === 'video' || asset?.kind === 'audio';
+  const playable = renderMedia && (asset?.kind === 'video' || asset?.kind === 'audio');
 
   const stopMediaPlayback = () => {
     const media = mediaRef.current;
@@ -267,6 +269,10 @@ export function AssetPreviewPanel({
   };
 
   const mediaNode = useMemo(() => {
+    if (!renderMedia) {
+      mediaRef.current = null;
+      return null;
+    }
     if (!asset) return null;
     if (asset.kind === 'video') {
       return <video ref={(el) => { mediaRef.current = el; }} preload="metadata" playsInline src={asset.src} />;
@@ -284,14 +290,14 @@ export function AssetPreviewPanel({
         <span className="kbd">{asset.kind}</span>
       </div>
     );
-  }, [asset]);
+  }, [asset, renderMedia]);
 
   if (!asset) return null;
 
   return (
-    <div className="preview-shell" onPointerMove={() => setOverlayVisible(true)} onPointerDown={() => setOverlayVisible(true)}>
-      <div className="preview-media" onClick={handleMediaTapToggle}>{mediaNode}</div>
-      {asset.kind === 'audio' ? <canvas ref={canvasRef} className="preview-wave" /> : null}
+    <div className={`preview-shell ${renderMedia ? '' : 'preview-shell-media-disabled'}`} onPointerMove={() => setOverlayVisible(true)} onPointerDown={() => setOverlayVisible(true)}>
+      {renderMedia ? <div className="preview-media" onClick={handleMediaTapToggle}>{mediaNode}</div> : null}
+      {renderMedia && asset.kind === 'audio' ? <canvas ref={canvasRef} className="preview-wave" /> : null}
       <div className={`preview-overlay ${overlayVisible ? '' : 'fade'}`} onClick={handleOverlayTapToggle}>
         <div className="preview-top">
           <div className="preview-top-row">

@@ -80,7 +80,7 @@ export function captureFocusSceneSnapshot(args: {
       id: el.dataset.cardId || selectionKey || `card-${index}`,
       selectionKey,
       rect: rectOf(el),
-      thumbUrl: img?.currentSrc || img?.src || undefined,
+      thumbUrl: img?.currentSrc || img?.src || img?.dataset.thumbUrl || img?.dataset.thumbFallback || undefined,
       mediaUrl: el.dataset.streamUrl || undefined,
       kind: el.dataset.kind || 'unknown',
       title: titleNode?.textContent?.trim() || '',

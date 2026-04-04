@@ -1,3 +1,10 @@
+## 2026-04-04 — Proxy focused-media ownership correction pass (active)
+- [x] Removed focused-grid detached media owner by reusing `AssetPreviewPanel` chrome with `renderMedia={false}` in proxy-preview mode.
+- [x] Kept focused media ownership in proxy renderer active card surface (`ViewportProxyRenderer`) and added active-video poster fallback beneath video playback.
+- [x] Hardened proxy snapshot thumb capture to include dataset thumb fallbacks when image `src/currentSrc` is unavailable at transition sample time.
+- [x] Suppressed always-on cinematic shell marker overlays in world grid cards to prevent Overlay A pollution from cinematic marker UI.
+- [ ] Device-verify: world grid shows only Overlay A, zoom motion carries active media + ambient neighbors, focused card hosts media + compact chrome without detached panel body.
+
 ## 2026-04-04 — Proxy preview frame TDZ hotfix (active)
 - [x] Identified root cause of boot regression: proxy preview rAF `useEffect` referenced `proxyPreviewVisible` before that `const` was initialized (TDZ in `ExplorerApp`).
 - [x] Reordered the proxy preview frame `useEffect` to run after `proxyPreviewVisible` declaration while preserving the same geometry-sync logic.
