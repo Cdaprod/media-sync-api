@@ -487,6 +487,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewObsSlot, setPreviewObsSlot] = useState('1');
   const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
   const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
+  const [proxyPreviewFrame, setProxyPreviewFrame] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
   const [composeModalRendered, setComposeModalRendered] = useState(false);
   const [composeSubmitting, setComposeSubmitting] = useState(false);
@@ -641,6 +642,36 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }).__explorerFocusLayerDebug;
     };
   }, [gridCinematicMode, proxyTravelState]);
+
+  useEffect(() => {
+    if (!proxyPreviewVisible) {
+      setProxyPreviewFrame(null);
+      return;
+    }
+    const root = focusProxyRootRef.current;
+    if (!root) return;
+    let rafId = 0;
+    const syncFrame = () => {
+      const activeCard = root.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
+      if (!activeCard) {
+        setProxyPreviewFrame(null);
+        return;
+      }
+      const rect = activeCard.getBoundingClientRect();
+      setProxyPreviewFrame({
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+    const tick = () => {
+      syncFrame();
+      rafId = window.requestAnimationFrame(tick);
+    };
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [proxyPreviewVisible]);
 
   const scheduleGridColumnCommit = useCallback((nextColumns: number) => {
     pendingGridColumnCommitRef.current = nextColumns;
@@ -3949,7 +3980,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         aria-hidden="true"
       >
         {proxyPreviewVisible ? (
-          <div className="proxy-preview-ui" onPointerDown={(event) => event.stopPropagation()}>
+          <div
+            className="proxy-preview-ui"
+            style={proxyPreviewFrame ? {
+              left: `${proxyPreviewFrame.left}px`,
+              top: `${proxyPreviewFrame.top}px`,
+              width: `${proxyPreviewFrame.width}px`,
+              height: `${proxyPreviewFrame.height}px`,
+            } : undefined}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
             <AssetPreviewPanel
               asset={normalizedPreviewAsset}
               onPrev={() => focusRelative(-1)}
