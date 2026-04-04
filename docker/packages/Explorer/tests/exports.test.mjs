@@ -1129,6 +1129,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(focusMotion.includes('if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || !Number.isFinite(scale)) {'));
   assert.ok(renderTypes.includes('export type FocusSceneSnapshot'));
   assert.ok(sceneSnapshot.includes('export function captureFocusSceneSnapshot'));
+  assert.ok(sceneSnapshot.includes('const ambientNeighborLimit = Math.min(Math.max(0, maxCards - 1), 8);'));
+  assert.ok(sceneSnapshot.includes('sampledEls = [activeEl, ...neighbors];'));
   assert.ok(cameraController.includes('export function computeCameraStateForTarget'));
   assert.ok(cameraController.includes('viewportLeft?: number;'));
   assert.ok(cameraController.includes('viewportTop?: number;'));
@@ -1138,6 +1140,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('const selectedClass = card.selected ? \'is-selected\' : \'\';'));
   assert.ok(proxyRenderer.includes('const showActiveChrome = opts?.showActiveChrome ?? true;'));
   assert.ok(proxyRenderer.includes('const activeChrome = (card.active && showActiveChrome)'));
+  assert.ok(proxyRenderer.includes("const ambientClass = card.active ? '' : 'is-ambient';"));
+  assert.ok(proxyRenderer.includes('class=\"proxy-render-card ${activeClass} ${ambientClass} ${selectedClass}\"'));
   assert.ok(proxyRenderer.includes('data-proxy-active="${activeMarker}"'));
   assert.ok(orchestrator.includes('export class FocusTransitionOrchestrator'));
   assert.ok(orchestrator.includes('openFocusTransition(args: {'));

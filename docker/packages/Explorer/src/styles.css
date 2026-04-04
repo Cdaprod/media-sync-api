@@ -867,9 +867,9 @@ select.control{
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: rgba(7,7,14,0.72);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: radial-gradient(110% 95% at 50% 22%, rgba(18, 28, 52, 0.96) 0%, rgba(4, 8, 18, 0.98) 72%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   perspective: 1400px;
   transform-style: preserve-3d;
 }
@@ -890,6 +890,10 @@ select.control{
 }
 .proxy-render-card.is-active{
   box-shadow: 0 30px 90px rgba(0,0,0,0.44);
+}
+.proxy-render-card.is-ambient{
+  opacity: 0.12;
+  filter: blur(7px) saturate(0.62) brightness(0.7);
 }
 .proxy-render-card.is-selected{
   outline: 1px solid rgba(181, 198, 247, 0.72);
@@ -980,7 +984,13 @@ select.control{
   transform: translateZ(0);
 }
 .app.grid-focused .masonry-host{
-  opacity: 0.24;
+  opacity: 0;
+  pointer-events: none;
+}
+.app.grid-opening .masonry-host,
+.app.grid-refocusing .masonry-host{
+  opacity: 0.1;
+  pointer-events: none;
 }
 .proxy-render-fallback{
   width: 100%;

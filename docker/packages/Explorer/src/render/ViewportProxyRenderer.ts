@@ -40,6 +40,7 @@ export class ViewportProxyRenderer {
       .sort((a, b) => b.priority - a.priority)
       .map((card) => {
         const activeClass = card.active ? 'is-active' : '';
+        const ambientClass = card.active ? '' : 'is-ambient';
         const selectedClass = card.selected ? 'is-selected' : '';
         const activeMarker = card.active ? 'true' : 'false';
         const chromeScale = Math.max(0.72, Math.min(1, card.rect.width / 360));
@@ -65,7 +66,7 @@ export class ViewportProxyRenderer {
 
         return `
           <div
-            class="proxy-render-card ${activeClass} ${selectedClass}"
+            class="proxy-render-card ${activeClass} ${ambientClass} ${selectedClass}"
             data-selection-key="${card.selectionKey}"
             data-select-key="${card.selectionKey}"
             data-proxy-active="${activeMarker}"

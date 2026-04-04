@@ -45,7 +45,31 @@ export function captureFocusSceneSnapshot(args: {
     return key === activeSelectionKey || inBufferedViewport(rect);
   });
 
-  const cards: RenderCardSnapshot[] = focusedWindowEls.slice(0, maxCards).map((el, index) => {
+  let sampledEls = focusedWindowEls.slice(0, maxCards);
+  if (activeSelectionKey) {
+    const activeEl = focusedWindowEls.find((el) => (el.dataset.selectKey || '') === activeSelectionKey) || null;
+    if (activeEl) {
+      const activeRect = rectOf(activeEl);
+      const activeCenterX = activeRect.left + (activeRect.width / 2);
+      const activeCenterY = activeRect.top + (activeRect.height / 2);
+      const ambientNeighborLimit = Math.min(Math.max(0, maxCards - 1), 8);
+      const neighbors = focusedWindowEls
+        .filter((el) => el !== activeEl)
+        .sort((a, b) => {
+          const ar = rectOf(a);
+          const br = rectOf(b);
+          const adx = (ar.left + (ar.width / 2)) - activeCenterX;
+          const ady = (ar.top + (ar.height / 2)) - activeCenterY;
+          const bdx = (br.left + (br.width / 2)) - activeCenterX;
+          const bdy = (br.top + (br.height / 2)) - activeCenterY;
+          return (adx * adx + ady * ady) - (bdx * bdx + bdy * bdy);
+        })
+        .slice(0, ambientNeighborLimit);
+      sampledEls = [activeEl, ...neighbors];
+    }
+  }
+
+  const cards: RenderCardSnapshot[] = sampledEls.map((el, index) => {
     const selectionKey = el.dataset.selectKey || '';
     const img = el.querySelector<HTMLImageElement>('img.asset-thumb, .thumb img, img');
     const titleNode =

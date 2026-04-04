@@ -1,3 +1,11 @@
+## 2026-04-04 — Focus plane leak containment pass (active)
+- [x] Reduced readable tiled background structure in focused mode by limiting proxy ambient neighbors around the active card (active + nearest bounded set).
+- [x] Added explicit ambient-card styling (`.proxy-render-card.is-ambient`) to push non-active proxy cards into atmospheric backdrop treatment.
+- [x] Increased focused proxy surface isolation (darker radial surface + stronger blur) and removed live masonry competition during focused/opening/refocusing modes.
+- [x] Preserved active proxy markers and focused media owner path while reducing world-plane readability behind focused content.
+- [x] Updated static contracts for ambient neighbor sampling + ambient proxy class markers.
+- [ ] Device-verify that faint grid structure no longer reads as tiled matrix behind focused card.
+
 ## 2026-04-04 — Boot regression fix (TDZ) (active)
 - [x] Fixed ExplorerApp startup crash (`ReferenceError: Cannot access uninitialized variable`) caused by `openPreview` referencing `closeDrawer` before `closeDrawer` initialization.
 - [x] Replaced the fail-closed branch call to later-declared `closeDrawer` with an inline idle-reset path using already-initialized setters + `resetFocusPresentationToIdle`.
