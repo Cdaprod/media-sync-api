@@ -1,3 +1,11 @@
+## 2026-04-04 — Overlay model unification pass (A/B/C) (active)
+- [x] Removed legacy focused-grid proxy chrome controls/text (Overlay C) from proxy renderer output; kept only media + scrim atmosphere there.
+- [x] Reused list preview/player component family (`AssetPreviewPanel`) as focused grid preview UI (Overlay B-family) mounted in proxy root.
+- [x] Added proxy preview container isolation (`.proxy-preview-ui`) so focused preview controls no longer rely on legacy proxy button lane.
+- [x] Kept world-card overlay system (Overlay A) untouched in `AssetGrid` and maintained overlay-toggle semantics.
+- [x] Prevented proxy root close handler from swallowing focused preview control interactions by ignoring `.proxy-preview-ui` hit targets.
+- [ ] Device-verify A/B split: grid browsing shows Overlay A only, focused grid preview shows compact Overlay B-family only, and legacy Overlay C elements no longer appear.
+
 ## 2026-04-04 — Focus plane leak containment pass (active)
 - [x] Reduced readable tiled background structure in focused mode by limiting proxy ambient neighbors around the active card (active + nearest bounded set).
 - [x] Added explicit ambient-card styling (`.proxy-render-card.is-ambient`) to push non-active proxy cards into atmospheric backdrop treatment.

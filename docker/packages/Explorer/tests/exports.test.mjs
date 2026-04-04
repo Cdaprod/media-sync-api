@@ -1112,6 +1112,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('data-grid-cinematic-nav="true"'));
   assert.ok(content.includes('const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === \'grid\' && gridCinematicMode === \'grid-rest\';'));
   assert.ok(content.includes('const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === \'list\' || focusPresentationState.mode === \'drawer-fallback\');'));
+  assert.ok(content.includes("const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';"));
+  assert.ok(content.includes("if (target.closest('.proxy-preview-ui')) return;"));
+  assert.ok(content.includes('className="proxy-preview-ui"'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
   assert.ok(content.includes("'--focus-world-origin-y': `${focusWorldTransform.originY}%`"));
   assert.ok(content.includes("focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''"));
@@ -1139,7 +1142,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('export class ViewportProxyRenderer'));
   assert.ok(proxyRenderer.includes('const selectedClass = card.selected ? \'is-selected\' : \'\';'));
   assert.ok(proxyRenderer.includes('const showActiveChrome = opts?.showActiveChrome ?? true;'));
-  assert.ok(proxyRenderer.includes('const activeChrome = (card.active && showActiveChrome)'));
+  assert.ok(proxyRenderer.includes('const activeChrome = showActiveChrome && card.active'));
+  assert.ok(proxyRenderer.includes('? \'<div class=\"proxy-render-scrim\"></div>\''));
   assert.ok(proxyRenderer.includes("const ambientClass = card.active ? '' : 'is-ambient';"));
   assert.ok(proxyRenderer.includes('class=\"proxy-render-card ${activeClass} ${ambientClass} ${selectedClass}\"'));
   assert.ok(proxyRenderer.includes('data-proxy-active="${activeMarker}"'));

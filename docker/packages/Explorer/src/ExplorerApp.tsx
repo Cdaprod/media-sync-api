@@ -1701,6 +1701,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const handleProxyPointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
       if (!target) return;
+      if (target.closest('.proxy-preview-ui')) return;
       const action = target.closest<HTMLElement>('[data-proxy-action]')?.dataset.proxyAction;
       if (action === 'close') {
         event.preventDefault();
@@ -3301,6 +3302,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyTravelActive = proxyTravelState !== 'idle';
   const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === 'grid' && gridCinematicMode === 'grid-rest';
   const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
+  const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible
@@ -3945,15 +3947,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         className={`focus-proxy-root ${gridCinematicMode !== 'grid-rest' ? 'is-active' : ''}`}
         data-focus-proxy-root="true"
         aria-hidden="true"
-      />
-
-      <aside
-        className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}
-        data-inspector-drawer="true"
-        aria-hidden={!drawerVisibleOwner}
       >
-        <div className="drawer-body custom-ui-surface">
-          <AssetPreviewPanel
+        {proxyPreviewVisible ? (
+          <div className="proxy-preview-ui" onPointerDown={(event) => event.stopPropagation()}>
+            <AssetPreviewPanel
               asset={normalizedPreviewAsset}
               onPrev={() => focusRelative(-1)}
               onNext={() => focusRelative(1)}
@@ -3979,6 +3976,44 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}
               playOnAssetChangeToken={previewAutoPlayToken}
             />
+          </div>
+        ) : null}
+      </div>
+
+      <aside
+        className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}
+        data-inspector-drawer="true"
+        aria-hidden={!drawerVisibleOwner}
+      >
+        <div className="drawer-body custom-ui-surface">
+          {drawerVisibleOwner ? (
+            <AssetPreviewPanel
+              asset={normalizedPreviewAsset}
+              onPrev={() => focusRelative(-1)}
+              onNext={() => focusRelative(1)}
+              onClose={closeDrawer}
+              onCopy={() => { if (focused) void handleCopyStream(focused); }}
+              onSelect={() => { if (focused) toggleSelected(focused); }}
+              onDelete={() => { if (focused) void deleteMediaSelection([assetSelectionKey(focused, activeProject)]); }}
+              onTag={() => { void handleFocusedTag(); }}
+              onObs={() => { void handleFocusedObs(); }}
+              onResolve={() => { void handleFocusedResolve(); }}
+              onProgramMonitor={() => { void handleFocusedProgramMonitor(); }}
+              showResolve={Boolean(activeProject || focused?.project_name)}
+              showProgramMonitor
+              obsMode={previewObsMode}
+              obsSlot={previewObsSlot}
+              obsExclusive={previewObsExclusive}
+              onObsModeChange={setPreviewObsMode}
+              onObsSlotChange={setPreviewObsSlot}
+              onObsExclusiveChange={setPreviewObsExclusive}
+              metadataRows={previewMetadataRows}
+              detailsOpen={previewDetailsOpen}
+              onDetailsToggle={() => setPreviewDetailsOpen((prev) => !prev)}
+              selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}
+              playOnAssetChangeToken={previewAutoPlayToken}
+            />
+          ) : null}
         </div>
       </aside>
 

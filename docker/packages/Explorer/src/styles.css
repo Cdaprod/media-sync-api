@@ -976,6 +976,34 @@ select.control{
   font-size: clamp(10px, calc(10px * var(--proxy-chrome-scale, 1)), 12px);
   pointer-events: auto;
 }
+.proxy-preview-ui{
+  position: absolute;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  padding: 12px;
+}
+.proxy-preview-ui .preview-shell{
+  width: min(94vw, 760px);
+  height: min(78vh, 640px);
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 30px 86px rgba(0,0,0,0.54);
+}
+.proxy-preview-ui .preview-top,
+.proxy-preview-ui .preview-bottom{
+  padding: clamp(8px, 1.6vw, 12px);
+}
+.proxy-preview-ui .preview-control-row{
+  gap: 6px;
+}
+.proxy-preview-ui .preview-pill{
+  min-height: 34px;
+  font-size: 12px;
+}
 .app.grid-rest .masonry-columns{
   transform-style: preserve-3d;
   perspective: 1200px;

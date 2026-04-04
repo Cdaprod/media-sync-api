@@ -49,19 +49,8 @@ export class ViewportProxyRenderer {
           : card.thumbUrl
             ? `<img src="${card.thumbUrl}" alt="">`
           : `<div class="proxy-render-fallback">${card.kind}</div>`;
-        const activeChrome = (card.active && showActiveChrome)
-          ? `<div class="proxy-render-scrim"></div>
-             <div class="proxy-render-top">
-               <span class="proxy-render-kind">${card.kind}</span>
-               <button type="button" class="proxy-render-btn" data-proxy-action="close">Close</button>
-             </div>
-             <div class="proxy-render-bottom">
-               <span class="proxy-render-title">${card.title || ''}</span>
-               <div class="proxy-render-nav">
-                 <button type="button" class="proxy-render-btn" data-proxy-action="prev">Prev</button>
-                 <button type="button" class="proxy-render-btn" data-proxy-action="next">Next</button>
-               </div>
-             </div>`
+        const activeChrome = showActiveChrome && card.active
+          ? '<div class="proxy-render-scrim"></div>'
           : '';
 
         return `
