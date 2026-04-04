@@ -86,6 +86,8 @@ export function captureFocusSceneSnapshot(args: {
   return {
     cards,
     viewport: {
+      left: viewportRect.left,
+      top: viewportRect.top,
       width: viewportEl.clientWidth,
       height: viewportEl.clientHeight,
       scrollTop: viewportEl.scrollTop,

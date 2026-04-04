@@ -17,6 +17,46 @@ export class FocusTransitionOrchestrator {
     this.renderer = new ViewportProxyRenderer(root);
   }
 
+  private publishCenterDebug(args: {
+    viewportLeft: number;
+    viewportTop: number;
+    viewportWidth: number;
+    viewportHeight: number;
+    camera: ProxyCameraState;
+    targetCenterX: number;
+    targetCenterY: number;
+    topInset?: number;
+    bottomInset?: number;
+    sideInset?: number;
+  }) {
+    const topInset = args.topInset ?? 88;
+    const bottomInset = args.bottomInset ?? 140;
+    const sideInset = args.sideInset ?? 24;
+    const safeWidth = Math.max(120, args.viewportWidth - sideInset * 2);
+    const safeHeight = Math.max(120, args.viewportHeight - topInset - bottomInset);
+    const viewportCenter = {
+      x: args.viewportLeft + sideInset + safeWidth / 2,
+      y: args.viewportTop + topInset + safeHeight / 2,
+    };
+    const targetCenter = {
+      x: (args.targetCenterX * args.camera.scale) + args.camera.x,
+      y: (args.targetCenterY * args.camera.scale) + args.camera.y,
+    };
+    (globalThis as typeof globalThis & {
+      __explorerProxyCenterDebug?: {
+        viewportCenter: { x: number; y: number };
+        targetCenter: { x: number; y: number };
+        finalDeltaX: number;
+        finalDeltaY: number;
+      };
+    }).__explorerProxyCenterDebug = {
+      viewportCenter,
+      targetCenter,
+      finalDeltaX: Math.round((targetCenter.x - viewportCenter.x) * 100) / 100,
+      finalDeltaY: Math.round((targetCenter.y - viewportCenter.y) * 100) / 100,
+    };
+  }
+
   openFocusTransition(args: {
     gridRoot: HTMLElement;
     viewportEl: HTMLElement;
@@ -38,6 +78,8 @@ export class FocusTransitionOrchestrator {
 
     const camera = computeCameraStateForTarget({
       target: snapshot.target,
+      viewportLeft: snapshot.viewport.left,
+      viewportTop: snapshot.viewport.top,
       viewportWidth: snapshot.viewport.width,
       viewportHeight: snapshot.viewport.height,
     });
@@ -56,6 +98,15 @@ export class FocusTransitionOrchestrator {
       },
       onComplete: () => {
         this.currentCamera = { ...camera };
+        this.publishCenterDebug({
+          viewportLeft: snapshot.viewport.left,
+          viewportTop: snapshot.viewport.top,
+          viewportWidth: snapshot.viewport.width,
+          viewportHeight: snapshot.viewport.height,
+          camera,
+          targetCenterX: snapshot.target!.centerX,
+          targetCenterY: snapshot.target!.centerY,
+        });
         args.onEvent?.('proxy-open-complete');
         args.onComplete?.();
       },
@@ -98,6 +149,8 @@ export class FocusTransitionOrchestrator {
     }
     const camera = computeCameraStateForTarget({
       target: snapshot.target,
+      viewportLeft: snapshot.viewport.left,
+      viewportTop: snapshot.viewport.top,
       viewportWidth: snapshot.viewport.width,
       viewportHeight: snapshot.viewport.height,
     });
@@ -117,6 +170,15 @@ export class FocusTransitionOrchestrator {
       },
       onComplete: () => {
         this.currentCamera = { ...camera };
+        this.publishCenterDebug({
+          viewportLeft: snapshot.viewport.left,
+          viewportTop: snapshot.viewport.top,
+          viewportWidth: snapshot.viewport.width,
+          viewportHeight: snapshot.viewport.height,
+          camera,
+          targetCenterX: snapshot.target!.centerX,
+          targetCenterY: snapshot.target!.centerY,
+        });
         args.onEvent?.('proxy-refocus-complete');
         args.onComplete?.();
       },

@@ -1105,6 +1105,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('closeDrawer();'));
   assert.ok(content.includes("const proxyOpened = runProxyFocusTransition(nextKey, 'refocus', () => {"));
   assert.ok(content.includes('className={`focus-proxy-root ${gridCinematicMode !== \'grid-rest\' ? \'is-active\' : \'\'}`}'));
+  assert.ok(content.includes('data-focus-proxy-root="true"'));
   assert.ok(content.includes('className={`app ${proxyTravelActive ? \'proxy-travel-active\' : \'\'} ${gridCinematicMode}`}'));
   assert.ok(content.includes('data-grid-cinematic-nav="true"'));
   assert.ok(content.includes('const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === \'grid\' && gridCinematicMode === \'grid-rest\';'));
@@ -1127,6 +1128,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(renderTypes.includes('export type FocusSceneSnapshot'));
   assert.ok(sceneSnapshot.includes('export function captureFocusSceneSnapshot'));
   assert.ok(cameraController.includes('export function computeCameraStateForTarget'));
+  assert.ok(cameraController.includes('viewportLeft?: number;'));
+  assert.ok(cameraController.includes('viewportTop?: number;'));
+  assert.ok(cameraController.includes('x: safeCenterX - (target.centerX * scale),'));
+  assert.ok(cameraController.includes('y: safeCenterY - (target.centerY * scale),'));
   assert.ok(proxyRenderer.includes('export class ViewportProxyRenderer'));
   assert.ok(proxyRenderer.includes('const selectedClass = card.selected ? \'is-selected\' : \'\';'));
   assert.ok(orchestrator.includes('export class FocusTransitionOrchestrator'));
@@ -1139,6 +1144,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('proxy-refocus-start'));
   assert.ok(orchestrator.includes('proxy-refocus-complete'));
   assert.ok(orchestrator.includes('proxy-failed'));
+  assert.ok(orchestrator.includes('__explorerProxyCenterDebug'));
   assert.ok(content.includes('density.scrubTo(nextColumns);'));
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(content.includes('density?.settleScrub();'));

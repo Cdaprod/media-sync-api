@@ -1,3 +1,11 @@
+## 2026-04-04 — Grid proxy final centering fix (active)
+- [x] Separate viewport-safe-frame target geometry from source card origin for proxy settle math (`computeCameraStateForTarget` now uses viewport offsets + scale-correct translation).
+- [x] Ensure settled open/refocus proxy center resolves to safe-frame center without lateral source bias by using scale-aware x/y solve and world transform-origin at top-left.
+- [x] Add lightweight settle telemetry (`globalThis.__explorerProxyCenterDebug`) for viewport center vs target center delta verification.
+- [x] Expose explicit proxy root marker (`data-focus-proxy-root`) to make runtime centering probes deterministic.
+- [x] Update static Explorer contract assertions for camera centering and proxy debug marker presence.
+- [ ] Capture a real side-edge open/refocus runtime sample and verify `delta.x` is near 0 at settled end-state.
+
 ## 2026-04-03 — Grid focused-state interaction completion pass (active)
 - [x] Introduced explicit grid cinematic mode state machine (`grid-rest/opening/focused/refocusing/closing`) and wired overlay visibility to settled focused mode.
 - [x] Added focused-mode pointer arbitration: different asset click -> refocus transition, non-asset click -> close transition to rest.

@@ -3898,7 +3898,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </button>
       </div>
 
-      <div ref={focusProxyRootRef} className={`focus-proxy-root ${gridCinematicMode !== 'grid-rest' ? 'is-active' : ''}`} aria-hidden="true" />
+      <div
+        ref={focusProxyRootRef}
+        className={`focus-proxy-root ${gridCinematicMode !== 'grid-rest' ? 'is-active' : ''}`}
+        data-focus-proxy-root="true"
+        aria-hidden="true"
+      />
 
       <aside
         className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}

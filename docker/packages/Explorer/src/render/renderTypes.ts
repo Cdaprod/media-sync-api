@@ -37,6 +37,8 @@ export type ProxyCameraState = {
 export type FocusSceneSnapshot = {
   cards: RenderCardSnapshot[];
   viewport: {
+    left: number;
+    top: number;
     width: number;
     height: number;
     scrollTop: number;
