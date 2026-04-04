@@ -1134,6 +1134,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(cameraController.includes('y: safeCenterY - (target.centerY * scale),'));
   assert.ok(proxyRenderer.includes('export class ViewportProxyRenderer'));
   assert.ok(proxyRenderer.includes('const selectedClass = card.selected ? \'is-selected\' : \'\';'));
+  assert.ok(proxyRenderer.includes('const showActiveChrome = opts?.showActiveChrome ?? true;'));
+  assert.ok(proxyRenderer.includes('const activeChrome = (card.active && showActiveChrome)'));
+  assert.ok(proxyRenderer.includes('data-proxy-active="${activeMarker}"'));
   assert.ok(orchestrator.includes('export class FocusTransitionOrchestrator'));
   assert.ok(orchestrator.includes('openFocusTransition(args: {'));
   assert.ok(orchestrator.includes('refocusTransition(args: {'));
@@ -1145,6 +1148,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('proxy-refocus-complete'));
   assert.ok(orchestrator.includes('proxy-failed'));
   assert.ok(orchestrator.includes('__explorerProxyCenterDebug'));
+  assert.ok(orchestrator.includes('this.renderer.render(snapshot, startCamera, { showActiveChrome: false });'));
+  assert.ok(orchestrator.includes('this.renderer.render(snapshot, camera, { showActiveChrome: true });'));
+  assert.ok(orchestrator.includes('.proxy-render-top, .proxy-render-bottom, .proxy-render-scrim'));
   assert.ok(content.includes('density.scrubTo(nextColumns);'));
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(content.includes('density?.settleScrub();'));

@@ -25,8 +25,11 @@ export class ViewportProxyRenderer {
     this.mounted = false;
   }
 
-  render(snapshot: FocusSceneSnapshot, camera: ProxyCameraState) {
+  render(snapshot: FocusSceneSnapshot, camera: ProxyCameraState, opts?: {
+    showActiveChrome?: boolean;
+  }) {
     if (!this.mounted) this.mount();
+    const showActiveChrome = opts?.showActiveChrome ?? true;
 
     const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
     if (!world) return;
@@ -38,12 +41,13 @@ export class ViewportProxyRenderer {
       .map((card) => {
         const activeClass = card.active ? 'is-active' : '';
         const selectedClass = card.selected ? 'is-selected' : '';
+        const activeMarker = card.active ? 'true' : 'false';
         const thumb = (card.active && card.kind === 'video' && card.mediaUrl)
           ? `<video class="proxy-render-video" src="${card.mediaUrl}" muted autoplay loop playsinline preload="metadata"></video>`
           : card.thumbUrl
             ? `<img src="${card.thumbUrl}" alt="">`
           : `<div class="proxy-render-fallback">${card.kind}</div>`;
-        const activeChrome = card.active
+        const activeChrome = (card.active && showActiveChrome)
           ? `<div class="proxy-render-scrim"></div>
              <div class="proxy-render-top">
                <span class="proxy-render-kind">${card.kind}</span>
@@ -62,6 +66,8 @@ export class ViewportProxyRenderer {
           <div
             class="proxy-render-card ${activeClass} ${selectedClass}"
             data-selection-key="${card.selectionKey}"
+            data-select-key="${card.selectionKey}"
+            data-proxy-active="${activeMarker}"
             style="
               left:${card.rect.left}px;
               top:${card.rect.top}px;

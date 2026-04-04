@@ -85,7 +85,7 @@ export class FocusTransitionOrchestrator {
     });
 
     const startCamera = { ...this.currentCamera, x: 0, y: 0, scale: 1 };
-    this.renderer.render(snapshot, startCamera);
+    this.renderer.render(snapshot, startCamera, { showActiveChrome: false });
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
 
@@ -97,6 +97,7 @@ export class FocusTransitionOrchestrator {
         args.onStart?.();
       },
       onComplete: () => {
+        this.renderer.render(snapshot, camera, { showActiveChrome: true });
         this.currentCamera = { ...camera };
         this.publishCenterDebug({
           viewportLeft: snapshot.viewport.left,
@@ -154,7 +155,7 @@ export class FocusTransitionOrchestrator {
       viewportWidth: snapshot.viewport.width,
       viewportHeight: snapshot.viewport.height,
     });
-    this.renderer.render(snapshot, this.currentCamera);
+    this.renderer.render(snapshot, this.currentCamera, { showActiveChrome: false });
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
     this.timeline?.kill();
@@ -169,6 +170,7 @@ export class FocusTransitionOrchestrator {
         args.onStart?.();
       },
       onComplete: () => {
+        this.renderer.render(snapshot, camera, { showActiveChrome: true });
         this.currentCamera = { ...camera };
         this.publishCenterDebug({
           viewportLeft: snapshot.viewport.left,
@@ -223,6 +225,12 @@ export class FocusTransitionOrchestrator {
       },
     });
 
+    this.timeline.to(this.root.querySelectorAll<HTMLElement>('.proxy-render-top, .proxy-render-bottom, .proxy-render-scrim'), {
+      opacity: 0,
+      duration: 0.14,
+      ease: 'power2.out',
+      overwrite: 'auto',
+    });
     this.timeline.to(world, {
       x: 0,
       y: 0,

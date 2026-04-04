@@ -1,3 +1,12 @@
+## 2026-04-04 — Depth v4 conformity pass (active)
+- [x] Kept proxy camera math as safe-frame authoritative for open/refocus settle, including viewport-offset + scale-correct centering.
+- [x] Updated proxy render choreography so focused chrome is hidden during open/refocus travel and only rendered after settle.
+- [x] Added reverse-close choreography cue (chrome/scrim out before world return) on proxy close timeline.
+- [x] Strengthened focused overlay layering on proxy surface (thumb/media plane under scrim/top/bottom chrome, pointer-safe control lane).
+- [x] Added explicit proxy active-card markers (`data-proxy-active`, `data-select-key`) to support runtime focus diagnostics and hit targeting parity.
+- [x] Added lightweight idle depth treatment hooks (`perspective` + `preserve-3d`) without adding per-card runtime churn.
+- [ ] Device-verify conformity against demo contract for open/refocus/close choreography and focused interaction semantics on side-origin assets.
+
 ## 2026-04-04 — Grid proxy final centering fix (active)
 - [x] Separate viewport-safe-frame target geometry from source card origin for proxy settle math (`computeCameraStateForTarget` now uses viewport offsets + scale-correct translation).
 - [x] Ensure settled open/refocus proxy center resolves to safe-frame center without lateral source bias by using scale-aware x/y solve and world transform-origin at top-left.
