@@ -9,11 +9,19 @@ const fmtTime = (seconds: number) => {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 };
 
-type ProxyFocusedChromeCompactProps = {
+type ProxyFocusedChromeFullParityProps = {
   asset: PreviewAsset | null;
   onPrev?: () => void;
   onNext?: () => void;
   onClose?: () => void;
+  playable?: boolean;
+  isPlaying?: boolean;
+  currentTime?: number;
+  duration?: number;
+  onSeek?: (value: number) => void;
+  onTogglePlay?: () => void;
+  onSkipBack?: () => void;
+  onSkipForward?: () => void;
   onCopy?: () => void;
   onSelect?: () => void;
   onDelete?: () => void;
@@ -28,11 +36,19 @@ type ProxyFocusedChromeCompactProps = {
   showProgramMonitor?: boolean;
 };
 
-export function ProxyFocusedChromeCompact({
+export function ProxyFocusedChromeFullParity({
   asset,
   onPrev,
   onNext,
   onClose,
+  playable = false,
+  isPlaying = false,
+  currentTime = 0,
+  duration = 0,
+  onSeek,
+  onTogglePlay,
+  onSkipBack,
+  onSkipForward,
   onCopy,
   onSelect,
   onDelete,
@@ -45,8 +61,9 @@ export function ProxyFocusedChromeCompact({
   selected = false,
   showResolve = false,
   showProgramMonitor = false,
-}: ProxyFocusedChromeCompactProps) {
+}: ProxyFocusedChromeFullParityProps) {
   if (!asset) return null;
+  const durationCap = Math.max(duration, 1);
   return (
     <div className="proxy-focused-chrome" data-proxy-focused-chrome="true">
       <div className="proxy-focused-chrome-top">
@@ -67,7 +84,27 @@ export function ProxyFocusedChromeCompact({
             <span className="proxy-focused-chip" key={`${label}:${value}`}>{label}: {value}</span>
           ))}
         </div>
+        {playable ? (
+          <>
+            <div className="proxy-focused-time-row">
+              <span>{fmtTime(currentTime)}</span>
+              <span>{fmtTime(duration)}</span>
+            </div>
+            <input
+              className="proxy-focused-scrubber preview-interactive"
+              type="range"
+              min={0}
+              max={durationCap}
+              step={0.05}
+              value={Math.min(currentTime, durationCap)}
+              onChange={(event) => onSeek?.(parseFloat(event.currentTarget.value))}
+            />
+          </>
+        ) : null}
         <div className="proxy-focused-control-row preview-interactive">
+          {playable ? <button className="proxy-focused-pill" type="button" onClick={onSkipBack}>↺ 10s</button> : null}
+          {playable ? <button className="proxy-focused-pill primary" type="button" onClick={onTogglePlay}>{isPlaying ? '❚❚ Pause' : '▶ Play'}</button> : null}
+          {playable ? <button className="proxy-focused-pill" type="button" onClick={onSkipForward}>10s ↻</button> : null}
           {onCopy ? <button className="proxy-focused-pill" type="button" onClick={onCopy}>⧉ Copy stream URL</button> : null}
           {onSelect ? <button className="proxy-focused-pill" type="button" onClick={onSelect}>{selected ? '− Deselect' : '+ Select'}</button> : null}
           {onDelete ? <button className="proxy-focused-pill danger" type="button" onClick={onDelete}>🗑 Delete</button> : null}
@@ -81,6 +118,8 @@ export function ProxyFocusedChromeCompact({
     </div>
   );
 }
+
+export const ProxyFocusedChromeCompact = ProxyFocusedChromeFullParity;
 
 export function AssetPreviewPanel({
   asset,

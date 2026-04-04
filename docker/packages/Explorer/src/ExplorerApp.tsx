@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
@@ -33,7 +34,7 @@ import {
   kindBadgeClass,
   toAbsoluteUrl,
 } from './utils';
-import { AssetPreviewPanel, ProxyFocusedChromeCompact } from './AssetPreviewPanel';
+import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewPanel';
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
@@ -487,7 +488,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewObsSlot, setPreviewObsSlot] = useState('1');
   const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
   const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
-  const [proxyPreviewFrame, setProxyPreviewFrame] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const [activeProxyCardEl, setActiveProxyCardEl] = useState<HTMLElement | null>(null);
+  const [proxyPlaybackPlaying, setProxyPlaybackPlaying] = useState(false);
+  const [proxyPlaybackCurrentTime, setProxyPlaybackCurrentTime] = useState(0);
+  const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
   const [composeModalRendered, setComposeModalRendered] = useState(false);
   const [composeSubmitting, setComposeSubmitting] = useState(false);
@@ -3306,39 +3310,93 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
   useEffect(() => {
     if (!proxyPreviewVisible) {
-      setProxyPreviewFrame(null);
+      setActiveProxyCardEl(null);
+      setProxyPlaybackPlaying(false);
+      setProxyPlaybackCurrentTime(0);
+      setProxyPlaybackDuration(0);
       return;
     }
     const root = focusProxyRootRef.current;
     if (!root) return;
     let rafId = 0;
-    const syncFrame = () => {
+    const syncActiveCard = () => {
       const activeCard = root.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
-      if (!activeCard) {
-        setProxyPreviewFrame(null);
-        return;
-      }
-      const rect = activeCard.getBoundingClientRect();
-      setProxyPreviewFrame({
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-      });
+      setActiveProxyCardEl((prev) => (prev === activeCard ? prev : activeCard));
     };
     const tick = () => {
-      syncFrame();
+      syncActiveCard();
       rafId = window.requestAnimationFrame(tick);
     };
     rafId = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(rafId);
   }, [proxyPreviewVisible]);
+  useEffect(() => {
+    const proxyVideo = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
+    if (!proxyVideo) {
+      setProxyPlaybackPlaying(false);
+      setProxyPlaybackCurrentTime(0);
+      setProxyPlaybackDuration(0);
+      return;
+    }
+
+    const syncFromVideo = () => {
+      setProxyPlaybackPlaying(!proxyVideo.paused);
+      setProxyPlaybackCurrentTime(Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0);
+      setProxyPlaybackDuration(Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0);
+    };
+
+    syncFromVideo();
+    const onPlay = () => setProxyPlaybackPlaying(true);
+    const onPause = () => setProxyPlaybackPlaying(false);
+    const onTimeUpdate = () => setProxyPlaybackCurrentTime(Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0);
+    const onLoadedMetadata = () => setProxyPlaybackDuration(Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0);
+
+    proxyVideo.addEventListener('play', onPlay);
+    proxyVideo.addEventListener('pause', onPause);
+    proxyVideo.addEventListener('timeupdate', onTimeUpdate);
+    proxyVideo.addEventListener('loadedmetadata', onLoadedMetadata);
+
+    return () => {
+      proxyVideo.removeEventListener('play', onPlay);
+      proxyVideo.removeEventListener('pause', onPause);
+      proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
+      proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
+    };
+  }, [activeProxyCardEl]);
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible
     && cinematicRevealState.bottomVisible
     && cinematicRevealState.actionsVisible
   );
+  const handleProxySeek = useCallback((value: number) => {
+    const proxyVideo = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
+    if (!proxyVideo) return;
+    if (!Number.isFinite(value)) return;
+    proxyVideo.currentTime = Math.max(0, value);
+    setProxyPlaybackCurrentTime(Math.max(0, value));
+  }, [activeProxyCardEl]);
+  const handleProxyTogglePlay = useCallback(() => {
+    const proxyVideo = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
+    if (!proxyVideo) return;
+    if (proxyVideo.paused) proxyVideo.play().catch(() => {});
+    else proxyVideo.pause();
+  }, [activeProxyCardEl]);
+  const handleProxySkipBack = useCallback(() => {
+    const proxyVideo = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
+    if (!proxyVideo) return;
+    const next = Math.max(0, (proxyVideo.currentTime || 0) - 10);
+    proxyVideo.currentTime = next;
+    setProxyPlaybackCurrentTime(next);
+  }, [activeProxyCardEl]);
+  const handleProxySkipForward = useCallback(() => {
+    const proxyVideo = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
+    if (!proxyVideo) return;
+    const cap = Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : Math.max(proxyPlaybackDuration, 0);
+    const next = Math.min((proxyVideo.currentTime || 0) + 10, Math.max(cap, 0));
+    proxyVideo.currentTime = next;
+    setProxyPlaybackCurrentTime(next);
+  }, [activeProxyCardEl, proxyPlaybackDuration]);
 
   return (
     <div className={`app ${proxyTravelActive ? 'proxy-travel-active' : ''} ${gridCinematicMode}`}>
@@ -3978,19 +4036,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         data-focus-proxy-root="true"
         aria-hidden="true"
       >
-        {proxyPreviewVisible ? (
-          <div
-            className="proxy-preview-ui"
-            style={proxyPreviewFrame ? {
-              left: `${proxyPreviewFrame.left}px`,
-              top: `${proxyPreviewFrame.top}px`,
-              width: `${proxyPreviewFrame.width}px`,
-              height: `${proxyPreviewFrame.height}px`,
-            } : undefined}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <ProxyFocusedChromeCompact
+        {proxyPreviewVisible && activeProxyCardEl ? createPortal(
+          <div className="proxy-preview-ui" onPointerDown={(event) => event.stopPropagation()}>
+            <ProxyFocusedChromeFullParity
               asset={normalizedPreviewAsset}
+              playable={Boolean(focused && focused.kind === 'video')}
+              isPlaying={proxyPlaybackPlaying}
+              currentTime={proxyPlaybackCurrentTime}
+              duration={proxyPlaybackDuration}
+              onSeek={handleProxySeek}
+              onTogglePlay={handleProxyTogglePlay}
+              onSkipBack={handleProxySkipBack}
+              onSkipForward={handleProxySkipForward}
               onPrev={() => focusRelative(-1)}
               onNext={() => focusRelative(1)}
               onClose={closeDrawer}
@@ -4007,7 +4064,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               onDetailsToggle={() => setPreviewDetailsOpen((prev) => !prev)}
               selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}
             />
-          </div>
+          </div>,
+          activeProxyCardEl,
         ) : null}
       </div>
 

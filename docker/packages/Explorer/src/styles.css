@@ -992,6 +992,9 @@ select.control{
   z-index: 220;
   pointer-events: none;
 }
+.proxy-preview-ui .preview-interactive{
+  pointer-events: auto;
+}
 .proxy-focused-chrome{
   position: absolute;
   inset: 0;
@@ -1075,6 +1078,18 @@ select.control{
   background: rgba(8, 14, 30, 0.5);
   font-size: 12px;
 }
+.proxy-focused-time-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(226, 235, 252, 0.86);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.proxy-focused-scrubber{
+  width: 100%;
+  margin-bottom: 10px;
+}
 .proxy-focused-control-row{
   display: flex;
   flex-wrap: wrap;
@@ -1088,6 +1103,10 @@ select.control{
   color: rgba(236, 242, 255, 0.95);
   background: rgba(6, 12, 24, 0.56);
   font-size: 12px;
+}
+.proxy-focused-pill.primary{
+  border-color: rgba(99, 195, 236, 0.58);
+  background: rgba(9, 48, 69, 0.58);
 }
 .proxy-focused-pill.danger{
   border-color: rgba(244, 125, 145, 0.54);

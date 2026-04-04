@@ -1,3 +1,11 @@
+## 2026-04-04 — Full-parity proxy chrome + in-card parenting pass (active)
+- [x] Replaced focused proxy compact subset with full-parity proxy chrome (`ProxyFocusedChromeFullParity`) including transport lane, scrubber, play/pause, and skip ±10 controls.
+- [x] Moved focused proxy chrome ownership into the active proxy card transform tree by mounting chrome via React portal directly into `.proxy-render-card[data-proxy-active="true"]`.
+- [x] Removed rect-chasing frame dependence for main focused chrome placement (`proxyPreviewFrame`), reducing sibling-overlay drift/flicker risk during open/refocus motion.
+- [x] Added proxy-video transport binding in `ExplorerApp` (playback state listeners + seek/toggle/skip handlers) so focused chrome controls drive proxy media owner directly.
+- [x] Extended focused proxy styles for full-card overlay parity (top/bottom lanes + time row + scrubber + primary transport button state) while keeping media visible beneath localized gradients.
+- [ ] Device-verify parity/flicker: full-card overlay coverage, visible scrubber/transport, no chrome chase flicker on refocus, and preserved side-context continuity.
+
 ## 2026-04-04 — Focused proxy compact-chrome extraction pass (active)
 - [x] Stopped reusing the full `AssetPreviewPanel` shell in focused-grid proxy mode; proxy mode now mounts a dedicated compact chrome component only.
 - [x] Added `ProxyFocusedChromeCompact` in `AssetPreviewPanel.tsx` to reuse B-family control language without panel-body/media scaffolding.
