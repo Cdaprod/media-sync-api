@@ -892,8 +892,8 @@ select.control{
   box-shadow: 0 30px 90px rgba(0,0,0,0.44);
 }
 .proxy-render-card.is-ambient{
-  opacity: 0.12;
-  filter: blur(7px) saturate(0.62) brightness(0.7);
+  opacity: 0.26;
+  filter: blur(3px) saturate(0.74) brightness(0.88);
 }
 .proxy-render-card.is-selected{
   outline: 1px solid rgba(181, 198, 247, 0.72);
@@ -990,29 +990,108 @@ select.control{
   position: absolute;
   inset: 0;
   z-index: 220;
-  display: grid;
-  place-items: center;
-  pointer-events: auto;
-  padding: 12px;
+  pointer-events: none;
 }
-.proxy-preview-ui .preview-shell{
-  width: min(94vw, 760px);
-  height: min(78vh, 640px);
-  min-height: 0;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 30px 86px rgba(0,0,0,0.54);
+.proxy-focused-chrome{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
 }
-.proxy-preview-ui .preview-top,
-.proxy-preview-ui .preview-bottom{
-  padding: clamp(8px, 1.6vw, 12px);
+.proxy-focused-chrome-top,
+.proxy-focused-chrome-bottom{
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 14px 14px 10px;
+  pointer-events: none;
 }
-.proxy-preview-ui .preview-control-row{
-  gap: 6px;
+.proxy-focused-chrome-top{
+  top: 0;
+  background: linear-gradient(180deg, rgba(5, 8, 18, 0.62) 0%, rgba(5, 8, 18, 0.08) 100%);
 }
-.proxy-preview-ui .preview-pill{
-  min-height: 34px;
+.proxy-focused-chrome-bottom{
+  bottom: 0;
+  padding-top: 24px;
+  background: linear-gradient(0deg, rgba(5, 8, 18, 0.70) 0%, rgba(5, 8, 18, 0.14) 100%);
+}
+.proxy-focused-chrome-top-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.proxy-focused-kind{
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #90e3ff;
+  border: 1px solid rgba(74, 188, 230, 0.54);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(5, 16, 29, 0.36);
+}
+.proxy-focused-nav{
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+.proxy-focused-icon-btn{
+  border: 1px solid rgba(180, 196, 238, 0.34);
+  background: rgba(4, 8, 18, 0.62);
+  color: #eef3ff;
+  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+}
+.proxy-focused-title{
+  margin-top: 10px;
+  font-size: clamp(20px, 2.4vw, 30px);
+  line-height: 1.2;
+  color: rgba(246, 248, 255, 0.96);
+  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.56);
+  font-weight: 650;
+}
+.proxy-focused-path{
+  margin-top: 4px;
+  color: rgba(210, 220, 244, 0.78);
+  font-size: clamp(12px, 1.55vw, 17px);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.56);
+}
+.proxy-focused-chip-row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.proxy-focused-chip{
+  border: 1px solid rgba(188, 204, 239, 0.24);
+  border-radius: 999px;
+  padding: 6px 11px;
+  color: rgba(231, 237, 252, 0.88);
+  background: rgba(8, 14, 30, 0.5);
+  font-size: 12px;
+}
+.proxy-focused-control-row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  pointer-events: auto;
+}
+.proxy-focused-pill{
+  border: 1px solid rgba(171, 189, 233, 0.36);
+  border-radius: 999px;
+  padding: 8px 13px;
+  color: rgba(236, 242, 255, 0.95);
+  background: rgba(6, 12, 24, 0.56);
+  font-size: 12px;
+}
+.proxy-focused-pill.danger{
+  border-color: rgba(244, 125, 145, 0.54);
+  color: #ffb8c6;
 }
 .app.grid-rest .masonry-columns{
   transform-style: preserve-3d;

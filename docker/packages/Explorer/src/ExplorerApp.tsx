@@ -33,7 +33,7 @@ import {
   kindBadgeClass,
   toAbsoluteUrl,
 } from './utils';
-import { AssetPreviewPanel } from './AssetPreviewPanel';
+import { AssetPreviewPanel, ProxyFocusedChromeCompact } from './AssetPreviewPanel';
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
@@ -3989,9 +3989,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             } : undefined}
             onPointerDown={(event) => event.stopPropagation()}
           >
-            <AssetPreviewPanel
+            <ProxyFocusedChromeCompact
               asset={normalizedPreviewAsset}
-              renderMedia={false}
               onPrev={() => focusRelative(-1)}
               onNext={() => focusRelative(1)}
               onClose={closeDrawer}
@@ -4004,17 +4003,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               onProgramMonitor={() => { void handleFocusedProgramMonitor(); }}
               showResolve={Boolean(activeProject || focused?.project_name)}
               showProgramMonitor
-              obsMode={previewObsMode}
-              obsSlot={previewObsSlot}
-              obsExclusive={previewObsExclusive}
-              onObsModeChange={setPreviewObsMode}
-              onObsSlotChange={setPreviewObsSlot}
-              onObsExclusiveChange={setPreviewObsExclusive}
-              metadataRows={previewMetadataRows}
               detailsOpen={previewDetailsOpen}
               onDetailsToggle={() => setPreviewDetailsOpen((prev) => !prev)}
               selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}
-              playOnAssetChangeToken={previewAutoPlayToken}
             />
           </div>
         ) : null}

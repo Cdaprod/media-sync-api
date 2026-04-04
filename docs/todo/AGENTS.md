@@ -1,3 +1,11 @@
+## 2026-04-04 — Focused proxy compact-chrome extraction pass (active)
+- [x] Stopped reusing the full `AssetPreviewPanel` shell in focused-grid proxy mode; proxy mode now mounts a dedicated compact chrome component only.
+- [x] Added `ProxyFocusedChromeCompact` in `AssetPreviewPanel.tsx` to reuse B-family control language without panel-body/media scaffolding.
+- [x] Replaced proxy preview mount in `ExplorerApp` to use `ProxyFocusedChromeCompact` so focused controls render in-card over the proxy media surface.
+- [x] Reworked proxy chrome styles to transparent in-card lanes (top/bottom localized gradients + pills/buttons) and removed centered panel-shell sizing in `.proxy-preview-ui`.
+- [x] Strengthened ambient neighbor readability by increasing non-active proxy card visibility and reducing blur attenuation.
+- [ ] Device-verify no detached black panel feeling: focused media is primary, controls are embedded in-card, and ambient side-context is visibly present.
+
 ## 2026-04-04 — Proxy focused-media ownership correction pass (active)
 - [x] Removed focused-grid detached media owner by reusing `AssetPreviewPanel` chrome with `renderMedia={false}` in proxy-preview mode.
 - [x] Kept focused media ownership in proxy renderer active card surface (`ViewportProxyRenderer`) and added active-video poster fallback beneath video playback.

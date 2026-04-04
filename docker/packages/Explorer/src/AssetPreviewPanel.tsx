@@ -9,6 +9,79 @@ const fmtTime = (seconds: number) => {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 };
 
+type ProxyFocusedChromeCompactProps = {
+  asset: PreviewAsset | null;
+  onPrev?: () => void;
+  onNext?: () => void;
+  onClose?: () => void;
+  onCopy?: () => void;
+  onSelect?: () => void;
+  onDelete?: () => void;
+  onTag?: () => void;
+  onObs?: () => void;
+  onResolve?: () => void;
+  onProgramMonitor?: () => void;
+  onDetailsToggle?: () => void;
+  detailsOpen?: boolean;
+  selected?: boolean;
+  showResolve?: boolean;
+  showProgramMonitor?: boolean;
+};
+
+export function ProxyFocusedChromeCompact({
+  asset,
+  onPrev,
+  onNext,
+  onClose,
+  onCopy,
+  onSelect,
+  onDelete,
+  onTag,
+  onObs,
+  onResolve,
+  onProgramMonitor,
+  onDetailsToggle,
+  detailsOpen = false,
+  selected = false,
+  showResolve = false,
+  showProgramMonitor = false,
+}: ProxyFocusedChromeCompactProps) {
+  if (!asset) return null;
+  return (
+    <div className="proxy-focused-chrome" data-proxy-focused-chrome="true">
+      <div className="proxy-focused-chrome-top">
+        <div className="proxy-focused-chrome-top-row">
+          <span className={`proxy-focused-kind kind-${asset.kind}`}>{asset.kind.toUpperCase()}</span>
+          <div className="proxy-focused-nav preview-interactive">
+            <button className="proxy-focused-icon-btn" type="button" onClick={onPrev} aria-label="Previous">‹</button>
+            <button className="proxy-focused-icon-btn" type="button" onClick={onNext} aria-label="Next">›</button>
+            <button className="proxy-focused-icon-btn" type="button" onClick={onClose} aria-label="Close">✕</button>
+          </div>
+        </div>
+        <div className="proxy-focused-title">{asset.name}</div>
+        <div className="proxy-focused-path">{asset.path}</div>
+      </div>
+      <div className="proxy-focused-chrome-bottom">
+        <div className="proxy-focused-chip-row">
+          {(asset.quick.length ? asset.quick : [['Duration', fmtTime(asset.duration || 0)]]).map(([label, value]) => (
+            <span className="proxy-focused-chip" key={`${label}:${value}`}>{label}: {value}</span>
+          ))}
+        </div>
+        <div className="proxy-focused-control-row preview-interactive">
+          {onCopy ? <button className="proxy-focused-pill" type="button" onClick={onCopy}>⧉ Copy stream URL</button> : null}
+          {onSelect ? <button className="proxy-focused-pill" type="button" onClick={onSelect}>{selected ? '− Deselect' : '+ Select'}</button> : null}
+          {onDelete ? <button className="proxy-focused-pill danger" type="button" onClick={onDelete}>🗑 Delete</button> : null}
+          {onTag ? <button className="proxy-focused-pill" type="button" onClick={onTag}>🏷 Tag</button> : null}
+          {onObs ? <button className="proxy-focused-pill" type="button" onClick={onObs}>📺 OBS</button> : null}
+          {showResolve && onResolve ? <button className="proxy-focused-pill" type="button" onClick={onResolve}>⇢ Resolve</button> : null}
+          {showProgramMonitor && onProgramMonitor ? <button className="proxy-focused-pill" type="button" onClick={onProgramMonitor}>➕ Program</button> : null}
+          {onDetailsToggle ? <button className="proxy-focused-pill" type="button" onClick={onDetailsToggle}>{detailsOpen ? 'Hide details' : 'Show details'}</button> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AssetPreviewPanel({
   asset,
   onMediaReady,
