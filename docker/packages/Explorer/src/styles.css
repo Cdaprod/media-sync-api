@@ -880,6 +880,15 @@ select.control{
   will-change: transform;
   transform-style: preserve-3d;
 }
+.proxy-prewarm-video{
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  left: -200vw;
+  top: -200vh;
+}
 .proxy-render-card{
   position: absolute;
   overflow: hidden;

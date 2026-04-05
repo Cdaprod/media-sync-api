@@ -595,6 +595,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     muted: boolean;
     src: string;
   } | null>(null);
+  const proxyPrewarmVideoRef = useRef<HTMLVideoElement | null>(null);
+  const proxyPrewarmSelectionKeyRef = useRef('');
+  const proxyPrewarmUrlRef = useRef('');
+  const proxyPrewarmReadyStateRef = useRef(0);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
@@ -1057,6 +1061,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     },
     [api],
   );
+  const proxyPrewarmSelectionKey = useMemo(() => (
+    reinforcedActiveKey || previewActivationKey || activeAssetKey || ''
+  ), [activeAssetKey, previewActivationKey, reinforcedActiveKey]);
+  const proxyPrewarmUrl = useMemo(() => {
+    if (!proxyPrewarmSelectionKey) return '';
+    const targetItem = itemsBySelectionKey.get(proxyPrewarmSelectionKey);
+    if (!targetItem) return '';
+    if (guessKind(targetItem) !== 'video') return '';
+    return resolveAssetUrl(normalizeThumbUrl(targetItem.stream_url || targetItem.download_url || '')) || '';
+  }, [itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
 
   const thumbDatasetSignature = useMemo(() => {
     const dataset = filteredMedia.map((item) => {
@@ -3353,6 +3367,64 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
   const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
   useEffect(() => {
+    proxyPrewarmSelectionKeyRef.current = proxyPrewarmSelectionKey;
+    proxyPrewarmUrlRef.current = proxyPrewarmUrl;
+    const prewarmVideo = proxyPrewarmVideoRef.current;
+    if (!prewarmVideo) {
+      proxyPrewarmReadyStateRef.current = 0;
+      return;
+    }
+
+    const clearPrewarm = () => {
+      prewarmVideo.pause();
+      prewarmVideo.removeAttribute('src');
+      prewarmVideo.load();
+      proxyPrewarmReadyStateRef.current = 0;
+    };
+    if (!proxyPrewarmUrl || proxyPreviewVisible) {
+      clearPrewarm();
+      return;
+    }
+
+    prewarmVideo.muted = true;
+    prewarmVideo.defaultMuted = true;
+    prewarmVideo.playsInline = true;
+    prewarmVideo.preload = 'auto';
+    if (prewarmVideo.src !== proxyPrewarmUrl) {
+      prewarmVideo.src = proxyPrewarmUrl;
+    }
+    prewarmVideo.load();
+    proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
+
+    const tryPrimeFrame = () => {
+      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
+      if (prewarmVideo.readyState < 2) return;
+      prewarmVideo.play()
+        .then(() => {
+          prewarmVideo.pause();
+          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
+        })
+        .catch(() => {
+          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
+        });
+    };
+    const onLoadedMetadata = () => {
+      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
+    };
+    const onLoadedData = () => {
+      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
+      tryPrimeFrame();
+    };
+    prewarmVideo.addEventListener('loadedmetadata', onLoadedMetadata);
+    prewarmVideo.addEventListener('loadeddata', onLoadedData);
+    tryPrimeFrame();
+
+    return () => {
+      prewarmVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
+      prewarmVideo.removeEventListener('loadeddata', onLoadedData);
+    };
+  }, [proxyPreviewVisible, proxyPrewarmSelectionKey, proxyPrewarmUrl]);
+  useEffect(() => {
     if (!proxyPreviewVisible) {
       setActiveProxyCardEl(null);
       setActiveProxyUiSlotEl(null);
@@ -3408,6 +3480,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ended: boolean;
           currentSrc: string;
           mediaBranch: string;
+          prewarmSelectionKey: string;
+          prewarmUrl: string;
+          prewarmReadyState: number;
           sawTimeProgress: boolean;
           pendingHandoffTime: number | null;
         };
@@ -3423,6 +3498,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ended: proxyVideo.ended,
         currentSrc: proxyVideo.currentSrc || proxyVideo.src || '',
         mediaBranch: activeProxyCardEl?.dataset.proxyMediaBranch || '',
+        prewarmSelectionKey: proxyPrewarmSelectionKeyRef.current || '',
+        prewarmUrl: proxyPrewarmUrlRef.current || '',
+        prewarmReadyState: proxyPrewarmReadyStateRef.current || 0,
         sawTimeProgress,
         pendingHandoffTime,
       };
@@ -4274,6 +4352,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           proxyPreviewPortalTarget,
         ) : null}
       </div>
+      <video
+        ref={proxyPrewarmVideoRef}
+        className="proxy-prewarm-video"
+        muted
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
 
       <aside
         className={`drawer ${focusOverlayReady ? 'focus-overlay-ready' : ''} ${focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''}`}

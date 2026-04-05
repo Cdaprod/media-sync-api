@@ -273,6 +273,11 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const previewPlaybackHandoffRef = useRef<{'));
   assert.ok(explorer.includes('const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {'));
   assert.ok(explorer.includes('previewPlaybackHandoffRef.current = {'));
+  assert.ok(explorer.includes('const proxyPrewarmVideoRef = useRef<HTMLVideoElement | null>(null);'));
+  assert.ok(explorer.includes("const proxyPrewarmSelectionKey = useMemo(() => ("));
+  assert.ok(explorer.includes('const proxyPrewarmUrl = useMemo(() => {'));
+  assert.ok(explorer.includes('if (!proxyPrewarmUrl || proxyPreviewVisible) {'));
+  assert.ok(explorer.includes("className=\"proxy-prewarm-video\""));
   assert.ok(explorer.includes('const tryApplyHandoffTime = () => {'));
   assert.ok(explorer.includes('const setProxyMuted = (muted: boolean) => {'));
   assert.ok(explorer.includes('setProxyMuted(true);'));
@@ -715,6 +720,7 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(styles.includes('.app.proxy-travel-active .grid-cinematic-root{'));
   assert.ok(styles.includes('.app.proxy-travel-active .drawer{'));
   assert.ok(styles.includes('.proxy-render-world{'));
+  assert.ok(styles.includes('.proxy-prewarm-video{'));
   assert.ok(styles.includes('--proxy-world-scale'));
   assert.ok(styles.includes('transform: scale(calc(1 / var(--proxy-world-scale, 1)));'));
   assert.ok(styles.includes('.scroll.focus-proxy-scroll-lock{'));

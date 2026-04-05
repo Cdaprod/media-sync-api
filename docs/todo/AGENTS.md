@@ -1,3 +1,11 @@
+## 2026-04-05 — Focused proxy prewarm lane for likely-open assets (active)
+- [x] Added a dedicated hidden proxy prewarm surface (`.proxy-prewarm-video`) in `ExplorerApp` to pre-attach likely focused video sources before focus-open settle.
+- [x] Introduced explicit likely-open targeting (`reinforcedActiveKey -> previewActivationKey -> activeAssetKey`) with resolved stream URL authority so prewarm and focused owners use the same canonical media source.
+- [x] Prewarm lane now performs metadata/data readiness hooks plus muted prime-play attempt (`play().then(pause())`) while hidden to reduce cold first-frame decode on focused open.
+- [x] Extended focused playback debug payload with prewarm telemetry (`prewarmSelectionKey`, `prewarmUrl`, `prewarmReadyState`) for runtime validation.
+- [ ] Device-verify focused-open cold-start reduction on iOS Safari (less black-frame/blurred poster dwell before live motion).
+- [ ] Capture runtime evidence showing prewarm ready state has advanced before focus-open (`prewarmReadyState >= 1/2`) on at least one previously lagging asset.
+
 ## 2026-04-05 — Focused proxy audio ownership split (active)
 - [x] Kept thumbnail/grid continuity path muted by default (`setProxyMuted(true)` on bootstrap/inactive lanes) so non-focused video surfaces remain silent.
 - [x] Promoted focused proxy to audio owner only after readiness/ownership handoff (`onPlaying` after thumbnail pause/yield), then unmuted focused proxy media.
