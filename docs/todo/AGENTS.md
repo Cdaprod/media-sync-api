@@ -1,3 +1,10 @@
+## 2026-04-05 — Focused proxy visual stall regression hotfix (active)
+- [x] Root-caused still-frame focused preview regression to `useVideoOwnershipHandoff` effect churn from debug callback dependency invalidation.
+- [x] Introduced `latestDebugStateRef` in handoff hook and moved debug payload reads to ref-backed snapshot state so promotion/playback side-effect effect remains stable.
+- [x] Preserved existing diagnostics fields while removing teardown/re-init playback loops caused by internal state transitions.
+- [ ] Device-verify focused proxy video now advances frames continuously (no audio-only still-frame state) across open/refocus flows on iOS Safari.
+- [ ] Capture one runtime sample (`window.__explorerProxyPlaybackDebug`) showing stable `reason` transitions without repeated `inactive`/mount churn during a single focused-open.
+
 ## 2026-04-05 — Focused proxy stream authority + first-frame visual promotion repair (active)
 - [x] Added active-selection-derived `proxyAsset`/`proxyStreamUrl` in `ExplorerApp` so focused handoff always receives the resolved active proxy stream source.
 - [x] Switched focused handoff hook wiring to `streamUrl: proxyStreamUrl` and mirrored stream URL into playback debug + active card dataset for runtime verification.

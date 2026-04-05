@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-05)
+- Fixed focused proxy playback regression where `useVideoOwnershipHandoff` effect was restarting on internal debug-state updates, causing repeated teardown/pause/load loops that left video visually stalled.
+- Stabilized debug publishing with a `latestDebugStateRef` snapshot so hook side effects no longer depend on mutable promotion/ownership state transitions.
+- This keeps focused proxy playback continuity intact while preserving full stall-diagnostics payload updates in `__explorerProxyPlaybackDebug`.
+
+### Latest Implementation Notes (2026-04-05)
 - Repaired focused proxy stream-source authority in `ExplorerApp` by deriving a dedicated `proxyAsset`/`proxyStreamUrl` from the active proxy selection + renderer dataset/video source fallback chain.
 - `useVideoOwnershipHandoff` now receives the active proxy stream URL (`proxyStreamUrl`) instead of relying only on focused drawer normalization, preventing empty-stream short-circuiting during focused proxy ownership.
 - Proxy renderer now mirrors active media source on dataset (`data-stream-url`) and first-frame CSS gating also honors `data-first-frame-presented="true"` to hide poster/scrim only after frame-promotion truth is available.

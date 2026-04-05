@@ -92,6 +92,21 @@ export function useVideoOwnershipHandoff({
   const [promotionBlockedReason, setPromotionBlockedReason] = useState('none');
   const [playbackState, setPlaybackState] = useState<PlaybackState>(EMPTY_PLAYBACK);
   const pendingHandoffRef = useRef<number | null>(null);
+  const latestDebugStateRef = useRef<{
+    visualOwner: VisualOwner;
+    audioOwner: AudioOwner;
+    videoReady: boolean;
+    firstFramePresented: boolean;
+    promotionStrategy: FirstFrameReadyStrategy | 'none';
+    promotionBlockedReason: string;
+  }>({
+    visualOwner: 'thumbnail',
+    audioOwner: 'none',
+    videoReady: false,
+    firstFramePresented: false,
+    promotionStrategy: 'none',
+    promotionBlockedReason: 'none',
+  });
   const playRequestedRef = useRef(false);
   const playPromiseRejectedRef = useRef(false);
   const loadedMetadataSeenRef = useRef(false);
@@ -102,20 +117,31 @@ export function useVideoOwnershipHandoff({
   useEffect(() => {
     pendingHandoffRef.current = handoffTime == null ? null : Math.max(0, handoffTime);
   }, [handoffTime]);
+  useEffect(() => {
+    latestDebugStateRef.current = {
+      visualOwner,
+      audioOwner,
+      videoReady,
+      firstFramePresented,
+      promotionStrategy,
+      promotionBlockedReason,
+    };
+  }, [audioOwner, firstFramePresented, promotionBlockedReason, promotionStrategy, videoReady, visualOwner]);
 
   const publishDebug = useCallback((reason: string, video: HTMLVideoElement | null) => {
     if (!onDebug) return;
+    const latest = latestDebugStateRef.current;
     const currentTime = Number.isFinite(video?.currentTime) ? (video?.currentTime || 0) : 0;
     const duration = Number.isFinite(video?.duration) ? (video?.duration || 0) : 0;
     onDebug({
       reason,
       selectionKey,
       streamUrl,
-      visualOwner,
-      audioOwner,
-      videoReady,
-      firstFramePresented,
-      promotionStrategy,
+      visualOwner: latest.visualOwner,
+      audioOwner: latest.audioOwner,
+      videoReady: latest.videoReady,
+      firstFramePresented: latest.firstFramePresented,
+      promotionStrategy: latest.promotionStrategy,
       currentTime,
       duration,
       readyState: video?.readyState ?? 0,
@@ -129,9 +155,9 @@ export function useVideoOwnershipHandoff({
       loadedDataSeen: loadedDataSeenRef.current,
       canPlaySeen: canPlaySeenRef.current,
       playingSeen: playingSeenRef.current,
-      promotionBlockedReason,
+      promotionBlockedReason: latest.promotionBlockedReason,
     });
-  }, [audioOwner, firstFramePresented, mediaBranch, onDebug, promotionBlockedReason, promotionStrategy, selectionKey, streamUrl, videoReady, visualOwner]);
+  }, [mediaBranch, onDebug, selectionKey, streamUrl]);
 
   const resetOwnership = useCallback(() => {
     setVisualOwner('thumbnail');
