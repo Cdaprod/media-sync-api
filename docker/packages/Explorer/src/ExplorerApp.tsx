@@ -3384,31 +3384,91 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
 
-    const syncFromVideo = () => {
-      setProxyPlaybackPlaying(!proxyVideo.paused);
-      setProxyPlaybackCurrentTime(Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0);
-      setProxyPlaybackDuration(Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0);
+    const proxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
+    const handoff = previewPlaybackHandoffRef.current;
+    const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === proxySelectionKey);
+    let pendingHandoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;
+    let sawTimeProgress = false;
+    let yieldedGridOwner = false;
+
+    const publishPlaybackDebug = (reason: string) => {
+      (globalThis as typeof globalThis & {
+        __explorerProxyPlaybackDebug?: {
+          reason: string;
+          selectionKey: string;
+          paused: boolean;
+          currentTime: number;
+          duration: number;
+          readyState: number;
+          networkState: number;
+          ended: boolean;
+          currentSrc: string;
+          sawTimeProgress: boolean;
+          pendingHandoffTime: number | null;
+        };
+      }).__explorerProxyPlaybackDebug = {
+        reason,
+        selectionKey: proxySelectionKey,
+        paused: proxyVideo.paused,
+        currentTime: Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0,
+        duration: Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0,
+        readyState: proxyVideo.readyState,
+        networkState: proxyVideo.networkState,
+        ended: proxyVideo.ended,
+        currentSrc: proxyVideo.currentSrc || proxyVideo.src || '',
+        sawTimeProgress,
+        pendingHandoffTime,
+      };
+    };
+
+    const syncFromVideo = (reason: string) => {
+      const currentTime = Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0;
+      const duration = Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0;
+      const hasProgress = currentTime > 0.04;
+      if (hasProgress) {
+        sawTimeProgress = true;
+      }
+      const isActuallyPlaying = !proxyVideo.paused && proxyVideo.readyState >= 2 && (sawTimeProgress || hasProgress);
+      setProxyPlaybackPlaying(isActuallyPlaying);
+      setProxyPlaybackCurrentTime(currentTime);
+      setProxyPlaybackDuration(duration);
+      publishPlaybackDebug(reason);
+    };
+
+    const tryApplyHandoffTime = () => {
+      if (pendingHandoffTime == null) return;
+      if (proxyVideo.readyState < 1) return;
+      const duration = Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0;
+      const target = duration > 0
+        ? Math.min(pendingHandoffTime, Math.max(0, duration - 0.04))
+        : pendingHandoffTime;
+      try {
+        proxyVideo.currentTime = Math.max(0, target);
+        pendingHandoffTime = null;
+      } catch {
+        // Ignore early seek failure; we'll retry on next readiness event.
+      }
     };
 
     proxyVideo.muted = true;
     proxyVideo.playsInline = true;
+    proxyVideo.preload = 'auto';
     if (proxyPreviewVisible) {
-      const proxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
-      const handoff = previewPlaybackHandoffRef.current;
-      const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === proxySelectionKey);
-      if (hasMatchingHandoff && handoff) {
-        proxyVideo.currentTime = Number.isFinite(handoff.currentTime) ? Math.max(0, handoff.currentTime) : 0;
-      }
       const requestPlay = () => {
         proxyVideo.play().catch(() => {
           // Safari may still gate autoplay in edge cases; keep muted + playsInline state
         });
       };
+      tryApplyHandoffTime();
       if (hasMatchingHandoff ? Boolean(handoff?.wasPlaying) : true) {
         requestPlay();
       }
       const deferred = window.setTimeout(requestPlay, 80);
-      const onCanPlay = () => requestPlay();
+      const onCanPlay = () => {
+        tryApplyHandoffTime();
+        requestPlay();
+        syncFromVideo('canplay');
+      };
       proxyVideo.addEventListener('canplay', onCanPlay, { once: true });
       proxyVideo.addEventListener('loadeddata', onCanPlay, { once: true });
       const cleanupAutoplay = () => {
@@ -3416,35 +3476,55 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         proxyVideo.removeEventListener('canplay', onCanPlay);
         proxyVideo.removeEventListener('loadeddata', onCanPlay);
       };
-      syncFromVideo();
-      const onPlay = () => setProxyPlaybackPlaying(true);
-      const onPause = () => setProxyPlaybackPlaying(false);
-      const onTimeUpdate = () => setProxyPlaybackCurrentTime(Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0);
-      const onLoadedMetadata = () => setProxyPlaybackDuration(Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0);
+      syncFromVideo('mount');
+      const onPlay = () => syncFromVideo('play');
+      const onPause = () => syncFromVideo('pause');
+      const onTimeUpdate = () => syncFromVideo('timeupdate');
+      const onLoadedMetadata = () => {
+        tryApplyHandoffTime();
+        syncFromVideo('loadedmetadata');
+      };
+      const onPlaying = () => {
+        if (proxySelectionKey && !yieldedGridOwner) {
+          pauseGridThumbForSelectionKey(proxySelectionKey);
+          yieldedGridOwner = true;
+        }
+        if (hasMatchingHandoff) {
+          previewPlaybackHandoffRef.current = null;
+        }
+        syncFromVideo('playing');
+      };
+      const onWaiting = () => syncFromVideo('waiting');
+      const onStalled = () => syncFromVideo('stalled');
 
       proxyVideo.addEventListener('play', onPlay);
       proxyVideo.addEventListener('pause', onPause);
       proxyVideo.addEventListener('timeupdate', onTimeUpdate);
       proxyVideo.addEventListener('loadedmetadata', onLoadedMetadata);
-      if (proxySelectionKey) {
-        pauseGridThumbForSelectionKey(proxySelectionKey);
-      }
-      previewPlaybackHandoffRef.current = null;
+      proxyVideo.addEventListener('playing', onPlaying);
+      proxyVideo.addEventListener('waiting', onWaiting);
+      proxyVideo.addEventListener('stalled', onStalled);
 
       return () => {
         cleanupAutoplay();
+        if (pendingHandoffTime == null && hasMatchingHandoff) {
+          previewPlaybackHandoffRef.current = null;
+        }
         proxyVideo.removeEventListener('play', onPlay);
         proxyVideo.removeEventListener('pause', onPause);
         proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
         proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
+        proxyVideo.removeEventListener('playing', onPlaying);
+        proxyVideo.removeEventListener('waiting', onWaiting);
+        proxyVideo.removeEventListener('stalled', onStalled);
       };
     }
 
-    syncFromVideo();
-    const onPlay = () => setProxyPlaybackPlaying(true);
-    const onPause = () => setProxyPlaybackPlaying(false);
-    const onTimeUpdate = () => setProxyPlaybackCurrentTime(Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0);
-    const onLoadedMetadata = () => setProxyPlaybackDuration(Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0);
+    syncFromVideo('inactive-mount');
+    const onPlay = () => syncFromVideo('inactive-play');
+    const onPause = () => syncFromVideo('inactive-pause');
+    const onTimeUpdate = () => syncFromVideo('inactive-timeupdate');
+    const onLoadedMetadata = () => syncFromVideo('inactive-loadedmetadata');
 
     proxyVideo.addEventListener('play', onPlay);
     proxyVideo.addEventListener('pause', onPause);

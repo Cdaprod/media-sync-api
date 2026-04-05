@@ -1,3 +1,11 @@
+## 2026-04-05 — Focused proxy playback truth + readiness-gated handoff (active)
+- [x] Reworked focused proxy playback truth to require real readiness/progress (`readyState`, `timeupdate` progression) before reporting playing state, preventing false `Pause` UI while media is stalled at zero.
+- [x] Added proxy playback diagnostics export (`globalThis.__explorerProxyPlaybackDebug`) with runtime media signals (`paused`, `currentTime`, `duration`, `readyState`, `networkState`, `ended`, `currentSrc`, handoff state).
+- [x] Gated handoff seek application behind media readiness (`tryApplyHandoffTime`) and retried on readiness events (`loadedmetadata`, `canplay`) before clearing handoff ownership.
+- [x] Deferred thumbnail-owner pause until proxy `playing` event to keep one real playback owner while avoiding early dead-state takeover.
+- [ ] Device-verify focused proxy no longer shows false `Pause` with `0:00/0:00`, and confirm timeline advances with real video motion in iOS Safari.
+- [ ] Capture runtime debug sample (`window.__explorerProxyPlaybackDebug`) during focused-open for at least one previously failing asset.
+
 ## 2026-04-05 — Overlay A badge dedupe + playback handoff continuity (active)
 - [x] Removed redundant wrapper badge children from world-grid Overlay A render path (`Cinematic`, `Scene`, bottom-right duplicate kind) while preserving the real overlay lanes (`asset-ol-tl/tr/bl/bottom`) and selection UI.
 - [x] Added immediate first-activation thumbnail playback wiring (`playGridThumbForSelectionKey`) so first tap on playable grid assets attempts muted inline autoplay without waiting for second-tap preview open.
