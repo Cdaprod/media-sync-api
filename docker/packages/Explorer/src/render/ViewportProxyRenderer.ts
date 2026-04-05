@@ -44,6 +44,7 @@ export class ViewportProxyRenderer {
         const ambientClass = card.active ? '' : 'is-ambient';
         const selectedClass = card.selected ? 'is-selected' : '';
         const activeMarker = card.active ? 'true' : 'false';
+        const mediaBranch = (card.active && card.kind === 'video' && card.mediaUrl) ? 'video' : (card.thumbUrl ? 'thumb' : 'fallback');
         const chromeScale = Math.max(0.72, Math.min(1, card.rect.width / 360));
         const thumb = (card.active && card.kind === 'video' && card.mediaUrl)
           ? `
@@ -64,6 +65,7 @@ export class ViewportProxyRenderer {
             data-select-key="${card.selectionKey}"
             data-proxy-active="${activeMarker}"
             data-video-ready="false"
+            data-proxy-media-branch="${mediaBranch}"
             style="
               left:${card.rect.left}px;
               top:${card.rect.top}px;

@@ -29,6 +29,7 @@ export interface ExplorerAssetViewModel {
   pointerHandlers: AssetPointerHandlers;
   kindBadgeClassName: string;
   selectionOrderLabel: string;
+  streamUrl: string;
 }
 
 type GridEntry =
@@ -548,7 +549,7 @@ function AssetGridComponent({
               data-thumb-key={viewModel.thumbKey}
               data-thumb-job-key={viewModel.thumbJobKey}
               data-relative={viewModel.item.relative_path || ''}
-              data-stream-url={viewModel.item.stream_url || ''}
+              data-stream-url={viewModel.streamUrl}
               data-select-key={viewModel.selectionKey}
               data-active={viewModel.isActive ? 'true' : 'false'}
               data-layout-index={index}

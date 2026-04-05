@@ -3269,6 +3269,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       || (kind === 'image' ? item.stream_url : undefined));
     const fallbackThumb = buildThumbFallback(kind);
     const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
+    const streamUrl = resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '';
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
     const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
       ? thumbUrl
@@ -3282,7 +3283,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
     const activeVideoPreviewUrl = (
       isActivated && kind === 'video'
-        ? resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || ''))
+        ? streamUrl
         : undefined
     );
     const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';
@@ -3306,6 +3307,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       selectionKey,
       selectionOrderLabel: selectionOrderIndex ? String(Math.min(selectionOrderIndex, 99)) : '',
       size,
+      streamUrl,
       sub,
       thumbJobKey,
       thumbKey,
@@ -3404,6 +3406,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           networkState: number;
           ended: boolean;
           currentSrc: string;
+          mediaBranch: string;
           sawTimeProgress: boolean;
           pendingHandoffTime: number | null;
         };
@@ -3417,6 +3420,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         networkState: proxyVideo.networkState,
         ended: proxyVideo.ended,
         currentSrc: proxyVideo.currentSrc || proxyVideo.src || '',
+        mediaBranch: activeProxyCardEl?.dataset.proxyMediaBranch || '',
         sawTimeProgress,
         pendingHandoffTime,
       };

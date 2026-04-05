@@ -937,6 +937,8 @@ select.control{
 .proxy-render-card[data-video-ready="true"] .proxy-render-poster{
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
 }
 .proxy-render-card[data-video-ready="true"] .proxy-render-video{
   opacity: 1;
@@ -951,7 +953,7 @@ select.control{
   opacity: 1;
 }
 .proxy-render-card[data-video-ready="true"] .proxy-render-scrim{
-  opacity: 0.12;
+  opacity: 0;
 }
 .proxy-render-ui-slot{
   position: absolute;

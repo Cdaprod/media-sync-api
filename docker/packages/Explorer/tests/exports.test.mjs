@@ -252,12 +252,15 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const isSecondTapReinforced = reinforcedActiveKey === selectionKey;'));
   assert.ok(explorer.includes('const isHoldEmphasis = holdEmphasisKey === selectionKey;'));
   assert.ok(explorer.includes('const isActivated = previewActivationKey === selectionKey;'));
+  assert.ok(explorer.includes("const streamUrl = resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '';"));
   assert.ok(explorer.includes("const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';"));
+  assert.ok(explorer.includes('? streamUrl'));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
   assert.ok(grid.includes('<img'));
   assert.ok(grid.includes('activeVideoPreviewUrl'));
   assert.ok(explorer.includes("isActivated && kind === 'video'"));
   assert.ok(grid.includes('className="asset-thumb-preview"'));
+  assert.ok(grid.includes('data-stream-url={viewModel.streamUrl}'));
   assert.ok(grid.includes('key={viewModel.previewPlaybackKey}'));
   assert.ok(list.includes('<img'));
   assert.ok(list.includes('activeVideoPreviewUrl'));

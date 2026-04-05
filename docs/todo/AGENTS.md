@@ -1,3 +1,11 @@
+## 2026-04-05 — Proxy focused media-source authority + hard poster cutoff (active)
+- [x] Root-caused focused proxy static-frame behavior to media source authority drift: proxy card snapshot consumed raw `item.stream_url` while playback/details path used resolved API-base URLs, allowing focused proxy video to bind an invalid relative source in split-origin sessions.
+- [x] Added resolved per-item `streamUrl` to Explorer asset view models and switched grid card `data-stream-url` ownership to that resolved URL so `SceneSnapshot -> ViewportProxyRenderer` receives the same valid stream source as focused preview metadata/actions.
+- [x] Added explicit proxy media-branch diagnostics (`data-proxy-media-branch`) and exported `mediaBranch` via `__explorerProxyPlaybackDebug` to confirm whether active focused cards are in `video`, `thumb`, or `fallback` source path at runtime.
+- [x] Hardened poster-to-video ownership switch CSS after readiness (`pointer-events:none`, negative poster z-order, scrim fully cleared) so once `data-video-ready="true"` the poster no longer contributes to visible output.
+- [ ] Device-verify focused-open on iOS Safari now shows advancing video frames (not static poster look), with non-zero duration/currentTime for playable assets.
+- [ ] Capture one runtime debug sample (`window.__explorerProxyPlaybackDebug`) confirming `mediaBranch:"video"` and a non-empty `currentSrc` on a previously failing asset.
+
 ## 2026-04-05 — Focused proxy playback truth + readiness-gated handoff (active)
 - [x] Reworked focused proxy playback truth to require real readiness/progress (`readyState`, `timeupdate` progression) before reporting playing state, preventing false `Pause` UI while media is stalled at zero.
 - [x] Added proxy playback diagnostics export (`globalThis.__explorerProxyPlaybackDebug`) with runtime media signals (`paused`, `currentTime`, `duration`, `readyState`, `networkState`, `ended`, `currentSrc`, handoff state).
