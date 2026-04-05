@@ -27,6 +27,13 @@ export type VideoOwnershipDebug = {
   muted: boolean;
   mediaBranch: string;
   handoffTime: number | null;
+  playRequested: boolean;
+  playPromiseRejected: boolean;
+  loadedMetadataSeen: boolean;
+  loadedDataSeen: boolean;
+  canPlaySeen: boolean;
+  playingSeen: boolean;
+  promotionBlockedReason: string;
 };
 
 export type UseVideoOwnershipHandoffArgs = {
@@ -82,8 +89,15 @@ export function useVideoOwnershipHandoff({
   const [videoReady, setVideoReady] = useState(false);
   const [firstFramePresented, setFirstFramePresented] = useState(false);
   const [promotionStrategy, setPromotionStrategy] = useState<FirstFrameReadyStrategy | 'none'>('none');
+  const [promotionBlockedReason, setPromotionBlockedReason] = useState('none');
   const [playbackState, setPlaybackState] = useState<PlaybackState>(EMPTY_PLAYBACK);
   const pendingHandoffRef = useRef<number | null>(null);
+  const playRequestedRef = useRef(false);
+  const playPromiseRejectedRef = useRef(false);
+  const loadedMetadataSeenRef = useRef(false);
+  const loadedDataSeenRef = useRef(false);
+  const canPlaySeenRef = useRef(false);
+  const playingSeenRef = useRef(false);
 
   useEffect(() => {
     pendingHandoffRef.current = handoffTime == null ? null : Math.max(0, handoffTime);
@@ -109,8 +123,15 @@ export function useVideoOwnershipHandoff({
       muted: video?.muted ?? true,
       mediaBranch,
       handoffTime: pendingHandoffRef.current,
+      playRequested: playRequestedRef.current,
+      playPromiseRejected: playPromiseRejectedRef.current,
+      loadedMetadataSeen: loadedMetadataSeenRef.current,
+      loadedDataSeen: loadedDataSeenRef.current,
+      canPlaySeen: canPlaySeenRef.current,
+      playingSeen: playingSeenRef.current,
+      promotionBlockedReason,
     });
-  }, [audioOwner, firstFramePresented, mediaBranch, onDebug, promotionStrategy, selectionKey, streamUrl, videoReady, visualOwner]);
+  }, [audioOwner, firstFramePresented, mediaBranch, onDebug, promotionBlockedReason, promotionStrategy, selectionKey, streamUrl, videoReady, visualOwner]);
 
   const resetOwnership = useCallback(() => {
     setVisualOwner('thumbnail');
@@ -118,6 +139,7 @@ export function useVideoOwnershipHandoff({
     setVideoReady(false);
     setFirstFramePresented(false);
     setPromotionStrategy('none');
+    setPromotionBlockedReason('none');
     setPlaybackState(EMPTY_PLAYBACK);
   }, []);
 
@@ -145,12 +167,21 @@ export function useVideoOwnershipHandoff({
 
     let alive = true;
     let sawTimeProgress = false;
+    let promoted = false;
 
     setVisualOwner('poster');
     setAudioOwner('none');
     setVideoReady(false);
     setFirstFramePresented(false);
     setPromotionStrategy('none');
+    setPromotionBlockedReason('none');
+
+    playRequestedRef.current = false;
+    playPromiseRejectedRef.current = false;
+    loadedMetadataSeenRef.current = false;
+    loadedDataSeenRef.current = false;
+    canPlaySeenRef.current = false;
+    playingSeenRef.current = false;
 
     proxyVideoEl.muted = true;
     proxyVideoEl.defaultMuted = true;
@@ -184,36 +215,100 @@ export function useVideoOwnershipHandoff({
       }
     };
 
+    const promote = (strategy: FirstFrameReadyStrategy | 'none', reason: string) => {
+      if (promoted) return;
+      promoted = true;
+      setFirstFramePresented(true);
+      setVideoReady(true);
+      setPromotionStrategy(strategy);
+      setPromotionBlockedReason('none');
+      setVisualOwner('proxy');
+      if (enableFocusedAudio && shouldPlay && playingSeenRef.current) {
+        proxyVideoEl.muted = false;
+        proxyVideoEl.defaultMuted = false;
+        setAudioOwner('proxy');
+      }
+      onPromoted?.();
+      onHandoffConsumed?.();
+      syncPlaybackState(reason);
+    };
+
+    const tryFallbackPromote = (fallbackReason: string) => {
+      if (promoted) return;
+      const currentTime = Number.isFinite(proxyVideoEl.currentTime) ? proxyVideoEl.currentTime : 0;
+      const immediateReady = proxyVideoEl.readyState >= 2 && (
+        currentTime > 0.01
+        || !proxyVideoEl.paused
+        || loadedDataSeenRef.current
+        || canPlaySeenRef.current
+        || playingSeenRef.current
+      );
+      if (!immediateReady) {
+        setPromotionBlockedReason(fallbackReason);
+        syncPlaybackState(`${fallbackReason}-blocked`);
+        return;
+      }
+      promote('fallback', fallbackReason);
+    };
+
     const requestPlay = () => {
       if (!shouldPlay) return;
+      playRequestedRef.current = true;
       proxyVideoEl.play().catch(() => {
+        playPromiseRejectedRef.current = true;
+        setPromotionBlockedReason('play-rejected');
+        syncPlaybackState('play-rejected');
         // Safari may still gate autoplay in edge cases.
       });
     };
 
-    const shouldStartPlayback = shouldPlay && (pendingHandoffRef.current != null ? wasPlayingBeforeHandoff : true);
+    const shouldStartPlayback = shouldPlay;
     if (shouldStartPlayback) {
+      proxyVideoEl.load();
       tryApplyHandoffTime();
       requestPlay();
+      tryFallbackPromote('immediate-readiness-fallback');
+    }
+    else if (pendingHandoffRef.current != null && !wasPlayingBeforeHandoff) {
+      setPromotionBlockedReason('handoff-paused-before-open');
     }
 
     const onLoadedMetadata = () => {
+      loadedMetadataSeenRef.current = true;
       tryApplyHandoffTime();
       syncPlaybackState('loadedmetadata');
     };
-    const onCanPlay = () => {
+    const onLoadedData = () => {
+      loadedDataSeenRef.current = true;
       tryApplyHandoffTime();
       requestPlay();
+      tryFallbackPromote('loadeddata-fallback');
+      syncPlaybackState('loadeddata');
+    };
+    const onCanPlay = () => {
+      canPlaySeenRef.current = true;
+      tryApplyHandoffTime();
+      requestPlay();
+      tryFallbackPromote('canplay-fallback');
       syncPlaybackState('canplay');
     };
-    const onPlay = () => syncPlaybackState('play');
+    const onPlay = () => {
+      playingSeenRef.current = true;
+      tryFallbackPromote('playing-fallback');
+      if (promoted && enableFocusedAudio && shouldPlay) {
+        proxyVideoEl.muted = false;
+        proxyVideoEl.defaultMuted = false;
+        setAudioOwner('proxy');
+      }
+      syncPlaybackState('play');
+    };
     const onPause = () => syncPlaybackState('pause');
     const onTimeUpdate = () => syncPlaybackState('timeupdate');
     const onWaiting = () => syncPlaybackState('waiting');
     const onStalled = () => syncPlaybackState('stalled');
 
     proxyVideoEl.addEventListener('loadedmetadata', onLoadedMetadata);
-    proxyVideoEl.addEventListener('loadeddata', onCanPlay);
+    proxyVideoEl.addEventListener('loadeddata', onLoadedData);
     proxyVideoEl.addEventListener('canplay', onCanPlay);
     proxyVideoEl.addEventListener('play', onPlay);
     proxyVideoEl.addEventListener('pause', onPause);
@@ -227,21 +322,12 @@ export function useVideoOwnershipHandoff({
       const frame = await awaitFirstVideoFrame(proxyVideoEl);
       if (!alive) return;
       if (!frame.ok) {
+        setPromotionBlockedReason('first-frame-timeout');
+        tryFallbackPromote('immediate-readiness-fallback');
         syncPlaybackState('first-frame-timeout');
         return;
       }
-      setFirstFramePresented(true);
-      setVideoReady(true);
-      setPromotionStrategy(frame.strategy);
-      setVisualOwner('proxy');
-      if (enableFocusedAudio && shouldPlay) {
-        proxyVideoEl.muted = false;
-        proxyVideoEl.defaultMuted = false;
-        setAudioOwner('proxy');
-      }
-      onPromoted?.();
-      onHandoffConsumed?.();
-      syncPlaybackState('first-frame-presented');
+      promote(frame.strategy, 'first-frame-presented');
     })();
 
     return () => {
@@ -250,7 +336,7 @@ export function useVideoOwnershipHandoff({
       proxyVideoEl.muted = true;
       proxyVideoEl.defaultMuted = true;
       proxyVideoEl.removeEventListener('loadedmetadata', onLoadedMetadata);
-      proxyVideoEl.removeEventListener('loadeddata', onCanPlay);
+      proxyVideoEl.removeEventListener('loadeddata', onLoadedData);
       proxyVideoEl.removeEventListener('canplay', onCanPlay);
       proxyVideoEl.removeEventListener('play', onPlay);
       proxyVideoEl.removeEventListener('pause', onPause);

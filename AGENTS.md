@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-05)
+- Updated `useVideoOwnershipHandoff` focused-open priming to always attempt muted `load() + play()` startup and removed promotion start gating on `wasPlayingBeforeHandoff`.
+- Added explicit promotion fallback lanes (`loadeddata-fallback`, `canplay-fallback`, `playing-fallback`, `immediate-readiness-fallback`) so poster ownership can promote even when RVFC readiness does not resolve in Safari-like runtimes.
+- Extended focused handoff debug telemetry with stall diagnostics (`playRequested`, `playPromiseRejected`, `loadedMetadataSeen`, `loadedDataSeen`, `canPlaySeen`, `playingSeen`, `promotionBlockedReason`) for runtime failure triage.
+
+### Latest Implementation Notes (2026-04-05)
 - Fixed a focused playback runtime crash in `ExplorerApp` by replacing an undefined `proxyAsset` reference with `normalizedPreviewAsset` when wiring `useVideoOwnershipHandoff` stream URL input.
 - This restores hook initialization safety under normal render paths and prevents `ReferenceError: Can't find variable: proxyAsset` in preview open flows.
 

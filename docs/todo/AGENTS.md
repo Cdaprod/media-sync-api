@@ -1,3 +1,11 @@
+## 2026-04-05 — Focused proxy stalled-promotion fallback + diagnostics pass (active)
+- [x] Updated `useVideoOwnershipHandoff` focused-open startup to always run muted `load() + play()` priming and removed `wasPlayingBeforeHandoff` as the promotion-start gate.
+- [x] Added explicit fallback promotion lanes (`loadeddata-fallback`, `canplay-fallback`, `playing-fallback`, `immediate-readiness-fallback`) so poster ownership cannot stay pinned when RVFC does not resolve.
+- [x] Extended handoff debug payload with stall telemetry (`playRequested`, `playPromiseRejected`, `loadedMetadataSeen`, `loadedDataSeen`, `canPlaySeen`, `playingSeen`, `promotionBlockedReason`).
+- [x] Added static regression assertions to lock fallback-promotion and stall-diagnostics markers.
+- [ ] Device-verify on iOS Safari that focused-open no longer stalls on poster ownership when RVFC fails to resolve.
+- [ ] Capture one `window.__explorerProxyPlaybackDebug` sample showing fallback promotion path + diagnostic fields during a previously stalled open.
+
 ## 2026-04-05 — ExplorerApp hook wiring runtime crash fix (active)
 - [x] Fixed undefined `proxyAsset` symbol in focused handoff hook wiring by using `normalizedPreviewAsset?.streamUrl` as the stream URL authority.
 - [x] Restored focused preview render stability by removing `ReferenceError: Can't find variable: proxyAsset` from `ExplorerApp` runtime path.
