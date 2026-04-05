@@ -258,7 +258,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const isSecondTapReinforced = reinforcedActiveKey === selectionKey;'));
   assert.ok(explorer.includes('const isHoldEmphasis = holdEmphasisKey === selectionKey;'));
   assert.ok(explorer.includes('const isActivated = previewActivationKey === selectionKey;'));
-  assert.ok(explorer.includes("const streamUrl = resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '';"));
+  assert.ok(explorer.includes("const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');"));
   assert.ok(explorer.includes("const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';"));
   assert.ok(explorer.includes('? streamUrl'));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
@@ -288,8 +288,10 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;'));
   assert.ok(explorer.includes('const proxyAsset = useMemo(() => {'));
   assert.ok(explorer.includes('const proxyStreamUrl = useMemo(() => {'));
+  assert.ok(explorer.includes('const absolutizeMediaUrl = useCallback((path?: string) => {'));
   assert.ok(explorer.includes("const datasetStream = activeProxyCardEl?.dataset.streamUrl || activeProxyVideoEl?.dataset.streamUrl || '';"));
   assert.ok(explorer.includes("const elementSrc = activeProxyVideoEl?.currentSrc || activeProxyVideoEl?.src || '';"));
+  assert.ok(explorer.includes("return absolutizeMediaUrl(datasetStream || elementSrc || proxyAsset?.src || '');"));
   assert.ok(explorer.includes('onHandoffConsumed: () => {'));
   assert.ok(explorer.includes('onPromoted: () => {'));
   assert.ok(explorer.includes('pauseGridThumbForSelectionKey(activeProxySelectionKey);'));

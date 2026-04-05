@@ -288,17 +288,6 @@ export function useVideoOwnershipHandoff({
       });
     };
 
-    const shouldStartPlayback = shouldPlay;
-    if (shouldStartPlayback) {
-      proxyVideoEl.load();
-      tryApplyHandoffTime();
-      requestPlay();
-      tryFallbackPromote('immediate-readiness-fallback');
-    }
-    else if (pendingHandoffRef.current != null && !wasPlayingBeforeHandoff) {
-      setPromotionBlockedReason('handoff-paused-before-open');
-    }
-
     const onLoadedMetadata = () => {
       loadedMetadataSeenRef.current = true;
       tryApplyHandoffTime();
@@ -341,6 +330,17 @@ export function useVideoOwnershipHandoff({
     proxyVideoEl.addEventListener('timeupdate', onTimeUpdate);
     proxyVideoEl.addEventListener('waiting', onWaiting);
     proxyVideoEl.addEventListener('stalled', onStalled);
+
+    const shouldStartPlayback = shouldPlay;
+    if (shouldStartPlayback) {
+      proxyVideoEl.load();
+      tryApplyHandoffTime();
+      requestPlay();
+      tryFallbackPromote('immediate-readiness-fallback');
+    }
+    else if (pendingHandoffRef.current != null && !wasPlayingBeforeHandoff) {
+      setPromotionBlockedReason('handoff-paused-before-open');
+    }
 
     syncPlaybackState('mount');
 

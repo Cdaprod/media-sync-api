@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-05)
+- Fixed focused proxy video still-frame regression on LAN/mobile hosts by canonicalizing proxy/grid stream URLs to absolute API-backed URLs (`resolvedApiBase` with `:8787` fallback) before renderer/handoff use.
+- Corrected focused proxy stream fallback to use `proxyAsset?.src` (preview adapter output) instead of non-existent `streamUrl`, preventing empty stream fallback chains.
+- Reordered `useVideoOwnershipHandoff` event listener attachment to occur before `load()/play()` priming so fast `loadeddata/canplay/play` events cannot be missed during focused-open promotion.
+
+### Latest Implementation Notes (2026-04-05)
 - Fixed focused proxy playback regression where `useVideoOwnershipHandoff` effect was restarting on internal debug-state updates, causing repeated teardown/pause/load loops that left video visually stalled.
 - Stabilized debug publishing with a `latestDebugStateRef` snapshot so hook side effects no longer depend on mutable promotion/ownership state transitions.
 - This keeps focused proxy playback continuity intact while preserving full stall-diagnostics payload updates in `__explorerProxyPlaybackDebug`.

@@ -1062,6 +1062,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     },
     [api],
   );
+  const absolutizeMediaUrl = useCallback((path?: string) => {
+    if (!path) return '';
+    if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    if (typeof window === 'undefined') return path;
+    const fallbackBase = `${window.location.protocol}//${window.location.hostname}:8787`;
+    const base = resolvedApiBase || fallbackBase;
+    try {
+      return new URL(path, base).toString();
+    } catch {
+      return path;
+    }
+  }, [resolvedApiBase]);
   const proxyPrewarmSelectionKey = useMemo(() => (
     reinforcedActiveKey || previewActivationKey || activeAssetKey || ''
   ), [activeAssetKey, previewActivationKey, reinforcedActiveKey]);
@@ -1070,8 +1084,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const targetItem = itemsBySelectionKey.get(proxyPrewarmSelectionKey);
     if (!targetItem) return '';
     if (guessKind(targetItem) !== 'video') return '';
-    return resolveAssetUrl(normalizeThumbUrl(targetItem.stream_url || targetItem.download_url || '')) || '';
-  }, [itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
+    return absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(targetItem.stream_url || targetItem.download_url || '')) || '');
+  }, [absolutizeMediaUrl, itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
 
   const thumbDatasetSignature = useMemo(() => {
     const dataset = filteredMedia.map((item) => {
@@ -3284,7 +3298,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       || (kind === 'image' ? item.stream_url : undefined));
     const fallbackThumb = buildThumbFallback(kind);
     const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
-    const streamUrl = resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '';
+    const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
     const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
       ? thumbUrl
@@ -3332,6 +3346,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [
     activeAssetKey,
     activeProject,
+    absolutizeMediaUrl,
     assetRenderKey,
     buildAssetPointerHandlers,
     dynamicOrientations,
@@ -3463,8 +3478,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyStreamUrl = useMemo(() => {
     const datasetStream = activeProxyCardEl?.dataset.streamUrl || activeProxyVideoEl?.dataset.streamUrl || '';
     const elementSrc = activeProxyVideoEl?.currentSrc || activeProxyVideoEl?.src || '';
-    return datasetStream || elementSrc || proxyAsset?.streamUrl || '';
-  }, [activeProxyCardEl, activeProxyVideoEl, proxyAsset]);
+    return absolutizeMediaUrl(datasetStream || elementSrc || proxyAsset?.src || '');
+  }, [absolutizeMediaUrl, activeProxyCardEl, activeProxyVideoEl, proxyAsset]);
   const handoff = previewPlaybackHandoffRef.current;
   const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === activeProxySelectionKey);
   const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;

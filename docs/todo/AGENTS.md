@@ -1,3 +1,11 @@
+## 2026-04-05 — Focused proxy still-frame absolute-stream + early-event capture fix (active)
+- [x] Added `absolutizeMediaUrl(...)` in `ExplorerApp` and routed proxy prewarm/grid stream URLs through canonical absolute API URL resolution with `:8787` LAN fallback.
+- [x] Fixed focused proxy stream fallback chain to use `proxyAsset?.src` (from `normalizePreviewAsset`) instead of missing `proxyAsset?.streamUrl` field.
+- [x] Reordered `useVideoOwnershipHandoff` startup so readiness/playback listeners bind before `load()` + `play()` priming, preventing missed fast events on iOS Safari.
+- [x] Updated static regression assertions for absolute stream URL composition markers and focused proxy stream fallback wiring.
+- [ ] Device-verify focused proxy no longer renders relative `/media/...` src on split-origin sessions and reaches `firstFramePresented:true` during focused open.
+- [ ] Capture one iOS runtime sample (`window.__explorerProxyPlaybackDebug`) showing non-empty absolute `streamUrl`, `mediaBranch:"video"`, and non-`none` promotion strategy.
+
 ## 2026-04-05 — Focused proxy visual stall regression hotfix (active)
 - [x] Root-caused still-frame focused preview regression to `useVideoOwnershipHandoff` effect churn from debug callback dependency invalidation.
 - [x] Introduced `latestDebugStateRef` in handoff hook and moved debug payload reads to ref-backed snapshot state so promotion/playback side-effect effect remains stable.
