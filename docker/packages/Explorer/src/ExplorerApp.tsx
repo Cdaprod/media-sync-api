@@ -3352,9 +3352,39 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     proxyVideo.muted = true;
     proxyVideo.playsInline = true;
     if (proxyPreviewVisible) {
-      proxyVideo.play().catch(() => {
-        // Safari may still gate autoplay in edge cases; keep muted + playsInline state
-      });
+      const requestPlay = () => {
+        proxyVideo.play().catch(() => {
+          // Safari may still gate autoplay in edge cases; keep muted + playsInline state
+        });
+      };
+      requestPlay();
+      const deferred = window.setTimeout(requestPlay, 80);
+      const onCanPlay = () => requestPlay();
+      proxyVideo.addEventListener('canplay', onCanPlay, { once: true });
+      proxyVideo.addEventListener('loadeddata', onCanPlay, { once: true });
+      const cleanupAutoplay = () => {
+        window.clearTimeout(deferred);
+        proxyVideo.removeEventListener('canplay', onCanPlay);
+        proxyVideo.removeEventListener('loadeddata', onCanPlay);
+      };
+      syncFromVideo();
+      const onPlay = () => setProxyPlaybackPlaying(true);
+      const onPause = () => setProxyPlaybackPlaying(false);
+      const onTimeUpdate = () => setProxyPlaybackCurrentTime(Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0);
+      const onLoadedMetadata = () => setProxyPlaybackDuration(Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0);
+
+      proxyVideo.addEventListener('play', onPlay);
+      proxyVideo.addEventListener('pause', onPause);
+      proxyVideo.addEventListener('timeupdate', onTimeUpdate);
+      proxyVideo.addEventListener('loadedmetadata', onLoadedMetadata);
+
+      return () => {
+        cleanupAutoplay();
+        proxyVideo.removeEventListener('play', onPlay);
+        proxyVideo.removeEventListener('pause', onPause);
+        proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
+        proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
+      };
     }
 
     syncFromVideo();
@@ -3374,7 +3404,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
       proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
     };
-  }, [activeProxyCardEl, proxyPreviewVisible]);
+  }, [activeProxyCardEl, proxyPreviewVisible, previewAutoPlayToken]);
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible
@@ -4053,7 +4083,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           <div className="proxy-preview-ui" onPointerDown={(event) => event.stopPropagation()}>
             <ProxyFocusedChromeFullParity
               asset={normalizedPreviewAsset}
-              playable={Boolean(focused && focused.kind === 'video')}
+              playable={Boolean(normalizedPreviewAsset && (normalizedPreviewAsset.kind === 'video' || normalizedPreviewAsset.kind === 'audio'))}
               isPlaying={proxyPlaybackPlaying}
               currentTime={proxyPlaybackCurrentTime}
               duration={proxyPlaybackDuration}
@@ -4073,6 +4103,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               onProgramMonitor={() => { void handleFocusedProgramMonitor(); }}
               showResolve={Boolean(activeProject || focused?.project_name)}
               showProgramMonitor
+              metadataRows={previewMetadataRows}
               detailsOpen={previewDetailsOpen}
               onDetailsToggle={() => setPreviewDetailsOpen((prev) => !prev)}
               selected={Boolean(focused && selected.has(assetSelectionKey(focused, activeProject)))}

@@ -124,6 +124,9 @@ test('preview adapter and panel keep drawer-based preview contract', () => {
   assert.ok(panel.includes('handleOverlayTapToggle'));
   assert.ok(panel.includes('onClick={handleClose}'));
   assert.ok(panel.includes('preview-obs-row'));
+  assert.ok(panel.includes('proxy-focused-details-panel'));
+  assert.ok(panel.includes('metadataRows?: Array<[string, string]>;'));
+  assert.ok(panel.includes('.map(([label, value], idx) => ('));
   assert.ok(panel.includes('obsMode'));
   assert.ok(styles.includes('.preview-shell'));
   assert.ok(styles.includes('.preview-overlay.fade'));
@@ -1115,6 +1118,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === \'grid\' && gridCinematicMode === \'grid-rest\';'));
   assert.ok(content.includes('const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === \'list\' || focusPresentationState.mode === \'drawer-fallback\');'));
   assert.ok(content.includes("const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';"));
+  assert.ok(content.includes("playable={Boolean(normalizedPreviewAsset && (normalizedPreviewAsset.kind === 'video' || normalizedPreviewAsset.kind === 'audio'))}"));
+  assert.ok(content.includes('metadataRows={previewMetadataRows}'));
+  assert.ok(content.includes('}, [activeProxyCardEl, proxyPreviewVisible, previewAutoPlayToken]);'));
   assert.ok(content.includes("if (target.closest('.proxy-preview-ui')) return;"));
   assert.ok(content.includes('className="proxy-preview-ui"'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));

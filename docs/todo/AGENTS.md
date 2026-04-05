@@ -1,3 +1,11 @@
+## 2026-04-05 — Overlay toggle restoration + focused player parity follow-up (active)
+- [x] Restored world-grid overlay toggle behavior by enforcing `overlay-hidden` ownership at `.asset-overlay` container level so TopBar `Overlays: On/Off` deterministically hides/shows card overlays again.
+- [x] Refactored `ProxyFocusedChromeFullParity` into a player-first dock contract: persistent transport core (time, scrubber, play/pause, ±10s) remains primary, while secondary actions + metadata move into a details-gated section.
+- [x] Wired focused proxy parity props to runtime preview truth (`playable` now derived from normalized preview kind, and proxy chrome receives metadata rows) to avoid transport omission when focus item typing varies.
+- [x] Hardened focused proxy autoplay retries with post-attach follow-up attempts (`canplay`, `loadeddata`, delayed retry) keyed by `previewAutoPlayToken` for open/refocus parity.
+- [ ] Device-verify that `Overlays: Off` hides Overlay A on grid cards and `Overlays: On` restores it in the same session.
+- [ ] Device-verify focused proxy opens with visible transport + autoplay, and details toggle now only expands/collapses secondary metadata/actions.
+
 ## 2026-04-05 — Proxy focused layout coordinate-space correction (active)
 - [x] Fixed focused proxy chrome coordinate mismatch by introducing explicit world-scale handoff (`--proxy-world-scale`) from renderer to CSS so focused UI layout can be computed at visual-size-equivalent dimensions.
 - [x] Updated `.proxy-render-ui-slot` to use inverse-scale compensation (`scale(1 / --proxy-world-scale)`) with expanded local layout bounds, decoupling active chrome layout from tiny base card geometry while preserving world camera travel.

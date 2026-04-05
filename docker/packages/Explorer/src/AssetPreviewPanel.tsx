@@ -34,6 +34,7 @@ type ProxyFocusedChromeFullParityProps = {
   selected?: boolean;
   showResolve?: boolean;
   showProgramMonitor?: boolean;
+  metadataRows?: Array<[string, string]>;
 };
 
 export function ProxyFocusedChromeFullParity({
@@ -61,6 +62,7 @@ export function ProxyFocusedChromeFullParity({
   selected = false,
   showResolve = false,
   showProgramMonitor = false,
+  metadataRows = [],
 }: ProxyFocusedChromeFullParityProps) {
   if (!asset) return null;
   const durationCap = Math.max(duration, 1);
@@ -79,19 +81,14 @@ export function ProxyFocusedChromeFullParity({
         <div className="proxy-focused-path">{asset.path}</div>
       </div>
       <div className="proxy-focused-chrome-bottom">
-        <div className="proxy-focused-chip-row">
-          {(asset.quick.length ? asset.quick : [['Duration', fmtTime(asset.duration || 0)]]).map(([label, value]) => (
-            <span className="proxy-focused-chip" key={`${label}:${value}`}>{label}: {value}</span>
-          ))}
-        </div>
         {playable ? (
-          <>
+          <div className="proxy-focused-player-core preview-interactive">
             <div className="proxy-focused-time-row">
               <span>{fmtTime(currentTime)}</span>
               <span>{fmtTime(duration)}</span>
             </div>
             <input
-              className="proxy-focused-scrubber preview-interactive"
+              className="proxy-focused-scrubber"
               type="range"
               min={0}
               max={durationCap}
@@ -99,23 +96,36 @@ export function ProxyFocusedChromeFullParity({
               value={Math.min(currentTime, durationCap)}
               onChange={(event) => onSeek?.(parseFloat(event.currentTarget.value))}
             />
-            <div className="proxy-focused-transport-row preview-interactive">
+            <div className="proxy-focused-transport-row">
               <button className="proxy-focused-pill" type="button" onClick={onSkipBack}>↺ 10s</button>
               <button className="proxy-focused-pill primary" type="button" onClick={onTogglePlay}>{isPlaying ? '❚❚ Pause' : '▶ Play'}</button>
               <button className="proxy-focused-pill" type="button" onClick={onSkipForward}>10s ↻</button>
             </div>
-          </>
+          </div>
         ) : null}
         <div className="proxy-focused-control-row preview-interactive">
           {onCopy ? <button className="proxy-focused-pill" type="button" onClick={onCopy}>⧉ Copy stream URL</button> : null}
           {onSelect ? <button className="proxy-focused-pill" type="button" onClick={onSelect}>{selected ? '− Deselect' : '+ Select'}</button> : null}
-          {onDelete ? <button className="proxy-focused-pill danger" type="button" onClick={onDelete}>🗑 Delete</button> : null}
-          {onTag ? <button className="proxy-focused-pill" type="button" onClick={onTag}>🏷 Tag</button> : null}
-          {onObs ? <button className="proxy-focused-pill" type="button" onClick={onObs}>📺 OBS</button> : null}
-          {showResolve && onResolve ? <button className="proxy-focused-pill" type="button" onClick={onResolve}>⇢ Resolve</button> : null}
-          {showProgramMonitor && onProgramMonitor ? <button className="proxy-focused-pill" type="button" onClick={onProgramMonitor}>➕ Program</button> : null}
           {onDetailsToggle ? <button className="proxy-focused-pill" type="button" onClick={onDetailsToggle}>{detailsOpen ? 'Hide details' : 'Show details'}</button> : null}
         </div>
+        {detailsOpen ? (
+          <div className="proxy-focused-details-panel preview-interactive">
+            <div className="proxy-focused-chip-row">
+              {(asset.quick.length ? asset.quick : [['Duration', fmtTime(asset.duration || 0)]])
+                .concat(metadataRows)
+                .map(([label, value], idx) => (
+                  <span className="proxy-focused-chip" key={`${label}:${value}:${idx}`}>{label}: {value}</span>
+                ))}
+            </div>
+            <div className="proxy-focused-detail-actions">
+              {onDelete ? <button className="proxy-focused-pill danger" type="button" onClick={onDelete}>🗑 Delete</button> : null}
+              {onTag ? <button className="proxy-focused-pill" type="button" onClick={onTag}>🏷 Tag</button> : null}
+              {onObs ? <button className="proxy-focused-pill" type="button" onClick={onObs}>📺 OBS</button> : null}
+              {showResolve && onResolve ? <button className="proxy-focused-pill" type="button" onClick={onResolve}>⇢ Resolve</button> : null}
+              {showProgramMonitor && onProgramMonitor ? <button className="proxy-focused-pill" type="button" onClick={onProgramMonitor}>➕ Program</button> : null}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

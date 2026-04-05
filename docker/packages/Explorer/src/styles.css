@@ -1091,11 +1091,10 @@ select.control{
 }
 .proxy-focused-chip-row{
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  margin-bottom: 8px;
+  overflow: hidden;
   max-width: 100%;
 }
 .proxy-focused-chip{
@@ -1122,22 +1121,38 @@ select.control{
 }
 .proxy-focused-control-row{
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
   pointer-events: auto;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: hidden;
   margin-top: 4px;
   max-width: 100%;
 }
 .proxy-focused-transport-row{
   display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
-  pointer-events: auto;
   margin-bottom: 4px;
   max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: hidden;
+}
+.proxy-focused-player-core{
+  pointer-events: auto;
+}
+.proxy-focused-details-panel{
+  margin-top: 6px;
+  border-top: 1px solid rgba(156, 178, 227, 0.25);
+  padding-top: 7px;
+  max-height: min(44%, 220px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.proxy-focused-detail-actions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: auto;
 }
 .proxy-focused-pill{
   border: 1px solid rgba(171, 189, 233, 0.36);
@@ -1442,6 +1457,10 @@ select.control{
   transition:
     opacity var(--overlay-fade-duration) var(--overlay-fade-ease),
     transform var(--overlay-fade-duration) var(--overlay-fade-ease);
+}
+.content.overlay-hidden .asset .asset-overlay{
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 .content.density-overlay-out .asset .asset-ol-bottom,
 .content.density-overlay-out .asset .asset-ol-bl,
