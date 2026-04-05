@@ -3400,6 +3400,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           reason: string;
           selectionKey: string;
           paused: boolean;
+          muted: boolean;
           currentTime: number;
           duration: number;
           readyState: number;
@@ -3414,6 +3415,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         reason,
         selectionKey: proxySelectionKey,
         paused: proxyVideo.paused,
+        muted: proxyVideo.muted,
         currentTime: Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0,
         duration: Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0,
         readyState: proxyVideo.readyState,
@@ -3455,7 +3457,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     };
 
-    proxyVideo.muted = true;
+    const setProxyMuted = (muted: boolean) => {
+      proxyVideo.muted = muted;
+      proxyVideo.defaultMuted = muted;
+    };
+
+    setProxyMuted(true);
     proxyVideo.playsInline = true;
     proxyVideo.preload = 'auto';
     if (proxyPreviewVisible) {
@@ -3495,6 +3502,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           pauseGridThumbForSelectionKey(proxySelectionKey);
           yieldedGridOwner = true;
         }
+        setProxyMuted(false);
         if (hasMatchingHandoff) {
           previewPlaybackHandoffRef.current = null;
         }
@@ -3520,6 +3528,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
       return () => {
         cleanupAutoplay();
+        setProxyMuted(true);
+        proxyVideo.pause();
         if (pendingHandoffTime == null && hasMatchingHandoff) {
           previewPlaybackHandoffRef.current = null;
         }
@@ -3535,6 +3545,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
 
     syncFromVideo('inactive-mount');
+    setProxyMuted(true);
     const onPlay = () => syncFromVideo('inactive-play');
     const onPause = () => syncFromVideo('inactive-pause');
     const onTimeUpdate = () => syncFromVideo('inactive-timeupdate');
@@ -3568,7 +3579,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const handleProxyTogglePlay = useCallback(() => {
     const proxyVideo = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
     if (!proxyVideo) return;
-    if (proxyVideo.paused) proxyVideo.play().catch(() => {});
+    if (proxyVideo.paused) {
+      proxyVideo.muted = false;
+      proxyVideo.defaultMuted = false;
+      proxyVideo.play().catch(() => {});
+    }
     else proxyVideo.pause();
   }, [activeProxyCardEl]);
   const handleProxySkipBack = useCallback(() => {

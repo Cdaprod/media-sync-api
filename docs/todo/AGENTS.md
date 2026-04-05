@@ -1,3 +1,11 @@
+## 2026-04-05 — Focused proxy audio ownership split (active)
+- [x] Kept thumbnail/grid continuity path muted by default (`setProxyMuted(true)` on bootstrap/inactive lanes) so non-focused video surfaces remain silent.
+- [x] Promoted focused proxy to audio owner only after readiness/ownership handoff (`onPlaying` after thumbnail pause/yield), then unmuted focused proxy media.
+- [x] Hardened close/refocus cleanup to stop and re-mute prior focused proxy owners (`pause()` + mute reset) to prevent overlapping audio across transitions.
+- [x] Added focused playback debug `muted` signal to `__explorerProxyPlaybackDebug` for device-side verification of mute/unmute ownership timing.
+- [ ] Device-verify iOS Safari behavior: focused proxy opens muted during bootstrap, then plays audible audio after settle/playing ownership (or first explicit play tap if autoplay policy gates unmuted playback).
+- [ ] Capture runtime proof showing no thumbnail audio, no dual audio owners, and focused owner mute state transitions (`muted:true -> muted:false`) across open/pause/close/refocus.
+
 ## 2026-04-05 — Proxy focused media-source authority + hard poster cutoff (active)
 - [x] Root-caused focused proxy static-frame behavior to media source authority drift: proxy card snapshot consumed raw `item.stream_url` while playback/details path used resolved API-base URLs, allowing focused proxy video to bind an invalid relative source in split-origin sessions.
 - [x] Added resolved per-item `streamUrl` to Explorer asset view models and switched grid card `data-stream-url` ownership to that resolved URL so `SceneSnapshot -> ViewportProxyRenderer` receives the same valid stream source as focused preview metadata/actions.

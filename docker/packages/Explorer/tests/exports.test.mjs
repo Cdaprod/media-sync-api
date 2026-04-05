@@ -274,7 +274,11 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {'));
   assert.ok(explorer.includes('previewPlaybackHandoffRef.current = {'));
   assert.ok(explorer.includes('const tryApplyHandoffTime = () => {'));
+  assert.ok(explorer.includes('const setProxyMuted = (muted: boolean) => {'));
+  assert.ok(explorer.includes('setProxyMuted(true);'));
   assert.ok(explorer.includes('proxyVideo.currentTime = Math.max(0, target);'));
+  assert.ok(explorer.includes('setProxyMuted(false);'));
+  assert.ok(explorer.includes('proxyVideo.pause();'));
   assert.ok(explorer.includes('pauseGridThumbForSelectionKey(proxySelectionKey);'));
   assert.ok(list.includes('data-no-preview="1"'));
   assert.ok(grid.includes('is-active-reinforced'));
