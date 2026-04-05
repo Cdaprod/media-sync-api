@@ -954,13 +954,15 @@ select.control{
   opacity: 0;
   transition: opacity 120ms ease;
 }
-.proxy-render-card[data-video-ready="true"] .proxy-render-poster{
+.proxy-render-card[data-video-ready="true"] .proxy-render-poster,
+.proxy-render-card[data-first-frame-presented="true"] .proxy-render-poster{
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   z-index: -1;
 }
-.proxy-render-card[data-video-ready="true"] .proxy-render-video{
+.proxy-render-card[data-video-ready="true"] .proxy-render-video,
+.proxy-render-card[data-first-frame-presented="true"] .proxy-render-video{
   opacity: 1;
   z-index: 2;
 }
@@ -972,7 +974,8 @@ select.control{
   z-index: 2;
   opacity: 1;
 }
-.proxy-render-card[data-video-ready="true"] .proxy-render-scrim{
+.proxy-render-card[data-video-ready="true"] .proxy-render-scrim,
+.proxy-render-card[data-first-frame-presented="true"] .proxy-render-scrim{
   opacity: 0;
 }
 .proxy-render-ui-slot{

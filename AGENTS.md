@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-05)
+- Repaired focused proxy stream-source authority in `ExplorerApp` by deriving a dedicated `proxyAsset`/`proxyStreamUrl` from the active proxy selection + renderer dataset/video source fallback chain.
+- `useVideoOwnershipHandoff` now receives the active proxy stream URL (`proxyStreamUrl`) instead of relying only on focused drawer normalization, preventing empty-stream short-circuiting during focused proxy ownership.
+- Proxy renderer now mirrors active media source on dataset (`data-stream-url`) and first-frame CSS gating also honors `data-first-frame-presented="true"` to hide poster/scrim only after frame-promotion truth is available.
+
+### Latest Implementation Notes (2026-04-05)
 - Updated `useVideoOwnershipHandoff` focused-open priming to always attempt muted `load() + play()` startup and removed promotion start gating on `wasPlayingBeforeHandoff`.
 - Added explicit promotion fallback lanes (`loadeddata-fallback`, `canplay-fallback`, `playing-fallback`, `immediate-readiness-fallback`) so poster ownership can promote even when RVFC readiness does not resolve in Safari-like runtimes.
 - Extended focused handoff debug telemetry with stall diagnostics (`playRequested`, `playPromiseRejected`, `loadedMetadataSeen`, `loadedDataSeen`, `canPlaySeen`, `playingSeen`, `promotionBlockedReason`) for runtime failure triage.

@@ -221,11 +221,15 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const handoffHookPath = path.join(packageRoot, 'src', 'hooks', 'useVideoOwnershipHandoff.ts');
+  const proxyRendererPath = path.join(packageRoot, 'src', 'render', 'ViewportProxyRenderer.ts');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const handoffHookContent = fs.readFileSync(handoffHookPath, 'utf8');
+  const proxyRenderer = fs.readFileSync(proxyRendererPath, 'utf8');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
   const list = fs.readFileSync(listPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(hookContent.includes('lastTileTapRef'));
   assert.ok(hookContent.includes('const isSecondTap = prevTap.key === itemKey'));
   assert.ok(hookContent.includes('focusAsset(item, itemKey);'));
@@ -282,12 +286,21 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes("className=\"proxy-prewarm-video\""));
   assert.ok(explorer.includes('useVideoOwnershipHandoff({'));
   assert.ok(explorer.includes('const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;'));
+  assert.ok(explorer.includes('const proxyAsset = useMemo(() => {'));
+  assert.ok(explorer.includes('const proxyStreamUrl = useMemo(() => {'));
+  assert.ok(explorer.includes("const datasetStream = activeProxyCardEl?.dataset.streamUrl || activeProxyVideoEl?.dataset.streamUrl || '';"));
+  assert.ok(explorer.includes("const elementSrc = activeProxyVideoEl?.currentSrc || activeProxyVideoEl?.src || '';"));
   assert.ok(explorer.includes('onHandoffConsumed: () => {'));
   assert.ok(explorer.includes('onPromoted: () => {'));
   assert.ok(explorer.includes('pauseGridThumbForSelectionKey(activeProxySelectionKey);'));
-  assert.ok(explorer.includes("activeProxyCardEl.dataset.videoReady = proxyVideoReady ? 'true' : 'false';"));
+  assert.ok(explorer.includes('streamUrl: proxyStreamUrl,'));
+  assert.ok(explorer.includes('streamUrl: proxyStreamUrl,'));
+  assert.ok(explorer.includes("activeProxyCardEl.dataset.videoReady = (proxyVideoReady || proxyFirstFramePresented) ? 'true' : 'false';"));
   assert.ok(explorer.includes("activeProxyCardEl.dataset.firstFramePresented = proxyFirstFramePresented ? 'true' : 'false';"));
   assert.ok(explorer.includes('activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;'));
+  assert.ok(explorer.includes('activeProxyCardEl.dataset.streamUrl = proxyStreamUrl;'));
+  assert.ok(proxyRenderer.includes("activeCardEl.dataset.streamUrl = card.mediaUrl || '';"));
+  assert.ok(proxyRenderer.includes('videoEl.dataset.streamUrl = card.mediaUrl;'));
   assert.ok(handoffHookContent.includes('playRequested: boolean;'));
   assert.ok(handoffHookContent.includes('playPromiseRejected: boolean;'));
   assert.ok(handoffHookContent.includes('loadedMetadataSeen: boolean;'));
@@ -304,6 +317,9 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(list.includes('data-no-preview="1"'));
   assert.ok(grid.includes('is-active-reinforced'));
   assert.ok(grid.includes('is-hold-emphasis'));
+  assert.ok(styles.includes('.proxy-render-card[data-first-frame-presented=\"true\"] .proxy-render-poster'));
+  assert.ok(styles.includes('.proxy-render-card[data-first-frame-presented=\"true\"] .proxy-render-video'));
+  assert.ok(styles.includes('.proxy-render-card[data-first-frame-presented=\"true\"] .proxy-render-scrim'));
 });
 
 test('topbar interaction boundaries protect header controls and nearby asset selectors', () => {

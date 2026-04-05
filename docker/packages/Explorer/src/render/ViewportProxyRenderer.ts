@@ -153,6 +153,7 @@ export class ViewportProxyRenderer {
     activeCardEl.dataset.selectKey = card.selectionKey;
     activeCardEl.dataset.proxyActive = 'true';
     activeCardEl.dataset.proxyMediaBranch = mediaBranch;
+    activeCardEl.dataset.streamUrl = card.mediaUrl || '';
     activeCardEl.style.left = `${card.rect.left}px`;
     activeCardEl.style.top = `${card.rect.top}px`;
     activeCardEl.style.width = `${card.rect.width}px`;
@@ -180,6 +181,7 @@ export class ViewportProxyRenderer {
       if (videoEl.src !== card.mediaUrl) {
         videoEl.src = card.mediaUrl;
       }
+      videoEl.dataset.streamUrl = card.mediaUrl;
       this.activeVideoEl = videoEl;
 
       let posterEl = this.activePosterEl;

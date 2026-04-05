@@ -3453,6 +3453,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const activeProxyVideoEl = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
   const activeProxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
   const activeProxyMediaBranch = activeProxyCardEl?.dataset.proxyMediaBranch || '';
+  const proxyAsset = useMemo(() => {
+    if (activeProxySelectionKey) {
+      const proxyItem = itemsBySelectionKey.get(activeProxySelectionKey);
+      if (proxyItem) return normalizePreviewAsset(proxyItem, resolveAssetUrl);
+    }
+    return normalizedPreviewAsset;
+  }, [activeProxySelectionKey, itemsBySelectionKey, normalizedPreviewAsset, resolveAssetUrl]);
+  const proxyStreamUrl = useMemo(() => {
+    const datasetStream = activeProxyCardEl?.dataset.streamUrl || activeProxyVideoEl?.dataset.streamUrl || '';
+    const elementSrc = activeProxyVideoEl?.currentSrc || activeProxyVideoEl?.src || '';
+    return datasetStream || elementSrc || proxyAsset?.streamUrl || '';
+  }, [activeProxyCardEl, activeProxyVideoEl, proxyAsset]);
   const handoff = previewPlaybackHandoffRef.current;
   const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === activeProxySelectionKey);
   const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;
@@ -3463,7 +3475,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     promotionStrategy: proxyPromotionStrategy,
   } = useVideoOwnershipHandoff({
     selectionKey: activeProxySelectionKey,
-    streamUrl: normalizedPreviewAsset?.streamUrl || '',
+    streamUrl: proxyStreamUrl,
     isFocusedOpen: proxyPreviewVisible,
     shouldPlay: proxyPreviewVisible,
     enableFocusedAudio: true,
@@ -3487,6 +3499,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         __explorerProxyPlaybackDebug?: Record<string, unknown>;
       }).__explorerProxyPlaybackDebug = {
         ...entry,
+        streamUrl: proxyStreamUrl,
         prewarmSelectionKey: proxyPrewarmSelectionKeyRef.current || '',
         prewarmUrl: proxyPrewarmUrlRef.current || '',
         prewarmReadyState: proxyPrewarmReadyStateRef.current || 0,
@@ -3495,10 +3508,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   });
   useEffect(() => {
     if (!activeProxyCardEl) return;
-    activeProxyCardEl.dataset.videoReady = proxyVideoReady ? 'true' : 'false';
+    activeProxyCardEl.dataset.videoReady = (proxyVideoReady || proxyFirstFramePresented) ? 'true' : 'false';
     activeProxyCardEl.dataset.firstFramePresented = proxyFirstFramePresented ? 'true' : 'false';
     activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;
-  }, [activeProxyCardEl, proxyFirstFramePresented, proxyPromotionStrategy, proxyVideoReady]);
+    activeProxyCardEl.dataset.streamUrl = proxyStreamUrl;
+  }, [activeProxyCardEl, proxyFirstFramePresented, proxyPromotionStrategy, proxyStreamUrl, proxyVideoReady]);
   useEffect(() => {
     setProxyPlaybackPlaying(proxyPlaybackState.isPlaying);
     setProxyPlaybackCurrentTime(proxyPlaybackState.currentTime);
