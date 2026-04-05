@@ -1,4 +1,8 @@
 ### Latest Implementation Notes (2026-04-05)
+- Fixed a focused playback runtime crash in `ExplorerApp` by replacing an undefined `proxyAsset` reference with `normalizedPreviewAsset` when wiring `useVideoOwnershipHandoff` stream URL input.
+- This restores hook initialization safety under normal render paths and prevents `ReferenceError: Can't find variable: proxyAsset` in preview open flows.
+
+### Latest Implementation Notes (2026-04-05)
 - Refactored `ViewportProxyRenderer` into ambient + active layers so render passes no longer rebuild/destroy the active proxy media subtree.
 - Added selection-key reconciliation for active cards to preserve active `<video>` node identity across open/refocus/settle when the focused key is unchanged.
 - Added runtime persistence diagnostics via `window.__explorerProxyRendererDebug` (`activeVideoNodeStableId`, `activeNodeReused`, `activeMediaRecreated`, `renderPassCount`).

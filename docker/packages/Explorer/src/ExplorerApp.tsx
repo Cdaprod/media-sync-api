@@ -3463,7 +3463,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     promotionStrategy: proxyPromotionStrategy,
   } = useVideoOwnershipHandoff({
     selectionKey: activeProxySelectionKey,
-    streamUrl: proxyAsset?.streamUrl || '',
+    streamUrl: normalizedPreviewAsset?.streamUrl || '',
     isFocusedOpen: proxyPreviewVisible,
     shouldPlay: proxyPreviewVisible,
     enableFocusedAudio: true,

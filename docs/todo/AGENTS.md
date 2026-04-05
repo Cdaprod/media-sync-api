@@ -1,3 +1,8 @@
+## 2026-04-05 — ExplorerApp hook wiring runtime crash fix (active)
+- [x] Fixed undefined `proxyAsset` symbol in focused handoff hook wiring by using `normalizedPreviewAsset?.streamUrl` as the stream URL authority.
+- [x] Restored focused preview render stability by removing `ReferenceError: Can't find variable: proxyAsset` from `ExplorerApp` runtime path.
+- [ ] Device-verify focused open/refocus path no longer crashes and still preserves first-frame ownership gating behavior.
+
 ## 2026-04-05 — Proxy renderer active-node persistence pass (active)
 - [x] Refactored `ViewportProxyRenderer` to use split world layers (`proxy-render-ambient-layer` + `proxy-render-active-layer`) so active media no longer depends on full `world.innerHTML` rewrites.
 - [x] Added active-card reconciliation by `selectionKey` to reuse the same active media subtree (especially `.proxy-render-video`) across render passes when selection is unchanged.
