@@ -63,6 +63,7 @@ import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
 import { FocusTransitionOrchestrator } from './render/FocusTransitionOrchestrator';
+import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -3449,198 +3450,60 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     rafId = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(rafId);
   }, [proxyPreviewVisible]);
-  useEffect(() => {
-    const proxyVideo = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
-    if (!proxyVideo) {
-      setProxyPlaybackPlaying(false);
-      setProxyPlaybackCurrentTime(0);
-      setProxyPlaybackDuration(0);
-      return;
-    }
-
-    const proxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
-    if (activeProxyCardEl) activeProxyCardEl.dataset.videoReady = 'false';
-    const handoff = previewPlaybackHandoffRef.current;
-    const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === proxySelectionKey);
-    let pendingHandoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;
-    let sawTimeProgress = false;
-    let yieldedGridOwner = false;
-
-    const publishPlaybackDebug = (reason: string) => {
+  const activeProxyVideoEl = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
+  const activeProxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
+  const activeProxyMediaBranch = activeProxyCardEl?.dataset.proxyMediaBranch || '';
+  const handoff = previewPlaybackHandoffRef.current;
+  const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === activeProxySelectionKey);
+  const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;
+  const {
+    videoReady: proxyVideoReady,
+    firstFramePresented: proxyFirstFramePresented,
+    playbackState: proxyPlaybackState,
+    promotionStrategy: proxyPromotionStrategy,
+  } = useVideoOwnershipHandoff({
+    selectionKey: activeProxySelectionKey,
+    streamUrl: proxyAsset?.streamUrl || '',
+    isFocusedOpen: proxyPreviewVisible,
+    shouldPlay: proxyPreviewVisible,
+    enableFocusedAudio: true,
+    proxyVideoEl: activeProxyVideoEl,
+    mediaBranch: activeProxyMediaBranch,
+    handoffTime,
+    wasPlayingBeforeHandoff: hasMatchingHandoff ? Boolean(handoff?.wasPlaying) : true,
+    playToken: previewAutoPlayToken,
+    onHandoffConsumed: () => {
+      if (hasMatchingHandoff) {
+        previewPlaybackHandoffRef.current = null;
+      }
+    },
+    onPromoted: () => {
+      if (activeProxySelectionKey) {
+        pauseGridThumbForSelectionKey(activeProxySelectionKey);
+      }
+    },
+    onDebug: (entry) => {
       (globalThis as typeof globalThis & {
-        __explorerProxyPlaybackDebug?: {
-          reason: string;
-          selectionKey: string;
-          paused: boolean;
-          muted: boolean;
-          currentTime: number;
-          duration: number;
-          readyState: number;
-          networkState: number;
-          ended: boolean;
-          currentSrc: string;
-          mediaBranch: string;
-          prewarmSelectionKey: string;
-          prewarmUrl: string;
-          prewarmReadyState: number;
-          sawTimeProgress: boolean;
-          pendingHandoffTime: number | null;
-        };
+        __explorerProxyPlaybackDebug?: Record<string, unknown>;
       }).__explorerProxyPlaybackDebug = {
-        reason,
-        selectionKey: proxySelectionKey,
-        paused: proxyVideo.paused,
-        muted: proxyVideo.muted,
-        currentTime: Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0,
-        duration: Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0,
-        readyState: proxyVideo.readyState,
-        networkState: proxyVideo.networkState,
-        ended: proxyVideo.ended,
-        currentSrc: proxyVideo.currentSrc || proxyVideo.src || '',
-        mediaBranch: activeProxyCardEl?.dataset.proxyMediaBranch || '',
+        ...entry,
         prewarmSelectionKey: proxyPrewarmSelectionKeyRef.current || '',
         prewarmUrl: proxyPrewarmUrlRef.current || '',
         prewarmReadyState: proxyPrewarmReadyStateRef.current || 0,
-        sawTimeProgress,
-        pendingHandoffTime,
       };
-    };
-
-    const syncFromVideo = (reason: string) => {
-      const currentTime = Number.isFinite(proxyVideo.currentTime) ? proxyVideo.currentTime : 0;
-      const duration = Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0;
-      const hasProgress = currentTime > 0.04;
-      if (hasProgress) {
-        sawTimeProgress = true;
-      }
-      const isActuallyPlaying = !proxyVideo.paused && proxyVideo.readyState >= 2 && (sawTimeProgress || hasProgress);
-      setProxyPlaybackPlaying(isActuallyPlaying);
-      setProxyPlaybackCurrentTime(currentTime);
-      setProxyPlaybackDuration(duration);
-      publishPlaybackDebug(reason);
-    };
-
-    const tryApplyHandoffTime = () => {
-      if (pendingHandoffTime == null) return;
-      if (proxyVideo.readyState < 1) return;
-      const duration = Number.isFinite(proxyVideo.duration) ? proxyVideo.duration : 0;
-      const target = duration > 0
-        ? Math.min(pendingHandoffTime, Math.max(0, duration - 0.04))
-        : pendingHandoffTime;
-      try {
-        proxyVideo.currentTime = Math.max(0, target);
-        pendingHandoffTime = null;
-      } catch {
-        // Ignore early seek failure; we'll retry on next readiness event.
-      }
-    };
-
-    const setProxyMuted = (muted: boolean) => {
-      proxyVideo.muted = muted;
-      proxyVideo.defaultMuted = muted;
-    };
-
-    setProxyMuted(true);
-    proxyVideo.playsInline = true;
-    proxyVideo.preload = 'auto';
-    if (proxyPreviewVisible) {
-      const requestPlay = () => {
-        proxyVideo.play().catch(() => {
-          // Safari may still gate autoplay in edge cases; keep muted + playsInline state
-        });
-      };
-      tryApplyHandoffTime();
-      if (hasMatchingHandoff ? Boolean(handoff?.wasPlaying) : true) {
-        requestPlay();
-      }
-      const deferred = window.setTimeout(requestPlay, 80);
-      const onCanPlay = () => {
-        tryApplyHandoffTime();
-        requestPlay();
-        syncFromVideo('canplay');
-      };
-      proxyVideo.addEventListener('canplay', onCanPlay, { once: true });
-      proxyVideo.addEventListener('loadeddata', onCanPlay, { once: true });
-      const cleanupAutoplay = () => {
-        window.clearTimeout(deferred);
-        proxyVideo.removeEventListener('canplay', onCanPlay);
-        proxyVideo.removeEventListener('loadeddata', onCanPlay);
-      };
-      syncFromVideo('mount');
-      const onPlay = () => syncFromVideo('play');
-      const onPause = () => syncFromVideo('pause');
-      const onTimeUpdate = () => syncFromVideo('timeupdate');
-      const onLoadedMetadata = () => {
-        tryApplyHandoffTime();
-        syncFromVideo('loadedmetadata');
-      };
-      const onPlaying = () => {
-        if (activeProxyCardEl) activeProxyCardEl.dataset.videoReady = 'true';
-        if (proxySelectionKey && !yieldedGridOwner) {
-          pauseGridThumbForSelectionKey(proxySelectionKey);
-          yieldedGridOwner = true;
-        }
-        setProxyMuted(false);
-        if (hasMatchingHandoff) {
-          previewPlaybackHandoffRef.current = null;
-        }
-        syncFromVideo('playing');
-      };
-      const onLoadedData = () => {
-        if (proxyVideo.readyState >= 2 && activeProxyCardEl) {
-          activeProxyCardEl.dataset.videoReady = 'true';
-        }
-        syncFromVideo('loadeddata');
-      };
-      const onWaiting = () => syncFromVideo('waiting');
-      const onStalled = () => syncFromVideo('stalled');
-
-      proxyVideo.addEventListener('play', onPlay);
-      proxyVideo.addEventListener('pause', onPause);
-      proxyVideo.addEventListener('timeupdate', onTimeUpdate);
-      proxyVideo.addEventListener('loadedmetadata', onLoadedMetadata);
-      proxyVideo.addEventListener('loadeddata', onLoadedData);
-      proxyVideo.addEventListener('playing', onPlaying);
-      proxyVideo.addEventListener('waiting', onWaiting);
-      proxyVideo.addEventListener('stalled', onStalled);
-
-      return () => {
-        cleanupAutoplay();
-        setProxyMuted(true);
-        proxyVideo.pause();
-        if (pendingHandoffTime == null && hasMatchingHandoff) {
-          previewPlaybackHandoffRef.current = null;
-        }
-        proxyVideo.removeEventListener('play', onPlay);
-        proxyVideo.removeEventListener('pause', onPause);
-        proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
-        proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
-        proxyVideo.removeEventListener('loadeddata', onLoadedData);
-        proxyVideo.removeEventListener('playing', onPlaying);
-        proxyVideo.removeEventListener('waiting', onWaiting);
-        proxyVideo.removeEventListener('stalled', onStalled);
-      };
-    }
-
-    syncFromVideo('inactive-mount');
-    setProxyMuted(true);
-    const onPlay = () => syncFromVideo('inactive-play');
-    const onPause = () => syncFromVideo('inactive-pause');
-    const onTimeUpdate = () => syncFromVideo('inactive-timeupdate');
-    const onLoadedMetadata = () => syncFromVideo('inactive-loadedmetadata');
-
-    proxyVideo.addEventListener('play', onPlay);
-    proxyVideo.addEventListener('pause', onPause);
-    proxyVideo.addEventListener('timeupdate', onTimeUpdate);
-    proxyVideo.addEventListener('loadedmetadata', onLoadedMetadata);
-
-    return () => {
-      proxyVideo.removeEventListener('play', onPlay);
-      proxyVideo.removeEventListener('pause', onPause);
-      proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
-      proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
-    };
-  }, [activeProxyCardEl, pauseGridThumbForSelectionKey, proxyPreviewVisible, previewAutoPlayToken]);
+    },
+  });
+  useEffect(() => {
+    if (!activeProxyCardEl) return;
+    activeProxyCardEl.dataset.videoReady = proxyVideoReady ? 'true' : 'false';
+    activeProxyCardEl.dataset.firstFramePresented = proxyFirstFramePresented ? 'true' : 'false';
+    activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;
+  }, [activeProxyCardEl, proxyFirstFramePresented, proxyPromotionStrategy, proxyVideoReady]);
+  useEffect(() => {
+    setProxyPlaybackPlaying(proxyPlaybackState.isPlaying);
+    setProxyPlaybackCurrentTime(proxyPlaybackState.currentTime);
+    setProxyPlaybackDuration(proxyPlaybackState.duration);
+  }, [proxyPlaybackState.currentTime, proxyPlaybackState.duration, proxyPlaybackState.isPlaying]);
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible

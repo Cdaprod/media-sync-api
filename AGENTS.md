@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-04-05)
+- Added a dedicated focused video ownership handoff hook (`useVideoOwnershipHandoff`) to keep poster ownership active until a strict first-frame-ready gate passes.
+- Added `awaitFirstVideoFrame(...)` utility under `docker/packages/Explorer/src/utils/` with RVFC-first readiness and fallback `readyState/currentTime/rAF` strategy to avoid reveal-time blank planes.
+- Explorer proxy playback debug now reports frame-promotion diagnostics (`videoReady`, `firstFramePresented`, `promotionStrategy`) alongside media branch and playback metrics.
+
 ### Latest Implementation Notes (2026-04-03)
 - Added explicit grid cinematic focus-state machine lane in `ExplorerApp` (`grid-rest`, `grid-opening`, `grid-focused`, `grid-refocusing`, `grid-closing`) so overlay/chrome visibility and ownership are tied to settled focused state instead of open intent.
 - Grid focused interaction arbitration now distinguishes pointer hits on assets vs non-asset space: non-asset clicks trigger close travel to rest, while different-asset clicks route to proxy refocus travel.

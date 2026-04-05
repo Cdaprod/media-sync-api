@@ -1,3 +1,11 @@
+## 2026-04-05 — Focused proxy first-frame promotion gate (active)
+- [x] Added a dedicated ownership handoff hook (`useVideoOwnershipHandoff`) so focused proxy reveal is gated by first-frame readiness instead of metadata/canplay-only signals.
+- [x] Added `awaitFirstVideoFrame(...)` utility with `requestVideoFrameCallback`-first strategy plus fallback (`readyState/currentTime/rAF`) and timeout handling.
+- [x] Kept poster/placeholder visual ownership until first frame is presentation-ready (`data-video-ready="true"` only after first-frame confirmation), preventing blank promoted planes.
+- [x] Extended proxy playback diagnostics with explicit frame readiness signals (`videoReady`, `firstFramePresented`, `promotionStrategy`, `mediaBranch`, `readyState`, `currentTime`, `duration`).
+- [ ] Device-verify on iOS Safari that focused open no longer exhibits `video -> blank -> video` and remains continuous from thumbnail/poster into live proxy.
+- [ ] Capture one runtime debug sample (`window.__explorerProxyPlaybackDebug`) showing `firstFramePresented:true` before poster hide and `promotionStrategy:"rvfc"` or fallback path as expected.
+
 ## 2026-04-05 — Focused proxy prewarm lane for likely-open assets (active)
 - [x] Added a dedicated hidden proxy prewarm surface (`.proxy-prewarm-video`) in `ExplorerApp` to pre-attach likely focused video sources before focus-open settle.
 - [x] Introduced explicit likely-open targeting (`reinforcedActiveKey -> previewActivationKey -> activeAssetKey`) with resolved stream URL authority so prewarm and focused owners use the same canonical media source.
