@@ -313,6 +313,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("tryFallbackPromote('loadeddata-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('canplay-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('playing-fallback');"));
+  assert.ok(handoffHookContent.includes("tryFallbackPromote('timeupdate-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('immediate-readiness-fallback');"));
   assert.ok(handoffHookContent.includes('const shouldStartPlayback = shouldPlay;'));
   assert.ok(handoffHookContent.includes('proxyVideoEl.load();'));
@@ -1178,6 +1179,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('metadataRows={previewMetadataRows}'));
   assert.ok(content.includes('playToken: previewAutoPlayToken,'));
   assert.ok(content.includes("if (target.closest('.proxy-preview-ui')) return;"));
+  assert.ok(content.includes('if (nextKey === activeAssetKey) {'));
+  assert.ok(content.includes('handleProxyTogglePlay();'));
   assert.ok(content.includes('className="proxy-preview-ui"'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
   assert.ok(content.includes("'--focus-world-origin-y': `${focusWorldTransform.originY}%`"));

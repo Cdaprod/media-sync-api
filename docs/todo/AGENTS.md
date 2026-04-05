@@ -1,3 +1,11 @@
+## 2026-04-05 — Focused proxy tap play/pause + timeupdate promotion recovery (active)
+- [x] Added active-card tap playback toggle in proxy root pointer handler (`handleProxyTogglePlay`) for focused cinematic preview media surface.
+- [x] Preserved interaction arbitration so preview UI controls/buttons remain interactive and non-media taps keep existing close/refocus behavior.
+- [x] Added `timeupdate-fallback` promotion lane in `useVideoOwnershipHandoff` to promote from poster when playback progresses but earlier readiness events were missed.
+- [x] Updated static regression assertions for active-card tap toggle and `timeupdate-fallback` marker.
+- [ ] Device-verify focused preview now play/pause toggles on direct media tap and timeline advances from `0:00` on iOS Safari.
+- [ ] Capture one runtime sample with `firstFramePresented:true` and either `promotionStrategy != "none"` or `reason:"timeupdate-fallback"` during focused open.
+
 ## 2026-04-05 — Focused proxy still-frame absolute-stream + early-event capture fix (active)
 - [x] Added `absolutizeMediaUrl(...)` in `ExplorerApp` and routed proxy prewarm/grid stream URLs through canonical absolute API URL resolution with `:8787` LAN fallback.
 - [x] Fixed focused proxy stream fallback chain to use `proxyAsset?.src` (from `normalizePreviewAsset`) instead of missing `proxyAsset?.streamUrl` field.

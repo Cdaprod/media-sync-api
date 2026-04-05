@@ -1802,7 +1802,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return;
       }
       const nextKey = cardEl.dataset.selectionKey || '';
-      if (!nextKey || nextKey === activeAssetKey) return;
+      if (!nextKey) return;
+      if (nextKey === activeAssetKey) {
+        if (isInteractiveTarget(target)) return;
+        event.preventDefault();
+        handleProxyTogglePlay();
+        return;
+      }
       const nextItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === nextKey);
       if (!nextItem) return;
       event.preventDefault();
@@ -1810,7 +1816,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
     proxyRoot.addEventListener('pointerdown', handleProxyPointerDown, true);
     return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
-  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusRelative, gridCinematicMode, inspectorOpen, openPreview, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusRelative, gridCinematicMode, handleProxyTogglePlay, inspectorOpen, openPreview, view]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;

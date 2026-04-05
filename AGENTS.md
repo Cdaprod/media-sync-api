@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-05)
+- Added focused proxy tap-to-toggle playback in `ExplorerApp` proxy-root pointer handling: tapping the active proxy media surface now routes to `handleProxyTogglePlay()` while preserving existing interactive-control guards.
+- Added a `timeupdate-fallback` promotion lane in `useVideoOwnershipHandoff` so first-frame promotion can recover when earlier readiness events are missed but playback time is advancing.
+- This resolves focused-preview stuck-poster/still-frame behavior while restoring expected tap play/pause semantics on mobile Safari.
+
+### Latest Implementation Notes (2026-04-05)
 - Fixed focused proxy video still-frame regression on LAN/mobile hosts by canonicalizing proxy/grid stream URLs to absolute API-backed URLs (`resolvedApiBase` with `:8787` fallback) before renderer/handoff use.
 - Corrected focused proxy stream fallback to use `proxyAsset?.src` (preview adapter output) instead of non-existent `streamUrl`, preventing empty stream fallback chains.
 - Reordered `useVideoOwnershipHandoff` event listener attachment to occur before `load()/play()` priming so fast `loadeddata/canplay/play` events cannot be missed during focused-open promotion.

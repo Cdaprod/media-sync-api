@@ -318,7 +318,10 @@ export function useVideoOwnershipHandoff({
       syncPlaybackState('play');
     };
     const onPause = () => syncPlaybackState('pause');
-    const onTimeUpdate = () => syncPlaybackState('timeupdate');
+    const onTimeUpdate = () => {
+      tryFallbackPromote('timeupdate-fallback');
+      syncPlaybackState('timeupdate');
+    };
     const onWaiting = () => syncPlaybackState('waiting');
     const onStalled = () => syncPlaybackState('stalled');
 
