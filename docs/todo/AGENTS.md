@@ -1,3 +1,12 @@
+## 2026-04-05 — Proxy renderer active-node persistence pass (active)
+- [x] Refactored `ViewportProxyRenderer` to use split world layers (`proxy-render-ambient-layer` + `proxy-render-active-layer`) so active media no longer depends on full `world.innerHTML` rewrites.
+- [x] Added active-card reconciliation by `selectionKey` to reuse the same active media subtree (especially `.proxy-render-video`) across render passes when selection is unchanged.
+- [x] Limited active-card updates to in-place mutations (geometry styles/datasets/chrome markers/media src sync) and recreate media nodes only on selection/branch changes.
+- [x] Added renderer persistence diagnostics via `window.__explorerProxyRendererDebug` (`activeSelectionKey`, `activeVideoNodeStableId`, `renderPassCount`, `activeNodeReused`, `activeMediaRecreated`).
+- [x] Updated static regression contracts to assert the new persistent-render architecture and diagnostics markers.
+- [ ] Device-verify open/refocus with unchanged selection keeps stable `activeVideoNodeStableId` and `activeMediaRecreated:false` after initial mount.
+- [ ] Capture one runtime sample showing no `thumbnail -> blank -> video` interval after renderer persistence pass.
+
 ## 2026-04-05 — Focused proxy first-frame promotion gate (active)
 - [x] Added a dedicated ownership handoff hook (`useVideoOwnershipHandoff`) so focused proxy reveal is gated by first-frame readiness instead of metadata/canplay-only signals.
 - [x] Added `awaitFirstVideoFrame(...)` utility with `requestVideoFrameCallback`-first strategy plus fallback (`readyState/currentTime/rAF`) and timeout handling.

@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-05)
+- Refactored `ViewportProxyRenderer` into ambient + active layers so render passes no longer rebuild/destroy the active proxy media subtree.
+- Added selection-key reconciliation for active cards to preserve active `<video>` node identity across open/refocus/settle when the focused key is unchanged.
+- Added runtime persistence diagnostics via `window.__explorerProxyRendererDebug` (`activeVideoNodeStableId`, `activeNodeReused`, `activeMediaRecreated`, `renderPassCount`).
+
+### Latest Implementation Notes (2026-04-05)
 - Added a dedicated focused video ownership handoff hook (`useVideoOwnershipHandoff`) to keep poster ownership active until a strict first-frame-ready gate passes.
 - Added `awaitFirstVideoFrame(...)` utility under `docker/packages/Explorer/src/utils/` with RVFC-first readiness and fallback `readyState/currentTime/rAF` strategy to avoid reveal-time blank planes.
 - Explorer proxy playback debug now reports frame-promotion diagnostics (`videoReady`, `firstFramePresented`, `promotionStrategy`) alongside media branch and playback metrics.

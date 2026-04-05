@@ -880,6 +880,17 @@ select.control{
   will-change: transform;
   transform-style: preserve-3d;
 }
+.proxy-render-ambient-layer,
+.proxy-render-active-layer{
+  position: absolute;
+  inset: 0;
+}
+.proxy-render-ambient-layer{
+  z-index: 0;
+}
+.proxy-render-active-layer{
+  z-index: 1;
+}
 .proxy-prewarm-video{
   position: fixed;
   width: 1px;
