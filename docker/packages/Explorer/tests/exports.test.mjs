@@ -265,8 +265,13 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(list.includes('key={viewModel.previewPlaybackKey}'));
   assert.ok(grid.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
   assert.ok(list.includes("data-active={viewModel.isActive ? 'true' : 'false'}"));
-  assert.ok(explorer.includes("commitPreviewActivationKey('');"));
   assert.ok(explorer.includes('commitPreviewActivationKey(itemKey);'));
+  assert.ok(explorer.includes('playGridThumbForSelectionKey(itemKey);'));
+  assert.ok(explorer.includes('const previewPlaybackHandoffRef = useRef<{'));
+  assert.ok(explorer.includes('const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {'));
+  assert.ok(explorer.includes('previewPlaybackHandoffRef.current = {'));
+  assert.ok(explorer.includes('proxyVideo.currentTime = Number.isFinite(handoff.currentTime) ? Math.max(0, handoff.currentTime) : 0;'));
+  assert.ok(explorer.includes('pauseGridThumbForSelectionKey(proxySelectionKey);'));
   assert.ok(list.includes('data-no-preview="1"'));
   assert.ok(grid.includes('is-active-reinforced'));
   assert.ok(grid.includes('is-hold-emphasis'));
@@ -674,6 +679,9 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(gridContent.includes('data-card-ui-nav="true"'));
   assert.ok(gridContent.includes('data-card-ui-bottom="true"'));
   assert.ok(gridContent.includes('data-card-ui-actions="true"'));
+  assert.ok(!gridContent.includes('<span className="badge tile-ui-text">Cinematic</span>'));
+  assert.ok(!gridContent.includes('<span className="badge tile-ui-text">Scene</span>'));
+  assert.ok(!gridContent.includes('<span className="badge tile-ui-text">{viewModel.kind}</span>'));
   assert.ok(gridContent.includes('--masonry-column-count'));
   assert.ok(stateContent.includes('export function buildMasonryColumns'));
   assert.ok(styles.includes('.masonry-columns{'));
@@ -1120,7 +1128,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';"));
   assert.ok(content.includes("playable={Boolean(normalizedPreviewAsset && (normalizedPreviewAsset.kind === 'video' || normalizedPreviewAsset.kind === 'audio'))}"));
   assert.ok(content.includes('metadataRows={previewMetadataRows}'));
-  assert.ok(content.includes('}, [activeProxyCardEl, proxyPreviewVisible, previewAutoPlayToken]);'));
+  assert.ok(content.includes('previewAutoPlayToken]'));
   assert.ok(content.includes("if (target.closest('.proxy-preview-ui')) return;"));
   assert.ok(content.includes('className="proxy-preview-ui"'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
@@ -1364,7 +1372,7 @@ test('local density/context/preview interactions stay network-quiet and do not i
   assert.ok(!contextBlock.includes('loadAllMedia('));
 
   const previewStart = content.indexOf('const openPreview = useCallback((item: MediaItem) => {');
-  const previewBlock = previewStart >= 0 ? content.slice(previewStart, previewStart + 520) : '';
+  const previewBlock = previewStart >= 0 ? content.slice(previewStart, previewStart + 900) : '';
   assert.ok(previewBlock.includes('setInspectorOpen(true);'));
   assert.ok(!previewBlock.includes('loadSources('));
   assert.ok(!previewBlock.includes('loadProjects('));

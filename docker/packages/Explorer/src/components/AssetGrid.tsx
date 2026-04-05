@@ -593,12 +593,8 @@ function AssetGridComponent({
                 ) : null}
                 <div className={`asset-overlay ${simplifiedCardSubtreeActive ? 'is-simplified' : ''}`}>
                   <div className="asset-cinematic-ui asset-cinematic-ui-top" data-card-ui-top="true">
-                  <div className="asset-cinematic-ui-chip" data-card-ui-chip="true">
-                    <span className="badge tile-ui-text">Cinematic</span>
-                  </div>
-                  <div className="asset-cinematic-ui-nav" data-card-ui-nav="true">
-                    <span className="badge tile-ui-text">Scene</span>
-                  </div>
+                  <div className="asset-cinematic-ui-chip" data-card-ui-chip="true"></div>
+                  <div className="asset-cinematic-ui-nav" data-card-ui-nav="true"></div>
                   <div className="asset-ol-tl">
                     <span className={`badge ${viewModel.kindBadgeClassName} tile-ui-text`}>{viewModel.kind}</span>
                   </div>
@@ -646,9 +642,7 @@ function AssetGridComponent({
                     <div className="asset-title tile-ui-text">{viewModel.title}</div>
                     <div className="asset-subtitle tile-ui-text">{viewModel.sub}</div>
                   </div>
-                  <div className="asset-cinematic-ui-actions" data-card-ui-actions="true">
-                    <span className="badge tile-ui-text">{viewModel.kind}</span>
-                  </div>
+                  <div className="asset-cinematic-ui-actions" data-card-ui-actions="true"></div>
                   </div>
                 </div>
               </div>

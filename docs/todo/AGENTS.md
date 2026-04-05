@@ -1,3 +1,11 @@
+## 2026-04-05 — Overlay A badge dedupe + playback handoff continuity (active)
+- [x] Removed redundant wrapper badge children from world-grid Overlay A render path (`Cinematic`, `Scene`, bottom-right duplicate kind) while preserving the real overlay lanes (`asset-ol-tl/tr/bl/bottom`) and selection UI.
+- [x] Added immediate first-activation thumbnail playback wiring (`playGridThumbForSelectionKey`) so first tap on playable grid assets attempts muted inline autoplay without waiting for second-tap preview open.
+- [x] Added explicit thumbnail→focused playback handoff state (`previewPlaybackHandoffRef`) capturing selection key/currentTime/play state before focus-open.
+- [x] Hydrated focused proxy video from handoff (`currentTime` + play intent) and paused the source thumbnail once proxy owner takes over to avoid dual-owner drift.
+- [ ] Device-verify first-tap thumbnail autoplay and focused-open continuity near same playback position on iOS Safari.
+- [ ] Device-verify Overlay A now shows only non-duplicate lanes in world-grid while focused Overlay B ownership behavior remains unchanged.
+
 ## 2026-04-05 — Overlay A wrapper-lane visibility fix (active)
 - [x] Root-caused world-grid Overlay A invisibility to wrapper-lane suppression: `.asset-cinematic-ui` base style was still `display: none`, preventing visible child-lane recovery.
 - [x] Restored wrapper visibility baseline by setting `.asset-cinematic-ui` to `display: block` so mounted Overlay A DOM can render in world-grid when overlays are enabled.

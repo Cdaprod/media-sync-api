@@ -588,6 +588,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const previewDebugLogRef = useRef<PreviewDebugEntry[]>([]);
   const focusProxyRootRef = useRef<HTMLDivElement | null>(null);
   const focusOrchestratorRef = useRef<FocusTransitionOrchestrator | null>(null);
+  const previewPlaybackHandoffRef = useRef<{
+    selectionKey: string;
+    currentTime: number;
+    wasPlaying: boolean;
+    muted: boolean;
+    src: string;
+  } | null>(null);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
@@ -1589,9 +1596,42 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return opened;
   }, [recordPreviewDebug, view]);
 
+  const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {
+    if (!selectionKey || !gridRef.current) return null;
+    const nodes = Array.from(gridRef.current.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
+    return nodes.find((node) => node.closest<HTMLElement>('.masonry-card[data-select-key]')?.dataset.selectKey === selectionKey) || null;
+  }, []);
+
+  const playGridThumbForSelectionKey = useCallback((selectionKey: string) => {
+    const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
+    if (!thumbVideo) return;
+    thumbVideo.muted = true;
+    thumbVideo.playsInline = true;
+    thumbVideo.loop = true;
+    thumbVideo.play().catch(() => {});
+  }, [getGridThumbVideoBySelectionKey]);
+
+  const pauseGridThumbForSelectionKey = useCallback((selectionKey: string) => {
+    const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
+    if (!thumbVideo) return;
+    thumbVideo.pause();
+  }, [getGridThumbVideoBySelectionKey]);
+
   const openPreview = useCallback((item: MediaItem) => {
     const nextKey = assetSelectionKey(item, activeProject);
     if (!nextKey) return;
+    const thumbVideo = getGridThumbVideoBySelectionKey(nextKey);
+    if (thumbVideo) {
+      previewPlaybackHandoffRef.current = {
+        selectionKey: nextKey,
+        currentTime: Number.isFinite(thumbVideo.currentTime) ? Math.max(0, thumbVideo.currentTime) : 0,
+        wasPlaying: !thumbVideo.paused,
+        muted: thumbVideo.muted,
+        src: thumbVideo.currentSrc || thumbVideo.src || '',
+      };
+    } else {
+      previewPlaybackHandoffRef.current = null;
+    }
     recordPreviewDebug({ stage: 'openPreview-request', selectionKey: nextKey, requestedMode: view });
     focusAsset(item, nextKey);
     setFocused(item);
@@ -1614,7 +1654,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setPreviewDetailsOpen(false);
       resetFocusPresentationToIdle();
     }
-  }, [activeAssetKey, activeProject, assetSelectionKey, focusAsset, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, resetFocusPresentationToIdle, runProxyFocusTransition, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, focusAsset, getGridThumbVideoBySelectionKey, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, resetFocusPresentationToIdle, runProxyFocusTransition, view]);
 
   const closeGridFocusToRest = useCallback(() => {
     gridCinematicTimelineRef.current?.playClose();
@@ -2386,7 +2426,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return;
       }
       setActiveAssetKey(itemKey);
-      commitPreviewActivationKey('');
+      commitPreviewActivationKey(itemKey);
+      playGridThumbForSelectionKey(itemKey);
       setReinforcedActiveKey('');
     },
     onHoldEmphasis: (itemKey, active) => {
@@ -3352,12 +3393,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     proxyVideo.muted = true;
     proxyVideo.playsInline = true;
     if (proxyPreviewVisible) {
+      const proxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
+      const handoff = previewPlaybackHandoffRef.current;
+      const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === proxySelectionKey);
+      if (hasMatchingHandoff && handoff) {
+        proxyVideo.currentTime = Number.isFinite(handoff.currentTime) ? Math.max(0, handoff.currentTime) : 0;
+      }
       const requestPlay = () => {
         proxyVideo.play().catch(() => {
           // Safari may still gate autoplay in edge cases; keep muted + playsInline state
         });
       };
-      requestPlay();
+      if (hasMatchingHandoff ? Boolean(handoff?.wasPlaying) : true) {
+        requestPlay();
+      }
       const deferred = window.setTimeout(requestPlay, 80);
       const onCanPlay = () => requestPlay();
       proxyVideo.addEventListener('canplay', onCanPlay, { once: true });
@@ -3377,6 +3426,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       proxyVideo.addEventListener('pause', onPause);
       proxyVideo.addEventListener('timeupdate', onTimeUpdate);
       proxyVideo.addEventListener('loadedmetadata', onLoadedMetadata);
+      if (proxySelectionKey) {
+        pauseGridThumbForSelectionKey(proxySelectionKey);
+      }
+      previewPlaybackHandoffRef.current = null;
 
       return () => {
         cleanupAutoplay();
@@ -3404,7 +3457,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
       proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
     };
-  }, [activeProxyCardEl, proxyPreviewVisible, previewAutoPlayToken]);
+  }, [activeProxyCardEl, pauseGridThumbForSelectionKey, proxyPreviewVisible, previewAutoPlayToken]);
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible
