@@ -13,8 +13,14 @@ type PlaybackState = {
 
 export type VideoOwnershipDebug = {
   reason: string;
+  sessionKey: string;
   selectionKey: string;
   streamUrl: string;
+  videoNodeFound: boolean;
+  videoStableId: string;
+  cardSelectionKey: string;
+  cardVideoReady: string;
+  cardFirstFramePresented: string;
   visualOwner: VisualOwner;
   audioOwner: AudioOwner;
   videoReady: boolean;
@@ -25,6 +31,7 @@ export type VideoOwnershipDebug = {
   readyState: number;
   paused: boolean;
   muted: boolean;
+  currentSrc: string;
   mediaBranch: string;
   handoffTime: number | null;
   playRequested: boolean;
@@ -91,7 +98,9 @@ export function useVideoOwnershipHandoff({
   const [promotionStrategy, setPromotionStrategy] = useState<FirstFrameReadyStrategy | 'none'>('none');
   const [promotionBlockedReason, setPromotionBlockedReason] = useState('none');
   const [playbackState, setPlaybackState] = useState<PlaybackState>(EMPTY_PLAYBACK);
+  const sessionKey = `${selectionKey}::${streamUrl}::${playToken}`;
   const pendingHandoffRef = useRef<number | null>(null);
+  const latestSessionKeyRef = useRef('');
   const latestDebugStateRef = useRef<{
     visualOwner: VisualOwner;
     audioOwner: AudioOwner;
@@ -113,6 +122,33 @@ export function useVideoOwnershipHandoff({
   const loadedDataSeenRef = useRef(false);
   const canPlaySeenRef = useRef(false);
   const playingSeenRef = useRef(false);
+  const debugContextRef = useRef({
+    sessionKey,
+    selectionKey,
+    streamUrl,
+    mediaBranch,
+  });
+  const onPromotedRef = useRef(onPromoted);
+  const onHandoffConsumedRef = useRef(onHandoffConsumed);
+  const onDebugRef = useRef(onDebug);
+
+  useEffect(() => {
+    debugContextRef.current = {
+      sessionKey,
+      selectionKey,
+      streamUrl,
+      mediaBranch,
+    };
+  }, [mediaBranch, selectionKey, sessionKey, streamUrl]);
+  useEffect(() => {
+    onPromotedRef.current = onPromoted;
+  }, [onPromoted]);
+  useEffect(() => {
+    onHandoffConsumedRef.current = onHandoffConsumed;
+  }, [onHandoffConsumed]);
+  useEffect(() => {
+    onDebugRef.current = onDebug;
+  }, [onDebug]);
 
   useEffect(() => {
     pendingHandoffRef.current = handoffTime == null ? null : Math.max(0, handoffTime);
@@ -129,14 +165,23 @@ export function useVideoOwnershipHandoff({
   }, [audioOwner, firstFramePresented, promotionBlockedReason, promotionStrategy, videoReady, visualOwner]);
 
   const publishDebug = useCallback((reason: string, video: HTMLVideoElement | null) => {
-    if (!onDebug) return;
+    const onDebugHandler = onDebugRef.current;
+    if (!onDebugHandler) return;
     const latest = latestDebugStateRef.current;
+    const context = debugContextRef.current;
+    const cardEl = video?.closest<HTMLElement>('.proxy-render-card[data-selection-key]') ?? null;
     const currentTime = Number.isFinite(video?.currentTime) ? (video?.currentTime || 0) : 0;
     const duration = Number.isFinite(video?.duration) ? (video?.duration || 0) : 0;
-    onDebug({
+    onDebugHandler({
       reason,
-      selectionKey,
-      streamUrl,
+      sessionKey: context.sessionKey,
+      selectionKey: context.selectionKey,
+      streamUrl: context.streamUrl,
+      videoNodeFound: Boolean(video),
+      videoStableId: video?.dataset.proxyStableVideoId || '',
+      cardSelectionKey: cardEl?.dataset.selectionKey || '',
+      cardVideoReady: cardEl?.dataset.videoReady || '',
+      cardFirstFramePresented: cardEl?.dataset.firstFramePresented || '',
       visualOwner: latest.visualOwner,
       audioOwner: latest.audioOwner,
       videoReady: latest.videoReady,
@@ -147,7 +192,8 @@ export function useVideoOwnershipHandoff({
       readyState: video?.readyState ?? 0,
       paused: video?.paused ?? true,
       muted: video?.muted ?? true,
-      mediaBranch,
+      currentSrc: video?.currentSrc || video?.src || '',
+      mediaBranch: context.mediaBranch,
       handoffTime: pendingHandoffRef.current,
       playRequested: playRequestedRef.current,
       playPromiseRejected: playPromiseRejectedRef.current,
@@ -157,7 +203,7 @@ export function useVideoOwnershipHandoff({
       playingSeen: playingSeenRef.current,
       promotionBlockedReason: latest.promotionBlockedReason,
     });
-  }, [mediaBranch, onDebug, selectionKey, streamUrl]);
+  }, []);
 
   const resetOwnership = useCallback(() => {
     setVisualOwner('thumbnail');
@@ -171,6 +217,7 @@ export function useVideoOwnershipHandoff({
 
   useEffect(() => {
     if (!isFocusedOpen || !selectionKey || !streamUrl) {
+      latestSessionKeyRef.current = '';
       if (proxyVideoEl) {
         proxyVideoEl.pause();
         proxyVideoEl.muted = true;
@@ -191,23 +238,30 @@ export function useVideoOwnershipHandoff({
       return;
     }
 
+    const isSessionChanged = latestSessionKeyRef.current !== sessionKey;
+    latestSessionKeyRef.current = sessionKey;
+
     let alive = true;
     let sawTimeProgress = false;
     let promoted = false;
 
-    setVisualOwner('poster');
-    setAudioOwner('none');
-    setVideoReady(false);
-    setFirstFramePresented(false);
-    setPromotionStrategy('none');
-    setPromotionBlockedReason('none');
+    if (isSessionChanged) {
+      setVisualOwner('poster');
+      setAudioOwner('none');
+      setVideoReady(false);
+      setFirstFramePresented(false);
+      setPromotionStrategy('none');
+      setPromotionBlockedReason('none');
+    }
 
-    playRequestedRef.current = false;
-    playPromiseRejectedRef.current = false;
-    loadedMetadataSeenRef.current = false;
-    loadedDataSeenRef.current = false;
-    canPlaySeenRef.current = false;
-    playingSeenRef.current = false;
+    if (isSessionChanged) {
+      playRequestedRef.current = false;
+      playPromiseRejectedRef.current = false;
+      loadedMetadataSeenRef.current = false;
+      loadedDataSeenRef.current = false;
+      canPlaySeenRef.current = false;
+      playingSeenRef.current = false;
+    }
 
     proxyVideoEl.muted = true;
     proxyVideoEl.defaultMuted = true;
@@ -254,8 +308,16 @@ export function useVideoOwnershipHandoff({
         proxyVideoEl.defaultMuted = false;
         setAudioOwner('proxy');
       }
-      onPromoted?.();
-      onHandoffConsumed?.();
+      const cardEl = proxyVideoEl.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
+      if (cardEl) {
+        cardEl.dataset.firstFramePresented = 'true';
+        cardEl.dataset.videoReady = 'true';
+        cardEl.dataset.promotionStrategy = strategy;
+        cardEl.dataset.proxySessionId = sessionKey;
+      }
+      proxyVideoEl.dataset.proxySessionId = sessionKey;
+      onPromotedRef.current?.();
+      onHandoffConsumedRef.current?.();
       syncPlaybackState(reason);
     };
 
@@ -376,16 +438,15 @@ export function useVideoOwnershipHandoff({
   }, [
     enableFocusedAudio,
     isFocusedOpen,
-    onHandoffConsumed,
-    onPromoted,
+    playToken,
     proxyVideoEl,
-    publishDebug,
     resetOwnership,
     selectionKey,
+    sessionKey,
     shouldPlay,
     streamUrl,
     wasPlayingBeforeHandoff,
-    playToken,
+    publishDebug,
   ]);
 
   const canPromote = useMemo(() => (

@@ -288,6 +288,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;'));
   assert.ok(explorer.includes('const proxyAsset = useMemo(() => {'));
   assert.ok(explorer.includes('const proxyStreamUrl = useMemo(() => {'));
+  assert.ok(explorer.includes('const proxyPlaybackSessionKey = useMemo(() => ('));
   assert.ok(explorer.includes('const absolutizeMediaUrl = useCallback((path?: string) => {'));
   assert.ok(explorer.includes("const datasetStream = activeProxyCardEl?.dataset.streamUrl || activeProxyVideoEl?.dataset.streamUrl || '';"));
   assert.ok(explorer.includes("const elementSrc = activeProxyVideoEl?.currentSrc || activeProxyVideoEl?.src || '';"));
@@ -301,8 +302,17 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes("activeProxyCardEl.dataset.firstFramePresented = proxyFirstFramePresented ? 'true' : 'false';"));
   assert.ok(explorer.includes('activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;'));
   assert.ok(explorer.includes('activeProxyCardEl.dataset.streamUrl = proxyStreamUrl;'));
+  assert.ok(explorer.includes('activeProxyCardEl.dataset.proxySessionId = proxyPlaybackSessionKey;'));
+  assert.ok(explorer.includes('activeProxyVideoEl.dataset.proxySessionId = proxyPlaybackSessionKey;'));
   assert.ok(proxyRenderer.includes("activeCardEl.dataset.streamUrl = card.mediaUrl || '';"));
   assert.ok(proxyRenderer.includes('videoEl.dataset.streamUrl = card.mediaUrl;'));
+  assert.ok(handoffHookContent.includes('sessionKey: string;'));
+  assert.ok(handoffHookContent.includes('const latestSessionKeyRef = useRef(\'\');'));
+  assert.ok(handoffHookContent.includes('const isSessionChanged = latestSessionKeyRef.current !== sessionKey;'));
+  assert.ok(handoffHookContent.includes('onPromotedRef.current?.();'));
+  assert.ok(handoffHookContent.includes('onHandoffConsumedRef.current?.();'));
+  assert.ok(handoffHookContent.includes("cardEl.dataset.proxySessionId = sessionKey;"));
+  assert.ok(handoffHookContent.includes('videoNodeFound: boolean;'));
   assert.ok(handoffHookContent.includes('playRequested: boolean;'));
   assert.ok(handoffHookContent.includes('playPromiseRejected: boolean;'));
   assert.ok(handoffHookContent.includes('loadedMetadataSeen: boolean;'));

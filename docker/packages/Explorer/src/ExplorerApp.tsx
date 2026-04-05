@@ -3486,6 +3486,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const elementSrc = activeProxyVideoEl?.currentSrc || activeProxyVideoEl?.src || '';
     return absolutizeMediaUrl(datasetStream || elementSrc || proxyAsset?.src || '');
   }, [absolutizeMediaUrl, activeProxyCardEl, activeProxyVideoEl, proxyAsset]);
+  const proxyPlaybackSessionKey = useMemo(() => (
+    `${activeProxySelectionKey}::${proxyStreamUrl}::${previewAutoPlayToken}`
+  ), [activeProxySelectionKey, previewAutoPlayToken, proxyStreamUrl]);
   const handoff = previewPlaybackHandoffRef.current;
   const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === activeProxySelectionKey);
   const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;
@@ -3521,6 +3524,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }).__explorerProxyPlaybackDebug = {
         ...entry,
         streamUrl: proxyStreamUrl,
+        sessionKey: proxyPlaybackSessionKey,
+        videoStableId: activeProxyVideoEl?.dataset.proxyStableVideoId || '',
+        cardSelectionKey: activeProxyCardEl?.dataset.selectionKey || '',
+        cardVideoReady: activeProxyCardEl?.dataset.videoReady || '',
+        cardFirstFramePresented: activeProxyCardEl?.dataset.firstFramePresented || '',
+        cardPromotionStrategy: activeProxyCardEl?.dataset.promotionStrategy || '',
+        cardSessionId: activeProxyCardEl?.dataset.proxySessionId || '',
         prewarmSelectionKey: proxyPrewarmSelectionKeyRef.current || '',
         prewarmUrl: proxyPrewarmUrlRef.current || '',
         prewarmReadyState: proxyPrewarmReadyStateRef.current || 0,
@@ -3533,7 +3543,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     activeProxyCardEl.dataset.firstFramePresented = proxyFirstFramePresented ? 'true' : 'false';
     activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;
     activeProxyCardEl.dataset.streamUrl = proxyStreamUrl;
-  }, [activeProxyCardEl, proxyFirstFramePresented, proxyPromotionStrategy, proxyStreamUrl, proxyVideoReady]);
+    activeProxyCardEl.dataset.proxySessionId = proxyPlaybackSessionKey;
+    if (activeProxyVideoEl) {
+      activeProxyVideoEl.dataset.proxySessionId = proxyPlaybackSessionKey;
+    }
+  }, [activeProxyCardEl, activeProxyVideoEl, proxyFirstFramePresented, proxyPlaybackSessionKey, proxyPromotionStrategy, proxyStreamUrl, proxyVideoReady]);
   useEffect(() => {
     setProxyPlaybackPlaying(proxyPlaybackState.isPlaying);
     setProxyPlaybackCurrentTime(proxyPlaybackState.currentTime);

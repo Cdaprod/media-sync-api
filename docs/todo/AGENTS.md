@@ -1,3 +1,12 @@
+## 2026-04-05 — Focused proxy session-key stabilization + direct promotion write-through (active)
+- [x] Added explicit ownership `sessionKey` in `useVideoOwnershipHandoff` and restricted bootstrap reset lane to true session changes.
+- [x] Moved unstable callback inputs (`onDebug`, `onPromoted`, `onHandoffConsumed`) behind refs so bootstrap effect does not restart from callback identity churn.
+- [x] Added direct promotion dataset write-through on active card/video node (`data-first-frame-presented`, `data-video-ready`, `data-promotion-strategy`, `data-proxy-session-id`) at promotion moment.
+- [x] Expanded proxy playback diagnostics with node/session/card state (`sessionKey`, `videoStableId`, `cardSelectionKey`, `cardVideoReady`, `cardFirstFramePresented`, `currentSrc`).
+- [x] Extended static regression assertions for session-key lifecycle and callback-ref/write-through markers.
+- [ ] Device-verify focused-open now reliably transitions `none -> rvfc|fallback` and card dataset flips to ready/presented without reverting in the same session.
+- [ ] Capture one iOS runtime sample proving `hookFirstFramePresented:true` and `cardFirstFramePresented:"true"` with matching `sessionKey`.
+
 ## 2026-04-05 — Focused proxy tap play/pause + timeupdate promotion recovery (active)
 - [x] Added active-card tap playback toggle in proxy root pointer handler (`handleProxyTogglePlay`) for focused cinematic preview media surface.
 - [x] Preserved interaction arbitration so preview UI controls/buttons remain interactive and non-media taps keep existing close/refocus behavior.

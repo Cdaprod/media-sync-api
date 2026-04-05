@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-05)
+- Hardening pass for focused proxy ownership session: `useVideoOwnershipHandoff` now tracks an explicit `sessionKey` (`selectionKey::streamUrl::playToken`) and only performs poster/reset bootstrap on true session changes.
+- Moved handoff callbacks (`onPromoted`, `onHandoffConsumed`, `onDebug`) behind refs to prevent callback identity churn from restarting the ownership bootstrap effect.
+- Added direct promotion write-through on live active card/video datasets (`data-first-frame-presented`, `data-video-ready`, `data-promotion-strategy`, `data-proxy-session-id`) plus expanded runtime diagnostics (`videoStableId`, `cardVideoReady`, `cardFirstFramePresented`, `currentSrc`, `sessionKey`).
+
+### Latest Implementation Notes (2026-04-05)
 - Added focused proxy tap-to-toggle playback in `ExplorerApp` proxy-root pointer handling: tapping the active proxy media surface now routes to `handleProxyTogglePlay()` while preserving existing interactive-control guards.
 - Added a `timeupdate-fallback` promotion lane in `useVideoOwnershipHandoff` so first-frame promotion can recover when earlier readiness events are missed but playback time is advancing.
 - This resolves focused-preview stuck-poster/still-frame behavior while restoring expected tap play/pause semantics on mobile Safari.
