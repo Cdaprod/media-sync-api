@@ -1258,7 +1258,7 @@ select.control{
   left: 0;
   right: 0;
   pointer-events: none;
-  display: none;
+  display: block;
 }
 .asset-cinematic-ui-top{
   top: 0;
@@ -1549,6 +1549,12 @@ select.control{
 .content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-ol-tr{
   opacity: 1 !important;
   transform: translateY(0) !important;
+}
+.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-cinematic-ui-top,
+.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-cinematic-ui-bottom{
+  opacity: 1 !important;
+  transform: none !important;
+  display: block !important;
 }
 .asset .asset-ol-tl{
   position: absolute;

@@ -1,3 +1,10 @@
+## 2026-04-05 — Overlay A wrapper-lane visibility fix (active)
+- [x] Root-caused world-grid Overlay A invisibility to wrapper-lane suppression: `.asset-cinematic-ui` base style was still `display: none`, preventing visible child-lane recovery.
+- [x] Restored wrapper visibility baseline by setting `.asset-cinematic-ui` to `display: block` so mounted Overlay A DOM can render in world-grid when overlays are enabled.
+- [x] Added explicit overlay-on wrapper recovery contract for `.asset-cinematic-ui-top` / `.asset-cinematic-ui-bottom` under non-suppressed states (`:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active)`).
+- [x] Extended static contract assertions to lock wrapper baseline visibility + explicit wrapper recovery selectors.
+- [ ] Device-verify On/Off toggle parity: Overlay A visible with `Overlays: On`, hidden with `Overlays: Off`, and replaced by Overlay B in focused mode.
+
 ## 2026-04-05 — Overlay A world-grid visibility contract repair (active)
 - [x] Identified regression scope as world-grid Overlay A visibility recovery, not focused Overlay B ownership.
 - [x] Relaxed `.asset-overlay.is-simplified` suppression so critical Overlay A lanes (kind + ordered select UI) remain recoverable when simplified subtree mode is active.

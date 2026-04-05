@@ -2287,8 +2287,11 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(styles.includes('.asset .asset-ol-tr{'));
   assert.ok(styles.includes('.asset .asset-ol-bl{'));
   assert.ok(styles.includes('.asset .asset-ol-bottom{'));
+  assert.ok(styles.includes('.asset-cinematic-ui{'));
+  assert.ok(styles.includes('display: block;'));
   assert.ok(styles.includes('.asset .asset-overlay.is-simplified .asset-ol-bottom,'));
   assert.ok(styles.includes('.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-overlay{'));
+  assert.ok(styles.includes('.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-cinematic-ui-top,'));
   assert.ok(styles.includes('opacity var(--overlay-fade-duration) var(--overlay-fade-ease),'));
   assert.ok(styles.includes('transform var(--overlay-fade-duration) var(--overlay-fade-ease);'));
   assert.ok(styles.includes('.content.density-motion-active .asset .asset-overlay,'));
