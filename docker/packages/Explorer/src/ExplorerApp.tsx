@@ -3385,6 +3385,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
 
     const proxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
+    if (activeProxyCardEl) activeProxyCardEl.dataset.videoReady = 'false';
     const handoff = previewPlaybackHandoffRef.current;
     const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === proxySelectionKey);
     let pendingHandoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;
@@ -3485,6 +3486,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         syncFromVideo('loadedmetadata');
       };
       const onPlaying = () => {
+        if (activeProxyCardEl) activeProxyCardEl.dataset.videoReady = 'true';
         if (proxySelectionKey && !yieldedGridOwner) {
           pauseGridThumbForSelectionKey(proxySelectionKey);
           yieldedGridOwner = true;
@@ -3494,6 +3496,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         }
         syncFromVideo('playing');
       };
+      const onLoadedData = () => {
+        if (proxyVideo.readyState >= 2 && activeProxyCardEl) {
+          activeProxyCardEl.dataset.videoReady = 'true';
+        }
+        syncFromVideo('loadeddata');
+      };
       const onWaiting = () => syncFromVideo('waiting');
       const onStalled = () => syncFromVideo('stalled');
 
@@ -3501,6 +3509,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       proxyVideo.addEventListener('pause', onPause);
       proxyVideo.addEventListener('timeupdate', onTimeUpdate);
       proxyVideo.addEventListener('loadedmetadata', onLoadedMetadata);
+      proxyVideo.addEventListener('loadeddata', onLoadedData);
       proxyVideo.addEventListener('playing', onPlaying);
       proxyVideo.addEventListener('waiting', onWaiting);
       proxyVideo.addEventListener('stalled', onStalled);
@@ -3514,6 +3523,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         proxyVideo.removeEventListener('pause', onPause);
         proxyVideo.removeEventListener('timeupdate', onTimeUpdate);
         proxyVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
+        proxyVideo.removeEventListener('loadeddata', onLoadedData);
         proxyVideo.removeEventListener('playing', onPlaying);
         proxyVideo.removeEventListener('waiting', onWaiting);
         proxyVideo.removeEventListener('stalled', onStalled);

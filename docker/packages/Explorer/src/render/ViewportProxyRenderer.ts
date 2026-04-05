@@ -63,6 +63,7 @@ export class ViewportProxyRenderer {
             data-selection-key="${card.selectionKey}"
             data-select-key="${card.selectionKey}"
             data-proxy-active="${activeMarker}"
+            data-video-ready="false"
             style="
               left:${card.rect.left}px;
               top:${card.rect.top}px;
