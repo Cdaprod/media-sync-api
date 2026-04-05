@@ -1528,11 +1528,27 @@ select.control{
 }
 
 .asset .asset-overlay.is-simplified{
-  opacity: 0;
+  opacity: 1;
   pointer-events: none;
   transition:
     opacity 140ms ease,
     transform 140ms ease;
+}
+.asset .asset-overlay.is-simplified .asset-ol-bottom,
+.asset .asset-overlay.is-simplified .asset-ol-bl,
+.asset .asset-overlay.is-simplified .asset-cinematic-ui-actions{
+  opacity: 0;
+}
+.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-overlay{
+  opacity: 1 !important;
+  pointer-events: none;
+}
+.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-ol-bottom,
+.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-ol-bl,
+.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-ol-tl,
+.content:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active) .asset .asset-ol-tr{
+  opacity: 1 !important;
+  transform: translateY(0) !important;
 }
 .asset .asset-ol-tl{
   position: absolute;

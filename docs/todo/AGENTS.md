@@ -1,3 +1,10 @@
+## 2026-04-05 — Overlay A world-grid visibility contract repair (active)
+- [x] Identified regression scope as world-grid Overlay A visibility recovery, not focused Overlay B ownership.
+- [x] Relaxed `.asset-overlay.is-simplified` suppression so critical Overlay A lanes (kind + ordered select UI) remain recoverable when simplified subtree mode is active.
+- [x] Added explicit world-grid visible-state contract for overlay-on mode (`:not(.overlay-hidden):not(.density-motion-active):not(.density-gesture-active)`) to force overlay lane restoration after transient suppressor states.
+- [x] Kept focused-preview ownership model intact (Overlay B remains focused-only; Overlay A still hidden under `overlay-hidden` and focus/motion suppressors).
+- [ ] Device-verify world-grid Overlay A checkboxes/order badges appear with `Overlays: On`, hide with `Overlays: Off`, and remain replaced by Overlay B while focused.
+
 ## 2026-04-05 — Overlay toggle restoration + focused player parity follow-up (active)
 - [x] Restored world-grid overlay toggle behavior by enforcing `overlay-hidden` ownership at `.asset-overlay` container level so TopBar `Overlays: On/Off` deterministically hides/shows card overlays again.
 - [x] Refactored `ProxyFocusedChromeFullParity` into a player-first dock contract: persistent transport core (time, scrubber, play/pause, ±10s) remains primary, while secondary actions + metadata move into a details-gated section.
