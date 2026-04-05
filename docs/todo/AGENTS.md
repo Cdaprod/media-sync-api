@@ -1,3 +1,11 @@
+## 2026-04-05 — Proxy focused layout coordinate-space correction (active)
+- [x] Fixed focused proxy chrome coordinate mismatch by introducing explicit world-scale handoff (`--proxy-world-scale`) from renderer to CSS so focused UI layout can be computed at visual-size-equivalent dimensions.
+- [x] Updated `.proxy-render-ui-slot` to use inverse-scale compensation (`scale(1 / --proxy-world-scale)`) with expanded local layout bounds, decoupling active chrome layout from tiny base card geometry while preserving world camera travel.
+- [x] Added focused proxy video autoplay follow-up (`video.play().catch(...)`) after render mount so iOS Safari has an explicit post-attach play attempt in addition to muted/autoplay attributes.
+- [x] Extended Explorer static contract assertions to lock the new renderer/CSS markers for world-scale propagation, inverse UI compensation, and play-attempt behavior.
+- [ ] Run on-device grid focused-open verification and capture evidence that scrubber + transport remain visible with no oversized/cramped chrome.
+- [ ] Verify proxy-focused video playback starts consistently on iOS Safari after focus settle (no manual interaction required in typical autoplay-allowed conditions).
+
 ## 2026-04-04 — Proxy active-card layout budget + UI slot follow-up (active)
 - [x] Added dedicated active-card UI mount slot (`.proxy-render-ui-slot`) in proxy renderer so focused chrome portals into a stable in-card layer above scrim/video.
 - [x] Reduced focused full-surface scrim intensity to avoid washing out proxy video while preserving localized top/bottom readability.

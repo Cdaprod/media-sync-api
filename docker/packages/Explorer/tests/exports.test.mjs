@@ -696,6 +696,8 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(styles.includes('.app.proxy-travel-active .grid-cinematic-root{'));
   assert.ok(styles.includes('.app.proxy-travel-active .drawer{'));
   assert.ok(styles.includes('.proxy-render-world{'));
+  assert.ok(styles.includes('--proxy-world-scale'));
+  assert.ok(styles.includes('transform: scale(calc(1 / var(--proxy-world-scale, 1)));'));
   assert.ok(styles.includes('.scroll.focus-proxy-scroll-lock{'));
   assert.ok(styles.includes('overflow-x: hidden;'));
   assert.ok(styles.includes('overflow-x: clip;'));
@@ -1144,6 +1146,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('const showActiveChrome = opts?.showActiveChrome ?? true;'));
   assert.ok(proxyRenderer.includes('const activeChrome = showActiveChrome && card.active'));
   assert.ok(proxyRenderer.includes('? \'<div class=\"proxy-render-scrim\"></div><div class=\"proxy-render-ui-slot\" data-proxy-ui-slot=\"true\"></div>\''));
+  assert.ok(proxyRenderer.includes("world.style.setProperty('--proxy-world-scale', String(Math.max(0.001, camera.scale)));"));
+  assert.ok(proxyRenderer.includes('void activeVideo.play().catch(() => {});'));
   assert.ok(proxyRenderer.includes("const ambientClass = card.active ? '' : 'is-ambient';"));
   assert.ok(proxyRenderer.includes('class=\"proxy-render-card ${activeClass} ${ambientClass} ${selectedClass}\"'));
   assert.ok(proxyRenderer.includes('data-proxy-active="${activeMarker}"'));

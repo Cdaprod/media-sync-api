@@ -34,6 +34,7 @@ export class ViewportProxyRenderer {
     const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
     if (!world) return;
 
+    world.style.setProperty('--proxy-world-scale', String(Math.max(0.001, camera.scale)));
     world.style.transform = `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})`;
 
     world.innerHTML = snapshot.cards
@@ -76,5 +77,10 @@ export class ViewportProxyRenderer {
         `;
       })
       .join('');
+
+    const activeVideo = world.querySelector<HTMLVideoElement>('.proxy-render-card[data-proxy-active="true"] .proxy-render-video');
+    if (activeVideo) {
+      void activeVideo.play().catch(() => {});
+    }
   }
 }

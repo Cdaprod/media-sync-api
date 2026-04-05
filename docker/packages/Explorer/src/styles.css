@@ -940,7 +940,12 @@ select.control{
 }
 .proxy-render-ui-slot{
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: calc(100% * var(--proxy-world-scale, 1));
+  height: calc(100% * var(--proxy-world-scale, 1));
+  transform-origin: top left;
+  transform: scale(calc(1 / var(--proxy-world-scale, 1)));
   z-index: 3;
   pointer-events: none;
 }
