@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- Reduced focused proxy continuity churn in `useVideoOwnershipHandoff` by binding/loading the proxy `<video>` only when the stream source actually changed (`source-bound`), and reusing warm decoder state otherwise (`source-reused`).
+- Removed unconditional focused-open `load()` restart lane so same-session focused reopen/refocus no longer forces a decoder reset before play/promotion fallback checks.
+- Expanded static regression contracts to lock conditional source-binding markers and guard against reintroducing unconditional `load()` in the focused-open playback path.
+
+### Latest Implementation Notes (2026-04-06)
 - First-tap focused prewarm now keeps hidden proxy prewarm video actively playing muted/looped (instead of play-then-immediate-pause) so decode/frame state is already warm before focused-open reveal.
 - Focused proxy side-card taps now route directly through explicit refocus transition ownership (`focusAsset` + `runProxyFocusTransition(...,'refocus')`) before fallback preview open, preserving animated lateral/up-down travel while already zoomed.
 - Updated static regression contracts to lock active prewarm playback markers and in-focus side-card refocus routing markers.

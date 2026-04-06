@@ -327,8 +327,11 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("tryFallbackPromote('playing-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('timeupdate-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('immediate-readiness-fallback');"));
+  assert.ok(handoffHookContent.includes('const sourceAlreadyBound = isSameStream(proxyVideoEl.currentSrc) || isSameStream(proxyVideoEl.src);'));
+  assert.ok(handoffHookContent.includes("syncPlaybackState('source-bound');"));
+  assert.ok(handoffHookContent.includes("publishDebug('source-reused', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('const shouldStartPlayback = shouldPlay;'));
-  assert.ok(handoffHookContent.includes('proxyVideoEl.load();'));
+  assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
   assert.ok(list.includes('data-no-preview="1"'));
   assert.ok(grid.includes('is-active-reinforced'));
   assert.ok(grid.includes('is-hold-emphasis'));

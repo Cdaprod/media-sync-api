@@ -396,9 +396,27 @@ export function useVideoOwnershipHandoff({
     proxyVideoEl.addEventListener('waiting', onWaiting);
     proxyVideoEl.addEventListener('stalled', onStalled);
 
+    const isSameStream = (value: string) => {
+      if (!value || !streamUrl) return false;
+      try {
+        return new URL(value, window.location.href).href === new URL(streamUrl, window.location.href).href;
+      }
+      catch {
+        return value === streamUrl;
+      }
+    };
+    const sourceAlreadyBound = isSameStream(proxyVideoEl.currentSrc) || isSameStream(proxyVideoEl.src);
+    if (!sourceAlreadyBound) {
+      proxyVideoEl.src = streamUrl;
+      proxyVideoEl.load();
+      syncPlaybackState('source-bound');
+    }
+    else {
+      publishDebug('source-reused', proxyVideoEl);
+    }
+
     const shouldStartPlayback = shouldPlay;
     if (shouldStartPlayback) {
-      proxyVideoEl.load();
       tryApplyHandoffTime();
       requestPlay();
       tryFallbackPromote('immediate-readiness-fallback');

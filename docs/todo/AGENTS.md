@@ -1,3 +1,10 @@
+## 2026-04-06 — Focused proxy source-binding continuity guard (active)
+- [x] Updated `useVideoOwnershipHandoff` focused-open startup to conditionally bind/load proxy media only when stream source changed (`source-bound`) and reuse warm source state otherwise (`source-reused`).
+- [x] Removed unconditional `proxyVideoEl.load()` restart from focused-open playback path to reduce decoder resets on same-session reopen/refocus.
+- [x] Added static regression assertions for conditional source-binding markers and a negative assertion preventing unconditional focused-open `load()` reintroduction.
+- [ ] Device-verify focused reopen/refocus on iOS Safari shows fewer restart pops/freezes when the active asset source is unchanged.
+- [ ] Capture runtime debug sample showing `source-reused` immediately before focused-open promotion on same-asset second tap.
+
 ## 2026-04-06 — First-tap under-hood prewarm continuity + in-focus side-card refocus routing (active)
 - [x] Updated hidden proxy prewarm lane to keep muted loop playback active after first-tap targeting so focused-open has warmed decode/frame continuity.
 - [x] Kept prewarm cleanup behavior for inactive/visible transitions while removing immediate pause after successful prewarm `play()` priming.
