@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- Added asset-scoped playback memory utility (`playbackResumeStore`) keyed by `selectionKey::streamUrl` to persist per-asset preview resume snapshots (`currentTime`, `duration`, `wasPlaying`, `updatedAt`) during runtime.
+- `useVideoOwnershipHandoff` now restores resume target from `handoffTime` first and falls back to per-asset resume snapshot, normalizing near-end timestamps to restart-safe positions via `maybeNormalizeResumeTime(...)`.
+- Focus-close, pause, timeupdate, and cleanup paths now persist authoritative per-asset resume snapshots so revisiting previously previewed assets resumes from their last meaningful position across multi-asset preview sessions.
+
+### Latest Implementation Notes (2026-04-06)
 - `useVideoOwnershipHandoff` continuity identity now keys session reset on `continuityKey` (`selectionKey::streamUrl`) while preserving separate `playbackIntentKey` diagnostics so `playToken` churn no longer forces same-asset visual reset.
 - Focus-close behavior no longer tears down proxy decode via pause/reset when selection/source remain valid; close now demotes audio/visual ownership (`inactive-focused-closed`) while keeping warm continuity state available for fast reopen.
 - Expanded proxy playback debug payload with thumbnail-vs-proxy drift telemetry (`thumbnailVideoNodeFound`, `thumbnailCurrentTime`, `thumbnailReadyState`, `thumbnailPaused`, `timeDeltaFromThumbnail`) and wired Explorer hook input to pass active grid thumbnail video.

@@ -32,6 +32,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -221,10 +222,12 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const handoffHookPath = path.join(packageRoot, 'src', 'hooks', 'useVideoOwnershipHandoff.ts');
+  const playbackResumeStorePath = path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts');
   const proxyRendererPath = path.join(packageRoot, 'src', 'render', 'ViewportProxyRenderer.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const handoffHookContent = fs.readFileSync(handoffHookPath, 'utf8');
+  const playbackResumeStore = fs.readFileSync(playbackResumeStorePath, 'utf8');
   const proxyRenderer = fs.readFileSync(proxyRendererPath, 'utf8');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
@@ -314,7 +317,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('continuityKey: string;'));
   assert.ok(handoffHookContent.includes('playbackIntentKey: string;'));
   assert.ok(handoffHookContent.includes('const latestSessionKeyRef = useRef(\'\');'));
-  assert.ok(handoffHookContent.includes('const continuityKey = `${selectionKey}::${streamUrl}`;'));
+  assert.ok(handoffHookContent.includes('const continuityKey = makeVideoResumeKey(selectionKey, streamUrl);'));
   assert.ok(handoffHookContent.includes('const isSessionChanged = latestSessionKeyRef.current !== continuityKey;'));
   assert.ok(handoffHookContent.includes('onPromotedRef.current?.();'));
   assert.ok(handoffHookContent.includes('onHandoffConsumedRef.current?.();'));
@@ -329,6 +332,9 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('promotionBlockedReason: string;'));
   assert.ok(handoffHookContent.includes('thumbnailVideoNodeFound: boolean;'));
   assert.ok(handoffHookContent.includes('timeDeltaFromThumbnail: number | null;'));
+  assert.ok(handoffHookContent.includes('const resumeSnapshot = getVideoResumeSnapshot(continuityKey);'));
+  assert.ok(handoffHookContent.includes('const tryApplyResumeTargetTime = () => {'));
+  assert.ok(handoffHookContent.includes('persistResumeSnapshot(proxyVideoEl, !proxyVideoEl.paused);'));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('loadeddata-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('canplay-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('playing-fallback');"));
@@ -341,6 +347,9 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("publishDebug('inactive-focused-closed', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('const shouldStartPlayback = shouldPlay;'));
   assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
+  assert.ok(playbackResumeStore.includes('const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();'));
+  assert.ok(playbackResumeStore.includes('export function makeVideoResumeKey(selectionKey: string, streamUrl: string): VideoResumeKey {'));
+  assert.ok(playbackResumeStore.includes('export function maybeNormalizeResumeTime(currentTime: number, duration: number): number {'));
   assert.ok(list.includes('data-no-preview="1"'));
   assert.ok(grid.includes('is-active-reinforced'));
   assert.ok(grid.includes('is-hold-emphasis'));

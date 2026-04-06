@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { awaitFirstVideoFrame, type FirstFrameReadyStrategy } from '../utils/awaitFirstVideoFrame';
+import {
+  getVideoResumeSnapshot,
+  makeVideoResumeKey,
+  maybeNormalizeResumeTime,
+  setVideoResumeSnapshot,
+} from '../utils/playbackResumeStore';
 
 export type VisualOwner = 'thumbnail' | 'poster' | 'proxy';
 export type AudioOwner = 'none' | 'proxy';
@@ -107,7 +113,7 @@ export function useVideoOwnershipHandoff({
   const [promotionStrategy, setPromotionStrategy] = useState<FirstFrameReadyStrategy | 'none'>('none');
   const [promotionBlockedReason, setPromotionBlockedReason] = useState('none');
   const [playbackState, setPlaybackState] = useState<PlaybackState>(EMPTY_PLAYBACK);
-  const continuityKey = `${selectionKey}::${streamUrl}`;
+  const continuityKey = makeVideoResumeKey(selectionKey, streamUrl);
   const playbackIntentKey = `${continuityKey}::${playToken}`;
   const pendingHandoffRef = useRef<number | null>(null);
   const latestSessionKeyRef = useRef('');
@@ -242,6 +248,17 @@ export function useVideoOwnershipHandoff({
   }, []);
 
   useEffect(() => {
+    const persistResumeSnapshot = (video: HTMLVideoElement, wasPlaying: boolean) => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const currentTime = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+      setVideoResumeSnapshot(continuityKey, {
+        currentTime: maybeNormalizeResumeTime(currentTime, duration),
+        duration,
+        wasPlaying,
+        updatedAt: Date.now(),
+      });
+    };
+
     if (!selectionKey || !streamUrl) {
       latestSessionKeyRef.current = '';
       if (proxyVideoEl) {
@@ -256,6 +273,7 @@ export function useVideoOwnershipHandoff({
 
     if (!isFocusedOpen) {
       if (proxyVideoEl) {
+        persistResumeSnapshot(proxyVideoEl, !proxyVideoEl.paused);
         proxyVideoEl.muted = true;
         proxyVideoEl.defaultMuted = true;
       }
@@ -281,6 +299,7 @@ export function useVideoOwnershipHandoff({
     let alive = true;
     let sawTimeProgress = false;
     let promoted = false;
+    const resumeSnapshot = getVideoResumeSnapshot(continuityKey);
 
     if (isSessionChanged) {
       setVisualOwner('poster');
@@ -315,17 +334,21 @@ export function useVideoOwnershipHandoff({
       publishDebug(reason, proxyVideoEl);
     };
 
-    const tryApplyHandoffTime = () => {
-      const pendingHandoff = pendingHandoffRef.current;
-      if (pendingHandoff == null) return;
+    const tryApplyResumeTargetTime = () => {
       if (proxyVideoEl.readyState < 1) return;
+      const pendingHandoff = pendingHandoffRef.current;
+      const resumeTime = resumeSnapshot?.currentTime ?? null;
+      const rawTarget = pendingHandoff != null ? pendingHandoff : resumeTime;
+      if (rawTarget == null) return;
       const duration = Number.isFinite(proxyVideoEl.duration) ? proxyVideoEl.duration : 0;
       const target = duration > 0
-        ? Math.min(pendingHandoff, Math.max(0, duration - 0.04))
-        : pendingHandoff;
+        ? maybeNormalizeResumeTime(rawTarget, duration)
+        : Math.max(0, rawTarget);
       try {
         proxyVideoEl.currentTime = Math.max(0, target);
-        pendingHandoffRef.current = null;
+        if (pendingHandoff != null) {
+          pendingHandoffRef.current = null;
+        }
       }
       catch {
         // Ignore early seek failure; we'll retry on the next readiness event.
@@ -389,19 +412,19 @@ export function useVideoOwnershipHandoff({
 
     const onLoadedMetadata = () => {
       loadedMetadataSeenRef.current = true;
-      tryApplyHandoffTime();
+      tryApplyResumeTargetTime();
       syncPlaybackState('loadedmetadata');
     };
     const onLoadedData = () => {
       loadedDataSeenRef.current = true;
-      tryApplyHandoffTime();
+      tryApplyResumeTargetTime();
       requestPlay();
       tryFallbackPromote('loadeddata-fallback');
       syncPlaybackState('loadeddata');
     };
     const onCanPlay = () => {
       canPlaySeenRef.current = true;
-      tryApplyHandoffTime();
+      tryApplyResumeTargetTime();
       requestPlay();
       tryFallbackPromote('canplay-fallback');
       syncPlaybackState('canplay');
@@ -416,8 +439,12 @@ export function useVideoOwnershipHandoff({
       }
       syncPlaybackState('play');
     };
-    const onPause = () => syncPlaybackState('pause');
+    const onPause = () => {
+      persistResumeSnapshot(proxyVideoEl, false);
+      syncPlaybackState('pause');
+    };
     const onTimeUpdate = () => {
+      persistResumeSnapshot(proxyVideoEl, !proxyVideoEl.paused);
       tryFallbackPromote('timeupdate-fallback');
       syncPlaybackState('timeupdate');
     };
@@ -454,7 +481,7 @@ export function useVideoOwnershipHandoff({
 
     const shouldStartPlayback = shouldPlay;
     if (shouldStartPlayback) {
-      tryApplyHandoffTime();
+      tryApplyResumeTargetTime();
       requestPlay();
       tryFallbackPromote('immediate-readiness-fallback');
     }
@@ -478,6 +505,7 @@ export function useVideoOwnershipHandoff({
 
     return () => {
       alive = false;
+      persistResumeSnapshot(proxyVideoEl, !proxyVideoEl.paused);
       proxyVideoEl.removeEventListener('loadedmetadata', onLoadedMetadata);
       proxyVideoEl.removeEventListener('loadeddata', onLoadedData);
       proxyVideoEl.removeEventListener('canplay', onCanPlay);

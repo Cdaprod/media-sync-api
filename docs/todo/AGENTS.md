@@ -1,3 +1,12 @@
+## 2026-04-06 — Per-asset playback memory across multi-preview sessions (active)
+- [x] Added in-memory playback resume store utility keyed by asset continuity identity (`selectionKey::streamUrl`) with snapshot fields (`currentTime`, `duration`, `wasPlaying`, `updatedAt`).
+- [x] Integrated resume restore lane in `useVideoOwnershipHandoff` so focused-open applies target time from pending handoff first, then stored per-asset resume snapshot.
+- [x] Persisted resume snapshots from authoritative playback moments (`timeupdate`, `pause`, focused-close demote, effect cleanup) so returning to previously previewed assets resumes where left off.
+- [x] Added resume-time normalization (`maybeNormalizeResumeTime`) to restart near-end previews from beginning and clamp invalid timestamps safely.
+- [x] Extended static contract assertions for new resume store module and handoff hook resume integration markers.
+- [ ] Device-verify previewing A->B->C->A resumes A at prior position while preserving handoff precedence on immediate same-asset focus-open.
+- [ ] Validate near-end behavior: previews ending within ~0.75s of duration restart at 0 on next open.
+
 ## 2026-04-06 — Continuity key split + close-state warm retention + drift debug (active)
 - [x] Split proxy ownership identity into `continuityKey` (`selectionKey::streamUrl`) and `playbackIntentKey` (`continuityKey::playToken`) so same-asset play-token bumps no longer hard-reset visual continuity lanes.
 - [x] Refined non-focused path in `useVideoOwnershipHandoff` to avoid pause/reset teardown when selection/source remain present (`inactive-focused-closed`), keeping proxy decode warmer for rapid reopen while muting audio ownership.
