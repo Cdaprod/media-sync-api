@@ -283,6 +283,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes("const proxyPrewarmSelectionKey = useMemo(() => ("));
   assert.ok(explorer.includes('const proxyPrewarmUrl = useMemo(() => {'));
   assert.ok(explorer.includes('if (!proxyPrewarmUrl || proxyPreviewVisible) {'));
+  assert.ok(explorer.includes('prewarmVideo.loop = true;'));
+  assert.ok(!explorer.includes('prewarmVideo.pause();\n          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;'));
   assert.ok(explorer.includes("className=\"proxy-prewarm-video\""));
   assert.ok(explorer.includes('useVideoOwnershipHandoff({'));
   assert.ok(explorer.includes('const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;'));
@@ -1193,6 +1195,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("const proxyVideo = cardEl.querySelector<HTMLVideoElement>('.proxy-render-video');"));
   assert.ok(content.includes('if (proxyVideo.paused) {'));
   assert.ok(content.includes('proxyVideo.play().catch(() => {});'));
+  assert.ok(content.includes('focusAsset(nextItem, nextKey);'));
+  assert.ok(content.includes('const proxyOpened = runProxyFocusTransition(nextKey, \'refocus\');'));
   assert.ok(content.includes('className="proxy-preview-ui"'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
   assert.ok(content.includes("'--focus-world-origin-y': `${focusWorldTransform.originY}%`"));

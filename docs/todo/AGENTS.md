@@ -1,3 +1,11 @@
+## 2026-04-06 — First-tap under-hood prewarm continuity + in-focus side-card refocus routing (active)
+- [x] Updated hidden proxy prewarm lane to keep muted loop playback active after first-tap targeting so focused-open has warmed decode/frame continuity.
+- [x] Kept prewarm cleanup behavior for inactive/visible transitions while removing immediate pause after successful prewarm `play()` priming.
+- [x] Changed focused proxy side-card pointer path to run explicit refocus transition ownership (`focusAsset` + `runProxyFocusTransition(...,'refocus')`) with fallback to `openPreview` only if refocus transition cannot start.
+- [x] Added static regression assertions for prewarm loop marker and in-focus refocus routing markers.
+- [ ] Device-verify first tap on grid asset primes playback under the hood (reduced blank/stall on second-tap focused-open) on iOS Safari.
+- [ ] Device-verify side-card taps while focused animate to neighboring assets (horizontal/vertical refocus travel) without closing to rest.
+
 ## 2026-04-05 — ExplorerApp TDZ crash fix for proxy tap toggle (active)
 - [x] Root-caused `Cannot access uninitialized variable` crash to proxy-root effect dependency referencing `handleProxyTogglePlay` before callback initialization.
 - [x] Replaced active-card tap path with inline proxy video play/pause toggle logic inside the proxy pointer handler to avoid forward-reference TDZ.

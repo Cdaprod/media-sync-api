@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-04-06)
+- First-tap focused prewarm now keeps hidden proxy prewarm video actively playing muted/looped (instead of play-then-immediate-pause) so decode/frame state is already warm before focused-open reveal.
+- Focused proxy side-card taps now route directly through explicit refocus transition ownership (`focusAsset` + `runProxyFocusTransition(...,'refocus')`) before fallback preview open, preserving animated lateral/up-down travel while already zoomed.
+- Updated static regression contracts to lock active prewarm playback markers and in-focus side-card refocus routing markers.
+
 ### Latest Implementation Notes (2026-04-05)
 - Fixed a runtime `ReferenceError: Cannot access uninitialized variable` in `ExplorerApp` by removing early TDZ usage of `handleProxyTogglePlay` from proxy-root effect dependencies before callback initialization.
 - Active-card tap-to-toggle now executes inline media toggle logic within the proxy pointer handler (same behavior, no forward-reference TDZ risk).

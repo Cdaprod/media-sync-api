@@ -1819,11 +1819,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const nextItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === nextKey);
       if (!nextItem) return;
       event.preventDefault();
-      openPreview(nextItem);
+      focusAsset(nextItem, nextKey);
+      setFocused(nextItem);
+      setPreviewDetailsOpen(false);
+      setInspectorOpen(true);
+      inspectorOpenRef.current = true;
+      const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');
+      if (!proxyOpened) {
+        openPreview(nextItem);
+      }
     };
     proxyRoot.addEventListener('pointerdown', handleProxyPointerDown, true);
     return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
-  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusRelative, gridCinematicMode, inspectorOpen, openPreview, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusAsset, focusRelative, gridCinematicMode, inspectorOpen, openPreview, runProxyFocusTransition, view]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
@@ -3418,6 +3426,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     prewarmVideo.muted = true;
     prewarmVideo.defaultMuted = true;
     prewarmVideo.playsInline = true;
+    prewarmVideo.loop = true;
     prewarmVideo.preload = 'auto';
     if (prewarmVideo.src !== proxyPrewarmUrl) {
       prewarmVideo.src = proxyPrewarmUrl;
@@ -3430,7 +3439,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (prewarmVideo.readyState < 2) return;
       prewarmVideo.play()
         .then(() => {
-          prewarmVideo.pause();
           proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
         })
         .catch(() => {
