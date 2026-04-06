@@ -370,8 +370,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("publishDebug('poster-release-after-paint', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('same-asset-grid-reentry', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('if (!proxyVideoEl.isConnected) {'));
-  assert.ok(handoffHookContent.includes("publishDebug('requestPlay-skipped-disconnected', proxyVideoEl);"));
-  assert.ok(handoffHookContent.includes("publishDebug('requestPlay-sync-throw', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('play-skipped-disconnected', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('play-threw-sync', proxyVideoEl);"));
   assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
   assert.ok(playbackResumeStore.includes('const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();'));
   assert.ok(playbackResumeStore.includes('export function makeVideoResumeKey(selectionKey: string, streamUrl: string): VideoResumeKey {'));

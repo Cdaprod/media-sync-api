@@ -513,7 +513,7 @@ export function useVideoOwnershipHandoff({
     const requestPlay = () => {
       if (!shouldPlay) return;
       if (!proxyVideoEl.isConnected) {
-        publishDebug('requestPlay-skipped-disconnected', proxyVideoEl);
+        publishDebug('play-skipped-disconnected', proxyVideoEl);
         return;
       }
       playRequestedRef.current = true;
@@ -523,7 +523,7 @@ export function useVideoOwnershipHandoff({
         playPromise = proxyVideoEl.play();
       }
       catch {
-        publishDebug('requestPlay-sync-throw', proxyVideoEl);
+        publishDebug('play-threw-sync', proxyVideoEl);
         return;
       }
       playPromise.catch((error: unknown) => {

@@ -1,3 +1,8 @@
+## 2026-04-06 — Canonical play-guard debug marker alignment (active)
+- [x] Renamed focused handoff disconnected/sync-throw play guard debug markers to canonical forms (`play-skipped-disconnected`, `play-threw-sync`) in `useVideoOwnershipHandoff`.
+- [x] Updated static regression assertions in `exports.test.mjs` to enforce canonical play-guard marker names and prevent legacy request-prefixed drift.
+- [ ] Device-verify runtime `__explorerProxyPlaybackDebug.reason` stream includes canonical play-guard markers during disconnected/sync-throw simulation paths.
+
 ## 2026-04-06 — First-open poster authority + mounted owner enforcement (active)
 - [x] Added first-open poster-hold lane and delayed proxy `videoReady` flip until post-paint overlap completion to avoid blank focused-open before thumbnail preplay.
 - [x] Added resume-source precedence markers (`handoff-live`, `focused-session-warm-reopen`, `resume-store-cold-reopen`, `none-start-at-zero`) with explicit same-asset reentry diagnostics.

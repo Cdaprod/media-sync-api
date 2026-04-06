@@ -1,4 +1,8 @@
 ### Latest Implementation Notes (2026-04-06)
+- Resolved focused handoff debug-marker naming drift in `useVideoOwnershipHandoff`: disconnected/sync-throw play guards now emit canonical markers (`play-skipped-disconnected`, `play-threw-sync`) used by runtime triage notes and static contracts.
+- Updated Explorer static contracts to lock the canonical play-guard marker strings and prevent regressions back to legacy request-prefixed marker names.
+
+### Latest Implementation Notes (2026-04-06)
 - Advanced first-open focused preview fallback: staged promotion now holds poster authority until visible paint confirms, preventing blank preview when no live thumbnail frame exists yet.
 - Resume-source precedence now distinguishes live handoff vs warm same-asset reopen vs cold store restore (`handoff-live`, `focused-session-warm-reopen`, `resume-store-cold-reopen`, `none-start-at-zero`) with explicit debug attribution.
 - Added authoritative ownership guard rails: disconnected/synchronous-play-throw request lanes are safely skipped/instrumented, and renderer now publishes mount lifecycle markers (`proxy-mounted`, `proxy-reused-mounted`, `proxy-remounted`, `proxy-detached`).
