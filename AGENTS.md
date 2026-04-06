@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- Fixed early proxy poster drop in staged promotion by deferring `setVideoReady(true)` until after visible paint confirmation + overlap frame, preventing blank focused-open when preview starts before thumbnail playback warms.
+- Hardened `requestPlay` against crash/reload regressions by skipping disconnected proxy nodes, catching synchronous `play()` throws, and emitting debug markers (`play-skipped-disconnected`, `play-threw-sync`).
+- Focused audio reconciliation now no-ops for disconnected proxy nodes, avoiding stale detached-element mutation during close/reopen churn.
+
+### Latest Implementation Notes (2026-04-06)
 - Fixed stale `play()` rejection race in `useVideoOwnershipHandoff` by guarding rejection telemetry/state writes behind both an active run token and matching continuity session key.
 - Added explicit `AbortError` ignore path for `play()` promise rejections so expected Safari abort churn from load/rebind/cleanup no longer marks current handoff as `play-rejected`.
 - Cleanup now clears active run token ownership, preventing delayed stale promise callbacks from mutating newer handoff runs.

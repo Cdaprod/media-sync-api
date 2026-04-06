@@ -397,7 +397,6 @@ export function useVideoOwnershipHandoff({
     const promote = (strategy: FirstFrameReadyStrategy | 'none', reason: string) => {
       if (promoted) return;
       promoted = true;
-      setVideoReady(true);
       setPromotionStrategy(strategy);
       setPromotionBlockedReason('none');
       setVisualOwner('proxy-preparing');
@@ -413,6 +412,7 @@ export function useVideoOwnershipHandoff({
         setVisualOwner('proxy-overlap');
         await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
         if (!alive) return;
+        setVideoReady(true);
         setFirstFramePresented(true);
         setVisualOwner('proxy');
         const cardEl = proxyVideoEl.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
@@ -449,9 +449,21 @@ export function useVideoOwnershipHandoff({
 
     const requestPlay = () => {
       if (!shouldPlay) return;
+      if (!proxyVideoEl.isConnected) {
+        publishDebug('play-skipped-disconnected', proxyVideoEl);
+        return;
+      }
       playRequestedRef.current = true;
       const currentSession = continuityKey;
-      proxyVideoEl.play().catch((error: unknown) => {
+      let playPromise: Promise<void>;
+      try {
+        playPromise = proxyVideoEl.play();
+      }
+      catch {
+        publishDebug('play-threw-sync', proxyVideoEl);
+        return;
+      }
+      playPromise.catch((error: unknown) => {
         const err = error as { name?: string } | null | undefined;
         if (!alive || activeRunTokenRef.current !== runToken) return;
         if (latestSessionKeyRef.current !== currentSession) return;
@@ -582,6 +594,7 @@ export function useVideoOwnershipHandoff({
 
   useEffect(() => {
     if (!proxyVideoEl) return;
+    if (!proxyVideoEl.isConnected) return;
     const shouldEnableAudio = (
       isFocusedOpen
       && enableFocusedAudio

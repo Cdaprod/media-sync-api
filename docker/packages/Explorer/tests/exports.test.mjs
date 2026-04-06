@@ -341,6 +341,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('const tryApplyResumeTargetTime = () => {'));
   assert.ok(handoffHookContent.includes("setVisualOwner('proxy-preparing');"));
   assert.ok(handoffHookContent.includes("setVisualOwner('proxy-overlap');"));
+  assert.ok(handoffHookContent.includes('setVideoReady(true);'));
   assert.ok(handoffHookContent.includes('awaitVisibleVideoPaint(proxyVideoEl, { timeoutMs: 420 });'));
   assert.ok(handoffHookContent.includes("publishDebug('audio-enabled', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('audio-muted', proxyVideoEl);"));
@@ -359,6 +360,9 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("if (!alive || activeRunTokenRef.current !== runToken) return;"));
   assert.ok(handoffHookContent.includes('if (latestSessionKeyRef.current !== currentSession) return;'));
   assert.ok(handoffHookContent.includes("if (err?.name === 'AbortError') return;"));
+  assert.ok(handoffHookContent.includes('if (!proxyVideoEl.isConnected) {'));
+  assert.ok(handoffHookContent.includes("publishDebug('play-skipped-disconnected', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('play-threw-sync', proxyVideoEl);"));
   assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
   assert.ok(playbackResumeStore.includes('const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();'));
   assert.ok(playbackResumeStore.includes('export function makeVideoResumeKey(selectionKey: string, streamUrl: string): VideoResumeKey {'));

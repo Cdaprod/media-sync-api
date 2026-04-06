@@ -1,3 +1,11 @@
+## 2026-04-06 — Pre-warm preview blank fix + disconnected play guard (active)
+- [x] Deferred `setVideoReady(true)` to post-visible-paint promotion completion so poster/scrim do not drop before an actual proxy frame is painted.
+- [x] Added disconnected-node guard + synchronous `play()` throw handling in `requestPlay` with debug markers (`play-skipped-disconnected`, `play-threw-sync`).
+- [x] Guarded focused audio reconciliation effect against disconnected proxy nodes.
+- [x] Updated static regression assertions for new play-guard markers and staged ready marker placement.
+- [ ] Device-verify first-open (without thumbnail preplay) no longer shows blank focused video before load completion.
+- [ ] Device-verify exiting focused preview then immediately re-entering same asset no longer crashes/reloads page.
+
 ## 2026-04-06 — Stale play() rejection race guard (active)
 - [x] Added active run-token guard in `useVideoOwnershipHandoff` play-request path so stale `play()` promise rejections cannot mutate newer handoff runs.
 - [x] Added continuity-session guard (`latestSessionKeyRef` vs request-time session) for play rejection telemetry writes.
