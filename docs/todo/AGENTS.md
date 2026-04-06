@@ -1,3 +1,11 @@
+## 2026-04-06 — Paint-confirmed proxy promotion + focused audio reconciliation (active)
+- [x] Added `awaitVisibleVideoPaint(...)` helper and integrated staged promotion ownership (`proxy-preparing` -> `proxy-overlap` -> `proxy`) before thumbnail handoff completion.
+- [x] Added warm same-asset reopen precedence (`handoff` -> `focused-session` -> `resume-store`) and debug lane attribution (`resumeSourceUsed`) in `useVideoOwnershipHandoff`.
+- [x] Added focused-state audio reconciliation effect with explicit debug markers (`audio-enabled`, `audio-muted`) so zoomed preview audio no longer depends only on play-event timing.
+- [x] Updated static contract assertions for new utility/module exports and staged promotion/audio debug markers.
+- [ ] Device-verify black/empty flicker is removed during zoom-in handoff on iOS Safari while thumbnail remains stable.
+- [ ] Device-verify zoom-out/zoom-in same asset resumes from focused-session time and preserves audible focused playback.
+
 ## 2026-04-06 — Per-asset playback memory across multi-preview sessions (active)
 - [x] Added in-memory playback resume store utility keyed by asset continuity identity (`selectionKey::streamUrl`) with snapshot fields (`currentTime`, `duration`, `wasPlaying`, `updatedAt`).
 - [x] Integrated resume restore lane in `useVideoOwnershipHandoff` so focused-open applies target time from pending handoff first, then stored per-asset resume snapshot.

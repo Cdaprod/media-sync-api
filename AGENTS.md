@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- Added `awaitVisibleVideoPaint(...)` utility and upgraded focused promotion to staged ownership (`proxy-preparing` -> `proxy-overlap` -> `proxy`) so thumbnail-to-proxy transfer waits for visible paint confirmation instead of immediate readiness-only swap.
+- Added warm same-asset reopen precedence in `useVideoOwnershipHandoff`: resume target now prefers pending handoff, then focused-session snapshot, then per-asset resume store, with debug marker `resumeSourceUsed` for lane attribution.
+- Added focused audio reconciliation effect driven by focused ownership state (not only play-event timing), publishing explicit debug events (`audio-enabled`, `audio-muted`) and restoring reliable zoomed-preview audio while muting on close.
+
+### Latest Implementation Notes (2026-04-06)
 - Added asset-scoped playback memory utility (`playbackResumeStore`) keyed by `selectionKey::streamUrl` to persist per-asset preview resume snapshots (`currentTime`, `duration`, `wasPlaying`, `updatedAt`) during runtime.
 - `useVideoOwnershipHandoff` now restores resume target from `handoffTime` first and falls back to per-asset resume snapshot, normalizing near-end timestamps to restart-safe positions via `maybeNormalizeResumeTime(...)`.
 - Focus-close, pause, timeupdate, and cleanup paths now persist authoritative per-asset resume snapshots so revisiting previously previewed assets resumes from their last meaningful position across multi-asset preview sessions.

@@ -32,6 +32,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'awaitVisibleVideoPaint.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
@@ -223,11 +224,13 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const handoffHookPath = path.join(packageRoot, 'src', 'hooks', 'useVideoOwnershipHandoff.ts');
   const playbackResumeStorePath = path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts');
+  const awaitVisibleVideoPaintPath = path.join(packageRoot, 'src', 'utils', 'awaitVisibleVideoPaint.ts');
   const proxyRendererPath = path.join(packageRoot, 'src', 'render', 'ViewportProxyRenderer.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const handoffHookContent = fs.readFileSync(handoffHookPath, 'utf8');
   const playbackResumeStore = fs.readFileSync(playbackResumeStorePath, 'utf8');
+  const awaitVisibleVideoPaint = fs.readFileSync(awaitVisibleVideoPaintPath, 'utf8');
   const proxyRenderer = fs.readFileSync(proxyRendererPath, 'utf8');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
@@ -332,8 +335,14 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('promotionBlockedReason: string;'));
   assert.ok(handoffHookContent.includes('thumbnailVideoNodeFound: boolean;'));
   assert.ok(handoffHookContent.includes('timeDeltaFromThumbnail: number | null;'));
+  assert.ok(handoffHookContent.includes("resumeSourceUsed: 'none' | 'handoff' | 'focused-session' | 'resume-store';"));
   assert.ok(handoffHookContent.includes('const resumeSnapshot = getVideoResumeSnapshot(continuityKey);'));
   assert.ok(handoffHookContent.includes('const tryApplyResumeTargetTime = () => {'));
+  assert.ok(handoffHookContent.includes("setVisualOwner('proxy-preparing');"));
+  assert.ok(handoffHookContent.includes("setVisualOwner('proxy-overlap');"));
+  assert.ok(handoffHookContent.includes('awaitVisibleVideoPaint(proxyVideoEl, { timeoutMs: 420 });'));
+  assert.ok(handoffHookContent.includes("publishDebug('audio-enabled', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('audio-muted', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('persistResumeSnapshot(proxyVideoEl, !proxyVideoEl.paused);'));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('loadeddata-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('canplay-fallback');"));
@@ -350,6 +359,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(playbackResumeStore.includes('const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();'));
   assert.ok(playbackResumeStore.includes('export function makeVideoResumeKey(selectionKey: string, streamUrl: string): VideoResumeKey {'));
   assert.ok(playbackResumeStore.includes('export function maybeNormalizeResumeTime(currentTime: number, duration: number): number {'));
+  assert.ok(awaitVisibleVideoPaint.includes('export async function awaitVisibleVideoPaint('));
+  assert.ok(awaitVisibleVideoPaint.includes("reason: 'painted' | 'timeout';"));
   assert.ok(list.includes('data-no-preview="1"'));
   assert.ok(grid.includes('is-active-reinforced'));
   assert.ok(grid.includes('is-hold-emphasis'));

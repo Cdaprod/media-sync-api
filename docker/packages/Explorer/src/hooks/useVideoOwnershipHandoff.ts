@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { awaitVisibleVideoPaint } from '../utils/awaitVisibleVideoPaint';
 import { awaitFirstVideoFrame, type FirstFrameReadyStrategy } from '../utils/awaitFirstVideoFrame';
 import {
   getVideoResumeSnapshot,
@@ -8,7 +9,7 @@ import {
   setVideoResumeSnapshot,
 } from '../utils/playbackResumeStore';
 
-export type VisualOwner = 'thumbnail' | 'poster' | 'proxy';
+export type VisualOwner = 'thumbnail' | 'poster' | 'proxy-preparing' | 'proxy-overlap' | 'proxy';
 export type AudioOwner = 'none' | 'proxy';
 
 type PlaybackState = {
@@ -54,6 +55,7 @@ export type VideoOwnershipDebug = {
   thumbnailReadyState: number;
   thumbnailPaused: boolean;
   timeDeltaFromThumbnail: number | null;
+  resumeSourceUsed: 'none' | 'handoff' | 'focused-session' | 'resume-store';
 };
 
 export type UseVideoOwnershipHandoffArgs = {
@@ -138,6 +140,14 @@ export function useVideoOwnershipHandoff({
   const loadedDataSeenRef = useRef(false);
   const canPlaySeenRef = useRef(false);
   const playingSeenRef = useRef(false);
+  const resumeSourceRef = useRef<'none' | 'handoff' | 'focused-session' | 'resume-store'>('none');
+  const lastFocusedSessionRef = useRef<{
+    continuityKey: string;
+    currentTime: number;
+    duration: number;
+    wasPlaying: boolean;
+    updatedAt: number;
+  } | null>(null);
   const debugContextRef = useRef({
     continuityKey,
     playbackIntentKey,
@@ -234,6 +244,7 @@ export function useVideoOwnershipHandoff({
       thumbnailReadyState: thumbnailVideoEl?.readyState ?? 0,
       thumbnailPaused: thumbnailVideoEl?.paused ?? true,
       timeDeltaFromThumbnail,
+      resumeSourceUsed: resumeSourceRef.current,
     });
   }, [thumbnailVideoEl]);
 
@@ -251,12 +262,22 @@ export function useVideoOwnershipHandoff({
     const persistResumeSnapshot = (video: HTMLVideoElement, wasPlaying: boolean) => {
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
       const currentTime = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+      const normalizedTime = maybeNormalizeResumeTime(currentTime, duration);
       setVideoResumeSnapshot(continuityKey, {
-        currentTime: maybeNormalizeResumeTime(currentTime, duration),
+        currentTime: normalizedTime,
         duration,
         wasPlaying,
         updatedAt: Date.now(),
       });
+      if (isFocusedOpen) {
+        lastFocusedSessionRef.current = {
+          continuityKey,
+          currentTime: normalizedTime,
+          duration,
+          wasPlaying,
+          updatedAt: Date.now(),
+        };
+      }
     };
 
     if (!selectionKey || !streamUrl) {
@@ -308,6 +329,7 @@ export function useVideoOwnershipHandoff({
       setFirstFramePresented(false);
       setPromotionStrategy('none');
       setPromotionBlockedReason('none');
+      resumeSourceRef.current = 'none';
     }
 
     if (isSessionChanged) {
@@ -337,9 +359,23 @@ export function useVideoOwnershipHandoff({
     const tryApplyResumeTargetTime = () => {
       if (proxyVideoEl.readyState < 1) return;
       const pendingHandoff = pendingHandoffRef.current;
+      const focusedSessionSnapshot = (
+        lastFocusedSessionRef.current
+        && lastFocusedSessionRef.current.continuityKey === continuityKey
+      )
+        ? lastFocusedSessionRef.current
+        : null;
       const resumeTime = resumeSnapshot?.currentTime ?? null;
-      const rawTarget = pendingHandoff != null ? pendingHandoff : resumeTime;
-      if (rawTarget == null) return;
+      const rawTarget = pendingHandoff != null
+        ? pendingHandoff
+        : (focusedSessionSnapshot?.currentTime ?? resumeTime);
+      if (rawTarget == null) {
+        resumeSourceRef.current = 'none';
+        return;
+      }
+      resumeSourceRef.current = pendingHandoff != null
+        ? 'handoff'
+        : (focusedSessionSnapshot ? 'focused-session' : 'resume-store');
       const duration = Number.isFinite(proxyVideoEl.duration) ? proxyVideoEl.duration : 0;
       const target = duration > 0
         ? maybeNormalizeResumeTime(rawTarget, duration)
@@ -358,27 +394,36 @@ export function useVideoOwnershipHandoff({
     const promote = (strategy: FirstFrameReadyStrategy | 'none', reason: string) => {
       if (promoted) return;
       promoted = true;
-      setFirstFramePresented(true);
       setVideoReady(true);
       setPromotionStrategy(strategy);
       setPromotionBlockedReason('none');
-      setVisualOwner('proxy');
-      if (enableFocusedAudio && shouldPlay && playingSeenRef.current) {
-        proxyVideoEl.muted = false;
-        proxyVideoEl.defaultMuted = false;
-        setAudioOwner('proxy');
-      }
-      const cardEl = proxyVideoEl.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
-      if (cardEl) {
-        cardEl.dataset.firstFramePresented = 'true';
-        cardEl.dataset.videoReady = 'true';
-        cardEl.dataset.promotionStrategy = strategy;
-        cardEl.dataset.proxySessionId = continuityKey;
-      }
-      proxyVideoEl.dataset.proxySessionId = continuityKey;
-      onPromotedRef.current?.();
-      onHandoffConsumedRef.current?.();
-      syncPlaybackState(reason);
+      setVisualOwner('proxy-preparing');
+
+      void (async () => {
+        const visiblePaint = await awaitVisibleVideoPaint(proxyVideoEl, { timeoutMs: 420 });
+        if (!alive) return;
+        if (!visiblePaint.ok) {
+          setPromotionBlockedReason('visible-paint-timeout');
+          syncPlaybackState('visible-paint-timeout');
+          return;
+        }
+        setVisualOwner('proxy-overlap');
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        if (!alive) return;
+        setFirstFramePresented(true);
+        setVisualOwner('proxy');
+        const cardEl = proxyVideoEl.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
+        if (cardEl) {
+          cardEl.dataset.firstFramePresented = 'true';
+          cardEl.dataset.videoReady = 'true';
+          cardEl.dataset.promotionStrategy = strategy;
+          cardEl.dataset.proxySessionId = continuityKey;
+        }
+        proxyVideoEl.dataset.proxySessionId = continuityKey;
+        onPromotedRef.current?.();
+        onHandoffConsumedRef.current?.();
+        syncPlaybackState(reason);
+      })();
     };
 
     const tryFallbackPromote = (fallbackReason: string) => {
@@ -432,11 +477,6 @@ export function useVideoOwnershipHandoff({
     const onPlay = () => {
       playingSeenRef.current = true;
       tryFallbackPromote('playing-fallback');
-      if (promoted && enableFocusedAudio && shouldPlay) {
-        proxyVideoEl.muted = false;
-        proxyVideoEl.defaultMuted = false;
-        setAudioOwner('proxy');
-      }
       syncPlaybackState('play');
     };
     const onPause = () => {
@@ -528,6 +568,32 @@ export function useVideoOwnershipHandoff({
     wasPlayingBeforeHandoff,
     publishDebug,
   ]);
+
+  useEffect(() => {
+    if (!proxyVideoEl) return;
+    const shouldEnableAudio = (
+      isFocusedOpen
+      && enableFocusedAudio
+      && shouldPlay
+      && (visualOwner === 'proxy' || visualOwner === 'proxy-overlap')
+    );
+    if (shouldEnableAudio) {
+      proxyVideoEl.muted = false;
+      proxyVideoEl.defaultMuted = false;
+      if (audioOwner !== 'proxy') {
+        setAudioOwner('proxy');
+      }
+      publishDebug('audio-enabled', proxyVideoEl);
+    }
+    else {
+      proxyVideoEl.muted = true;
+      proxyVideoEl.defaultMuted = true;
+      if (audioOwner !== 'none') {
+        setAudioOwner('none');
+      }
+      publishDebug('audio-muted', proxyVideoEl);
+    }
+  }, [audioOwner, enableFocusedAudio, isFocusedOpen, proxyVideoEl, publishDebug, shouldPlay, visualOwner]);
 
   const canPromote = useMemo(() => (
     isFocusedOpen
