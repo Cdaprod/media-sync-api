@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- Fixed stale `play()` rejection race in `useVideoOwnershipHandoff` by guarding rejection telemetry/state writes behind both an active run token and matching continuity session key.
+- Added explicit `AbortError` ignore path for `play()` promise rejections so expected Safari abort churn from load/rebind/cleanup no longer marks current handoff as `play-rejected`.
+- Cleanup now clears active run token ownership, preventing delayed stale promise callbacks from mutating newer handoff runs.
+
+### Latest Implementation Notes (2026-04-06)
 - Added `awaitVisibleVideoPaint(...)` utility and upgraded focused promotion to staged ownership (`proxy-preparing` -> `proxy-overlap` -> `proxy`) so thumbnail-to-proxy transfer waits for visible paint confirmation instead of immediate readiness-only swap.
 - Added warm same-asset reopen precedence in `useVideoOwnershipHandoff`: resume target now prefers pending handoff, then focused-session snapshot, then per-asset resume store, with debug marker `resumeSourceUsed` for lane attribution.
 - Added focused audio reconciliation effect driven by focused ownership state (not only play-event timing), publishing explicit debug events (`audio-enabled`, `audio-muted`) and restoring reliable zoomed-preview audio while muting on close.

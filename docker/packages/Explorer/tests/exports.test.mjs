@@ -328,6 +328,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('videoNodeFound: boolean;'));
   assert.ok(handoffHookContent.includes('playRequested: boolean;'));
   assert.ok(handoffHookContent.includes('playPromiseRejected: boolean;'));
+  assert.ok(handoffHookContent.includes('const activeRunTokenRef = useRef<symbol | null>(null);'));
   assert.ok(handoffHookContent.includes('loadedMetadataSeen: boolean;'));
   assert.ok(handoffHookContent.includes('loadedDataSeen: boolean;'));
   assert.ok(handoffHookContent.includes('canPlaySeen: boolean;'));
@@ -355,6 +356,9 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("publishDebug('inactive-no-selection', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('inactive-focused-closed', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('const shouldStartPlayback = shouldPlay;'));
+  assert.ok(handoffHookContent.includes("if (!alive || activeRunTokenRef.current !== runToken) return;"));
+  assert.ok(handoffHookContent.includes('if (latestSessionKeyRef.current !== currentSession) return;'));
+  assert.ok(handoffHookContent.includes("if (err?.name === 'AbortError') return;"));
   assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
   assert.ok(playbackResumeStore.includes('const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();'));
   assert.ok(playbackResumeStore.includes('export function makeVideoResumeKey(selectionKey: string, streamUrl: string): VideoResumeKey {'));

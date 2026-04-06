@@ -1,3 +1,10 @@
+## 2026-04-06 — Stale play() rejection race guard (active)
+- [x] Added active run-token guard in `useVideoOwnershipHandoff` play-request path so stale `play()` promise rejections cannot mutate newer handoff runs.
+- [x] Added continuity-session guard (`latestSessionKeyRef` vs request-time session) for play rejection telemetry writes.
+- [x] Ignored expected `AbortError` rejections from `play()` during load/rebind/cleanup churn to prevent false `play-rejected` promotion blocking.
+- [x] Updated static contract assertions for run-token guard + session guard + abort ignore markers.
+- [ ] Device-verify rapid refocus switching no longer produces false `play-rejected` debug states or silent focused playback.
+
 ## 2026-04-06 — Paint-confirmed proxy promotion + focused audio reconciliation (active)
 - [x] Added `awaitVisibleVideoPaint(...)` helper and integrated staged promotion ownership (`proxy-preparing` -> `proxy-overlap` -> `proxy`) before thumbnail handoff completion.
 - [x] Added warm same-asset reopen precedence (`handoff` -> `focused-session` -> `resume-store`) and debug lane attribution (`resumeSourceUsed`) in `useVideoOwnershipHandoff`.

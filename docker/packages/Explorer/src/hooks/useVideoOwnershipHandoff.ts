@@ -140,6 +140,7 @@ export function useVideoOwnershipHandoff({
   const loadedDataSeenRef = useRef(false);
   const canPlaySeenRef = useRef(false);
   const playingSeenRef = useRef(false);
+  const activeRunTokenRef = useRef<symbol | null>(null);
   const resumeSourceRef = useRef<'none' | 'handoff' | 'focused-session' | 'resume-store'>('none');
   const lastFocusedSessionRef = useRef<{
     continuityKey: string;
@@ -318,6 +319,8 @@ export function useVideoOwnershipHandoff({
     latestSessionKeyRef.current = continuityKey;
 
     let alive = true;
+    const runToken = Symbol('video-ownership-run');
+    activeRunTokenRef.current = runToken;
     let sawTimeProgress = false;
     let promoted = false;
     const resumeSnapshot = getVideoResumeSnapshot(continuityKey);
@@ -447,7 +450,12 @@ export function useVideoOwnershipHandoff({
     const requestPlay = () => {
       if (!shouldPlay) return;
       playRequestedRef.current = true;
-      proxyVideoEl.play().catch(() => {
+      const currentSession = continuityKey;
+      proxyVideoEl.play().catch((error: unknown) => {
+        const err = error as { name?: string } | null | undefined;
+        if (!alive || activeRunTokenRef.current !== runToken) return;
+        if (latestSessionKeyRef.current !== currentSession) return;
+        if (err?.name === 'AbortError') return;
         playPromiseRejectedRef.current = true;
         setPromotionBlockedReason('play-rejected');
         syncPlaybackState('play-rejected');
@@ -545,6 +553,9 @@ export function useVideoOwnershipHandoff({
 
     return () => {
       alive = false;
+      if (activeRunTokenRef.current === runToken) {
+        activeRunTokenRef.current = null;
+      }
       persistResumeSnapshot(proxyVideoEl, !proxyVideoEl.paused);
       proxyVideoEl.removeEventListener('loadedmetadata', onLoadedMetadata);
       proxyVideoEl.removeEventListener('loadeddata', onLoadedData);
