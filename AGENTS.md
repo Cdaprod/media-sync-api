@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- Strengthened focused continuity resume authority in `useVideoOwnershipHandoff` with per-continuity writer versions so stale/hidden cleanup lanes cannot overwrite newer authoritative resume snapshots.
+- Tightened reopen source precedence so `handoff-live` is used only for true live thumbnail handoff (`wasPlayingBeforeHandoff` + live frame), while same-asset immediate reopen stays on `focused-session-warm-reopen`.
+- Added close-path hardening marker `focus-close-cleanup` and expanded static contracts for poster/debug threading plus authoritative resume-write guards.
+
+### Latest Implementation Notes (2026-04-06)
 - Resolved focused handoff debug-marker naming drift in `useVideoOwnershipHandoff`: disconnected/sync-throw play guards now emit canonical markers (`play-skipped-disconnected`, `play-threw-sync`) used by runtime triage notes and static contracts.
 - Updated Explorer static contracts to lock the canonical play-guard marker strings and prevent regressions back to legacy request-prefixed marker names.
 

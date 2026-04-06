@@ -152,6 +152,8 @@ export function useVideoOwnershipHandoff({
   const activeRunTokenRef = useRef<symbol | null>(null);
   const resumeSourceRef = useRef<'handoff-live' | 'focused-session-warm-reopen' | 'resume-store-cold-reopen' | 'none-start-at-zero'>('none-start-at-zero');
   const runTokenLabelRef = useRef('run:idle');
+  const activeResumeWriterVersionRef = useRef(0);
+  const resumeWriterVersionByContinuityRef = useRef(new Map<string, number>());
   const authoritativeVisualSurfaceRef = useRef<'none' | 'poster' | 'proxy'>('none');
   const authoritativeAudioSurfaceRef = useRef<'none' | 'proxy'>('none');
   const lastFocusedSessionRef = useRef<{
@@ -286,7 +288,8 @@ export function useVideoOwnershipHandoff({
       const isAuthoritativeWriter = (
         video.isConnected
         && latestSessionKeyRef.current === continuityKey
-        && (visualOwner === 'proxy' || isFocusedOpen)
+        && activeResumeWriterVersionRef.current > 0
+        && (authoritativeVisualSurfaceRef.current === 'proxy' || isFocusedOpen)
       );
       if (!isAuthoritativeWriter) return;
       const duration = Number.isFinite(video.duration) ? video.duration : 0;
@@ -297,6 +300,7 @@ export function useVideoOwnershipHandoff({
         duration,
         wasPlaying,
         updatedAt: Date.now(),
+        writerVersion: activeResumeWriterVersionRef.current,
       });
       if (isFocusedOpen) {
         lastFocusedSessionRef.current = {
@@ -311,6 +315,7 @@ export function useVideoOwnershipHandoff({
 
     if (!selectionKey || !streamUrl) {
       latestSessionKeyRef.current = '';
+      activeResumeWriterVersionRef.current = 0;
       authoritativeVisualSurfaceRef.current = 'none';
       authoritativeAudioSurfaceRef.current = 'none';
       if (proxyVideoEl) {
@@ -335,6 +340,7 @@ export function useVideoOwnershipHandoff({
       authoritativeVisualSurfaceRef.current = 'poster';
       publishDebug('inactive-focused-closed', proxyVideoEl);
       publishDebug('proxy-state-after-close', proxyVideoEl);
+      publishDebug('focus-close-cleanup', proxyVideoEl);
       return;
     }
 
@@ -352,6 +358,14 @@ export function useVideoOwnershipHandoff({
 
     const isSessionChanged = latestSessionKeyRef.current !== continuityKey;
     latestSessionKeyRef.current = continuityKey;
+    if (isSessionChanged) {
+      const nextWriterVersion = (resumeWriterVersionByContinuityRef.current.get(continuityKey) ?? 0) + 1;
+      resumeWriterVersionByContinuityRef.current.set(continuityKey, nextWriterVersion);
+      activeResumeWriterVersionRef.current = nextWriterVersion;
+    }
+    else {
+      activeResumeWriterVersionRef.current = resumeWriterVersionByContinuityRef.current.get(continuityKey) ?? 1;
+    }
 
     let alive = true;
     const runToken = Symbol('video-ownership-run');
@@ -413,14 +427,15 @@ export function useVideoOwnershipHandoff({
         ? lastFocusedSessionRef.current
         : null;
       const resumeTime = resumeSnapshot?.currentTime ?? null;
-      const rawTarget = (pendingHandoff != null && hasLiveThumbnailFrame)
+      const canUseLiveHandoff = pendingHandoff != null && hasLiveThumbnailFrame && wasPlayingBeforeHandoff;
+      const rawTarget = canUseLiveHandoff
         ? pendingHandoff
         : (focusedSessionSnapshot?.currentTime ?? resumeTime);
       if (rawTarget == null) {
         resumeSourceRef.current = 'none-start-at-zero';
         return;
       }
-      resumeSourceRef.current = (pendingHandoff != null && hasLiveThumbnailFrame)
+      resumeSourceRef.current = canUseLiveHandoff
         ? 'handoff-live'
         : (focusedSessionSnapshot ? 'focused-session-warm-reopen' : 'resume-store-cold-reopen');
       if (resumeSourceRef.current === 'focused-session-warm-reopen') {

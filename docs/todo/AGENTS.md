@@ -1,3 +1,10 @@
+## 2026-04-06 — Focused continuity authority hardening (active)
+- [x] Added authoritative resume writer versioning (`activeResumeWriterVersionRef` + continuity version map + `writerVersion` snapshot guard) so stale/hidden lanes cannot overwrite newer resume positions.
+- [x] Tightened resume precedence so `handoff-live` is restricted to true live thumbnail handoff (`pendingHandoff + live thumbnail frame + wasPlayingBeforeHandoff`), preserving same-asset reopen authority for `focused-session-warm-reopen`.
+- [x] Added focused close-path hardening marker `focus-close-cleanup` for close->grid->same-asset reentry traceability.
+- [x] Expanded static regression assertions for poster-threaded debug fields and authoritative resume-write/version markers.
+- [ ] Device-verify close->grid->same-asset immediate reopen keeps warm resume source attribution and does not regress to stale snapshot positions.
+
 ## 2026-04-06 — Canonical play-guard debug marker alignment (active)
 - [x] Renamed focused handoff disconnected/sync-throw play guard debug markers to canonical forms (`play-skipped-disconnected`, `play-threw-sync`) in `useVideoOwnershipHandoff`.
 - [x] Updated static regression assertions in `exports.test.mjs` to enforce canonical play-guard marker names and prevent legacy request-prefixed drift.

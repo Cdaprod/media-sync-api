@@ -340,6 +340,11 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('thumbnailVideoNodeFound: boolean;'));
   assert.ok(handoffHookContent.includes('timeDeltaFromThumbnail: number | null;'));
   assert.ok(handoffHookContent.includes("resumeSourceUsed: 'handoff-live' | 'focused-session-warm-reopen' | 'resume-store-cold-reopen' | 'none-start-at-zero';"));
+  assert.ok(handoffHookContent.includes('hasPoster: boolean;'));
+  assert.ok(handoffHookContent.includes('posterUrl: string;'));
+  assert.ok(handoffHookContent.includes('posterShown: boolean;'));
+  assert.ok(handoffHookContent.includes('const activeResumeWriterVersionRef = useRef(0);'));
+  assert.ok(handoffHookContent.includes('const resumeWriterVersionByContinuityRef = useRef(new Map<string, number>());'));
   assert.ok(handoffHookContent.includes('const resumeSnapshot = getVideoResumeSnapshot(continuityKey);'));
   assert.ok(handoffHookContent.includes('const tryApplyResumeTargetTime = () => {'));
   assert.ok(handoffHookContent.includes("setVisualOwner('proxy-preparing');"));
@@ -361,6 +366,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("publishDebug('source-reused', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('inactive-no-selection', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('inactive-focused-closed', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('focus-close-cleanup', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('const shouldStartPlayback = shouldPlay;'));
   assert.ok(handoffHookContent.includes("if (!alive || activeRunTokenRef.current !== runToken) return;"));
   assert.ok(handoffHookContent.includes('if (latestSessionKeyRef.current !== currentSession) return;'));
@@ -369,11 +375,16 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("publishDebug('first-open-no-live-thumbnail', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('poster-release-after-paint', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('same-asset-grid-reentry', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes('const canUseLiveHandoff = pendingHandoff != null && hasLiveThumbnailFrame && wasPlayingBeforeHandoff;'));
+  assert.ok(handoffHookContent.includes('writerVersion: activeResumeWriterVersionRef.current,'));
   assert.ok(handoffHookContent.includes('if (!proxyVideoEl.isConnected) {'));
   assert.ok(handoffHookContent.includes("publishDebug('play-skipped-disconnected', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('play-threw-sync', proxyVideoEl);"));
   assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
   assert.ok(playbackResumeStore.includes('const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();'));
+  assert.ok(playbackResumeStore.includes('writerVersion?: number;'));
+  assert.ok(playbackResumeStore.includes('const existingWriterVersion = existing?.writerVersion;'));
+  assert.ok(playbackResumeStore.includes('const nextWriterVersion = snapshot.writerVersion;'));
   assert.ok(playbackResumeStore.includes('export function makeVideoResumeKey(selectionKey: string, streamUrl: string): VideoResumeKey {'));
   assert.ok(playbackResumeStore.includes('export function maybeNormalizeResumeTime(currentTime: number, duration: number): number {'));
   assert.ok(awaitVisibleVideoPaint.includes('export async function awaitVisibleVideoPaint('));

@@ -5,6 +5,7 @@ export type VideoResumeSnapshot = {
   duration: number;
   wasPlaying: boolean;
   updatedAt: number;
+  writerVersion?: number;
 };
 
 const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();
@@ -19,6 +20,15 @@ export function getVideoResumeSnapshot(key: VideoResumeKey): VideoResumeSnapshot
 
 export function setVideoResumeSnapshot(key: VideoResumeKey, snapshot: VideoResumeSnapshot): void {
   const existing = playbackResumeStore.get(key);
+  const existingWriterVersion = existing?.writerVersion;
+  const nextWriterVersion = snapshot.writerVersion;
+  if (
+    Number.isFinite(existingWriterVersion)
+    && Number.isFinite(nextWriterVersion)
+    && (nextWriterVersion as number) < (existingWriterVersion as number)
+  ) {
+    return;
+  }
   if (existing && existing.updatedAt > snapshot.updatedAt) return;
   playbackResumeStore.set(key, snapshot);
 }
