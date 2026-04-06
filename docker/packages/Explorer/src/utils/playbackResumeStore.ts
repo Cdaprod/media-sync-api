@@ -18,6 +18,8 @@ export function getVideoResumeSnapshot(key: VideoResumeKey): VideoResumeSnapshot
 }
 
 export function setVideoResumeSnapshot(key: VideoResumeKey, snapshot: VideoResumeSnapshot): void {
+  const existing = playbackResumeStore.get(key);
+  if (existing && existing.updatedAt > snapshot.updatedAt) return;
   playbackResumeStore.set(key, snapshot);
 }
 

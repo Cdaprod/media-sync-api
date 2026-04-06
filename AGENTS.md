@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- Advanced first-open focused preview fallback: staged promotion now holds poster authority until visible paint confirms, preventing blank preview when no live thumbnail frame exists yet.
+- Resume-source precedence now distinguishes live handoff vs warm same-asset reopen vs cold store restore (`handoff-live`, `focused-session-warm-reopen`, `resume-store-cold-reopen`, `none-start-at-zero`) with explicit debug attribution.
+- Added authoritative ownership guard rails: disconnected/synchronous-play-throw request lanes are safely skipped/instrumented, and renderer now publishes mount lifecycle markers (`proxy-mounted`, `proxy-reused-mounted`, `proxy-remounted`, `proxy-detached`).
+
+### Latest Implementation Notes (2026-04-06)
 - Fixed early proxy poster drop in staged promotion by deferring `setVideoReady(true)` until after visible paint confirmation + overlap frame, preventing blank focused-open when preview starts before thumbnail playback warms.
 - Hardened `requestPlay` against crash/reload regressions by skipping disconnected proxy nodes, catching synchronous `play()` throws, and emitting debug markers (`play-skipped-disconnected`, `play-threw-sync`).
 - Focused audio reconciliation now no-ops for disconnected proxy nodes, avoiding stale detached-element mutation during close/reopen churn.

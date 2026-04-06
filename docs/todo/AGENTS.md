@@ -1,3 +1,12 @@
+## 2026-04-06 — First-open poster authority + mounted owner enforcement (active)
+- [x] Added first-open poster-hold lane and delayed proxy `videoReady` flip until post-paint overlap completion to avoid blank focused-open before thumbnail preplay.
+- [x] Added resume-source precedence markers (`handoff-live`, `focused-session-warm-reopen`, `resume-store-cold-reopen`, `none-start-at-zero`) with explicit same-asset reentry diagnostics.
+- [x] Added requestPlay defensive instrumentation (`requestPlay-skipped-disconnected`, `requestPlay-sync-throw`) and renderer mount lifecycle markers (`proxy-mounted`, `proxy-reused-mounted`, `proxy-remounted`, `proxy-detached`).
+- [x] Added authoritative audio/visual surface debug outputs and monotonic resume-store write guard.
+- [ ] Device-verify first-open focused preview (without thumbnail preplay) shows poster then smooth proxy release with no blank flash.
+- [ ] Device-verify repeated same-asset close/open stays mounted-reused (no reload) with resume from warm focused-session lane and proper focused audio ownership.
+- [ ] Deferred: true single-surface promotion (same DOM video node moved between grid/focus) remains a future architecture cut.
+
 ## 2026-04-06 — Pre-warm preview blank fix + disconnected play guard (active)
 - [x] Deferred `setVideoReady(true)` to post-visible-paint promotion completion so poster/scrim do not drop before an actual proxy frame is painted.
 - [x] Added disconnected-node guard + synchronous `play()` throw handling in `requestPlay` with debug markers (`play-skipped-disconnected`, `play-threw-sync`).

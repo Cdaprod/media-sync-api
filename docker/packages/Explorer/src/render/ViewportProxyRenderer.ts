@@ -14,6 +14,7 @@ export class ViewportProxyRenderer {
   private activePosterEl: HTMLImageElement | null = null;
   private activeVideoNodeStableId = 0;
   private renderPassCount = 0;
+  private proxyMountedState = 'proxy-detached';
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -48,6 +49,7 @@ export class ViewportProxyRenderer {
     this.activeVideoEl = null;
     this.activePosterEl = null;
     this.renderPassCount = 0;
+    this.proxyMountedState = 'proxy-detached';
   }
 
   private ensureLayers() {
@@ -99,6 +101,7 @@ export class ViewportProxyRenderer {
     this.activeCardEl = null;
     this.activeVideoEl = null;
     this.activePosterEl = null;
+    this.proxyMountedState = 'proxy-detached';
   }
 
   private ensureActiveCardShell(card: RenderCardSnapshot) {
@@ -176,12 +179,17 @@ export class ViewportProxyRenderer {
         thumbEl.appendChild(videoEl);
         this.activeVideoNodeStableId += 1;
         videoEl.dataset.proxyStableVideoId = String(this.activeVideoNodeStableId);
+        this.proxyMountedState = this.proxyMountedState === 'proxy-detached' ? 'proxy-mounted' : 'proxy-remounted';
         activeMediaRecreated = true;
+      }
+      else {
+        this.proxyMountedState = 'proxy-reused-mounted';
       }
       if (videoEl.src !== card.mediaUrl) {
         videoEl.src = card.mediaUrl;
       }
       videoEl.dataset.streamUrl = card.mediaUrl;
+      videoEl.dataset.proxyMountedState = this.proxyMountedState;
       this.activeVideoEl = videoEl;
 
       let posterEl = this.activePosterEl;
@@ -217,6 +225,7 @@ export class ViewportProxyRenderer {
       if (this.activeVideoEl) {
         this.activeVideoEl.remove();
         this.activeVideoEl = null;
+        this.proxyMountedState = 'proxy-detached';
         activeMediaRecreated = true;
       }
       if (this.activePosterEl) {
@@ -304,6 +313,7 @@ export class ViewportProxyRenderer {
         renderPassCount: number;
         activeNodeReused: boolean;
         activeMediaRecreated: boolean;
+        proxyMountedState: string;
       };
     }).__explorerProxyRendererDebug = {
       activeSelectionKey: this.activeSelectionKey,
@@ -311,6 +321,7 @@ export class ViewportProxyRenderer {
       renderPassCount: this.renderPassCount,
       activeNodeReused: reconcile.activeNodeReused,
       activeMediaRecreated: reconcile.activeMediaRecreated,
+      proxyMountedState: this.proxyMountedState,
     };
   }
 }
