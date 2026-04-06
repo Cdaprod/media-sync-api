@@ -954,6 +954,12 @@ select.control{
   opacity: 0;
   transition: opacity 120ms ease;
 }
+.proxy-render-card[data-poster-shown="true"] .proxy-render-poster{
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+  z-index: 2;
+}
 .proxy-render-card[data-video-ready="true"] .proxy-render-poster,
 .proxy-render-card[data-first-frame-presented="true"] .proxy-render-poster{
   opacity: 0;

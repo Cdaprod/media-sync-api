@@ -86,6 +86,7 @@ export class FocusTransitionOrchestrator {
 
     const startCamera = { ...this.currentCamera, x: 0, y: 0, scale: 1 };
     this.renderer.render(snapshot, startCamera, { showActiveChrome: false });
+    delete this.root.dataset.proxyRetainedOnClose;
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
 
@@ -156,6 +157,7 @@ export class FocusTransitionOrchestrator {
       viewportHeight: snapshot.viewport.height,
     });
     this.renderer.render(snapshot, this.currentCamera, { showActiveChrome: false });
+    delete this.root.dataset.proxyRetainedOnClose;
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
     this.timeline?.kill();
@@ -217,7 +219,7 @@ export class FocusTransitionOrchestrator {
       onComplete: () => {
         this.root.style.opacity = '0';
         this.root.style.pointerEvents = 'none';
-        this.renderer.unmount();
+        this.root.dataset.proxyRetainedOnClose = 'true';
         this.currentCamera = {
           x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
         };

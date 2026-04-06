@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- Render-layer continuity follow-up: `FocusTransitionOrchestrator.closeFocusTransition` now retains the mounted proxy renderer tree on close (opacity/pointer suppression only) instead of unmounting, enabling same-asset close/open reuse of the active proxy subtree.
+- `useVideoOwnershipHandoff` now returns poster-threaded state (`hasPoster`, `posterShown`, `posterUrl`), and `ExplorerApp` threads those values onto active proxy card/video datasets for render-lane visibility/debug authority.
+- Added explicit proxy poster visibility dataset selector (`data-poster-shown="true"`) in styles and expanded static contracts to lock retained-close behavior + poster threading markers.
+
+### Latest Implementation Notes (2026-04-06)
 - Strengthened focused continuity resume authority in `useVideoOwnershipHandoff` with per-continuity writer versions so stale/hidden cleanup lanes cannot overwrite newer authoritative resume snapshots.
 - Tightened reopen source precedence so `handoff-live` is used only for true live thumbnail handoff (`wasPlayingBeforeHandoff` + live frame), while same-asset immediate reopen stays on `focused-session-warm-reopen`.
 - Added close-path hardening marker `focus-close-cleanup` and expanded static contracts for poster/debug threading plus authoritative resume-write guards.

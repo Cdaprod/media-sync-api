@@ -308,12 +308,19 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('streamUrl: proxyStreamUrl,'));
   assert.ok(explorer.includes('streamUrl: proxyStreamUrl,'));
   assert.ok(explorer.includes('thumbnailVideoEl: activeThumbnailVideoEl,'));
+  assert.ok(explorer.includes('hasPoster: proxyHasPoster,'));
+  assert.ok(explorer.includes('posterShown: proxyPosterShown,'));
+  assert.ok(explorer.includes('posterUrl: proxyPosterUrl,'));
   assert.ok(explorer.includes("activeProxyCardEl.dataset.videoReady = (proxyVideoReady || proxyFirstFramePresented) ? 'true' : 'false';"));
   assert.ok(explorer.includes("activeProxyCardEl.dataset.firstFramePresented = proxyFirstFramePresented ? 'true' : 'false';"));
   assert.ok(explorer.includes('activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;'));
   assert.ok(explorer.includes('activeProxyCardEl.dataset.streamUrl = proxyStreamUrl;'));
   assert.ok(explorer.includes('activeProxyCardEl.dataset.proxySessionId = proxyPlaybackSessionKey;'));
+  assert.ok(explorer.includes("activeProxyCardEl.dataset.posterShown = proxyPosterShown ? 'true' : 'false';"));
+  assert.ok(explorer.includes('activeProxyCardEl.dataset.posterUrl = proxyPosterUrl;'));
+  assert.ok(explorer.includes("activeProxyCardEl.dataset.hasPoster = proxyHasPoster ? 'true' : 'false';"));
   assert.ok(explorer.includes('activeProxyVideoEl.dataset.proxySessionId = proxyPlaybackSessionKey;'));
+  assert.ok(explorer.includes("activeProxyVideoEl.dataset.posterShown = proxyPosterShown ? 'true' : 'false';"));
   assert.ok(proxyRenderer.includes("activeCardEl.dataset.streamUrl = card.mediaUrl || '';"));
   assert.ok(proxyRenderer.includes('videoEl.dataset.streamUrl = card.mediaUrl;'));
   assert.ok(proxyRenderer.includes("videoEl.dataset.proxyMountedState = this.proxyMountedState;"));
@@ -343,6 +350,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('hasPoster: boolean;'));
   assert.ok(handoffHookContent.includes('posterUrl: string;'));
   assert.ok(handoffHookContent.includes('posterShown: boolean;'));
+  assert.ok(handoffHookContent.includes('const posterState = useMemo(() => {'));
+  assert.ok(handoffHookContent.includes("posterShown: visualOwner === 'poster' || !firstFramePresented,"));
   assert.ok(handoffHookContent.includes('const activeResumeWriterVersionRef = useRef(0);'));
   assert.ok(handoffHookContent.includes('const resumeWriterVersionByContinuityRef = useRef(new Map<string, number>());'));
   assert.ok(handoffHookContent.includes('const resumeSnapshot = getVideoResumeSnapshot(continuityKey);'));
@@ -1311,6 +1320,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('__explorerProxyCenterDebug'));
   assert.ok(orchestrator.includes('this.renderer.render(snapshot, startCamera, { showActiveChrome: false });'));
   assert.ok(orchestrator.includes('this.renderer.render(snapshot, camera, { showActiveChrome: true });'));
+  assert.ok(orchestrator.includes("this.root.dataset.proxyRetainedOnClose = 'true';"));
+  assert.ok(!orchestrator.includes('this.renderer.unmount();'));
   assert.ok(orchestrator.includes('.proxy-render-top, .proxy-render-bottom, .proxy-render-scrim'));
   assert.ok(content.includes('density.scrubTo(nextColumns);'));
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));

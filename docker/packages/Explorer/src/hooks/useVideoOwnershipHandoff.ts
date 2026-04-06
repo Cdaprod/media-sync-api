@@ -92,6 +92,9 @@ export type UseVideoOwnershipHandoffResult = {
   canPromote: boolean;
   playbackState: PlaybackState;
   promotionStrategy: FirstFrameReadyStrategy | 'none';
+  hasPoster: boolean;
+  posterShown: boolean;
+  posterUrl: string;
   resetOwnership: () => void;
 };
 
@@ -714,6 +717,16 @@ export function useVideoOwnershipHandoff({
     && Boolean(streamUrl)
     && (videoReady || firstFramePresented)
   ), [firstFramePresented, isFocusedOpen, selectionKey, streamUrl, videoReady]);
+  const posterState = useMemo(() => {
+    const cardEl = proxyVideoEl?.closest<HTMLElement>('.proxy-render-card[data-selection-key]') ?? null;
+    const posterEl = cardEl?.querySelector<HTMLImageElement>('.proxy-render-poster') ?? null;
+    const posterUrl = posterEl?.src || '';
+    return {
+      hasPoster: Boolean(posterUrl),
+      posterUrl,
+      posterShown: visualOwner === 'poster' || !firstFramePresented,
+    };
+  }, [firstFramePresented, proxyVideoEl, visualOwner]);
 
   return {
     visualOwner,
@@ -723,6 +736,9 @@ export function useVideoOwnershipHandoff({
     canPromote,
     playbackState,
     promotionStrategy,
+    hasPoster: posterState.hasPoster,
+    posterShown: posterState.posterShown,
+    posterUrl: posterState.posterUrl,
     resetOwnership,
   };
 }

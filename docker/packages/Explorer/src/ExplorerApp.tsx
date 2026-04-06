@@ -3515,6 +3515,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     firstFramePresented: proxyFirstFramePresented,
     playbackState: proxyPlaybackState,
     promotionStrategy: proxyPromotionStrategy,
+    hasPoster: proxyHasPoster,
+    posterShown: proxyPosterShown,
+    posterUrl: proxyPosterUrl,
   } = useVideoOwnershipHandoff({
     selectionKey: activeProxySelectionKey,
     streamUrl: proxyStreamUrl,
@@ -3563,10 +3566,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;
     activeProxyCardEl.dataset.streamUrl = proxyStreamUrl;
     activeProxyCardEl.dataset.proxySessionId = proxyPlaybackSessionKey;
+    activeProxyCardEl.dataset.posterShown = proxyPosterShown ? 'true' : 'false';
+    activeProxyCardEl.dataset.posterUrl = proxyPosterUrl;
+    activeProxyCardEl.dataset.hasPoster = proxyHasPoster ? 'true' : 'false';
     if (activeProxyVideoEl) {
       activeProxyVideoEl.dataset.proxySessionId = proxyPlaybackSessionKey;
+      activeProxyVideoEl.dataset.posterShown = proxyPosterShown ? 'true' : 'false';
+      activeProxyVideoEl.dataset.posterUrl = proxyPosterUrl;
+      activeProxyVideoEl.dataset.hasPoster = proxyHasPoster ? 'true' : 'false';
     }
-  }, [activeProxyCardEl, activeProxyVideoEl, proxyFirstFramePresented, proxyPlaybackSessionKey, proxyPromotionStrategy, proxyStreamUrl, proxyVideoReady]);
+  }, [
+    activeProxyCardEl,
+    activeProxyVideoEl,
+    proxyFirstFramePresented,
+    proxyHasPoster,
+    proxyPlaybackSessionKey,
+    proxyPosterShown,
+    proxyPosterUrl,
+    proxyPromotionStrategy,
+    proxyStreamUrl,
+    proxyVideoReady,
+  ]);
   useEffect(() => {
     setProxyPlaybackPlaying(proxyPlaybackState.isPlaying);
     setProxyPlaybackCurrentTime(proxyPlaybackState.currentTime);

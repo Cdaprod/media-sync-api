@@ -1,3 +1,10 @@
+## 2026-04-06 — Render-layer mount retention + poster threading follow-up (active)
+- [x] Updated `FocusTransitionOrchestrator` close path to retain mounted proxy renderer subtree on close (hide/reset only) instead of unmounting, preserving same-asset reopen continuity potential in the render layer.
+- [x] Threaded poster state from handoff hook result (`hasPoster`, `posterShown`, `posterUrl`) into `ExplorerApp` active proxy card/video datasets.
+- [x] Added explicit CSS poster visibility lane keyed by `data-poster-shown="true"` to keep poster authority explicit in the render layer while first-frame handoff completes.
+- [x] Expanded static regression assertions for retained-close marker (`proxyRetainedOnClose`), no-close-unmount contract, and poster-threaded dataset wiring.
+- [ ] Device-verify close->reopen same asset preserves proxy mount continuity (`proxy-reused-mounted` on reopen) and avoids blank poster-drop on first-open.
+
 ## 2026-04-06 — Focused continuity authority hardening (active)
 - [x] Added authoritative resume writer versioning (`activeResumeWriterVersionRef` + continuity version map + `writerVersion` snapshot guard) so stale/hidden lanes cannot overwrite newer resume positions.
 - [x] Tightened resume precedence so `handoff-live` is restricted to true live thumbnail handoff (`pendingHandoff + live thumbnail frame + wasPlayingBeforeHandoff`), preserving same-asset reopen authority for `focused-session-warm-reopen`.
