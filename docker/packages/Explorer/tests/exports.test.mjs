@@ -1238,7 +1238,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('const proxyTravelActive = proxyTravelState !== \'idle\';'));
   assert.ok(content.includes('const focusOrchestratorRef = useRef<FocusTransitionOrchestrator | null>(null);'));
   assert.ok(content.includes("const runProxyFocusTransition = useCallback(("));
-  assert.ok(content.includes("mode: 'open' | 'refocus',"));
+  assert.ok(content.includes("mode: 'open' | 'refocus' | 'retarget',"));
   assert.ok(content.includes('setGridCinematicMode(mode === \'open\' ? \'grid-opening\' : \'grid-refocusing\');'));
   assert.ok(content.includes('setGridCinematicMode(\'grid-focused\');'));
   assert.ok(content.includes('focusOrchestratorRef.current?.closeFocusTransition({'));
@@ -1249,7 +1249,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("const cardEl = targetEl.closest<HTMLElement>('.masonry-card[data-select-key]');"));
   assert.ok(content.includes('if (!cardEl) {'));
   assert.ok(content.includes('closeDrawer();'));
-  assert.ok(content.includes("const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');"));
+  assert.ok(content.includes("const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');"));
   assert.ok(content.includes('__explorerFocusLayerDebug'));
   assert.ok(content.includes("recordPreviewDebug({ stage: 'proxy-open-failed-no-fallback', selectionKey: nextKey, requestedMode: view, finalMode: 'idle' });"));
   assert.ok(content.includes('className={`focus-proxy-root ${gridCinematicMode !== \'grid-rest\' ? \'is-active\' : \'\'}`}'));
@@ -1268,7 +1268,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('if (proxyVideo.paused) {'));
   assert.ok(content.includes('proxyVideo.play().catch(() => {});'));
   assert.ok(content.includes('focusAsset(nextItem, nextKey);'));
-  assert.ok(content.includes('const proxyOpened = runProxyFocusTransition(nextKey, \'refocus\');'));
+  assert.ok(content.includes('const proxyOpened = runProxyFocusTransition(nextKey, \'retarget\');'));
   assert.ok(content.includes('className="proxy-preview-ui"'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
   assert.ok(content.includes("'--focus-world-origin-y': `${focusWorldTransform.originY}%`"));
@@ -1313,12 +1313,17 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('export class FocusTransitionOrchestrator'));
   assert.ok(orchestrator.includes('openFocusTransition(args: {'));
   assert.ok(orchestrator.includes('refocusTransition(args: {'));
+  assert.ok(orchestrator.includes('retargetTransition(args: {'));
   assert.ok(orchestrator.includes('closeFocusTransition(args?: {'));
   assert.ok(orchestrator.includes('this.timeline = gsap.timeline('));
   assert.ok(orchestrator.includes('proxy-open-start'));
   assert.ok(orchestrator.includes('proxy-open-complete'));
   assert.ok(orchestrator.includes('proxy-refocus-start'));
   assert.ok(orchestrator.includes('proxy-refocus-complete'));
+  assert.ok(orchestrator.includes('focus-retarget-start'));
+  assert.ok(orchestrator.includes('focus-retarget-commit'));
+  assert.ok(orchestrator.includes('focus-retarget-cancel'));
+  assert.ok(orchestrator.includes('focus-retarget-fallback-close-open'));
   assert.ok(orchestrator.includes('proxy-failed'));
   assert.ok(orchestrator.includes('__explorerProxyCenterDebug'));
   assert.ok(orchestrator.includes('this.renderer.render(snapshot, startCamera, { showActiveChrome: false });'));
@@ -1337,6 +1342,12 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(!closeSection.includes('this.renderer.unmount();'));
   assert.ok(orchestrator.includes('.proxy-render-top, .proxy-render-bottom, .proxy-render-scrim'));
   assert.ok(content.includes('focusOrchestratorRef.current?.clearRetainedProxyOnDeselect();'));
+  assert.ok(content.includes("mode: 'open' | 'refocus' | 'retarget'"));
+  assert.ok(content.includes("runProxyFocusTransition(nextKey, 'retarget')"));
+  assert.ok(content.includes("stage: 'focused-retarget-tap'"));
+  assert.ok(content.includes("stage: 'focused-retarget-blocked-overlay'"));
+  assert.ok(content.includes("stage: 'focused-retarget-blocked-same-key'"));
+  assert.ok(content.includes("stage: 'focused-retarget-dispatched'"));
   assert.ok(content.includes('__explorerProxyContinuityDebug'));
   assert.ok(content.includes('authoritativeVisualSurface'));
   assert.ok(content.includes('authoritativeAudioSurface'));

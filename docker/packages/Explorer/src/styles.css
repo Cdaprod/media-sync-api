@@ -1226,7 +1226,7 @@ select.control{
 }
 .app.grid-focused .masonry-host{
   opacity: 0;
-  pointer-events: none;
+  pointer-events: auto;
 }
 .app.grid-opening .masonry-host,
 .app.grid-refocusing .masonry-host{

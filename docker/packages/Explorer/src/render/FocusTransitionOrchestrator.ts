@@ -240,6 +240,97 @@ export class FocusTransitionOrchestrator {
     return true;
   }
 
+  retargetTransition(args: {
+    gridRoot: HTMLElement;
+    viewportEl: HTMLElement;
+    selectionKey: string;
+    continuityKey?: string;
+    onStart?: () => void;
+    onComplete?: () => void;
+    onEvent?: (event: 'focus-retarget-start' | 'focus-retarget-commit' | 'focus-retarget-cancel' | 'focus-retarget-fallback-close-open' | 'proxy-failed' | 'proxy-retained-reuse-same-key' | 'proxy-retained-blocked-different-key' | 'proxy-retained-cleared-asset-change') => void;
+  }) {
+    const snapshot = captureFocusSceneSnapshot({
+      gridRoot: args.gridRoot,
+      viewportEl: args.viewportEl,
+      activeSelectionKey: args.selectionKey,
+    });
+    if (!snapshot.target) {
+      args.onEvent?.('focus-retarget-cancel');
+      return false;
+    }
+    const camera = computeCameraStateForTarget({
+      target: snapshot.target,
+      viewportLeft: snapshot.viewport.left,
+      viewportTop: snapshot.viewport.top,
+      viewportWidth: snapshot.viewport.width,
+      viewportHeight: snapshot.viewport.height,
+    });
+    const continuityKey = args.continuityKey ?? args.selectionKey;
+    const retainedMarker = this.root.dataset.proxyRetainedOnClose === 'true';
+    if (retainedMarker) {
+      if (this.retainedContinuityKey && this.retainedContinuityKey === continuityKey) {
+        args.onEvent?.('proxy-retained-reuse-same-key');
+      }
+      else {
+        args.onEvent?.('proxy-retained-blocked-different-key');
+        this.clearRetainedProxy('proxy-retained-cleared-asset-change');
+        args.onEvent?.('proxy-retained-cleared-asset-change');
+      }
+    }
+    this.activeContinuityKey = continuityKey;
+    this.renderer.render(snapshot, this.currentCamera, { showActiveChrome: false });
+    delete this.root.dataset.proxyRetainedOnClose;
+    delete this.root.dataset.proxyRetainedContinuityKey;
+    this.root.style.opacity = '1';
+    this.root.style.pointerEvents = 'auto';
+    this.timeline?.kill();
+    const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
+    if (!world) {
+      args.onEvent?.('focus-retarget-fallback-close-open');
+      return this.openFocusTransition({
+        gridRoot: args.gridRoot,
+        viewportEl: args.viewportEl,
+        selectionKey: args.selectionKey,
+        continuityKey,
+        onStart: args.onStart,
+        onComplete: args.onComplete,
+        onEvent: (event) => {
+          if (event === 'proxy-failed') args.onEvent?.('proxy-failed');
+        },
+      });
+    }
+    this.timeline = gsap.timeline({
+      onStart: () => {
+        args.onEvent?.('focus-retarget-start');
+        args.onStart?.();
+      },
+      onComplete: () => {
+        this.renderer.render(snapshot, camera, { showActiveChrome: true });
+        this.currentCamera = { ...camera };
+        this.publishCenterDebug({
+          viewportLeft: snapshot.viewport.left,
+          viewportTop: snapshot.viewport.top,
+          viewportWidth: snapshot.viewport.width,
+          viewportHeight: snapshot.viewport.height,
+          camera,
+          targetCenterX: snapshot.target!.centerX,
+          targetCenterY: snapshot.target!.centerY,
+        });
+        args.onEvent?.('focus-retarget-commit');
+        args.onComplete?.();
+      },
+    });
+    this.timeline.to(world, {
+      x: camera.x,
+      y: camera.y,
+      scale: camera.scale,
+      duration: 0.5,
+      ease: 'power3.inOut',
+      overwrite: 'auto',
+    });
+    return true;
+  }
+
   closeFocusTransition(args?: {
     onStart?: () => void;
     onComplete?: () => void;

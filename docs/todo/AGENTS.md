@@ -1,3 +1,12 @@
+## 2026-04-06 — Focused retarget interaction regression fix (active)
+- [x] Restored focused-state different-asset tap retarget dispatch in `ExplorerApp` by routing focused grid/overlay taps to `runProxyFocusTransition(..., 'retarget')` when continuity key differs.
+- [x] Added focused interaction markers for device/runtime triage (`focused-retarget-tap`, `focused-retarget-blocked-overlay`, `focused-retarget-blocked-same-key`, `focused-retarget-dispatched`).
+- [x] Added orchestrator retarget transition API (`retargetTransition`) with explicit transition markers (`focus-retarget-start`, `focus-retarget-commit`, `focus-retarget-cancel`, `focus-retarget-fallback-close-open`) preserving motion from current camera state.
+- [x] Added overlay hit-test fallback in focused proxy pointer handler using temporary proxy-root pointer pass-through + `elementFromPoint(...)` to recover underlying grid card retarget picks.
+- [x] Re-enabled focused-grid host hit-testing (`.app.grid-focused .masonry-host { pointer-events:auto; }`) so focused retarget taps can resolve to underlying grid cards.
+- [x] Expanded static regression assertions for focused-retarget tap path, same-key block path, orchestrator retarget API markers, and overlay interception markers.
+- [ ] Device-verify focused preview tap-to-other-asset moves camera continuously from current focused position on iOS Safari and desktop.
+
 ## 2026-04-06 — Retained proxy continuity + audio-owner hardening (active)
 - [x] Added retained continuity-key guards in `FocusTransitionOrchestrator` so retained close reuse is explicit for same key and blocked/cleared for different-key reopen (`proxy-retained-reuse-same-key`, `proxy-retained-blocked-different-key`, `proxy-retained-cleared-asset-change`).
 - [x] Added explicit retained clear path for deselection (`clearRetainedProxyOnDeselect`) with marker `proxy-retained-cleared-deselect` and wired it through `ExplorerApp.clearActiveAsset`.

@@ -1584,7 +1584,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const runProxyFocusTransition = useCallback((
     selectionKey: string,
-    mode: 'open' | 'refocus',
+    mode: 'open' | 'refocus' | 'retarget',
     onComplete?: () => void,
   ) => {
     if (view !== 'grid') return false;
@@ -1621,7 +1621,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
     const opened = mode === 'open'
       ? orchestrator.openFocusTransition(transitionArgs)
-      : orchestrator.refocusTransition(transitionArgs);
+      : (mode === 'retarget'
+        ? orchestrator.retargetTransition(transitionArgs)
+        : orchestrator.refocusTransition(transitionArgs));
     if (!opened) {
       clearTravelState();
       setGridCinematicMode('grid-rest');
@@ -1738,7 +1740,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused(nextItem);
     setActiveAssetKey(nextKey);
     commitPreviewActivationKey(nextKey);
-    const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');
+    const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');
     if (!proxyOpened) return;
     setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused, runProxyFocusTransition]);
@@ -1758,7 +1760,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return;
       }
       const nextKey = cardEl.dataset.selectKey || '';
-      if (!nextKey || nextKey === activeAssetKey) return;
+      recordPreviewDebug({ stage: 'focused-retarget-tap', selectionKey: nextKey || activeAssetKey, requestedMode: view });
+      if (!nextKey) return;
+      if (nextKey === activeAssetKey) {
+        recordPreviewDebug({ stage: 'focused-retarget-blocked-same-key', selectionKey: nextKey, requestedMode: view });
+        return;
+      }
       const nextItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === nextKey);
       if (!nextItem) return;
       event.preventDefault();
@@ -1766,8 +1773,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setFocused(nextItem);
       setActiveAssetKey(nextKey);
       commitPreviewActivationKey(nextKey);
-      const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');
+      const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');
       if (!proxyOpened) return;
+      recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
     };
     viewportEl.addEventListener('pointerdown', handlePointerDown, true);
     return () => viewportEl.removeEventListener('pointerdown', handlePointerDown, true);
@@ -1799,17 +1807,50 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         focusRelative(1);
         return;
       }
+      recordPreviewDebug({ stage: 'focused-retarget-tap', selectionKey: activeAssetKey, requestedMode: view });
       const cardEl = target.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
+      const resolveUnderlyingGridKey = () => {
+        const previousPointerEvents = proxyRoot.style.pointerEvents;
+        proxyRoot.style.pointerEvents = 'none';
+        const underlying = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
+        proxyRoot.style.pointerEvents = previousPointerEvents;
+        const gridCard = underlying?.closest<HTMLElement>('.masonry-card[data-select-key]') ?? null;
+        return gridCard?.dataset.selectKey || '';
+      };
       if (!cardEl) {
-        if (gridCinematicMode === 'grid-focused') {
-          event.preventDefault();
-          closeDrawer();
+        const gridKey = resolveUnderlyingGridKey();
+        if (!gridKey) {
+          recordPreviewDebug({ stage: 'focused-retarget-blocked-overlay', selectionKey: activeAssetKey, requestedMode: view });
+          if (gridCinematicMode === 'grid-focused') {
+            event.preventDefault();
+            closeDrawer();
+          }
+          return;
         }
+        if (gridKey === activeAssetKey) {
+          recordPreviewDebug({ stage: 'focused-retarget-blocked-same-key', selectionKey: gridKey, requestedMode: view });
+          return;
+        }
+        const targetItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === gridKey);
+        if (!targetItem) return;
+        event.preventDefault();
+        focusAsset(targetItem, gridKey);
+        setFocused(targetItem);
+        setPreviewDetailsOpen(false);
+        setInspectorOpen(true);
+        inspectorOpenRef.current = true;
+        const proxyOpened = runProxyFocusTransition(gridKey, 'retarget');
+        if (!proxyOpened) {
+          openPreview(targetItem);
+          return;
+        }
+        recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: gridKey, requestedMode: view });
         return;
       }
       const nextKey = cardEl.dataset.selectionKey || '';
       if (!nextKey) return;
       if (nextKey === activeAssetKey) {
+        recordPreviewDebug({ stage: 'focused-retarget-blocked-same-key', selectionKey: nextKey, requestedMode: view });
         if (isInteractiveTarget(target)) return;
         event.preventDefault();
         const proxyVideo = cardEl.querySelector<HTMLVideoElement>('.proxy-render-video');
@@ -1830,10 +1871,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setPreviewDetailsOpen(false);
       setInspectorOpen(true);
       inspectorOpenRef.current = true;
-      const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');
+      const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');
       if (!proxyOpened) {
         openPreview(nextItem);
+        return;
       }
+      recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
     };
     proxyRoot.addEventListener('pointerdown', handleProxyPointerDown, true);
     return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
