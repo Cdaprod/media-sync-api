@@ -364,6 +364,9 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("publishDebug('audio-owner-denied-hidden', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('audio-owner-denied-detached', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('audio-owner-revoked-close', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('poster-held-same-asset-reopen', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('poster-release-same-asset-reopen', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('poster-stuck-guard-fired', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('persistResumeSnapshot(proxyVideoEl, !proxyVideoEl.paused);'));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('loadeddata-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('canplay-fallback');"));
@@ -1321,8 +1324,22 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('this.renderer.render(snapshot, startCamera, { showActiveChrome: false });'));
   assert.ok(orchestrator.includes('this.renderer.render(snapshot, camera, { showActiveChrome: true });'));
   assert.ok(orchestrator.includes("this.root.dataset.proxyRetainedOnClose = 'true';"));
-  assert.ok(!orchestrator.includes('this.renderer.unmount();'));
+  assert.ok(orchestrator.includes("args.onEvent?.('proxy-retained-reuse-same-key');"));
+  assert.ok(orchestrator.includes("args.onEvent?.('proxy-retained-blocked-different-key');"));
+  assert.ok(orchestrator.includes("this.clearRetainedProxy('proxy-retained-cleared-asset-change');"));
+  assert.ok(orchestrator.includes("clearRetainedProxyOnDeselect()"));
+  assert.ok(orchestrator.includes("this.root.dataset.proxyContinuityEvent = 'audio-owner-revoked-close';"));
+  const closeSectionStart = orchestrator.indexOf('closeFocusTransition(args?: {');
+  const closeSectionEnd = orchestrator.indexOf('clearRetainedProxyOnDeselect()');
+  const closeSection = closeSectionStart >= 0 && closeSectionEnd > closeSectionStart
+    ? orchestrator.slice(closeSectionStart, closeSectionEnd)
+    : orchestrator;
+  assert.ok(!closeSection.includes('this.renderer.unmount();'));
   assert.ok(orchestrator.includes('.proxy-render-top, .proxy-render-bottom, .proxy-render-scrim'));
+  assert.ok(content.includes('focusOrchestratorRef.current?.clearRetainedProxyOnDeselect();'));
+  assert.ok(content.includes('__explorerProxyContinuityDebug'));
+  assert.ok(content.includes('authoritativeVisualSurface'));
+  assert.ok(content.includes('authoritativeAudioSurface'));
   assert.ok(content.includes('density.scrubTo(nextColumns);'));
   assert.ok(content.includes('scrubDensityColumns(nextColumns);'));
   assert.ok(content.includes('density?.settleScrub();'));

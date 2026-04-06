@@ -1,3 +1,12 @@
+## 2026-04-06 — Retained proxy continuity + audio-owner hardening (active)
+- [x] Added retained continuity-key guards in `FocusTransitionOrchestrator` so retained close reuse is explicit for same key and blocked/cleared for different-key reopen (`proxy-retained-reuse-same-key`, `proxy-retained-blocked-different-key`, `proxy-retained-cleared-asset-change`).
+- [x] Added explicit retained clear path for deselection (`clearRetainedProxyOnDeselect`) with marker `proxy-retained-cleared-deselect` and wired it through `ExplorerApp.clearActiveAsset`.
+- [x] Hardened close-path audio authority in render lane by forcing retained active proxy video muted/defaultMuted and stamping `authoritativeAudioSurface=none` on close.
+- [x] Added same-asset warm-reopen poster markers (`poster-held-same-asset-reopen`, `poster-release-same-asset-reopen`) plus stuck-poster guard marker (`poster-stuck-guard-fired`) in `useVideoOwnershipHandoff`.
+- [x] Added lightweight continuity debug snapshot export (`window.__explorerProxyContinuityDebug`) with continuity key, retained flag, mounted/retained state, posterShown, and authoritative visual/audio surfaces.
+- [x] Expanded static regression assertions to lock retained-key guards, retained-clear markers, close-path no-unmount contract, audio-owner close marker, poster-release markers, and continuity debug export wiring.
+- [ ] Device-verify hidden retained proxy remains inaudible after close while same-asset warm reopen still reuses retained subtree.
+
 ## 2026-04-06 — Render-layer mount retention + poster threading follow-up (active)
 - [x] Updated `FocusTransitionOrchestrator` close path to retain mounted proxy renderer subtree on close (hide/reset only) instead of unmounting, preserving same-asset reopen continuity potential in the render layer.
 - [x] Threaded poster state from handoff hook result (`hasPoster`, `posterShown`, `posterUrl`) into `ExplorerApp` active proxy card/video datasets.

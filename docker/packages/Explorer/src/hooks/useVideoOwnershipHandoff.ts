@@ -87,6 +87,8 @@ export type UseVideoOwnershipHandoffArgs = {
 export type UseVideoOwnershipHandoffResult = {
   visualOwner: VisualOwner;
   audioOwner: AudioOwner;
+  authoritativeVisualSurface: 'none' | 'poster' | 'proxy';
+  authoritativeAudioSurface: 'none' | 'proxy';
   videoReady: boolean;
   firstFramePresented: boolean;
   canPromote: boolean;
@@ -475,6 +477,9 @@ export function useVideoOwnershipHandoff({
         setVisualOwner('poster');
         publishDebug('first-open-poster-hold', proxyVideoEl);
         publishDebug('first-open-no-live-thumbnail', proxyVideoEl);
+        if (resumeSourceRef.current === 'focused-session-warm-reopen') {
+          publishDebug('poster-held-same-asset-reopen', proxyVideoEl);
+        }
       }
       else {
         setVisualOwner('proxy-preparing');
@@ -496,6 +501,9 @@ export function useVideoOwnershipHandoff({
         setVisualOwner('proxy');
         authoritativeVisualSurfaceRef.current = 'proxy';
         publishDebug('poster-release-after-paint', proxyVideoEl);
+        if (resumeSourceRef.current === 'focused-session-warm-reopen') {
+          publishDebug('poster-release-same-asset-reopen', proxyVideoEl);
+        }
         const cardEl = proxyVideoEl.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
         if (cardEl) {
           cardEl.dataset.firstFramePresented = 'true';
@@ -728,9 +736,19 @@ export function useVideoOwnershipHandoff({
     };
   }, [firstFramePresented, proxyVideoEl, visualOwner]);
 
+  useEffect(() => {
+    if (!proxyVideoEl || !isFocusedOpen) return;
+    if (visualOwner !== 'poster' || !firstFramePresented) return;
+    setVisualOwner('proxy');
+    authoritativeVisualSurfaceRef.current = 'proxy';
+    publishDebug('poster-stuck-guard-fired', proxyVideoEl);
+  }, [firstFramePresented, isFocusedOpen, proxyVideoEl, publishDebug, visualOwner]);
+
   return {
     visualOwner,
     audioOwner,
+    authoritativeVisualSurface: authoritativeVisualSurfaceRef.current,
+    authoritativeAudioSurface: authoritativeAudioSurfaceRef.current,
     videoReady,
     firstFramePresented,
     canPromote,

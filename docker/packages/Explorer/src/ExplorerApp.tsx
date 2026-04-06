@@ -977,6 +977,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const clearActiveAsset = useCallback(() => {
+    focusOrchestratorRef.current?.clearRetainedProxyOnDeselect();
     setActiveAssetKey('');
     commitPreviewActivationKey('');
     setPreviewPlaybackToken((prev) => prev + 1);
@@ -1596,10 +1597,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const handleEvent = (event: string) => {
       recordPreviewDebug({ stage: event, selectionKey, requestedMode: view });
     };
+    const continuityItem = itemsBySelectionKey.get(selectionKey) ?? null;
+    const continuityAsset = continuityItem ? normalizePreviewAsset(continuityItem, resolveAssetUrl) : null;
+    const continuityStreamUrl = absolutizeMediaUrl(continuityAsset?.src || '');
+    const continuityKey = continuityStreamUrl ? `${selectionKey}::${continuityStreamUrl}` : selectionKey;
     const transitionArgs = {
       gridRoot,
       viewportEl,
       selectionKey,
+      continuityKey,
       onStart: () => {
         setTravelState();
         setGridCinematicMode(mode === 'open' ? 'grid-opening' : 'grid-refocusing');
@@ -1623,7 +1629,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       handleEvent('proxy-failed');
     }
     return opened;
-  }, [recordPreviewDebug, view]);
+  }, [absolutizeMediaUrl, itemsBySelectionKey, normalizePreviewAsset, recordPreviewDebug, resolveAssetUrl, view]);
 
   const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {
     if (!selectionKey || !gridRef.current) return null;
@@ -3518,6 +3524,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     hasPoster: proxyHasPoster,
     posterShown: proxyPosterShown,
     posterUrl: proxyPosterUrl,
+    authoritativeVisualSurface,
+    authoritativeAudioSurface,
   } = useVideoOwnershipHandoff({
     selectionKey: activeProxySelectionKey,
     streamUrl: proxyStreamUrl,
@@ -3569,15 +3577,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     activeProxyCardEl.dataset.posterShown = proxyPosterShown ? 'true' : 'false';
     activeProxyCardEl.dataset.posterUrl = proxyPosterUrl;
     activeProxyCardEl.dataset.hasPoster = proxyHasPoster ? 'true' : 'false';
+    activeProxyCardEl.dataset.authoritativeVisualSurface = authoritativeVisualSurface;
+    activeProxyCardEl.dataset.authoritativeAudioSurface = authoritativeAudioSurface;
     if (activeProxyVideoEl) {
       activeProxyVideoEl.dataset.proxySessionId = proxyPlaybackSessionKey;
       activeProxyVideoEl.dataset.posterShown = proxyPosterShown ? 'true' : 'false';
       activeProxyVideoEl.dataset.posterUrl = proxyPosterUrl;
       activeProxyVideoEl.dataset.hasPoster = proxyHasPoster ? 'true' : 'false';
+      activeProxyVideoEl.dataset.authoritativeVisualSurface = authoritativeVisualSurface;
+      activeProxyVideoEl.dataset.authoritativeAudioSurface = authoritativeAudioSurface;
     }
   }, [
     activeProxyCardEl,
     activeProxyVideoEl,
+    authoritativeAudioSurface,
+    authoritativeVisualSurface,
     proxyFirstFramePresented,
     proxyHasPoster,
     proxyPlaybackSessionKey,
@@ -3586,6 +3600,37 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     proxyPromotionStrategy,
     proxyStreamUrl,
     proxyVideoReady,
+  ]);
+  useEffect(() => {
+    const root = focusProxyRootRef.current;
+    if (!root) return;
+    root.dataset.authoritativeVisualSurface = authoritativeVisualSurface;
+    root.dataset.authoritativeAudioSurface = authoritativeAudioSurface;
+  }, [authoritativeAudioSurface, authoritativeVisualSurface]);
+  useEffect(() => {
+    const root = focusProxyRootRef.current;
+    if (!root) return;
+    const continuityKey = activeProxySelectionKey && proxyStreamUrl
+      ? `${activeProxySelectionKey}::${proxyStreamUrl}`
+      : '';
+    (globalThis as typeof globalThis & {
+      __explorerProxyContinuityDebug?: Record<string, unknown>;
+    }).__explorerProxyContinuityDebug = {
+      continuityKey,
+      retainedOnClose: root.dataset.proxyRetainedOnClose === 'true',
+      mountedState: activeProxyVideoEl?.dataset.proxyMountedState || 'proxy-detached',
+      retainedState: root.dataset.proxyRetainedOnClose === 'true' ? 'retained' : 'active',
+      posterShown: proxyPosterShown,
+      authoritativeVisualSurface,
+      authoritativeAudioSurface,
+    };
+  }, [
+    activeProxySelectionKey,
+    activeProxyVideoEl,
+    authoritativeAudioSurface,
+    authoritativeVisualSurface,
+    proxyPosterShown,
+    proxyStreamUrl,
   ]);
   useEffect(() => {
     setProxyPlaybackPlaying(proxyPlaybackState.isPlaying);
