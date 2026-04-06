@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-06)
+- `useVideoOwnershipHandoff` continuity identity now keys session reset on `continuityKey` (`selectionKey::streamUrl`) while preserving separate `playbackIntentKey` diagnostics so `playToken` churn no longer forces same-asset visual reset.
+- Focus-close behavior no longer tears down proxy decode via pause/reset when selection/source remain valid; close now demotes audio/visual ownership (`inactive-focused-closed`) while keeping warm continuity state available for fast reopen.
+- Expanded proxy playback debug payload with thumbnail-vs-proxy drift telemetry (`thumbnailVideoNodeFound`, `thumbnailCurrentTime`, `thumbnailReadyState`, `thumbnailPaused`, `timeDeltaFromThumbnail`) and wired Explorer hook input to pass active grid thumbnail video.
+
+### Latest Implementation Notes (2026-04-06)
 - Reduced focused proxy continuity churn in `useVideoOwnershipHandoff` by binding/loading the proxy `<video>` only when the stream source actually changed (`source-bound`), and reusing warm decoder state otherwise (`source-reused`).
 - Removed unconditional focused-open `load()` restart lane so same-session focused reopen/refocus no longer forces a decoder reset before play/promotion fallback checks.
 - Expanded static regression contracts to lock conditional source-binding markers and guard against reintroducing unconditional `load()` in the focused-open playback path.

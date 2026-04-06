@@ -1,3 +1,11 @@
+## 2026-04-06 — Continuity key split + close-state warm retention + drift debug (active)
+- [x] Split proxy ownership identity into `continuityKey` (`selectionKey::streamUrl`) and `playbackIntentKey` (`continuityKey::playToken`) so same-asset play-token bumps no longer hard-reset visual continuity lanes.
+- [x] Refined non-focused path in `useVideoOwnershipHandoff` to avoid pause/reset teardown when selection/source remain present (`inactive-focused-closed`), keeping proxy decode warmer for rapid reopen while muting audio ownership.
+- [x] Extended hook debug payload with thumbnail/proxy drift telemetry fields (`thumbnailVideoNodeFound`, `thumbnailCurrentTime`, `thumbnailReadyState`, `thumbnailPaused`, `timeDeltaFromThumbnail`) and wired `ExplorerApp` to pass active thumbnail video node into handoff hook.
+- [x] Updated static regression assertions for continuity-key markers, inactive reason markers, and thumbnail drift debug fields.
+- [ ] Device-verify repeated close/reopen on same asset reduces restart pops while preserving muted close semantics.
+- [ ] Capture runtime sample with `timeDeltaFromThumbnail <= 0.05` near focused-open promotion on iOS Safari.
+
 ## 2026-04-06 — Focused proxy source-binding continuity guard (active)
 - [x] Updated `useVideoOwnershipHandoff` focused-open startup to conditionally bind/load proxy media only when stream source changed (`source-bound`) and reuse warm source state otherwise (`source-reused`).
 - [x] Removed unconditional `proxyVideoEl.load()` restart from focused-open playback path to reduce decoder resets on same-session reopen/refocus.

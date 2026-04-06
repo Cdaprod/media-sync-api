@@ -13,6 +13,8 @@ type PlaybackState = {
 
 export type VideoOwnershipDebug = {
   reason: string;
+  continuityKey: string;
+  playbackIntentKey: string;
   sessionKey: string;
   selectionKey: string;
   streamUrl: string;
@@ -41,6 +43,11 @@ export type VideoOwnershipDebug = {
   canPlaySeen: boolean;
   playingSeen: boolean;
   promotionBlockedReason: string;
+  thumbnailVideoNodeFound: boolean;
+  thumbnailCurrentTime: number;
+  thumbnailReadyState: number;
+  thumbnailPaused: boolean;
+  timeDeltaFromThumbnail: number | null;
 };
 
 export type UseVideoOwnershipHandoffArgs = {
@@ -50,6 +57,7 @@ export type UseVideoOwnershipHandoffArgs = {
   shouldPlay: boolean;
   enableFocusedAudio: boolean;
   proxyVideoEl: HTMLVideoElement | null;
+  thumbnailVideoEl?: HTMLVideoElement | null;
   mediaBranch: string;
   handoffTime: number | null;
   wasPlayingBeforeHandoff: boolean;
@@ -83,6 +91,7 @@ export function useVideoOwnershipHandoff({
   shouldPlay,
   enableFocusedAudio,
   proxyVideoEl,
+  thumbnailVideoEl = null,
   mediaBranch,
   handoffTime,
   wasPlayingBeforeHandoff,
@@ -98,7 +107,8 @@ export function useVideoOwnershipHandoff({
   const [promotionStrategy, setPromotionStrategy] = useState<FirstFrameReadyStrategy | 'none'>('none');
   const [promotionBlockedReason, setPromotionBlockedReason] = useState('none');
   const [playbackState, setPlaybackState] = useState<PlaybackState>(EMPTY_PLAYBACK);
-  const sessionKey = `${selectionKey}::${streamUrl}::${playToken}`;
+  const continuityKey = `${selectionKey}::${streamUrl}`;
+  const playbackIntentKey = `${continuityKey}::${playToken}`;
   const pendingHandoffRef = useRef<number | null>(null);
   const latestSessionKeyRef = useRef('');
   const latestDebugStateRef = useRef<{
@@ -123,7 +133,9 @@ export function useVideoOwnershipHandoff({
   const canPlaySeenRef = useRef(false);
   const playingSeenRef = useRef(false);
   const debugContextRef = useRef({
-    sessionKey,
+    continuityKey,
+    playbackIntentKey,
+    sessionKey: continuityKey,
     selectionKey,
     streamUrl,
     mediaBranch,
@@ -134,12 +146,14 @@ export function useVideoOwnershipHandoff({
 
   useEffect(() => {
     debugContextRef.current = {
-      sessionKey,
+      continuityKey,
+      playbackIntentKey,
+      sessionKey: continuityKey,
       selectionKey,
       streamUrl,
       mediaBranch,
     };
-  }, [mediaBranch, selectionKey, sessionKey, streamUrl]);
+  }, [continuityKey, mediaBranch, playbackIntentKey, selectionKey, streamUrl]);
   useEffect(() => {
     onPromotedRef.current = onPromoted;
   }, [onPromoted]);
@@ -172,8 +186,15 @@ export function useVideoOwnershipHandoff({
     const cardEl = video?.closest<HTMLElement>('.proxy-render-card[data-selection-key]') ?? null;
     const currentTime = Number.isFinite(video?.currentTime) ? (video?.currentTime || 0) : 0;
     const duration = Number.isFinite(video?.duration) ? (video?.duration || 0) : 0;
+    const thumbnailCurrentTime = Number.isFinite(thumbnailVideoEl?.currentTime) ? (thumbnailVideoEl?.currentTime || 0) : 0;
+    const thumbnailVideoNodeFound = Boolean(thumbnailVideoEl);
+    const timeDeltaFromThumbnail = thumbnailVideoNodeFound
+      ? Math.abs(currentTime - thumbnailCurrentTime)
+      : null;
     onDebugHandler({
       reason,
+      continuityKey: context.continuityKey,
+      playbackIntentKey: context.playbackIntentKey,
       sessionKey: context.sessionKey,
       selectionKey: context.selectionKey,
       streamUrl: context.streamUrl,
@@ -202,8 +223,13 @@ export function useVideoOwnershipHandoff({
       canPlaySeen: canPlaySeenRef.current,
       playingSeen: playingSeenRef.current,
       promotionBlockedReason: latest.promotionBlockedReason,
+      thumbnailVideoNodeFound,
+      thumbnailCurrentTime,
+      thumbnailReadyState: thumbnailVideoEl?.readyState ?? 0,
+      thumbnailPaused: thumbnailVideoEl?.paused ?? true,
+      timeDeltaFromThumbnail,
     });
-  }, []);
+  }, [thumbnailVideoEl]);
 
   const resetOwnership = useCallback(() => {
     setVisualOwner('thumbnail');
@@ -216,7 +242,7 @@ export function useVideoOwnershipHandoff({
   }, []);
 
   useEffect(() => {
-    if (!isFocusedOpen || !selectionKey || !streamUrl) {
+    if (!selectionKey || !streamUrl) {
       latestSessionKeyRef.current = '';
       if (proxyVideoEl) {
         proxyVideoEl.pause();
@@ -224,7 +250,18 @@ export function useVideoOwnershipHandoff({
         proxyVideoEl.defaultMuted = true;
       }
       resetOwnership();
-      publishDebug('inactive', proxyVideoEl);
+      publishDebug('inactive-no-selection', proxyVideoEl);
+      return;
+    }
+
+    if (!isFocusedOpen) {
+      if (proxyVideoEl) {
+        proxyVideoEl.muted = true;
+        proxyVideoEl.defaultMuted = true;
+      }
+      setAudioOwner('none');
+      setVisualOwner('thumbnail');
+      publishDebug('inactive-focused-closed', proxyVideoEl);
       return;
     }
 
@@ -238,8 +275,8 @@ export function useVideoOwnershipHandoff({
       return;
     }
 
-    const isSessionChanged = latestSessionKeyRef.current !== sessionKey;
-    latestSessionKeyRef.current = sessionKey;
+    const isSessionChanged = latestSessionKeyRef.current !== continuityKey;
+    latestSessionKeyRef.current = continuityKey;
 
     let alive = true;
     let sawTimeProgress = false;
@@ -313,9 +350,9 @@ export function useVideoOwnershipHandoff({
         cardEl.dataset.firstFramePresented = 'true';
         cardEl.dataset.videoReady = 'true';
         cardEl.dataset.promotionStrategy = strategy;
-        cardEl.dataset.proxySessionId = sessionKey;
+        cardEl.dataset.proxySessionId = continuityKey;
       }
-      proxyVideoEl.dataset.proxySessionId = sessionKey;
+      proxyVideoEl.dataset.proxySessionId = continuityKey;
       onPromotedRef.current?.();
       onHandoffConsumedRef.current?.();
       syncPlaybackState(reason);
@@ -441,9 +478,6 @@ export function useVideoOwnershipHandoff({
 
     return () => {
       alive = false;
-      proxyVideoEl.pause();
-      proxyVideoEl.muted = true;
-      proxyVideoEl.defaultMuted = true;
       proxyVideoEl.removeEventListener('loadedmetadata', onLoadedMetadata);
       proxyVideoEl.removeEventListener('loadeddata', onLoadedData);
       proxyVideoEl.removeEventListener('canplay', onCanPlay);
@@ -460,7 +494,7 @@ export function useVideoOwnershipHandoff({
     proxyVideoEl,
     resetOwnership,
     selectionKey,
-    sessionKey,
+    continuityKey,
     shouldPlay,
     streamUrl,
     wasPlayingBeforeHandoff,

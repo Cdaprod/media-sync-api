@@ -3507,6 +3507,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const handoff = previewPlaybackHandoffRef.current;
   const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === activeProxySelectionKey);
   const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;
+  const activeThumbnailVideoEl = activeProxySelectionKey
+    ? getGridThumbVideoBySelectionKey(activeProxySelectionKey)
+    : null;
   const {
     videoReady: proxyVideoReady,
     firstFramePresented: proxyFirstFramePresented,
@@ -3519,6 +3522,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     shouldPlay: proxyPreviewVisible,
     enableFocusedAudio: true,
     proxyVideoEl: activeProxyVideoEl,
+    thumbnailVideoEl: activeThumbnailVideoEl,
     mediaBranch: activeProxyMediaBranch,
     handoffTime,
     wasPlayingBeforeHandoff: hasMatchingHandoff ? Boolean(handoff?.wasPlaying) : true,
@@ -3539,7 +3543,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }).__explorerProxyPlaybackDebug = {
         ...entry,
         streamUrl: proxyStreamUrl,
-        sessionKey: proxyPlaybackSessionKey,
+        sessionKey: entry.sessionKey || proxyPlaybackSessionKey,
         videoStableId: activeProxyVideoEl?.dataset.proxyStableVideoId || '',
         cardSelectionKey: activeProxyCardEl?.dataset.selectionKey || '',
         cardVideoReady: activeProxyCardEl?.dataset.videoReady || '',

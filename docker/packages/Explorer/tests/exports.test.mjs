@@ -288,6 +288,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes("className=\"proxy-prewarm-video\""));
   assert.ok(explorer.includes('useVideoOwnershipHandoff({'));
   assert.ok(explorer.includes('const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;'));
+  assert.ok(explorer.includes('const activeThumbnailVideoEl = activeProxySelectionKey'));
   assert.ok(explorer.includes('const proxyAsset = useMemo(() => {'));
   assert.ok(explorer.includes('const proxyStreamUrl = useMemo(() => {'));
   assert.ok(explorer.includes('const proxyPlaybackSessionKey = useMemo(() => ('));
@@ -300,6 +301,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('pauseGridThumbForSelectionKey(activeProxySelectionKey);'));
   assert.ok(explorer.includes('streamUrl: proxyStreamUrl,'));
   assert.ok(explorer.includes('streamUrl: proxyStreamUrl,'));
+  assert.ok(explorer.includes('thumbnailVideoEl: activeThumbnailVideoEl,'));
   assert.ok(explorer.includes("activeProxyCardEl.dataset.videoReady = (proxyVideoReady || proxyFirstFramePresented) ? 'true' : 'false';"));
   assert.ok(explorer.includes("activeProxyCardEl.dataset.firstFramePresented = proxyFirstFramePresented ? 'true' : 'false';"));
   assert.ok(explorer.includes('activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;'));
@@ -309,11 +311,14 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(proxyRenderer.includes("activeCardEl.dataset.streamUrl = card.mediaUrl || '';"));
   assert.ok(proxyRenderer.includes('videoEl.dataset.streamUrl = card.mediaUrl;'));
   assert.ok(handoffHookContent.includes('sessionKey: string;'));
+  assert.ok(handoffHookContent.includes('continuityKey: string;'));
+  assert.ok(handoffHookContent.includes('playbackIntentKey: string;'));
   assert.ok(handoffHookContent.includes('const latestSessionKeyRef = useRef(\'\');'));
-  assert.ok(handoffHookContent.includes('const isSessionChanged = latestSessionKeyRef.current !== sessionKey;'));
+  assert.ok(handoffHookContent.includes('const continuityKey = `${selectionKey}::${streamUrl}`;'));
+  assert.ok(handoffHookContent.includes('const isSessionChanged = latestSessionKeyRef.current !== continuityKey;'));
   assert.ok(handoffHookContent.includes('onPromotedRef.current?.();'));
   assert.ok(handoffHookContent.includes('onHandoffConsumedRef.current?.();'));
-  assert.ok(handoffHookContent.includes("cardEl.dataset.proxySessionId = sessionKey;"));
+  assert.ok(handoffHookContent.includes("cardEl.dataset.proxySessionId = continuityKey;"));
   assert.ok(handoffHookContent.includes('videoNodeFound: boolean;'));
   assert.ok(handoffHookContent.includes('playRequested: boolean;'));
   assert.ok(handoffHookContent.includes('playPromiseRejected: boolean;'));
@@ -322,6 +327,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('canPlaySeen: boolean;'));
   assert.ok(handoffHookContent.includes('playingSeen: boolean;'));
   assert.ok(handoffHookContent.includes('promotionBlockedReason: string;'));
+  assert.ok(handoffHookContent.includes('thumbnailVideoNodeFound: boolean;'));
+  assert.ok(handoffHookContent.includes('timeDeltaFromThumbnail: number | null;'));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('loadeddata-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('canplay-fallback');"));
   assert.ok(handoffHookContent.includes("tryFallbackPromote('playing-fallback');"));
@@ -330,6 +337,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('const sourceAlreadyBound = isSameStream(proxyVideoEl.currentSrc) || isSameStream(proxyVideoEl.src);'));
   assert.ok(handoffHookContent.includes("syncPlaybackState('source-bound');"));
   assert.ok(handoffHookContent.includes("publishDebug('source-reused', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('inactive-no-selection', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("publishDebug('inactive-focused-closed', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('const shouldStartPlayback = shouldPlay;'));
   assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
   assert.ok(list.includes('data-no-preview="1"'));
