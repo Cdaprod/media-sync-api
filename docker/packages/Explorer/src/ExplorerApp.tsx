@@ -1806,7 +1806,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (nextKey === activeAssetKey) {
         if (isInteractiveTarget(target)) return;
         event.preventDefault();
-        handleProxyTogglePlay();
+        const proxyVideo = cardEl.querySelector<HTMLVideoElement>('.proxy-render-video');
+        if (!proxyVideo) return;
+        if (proxyVideo.paused) {
+          proxyVideo.muted = false;
+          proxyVideo.defaultMuted = false;
+          proxyVideo.play().catch(() => {});
+        }
+        else proxyVideo.pause();
         return;
       }
       const nextItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === nextKey);
@@ -1816,7 +1823,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
     proxyRoot.addEventListener('pointerdown', handleProxyPointerDown, true);
     return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
-  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusRelative, gridCinematicMode, handleProxyTogglePlay, inspectorOpen, openPreview, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusRelative, gridCinematicMode, inspectorOpen, openPreview, view]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;

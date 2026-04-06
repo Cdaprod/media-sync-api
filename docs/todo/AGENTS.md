@@ -1,3 +1,9 @@
+## 2026-04-05 — ExplorerApp TDZ crash fix for proxy tap toggle (active)
+- [x] Root-caused `Cannot access uninitialized variable` crash to proxy-root effect dependency referencing `handleProxyTogglePlay` before callback initialization.
+- [x] Replaced active-card tap path with inline proxy video play/pause toggle logic inside the proxy pointer handler to avoid forward-reference TDZ.
+- [x] Updated static regression assertions to lock inline active-card toggle markers (`proxy-render-video` query + play branch).
+- [ ] Device-verify app boots without runtime error overlay and active proxy tap-to-toggle remains functional on iOS Safari.
+
 ## 2026-04-05 — Focused proxy session-key stabilization + direct promotion write-through (active)
 - [x] Added explicit ownership `sessionKey` in `useVideoOwnershipHandoff` and restricted bootstrap reset lane to true session changes.
 - [x] Moved unstable callback inputs (`onDebug`, `onPromoted`, `onHandoffConsumed`) behind refs so bootstrap effect does not restart from callback identity churn.

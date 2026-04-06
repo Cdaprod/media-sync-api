@@ -1190,7 +1190,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('playToken: previewAutoPlayToken,'));
   assert.ok(content.includes("if (target.closest('.proxy-preview-ui')) return;"));
   assert.ok(content.includes('if (nextKey === activeAssetKey) {'));
-  assert.ok(content.includes('handleProxyTogglePlay();'));
+  assert.ok(content.includes("const proxyVideo = cardEl.querySelector<HTMLVideoElement>('.proxy-render-video');"));
+  assert.ok(content.includes('if (proxyVideo.paused) {'));
+  assert.ok(content.includes('proxyVideo.play().catch(() => {});'));
   assert.ok(content.includes('className="proxy-preview-ui"'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
   assert.ok(content.includes("'--focus-world-origin-y': `${focusWorldTransform.originY}%`"));

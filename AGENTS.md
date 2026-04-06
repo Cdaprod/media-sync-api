@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-04-05)
+- Fixed a runtime `ReferenceError: Cannot access uninitialized variable` in `ExplorerApp` by removing early TDZ usage of `handleProxyTogglePlay` from proxy-root effect dependencies before callback initialization.
+- Active-card tap-to-toggle now executes inline media toggle logic within the proxy pointer handler (same behavior, no forward-reference TDZ risk).
+- Kept focused proxy tap-to-toggle semantics and existing interactive-control guards intact.
+
+### Latest Implementation Notes (2026-04-05)
 - Hardening pass for focused proxy ownership session: `useVideoOwnershipHandoff` now tracks an explicit `sessionKey` (`selectionKey::streamUrl::playToken`) and only performs poster/reset bootstrap on true session changes.
 - Moved handoff callbacks (`onPromoted`, `onHandoffConsumed`, `onDebug`) behind refs to prevent callback identity churn from restarting the ownership bootstrap effect.
 - Added direct promotion write-through on live active card/video datasets (`data-first-frame-presented`, `data-video-ready`, `data-promotion-strategy`, `data-proxy-session-id`) plus expanded runtime diagnostics (`videoStableId`, `cardVideoReady`, `cardFirstFramePresented`, `currentSrc`, `sessionKey`).
