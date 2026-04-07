@@ -1247,6 +1247,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("setGridCinematicMode('grid-rest');"));
   assert.ok(content.includes('recordPreviewDebug({ stage: event, selectionKey, requestedMode: view });'));
   assert.ok(content.includes("const cardEl = targetEl.closest<HTMLElement>('.masonry-card[data-select-key]');"));
+  assert.ok(content.includes("if (targetEl.closest('[data-focus-proxy-root=\"true\"]')) {"));
+  assert.ok(content.includes("stage: 'focused-retarget-delegated-to-proxy-root'"));
+  assert.ok(content.includes("stage: 'viewport-close-blocked-proxy-origin'"));
   assert.ok(content.includes('if (!cardEl) {'));
   assert.ok(content.includes('closeDrawer();'));
   assert.ok(content.includes("const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');"));
@@ -1348,6 +1351,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("stage: 'focused-retarget-blocked-overlay'"));
   assert.ok(content.includes("stage: 'focused-retarget-blocked-same-key'"));
   assert.ok(content.includes("stage: 'focused-retarget-dispatched'"));
+  assert.ok(content.includes('const handleProxyPointerDown = (event: PointerEvent) => {'));
   assert.ok(content.includes('__explorerProxyContinuityDebug'));
   assert.ok(content.includes('authoritativeVisualSurface'));
   assert.ok(content.includes('authoritativeAudioSurface'));

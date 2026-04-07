@@ -1754,6 +1754,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const handlePointerDown = (event: PointerEvent) => {
       const targetEl = event.target as HTMLElement | null;
       if (!targetEl) return;
+      if (targetEl.closest('[data-focus-proxy-root="true"]')) {
+        recordPreviewDebug({ stage: 'focused-retarget-delegated-to-proxy-root', selectionKey: activeAssetKey, requestedMode: view });
+        recordPreviewDebug({ stage: 'viewport-close-blocked-proxy-origin', selectionKey: activeAssetKey, requestedMode: view });
+        return;
+      }
       const cardEl = targetEl.closest<HTMLElement>('.masonry-card[data-select-key]');
       if (!cardEl) {
         closeDrawer();

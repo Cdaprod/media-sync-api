@@ -1,3 +1,10 @@
+## 2026-04-07 — Focused retarget event-routing ownership fix (active)
+- [x] Patched focused viewport capture handler in `ExplorerApp` to delegate proxy-originated pointer events (`[data-focus-proxy-root="true"]`) to the proxy-root interaction lane.
+- [x] Added explicit viewport delegation markers (`focused-retarget-delegated-to-proxy-root`, `viewport-close-blocked-proxy-origin`) so runtime traces can confirm viewport no longer preempts focused retarget.
+- [x] Preserved proxy-root pointerdown as authoritative focused retarget path (including fallback hit-testing via `elementFromPoint(...)`) while avoiding viewport close-path preemption for proxy-originated taps.
+- [x] Expanded static regression assertions to lock proxy-origin delegation guard and marker strings in `exports.test.mjs`.
+- [ ] Device-verify zoomed focused preview tap-on-outside-asset now consistently retargets camera (no premature close/no-op from viewport handler).
+
 ## 2026-04-06 — Focused retarget interaction regression fix (active)
 - [x] Restored focused-state different-asset tap retarget dispatch in `ExplorerApp` by routing focused grid/overlay taps to `runProxyFocusTransition(..., 'retarget')` when continuity key differs.
 - [x] Added focused interaction markers for device/runtime triage (`focused-retarget-tap`, `focused-retarget-blocked-overlay`, `focused-retarget-blocked-same-key`, `focused-retarget-dispatched`).
