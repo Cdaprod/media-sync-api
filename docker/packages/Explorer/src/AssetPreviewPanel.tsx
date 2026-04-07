@@ -67,8 +67,8 @@ export function ProxyFocusedChromeFullParity({
   if (!asset) return null;
   const durationCap = Math.max(duration, 1);
   return (
-    <div className="proxy-focused-chrome" data-proxy-focused-chrome="true">
-      <div className="proxy-focused-chrome-top">
+    <div className="proxy-focused-chrome" data-proxy-focused-chrome="true" data-focus-proxy-layer="true">
+      <div className="proxy-focused-chrome-top" data-focus-proxy-layer="true">
         <div className="proxy-focused-chrome-top-row">
           <span className={`proxy-focused-kind kind-${asset.kind}`}>{asset.kind.toUpperCase()}</span>
           <div className="proxy-focused-nav preview-interactive">
@@ -80,7 +80,7 @@ export function ProxyFocusedChromeFullParity({
         <div className="proxy-focused-title">{asset.name}</div>
         <div className="proxy-focused-path">{asset.path}</div>
       </div>
-      <div className="proxy-focused-chrome-bottom">
+      <div className="proxy-focused-chrome-bottom" data-focus-proxy-layer="true">
         {playable ? (
           <div className="proxy-focused-player-core preview-interactive">
             <div className="proxy-focused-time-row">

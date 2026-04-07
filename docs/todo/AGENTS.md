@@ -1,3 +1,9 @@
+## 2026-04-07 — Mobile tap reliability + double-tap zoom suppression pass (active)
+- [x] Extended proxy-layer marker coverage to proxy preview chrome surfaces (`proxy-preview-ui`, focused chrome top/bottom) so composed-path proxy-origin detection is stable across nested proxy children.
+- [x] Added mobile tap gesture hardening (`touch-action: manipulation`) on focused proxy root and focused masonry host to reduce Safari double-tap zoom interference during retarget taps.
+- [x] Expanded static assertions for proxy chrome layer markers and proxy preview UI marker wiring.
+- [ ] Device-verify iOS Safari no longer performs default double-tap page zoom while focused retarget taps remain responsive/reliable.
+
 ## 2026-04-07 — Proxy-layer composed-path retarget reliability pass (active)
 - [x] Switched focused viewport delegation detection from `target.closest(...)` to full `event.composedPath()` scanning for `dataset.focusProxyLayer === 'true'`.
 - [x] Added `data-focus-proxy-layer="true"` on focused proxy root and proxy renderer layers/surfaces/cards/scrim so proxy-origin events are consistently detectable regardless of child origin.

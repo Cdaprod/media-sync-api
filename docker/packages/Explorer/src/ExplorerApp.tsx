@@ -4369,7 +4369,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         aria-hidden="true"
       >
         {proxyPreviewVisible && proxyPreviewPortalTarget ? createPortal(
-          <div className="proxy-preview-ui" onPointerDown={(event) => event.stopPropagation()}>
+          <div className="proxy-preview-ui" data-focus-proxy-layer="true" onPointerDown={(event) => event.stopPropagation()}>
             <ProxyFocusedChromeFullParity
               asset={normalizedPreviewAsset}
               playable={Boolean(normalizedPreviewAsset && (normalizedPreviewAsset.kind === 'video' || normalizedPreviewAsset.kind === 'audio'))}

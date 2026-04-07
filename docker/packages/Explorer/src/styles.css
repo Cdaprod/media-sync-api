@@ -844,6 +844,7 @@ select.control{
   z-index: 150;
   opacity: 0;
   pointer-events: none;
+  touch-action: manipulation;
   overflow: hidden;
   transition: opacity 120ms ease;
 }
@@ -1227,6 +1228,7 @@ select.control{
 .app.grid-focused .masonry-host{
   opacity: 0;
   pointer-events: auto;
+  touch-action: manipulation;
 }
 .app.grid-opening .masonry-host,
 .app.grid-refocusing .masonry-host{

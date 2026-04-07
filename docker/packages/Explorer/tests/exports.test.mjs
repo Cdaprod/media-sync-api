@@ -127,6 +127,9 @@ test('preview adapter and panel keep drawer-based preview contract', () => {
   assert.ok(panel.includes('onClick={handleClose}'));
   assert.ok(panel.includes('preview-obs-row'));
   assert.ok(panel.includes('proxy-focused-details-panel'));
+  assert.ok(panel.includes('data-proxy-focused-chrome="true" data-focus-proxy-layer="true"'));
+  assert.ok(panel.includes('className="proxy-focused-chrome-top" data-focus-proxy-layer="true"'));
+  assert.ok(panel.includes('className="proxy-focused-chrome-bottom" data-focus-proxy-layer="true"'));
   assert.ok(panel.includes('metadataRows?: Array<[string, string]>;'));
   assert.ok(panel.includes('.map(([label, value], idx) => ('));
   assert.ok(panel.includes('obsMode'));
@@ -1275,7 +1278,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('proxyVideo.play().catch(() => {});'));
   assert.ok(content.includes('focusAsset(nextItem, nextKey);'));
   assert.ok(content.includes('const proxyOpened = runProxyFocusTransition(nextKey, \'retarget\');'));
-  assert.ok(content.includes('className="proxy-preview-ui"'));
+  assert.ok(content.includes('className="proxy-preview-ui" data-focus-proxy-layer="true"'));
   assert.ok(content.includes("'--focus-world-origin-x': `${focusWorldTransform.originX}%`"));
   assert.ok(content.includes("'--focus-world-origin-y': `${focusWorldTransform.originY}%`"));
   assert.ok(content.includes("focusPresentationState.mode === 'world-focus' ? 'world-focus-suppressed' : ''"));
