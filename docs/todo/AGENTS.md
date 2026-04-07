@@ -1,3 +1,10 @@
+## 2026-04-07 — Proxy-layer composed-path retarget reliability pass (active)
+- [x] Switched focused viewport delegation detection from `target.closest(...)` to full `event.composedPath()` scanning for `dataset.focusProxyLayer === 'true'`.
+- [x] Added `data-focus-proxy-layer="true"` on focused proxy root and proxy renderer layers/surfaces/cards/scrim so proxy-origin events are consistently detectable regardless of child origin.
+- [x] Kept viewport delegation markers (`focused-retarget-delegated-to-proxy-root`, `viewport-close-blocked-proxy-origin`) and verified they now trigger from composed-path proxy-origin detection.
+- [x] Expanded static assertions to lock composed-path detection and proxy-layer dataset markers in Explorer + proxy renderer contracts.
+- [ ] Device-verify focused retarget reliability is stable across taps landing on scrim/top/bottom/ambient proxy children.
+
 ## 2026-04-07 — Focused retarget event-routing ownership fix (active)
 - [x] Patched focused viewport capture handler in `ExplorerApp` to delegate proxy-originated pointer events (`[data-focus-proxy-root="true"]`) to the proxy-root interaction lane.
 - [x] Added explicit viewport delegation markers (`focused-retarget-delegated-to-proxy-root`, `viewport-close-blocked-proxy-origin`) so runtime traces can confirm viewport no longer preempts focused retarget.

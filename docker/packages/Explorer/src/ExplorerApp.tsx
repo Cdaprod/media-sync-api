@@ -1752,13 +1752,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const viewportEl = mediaScrollViewportRef.current;
     if (!viewportEl) return;
     const handlePointerDown = (event: PointerEvent) => {
-      const targetEl = event.target as HTMLElement | null;
-      if (!targetEl) return;
-      if (targetEl.closest('[data-focus-proxy-root="true"]')) {
+      const isProxyOrigin = event.composedPath().some((node) => (
+        node instanceof HTMLElement
+        && node.dataset.focusProxyLayer === 'true'
+      ));
+      if (isProxyOrigin) {
         recordPreviewDebug({ stage: 'focused-retarget-delegated-to-proxy-root', selectionKey: activeAssetKey, requestedMode: view });
         recordPreviewDebug({ stage: 'viewport-close-blocked-proxy-origin', selectionKey: activeAssetKey, requestedMode: view });
         return;
       }
+      const targetEl = event.target as HTMLElement | null;
+      if (!targetEl) return;
       const cardEl = targetEl.closest<HTMLElement>('.masonry-card[data-select-key]');
       if (!cardEl) {
         closeDrawer();
@@ -4361,6 +4365,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ref={focusProxyRootRef}
         className={`focus-proxy-root ${gridCinematicMode !== 'grid-rest' ? 'is-active' : ''}`}
         data-focus-proxy-root="true"
+        data-focus-proxy-layer="true"
         aria-hidden="true"
       >
         {proxyPreviewVisible && proxyPreviewPortalTarget ? createPortal(

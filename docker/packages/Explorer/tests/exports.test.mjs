@@ -1247,7 +1247,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("setGridCinematicMode('grid-rest');"));
   assert.ok(content.includes('recordPreviewDebug({ stage: event, selectionKey, requestedMode: view });'));
   assert.ok(content.includes("const cardEl = targetEl.closest<HTMLElement>('.masonry-card[data-select-key]');"));
-  assert.ok(content.includes("if (targetEl.closest('[data-focus-proxy-root=\"true\"]')) {"));
+  assert.ok(content.includes('const isProxyOrigin = event.composedPath().some((node) => ('));
+  assert.ok(content.includes("node instanceof HTMLElement"));
+  assert.ok(content.includes("node.dataset.focusProxyLayer === 'true'"));
   assert.ok(content.includes("stage: 'focused-retarget-delegated-to-proxy-root'"));
   assert.ok(content.includes("stage: 'viewport-close-blocked-proxy-origin'"));
   assert.ok(content.includes('if (!cardEl) {'));
@@ -1257,6 +1259,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("recordPreviewDebug({ stage: 'proxy-open-failed-no-fallback', selectionKey: nextKey, requestedMode: view, finalMode: 'idle' });"));
   assert.ok(content.includes('className={`focus-proxy-root ${gridCinematicMode !== \'grid-rest\' ? \'is-active\' : \'\'}`}'));
   assert.ok(content.includes('data-focus-proxy-root="true"'));
+  assert.ok(content.includes('data-focus-proxy-layer="true"'));
   assert.ok(content.includes('className={`app ${proxyTravelActive ? \'proxy-travel-active\' : \'\'} ${gridCinematicMode}`}'));
   assert.ok(content.includes('data-grid-cinematic-nav="true"'));
   assert.ok(content.includes('const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === \'grid\' && gridCinematicMode === \'grid-rest\';'));
@@ -1302,8 +1305,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('private activeSelectionKey = \'\';'));
   assert.ok(proxyRenderer.includes('private activeVideoEl: HTMLVideoElement | null = null;'));
   assert.ok(proxyRenderer.includes('private renderPassCount = 0;'));
-  assert.ok(proxyRenderer.includes('<div class=\"proxy-render-ambient-layer\"></div>'));
-  assert.ok(proxyRenderer.includes('<div class=\"proxy-render-active-layer\"></div>'));
+  assert.ok(proxyRenderer.includes('<div class=\"proxy-render-ambient-layer\" data-focus-proxy-layer=\"true\"></div>'));
+  assert.ok(proxyRenderer.includes('<div class=\"proxy-render-active-layer\" data-focus-proxy-layer=\"true\"></div>'));
+  assert.ok(proxyRenderer.includes('data-focus-proxy-layer=\"true\"'));
   assert.ok(proxyRenderer.includes('const sameSelection = Boolean(this.activeCardEl && this.activeSelectionKey === card.selectionKey);'));
   assert.ok(proxyRenderer.includes('ambientLayer.innerHTML = sorted'));
   assert.ok(proxyRenderer.includes('.filter((card) => !card.active)'));
