@@ -1,3 +1,10 @@
+## 2026-04-08 — Focused proxy ambient hit-target ownership pass (active)
+- [x] Make proxy ambient/active card roots explicit direct hit targets with stable `data-selection-key` + `data-proxy-hit-target` markers in `ViewportProxyRenderer`.
+- [x] Move focused proxy pointer ownership off full-screen decorative wrappers and onto cards/interactive preview controls (`pointer-events` contract updates in styles).
+- [x] Add focused tap runtime markers for surface/body/card-root/card-child hit attribution and empty-space post-surface/body diagnostics.
+- [x] Expand Explorer static contracts to lock renderer hit-target markers, focused tap markers, and proxy-layer pointer-event ownership selectors.
+- [ ] Validate on physical iPhone Safari that surrounding ambient-card taps now resolve to `.proxy-render-card[data-selection-key]` and retarget without entering `grid-closing`.
+
 ## 2026-04-08 — Focused asset-vs-empty-space tap contract pass (active)
 - [x] Re-asserted focused tap contract in `ExplorerApp`: proxy/grid asset hit retargets camera, true empty-space tap closes focus.
 - [x] Added focused tap branch markers for direct proxy asset hit, grid fallback hit, empty-space hit, empty-space close, and retarget dispatch (`focused-tap-*`).

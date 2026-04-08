@@ -78,6 +78,7 @@ export class ViewportProxyRenderer {
         data-focus-proxy-layer="true"
         data-selection-key="${card.selectionKey}"
         data-select-key="${card.selectionKey}"
+        data-proxy-hit-target="card-root"
         data-proxy-active="false"
         data-video-ready="false"
         data-proxy-media-branch="${card.thumbUrl ? 'thumb' : 'fallback'}"
@@ -89,7 +90,7 @@ export class ViewportProxyRenderer {
           --proxy-chrome-scale:${clampChromeScale(card.rect.width)};
         "
       >
-        <div class="proxy-render-thumb">${thumb}</div>
+        <div class="proxy-render-thumb" data-proxy-hit-target="card-child">${thumb}</div>
       </div>
     `;
   }
@@ -113,10 +114,11 @@ export class ViewportProxyRenderer {
         data-focus-proxy-layer="true"
         data-selection-key="${card.selectionKey}"
         data-select-key="${card.selectionKey}"
+        data-proxy-hit-target="card-root"
         data-proxy-active="true"
         data-video-ready="false"
       >
-        <div class="proxy-render-thumb"></div>
+        <div class="proxy-render-thumb" data-proxy-hit-target="card-child"></div>
       </div>
     `;
     this.activeCardEl = this.activeLayerEl.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
@@ -151,12 +153,14 @@ export class ViewportProxyRenderer {
     if (!thumbEl) {
       return { activeNodeReused: false, activeMediaRecreated: true };
     }
+    thumbEl.dataset.proxyHitTarget = 'card-child';
 
     const mediaBranch = (card.kind === 'video' && card.mediaUrl) ? 'video' : (card.thumbUrl ? 'thumb' : 'fallback');
     activeCardEl.className = `proxy-render-card is-active ${card.selected ? 'is-selected' : ''}`;
     activeCardEl.dataset.focusProxyLayer = 'true';
     activeCardEl.dataset.selectionKey = card.selectionKey;
     activeCardEl.dataset.selectKey = card.selectionKey;
+    activeCardEl.dataset.proxyHitTarget = 'card-root';
     activeCardEl.dataset.proxyActive = 'true';
     activeCardEl.dataset.proxyMediaBranch = mediaBranch;
     activeCardEl.dataset.streamUrl = card.mediaUrl || '';

@@ -1862,7 +1862,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return;
       }
       recordPreviewDebug({ stage: 'focused-retarget-tap', selectionKey: activeAssetKey, requestedMode: view });
+      if (target.classList.contains('proxy-render-surface')) {
+        recordPreviewDebug({ stage: 'focused-tap-hit-proxy-surface', selectionKey: activeAssetKey, requestedMode: view });
+      }
+      if (target === document.body) {
+        recordPreviewDebug({ stage: 'focused-tap-hit-body', selectionKey: activeAssetKey, requestedMode: view });
+      }
       const cardEl = target.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
+      if (cardEl) {
+        if (target === cardEl) {
+          recordPreviewDebug({ stage: 'focused-tap-hit-proxy-card-root', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
+        }
+        else {
+          recordPreviewDebug({ stage: 'focused-tap-hit-proxy-card-child', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
+        }
+      }
       const resolveUnderlyingGridKey = () => {
         const previousPointerEvents = proxyRoot.style.pointerEvents;
         proxyRoot.style.pointerEvents = 'none';
@@ -1874,6 +1888,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (!cardEl) {
         const gridKey = resolveUnderlyingGridKey();
         if (!gridKey) {
+          if (target.classList.contains('proxy-render-surface')) {
+            recordPreviewDebug({ stage: 'focused-tap-empty-after-proxy-surface', selectionKey: activeAssetKey, requestedMode: view });
+          }
+          if (target === document.body) {
+            recordPreviewDebug({ stage: 'focused-tap-empty-after-body', selectionKey: activeAssetKey, requestedMode: view });
+          }
           recordPreviewDebug({ stage: 'focused-tap-hit-empty-space', selectionKey: activeAssetKey, requestedMode: view });
           recordPreviewDebug({ stage: 'focused-retarget-ambient-card-miss', selectionKey: activeAssetKey, requestedMode: view });
           recordPreviewDebug({ stage: 'focused-retarget-blocked-overlay', selectionKey: activeAssetKey, requestedMode: view });
