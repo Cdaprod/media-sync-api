@@ -600,6 +600,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyPrewarmSelectionKeyRef = useRef('');
   const proxyPrewarmUrlRef = useRef('');
   const proxyPrewarmReadyStateRef = useRef(0);
+  const focusedDoubleTapStateRef = useRef({ lastTapAt: 0 });
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
@@ -1625,6 +1626,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ? orchestrator.retargetTransition(transitionArgs)
         : orchestrator.refocusTransition(transitionArgs));
     if (!opened) {
+      if (mode === 'retarget') {
+        handleEvent('focused-retarget-runProxyFocusTransition-false');
+        return false;
+      }
       clearTravelState();
       setGridCinematicMode('grid-rest');
       viewportEl.classList.remove('focus-proxy-scroll-lock');
@@ -1745,6 +1750,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused, runProxyFocusTransition]);
 
+  const scheduleFocusedRetargetRetry = useCallback((
+    nextItem: MediaItem,
+    nextKey: string,
+  ) => {
+    recordPreviewDebug({ stage: 'focused-retarget-retry-scheduled', selectionKey: nextKey, requestedMode: view });
+    recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: nextKey, requestedMode: view });
+    window.requestAnimationFrame(() => {
+      recordPreviewDebug({ stage: 'focused-retarget-retry-attempt', selectionKey: nextKey, requestedMode: view });
+      setFocused(nextItem);
+      setActiveAssetKey(nextKey);
+      commitPreviewActivationKey(nextKey);
+      const retryOpened = runProxyFocusTransition(nextKey, 'retarget');
+      if (retryOpened) {
+        recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
+        return;
+      }
+      recordPreviewDebug({ stage: 'focused-retarget-retry-failed', selectionKey: nextKey, requestedMode: view });
+      recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: nextKey, requestedMode: view });
+    });
+  }, [commitPreviewActivationKey, recordPreviewDebug, runProxyFocusTransition, view]);
+
   useEffect(() => {
     if (view !== 'grid') return;
     if (!inspectorOpen) return;
@@ -1779,16 +1805,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (!nextItem) return;
       event.preventDefault();
       event.stopPropagation();
+      recordPreviewDebug({ stage: 'focused-retarget-resolved-key', selectionKey: nextKey, requestedMode: view });
       setFocused(nextItem);
       setActiveAssetKey(nextKey);
       commitPreviewActivationKey(nextKey);
       const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');
-      if (!proxyOpened) return;
+      if (!proxyOpened) {
+        scheduleFocusedRetargetRetry(nextItem, nextKey);
+        return;
+      }
       recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
     };
     viewportEl.addEventListener('pointerdown', handlePointerDown, true);
     return () => viewportEl.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, commitPreviewActivationKey, filteredMedia, gridCinematicMode, inspectorOpen, runProxyFocusTransition, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, commitPreviewActivationKey, filteredMedia, gridCinematicMode, inspectorOpen, runProxyFocusTransition, scheduleFocusedRetargetRetry, view]);
 
   useEffect(() => {
     if (view !== 'grid') return;
@@ -1799,6 +1829,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const handleProxyPointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
       if (!target) return;
+      if (event.pointerType === 'touch') {
+        const now = Date.now();
+        const withinDoubleTapWindow = (now - focusedDoubleTapStateRef.current.lastTapAt) <= 320;
+        const isControlTarget = Boolean(
+          target.closest('input, textarea, select, button, a, [contenteditable=\"true\"], [data-interactive=\"true\"]'),
+        );
+        if (withinDoubleTapWindow && !isControlTarget) {
+          event.preventDefault();
+          recordPreviewDebug({ stage: 'focused-doubletap-suppressed', selectionKey: activeAssetKey, requestedMode: view });
+        }
+        if (withinDoubleTapWindow && isControlTarget) {
+          recordPreviewDebug({ stage: 'focused-doubletap-allowed-control', selectionKey: activeAssetKey, requestedMode: view });
+        }
+        focusedDoubleTapStateRef.current.lastTapAt = now;
+      }
       if (target.closest('.proxy-preview-ui')) return;
       const action = target.closest<HTMLElement>('[data-proxy-action]')?.dataset.proxyAction;
       if (action === 'close') {
@@ -1829,13 +1874,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (!cardEl) {
         const gridKey = resolveUnderlyingGridKey();
         if (!gridKey) {
+          recordPreviewDebug({ stage: 'focused-retarget-ambient-card-miss', selectionKey: activeAssetKey, requestedMode: view });
           recordPreviewDebug({ stage: 'focused-retarget-blocked-overlay', selectionKey: activeAssetKey, requestedMode: view });
           if (gridCinematicMode === 'grid-focused') {
             event.preventDefault();
-            closeDrawer();
+            recordPreviewDebug({ stage: 'focused-retarget-closeDrawer-blocked', selectionKey: activeAssetKey, requestedMode: view });
+            recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: activeAssetKey, requestedMode: view });
           }
           return;
         }
+        recordPreviewDebug({ stage: 'focused-retarget-hit-grid-fallback', selectionKey: gridKey, requestedMode: view });
         if (gridKey === activeAssetKey) {
           recordPreviewDebug({ stage: 'focused-retarget-blocked-same-key', selectionKey: gridKey, requestedMode: view });
           return;
@@ -1843,6 +1891,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         const targetItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === gridKey);
         if (!targetItem) return;
         event.preventDefault();
+        recordPreviewDebug({ stage: 'focused-retarget-resolved-key', selectionKey: gridKey, requestedMode: view });
         focusAsset(targetItem, gridKey);
         setFocused(targetItem);
         setPreviewDetailsOpen(false);
@@ -1850,11 +1899,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         inspectorOpenRef.current = true;
         const proxyOpened = runProxyFocusTransition(gridKey, 'retarget');
         if (!proxyOpened) {
-          openPreview(targetItem);
+          recordPreviewDebug({ stage: 'focused-retarget-openPreview-fallback-blocked', selectionKey: gridKey, requestedMode: view });
+          scheduleFocusedRetargetRetry(targetItem, gridKey);
           return;
         }
         recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: gridKey, requestedMode: view });
         return;
+      }
+      if (cardEl.classList.contains('is-ambient')) {
+        recordPreviewDebug({ stage: 'focused-retarget-ambient-card-hit', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
+      }
+      else {
+        recordPreviewDebug({ stage: 'focused-retarget-hit-proxy-card', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
       }
       const nextKey = cardEl.dataset.selectionKey || '';
       if (!nextKey) return;
@@ -1875,6 +1931,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const nextItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === nextKey);
       if (!nextItem) return;
       event.preventDefault();
+      recordPreviewDebug({ stage: 'focused-retarget-resolved-key', selectionKey: nextKey, requestedMode: view });
       focusAsset(nextItem, nextKey);
       setFocused(nextItem);
       setPreviewDetailsOpen(false);
@@ -1882,14 +1939,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       inspectorOpenRef.current = true;
       const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');
       if (!proxyOpened) {
-        openPreview(nextItem);
+        recordPreviewDebug({ stage: 'focused-retarget-openPreview-fallback-blocked', selectionKey: nextKey, requestedMode: view });
+        scheduleFocusedRetargetRetry(nextItem, nextKey);
         return;
       }
       recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
     };
     proxyRoot.addEventListener('pointerdown', handleProxyPointerDown, true);
     return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
-  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusAsset, focusRelative, gridCinematicMode, inspectorOpen, openPreview, runProxyFocusTransition, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusAsset, focusRelative, gridCinematicMode, inspectorOpen, runProxyFocusTransition, scheduleFocusedRetargetRetry, view]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;

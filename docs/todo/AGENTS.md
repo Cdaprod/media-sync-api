@@ -1,3 +1,11 @@
+## 2026-04-08 — Focused retarget fallback-policy + double-tap suppression pass (active)
+- [x] Added focused retarget runtime branch markers in `ExplorerApp` to isolate failure path (`hit-proxy-card`, `hit-grid-fallback`, `resolved-key`, `runProxyFocusTransition-false`, retry lifecycle markers, close/open fallback-block markers).
+- [x] Removed forced focused retarget `openPreview(...)` fallback from proxy-origin lane; failed retarget now schedules retry and keeps focused state instead of forcing close/open behavior.
+- [x] Blocked proxy-origin close fallback when no retarget candidate resolves in focused mode (`focused-retarget-closeDrawer-blocked`) and kept focused presentation alive for retry triage.
+- [x] Added focused proxy-surface JS double-tap suppression lane for touch pointer input with control-safe allow path markers (`focused-doubletap-suppressed`, `focused-doubletap-allowed-control`).
+- [x] Hardened orchestrator `retargetTransition` recovery path to recover world/mount/render from current camera (`focus-retarget-recover-world`, `focus-retarget-recover-world-commit`) and only hard-fail as last resort (`focus-retarget-hard-fallback`) without implicit open-from-rest fallback.
+- [ ] Device-verify focused retarget now preserves continuity motion (no forced zoom-out/open) and double-tap no longer triggers Safari page zoom on focused proxy surface.
+
 ## 2026-04-07 — Mobile tap reliability + double-tap zoom suppression pass (active)
 - [x] Extended proxy-layer marker coverage to proxy preview chrome surfaces (`proxy-preview-ui`, focused chrome top/bottom) so composed-path proxy-origin detection is stable across nested proxy children.
 - [x] Added mobile tap gesture hardening (`touch-action: manipulation`) on focused proxy root and focused masonry host to reduce Safari double-tap zoom interference during retarget taps.

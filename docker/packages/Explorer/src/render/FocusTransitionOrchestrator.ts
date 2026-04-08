@@ -247,7 +247,7 @@ export class FocusTransitionOrchestrator {
     continuityKey?: string;
     onStart?: () => void;
     onComplete?: () => void;
-    onEvent?: (event: 'focus-retarget-start' | 'focus-retarget-commit' | 'focus-retarget-cancel' | 'focus-retarget-fallback-close-open' | 'proxy-failed' | 'proxy-retained-reuse-same-key' | 'proxy-retained-blocked-different-key' | 'proxy-retained-cleared-asset-change') => void;
+    onEvent?: (event: 'focus-retarget-start' | 'focus-retarget-commit' | 'focus-retarget-cancel' | 'focus-retarget-recover-world' | 'focus-retarget-recover-world-commit' | 'focus-retarget-hard-fallback' | 'proxy-failed' | 'proxy-retained-reuse-same-key' | 'proxy-retained-blocked-different-key' | 'proxy-retained-cleared-asset-change') => void;
   }) {
     const snapshot = captureFocusSceneSnapshot({
       gridRoot: args.gridRoot,
@@ -284,20 +284,17 @@ export class FocusTransitionOrchestrator {
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
     this.timeline?.kill();
-    const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
+    let world = this.root.querySelector<HTMLElement>('.proxy-render-world');
     if (!world) {
-      args.onEvent?.('focus-retarget-fallback-close-open');
-      return this.openFocusTransition({
-        gridRoot: args.gridRoot,
-        viewportEl: args.viewportEl,
-        selectionKey: args.selectionKey,
-        continuityKey,
-        onStart: args.onStart,
-        onComplete: args.onComplete,
-        onEvent: (event) => {
-          if (event === 'proxy-failed') args.onEvent?.('proxy-failed');
-        },
-      });
+      args.onEvent?.('focus-retarget-recover-world');
+      this.renderer.mount();
+      this.renderer.render(snapshot, this.currentCamera, { showActiveChrome: false });
+      world = this.root.querySelector<HTMLElement>('.proxy-render-world');
+      if (!world) {
+        args.onEvent?.('focus-retarget-hard-fallback');
+        return false;
+      }
+      args.onEvent?.('focus-retarget-recover-world-commit');
     }
     this.timeline = gsap.timeline({
       onStart: () => {
