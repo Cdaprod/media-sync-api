@@ -1258,7 +1258,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("stage: 'focused-retarget-resolved-key'"));
   assert.ok(content.includes("handleEvent('focused-retarget-runProxyFocusTransition-false');"));
   assert.ok(content.includes("stage: 'focused-retarget-openPreview-fallback-blocked'"));
-  assert.ok(content.includes("stage: 'focused-retarget-closeDrawer-blocked'"));
+  assert.ok(content.includes("stage: 'focused-tap-hit-proxy-asset'"));
+  assert.ok(content.includes("stage: 'focused-tap-hit-grid-asset'"));
+  assert.ok(content.includes("stage: 'focused-tap-hit-empty-space'"));
+  assert.ok(content.includes("stage: 'focused-tap-close-empty-space'"));
+  assert.ok(content.includes("stage: 'focused-tap-retarget-dispatched'"));
   assert.ok(content.includes("stage: 'focused-retarget-retry-scheduled'"));
   assert.ok(content.includes("stage: 'focused-retarget-retry-attempt'"));
   assert.ok(content.includes("stage: 'focused-retarget-retry-failed'"));
@@ -1286,6 +1290,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('metadataRows={previewMetadataRows}'));
   assert.ok(content.includes('playToken: previewAutoPlayToken,'));
   assert.ok(content.includes("if (target.closest('.proxy-preview-ui')) return;"));
+  assert.ok(content.includes('if (!gridKey) {'));
+  assert.ok(content.includes("recordPreviewDebug({ stage: 'focused-tap-close-empty-space'"));
   assert.ok(content.includes('if (nextKey === activeAssetKey) {'));
   assert.ok(content.includes("const proxyVideo = cardEl.querySelector<HTMLVideoElement>('.proxy-render-video');"));
   assert.ok(content.includes('if (proxyVideo.paused) {'));

@@ -1,3 +1,10 @@
+## 2026-04-08 — Focused asset-vs-empty-space tap contract pass (active)
+- [x] Re-asserted focused tap contract in `ExplorerApp`: proxy/grid asset hit retargets camera, true empty-space tap closes focus.
+- [x] Added focused tap branch markers for direct proxy asset hit, grid fallback hit, empty-space hit, empty-space close, and retarget dispatch (`focused-tap-*`).
+- [x] Updated focused proxy handler so close is only triggered after both direct proxy-card and grid fallback asset resolution fail.
+- [x] Expanded static assertions to lock focused asset-vs-empty-space branch markers and close-after-resolution-fail contract.
+- [ ] Device-verify repeated focused surrounding-asset taps retarget continuously while empty-gap taps close predictably.
+
 ## 2026-04-08 — Focused retarget fallback-policy + double-tap suppression pass (active)
 - [x] Added focused retarget runtime branch markers in `ExplorerApp` to isolate failure path (`hit-proxy-card`, `hit-grid-fallback`, `resolved-key`, `runProxyFocusTransition-false`, retry lifecycle markers, close/open fallback-block markers).
 - [x] Removed forced focused retarget `openPreview(...)` fallback from proxy-origin lane; failed retarget now schedules retry and keeps focused state instead of forcing close/open behavior.

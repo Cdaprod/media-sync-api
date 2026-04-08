@@ -1874,15 +1874,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (!cardEl) {
         const gridKey = resolveUnderlyingGridKey();
         if (!gridKey) {
+          recordPreviewDebug({ stage: 'focused-tap-hit-empty-space', selectionKey: activeAssetKey, requestedMode: view });
           recordPreviewDebug({ stage: 'focused-retarget-ambient-card-miss', selectionKey: activeAssetKey, requestedMode: view });
           recordPreviewDebug({ stage: 'focused-retarget-blocked-overlay', selectionKey: activeAssetKey, requestedMode: view });
           if (gridCinematicMode === 'grid-focused') {
             event.preventDefault();
-            recordPreviewDebug({ stage: 'focused-retarget-closeDrawer-blocked', selectionKey: activeAssetKey, requestedMode: view });
-            recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: activeAssetKey, requestedMode: view });
+            recordPreviewDebug({ stage: 'focused-tap-close-empty-space', selectionKey: activeAssetKey, requestedMode: view });
+            closeDrawer();
           }
           return;
         }
+        recordPreviewDebug({ stage: 'focused-tap-hit-grid-asset', selectionKey: gridKey, requestedMode: view });
         recordPreviewDebug({ stage: 'focused-retarget-hit-grid-fallback', selectionKey: gridKey, requestedMode: view });
         if (gridKey === activeAssetKey) {
           recordPreviewDebug({ stage: 'focused-retarget-blocked-same-key', selectionKey: gridKey, requestedMode: view });
@@ -1903,9 +1905,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           scheduleFocusedRetargetRetry(targetItem, gridKey);
           return;
         }
+        recordPreviewDebug({ stage: 'focused-tap-retarget-dispatched', selectionKey: gridKey, requestedMode: view });
         recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: gridKey, requestedMode: view });
         return;
       }
+      recordPreviewDebug({ stage: 'focused-tap-hit-proxy-asset', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
       if (cardEl.classList.contains('is-ambient')) {
         recordPreviewDebug({ stage: 'focused-retarget-ambient-card-hit', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
       }
@@ -1943,6 +1947,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         scheduleFocusedRetargetRetry(nextItem, nextKey);
         return;
       }
+      recordPreviewDebug({ stage: 'focused-tap-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
       recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
     };
     proxyRoot.addEventListener('pointerdown', handleProxyPointerDown, true);
