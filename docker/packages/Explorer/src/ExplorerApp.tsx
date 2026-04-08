@@ -59,6 +59,7 @@ import {
   type FocusWorldGuardFailureReason,
   type FocusWorldTransform,
 } from './explorer/focus/focusWorldMotion';
+import { resolveFocusedTapTarget } from './explorer/focus/resolveFocusedTapTarget';
 import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
@@ -1862,20 +1863,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return;
       }
       recordPreviewDebug({ stage: 'focused-retarget-tap', selectionKey: activeAssetKey, requestedMode: view });
-      if (target.classList.contains('proxy-render-surface')) {
+      const tapTarget = resolveFocusedTapTarget(target);
+      if (tapTarget.kind === 'proxy-surface') {
         recordPreviewDebug({ stage: 'focused-tap-hit-proxy-surface', selectionKey: activeAssetKey, requestedMode: view });
       }
-      if (target === document.body) {
+      if (tapTarget.kind === 'body') {
         recordPreviewDebug({ stage: 'focused-tap-hit-body', selectionKey: activeAssetKey, requestedMode: view });
       }
-      const cardEl = target.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
-      if (cardEl) {
-        if (target === cardEl) {
-          recordPreviewDebug({ stage: 'focused-tap-hit-proxy-card-root', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
-        }
-        else {
-          recordPreviewDebug({ stage: 'focused-tap-hit-proxy-card-child', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
-        }
+      const cardEl = tapTarget.proxyCardEl;
+      if (tapTarget.kind === 'proxy-card-root') {
+        recordPreviewDebug({ stage: 'focused-tap-hit-proxy-card-root', selectionKey: tapTarget.selectionKey, requestedMode: view });
+      }
+      if (tapTarget.kind === 'proxy-card-child') {
+        recordPreviewDebug({ stage: 'focused-tap-hit-proxy-card-child', selectionKey: tapTarget.selectionKey, requestedMode: view });
       }
       const resolveUnderlyingGridKey = () => {
         const previousPointerEvents = proxyRoot.style.pointerEvents;
@@ -1888,10 +1888,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (!cardEl) {
         const gridKey = resolveUnderlyingGridKey();
         if (!gridKey) {
-          if (target.classList.contains('proxy-render-surface')) {
+          if (tapTarget.kind === 'proxy-surface') {
             recordPreviewDebug({ stage: 'focused-tap-empty-after-proxy-surface', selectionKey: activeAssetKey, requestedMode: view });
           }
-          if (target === document.body) {
+          if (tapTarget.kind === 'body') {
             recordPreviewDebug({ stage: 'focused-tap-empty-after-body', selectionKey: activeAssetKey, requestedMode: view });
           }
           recordPreviewDebug({ stage: 'focused-tap-hit-empty-space', selectionKey: activeAssetKey, requestedMode: view });

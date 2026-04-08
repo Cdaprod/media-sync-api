@@ -1,3 +1,10 @@
+## 2026-04-08 — Focused hit-target contract hardening (active)
+- [x] Extracted focused tap hit resolution into `resolveFocusedTapTarget(...)` with explicit contract comment (`asset tap => retarget`, `empty-space => close`, wrappers non-primary).
+- [x] Routed `ExplorerApp` focused pointer handling through the resolver to keep classification authority centralized and resistant to incidental refactors.
+- [x] Added explicit renderer/style contract comments so wrapper/card pointer ownership intent is visible at fragile seams.
+- [x] Expanded static contracts to lock resolver import/usage and helper classification branches (`proxy-card-root`, `proxy-card-child`, `proxy-surface`, `body`).
+- [ ] Add one runtime interaction test (focused ambient retarget vs true empty-space close) when an executable UI harness is available in-repo.
+
 ## 2026-04-08 — Focused proxy ambient hit-target ownership pass (active)
 - [x] Make proxy ambient/active card roots explicit direct hit targets with stable `data-selection-key` + `data-proxy-hit-target` markers in `ViewportProxyRenderer`.
 - [x] Move focused proxy pointer ownership off full-screen decorative wrappers and onto cards/interactive preview controls (`pointer-events` contract updates in styles).

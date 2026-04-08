@@ -67,6 +67,7 @@ export class ViewportProxyRenderer {
   }
 
   private buildAmbientCardHtml(card: RenderCardSnapshot) {
+    // Focused retarget contract: the proxy card root is the primary hit target for asset retarget.
     const selectedClass = card.selected ? 'is-selected' : '';
     const thumb = card.thumbUrl
       ? `<img src="${card.thumbUrl}" alt="">`

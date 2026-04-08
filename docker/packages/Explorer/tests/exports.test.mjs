@@ -1165,6 +1165,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   const drawerMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts');
   const topbarMotionPath = path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts');
   const focusMotionPath = path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts');
+  const focusedTapResolverPath = path.join(packageRoot, 'src', 'explorer', 'focus', 'resolveFocusedTapTarget.ts');
   const renderTypesPath = path.join(packageRoot, 'src', 'render', 'renderTypes.ts');
   const sceneSnapshotPath = path.join(packageRoot, 'src', 'render', 'SceneSnapshot.ts');
   const cameraControllerPath = path.join(packageRoot, 'src', 'render', 'CameraController.ts');
@@ -1178,6 +1179,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   const drawerMotion = fs.readFileSync(drawerMotionPath, 'utf8');
   const topbarMotion = fs.readFileSync(topbarMotionPath, 'utf8');
   const focusMotion = fs.readFileSync(focusMotionPath, 'utf8');
+  const focusedTapResolver = fs.readFileSync(focusedTapResolverPath, 'utf8');
   const renderTypes = fs.readFileSync(renderTypesPath, 'utf8');
   const sceneSnapshot = fs.readFileSync(sceneSnapshotPath, 'utf8');
   const cameraController = fs.readFileSync(cameraControllerPath, 'utf8');
@@ -1227,6 +1229,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('focusStartRetryFrameRef.current = window.requestAnimationFrame(() => {'));
   assert.ok(content.includes('const retryStart = startFocusMotionForSelectionKey(selectionKey);'));
   assert.ok(content.includes("from './explorer/focus/focusWorldMotion'"));
+  assert.ok(content.includes("from './explorer/focus/resolveFocusedTapTarget'"));
+  assert.ok(content.includes('const tapTarget = resolveFocusedTapTarget(target);'));
   assert.ok(content.includes('className="focus-world-stage"'));
   assert.ok(content.includes('ref={focusWorldStageRef}'));
   assert.ok(content.includes("data-focus-world={focusWorldActive ? 'true' : 'false'}"));
@@ -1338,6 +1342,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(cameraController.includes('x: safeCenterX - (target.centerX * scale),'));
   assert.ok(cameraController.includes('y: safeCenterY - (target.centerY * scale),'));
   assert.ok(proxyRenderer.includes('export class ViewportProxyRenderer'));
+  assert.ok(proxyRenderer.includes('Focused retarget contract: the proxy card root is the primary hit target for asset retarget.'));
   assert.ok(proxyRenderer.includes('const showActiveChrome = opts?.showActiveChrome ?? true;'));
   assert.ok(proxyRenderer.includes('private activeSelectionKey = \'\';'));
   assert.ok(proxyRenderer.includes('private activeVideoEl: HTMLVideoElement | null = null;'));
@@ -1378,6 +1383,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('this.renderer.render(snapshot, camera, { showActiveChrome: true });'));
   assert.ok(orchestrator.includes("this.root.dataset.proxyRetainedOnClose = 'true';"));
   assert.ok(orchestrator.includes("args.onEvent?.('proxy-retained-reuse-same-key');"));
+  assert.ok(focusedTapResolver.includes('Focused retarget contract:'));
+  assert.ok(focusedTapResolver.includes("kind: target === proxyCardEl ? 'proxy-card-root' : 'proxy-card-child'"));
+  assert.ok(focusedTapResolver.includes("if (target.classList.contains('proxy-render-surface')) {"));
+  assert.ok(focusedTapResolver.includes("if (target === document.body) {"));
   assert.ok(orchestrator.includes("args.onEvent?.('proxy-retained-blocked-different-key');"));
   assert.ok(orchestrator.includes("this.clearRetainedProxy('proxy-retained-cleared-asset-change');"));
   assert.ok(orchestrator.includes("clearRetainedProxyOnDeselect()"));

@@ -852,6 +852,7 @@ select.control{
   opacity: 1;
   pointer-events: none;
 }
+/* Focused retarget contract: wrappers are decorative only; cards/controls own pointer hits. */
 .app:not(.grid-focused) .grid-cinematic-root{
   opacity: 0;
   pointer-events: none;
