@@ -1,3 +1,70 @@
+## 2026-04-08 — Focused hit-target contract hardening (active)
+- [x] Extracted focused tap hit resolution into `resolveFocusedTapTarget(...)` with explicit contract comment (`asset tap => retarget`, `empty-space => close`, wrappers non-primary).
+- [x] Routed `ExplorerApp` focused pointer handling through the resolver to keep classification authority centralized and resistant to incidental refactors.
+- [x] Added explicit renderer/style contract comments so wrapper/card pointer ownership intent is visible at fragile seams.
+- [x] Expanded static contracts to lock resolver import/usage and helper classification branches (`proxy-card-root`, `proxy-card-child`, `proxy-surface`, `body`).
+- [ ] Add one runtime interaction test (focused ambient retarget vs true empty-space close) when an executable UI harness is available in-repo.
+
+## 2026-04-08 — Focused proxy ambient hit-target ownership pass (active)
+- [x] Make proxy ambient/active card roots explicit direct hit targets with stable `data-selection-key` + `data-proxy-hit-target` markers in `ViewportProxyRenderer`.
+- [x] Move focused proxy pointer ownership off full-screen decorative wrappers and onto cards/interactive preview controls (`pointer-events` contract updates in styles).
+- [x] Add focused tap runtime markers for surface/body/card-root/card-child hit attribution and empty-space post-surface/body diagnostics.
+- [x] Expand Explorer static contracts to lock renderer hit-target markers, focused tap markers, and proxy-layer pointer-event ownership selectors.
+- [ ] Validate on physical iPhone Safari that surrounding ambient-card taps now resolve to `.proxy-render-card[data-selection-key]` and retarget without entering `grid-closing`.
+
+## 2026-04-08 — Focused asset-vs-empty-space tap contract pass (active)
+- [x] Re-asserted focused tap contract in `ExplorerApp`: proxy/grid asset hit retargets camera, true empty-space tap closes focus.
+- [x] Added focused tap branch markers for direct proxy asset hit, grid fallback hit, empty-space hit, empty-space close, and retarget dispatch (`focused-tap-*`).
+- [x] Updated focused proxy handler so close is only triggered after both direct proxy-card and grid fallback asset resolution fail.
+- [x] Expanded static assertions to lock focused asset-vs-empty-space branch markers and close-after-resolution-fail contract.
+- [ ] Device-verify repeated focused surrounding-asset taps retarget continuously while empty-gap taps close predictably.
+
+## 2026-04-08 — Focused retarget fallback-policy + double-tap suppression pass (active)
+- [x] Added focused retarget runtime branch markers in `ExplorerApp` to isolate failure path (`hit-proxy-card`, `hit-grid-fallback`, `resolved-key`, `runProxyFocusTransition-false`, retry lifecycle markers, close/open fallback-block markers).
+- [x] Removed forced focused retarget `openPreview(...)` fallback from proxy-origin lane; failed retarget now schedules retry and keeps focused state instead of forcing close/open behavior.
+- [x] Blocked proxy-origin close fallback when no retarget candidate resolves in focused mode (`focused-retarget-closeDrawer-blocked`) and kept focused presentation alive for retry triage.
+- [x] Added focused proxy-surface JS double-tap suppression lane for touch pointer input with control-safe allow path markers (`focused-doubletap-suppressed`, `focused-doubletap-allowed-control`).
+- [x] Hardened orchestrator `retargetTransition` recovery path to recover world/mount/render from current camera (`focus-retarget-recover-world`, `focus-retarget-recover-world-commit`) and only hard-fail as last resort (`focus-retarget-hard-fallback`) without implicit open-from-rest fallback.
+- [ ] Device-verify focused retarget now preserves continuity motion (no forced zoom-out/open) and double-tap no longer triggers Safari page zoom on focused proxy surface.
+
+## 2026-04-07 — Mobile tap reliability + double-tap zoom suppression pass (active)
+- [x] Extended proxy-layer marker coverage to proxy preview chrome surfaces (`proxy-preview-ui`, focused chrome top/bottom) so composed-path proxy-origin detection is stable across nested proxy children.
+- [x] Added mobile tap gesture hardening (`touch-action: manipulation`) on focused proxy root and focused masonry host to reduce Safari double-tap zoom interference during retarget taps.
+- [x] Expanded static assertions for proxy chrome layer markers and proxy preview UI marker wiring.
+- [ ] Device-verify iOS Safari no longer performs default double-tap page zoom while focused retarget taps remain responsive/reliable.
+
+## 2026-04-07 — Proxy-layer composed-path retarget reliability pass (active)
+- [x] Switched focused viewport delegation detection from `target.closest(...)` to full `event.composedPath()` scanning for `dataset.focusProxyLayer === 'true'`.
+- [x] Added `data-focus-proxy-layer="true"` on focused proxy root and proxy renderer layers/surfaces/cards/scrim so proxy-origin events are consistently detectable regardless of child origin.
+- [x] Kept viewport delegation markers (`focused-retarget-delegated-to-proxy-root`, `viewport-close-blocked-proxy-origin`) and verified they now trigger from composed-path proxy-origin detection.
+- [x] Expanded static assertions to lock composed-path detection and proxy-layer dataset markers in Explorer + proxy renderer contracts.
+- [ ] Device-verify focused retarget reliability is stable across taps landing on scrim/top/bottom/ambient proxy children.
+
+## 2026-04-07 — Focused retarget event-routing ownership fix (active)
+- [x] Patched focused viewport capture handler in `ExplorerApp` to delegate proxy-originated pointer events (`[data-focus-proxy-root="true"]`) to the proxy-root interaction lane.
+- [x] Added explicit viewport delegation markers (`focused-retarget-delegated-to-proxy-root`, `viewport-close-blocked-proxy-origin`) so runtime traces can confirm viewport no longer preempts focused retarget.
+- [x] Preserved proxy-root pointerdown as authoritative focused retarget path (including fallback hit-testing via `elementFromPoint(...)`) while avoiding viewport close-path preemption for proxy-originated taps.
+- [x] Expanded static regression assertions to lock proxy-origin delegation guard and marker strings in `exports.test.mjs`.
+- [ ] Device-verify zoomed focused preview tap-on-outside-asset now consistently retargets camera (no premature close/no-op from viewport handler).
+
+## 2026-04-06 — Focused retarget interaction regression fix (active)
+- [x] Restored focused-state different-asset tap retarget dispatch in `ExplorerApp` by routing focused grid/overlay taps to `runProxyFocusTransition(..., 'retarget')` when continuity key differs.
+- [x] Added focused interaction markers for device/runtime triage (`focused-retarget-tap`, `focused-retarget-blocked-overlay`, `focused-retarget-blocked-same-key`, `focused-retarget-dispatched`).
+- [x] Added orchestrator retarget transition API (`retargetTransition`) with explicit transition markers (`focus-retarget-start`, `focus-retarget-commit`, `focus-retarget-cancel`, `focus-retarget-fallback-close-open`) preserving motion from current camera state.
+- [x] Added overlay hit-test fallback in focused proxy pointer handler using temporary proxy-root pointer pass-through + `elementFromPoint(...)` to recover underlying grid card retarget picks.
+- [x] Re-enabled focused-grid host hit-testing (`.app.grid-focused .masonry-host { pointer-events:auto; }`) so focused retarget taps can resolve to underlying grid cards.
+- [x] Expanded static regression assertions for focused-retarget tap path, same-key block path, orchestrator retarget API markers, and overlay interception markers.
+- [ ] Device-verify focused preview tap-to-other-asset moves camera continuously from current focused position on iOS Safari and desktop.
+
+## 2026-04-06 — Retained proxy continuity + audio-owner hardening (active)
+- [x] Added retained continuity-key guards in `FocusTransitionOrchestrator` so retained close reuse is explicit for same key and blocked/cleared for different-key reopen (`proxy-retained-reuse-same-key`, `proxy-retained-blocked-different-key`, `proxy-retained-cleared-asset-change`).
+- [x] Added explicit retained clear path for deselection (`clearRetainedProxyOnDeselect`) with marker `proxy-retained-cleared-deselect` and wired it through `ExplorerApp.clearActiveAsset`.
+- [x] Hardened close-path audio authority in render lane by forcing retained active proxy video muted/defaultMuted and stamping `authoritativeAudioSurface=none` on close.
+- [x] Added same-asset warm-reopen poster markers (`poster-held-same-asset-reopen`, `poster-release-same-asset-reopen`) plus stuck-poster guard marker (`poster-stuck-guard-fired`) in `useVideoOwnershipHandoff`.
+- [x] Added lightweight continuity debug snapshot export (`window.__explorerProxyContinuityDebug`) with continuity key, retained flag, mounted/retained state, posterShown, and authoritative visual/audio surfaces.
+- [x] Expanded static regression assertions to lock retained-key guards, retained-clear markers, close-path no-unmount contract, audio-owner close marker, poster-release markers, and continuity debug export wiring.
+- [ ] Device-verify hidden retained proxy remains inaudible after close while same-asset warm reopen still reuses retained subtree.
+
 ## 2026-04-06 — Render-layer mount retention + poster threading follow-up (active)
 - [x] Updated `FocusTransitionOrchestrator` close path to retain mounted proxy renderer subtree on close (hide/reset only) instead of unmounting, preserving same-asset reopen continuity potential in the render layer.
 - [x] Threaded poster state from handoff hook result (`hasPoster`, `posterShown`, `posterUrl`) into `ExplorerApp` active proxy card/video datasets.

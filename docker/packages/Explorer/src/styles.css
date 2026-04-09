@@ -844,13 +844,15 @@ select.control{
   z-index: 150;
   opacity: 0;
   pointer-events: none;
+  touch-action: manipulation;
   overflow: hidden;
   transition: opacity 120ms ease;
 }
 .focus-proxy-root.is-active{
   opacity: 1;
-  pointer-events: auto;
+  pointer-events: none;
 }
+/* Focused retarget contract: wrappers are decorative only; cards/controls own pointer hits. */
 .app:not(.grid-focused) .grid-cinematic-root{
   opacity: 0;
   pointer-events: none;
@@ -872,6 +874,7 @@ select.control{
   -webkit-backdrop-filter: blur(14px);
   perspective: 1400px;
   transform-style: preserve-3d;
+  pointer-events: none;
 }
 .proxy-render-world{
   position: absolute;
@@ -879,11 +882,13 @@ select.control{
   transform-origin: 0 0;
   will-change: transform;
   transform-style: preserve-3d;
+  pointer-events: none;
 }
 .proxy-render-ambient-layer,
 .proxy-render-active-layer{
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
 .proxy-render-ambient-layer{
   z-index: 0;
@@ -907,6 +912,7 @@ select.control{
   box-shadow: 0 24px 72px rgba(0,0,0,0.34);
   transform-style: preserve-3d;
   isolation: isolate;
+  pointer-events: auto;
 }
 .proxy-render-card.is-active{
   box-shadow: 0 30px 90px rgba(0,0,0,0.44);
@@ -929,6 +935,7 @@ select.control{
   object-fit: cover;
   z-index: 1;
   transform: translateZ(0);
+  pointer-events: none;
 }
 .proxy-render-poster{
   position: absolute;
@@ -953,6 +960,7 @@ select.control{
   transform: translateZ(0);
   opacity: 0;
   transition: opacity 120ms ease;
+  pointer-events: none;
 }
 .proxy-render-card[data-poster-shown="true"] .proxy-render-poster{
   opacity: 1;
@@ -1047,7 +1055,7 @@ select.control{
   position: absolute;
   inset: 0;
   z-index: 4;
-  pointer-events: none;
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1226,7 +1234,8 @@ select.control{
 }
 .app.grid-focused .masonry-host{
   opacity: 0;
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 .app.grid-opening .masonry-host,
 .app.grid-refocusing .masonry-host{

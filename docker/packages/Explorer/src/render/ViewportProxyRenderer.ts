@@ -24,10 +24,10 @@ export class ViewportProxyRenderer {
     if (this.mounted) return;
     this.root.dataset.proxyRendererMounted = 'true';
     this.root.innerHTML = `
-      <div class="proxy-render-surface">
-        <div class="proxy-render-world">
-          <div class="proxy-render-ambient-layer"></div>
-          <div class="proxy-render-active-layer"></div>
+      <div class="proxy-render-surface" data-focus-proxy-layer="true">
+        <div class="proxy-render-world" data-focus-proxy-layer="true">
+          <div class="proxy-render-ambient-layer" data-focus-proxy-layer="true"></div>
+          <div class="proxy-render-active-layer" data-focus-proxy-layer="true"></div>
         </div>
       </div>
     `;
@@ -67,6 +67,7 @@ export class ViewportProxyRenderer {
   }
 
   private buildAmbientCardHtml(card: RenderCardSnapshot) {
+    // Focused retarget contract: the proxy card root is the primary hit target for asset retarget.
     const selectedClass = card.selected ? 'is-selected' : '';
     const thumb = card.thumbUrl
       ? `<img src="${card.thumbUrl}" alt="">`
@@ -75,8 +76,10 @@ export class ViewportProxyRenderer {
     return `
       <div
         class="proxy-render-card is-ambient ${selectedClass}"
+        data-focus-proxy-layer="true"
         data-selection-key="${card.selectionKey}"
         data-select-key="${card.selectionKey}"
+        data-proxy-hit-target="card-root"
         data-proxy-active="false"
         data-video-ready="false"
         data-proxy-media-branch="${card.thumbUrl ? 'thumb' : 'fallback'}"
@@ -88,7 +91,7 @@ export class ViewportProxyRenderer {
           --proxy-chrome-scale:${clampChromeScale(card.rect.width)};
         "
       >
-        <div class="proxy-render-thumb">${thumb}</div>
+        <div class="proxy-render-thumb" data-proxy-hit-target="card-child">${thumb}</div>
       </div>
     `;
   }
@@ -109,12 +112,14 @@ export class ViewportProxyRenderer {
     this.activeLayerEl.innerHTML = `
       <div
         class="proxy-render-card is-active"
+        data-focus-proxy-layer="true"
         data-selection-key="${card.selectionKey}"
         data-select-key="${card.selectionKey}"
+        data-proxy-hit-target="card-root"
         data-proxy-active="true"
         data-video-ready="false"
       >
-        <div class="proxy-render-thumb"></div>
+        <div class="proxy-render-thumb" data-proxy-hit-target="card-child"></div>
       </div>
     `;
     this.activeCardEl = this.activeLayerEl.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
@@ -149,11 +154,14 @@ export class ViewportProxyRenderer {
     if (!thumbEl) {
       return { activeNodeReused: false, activeMediaRecreated: true };
     }
+    thumbEl.dataset.proxyHitTarget = 'card-child';
 
     const mediaBranch = (card.kind === 'video' && card.mediaUrl) ? 'video' : (card.thumbUrl ? 'thumb' : 'fallback');
     activeCardEl.className = `proxy-render-card is-active ${card.selected ? 'is-selected' : ''}`;
+    activeCardEl.dataset.focusProxyLayer = 'true';
     activeCardEl.dataset.selectionKey = card.selectionKey;
     activeCardEl.dataset.selectKey = card.selectionKey;
+    activeCardEl.dataset.proxyHitTarget = 'card-root';
     activeCardEl.dataset.proxyActive = 'true';
     activeCardEl.dataset.proxyMediaBranch = mediaBranch;
     activeCardEl.dataset.streamUrl = card.mediaUrl || '';
@@ -268,6 +276,7 @@ export class ViewportProxyRenderer {
       if (!existingScrim) {
         const scrim = document.createElement('div');
         scrim.className = 'proxy-render-scrim';
+        scrim.dataset.focusProxyLayer = 'true';
         activeCardEl.appendChild(scrim);
       }
       if (!existingUiSlot) {
