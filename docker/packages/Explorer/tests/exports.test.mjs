@@ -1414,9 +1414,18 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('focus-close-reset-rest'));
   assert.ok(content.includes('focus-close-reset-missed'));
   assert.ok(content.includes('focus-close-scroll-lock-removed'));
+  assert.ok(content.includes('focus-close-cleared-active-asset'));
+  assert.ok(content.includes('focus-close-cleared-preview-activation'));
+  assert.ok(content.includes('focus-close-cleared-reinforced-active'));
+  assert.ok(content.includes('focus-close-cleared-hold-emphasis'));
+  assert.ok(content.includes('focus-close-activation-reset-complete'));
   assert.ok(content.includes("setGridCinematicMode('grid-rest');"));
   assert.ok(content.includes("setProxyTravelState('idle');"));
   assert.ok(content.includes("viewportEl.classList.remove('focus-proxy-scroll-lock');"));
+  assert.ok(content.includes('activeAssetKey,'));
+  assert.ok(content.includes('previewActivationKey,'));
+  assert.ok(content.includes('reinforcedActiveKey,'));
+  assert.ok(content.includes('holdEmphasisKey,'));
   assert.ok(content.includes('grid-thumb-paused-authority-enforced'));
   assert.ok(content.includes('grid-thumb-play-blocked-non-authoritative'));
   assert.ok(content.includes('prewarm-video-paused'));

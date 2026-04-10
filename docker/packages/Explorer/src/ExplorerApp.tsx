@@ -648,6 +648,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         gridCinematicMode,
         proxyTravelState,
         inspectorOpen: inspectorOpenRef.current,
+        activeAssetKey,
+        previewActivationKey,
+        reinforcedActiveKey,
+        holdEmphasisKey,
         proxyRootActive: Boolean(document.querySelector('.focus-proxy-root.is-active')),
         scrollLockActive: Boolean(document.querySelector('.scroll')?.classList.contains('focus-proxy-scroll-lock')),
         candidates: withStyle,
@@ -665,7 +669,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         };
       }).__explorerFocusLayerDebug;
     };
-  }, [gridCinematicMode, proxyTravelState]);
+  }, [activeAssetKey, gridCinematicMode, holdEmphasisKey, previewActivationKey, proxyTravelState, reinforcedActiveKey]);
 
   useEffect(() => {
     gridCinematicModeRef.current = gridCinematicMode;
@@ -1021,8 +1025,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const clearActiveAsset = useCallback(() => {
     focusOrchestratorRef.current?.clearRetainedProxyOnDeselect();
     setActiveAssetKey('');
-    commitPreviewActivationKey('');
+    setPreviewActivationKey('');
     setPreviewPlaybackToken((prev) => prev + 1);
+    setReinforcedActiveKey('');
+    setHoldEmphasisKey('');
+    previewPlaybackHandoffRef.current = null;
     setFocused(null);
     setPreviewDetailsOpen(false);
   }, []);
@@ -1852,14 +1859,42 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (view === 'grid') {
       closeGridFocusToRest();
     }
+    if (activeAssetKey) {
+      setActiveAssetKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-active-asset', selectionKey: activeAssetKey, requestedMode: view });
+    }
+    if (previewActivationKey) {
+      setPreviewActivationKey('');
+      setPreviewPlaybackToken((prev) => prev + 1);
+      recordPreviewDebug({ stage: 'focus-close-cleared-preview-activation', selectionKey: previewActivationKey, requestedMode: view });
+    }
+    if (reinforcedActiveKey) {
+      setReinforcedActiveKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-reinforced-active', selectionKey: reinforcedActiveKey, requestedMode: view });
+    }
+    if (holdEmphasisKey) {
+      setHoldEmphasisKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-hold-emphasis', selectionKey: holdEmphasisKey, requestedMode: view });
+    }
+    previewPlaybackHandoffRef.current = null;
     setInspectorOpen(false);
     inspectorOpenRef.current = false;
     setFocused(null);
     setPreviewDetailsOpen(false);
+    recordPreviewDebug({ stage: 'focus-close-activation-reset-complete', requestedMode: view, finalMode: 'idle' });
     window.setTimeout(() => {
       resetFocusPresentationToIdle();
     }, 96);
-  }, [closeGridFocusToRest, resetFocusPresentationToIdle, view]);
+  }, [
+    activeAssetKey,
+    closeGridFocusToRest,
+    holdEmphasisKey,
+    previewActivationKey,
+    recordPreviewDebug,
+    reinforcedActiveKey,
+    resetFocusPresentationToIdle,
+    view,
+  ]);
 
   useEffect(() => () => {
     clearCloseSettleTimeout();

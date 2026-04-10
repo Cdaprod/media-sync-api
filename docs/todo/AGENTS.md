@@ -1,3 +1,12 @@
+## 2026-04-10 — Focused close activation-reset follow-up (active)
+- [x] Isolated post-close stale activation-state lane in `ExplorerApp` where visual close could settle while active/preview emphasis state remained armed.
+- [x] Hardened close path to explicitly clear activation/emphasis lanes on close (`activeAssetKey`, `previewActivationKey`, `reinforcedActiveKey`, `holdEmphasisKey`) with dedicated close markers.
+- [x] Added close activation-reset markers (`focus-close-cleared-active-asset`, `focus-close-cleared-preview-activation`, `focus-close-cleared-reinforced-active`, `focus-close-cleared-hold-emphasis`, `focus-close-activation-reset-complete`) for runtime triage.
+- [x] Cleared pending preview handoff state during close activation reset to avoid stale reopen semantics.
+- [x] Extended `__explorerFocusLayerDebug` snapshot with activation-state fields (`activeAssetKey`, `previewActivationKey`, `reinforcedActiveKey`, `holdEmphasisKey`).
+- [x] Expanded static regression contracts to lock activation-reset markers and debug field threading.
+- [ ] Validate on device that purple active border clears immediately on close and first/second tap preview flow re-arms from clean grid rest state.
+
 ## 2026-04-10 — Focused close-state reset hardening (active)
 - [x] Audited `ExplorerApp` close/reset ownership paths (`closeDrawer`, `closeGridFocusToRest`, focus reset helpers) and added explicit close markers (`focus-close-start`, `focus-close-complete`, `focus-close-reset-rest`, `focus-close-reset-missed`, `focus-close-scroll-lock-removed`).
 - [x] Added defensive close-settle fallback timer so missed close completion cannot leave `grid-closing`/non-idle proxy travel stuck; fallback forces reusable rest state.
