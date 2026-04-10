@@ -1584,62 +1584,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     });
   }, [clearFocusStartRetryFrame, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, startFocusMotionForSelectionKey]);
 
-  const runProxyFocusTransition = useCallback((
-    selectionKey: string,
-    mode: 'open' | 'refocus' | 'retarget',
-    onComplete?: () => void,
-  ) => {
-    if (view !== 'grid') return false;
-    const gridRoot = gridRef.current;
-    const viewportEl = mediaScrollViewportRef.current;
-    const orchestrator = focusOrchestratorRef.current;
-    if (!gridRoot || !viewportEl || !orchestrator) return false;
-    const setTravelState = () => setProxyTravelState(mode === 'open' ? 'open-travel' : 'refocus-travel');
-    const clearTravelState = () => setProxyTravelState('idle');
-    const handleEvent = (event: string) => {
-      recordPreviewDebug({ stage: event, selectionKey, requestedMode: view });
-    };
-    const continuityItem = itemsBySelectionKey.get(selectionKey) ?? null;
-    const continuityAsset = continuityItem ? normalizePreviewAsset(continuityItem, resolveAssetUrl) : null;
-    const continuityStreamUrl = absolutizeMediaUrl(continuityAsset?.src || '');
-    const continuityKey = continuityStreamUrl ? `${selectionKey}::${continuityStreamUrl}` : selectionKey;
-    const transitionArgs = {
-      gridRoot,
-      viewportEl,
-      selectionKey,
-      continuityKey,
-      onStart: () => {
-        setTravelState();
-        setGridCinematicMode(mode === 'open' ? 'grid-opening' : 'grid-refocusing');
-        viewportEl.classList.add('focus-proxy-scroll-lock');
-        pauseNonAuthoritativeGridVideos(selectionKey);
-      },
-      onComplete: () => {
-        clearTravelState();
-        setGridCinematicMode('grid-focused');
-        viewportEl.classList.remove('focus-proxy-scroll-lock');
-        onComplete?.();
-      },
-      onEvent: handleEvent,
-    };
-    const opened = mode === 'open'
-      ? orchestrator.openFocusTransition(transitionArgs)
-      : (mode === 'retarget'
-        ? orchestrator.retargetTransition(transitionArgs)
-        : orchestrator.refocusTransition(transitionArgs));
-    if (!opened) {
-      if (mode === 'retarget') {
-        handleEvent('focused-retarget-runProxyFocusTransition-false');
-        return false;
-      }
-      clearTravelState();
-      setGridCinematicMode('grid-rest');
-      viewportEl.classList.remove('focus-proxy-scroll-lock');
-      handleEvent('proxy-failed');
-    }
-    return opened;
-  }, [absolutizeMediaUrl, itemsBySelectionKey, normalizePreviewAsset, pauseNonAuthoritativeGridVideos, recordPreviewDebug, resolveAssetUrl, view]);
-
   const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {
     if (!selectionKey || !gridRef.current) return null;
     const nodes = Array.from(gridRef.current.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
@@ -1710,6 +1654,62 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     thumbVideo.pause();
     publishMediaInvariantDebug('grid-thumb-paused-selection');
   }, [getGridThumbVideoBySelectionKey, publishMediaInvariantDebug]);
+
+  const runProxyFocusTransition = useCallback((
+    selectionKey: string,
+    mode: 'open' | 'refocus' | 'retarget',
+    onComplete?: () => void,
+  ) => {
+    if (view !== 'grid') return false;
+    const gridRoot = gridRef.current;
+    const viewportEl = mediaScrollViewportRef.current;
+    const orchestrator = focusOrchestratorRef.current;
+    if (!gridRoot || !viewportEl || !orchestrator) return false;
+    const setTravelState = () => setProxyTravelState(mode === 'open' ? 'open-travel' : 'refocus-travel');
+    const clearTravelState = () => setProxyTravelState('idle');
+    const handleEvent = (event: string) => {
+      recordPreviewDebug({ stage: event, selectionKey, requestedMode: view });
+    };
+    const continuityItem = itemsBySelectionKey.get(selectionKey) ?? null;
+    const continuityAsset = continuityItem ? normalizePreviewAsset(continuityItem, resolveAssetUrl) : null;
+    const continuityStreamUrl = absolutizeMediaUrl(continuityAsset?.src || '');
+    const continuityKey = continuityStreamUrl ? `${selectionKey}::${continuityStreamUrl}` : selectionKey;
+    const transitionArgs = {
+      gridRoot,
+      viewportEl,
+      selectionKey,
+      continuityKey,
+      onStart: () => {
+        setTravelState();
+        setGridCinematicMode(mode === 'open' ? 'grid-opening' : 'grid-refocusing');
+        viewportEl.classList.add('focus-proxy-scroll-lock');
+        pauseNonAuthoritativeGridVideos(selectionKey);
+      },
+      onComplete: () => {
+        clearTravelState();
+        setGridCinematicMode('grid-focused');
+        viewportEl.classList.remove('focus-proxy-scroll-lock');
+        onComplete?.();
+      },
+      onEvent: handleEvent,
+    };
+    const opened = mode === 'open'
+      ? orchestrator.openFocusTransition(transitionArgs)
+      : (mode === 'retarget'
+        ? orchestrator.retargetTransition(transitionArgs)
+        : orchestrator.refocusTransition(transitionArgs));
+    if (!opened) {
+      if (mode === 'retarget') {
+        handleEvent('focused-retarget-runProxyFocusTransition-false');
+        return false;
+      }
+      clearTravelState();
+      setGridCinematicMode('grid-rest');
+      viewportEl.classList.remove('focus-proxy-scroll-lock');
+      handleEvent('proxy-failed');
+    }
+    return opened;
+  }, [absolutizeMediaUrl, itemsBySelectionKey, normalizePreviewAsset, pauseNonAuthoritativeGridVideos, recordPreviewDebug, resolveAssetUrl, view]);
 
   const openPreview = useCallback((item: MediaItem) => {
     const nextKey = assetSelectionKey(item, activeProject);

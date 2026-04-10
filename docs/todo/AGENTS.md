@@ -1,3 +1,8 @@
+## 2026-04-10 — Explorer TDZ regression fix (active)
+- [x] Fixed runtime `ReferenceError: Cannot access uninitialized variable` in `ExplorerApp` by moving `runProxyFocusTransition` below newly introduced media-authority helpers so dependency capture no longer references `pauseNonAuthoritativeGridVideos` before initialization.
+- [x] Added static ordering contract in `docker/packages/Explorer/tests/exports.test.mjs` asserting `pauseNonAuthoritativeGridVideos` declaration appears before `runProxyFocusTransition`.
+- [ ] Re-verify on mobile Safari that Explorer boots without error overlay before continuing media leak validation loops.
+
 ## 2026-04-10 — Explorer media lifecycle hardening (active)
 - [x] Added authoritative proxy release lifecycle in `ViewportProxyRenderer` (`pause`/mute, `removeAttribute('src')`, `load()`, remove) with explicit lifecycle markers (`proxy-video-released`, `proxy-video-removed-src`, `proxy-video-load-reset`, `proxy-video-reused`).
 - [x] Added grid-thumb authority enforcement in `ExplorerApp` via `pauseNonAuthoritativeGridVideos(...)` so focused proxy transitions/promotion pause/reset non-authoritative thumb videos.
