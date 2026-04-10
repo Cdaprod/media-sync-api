@@ -852,6 +852,17 @@ select.control{
   opacity: 1;
   pointer-events: none;
 }
+.focus-proxy-root[data-proxy-retained-inert="true"]{
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+.focus-proxy-root[data-proxy-retained-inert="true"] .proxy-render-surface,
+.focus-proxy-root[data-proxy-retained-inert="true"] .proxy-render-world,
+.focus-proxy-root[data-proxy-retained-inert="true"] .proxy-render-ambient-layer,
+.focus-proxy-root[data-proxy-retained-inert="true"] .proxy-render-active-layer,
+.focus-proxy-root[data-proxy-retained-inert="true"] .proxy-render-card{
+  pointer-events: none !important;
+}
 /* Focused retarget contract: wrappers are decorative only; cards/controls own pointer hits. */
 .app:not(.grid-focused) .grid-cinematic-root{
   opacity: 0;

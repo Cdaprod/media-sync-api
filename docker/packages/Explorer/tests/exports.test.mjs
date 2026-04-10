@@ -1391,6 +1391,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('orchestrator-close-complete'));
   assert.ok(orchestrator.includes('orchestrator-close-pointer-reset'));
   assert.ok(orchestrator.includes('orchestrator-close-retained'));
+  assert.ok(orchestrator.includes('orchestrator-close-retained-inert'));
+  assert.ok(orchestrator.includes('orchestrator-close-hit-ownership-revoked'));
+  assert.ok(orchestrator.includes('orchestrator-close-ambient-disabled'));
+  assert.ok(orchestrator.includes("this.root.dataset.proxyRetainedInert = 'true';"));
+  assert.ok(orchestrator.includes('delete this.root.dataset.proxyRetainedInert;'));
   assert.ok(orchestrator.includes('this.timeline = gsap.timeline('));
   assert.ok(orchestrator.includes('proxy-open-start'));
   assert.ok(orchestrator.includes('proxy-open-complete'));
@@ -1419,6 +1424,11 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes('focus-close-cleared-reinforced-active'));
   assert.ok(content.includes('focus-close-cleared-hold-emphasis'));
   assert.ok(content.includes('focus-close-activation-reset-complete'));
+  assert.ok(content.includes('focus-close-proxy-hit-owner-still-present'));
+  assert.ok(content.includes('focus-close-grid-hit-owner-restored'));
+  assert.ok(content.includes('focus-close-retained-proxy-inert'));
+  assert.ok(content.includes('retainedProxyInert'));
+  assert.ok(content.includes('gridShouldOwnHits'));
   assert.ok(content.includes("setGridCinematicMode('grid-rest');"));
   assert.ok(content.includes("setProxyTravelState('idle');"));
   assert.ok(content.includes("viewportEl.classList.remove('focus-proxy-scroll-lock');"));

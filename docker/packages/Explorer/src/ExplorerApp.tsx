@@ -652,6 +652,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         previewActivationKey,
         reinforcedActiveKey,
         holdEmphasisKey,
+        proxyLayerMounted: Boolean(document.querySelector('.focus-proxy-root [data-focus-proxy-layer="true"]')),
+        proxyLayerActive: Boolean(document.querySelector('.focus-proxy-root.is-active')),
+        retainedProxyInert: Boolean(document.querySelector('.focus-proxy-root')?.dataset.proxyRetainedInert === 'true'),
+        gridShouldOwnHits: gridCinematicMode === 'grid-rest' && proxyTravelState === 'idle' && !inspectorOpenRef.current,
         proxyRootActive: Boolean(document.querySelector('.focus-proxy-root.is-active')),
         scrollLockActive: Boolean(document.querySelector('.scroll')?.classList.contains('focus-proxy-scroll-lock')),
         candidates: withStyle,
@@ -767,6 +771,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       requestedMode: view,
       finalMode: 'idle',
       reason: reason === 'complete' ? 'close-complete' : 'close-settle-timeout',
+    });
+    const proxyRoot = focusProxyRootRef.current;
+    window.requestAnimationFrame(() => {
+      if (!proxyRoot) return;
+      const retainedInert = proxyRoot.dataset.proxyRetainedInert === 'true';
+      const pointerEvents = window.getComputedStyle(proxyRoot).pointerEvents;
+      const proxyCard = document.elementFromPoint(window.innerWidth * 0.5, window.innerHeight * 0.5)
+        ?.closest('.proxy-render-card');
+      if (retainedInert) {
+        recordPreviewDebug({ stage: 'focus-close-retained-proxy-inert', requestedMode: view, finalMode: 'idle' });
+      }
+      if (pointerEvents !== 'none' || proxyCard) {
+        recordPreviewDebug({
+          stage: 'focus-close-proxy-hit-owner-still-present',
+          requestedMode: view,
+          finalMode: 'idle',
+          reason: proxyCard ? 'proxy-card-hit-target' : `pointer-events-${pointerEvents}`,
+        });
+        return;
+      }
+      recordPreviewDebug({ stage: 'focus-close-grid-hit-owner-restored', requestedMode: view, finalMode: 'idle' });
     });
   }, [removeFocusProxyScrollLock, recordPreviewDebug, view]);
 

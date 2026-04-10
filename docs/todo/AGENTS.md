@@ -1,3 +1,12 @@
+## 2026-04-10 — Retained proxy inert hit-ownership fix (active)
+- [x] Narrowed remaining post-close interaction lock to retained proxy hit ownership (`.proxy-render-card.is-ambient` still winning hit-tests after visual close).
+- [x] Hardened `FocusTransitionOrchestrator.closeFocusTransition(...)` to transition retained proxy into explicit inert state (`data-proxy-retained-inert="true"`) while preserving mounted continuity.
+- [x] Added orchestrator close markers for retained inertness + hit ownership revocation (`orchestrator-close-retained-inert`, `orchestrator-close-hit-ownership-revoked`, `orchestrator-close-ambient-disabled`).
+- [x] Added CSS contract to force retained proxy subtree inertness (`pointer-events:none !important` for root/surface/world/layers/cards when retained-inert).
+- [x] Extended close debug flow in `ExplorerApp` with hit-ownership verification markers (`focus-close-proxy-hit-owner-still-present`, `focus-close-grid-hit-owner-restored`, `focus-close-retained-proxy-inert`) and focus-layer snapshot fields (`proxyLayerMounted`, `proxyLayerActive`, `retainedProxyInert`, `gridShouldOwnHits`).
+- [x] Expanded static regression contracts for retained inert markers, retained-inert dataset wiring, and inert CSS selectors.
+- [ ] Device-verify that post-close taps never resolve to `.proxy-render-card.is-ambient` and grid assets remain sole hit owners after repeated close/reopen cycles.
+
 ## 2026-04-10 — Focused close activation-reset follow-up (active)
 - [x] Isolated post-close stale activation-state lane in `ExplorerApp` where visual close could settle while active/preview emphasis state remained armed.
 - [x] Hardened close path to explicitly clear activation/emphasis lanes on close (`activeAssetKey`, `previewActivationKey`, `reinforcedActiveKey`, `holdEmphasisKey`) with dedicated close markers.
