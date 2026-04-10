@@ -603,6 +603,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyPrewarmSelectionKeyRef = useRef('');
   const proxyPrewarmUrlRef = useRef('');
   const proxyPrewarmReadyStateRef = useRef(0);
+  const previewAuthoritySelectionRef = useRef('');
   const focusedDoubleTapStateRef = useRef({ lastTapAt: 0 });
   const closeSettleTimeoutRef = useRef<number | null>(null);
 
@@ -682,6 +683,36 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     proxyTravelStateRef.current = proxyTravelState;
   }, [proxyTravelState]);
+
+  useEffect(() => {
+    if (inspectorOpen) return;
+    previewAuthoritySelectionRef.current = '';
+  }, [inspectorOpen]);
+
+  useEffect(() => {
+    if (view !== 'grid') return;
+    if (!inspectorOpen) return;
+    if (!activeAssetKey) return;
+    const previousSelection = previewAuthoritySelectionRef.current;
+    if (previousSelection && previousSelection !== activeAssetKey) {
+      recordPreviewDebug({
+        stage: 'preview-selection-interrupt-previous',
+        selectionKey: previousSelection,
+        requestedMode: view,
+        reason: `superseded-by:${activeAssetKey}`,
+      });
+      previewPlaybackHandoffRef.current = null;
+      proxyPrewarmSelectionKeyRef.current = '';
+      proxyPrewarmUrlRef.current = '';
+      proxyPrewarmReadyStateRef.current = 0;
+    }
+    if (previousSelection !== activeAssetKey) {
+      previewAuthoritySelectionRef.current = activeAssetKey;
+      setPreviewAutoPlayToken((prev) => prev + 1);
+      recordPreviewDebug({ stage: 'preview-selection-new-authority', selectionKey: activeAssetKey, requestedMode: view });
+      recordPreviewDebug({ stage: 'preview-selection-play-rearm', selectionKey: activeAssetKey, requestedMode: view });
+    }
+  }, [activeAssetKey, inspectorOpen, recordPreviewDebug, view]);
 
   const scheduleGridColumnCommit = useCallback((nextColumns: number) => {
     pendingGridColumnCommitRef.current = nextColumns;

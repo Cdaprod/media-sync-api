@@ -174,6 +174,12 @@ export class ViewportProxyRenderer {
     let activeMediaRecreated = false;
 
     if (!sameSelection) {
+      if (this.activeSelectionKey && this.activeSelectionKey !== card.selectionKey) {
+        this.publishLifecycleMarker('proxy-video-stale-selection-blocked', {
+          previousSelectionKey: this.activeSelectionKey,
+          nextSelectionKey: card.selectionKey,
+        });
+      }
       this.activeSelectionKey = card.selectionKey;
       this.ensureActiveCardShell(card);
       this.activeVideoEl = null;
@@ -238,6 +244,10 @@ export class ViewportProxyRenderer {
       }
       if (videoEl.src !== card.mediaUrl) {
         videoEl.src = card.mediaUrl;
+        this.publishLifecycleMarker('proxy-video-rearm-latest-selection', {
+          stableVideoId: videoEl.dataset.proxyStableVideoId || '',
+          selectionKey: card.selectionKey,
+        });
       }
       videoEl.dataset.streamUrl = card.mediaUrl;
       videoEl.dataset.proxyMountedState = this.proxyMountedState;

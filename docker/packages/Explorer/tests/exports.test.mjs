@@ -286,6 +286,9 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('commitPreviewActivationKey(itemKey);'));
   assert.ok(explorer.includes('playGridThumbForSelectionKey(itemKey);'));
   assert.ok(explorer.includes('const previewPlaybackHandoffRef = useRef<{'));
+  assert.ok(explorer.includes('preview-selection-interrupt-previous'));
+  assert.ok(explorer.includes('preview-selection-new-authority'));
+  assert.ok(explorer.includes('preview-selection-play-rearm'));
   assert.ok(explorer.includes('const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {'));
   assert.ok(explorer.includes('previewPlaybackHandoffRef.current = {'));
   assert.ok(explorer.includes('const proxyPrewarmVideoRef = useRef<HTMLVideoElement | null>(null);'));
@@ -398,7 +401,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes("publishDebug('inactive-focused-closed', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes("publishDebug('focus-close-cleanup', proxyVideoEl);"));
   assert.ok(handoffHookContent.includes('const shouldStartPlayback = shouldPlay;'));
-  assert.ok(handoffHookContent.includes("if (!alive || activeRunTokenRef.current !== runToken) return;"));
+  assert.ok(handoffHookContent.includes('if (!isLatestRun()) return;'));
   assert.ok(handoffHookContent.includes('if (latestSessionKeyRef.current !== currentSession) return;'));
   assert.ok(handoffHookContent.includes("if (err?.name === 'AbortError') return;"));
   assert.ok(handoffHookContent.includes("publishDebug('first-open-poster-hold', proxyVideoEl);"));
@@ -410,6 +413,10 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('if (!proxyVideoEl.isConnected) {'));
   assert.ok(handoffHookContent.includes("releaseProxyVideoResources(proxyVideoEl, 'play-skipped-disconnected');"));
   assert.ok(handoffHookContent.includes("publishDebug('play-threw-sync', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes('preview-session-interrupted'));
+  assert.ok(handoffHookContent.includes('preview-session-superseded'));
+  assert.ok(handoffHookContent.includes('preview-session-commit-blocked-stale'));
+  assert.ok(handoffHookContent.includes('preview-session-latest-commit'));
   assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
   assert.ok(playbackResumeStore.includes('const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();'));
   assert.ok(playbackResumeStore.includes('writerVersion?: number;'));
@@ -1374,6 +1381,8 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('__explorerProxyRendererDebug'));
   assert.ok(proxyRenderer.includes('proxy-video-released'));
   assert.ok(proxyRenderer.includes('proxy-video-reused'));
+  assert.ok(proxyRenderer.includes('proxy-video-rearm-latest-selection'));
+  assert.ok(proxyRenderer.includes('proxy-video-stale-selection-blocked'));
   assert.ok(proxyRenderer.includes('proxy-video-removed-src'));
   assert.ok(proxyRenderer.includes('proxy-video-load-reset'));
   assert.ok(proxyRenderer.includes('videoEl.removeAttribute(\'src\');'));

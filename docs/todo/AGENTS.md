@@ -1,3 +1,11 @@
+## 2026-04-10 — Preview interruption/cancellation hardening (active)
+- [x] Added explicit latest-preview-wins interruption markers in `useVideoOwnershipHandoff` (`preview-session-interrupted`, `preview-session-superseded`, `preview-session-commit-blocked-stale`, `preview-session-latest-commit`).
+- [x] Added per-run monotonic version guarding in `useVideoOwnershipHandoff` so stale async paths (first-frame/visible-paint/play rejection) cannot commit after superseding selection.
+- [x] Added `ExplorerApp` preview selection interruption markers (`preview-selection-interrupt-previous`, `preview-selection-new-authority`, `preview-selection-play-rearm`) and authority invalidation on selection supersede (clear stale handoff/prewarm refs + rearm play token).
+- [x] Added renderer lifecycle markers for rapid-selection node reuse rearm and stale selection handoff (`proxy-video-rearm-latest-selection`, `proxy-video-stale-selection-blocked`).
+- [x] Expanded static regression contracts to lock interruption markers across ExplorerApp/handoff hook/renderer.
+- [ ] Device-verify rapid multi-asset preview cycling no longer lands in visually-selected-but-never-plays stale session state.
+
 ## 2026-04-10 — Retained proxy inert hit-ownership fix (active)
 - [x] Narrowed remaining post-close interaction lock to retained proxy hit ownership (`.proxy-render-card.is-ambient` still winning hit-tests after visual close).
 - [x] Hardened `FocusTransitionOrchestrator.closeFocusTransition(...)` to transition retained proxy into explicit inert state (`data-proxy-retained-inert="true"`) while preserving mounted continuity.
