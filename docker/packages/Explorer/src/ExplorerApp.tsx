@@ -1594,19 +1594,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (typeof document === 'undefined') return;
     const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
     const proxyVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.proxy-render-video'));
+    const gridThumbVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
+    const prewarmVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.proxy-prewarm-video'));
     const playingVideos = videos.filter((video) => !video.paused && !video.ended);
+    const focusedProxyPlaybackOwned = view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+    const unauthorizedGridThumbPlaying = focusedProxyPlaybackOwned
+      && gridThumbVideos.some((video) => !video.paused && !video.ended);
+    const unauthorizedPrewarmPlaying = focusedProxyPlaybackOwned
+      && prewarmVideos.some((video) => !video.paused && !video.ended);
+    const violationClass = unauthorizedGridThumbPlaying
+      ? 'unauthorizedGridThumbPlaying'
+      : (unauthorizedPrewarmPlaying ? 'unauthorizedPrewarmPlaying' : '');
     const payload = {
       reason,
       totalVideos: videos.length,
       proxyVideos: proxyVideos.length,
       playingVideos: playingVideos.length,
       activeSelectionKey: activeAssetKey,
+      focusedProxyPlaybackOwned,
+      unauthorizedGridThumbPlaying,
+      unauthorizedPrewarmPlaying,
+      violationClass,
     };
     (globalThis as typeof globalThis & {
       __explorerMediaDebug?: typeof payload;
       __explorerMediaInvariantViolation?: typeof payload;
     }).__explorerMediaDebug = payload;
-    if (playingVideos.length > 2) {
+    if (playingVideos.length > 2 || unauthorizedGridThumbPlaying || unauthorizedPrewarmPlaying) {
       (globalThis as typeof globalThis & {
         __explorerMediaInvariantViolation?: typeof payload;
       }).__explorerMediaInvariantViolation = {
@@ -1623,13 +1637,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     thumbVideos.forEach((videoEl) => {
       const selectionKey = videoEl.closest<HTMLElement>('.masonry-card[data-select-key]')?.dataset.selectKey || '';
       if (selectionKey && selectionKey === authoritativeSelectionKey) return;
-      if (!videoEl.paused) {
+      if (!videoEl.paused || videoEl.currentTime !== 0) {
         videoEl.pause();
         videoEl.currentTime = 0;
         (globalThis as typeof globalThis & {
           __explorerMediaDebugMarker?: { marker: string; selectionKey: string };
         }).__explorerMediaDebugMarker = {
-          marker: 'grid-thumb-paused-non-authoritative',
+          marker: 'grid-thumb-paused-authority-enforced',
           selectionKey,
         };
       }
@@ -1640,13 +1654,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const playGridThumbForSelectionKey = useCallback((selectionKey: string) => {
     const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
     if (!thumbVideo) return;
+    const focusedProxyPlaybackOwned = view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+    if (focusedProxyPlaybackOwned) {
+      thumbVideo.pause();
+      thumbVideo.currentTime = 0;
+      (globalThis as typeof globalThis & {
+        __explorerMediaDebugMarker?: { marker: string; selectionKey: string };
+      }).__explorerMediaDebugMarker = {
+        marker: 'grid-thumb-play-blocked-non-authoritative',
+        selectionKey,
+      };
+      publishMediaInvariantDebug('grid-thumb-play-blocked');
+      return;
+    }
     thumbVideo.muted = true;
     thumbVideo.playsInline = true;
     thumbVideo.loop = true;
     pauseNonAuthoritativeGridVideos(selectionKey);
     thumbVideo.play().catch(() => {});
     publishMediaInvariantDebug('grid-thumb-play-requested');
-  }, [getGridThumbVideoBySelectionKey, pauseNonAuthoritativeGridVideos, publishMediaInvariantDebug]);
+  }, [getGridThumbVideoBySelectionKey, gridCinematicMode, inspectorOpen, pauseNonAuthoritativeGridVideos, publishMediaInvariantDebug, view]);
 
   const pauseGridThumbForSelectionKey = useCallback((selectionKey: string) => {
     const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
@@ -3486,6 +3513,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
   const canSelect = Boolean(activeProject) || mediaScope === 'all';
+  const suppressGridThumbPreviewLane = (
+    view === 'grid'
+    && inspectorOpen
+    && gridCinematicMode === 'grid-focused'
+    && proxyTravelState === 'idle'
+  );
   const projectLabel = useCallback((item: MediaItem) => {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
@@ -3524,7 +3557,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const isHoldEmphasis = holdEmphasisKey === selectionKey;
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
     const activeVideoPreviewUrl = (
-      isActivated && kind === 'video'
+      isActivated && kind === 'video' && !suppressGridThumbPreviewLane
         ? streamUrl
         : undefined
     );
@@ -3566,6 +3599,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     getCachedOrientation,
     holdEmphasisKey,
     projectLabel,
+    suppressGridThumbPreviewLane,
     previewActivationKey,
     previewPlaybackToken,
     reinforcedActiveKey,
@@ -3595,6 +3629,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === 'grid' && gridCinematicMode === 'grid-rest';
   const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
   const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+  const focusedProxyPlaybackOwned = proxyPreviewVisible;
   useEffect(() => {
     proxyPrewarmSelectionKeyRef.current = proxyPrewarmSelectionKey;
     proxyPrewarmUrlRef.current = proxyPrewarmUrl;
@@ -3604,14 +3639,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
 
-    const clearPrewarm = () => {
+    const publishPrewarmMarker = (marker: string) => {
+      (globalThis as typeof globalThis & {
+        __explorerMediaDebugMarker?: { marker: string; selectionKey: string; prewarmUrl?: string };
+      }).__explorerMediaDebugMarker = {
+        marker,
+        selectionKey: proxyPrewarmSelectionKey || '',
+        prewarmUrl: proxyPrewarmUrl || '',
+      };
+    };
+    const clearPrewarm = (reason?: 'blocked' | 'released') => {
+      const shouldEmitPaused = !prewarmVideo.paused || prewarmVideo.currentTime !== 0;
       prewarmVideo.pause();
+      prewarmVideo.currentTime = 0;
+      if (shouldEmitPaused) publishPrewarmMarker('prewarm-video-paused');
       prewarmVideo.removeAttribute('src');
       prewarmVideo.load();
+      if (reason === 'blocked') publishPrewarmMarker('prewarm-video-blocked-non-authoritative');
+      if (reason === 'released' || reason === 'blocked') publishPrewarmMarker('prewarm-video-released');
       proxyPrewarmReadyStateRef.current = 0;
     };
-    if (!proxyPrewarmUrl || proxyPreviewVisible) {
-      clearPrewarm();
+    if (!proxyPrewarmUrl) {
+      clearPrewarm('released');
+      return;
+    }
+    if (focusedProxyPlaybackOwned) {
+      clearPrewarm('blocked');
       return;
     }
 
@@ -3619,40 +3672,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     prewarmVideo.defaultMuted = true;
     prewarmVideo.playsInline = true;
     prewarmVideo.loop = true;
-    prewarmVideo.preload = 'auto';
+    prewarmVideo.preload = 'metadata';
     if (prewarmVideo.src !== proxyPrewarmUrl) {
       prewarmVideo.src = proxyPrewarmUrl;
     }
     prewarmVideo.load();
     proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
 
-    const tryPrimeFrame = () => {
-      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-      if (prewarmVideo.readyState < 2) return;
-      prewarmVideo.play()
-        .then(() => {
-          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-        })
-        .catch(() => {
-          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-        });
-    };
     const onLoadedMetadata = () => {
       proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
     };
-    const onLoadedData = () => {
-      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-      tryPrimeFrame();
-    };
     prewarmVideo.addEventListener('loadedmetadata', onLoadedMetadata);
-    prewarmVideo.addEventListener('loadeddata', onLoadedData);
-    tryPrimeFrame();
 
     return () => {
       prewarmVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
-      prewarmVideo.removeEventListener('loadeddata', onLoadedData);
     };
-  }, [proxyPreviewVisible, proxyPrewarmSelectionKey, proxyPrewarmUrl]);
+  }, [focusedProxyPlaybackOwned, proxyPrewarmSelectionKey, proxyPrewarmUrl]);
   useEffect(() => {
     if (!proxyPreviewVisible) {
       setActiveProxyCardEl(null);

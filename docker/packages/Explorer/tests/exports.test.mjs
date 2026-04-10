@@ -291,8 +291,10 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const proxyPrewarmVideoRef = useRef<HTMLVideoElement | null>(null);'));
   assert.ok(explorer.includes("const proxyPrewarmSelectionKey = useMemo(() => ("));
   assert.ok(explorer.includes('const proxyPrewarmUrl = useMemo(() => {'));
-  assert.ok(explorer.includes('if (!proxyPrewarmUrl || proxyPreviewVisible) {'));
+  assert.ok(explorer.includes('if (!proxyPrewarmUrl) {'));
+  assert.ok(explorer.includes('if (focusedProxyPlaybackOwned) {'));
   assert.ok(explorer.includes('prewarmVideo.loop = true;'));
+  assert.ok(explorer.includes("prewarmVideo.preload = 'metadata';"));
   assert.ok(!explorer.includes('prewarmVideo.pause();\n          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;'));
   assert.ok(explorer.includes("className=\"proxy-prewarm-video\""));
   assert.ok(explorer.includes('useVideoOwnershipHandoff({'));
@@ -1403,8 +1405,15 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes("this.root.dataset.proxyRetainedOnClose = 'true';"));
   assert.ok(orchestrator.includes("args.onEvent?.('proxy-retained-reuse-same-key');"));
   assert.ok(content.includes('pauseNonAuthoritativeGridVideos'));
-  assert.ok(content.includes('grid-thumb-paused-non-authoritative'));
+  assert.ok(content.includes('grid-thumb-paused-authority-enforced'));
+  assert.ok(content.includes('grid-thumb-play-blocked-non-authoritative'));
+  assert.ok(content.includes('prewarm-video-paused'));
+  assert.ok(content.includes('prewarm-video-released'));
+  assert.ok(content.includes('prewarm-video-blocked-non-authoritative'));
   assert.ok(content.includes('__explorerMediaInvariantViolation'));
+  assert.ok(content.includes('unauthorizedGridThumbPlaying'));
+  assert.ok(content.includes('unauthorizedPrewarmPlaying'));
+  assert.ok(content.includes('focusedProxyPlaybackOwned'));
   assert.ok(focusedTapResolver.includes('Focused retarget contract:'));
   assert.ok(focusedTapResolver.includes("kind: target === proxyCardEl ? 'proxy-card-root' : 'proxy-card-child'"));
   assert.ok(focusedTapResolver.includes("if (target.classList.contains('proxy-render-surface')) {"));

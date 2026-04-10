@@ -1,3 +1,11 @@
+## 2026-04-10 — Focused proxy media authority follow-up (active)
+- [x] Tightened `ExplorerApp` runtime media invariant diagnostics with explicit offender flags (`unauthorizedGridThumbPlaying`, `unauthorizedPrewarmPlaying`) and threaded them into `__explorerMediaInvariantViolation`.
+- [x] Strengthened grid-thumb authority enforcement markers/behavior (`grid-thumb-paused-authority-enforced`, `grid-thumb-play-blocked-non-authoritative`) including immediate pause/reset on blocked play attempts.
+- [x] Suppressed grid thumb preview lane while focused proxy ownership is active by gating `activeVideoPreviewUrl` with focused proxy authority state.
+- [x] Converted proxy prewarm lane to non-authoritative metadata prep only (`preload="metadata"`) and added explicit pause/release/blocked markers (`prewarm-video-paused`, `prewarm-video-released`, `prewarm-video-blocked-non-authoritative`).
+- [x] Expanded static regression contracts in `docker/packages/Explorer/tests/exports.test.mjs` to lock the new authority markers and invariant fields.
+- [ ] Re-verify on physical mobile Safari that focused proxy playback remains the sole active lane after rapid close/reopen and asset retarget churn.
+
 ## 2026-04-10 — Explorer TDZ regression fix (active)
 - [x] Fixed runtime `ReferenceError: Cannot access uninitialized variable` in `ExplorerApp` by moving `runProxyFocusTransition` below newly introduced media-authority helpers so dependency capture no longer references `pauseNonAuthoritativeGridVideos` before initialization.
 - [x] Added static ordering contract in `docker/packages/Explorer/tests/exports.test.mjs` asserting `pauseNonAuthoritativeGridVideos` declaration appears before `runProxyFocusTransition`.
