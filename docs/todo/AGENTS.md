@@ -1,3 +1,11 @@
+## 2026-04-10 — Explorer media lifecycle hardening (active)
+- [x] Added authoritative proxy release lifecycle in `ViewportProxyRenderer` (`pause`/mute, `removeAttribute('src')`, `load()`, remove) with explicit lifecycle markers (`proxy-video-released`, `proxy-video-removed-src`, `proxy-video-load-reset`, `proxy-video-reused`).
+- [x] Added grid-thumb authority enforcement in `ExplorerApp` via `pauseNonAuthoritativeGridVideos(...)` so focused proxy transitions/promotion pause/reset non-authoritative thumb videos.
+- [x] Added runtime media invariant debug payloads/markers in `ExplorerApp` (`__explorerMediaDebug`, `__explorerMediaInvariantViolation`, `grid-thumb-paused-non-authoritative`) to surface multi-video leaks quickly.
+- [x] Hardened `useVideoOwnershipHandoff` cleanup with `releaseProxyVideoResources(...)` so disconnected/no-selection paths release decode resources, not just listeners.
+- [x] Expanded static export contracts in `docker/packages/Explorer/tests/exports.test.mjs` to lock proxy release markers, src+load reset lifecycle, and grid authority helpers.
+- [ ] Validate on physical mobile Safari that repeated focused preview switching keeps `playingVideos <= 1` after settle and no longer crashes/reloads under churn.
+
 ## 2026-04-08 — Focused hit-target contract hardening (active)
 - [x] Extracted focused tap hit resolution into `resolveFocusedTapTarget(...)` with explicit contract comment (`asset tap => retarget`, `empty-space => close`, wrappers non-primary).
 - [x] Routed `ExplorerApp` focused pointer handling through the resolver to keep classification authority centralized and resistant to incidental refactors.

@@ -308,6 +308,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('onHandoffConsumed: () => {'));
   assert.ok(explorer.includes('onPromoted: () => {'));
   assert.ok(explorer.includes('pauseGridThumbForSelectionKey(activeProxySelectionKey);'));
+  assert.ok(explorer.includes('pauseNonAuthoritativeGridVideos(activeProxySelectionKey);'));
+  assert.ok(explorer.includes('publishMediaInvariantDebug(\'proxy-promoted-authority\');'));
   assert.ok(explorer.includes('streamUrl: proxyStreamUrl,'));
   assert.ok(explorer.includes('streamUrl: proxyStreamUrl,'));
   assert.ok(explorer.includes('thumbnailVideoEl: activeThumbnailVideoEl,'));
@@ -329,6 +331,11 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(proxyRenderer.includes("videoEl.dataset.proxyMountedState = this.proxyMountedState;"));
   assert.ok(proxyRenderer.includes("this.proxyMountedState = 'proxy-reused-mounted';"));
   assert.ok(proxyRenderer.includes("this.proxyMountedState = 'proxy-detached';"));
+  assert.ok(proxyRenderer.includes('proxy-video-released'));
+  assert.ok(proxyRenderer.includes('proxy-video-removed-src'));
+  assert.ok(proxyRenderer.includes('proxy-video-load-reset'));
+  assert.ok(proxyRenderer.includes('videoEl.removeAttribute(\'src\');'));
+  assert.ok(proxyRenderer.includes('videoEl.load();'));
   assert.ok(handoffHookContent.includes('sessionKey: string;'));
   assert.ok(handoffHookContent.includes('continuityKey: string;'));
   assert.ok(handoffHookContent.includes('playbackIntentKey: string;'));
@@ -347,6 +354,8 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('canPlaySeen: boolean;'));
   assert.ok(handoffHookContent.includes('playingSeen: boolean;'));
   assert.ok(handoffHookContent.includes('promotionBlockedReason: string;'));
+  assert.ok(handoffHookContent.includes('releaseProxyVideoResources'));
+  assert.ok(handoffHookContent.includes('proxy-video-released-disconnected'));
   assert.ok(handoffHookContent.includes('thumbnailVideoNodeFound: boolean;'));
   assert.ok(handoffHookContent.includes('timeDeltaFromThumbnail: number | null;'));
   assert.ok(handoffHookContent.includes("resumeSourceUsed: 'handoff-live' | 'focused-session-warm-reopen' | 'resume-store-cold-reopen' | 'none-start-at-zero';"));
@@ -393,7 +402,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(handoffHookContent.includes('const canUseLiveHandoff = pendingHandoff != null && hasLiveThumbnailFrame && wasPlayingBeforeHandoff;'));
   assert.ok(handoffHookContent.includes('writerVersion: activeResumeWriterVersionRef.current,'));
   assert.ok(handoffHookContent.includes('if (!proxyVideoEl.isConnected) {'));
-  assert.ok(handoffHookContent.includes("publishDebug('play-skipped-disconnected', proxyVideoEl);"));
+  assert.ok(handoffHookContent.includes("releaseProxyVideoResources(proxyVideoEl, 'play-skipped-disconnected');"));
   assert.ok(handoffHookContent.includes("publishDebug('play-threw-sync', proxyVideoEl);"));
   assert.ok(!handoffHookContent.includes('if (shouldStartPlayback) {\n      proxyVideoEl.load();'));
   assert.ok(playbackResumeStore.includes('const playbackResumeStore = new Map<VideoResumeKey, VideoResumeSnapshot>();'));
@@ -1357,6 +1366,12 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('.filter((card) => !card.active)'));
   assert.ok(proxyRenderer.includes('const reconcile = this.reconcileActiveCard(activeCard, showActiveChrome);'));
   assert.ok(proxyRenderer.includes('__explorerProxyRendererDebug'));
+  assert.ok(proxyRenderer.includes('proxy-video-released'));
+  assert.ok(proxyRenderer.includes('proxy-video-reused'));
+  assert.ok(proxyRenderer.includes('proxy-video-removed-src'));
+  assert.ok(proxyRenderer.includes('proxy-video-load-reset'));
+  assert.ok(proxyRenderer.includes('videoEl.removeAttribute(\'src\');'));
+  assert.ok(proxyRenderer.includes('videoEl.load();'));
   assert.ok(proxyRenderer.includes('activeVideoNodeStableId: this.activeVideoEl?.dataset.proxyStableVideoId || \'\','));
   assert.ok(proxyRenderer.includes("world.style.setProperty('--proxy-world-scale', String(Math.max(0.001, camera.scale)));"));
   assert.ok(proxyRenderer.includes('videoEl.dataset.proxyStableVideoId = String(this.activeVideoNodeStableId);'));
@@ -1383,6 +1398,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('this.renderer.render(snapshot, camera, { showActiveChrome: true });'));
   assert.ok(orchestrator.includes("this.root.dataset.proxyRetainedOnClose = 'true';"));
   assert.ok(orchestrator.includes("args.onEvent?.('proxy-retained-reuse-same-key');"));
+  assert.ok(content.includes('pauseNonAuthoritativeGridVideos'));
+  assert.ok(content.includes('grid-thumb-paused-non-authoritative'));
+  assert.ok(content.includes('__explorerMediaInvariantViolation'));
   assert.ok(focusedTapResolver.includes('Focused retarget contract:'));
   assert.ok(focusedTapResolver.includes("kind: target === proxyCardEl ? 'proxy-card-root' : 'proxy-card-child'"));
   assert.ok(focusedTapResolver.includes("if (target.classList.contains('proxy-render-surface')) {"));

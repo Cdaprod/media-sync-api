@@ -1612,6 +1612,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setTravelState();
         setGridCinematicMode(mode === 'open' ? 'grid-opening' : 'grid-refocusing');
         viewportEl.classList.add('focus-proxy-scroll-lock');
+        pauseNonAuthoritativeGridVideos(selectionKey);
       },
       onComplete: () => {
         clearTravelState();
@@ -1637,7 +1638,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       handleEvent('proxy-failed');
     }
     return opened;
-  }, [absolutizeMediaUrl, itemsBySelectionKey, normalizePreviewAsset, recordPreviewDebug, resolveAssetUrl, view]);
+  }, [absolutizeMediaUrl, itemsBySelectionKey, normalizePreviewAsset, pauseNonAuthoritativeGridVideos, recordPreviewDebug, resolveAssetUrl, view]);
 
   const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {
     if (!selectionKey || !gridRef.current) return null;
@@ -1645,20 +1646,70 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return nodes.find((node) => node.closest<HTMLElement>('.masonry-card[data-select-key]')?.dataset.selectKey === selectionKey) || null;
   }, []);
 
+  const publishMediaInvariantDebug = useCallback((reason: string) => {
+    if (typeof document === 'undefined') return;
+    const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
+    const proxyVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.proxy-render-video'));
+    const playingVideos = videos.filter((video) => !video.paused && !video.ended);
+    const payload = {
+      reason,
+      totalVideos: videos.length,
+      proxyVideos: proxyVideos.length,
+      playingVideos: playingVideos.length,
+      activeSelectionKey: activeAssetKey,
+    };
+    (globalThis as typeof globalThis & {
+      __explorerMediaDebug?: typeof payload;
+      __explorerMediaInvariantViolation?: typeof payload;
+    }).__explorerMediaDebug = payload;
+    if (playingVideos.length > 2) {
+      (globalThis as typeof globalThis & {
+        __explorerMediaInvariantViolation?: typeof payload;
+      }).__explorerMediaInvariantViolation = {
+        ...payload,
+        reason: 'media-invariant-violation',
+      };
+    }
+  }, [activeAssetKey]);
+
+  const pauseNonAuthoritativeGridVideos = useCallback((authoritativeSelectionKey: string) => {
+    const gridRoot = gridRef.current;
+    if (!gridRoot) return;
+    const thumbVideos = Array.from(gridRoot.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
+    thumbVideos.forEach((videoEl) => {
+      const selectionKey = videoEl.closest<HTMLElement>('.masonry-card[data-select-key]')?.dataset.selectKey || '';
+      if (selectionKey && selectionKey === authoritativeSelectionKey) return;
+      if (!videoEl.paused) {
+        videoEl.pause();
+        videoEl.currentTime = 0;
+        (globalThis as typeof globalThis & {
+          __explorerMediaDebugMarker?: { marker: string; selectionKey: string };
+        }).__explorerMediaDebugMarker = {
+          marker: 'grid-thumb-paused-non-authoritative',
+          selectionKey,
+        };
+      }
+    });
+    publishMediaInvariantDebug('grid-videos-paused');
+  }, [publishMediaInvariantDebug]);
+
   const playGridThumbForSelectionKey = useCallback((selectionKey: string) => {
     const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
     if (!thumbVideo) return;
     thumbVideo.muted = true;
     thumbVideo.playsInline = true;
     thumbVideo.loop = true;
+    pauseNonAuthoritativeGridVideos(selectionKey);
     thumbVideo.play().catch(() => {});
-  }, [getGridThumbVideoBySelectionKey]);
+    publishMediaInvariantDebug('grid-thumb-play-requested');
+  }, [getGridThumbVideoBySelectionKey, pauseNonAuthoritativeGridVideos, publishMediaInvariantDebug]);
 
   const pauseGridThumbForSelectionKey = useCallback((selectionKey: string) => {
     const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
     if (!thumbVideo) return;
     thumbVideo.pause();
-  }, [getGridThumbVideoBySelectionKey]);
+    publishMediaInvariantDebug('grid-thumb-paused-selection');
+  }, [getGridThumbVideoBySelectionKey, publishMediaInvariantDebug]);
 
   const openPreview = useCallback((item: MediaItem) => {
     const nextKey = assetSelectionKey(item, activeProject);
@@ -3681,6 +3732,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     onPromoted: () => {
       if (activeProxySelectionKey) {
         pauseGridThumbForSelectionKey(activeProxySelectionKey);
+        pauseNonAuthoritativeGridVideos(activeProxySelectionKey);
+        publishMediaInvariantDebug('proxy-promoted-authority');
       }
     },
     onDebug: (entry) => {
@@ -3772,6 +3825,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setProxyPlaybackCurrentTime(proxyPlaybackState.currentTime);
     setProxyPlaybackDuration(proxyPlaybackState.duration);
   }, [proxyPlaybackState.currentTime, proxyPlaybackState.duration, proxyPlaybackState.isPlaying]);
+
+  useEffect(() => {
+    publishMediaInvariantDebug('proxy-playback-state-sync');
+  }, [proxyPlaybackState.isPlaying, proxyPlaybackState.currentTime, publishMediaInvariantDebug]);
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible

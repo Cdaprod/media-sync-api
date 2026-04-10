@@ -288,6 +288,20 @@ export function useVideoOwnershipHandoff({
     setPlaybackState(EMPTY_PLAYBACK);
   }, []);
 
+  const releaseProxyVideoResources = useCallback((video: HTMLVideoElement | null, reason: string) => {
+    if (!video) return;
+    video.pause();
+    video.muted = true;
+    video.defaultMuted = true;
+    publishDebug(reason, video);
+    if (video.hasAttribute('src')) {
+      video.removeAttribute('src');
+      publishDebug('proxy-video-removed-src', video);
+    }
+    video.load();
+    publishDebug('proxy-video-load-reset', video);
+  }, [publishDebug]);
+
   useEffect(() => {
     const persistResumeSnapshot = (video: HTMLVideoElement, wasPlaying: boolean) => {
       const isAuthoritativeWriter = (
@@ -324,9 +338,7 @@ export function useVideoOwnershipHandoff({
       authoritativeVisualSurfaceRef.current = 'none';
       authoritativeAudioSurfaceRef.current = 'none';
       if (proxyVideoEl) {
-        proxyVideoEl.pause();
-        proxyVideoEl.muted = true;
-        proxyVideoEl.defaultMuted = true;
+        releaseProxyVideoResources(proxyVideoEl, 'proxy-video-released');
       }
       resetOwnership();
       publishDebug('inactive-no-selection', proxyVideoEl);
@@ -539,7 +551,7 @@ export function useVideoOwnershipHandoff({
     const requestPlay = () => {
       if (!shouldPlay) return;
       if (!proxyVideoEl.isConnected) {
-        publishDebug('play-skipped-disconnected', proxyVideoEl);
+        releaseProxyVideoResources(proxyVideoEl, 'play-skipped-disconnected');
         return;
       }
       playRequestedRef.current = true;
@@ -666,6 +678,9 @@ export function useVideoOwnershipHandoff({
       proxyVideoEl.removeEventListener('timeupdate', onTimeUpdate);
       proxyVideoEl.removeEventListener('waiting', onWaiting);
       proxyVideoEl.removeEventListener('stalled', onStalled);
+      if (!proxyVideoEl.isConnected) {
+        releaseProxyVideoResources(proxyVideoEl, 'proxy-video-released-disconnected');
+      }
     };
   }, [
     enableFocusedAudio,
@@ -679,6 +694,7 @@ export function useVideoOwnershipHandoff({
     streamUrl,
     wasPlayingBeforeHandoff,
     publishDebug,
+    releaseProxyVideoResources,
   ]);
 
   useEffect(() => {
