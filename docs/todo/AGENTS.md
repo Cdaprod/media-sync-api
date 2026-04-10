@@ -1,3 +1,12 @@
+## 2026-04-10 — Focused close-state reset hardening (active)
+- [x] Audited `ExplorerApp` close/reset ownership paths (`closeDrawer`, `closeGridFocusToRest`, focus reset helpers) and added explicit close markers (`focus-close-start`, `focus-close-complete`, `focus-close-reset-rest`, `focus-close-reset-missed`, `focus-close-scroll-lock-removed`).
+- [x] Added defensive close-settle fallback timer so missed close completion cannot leave `grid-closing`/non-idle proxy travel stuck; fallback forces reusable rest state.
+- [x] Centralized close rest settlement in `commitCloseStateToRest(...)` to guarantee `gridCinematicMode='grid-rest'`, `proxyTravelState='idle'`, and viewport scroll-lock removal.
+- [x] Extended runtime focus-layer debug snapshot with close-state observability fields (`proxyRootActive`, `scrollLockActive`).
+- [x] Hardened `FocusTransitionOrchestrator.closeFocusTransition(...)` with explicit close markers (`orchestrator-close-start`, `orchestrator-close-complete`, `orchestrator-close-pointer-reset`, `orchestrator-close-retained`) and pointer-reset telemetry.
+- [x] Expanded static regression contracts to lock close markers and rest-reset/scroll-lock removal contracts.
+- [ ] Validate on physical iPhone Safari that repeated open/close cycles never leave Explorer in non-reopenable stuck state.
+
 ## 2026-04-10 — Focused proxy media authority follow-up (active)
 - [x] Tightened `ExplorerApp` runtime media invariant diagnostics with explicit offender flags (`unauthorizedGridThumbPlaying`, `unauthorizedPrewarmPlaying`) and threaded them into `__explorerMediaInvariantViolation`.
 - [x] Strengthened grid-thumb authority enforcement markers/behavior (`grid-thumb-paused-authority-enforced`, `grid-thumb-play-blocked-non-authoritative`) including immediate pause/reset on blocked play attempts.

@@ -331,27 +331,36 @@ export class FocusTransitionOrchestrator {
   closeFocusTransition(args?: {
     onStart?: () => void;
     onComplete?: () => void;
+    onEvent?: (event: 'orchestrator-close-start' | 'orchestrator-close-complete' | 'orchestrator-close-pointer-reset' | 'orchestrator-close-retained') => void;
   }) {
     const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
     if (!world) {
+      args?.onEvent?.('orchestrator-close-start');
       this.root.style.opacity = '0';
       this.root.style.pointerEvents = 'none';
+      args?.onEvent?.('orchestrator-close-pointer-reset');
       this.currentCamera = {
         x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
       };
+      args?.onEvent?.('orchestrator-close-complete');
       args?.onComplete?.();
       return;
     }
 
     this.timeline?.kill();
     this.timeline = gsap.timeline({
-      onStart: () => args?.onStart?.(),
+      onStart: () => {
+        args?.onEvent?.('orchestrator-close-start');
+        args?.onStart?.();
+      },
       onComplete: () => {
         this.root.style.opacity = '0';
         this.root.style.pointerEvents = 'none';
+        args?.onEvent?.('orchestrator-close-pointer-reset');
         this.root.dataset.proxyRetainedOnClose = 'true';
         this.retainedContinuityKey = this.activeContinuityKey;
         this.root.dataset.proxyRetainedContinuityKey = this.retainedContinuityKey;
+        args?.onEvent?.('orchestrator-close-retained');
         const activeVideo = this.root.querySelector<HTMLVideoElement>('.proxy-render-card[data-proxy-active="true"] .proxy-render-video');
         if (activeVideo) {
           activeVideo.muted = true;
@@ -363,6 +372,7 @@ export class FocusTransitionOrchestrator {
         this.currentCamera = {
           x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
         };
+        args?.onEvent?.('orchestrator-close-complete');
         args?.onComplete?.();
       },
     });

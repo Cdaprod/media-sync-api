@@ -584,6 +584,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+  const gridCinematicModeRef = useRef<GridCinematicMode>('grid-rest');
+  const proxyTravelStateRef = useRef<ProxyTravelState>('idle');
   const focusStartRetryFrameRef = useRef<number | null>(null);
   const pendingGridColumnCommitRef = useRef<number | null>(null);
   const gridColumnCommitScheduledRef = useRef(false);
@@ -602,6 +604,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyPrewarmUrlRef = useRef('');
   const proxyPrewarmReadyStateRef = useRef(0);
   const focusedDoubleTapStateRef = useRef({ lastTapAt: 0 });
+  const closeSettleTimeoutRef = useRef<number | null>(null);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
@@ -645,6 +648,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         gridCinematicMode,
         proxyTravelState,
         inspectorOpen: inspectorOpenRef.current,
+        proxyRootActive: Boolean(document.querySelector('.focus-proxy-root.is-active')),
+        scrollLockActive: Boolean(document.querySelector('.scroll')?.classList.contains('focus-proxy-scroll-lock')),
         candidates: withStyle,
       };
     };
@@ -661,6 +666,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }).__explorerFocusLayerDebug;
     };
   }, [gridCinematicMode, proxyTravelState]);
+
+  useEffect(() => {
+    gridCinematicModeRef.current = gridCinematicMode;
+  }, [gridCinematicMode]);
+
+  useEffect(() => {
+    proxyTravelStateRef.current = proxyTravelState;
+  }, [proxyTravelState]);
 
   const scheduleGridColumnCommit = useCallback((nextColumns: number) => {
     pendingGridColumnCommitRef.current = nextColumns;
@@ -725,6 +738,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     window.cancelAnimationFrame(focusStartRetryFrameRef.current);
     focusStartRetryFrameRef.current = null;
   }, []);
+
+  const clearCloseSettleTimeout = useCallback(() => {
+    if (!closeSettleTimeoutRef.current) return;
+    window.clearTimeout(closeSettleTimeoutRef.current);
+    closeSettleTimeoutRef.current = null;
+  }, []);
+
+  const removeFocusProxyScrollLock = useCallback(() => {
+    const viewportEl = mediaScrollViewportRef.current;
+    if (!viewportEl) return;
+    if (viewportEl.classList.contains('focus-proxy-scroll-lock')) {
+      viewportEl.classList.remove('focus-proxy-scroll-lock');
+      recordPreviewDebug({ stage: 'focus-close-scroll-lock-removed', requestedMode: view });
+    }
+  }, [recordPreviewDebug, view]);
+
+  const commitCloseStateToRest = useCallback((reason: 'complete' | 'missed') => {
+    setGridCinematicMode('grid-rest');
+    setProxyTravelState('idle');
+    removeFocusProxyScrollLock();
+    recordPreviewDebug({
+      stage: reason === 'complete' ? 'focus-close-reset-rest' : 'focus-close-reset-missed',
+      requestedMode: view,
+      finalMode: 'idle',
+      reason: reason === 'complete' ? 'close-complete' : 'close-settle-timeout',
+    });
+  }, [removeFocusProxyScrollLock, recordPreviewDebug, view]);
 
   const resetFocusPresentationToIdle = useCallback(() => {
     clearFocusStartRetryFrame();
@@ -1778,17 +1818,35 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeAssetKey, activeProject, assetSelectionKey, focusAsset, getGridThumbVideoBySelectionKey, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, resetFocusPresentationToIdle, runProxyFocusTransition, view]);
 
   const closeGridFocusToRest = useCallback(() => {
+    clearCloseSettleTimeout();
+    recordPreviewDebug({ stage: 'focus-close-start', requestedMode: view });
     gridCinematicTimelineRef.current?.playClose();
     setGridCinematicMode('grid-closing');
     focusOrchestratorRef.current?.closeFocusTransition({
+      onEvent: (event) => {
+        recordPreviewDebug({ stage: event, requestedMode: view });
+      },
       onComplete: () => {
-        setGridCinematicMode('grid-rest');
+        clearCloseSettleTimeout();
+        recordPreviewDebug({ stage: 'focus-close-complete', requestedMode: view });
+        commitCloseStateToRest('complete');
       },
     });
-    const viewportEl = mediaScrollViewportRef.current;
-    if (viewportEl) viewportEl.classList.remove('focus-proxy-scroll-lock');
+    removeFocusProxyScrollLock();
     setProxyTravelState('idle');
-  }, []);
+    closeSettleTimeoutRef.current = window.setTimeout(() => {
+      closeSettleTimeoutRef.current = null;
+      if (gridCinematicModeRef.current !== 'grid-rest' || proxyTravelStateRef.current !== 'idle') {
+        commitCloseStateToRest('missed');
+      }
+    }, 560);
+  }, [
+    clearCloseSettleTimeout,
+    commitCloseStateToRest,
+    recordPreviewDebug,
+    removeFocusProxyScrollLock,
+    view,
+  ]);
 
   const closeDrawer = useCallback(() => {
     if (view === 'grid') {
@@ -1802,6 +1860,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       resetFocusPresentationToIdle();
     }, 96);
   }, [closeGridFocusToRest, resetFocusPresentationToIdle, view]);
+
+  useEffect(() => () => {
+    clearCloseSettleTimeout();
+  }, [clearCloseSettleTimeout]);
 
   const commitPreviewActivationKey = useCallback((nextKey: string) => {
     setPreviewActivationKey((prev) => {

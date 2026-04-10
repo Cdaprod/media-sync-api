@@ -1387,6 +1387,10 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes('refocusTransition(args: {'));
   assert.ok(orchestrator.includes('retargetTransition(args: {'));
   assert.ok(orchestrator.includes('closeFocusTransition(args?: {'));
+  assert.ok(orchestrator.includes('orchestrator-close-start'));
+  assert.ok(orchestrator.includes('orchestrator-close-complete'));
+  assert.ok(orchestrator.includes('orchestrator-close-pointer-reset'));
+  assert.ok(orchestrator.includes('orchestrator-close-retained'));
   assert.ok(orchestrator.includes('this.timeline = gsap.timeline('));
   assert.ok(orchestrator.includes('proxy-open-start'));
   assert.ok(orchestrator.includes('proxy-open-complete'));
@@ -1405,6 +1409,14 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(orchestrator.includes("this.root.dataset.proxyRetainedOnClose = 'true';"));
   assert.ok(orchestrator.includes("args.onEvent?.('proxy-retained-reuse-same-key');"));
   assert.ok(content.includes('pauseNonAuthoritativeGridVideos'));
+  assert.ok(content.includes('focus-close-start'));
+  assert.ok(content.includes('focus-close-complete'));
+  assert.ok(content.includes('focus-close-reset-rest'));
+  assert.ok(content.includes('focus-close-reset-missed'));
+  assert.ok(content.includes('focus-close-scroll-lock-removed'));
+  assert.ok(content.includes("setGridCinematicMode('grid-rest');"));
+  assert.ok(content.includes("setProxyTravelState('idle');"));
+  assert.ok(content.includes("viewportEl.classList.remove('focus-proxy-scroll-lock');"));
   assert.ok(content.includes('grid-thumb-paused-authority-enforced'));
   assert.ok(content.includes('grid-thumb-play-blocked-non-authoritative'));
   assert.ok(content.includes('prewarm-video-paused'));
