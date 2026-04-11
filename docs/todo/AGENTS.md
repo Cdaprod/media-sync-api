@@ -1,3 +1,8 @@
+## 2026-04-11 — Media invariant stale-closure fix (active)
+- [x] Fixed `publishMediaInvariantDebug` stale-closure dependency gap by including focused ownership inputs (`view`, `inspectorOpen`, `gridCinematicMode`) alongside `activeAssetKey`.
+- [x] Updated static regression contract to lock the widened `useCallback` dependency list for `publishMediaInvariantDebug`.
+- [ ] Re-verify on device close/reopen-same-asset flow that `__explorerMediaDebug.focusedProxyPlaybackOwned` tracks real focus ownership transitions without stale lag.
+
 ## 2026-04-10 — Preview interruption/cancellation hardening (active)
 - [x] Added explicit latest-preview-wins interruption markers in `useVideoOwnershipHandoff` (`preview-session-interrupted`, `preview-session-superseded`, `preview-session-commit-blocked-stale`, `preview-session-latest-commit`).
 - [x] Added per-run monotonic version guarding in `useVideoOwnershipHandoff` so stale async paths (first-frame/visible-paint/play rejection) cannot commit after superseding selection.

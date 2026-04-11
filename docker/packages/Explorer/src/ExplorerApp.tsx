@@ -1731,7 +1731,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         reason: 'media-invariant-violation',
       };
     }
-  }, [activeAssetKey]);
+  }, [activeAssetKey, gridCinematicMode, inspectorOpen, view]);
 
   const pauseNonAuthoritativeGridVideos = useCallback((authoritativeSelectionKey: string) => {
     const gridRoot = gridRef.current;

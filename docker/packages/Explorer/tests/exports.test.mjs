@@ -315,6 +315,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('pauseGridThumbForSelectionKey(activeProxySelectionKey);'));
   assert.ok(explorer.includes('pauseNonAuthoritativeGridVideos(activeProxySelectionKey);'));
   assert.ok(explorer.includes('publishMediaInvariantDebug(\'proxy-promoted-authority\');'));
+  assert.ok(explorer.includes('}, [activeAssetKey, gridCinematicMode, inspectorOpen, view]);'));
   const pauseNonAuthoritativeIndex = explorer.indexOf('const pauseNonAuthoritativeGridVideos = useCallback((authoritativeSelectionKey: string) => {');
   const runProxyFocusTransitionIndex = explorer.indexOf('const runProxyFocusTransition = useCallback((');
   assert.ok(pauseNonAuthoritativeIndex >= 0);
