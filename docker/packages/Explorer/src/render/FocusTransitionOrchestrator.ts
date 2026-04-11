@@ -414,4 +414,9 @@ export class FocusTransitionOrchestrator {
   clearRetainedProxyOnDeselect() {
     this.clearRetainedProxy('proxy-retained-cleared-deselect');
   }
+
+  interruptActiveTransition() {
+    this.timeline?.kill();
+    this.timeline = null;
+  }
 }

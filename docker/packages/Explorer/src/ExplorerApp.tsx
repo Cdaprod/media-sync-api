@@ -406,6 +406,8 @@ const SORT_LABELS: Record<SortKey, string> = {
  * Density/view/layout interactions must never replay startup loading effects.
  */
 let hasBootstrappedExplorerSession = false;
+let GLOBAL_PROXY_RAF_ID: number | null = null;
+let GLOBAL_PROXY_RAF_ACTIVE = false;
 
 function useToastQueue() {
   const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
@@ -605,6 +607,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyPrewarmReadyStateRef = useRef(0);
   const previewAuthoritySelectionRef = useRef('');
   const focusedDoubleTapStateRef = useRef({ lastTapAt: 0 });
+  const focusWorldIdleMarkerRef = useRef(false);
   const closeSettleTimeoutRef = useRef<number | null>(null);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
@@ -1795,6 +1798,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const viewportEl = mediaScrollViewportRef.current;
     const orchestrator = focusOrchestratorRef.current;
     if (!gridRoot || !viewportEl || !orchestrator) return false;
+    orchestrator.interruptActiveTransition();
     const setTravelState = () => setProxyTravelState(mode === 'open' ? 'open-travel' : 'refocus-travel');
     const clearTravelState = () => setProxyTravelState('idle');
     const handleEvent = (event: string) => {
@@ -1883,6 +1887,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const closeGridFocusToRest = useCallback(() => {
     clearCloseSettleTimeout();
     recordPreviewDebug({ stage: 'focus-close-start', requestedMode: view });
+    focusOrchestratorRef.current?.interruptActiveTransition();
     gridCinematicTimelineRef.current?.playClose();
     setGridCinematicMode('grid-closing');
     focusOrchestratorRef.current?.closeFocusTransition({
@@ -3784,6 +3789,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
   const focusedProxyPlaybackOwned = proxyPreviewVisible;
   useEffect(() => {
+    const stage = focusWorldStageRef.current;
+    if (!stage) return;
+    stage.dataset.focusWorldInteractive = focusWorldActive ? 'true' : 'false';
+    if (focusWorldActive) {
+      focusWorldIdleMarkerRef.current = false;
+      return;
+    }
+    if (focusWorldIdleMarkerRef.current) return;
+    focusWorldIdleMarkerRef.current = true;
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-inert', requestedMode: view, finalMode: 'idle' });
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', requestedMode: view, finalMode: 'idle' });
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-raf-blocked', requestedMode: view, finalMode: 'idle' });
+  }, [focusWorldActive, recordPreviewDebug, view]);
+  useEffect(() => {
     proxyPrewarmSelectionKeyRef.current = proxyPrewarmSelectionKey;
     proxyPrewarmUrlRef.current = proxyPrewarmUrl;
     const prewarmVideo = proxyPrewarmVideoRef.current;
@@ -3843,6 +3862,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [focusedProxyPlaybackOwned, proxyPrewarmSelectionKey, proxyPrewarmUrl]);
   useEffect(() => {
     if (!proxyPreviewVisible) {
+      if (GLOBAL_PROXY_RAF_ID !== null) {
+        window.cancelAnimationFrame(GLOBAL_PROXY_RAF_ID);
+        GLOBAL_PROXY_RAF_ID = null;
+      }
+      GLOBAL_PROXY_RAF_ACTIVE = false;
+      (globalThis as typeof globalThis & {
+        __explorerRafDebug?: { active: boolean; rafId: number | null };
+      }).__explorerRafDebug = {
+        active: GLOBAL_PROXY_RAF_ACTIVE,
+        rafId: GLOBAL_PROXY_RAF_ID,
+      };
       setActiveProxyCardEl(null);
       setActiveProxyUiSlotEl(null);
       setProxyPlaybackPlaying(false);
@@ -3852,7 +3882,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     const root = focusProxyRootRef.current;
     if (!root) return;
-    let rafId = 0;
+    if (GLOBAL_PROXY_RAF_ID !== null) {
+      window.cancelAnimationFrame(GLOBAL_PROXY_RAF_ID);
+      GLOBAL_PROXY_RAF_ID = null;
+    }
+    GLOBAL_PROXY_RAF_ACTIVE = false;
     const syncActiveCard = () => {
       const activeCard = root.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
       setActiveProxyCardEl((prev) => (prev === activeCard ? prev : activeCard));
@@ -3860,11 +3894,37 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setActiveProxyUiSlotEl((prev) => (prev === uiSlot ? prev : uiSlot));
     };
     const tick = () => {
+      if (!GLOBAL_PROXY_RAF_ACTIVE) return;
       syncActiveCard();
-      rafId = window.requestAnimationFrame(tick);
+      GLOBAL_PROXY_RAF_ID = window.requestAnimationFrame(tick);
+      (globalThis as typeof globalThis & {
+        __explorerRafDebug?: { active: boolean; rafId: number | null };
+      }).__explorerRafDebug = {
+        active: GLOBAL_PROXY_RAF_ACTIVE,
+        rafId: GLOBAL_PROXY_RAF_ID,
+      };
     };
-    rafId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(rafId);
+    GLOBAL_PROXY_RAF_ACTIVE = true;
+    GLOBAL_PROXY_RAF_ID = window.requestAnimationFrame(tick);
+    (globalThis as typeof globalThis & {
+      __explorerRafDebug?: { active: boolean; rafId: number | null };
+    }).__explorerRafDebug = {
+      active: GLOBAL_PROXY_RAF_ACTIVE,
+      rafId: GLOBAL_PROXY_RAF_ID,
+    };
+    return () => {
+      GLOBAL_PROXY_RAF_ACTIVE = false;
+      if (GLOBAL_PROXY_RAF_ID !== null) {
+        window.cancelAnimationFrame(GLOBAL_PROXY_RAF_ID);
+        GLOBAL_PROXY_RAF_ID = null;
+      }
+      (globalThis as typeof globalThis & {
+        __explorerRafDebug?: { active: boolean; rafId: number | null };
+      }).__explorerRafDebug = {
+        active: GLOBAL_PROXY_RAF_ACTIVE,
+        rafId: GLOBAL_PROXY_RAF_ID,
+      };
+    };
   }, [proxyPreviewVisible]);
   const activeProxyVideoEl = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
   const activeProxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
