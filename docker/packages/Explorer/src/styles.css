@@ -2667,18 +2667,12 @@ body.confirm-open{
 @media (pointer: coarse){
   .search{
     gap: 6px;
-    padding: 6px 8px;
-    min-height: 40px;
+    padding: 5px 8px;
+    min-height: 42px;
   }
   .search-input-wrap{
-    transform: scale(0.86);
-    transform-origin: left center;
-    width: calc(100% / 0.86);
-  }
-  .search .kbd,
-  .search-toolbar .control{
-    transform: scale(0.9);
-    transform-origin: center;
+    width: auto;
+    transform: none;
   }
   .search-input,
   .compose-field input,
@@ -2689,7 +2683,20 @@ body.confirm-open{
   .drawer textarea,
   .drawer select{
     font-size: 16px !important;
-    line-height: 1.1;
+    line-height: 1.2;
+  }
+  .search-input{
+    min-height: 32px;
+  }
+  .search .kbd{
+    font-size: 10px;
+    padding: 1px 5px;
+    opacity: 0.72;
+  }
+  .search-toolbar .control{
+    font-size: 11px;
+    min-height: 24px;
+    padding: 4px 7px;
   }
   .search-input::placeholder,
   .custom-ui-surface input::placeholder,

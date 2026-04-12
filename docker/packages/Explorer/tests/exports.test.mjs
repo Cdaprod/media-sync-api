@@ -2654,7 +2654,9 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(styles.includes('@media (pointer: coarse){'));
   assert.ok(styles.includes('.search-input,'));
   assert.ok(styles.includes('font-size: 16px !important;'));
-  assert.ok(styles.includes('transform: scale(0.86);'));
+  assert.ok(styles.includes('.search-input-wrap{'));
+  assert.ok(styles.includes('transform: none;'));
+  assert.ok(!styles.includes('transform: scale(0.86);'));
   assert.ok(content.includes('className="search-input-wrap"'));
   assert.ok(content.includes('className="search-input"'));
 });

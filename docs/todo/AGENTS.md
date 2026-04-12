@@ -1,3 +1,10 @@
+## 2026-04-12 — Editable-lane unscaled iPhone zoom suppression correction (active)
+- [x] Removed coarse-pointer transform scaling from `.search-input-wrap` and retained unscaled editable search lane authority.
+- [x] Kept mobile-safe editable controls at `font-size: 16px` while increasing search input comfort lane (`min-height: 32px`, `line-height: 1.2`) to avoid tiny rendered focus targets.
+- [x] Preserved compact topbar feel by shrinking non-editable chrome only (search shell padding/gap, kbd chip styling, search-toolbar control sizing).
+- [x] Updated Explorer static contracts to assert wrapper remains unscaled (`transform:none`) and prevent regression back to wrapper-scale compacting.
+- [ ] Validate on physical iPhone Safari (without inspector console focus lane) that Explorer search focus no longer triggers page zoom.
+
 ## 2026-04-12 — iPhone-safe compact input zoom suppression follow-up (active)
 - [x] Narrowed mobile zoom guard to editable controls only (no blanket `.control` scaling) so non-editable chips/buttons keep compact sizing authority.
 - [x] Added search-field wrapper lane (`.search-input-wrap` + `.search-input`) and coarse-pointer compact visual scale contract (`scale(0.86)`) while preserving actual editable font-size at `16px`.
