@@ -1,3 +1,72 @@
+## 2026-04-12 — RAF lane audit + focus-world idle blocking (active)
+- [x] Audited `requestAnimationFrame` usage in `ExplorerApp` focus/cinematic ownership paths and replaced direct calls with lane-tagged scheduling/cancel helpers.
+- [x] Added per-lane RAF runtime debug breakdown in `window.__explorerRafDebug` (`raf-lane-proxy-active-card`, `raf-lane-focus-world`, `raf-lane-cinematic-reveal`, `raf-lane-measurement`, `raf-lane-other`) with scheduled/completed/canceled/inFlight counters.
+- [x] Added idle-state guards + markers for focus-world lanes (`focus-world-stage-idle-raf-blocked`, `focus-world-stage-idle-measure-blocked`) and cleared queued focus/measurement retry RAF frames on reset.
+- [x] Hardened transition interruption in `FocusTransitionOrchestrator` to kill active world/chrome tweens and publish continuity marker `proxy-transition-interrupted`.
+- [x] Expanded static contract tests for RAF lane debug wiring and orchestrator interruption tween-kill marker contracts.
+- [ ] Device-verify RAF stack probe no longer climbs under repeated open/refocus/close churn and capture lane-level `__explorerRafDebug.lanes` evidence during idle/focused transitions.
+
+## 2026-04-11 — Media invariant stale-closure fix (active)
+- [x] Fixed `publishMediaInvariantDebug` stale-closure dependency gap by including focused ownership inputs (`view`, `inspectorOpen`, `gridCinematicMode`) alongside `activeAssetKey`.
+- [x] Updated static regression contract to lock the widened `useCallback` dependency list for `publishMediaInvariantDebug`.
+- [ ] Re-verify on device close/reopen-same-asset flow that `__explorerMediaDebug.focusedProxyPlaybackOwned` tracks real focus ownership transitions without stale lag.
+
+## 2026-04-10 — Preview interruption/cancellation hardening (active)
+- [x] Added explicit latest-preview-wins interruption markers in `useVideoOwnershipHandoff` (`preview-session-interrupted`, `preview-session-superseded`, `preview-session-commit-blocked-stale`, `preview-session-latest-commit`).
+- [x] Added per-run monotonic version guarding in `useVideoOwnershipHandoff` so stale async paths (first-frame/visible-paint/play rejection) cannot commit after superseding selection.
+- [x] Added `ExplorerApp` preview selection interruption markers (`preview-selection-interrupt-previous`, `preview-selection-new-authority`, `preview-selection-play-rearm`) and authority invalidation on selection supersede (clear stale handoff/prewarm refs + rearm play token).
+- [x] Added renderer lifecycle markers for rapid-selection node reuse rearm and stale selection handoff (`proxy-video-rearm-latest-selection`, `proxy-video-stale-selection-blocked`).
+- [x] Expanded static regression contracts to lock interruption markers across ExplorerApp/handoff hook/renderer.
+- [ ] Device-verify rapid multi-asset preview cycling no longer lands in visually-selected-but-never-plays stale session state.
+
+## 2026-04-10 — Retained proxy inert hit-ownership fix (active)
+- [x] Narrowed remaining post-close interaction lock to retained proxy hit ownership (`.proxy-render-card.is-ambient` still winning hit-tests after visual close).
+- [x] Hardened `FocusTransitionOrchestrator.closeFocusTransition(...)` to transition retained proxy into explicit inert state (`data-proxy-retained-inert="true"`) while preserving mounted continuity.
+- [x] Added orchestrator close markers for retained inertness + hit ownership revocation (`orchestrator-close-retained-inert`, `orchestrator-close-hit-ownership-revoked`, `orchestrator-close-ambient-disabled`).
+- [x] Added CSS contract to force retained proxy subtree inertness (`pointer-events:none !important` for root/surface/world/layers/cards when retained-inert).
+- [x] Extended close debug flow in `ExplorerApp` with hit-ownership verification markers (`focus-close-proxy-hit-owner-still-present`, `focus-close-grid-hit-owner-restored`, `focus-close-retained-proxy-inert`) and focus-layer snapshot fields (`proxyLayerMounted`, `proxyLayerActive`, `retainedProxyInert`, `gridShouldOwnHits`).
+- [x] Expanded static regression contracts for retained inert markers, retained-inert dataset wiring, and inert CSS selectors.
+- [ ] Device-verify that post-close taps never resolve to `.proxy-render-card.is-ambient` and grid assets remain sole hit owners after repeated close/reopen cycles.
+
+## 2026-04-10 — Focused close activation-reset follow-up (active)
+- [x] Isolated post-close stale activation-state lane in `ExplorerApp` where visual close could settle while active/preview emphasis state remained armed.
+- [x] Hardened close path to explicitly clear activation/emphasis lanes on close (`activeAssetKey`, `previewActivationKey`, `reinforcedActiveKey`, `holdEmphasisKey`) with dedicated close markers.
+- [x] Added close activation-reset markers (`focus-close-cleared-active-asset`, `focus-close-cleared-preview-activation`, `focus-close-cleared-reinforced-active`, `focus-close-cleared-hold-emphasis`, `focus-close-activation-reset-complete`) for runtime triage.
+- [x] Cleared pending preview handoff state during close activation reset to avoid stale reopen semantics.
+- [x] Extended `__explorerFocusLayerDebug` snapshot with activation-state fields (`activeAssetKey`, `previewActivationKey`, `reinforcedActiveKey`, `holdEmphasisKey`).
+- [x] Expanded static regression contracts to lock activation-reset markers and debug field threading.
+- [ ] Validate on device that purple active border clears immediately on close and first/second tap preview flow re-arms from clean grid rest state.
+
+## 2026-04-10 — Focused close-state reset hardening (active)
+- [x] Audited `ExplorerApp` close/reset ownership paths (`closeDrawer`, `closeGridFocusToRest`, focus reset helpers) and added explicit close markers (`focus-close-start`, `focus-close-complete`, `focus-close-reset-rest`, `focus-close-reset-missed`, `focus-close-scroll-lock-removed`).
+- [x] Added defensive close-settle fallback timer so missed close completion cannot leave `grid-closing`/non-idle proxy travel stuck; fallback forces reusable rest state.
+- [x] Centralized close rest settlement in `commitCloseStateToRest(...)` to guarantee `gridCinematicMode='grid-rest'`, `proxyTravelState='idle'`, and viewport scroll-lock removal.
+- [x] Extended runtime focus-layer debug snapshot with close-state observability fields (`proxyRootActive`, `scrollLockActive`).
+- [x] Hardened `FocusTransitionOrchestrator.closeFocusTransition(...)` with explicit close markers (`orchestrator-close-start`, `orchestrator-close-complete`, `orchestrator-close-pointer-reset`, `orchestrator-close-retained`) and pointer-reset telemetry.
+- [x] Expanded static regression contracts to lock close markers and rest-reset/scroll-lock removal contracts.
+- [ ] Validate on physical iPhone Safari that repeated open/close cycles never leave Explorer in non-reopenable stuck state.
+
+## 2026-04-10 — Focused proxy media authority follow-up (active)
+- [x] Tightened `ExplorerApp` runtime media invariant diagnostics with explicit offender flags (`unauthorizedGridThumbPlaying`, `unauthorizedPrewarmPlaying`) and threaded them into `__explorerMediaInvariantViolation`.
+- [x] Strengthened grid-thumb authority enforcement markers/behavior (`grid-thumb-paused-authority-enforced`, `grid-thumb-play-blocked-non-authoritative`) including immediate pause/reset on blocked play attempts.
+- [x] Suppressed grid thumb preview lane while focused proxy ownership is active by gating `activeVideoPreviewUrl` with focused proxy authority state.
+- [x] Converted proxy prewarm lane to non-authoritative metadata prep only (`preload="metadata"`) and added explicit pause/release/blocked markers (`prewarm-video-paused`, `prewarm-video-released`, `prewarm-video-blocked-non-authoritative`).
+- [x] Expanded static regression contracts in `docker/packages/Explorer/tests/exports.test.mjs` to lock the new authority markers and invariant fields.
+- [ ] Re-verify on physical mobile Safari that focused proxy playback remains the sole active lane after rapid close/reopen and asset retarget churn.
+
+## 2026-04-10 — Explorer TDZ regression fix (active)
+- [x] Fixed runtime `ReferenceError: Cannot access uninitialized variable` in `ExplorerApp` by moving `runProxyFocusTransition` below newly introduced media-authority helpers so dependency capture no longer references `pauseNonAuthoritativeGridVideos` before initialization.
+- [x] Added static ordering contract in `docker/packages/Explorer/tests/exports.test.mjs` asserting `pauseNonAuthoritativeGridVideos` declaration appears before `runProxyFocusTransition`.
+- [ ] Re-verify on mobile Safari that Explorer boots without error overlay before continuing media leak validation loops.
+
+## 2026-04-10 — Explorer media lifecycle hardening (active)
+- [x] Added authoritative proxy release lifecycle in `ViewportProxyRenderer` (`pause`/mute, `removeAttribute('src')`, `load()`, remove) with explicit lifecycle markers (`proxy-video-released`, `proxy-video-removed-src`, `proxy-video-load-reset`, `proxy-video-reused`).
+- [x] Added grid-thumb authority enforcement in `ExplorerApp` via `pauseNonAuthoritativeGridVideos(...)` so focused proxy transitions/promotion pause/reset non-authoritative thumb videos.
+- [x] Added runtime media invariant debug payloads/markers in `ExplorerApp` (`__explorerMediaDebug`, `__explorerMediaInvariantViolation`, `grid-thumb-paused-non-authoritative`) to surface multi-video leaks quickly.
+- [x] Hardened `useVideoOwnershipHandoff` cleanup with `releaseProxyVideoResources(...)` so disconnected/no-selection paths release decode resources, not just listeners.
+- [x] Expanded static export contracts in `docker/packages/Explorer/tests/exports.test.mjs` to lock proxy release markers, src+load reset lifecycle, and grid authority helpers.
+- [ ] Validate on physical mobile Safari that repeated focused preview switching keeps `playingVideos <= 1` after settle and no longer crashes/reloads under churn.
+
 ## 2026-04-08 — Focused hit-target contract hardening (active)
 - [x] Extracted focused tap hit resolution into `resolveFocusedTapTarget(...)` with explicit contract comment (`asset tap => retarget`, `empty-space => close`, wrappers non-primary).
 - [x] Routed `ExplorerApp` focused pointer handling through the resolver to keep classification authority centralized and resistant to incidental refactors.
