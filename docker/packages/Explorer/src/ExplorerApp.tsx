@@ -406,6 +406,92 @@ const SORT_LABELS: Record<SortKey, string> = {
  * Density/view/layout interactions must never replay startup loading effects.
  */
 let hasBootstrappedExplorerSession = false;
+let GLOBAL_PROXY_RAF_ID: number | null = null;
+let GLOBAL_PROXY_RAF_ACTIVE = false;
+type ExplorerRafLaneName =
+  | 'raf-lane-proxy-active-card'
+  | 'raf-lane-focus-world'
+  | 'raf-lane-cinematic-reveal'
+  | 'raf-lane-measurement'
+  | 'raf-lane-other';
+type ExplorerRafLaneDebug = {
+  active: boolean;
+  inFlight: number;
+  scheduled: number;
+  completed: number;
+  canceled: number;
+};
+const EXPLORER_RAF_LANES: ExplorerRafLaneName[] = [
+  'raf-lane-proxy-active-card',
+  'raf-lane-focus-world',
+  'raf-lane-cinematic-reveal',
+  'raf-lane-measurement',
+  'raf-lane-other',
+];
+const GLOBAL_EXPLORER_RAF_DEBUG: Record<ExplorerRafLaneName, ExplorerRafLaneDebug> = {
+  'raf-lane-proxy-active-card': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-focus-world': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-cinematic-reveal': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-measurement': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-other': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+};
+const GLOBAL_EXPLORER_RAF_REQUESTS = new Map<number, ExplorerRafLaneName>();
+
+const publishExplorerRafDebug = () => {
+  const lanes = EXPLORER_RAF_LANES.reduce<Record<ExplorerRafLaneName, ExplorerRafLaneDebug>>((acc, lane) => {
+    const state = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+    acc[lane] = { ...state };
+    return acc;
+  }, {} as Record<ExplorerRafLaneName, ExplorerRafLaneDebug>);
+  (globalThis as typeof globalThis & {
+    __explorerRafDebug?: {
+      active: boolean;
+      rafId: number | null;
+      lanes: Record<ExplorerRafLaneName, ExplorerRafLaneDebug>;
+    };
+  }).__explorerRafDebug = {
+    active: GLOBAL_PROXY_RAF_ACTIVE,
+    rafId: GLOBAL_PROXY_RAF_ID,
+    lanes,
+  };
+};
+
+const setExplorerRafLaneActive = (lane: ExplorerRafLaneName, active: boolean) => {
+  GLOBAL_EXPLORER_RAF_DEBUG[lane].active = active;
+  publishExplorerRafDebug();
+};
+
+const scheduleExplorerRaf = (lane: ExplorerRafLaneName, callback: FrameRequestCallback) => {
+  const laneDebug = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+  laneDebug.scheduled += 1;
+  laneDebug.inFlight += 1;
+  const rafId = window.requestAnimationFrame((timestamp) => {
+    const mappedLane = GLOBAL_EXPLORER_RAF_REQUESTS.get(rafId);
+    if (!mappedLane) return;
+    GLOBAL_EXPLORER_RAF_REQUESTS.delete(rafId);
+    const mappedDebug = GLOBAL_EXPLORER_RAF_DEBUG[mappedLane];
+    mappedDebug.inFlight = Math.max(0, mappedDebug.inFlight - 1);
+    mappedDebug.completed += 1;
+    publishExplorerRafDebug();
+    callback(timestamp);
+  });
+  GLOBAL_EXPLORER_RAF_REQUESTS.set(rafId, lane);
+  publishExplorerRafDebug();
+  return rafId;
+};
+
+const cancelExplorerRaf = (rafId: number | null) => {
+  if (rafId == null) return;
+  const lane = GLOBAL_EXPLORER_RAF_REQUESTS.get(rafId);
+  if (lane) {
+    const laneDebug = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+    laneDebug.inFlight = Math.max(0, laneDebug.inFlight - 1);
+    laneDebug.canceled += 1;
+    GLOBAL_EXPLORER_RAF_REQUESTS.delete(rafId);
+    publishExplorerRafDebug();
+  }
+  window.cancelAnimationFrame(rafId);
+};
 
 function useToastQueue() {
   const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
@@ -584,6 +670,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+  const gridCinematicModeRef = useRef<GridCinematicMode>('grid-rest');
+  const proxyTravelStateRef = useRef<ProxyTravelState>('idle');
   const focusStartRetryFrameRef = useRef<number | null>(null);
   const pendingGridColumnCommitRef = useRef<number | null>(null);
   const gridColumnCommitScheduledRef = useRef(false);
@@ -601,7 +689,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyPrewarmSelectionKeyRef = useRef('');
   const proxyPrewarmUrlRef = useRef('');
   const proxyPrewarmReadyStateRef = useRef(0);
+  const previewAuthoritySelectionRef = useRef('');
   const focusedDoubleTapStateRef = useRef({ lastTapAt: 0 });
+  const focusWorldIdleMarkerRef = useRef(false);
+  const focusWorldMotionFrameRef = useRef<number | null>(null);
+  const closeMeasurementFrameRef = useRef<number | null>(null);
+  const focusedRetargetRetryFrameRef = useRef<number | null>(null);
+  const closeSettleTimeoutRef = useRef<number | null>(null);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
@@ -645,6 +739,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         gridCinematicMode,
         proxyTravelState,
         inspectorOpen: inspectorOpenRef.current,
+        activeAssetKey,
+        previewActivationKey,
+        reinforcedActiveKey,
+        holdEmphasisKey,
+        proxyLayerMounted: Boolean(document.querySelector('.focus-proxy-root [data-focus-proxy-layer="true"]')),
+        proxyLayerActive: Boolean(document.querySelector('.focus-proxy-root.is-active')),
+        retainedProxyInert: Boolean(document.querySelector('.focus-proxy-root')?.dataset.proxyRetainedInert === 'true'),
+        gridShouldOwnHits: gridCinematicMode === 'grid-rest' && proxyTravelState === 'idle' && !inspectorOpenRef.current,
+        proxyRootActive: Boolean(document.querySelector('.focus-proxy-root.is-active')),
+        scrollLockActive: Boolean(document.querySelector('.scroll')?.classList.contains('focus-proxy-scroll-lock')),
         candidates: withStyle,
       };
     };
@@ -660,7 +764,45 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         };
       }).__explorerFocusLayerDebug;
     };
-  }, [gridCinematicMode, proxyTravelState]);
+  }, [activeAssetKey, gridCinematicMode, holdEmphasisKey, previewActivationKey, proxyTravelState, reinforcedActiveKey]);
+
+  useEffect(() => {
+    gridCinematicModeRef.current = gridCinematicMode;
+  }, [gridCinematicMode]);
+
+  useEffect(() => {
+    proxyTravelStateRef.current = proxyTravelState;
+  }, [proxyTravelState]);
+
+  useEffect(() => {
+    if (inspectorOpen) return;
+    previewAuthoritySelectionRef.current = '';
+  }, [inspectorOpen]);
+
+  useEffect(() => {
+    if (view !== 'grid') return;
+    if (!inspectorOpen) return;
+    if (!activeAssetKey) return;
+    const previousSelection = previewAuthoritySelectionRef.current;
+    if (previousSelection && previousSelection !== activeAssetKey) {
+      recordPreviewDebug({
+        stage: 'preview-selection-interrupt-previous',
+        selectionKey: previousSelection,
+        requestedMode: view,
+        reason: `superseded-by:${activeAssetKey}`,
+      });
+      previewPlaybackHandoffRef.current = null;
+      proxyPrewarmSelectionKeyRef.current = '';
+      proxyPrewarmUrlRef.current = '';
+      proxyPrewarmReadyStateRef.current = 0;
+    }
+    if (previousSelection !== activeAssetKey) {
+      previewAuthoritySelectionRef.current = activeAssetKey;
+      setPreviewAutoPlayToken((prev) => prev + 1);
+      recordPreviewDebug({ stage: 'preview-selection-new-authority', selectionKey: activeAssetKey, requestedMode: view });
+      recordPreviewDebug({ stage: 'preview-selection-play-rearm', selectionKey: activeAssetKey, requestedMode: view });
+    }
+  }, [activeAssetKey, inspectorOpen, recordPreviewDebug, view]);
 
   const scheduleGridColumnCommit = useCallback((nextColumns: number) => {
     pendingGridColumnCommitRef.current = nextColumns;
@@ -722,17 +864,99 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const clearFocusStartRetryFrame = useCallback(() => {
     if (!focusStartRetryFrameRef.current) return;
-    window.cancelAnimationFrame(focusStartRetryFrameRef.current);
+    cancelExplorerRaf(focusStartRetryFrameRef.current);
     focusStartRetryFrameRef.current = null;
   }, []);
 
+  const clearFocusWorldMotionFrame = useCallback(() => {
+    if (!focusWorldMotionFrameRef.current) return;
+    cancelExplorerRaf(focusWorldMotionFrameRef.current);
+    focusWorldMotionFrameRef.current = null;
+  }, []);
+
+  const clearCloseMeasurementFrame = useCallback(() => {
+    if (!closeMeasurementFrameRef.current) return;
+    cancelExplorerRaf(closeMeasurementFrameRef.current);
+    closeMeasurementFrameRef.current = null;
+  }, []);
+
+  const clearFocusedRetargetRetryFrame = useCallback(() => {
+    if (!focusedRetargetRetryFrameRef.current) return;
+    cancelExplorerRaf(focusedRetargetRetryFrameRef.current);
+    focusedRetargetRetryFrameRef.current = null;
+  }, []);
+
+  const clearCloseSettleTimeout = useCallback(() => {
+    if (!closeSettleTimeoutRef.current) return;
+    window.clearTimeout(closeSettleTimeoutRef.current);
+    closeSettleTimeoutRef.current = null;
+  }, []);
+
+  const removeFocusProxyScrollLock = useCallback(() => {
+    const viewportEl = mediaScrollViewportRef.current;
+    if (!viewportEl) return;
+    if (viewportEl.classList.contains('focus-proxy-scroll-lock')) {
+      viewportEl.classList.remove('focus-proxy-scroll-lock');
+      recordPreviewDebug({ stage: 'focus-close-scroll-lock-removed', requestedMode: view });
+    }
+  }, [recordPreviewDebug, view]);
+
+  const commitCloseStateToRest = useCallback((reason: 'complete' | 'missed') => {
+    setGridCinematicMode('grid-rest');
+    setProxyTravelState('idle');
+    removeFocusProxyScrollLock();
+    recordPreviewDebug({
+      stage: reason === 'complete' ? 'focus-close-reset-rest' : 'focus-close-reset-missed',
+      requestedMode: view,
+      finalMode: 'idle',
+      reason: reason === 'complete' ? 'close-complete' : 'close-settle-timeout',
+    });
+    const proxyRoot = focusProxyRootRef.current;
+    clearCloseMeasurementFrame();
+    closeMeasurementFrameRef.current = scheduleExplorerRaf('raf-lane-measurement', () => {
+      closeMeasurementFrameRef.current = null;
+      if (!inspectorOpenRef.current && focusPresentationStateRef.current.mode === 'idle') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', requestedMode: view, finalMode: 'idle' });
+        return;
+      }
+      if (!proxyRoot) return;
+      const retainedInert = proxyRoot.dataset.proxyRetainedInert === 'true';
+      const pointerEvents = window.getComputedStyle(proxyRoot).pointerEvents;
+      const proxyCard = document.elementFromPoint(window.innerWidth * 0.5, window.innerHeight * 0.5)
+        ?.closest('.proxy-render-card');
+      if (retainedInert) {
+        recordPreviewDebug({ stage: 'focus-close-retained-proxy-inert', requestedMode: view, finalMode: 'idle' });
+      }
+      if (pointerEvents !== 'none' || proxyCard) {
+        recordPreviewDebug({
+          stage: 'focus-close-proxy-hit-owner-still-present',
+          requestedMode: view,
+          finalMode: 'idle',
+          reason: proxyCard ? 'proxy-card-hit-target' : `pointer-events-${pointerEvents}`,
+        });
+        return;
+      }
+      recordPreviewDebug({ stage: 'focus-close-grid-hit-owner-restored', requestedMode: view, finalMode: 'idle' });
+    });
+  }, [clearCloseMeasurementFrame, removeFocusProxyScrollLock, recordPreviewDebug, view]);
+
   const resetFocusPresentationToIdle = useCallback(() => {
     clearFocusStartRetryFrame();
+    clearFocusWorldMotionFrame();
+    clearCloseMeasurementFrame();
+    clearFocusedRetargetRetryFrame();
     clearFocusOverlayRevealTimer();
     setFocusPresentationState({ mode: 'idle' });
     setFocusWorldTransform({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
     resetCinematicRevealState();
-  }, [clearFocusOverlayRevealTimer, clearFocusStartRetryFrame, resetCinematicRevealState]);
+  }, [
+    clearCloseMeasurementFrame,
+    clearFocusOverlayRevealTimer,
+    clearFocusStartRetryFrame,
+    clearFocusWorldMotionFrame,
+    clearFocusedRetargetRetryFrame,
+    resetCinematicRevealState,
+  ]);
 
   const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null, reason = 'unspecified') => {
     clearFocusStartRetryFrame();
@@ -888,7 +1112,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       && focusPresentationStateRef.current.key === selectionKey;
     setFocusPresentationState({ mode: 'world-focus', key: selectionKey, overlayReady: false });
     stageCinematicReveal(isRefocus ? 'refocus' : 'open');
-    window.requestAnimationFrame(() => {
+    clearFocusWorldMotionFrame();
+    focusWorldMotionFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
+      focusWorldMotionFrameRef.current = null;
+      if (focusPresentationStateRef.current.mode !== 'world-focus') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-raf-blocked', selectionKey, requestedMode: view, finalMode: 'idle' });
+        return;
+      }
       const next = computeFocusWorldTransform(selectionKey, { continueFromCurrent: true });
       if (!next.transform) return;
       setFocusWorldTransform(next.transform);
@@ -903,17 +1133,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }, FOCUS_OVERLAY_REVEAL_DELAY_MS);
     recordPreviewDebug({ stage: 'focus-start', selectionKey, finalMode: 'world-focus' });
     return { ok: true };
-  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, recordPreviewDebug, stageCinematicReveal, view]);
+  }, [
+    clearFocusOverlayRevealTimer,
+    clearFocusWorldMotionFrame,
+    computeFocusWorldTransform,
+    recordPreviewDebug,
+    stageCinematicReveal,
+    view,
+  ]);
 
   useEffect(() => {
     if (pinchOverlayGestureActiveRef.current) {
       pinchOverlayPendingNodeCountRef.current = gridColumnCount;
       return;
     }
-    const rafId = window.requestAnimationFrame(() => {
+    const rafId = scheduleExplorerRaf('raf-lane-cinematic-reveal', () => {
       setPinchDisplayNodeCount(gridColumnCount);
     });
-    return () => window.cancelAnimationFrame(rafId);
+    return () => cancelExplorerRaf(rafId);
   }, [gridColumnCount]);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
@@ -981,8 +1218,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const clearActiveAsset = useCallback(() => {
     focusOrchestratorRef.current?.clearRetainedProxyOnDeselect();
     setActiveAssetKey('');
-    commitPreviewActivationKey('');
+    setPreviewActivationKey('');
     setPreviewPlaybackToken((prev) => prev + 1);
+    setReinforcedActiveKey('');
+    setHoldEmphasisKey('');
+    previewPlaybackHandoffRef.current = null;
     setFocused(null);
     setPreviewDetailsOpen(false);
   }, []);
@@ -1568,7 +1808,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       requestedMode,
       reason: initialStart.reason,
     });
-    focusStartRetryFrameRef.current = window.requestAnimationFrame(() => {
+    focusStartRetryFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
       focusStartRetryFrameRef.current = null;
       const retryStart = startFocusMotionForSelectionKey(selectionKey);
       recordPreviewDebug({
@@ -1594,19 +1834,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (typeof document === 'undefined') return;
     const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
     const proxyVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.proxy-render-video'));
+    const gridThumbVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
+    const prewarmVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.proxy-prewarm-video'));
     const playingVideos = videos.filter((video) => !video.paused && !video.ended);
+    const focusedProxyPlaybackOwned = view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+    const unauthorizedGridThumbPlaying = focusedProxyPlaybackOwned
+      && gridThumbVideos.some((video) => !video.paused && !video.ended);
+    const unauthorizedPrewarmPlaying = focusedProxyPlaybackOwned
+      && prewarmVideos.some((video) => !video.paused && !video.ended);
+    const violationClass = unauthorizedGridThumbPlaying
+      ? 'unauthorizedGridThumbPlaying'
+      : (unauthorizedPrewarmPlaying ? 'unauthorizedPrewarmPlaying' : '');
     const payload = {
       reason,
       totalVideos: videos.length,
       proxyVideos: proxyVideos.length,
       playingVideos: playingVideos.length,
       activeSelectionKey: activeAssetKey,
+      focusedProxyPlaybackOwned,
+      unauthorizedGridThumbPlaying,
+      unauthorizedPrewarmPlaying,
+      violationClass,
     };
     (globalThis as typeof globalThis & {
       __explorerMediaDebug?: typeof payload;
       __explorerMediaInvariantViolation?: typeof payload;
     }).__explorerMediaDebug = payload;
-    if (playingVideos.length > 2) {
+    if (playingVideos.length > 2 || unauthorizedGridThumbPlaying || unauthorizedPrewarmPlaying) {
       (globalThis as typeof globalThis & {
         __explorerMediaInvariantViolation?: typeof payload;
       }).__explorerMediaInvariantViolation = {
@@ -1614,7 +1868,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         reason: 'media-invariant-violation',
       };
     }
-  }, [activeAssetKey]);
+  }, [activeAssetKey, gridCinematicMode, inspectorOpen, view]);
 
   const pauseNonAuthoritativeGridVideos = useCallback((authoritativeSelectionKey: string) => {
     const gridRoot = gridRef.current;
@@ -1623,13 +1877,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     thumbVideos.forEach((videoEl) => {
       const selectionKey = videoEl.closest<HTMLElement>('.masonry-card[data-select-key]')?.dataset.selectKey || '';
       if (selectionKey && selectionKey === authoritativeSelectionKey) return;
-      if (!videoEl.paused) {
+      if (!videoEl.paused || videoEl.currentTime !== 0) {
         videoEl.pause();
         videoEl.currentTime = 0;
         (globalThis as typeof globalThis & {
           __explorerMediaDebugMarker?: { marker: string; selectionKey: string };
         }).__explorerMediaDebugMarker = {
-          marker: 'grid-thumb-paused-non-authoritative',
+          marker: 'grid-thumb-paused-authority-enforced',
           selectionKey,
         };
       }
@@ -1640,13 +1894,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const playGridThumbForSelectionKey = useCallback((selectionKey: string) => {
     const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
     if (!thumbVideo) return;
+    const focusedProxyPlaybackOwned = view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+    if (focusedProxyPlaybackOwned) {
+      thumbVideo.pause();
+      thumbVideo.currentTime = 0;
+      (globalThis as typeof globalThis & {
+        __explorerMediaDebugMarker?: { marker: string; selectionKey: string };
+      }).__explorerMediaDebugMarker = {
+        marker: 'grid-thumb-play-blocked-non-authoritative',
+        selectionKey,
+      };
+      publishMediaInvariantDebug('grid-thumb-play-blocked');
+      return;
+    }
     thumbVideo.muted = true;
     thumbVideo.playsInline = true;
     thumbVideo.loop = true;
     pauseNonAuthoritativeGridVideos(selectionKey);
     thumbVideo.play().catch(() => {});
     publishMediaInvariantDebug('grid-thumb-play-requested');
-  }, [getGridThumbVideoBySelectionKey, pauseNonAuthoritativeGridVideos, publishMediaInvariantDebug]);
+  }, [getGridThumbVideoBySelectionKey, gridCinematicMode, inspectorOpen, pauseNonAuthoritativeGridVideos, publishMediaInvariantDebug, view]);
 
   const pauseGridThumbForSelectionKey = useCallback((selectionKey: string) => {
     const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
@@ -1665,6 +1932,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const viewportEl = mediaScrollViewportRef.current;
     const orchestrator = focusOrchestratorRef.current;
     if (!gridRoot || !viewportEl || !orchestrator) return false;
+    orchestrator.interruptActiveTransition();
     const setTravelState = () => setProxyTravelState(mode === 'open' ? 'open-travel' : 'refocus-travel');
     const clearTravelState = () => setProxyTravelState('idle');
     const handleEvent = (event: string) => {
@@ -1751,30 +2019,81 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeAssetKey, activeProject, assetSelectionKey, focusAsset, getGridThumbVideoBySelectionKey, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, resetFocusPresentationToIdle, runProxyFocusTransition, view]);
 
   const closeGridFocusToRest = useCallback(() => {
+    clearCloseSettleTimeout();
+    recordPreviewDebug({ stage: 'focus-close-start', requestedMode: view });
+    focusOrchestratorRef.current?.interruptActiveTransition();
     gridCinematicTimelineRef.current?.playClose();
     setGridCinematicMode('grid-closing');
     focusOrchestratorRef.current?.closeFocusTransition({
+      onEvent: (event) => {
+        recordPreviewDebug({ stage: event, requestedMode: view });
+      },
       onComplete: () => {
-        setGridCinematicMode('grid-rest');
+        clearCloseSettleTimeout();
+        recordPreviewDebug({ stage: 'focus-close-complete', requestedMode: view });
+        commitCloseStateToRest('complete');
       },
     });
-    const viewportEl = mediaScrollViewportRef.current;
-    if (viewportEl) viewportEl.classList.remove('focus-proxy-scroll-lock');
+    removeFocusProxyScrollLock();
     setProxyTravelState('idle');
-  }, []);
+    closeSettleTimeoutRef.current = window.setTimeout(() => {
+      closeSettleTimeoutRef.current = null;
+      if (gridCinematicModeRef.current !== 'grid-rest' || proxyTravelStateRef.current !== 'idle') {
+        commitCloseStateToRest('missed');
+      }
+    }, 560);
+  }, [
+    clearCloseSettleTimeout,
+    commitCloseStateToRest,
+    recordPreviewDebug,
+    removeFocusProxyScrollLock,
+    view,
+  ]);
 
   const closeDrawer = useCallback(() => {
     if (view === 'grid') {
       closeGridFocusToRest();
     }
+    if (activeAssetKey) {
+      setActiveAssetKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-active-asset', selectionKey: activeAssetKey, requestedMode: view });
+    }
+    if (previewActivationKey) {
+      setPreviewActivationKey('');
+      setPreviewPlaybackToken((prev) => prev + 1);
+      recordPreviewDebug({ stage: 'focus-close-cleared-preview-activation', selectionKey: previewActivationKey, requestedMode: view });
+    }
+    if (reinforcedActiveKey) {
+      setReinforcedActiveKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-reinforced-active', selectionKey: reinforcedActiveKey, requestedMode: view });
+    }
+    if (holdEmphasisKey) {
+      setHoldEmphasisKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-hold-emphasis', selectionKey: holdEmphasisKey, requestedMode: view });
+    }
+    previewPlaybackHandoffRef.current = null;
     setInspectorOpen(false);
     inspectorOpenRef.current = false;
     setFocused(null);
     setPreviewDetailsOpen(false);
+    recordPreviewDebug({ stage: 'focus-close-activation-reset-complete', requestedMode: view, finalMode: 'idle' });
     window.setTimeout(() => {
       resetFocusPresentationToIdle();
     }, 96);
-  }, [closeGridFocusToRest, resetFocusPresentationToIdle, view]);
+  }, [
+    activeAssetKey,
+    closeGridFocusToRest,
+    holdEmphasisKey,
+    previewActivationKey,
+    recordPreviewDebug,
+    reinforcedActiveKey,
+    resetFocusPresentationToIdle,
+    view,
+  ]);
+
+  useEffect(() => () => {
+    clearCloseSettleTimeout();
+  }, [clearCloseSettleTimeout]);
 
   const commitPreviewActivationKey = useCallback((nextKey: string) => {
     setPreviewActivationKey((prev) => {
@@ -1808,7 +2127,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   ) => {
     recordPreviewDebug({ stage: 'focused-retarget-retry-scheduled', selectionKey: nextKey, requestedMode: view });
     recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: nextKey, requestedMode: view });
-    window.requestAnimationFrame(() => {
+    clearFocusedRetargetRetryFrame();
+    focusedRetargetRetryFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
+      focusedRetargetRetryFrameRef.current = null;
       recordPreviewDebug({ stage: 'focused-retarget-retry-attempt', selectionKey: nextKey, requestedMode: view });
       setFocused(nextItem);
       setActiveAssetKey(nextKey);
@@ -1821,7 +2142,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       recordPreviewDebug({ stage: 'focused-retarget-retry-failed', selectionKey: nextKey, requestedMode: view });
       recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: nextKey, requestedMode: view });
     });
-  }, [commitPreviewActivationKey, recordPreviewDebug, runProxyFocusTransition, view]);
+  }, [clearFocusedRetargetRetryFrame, commitPreviewActivationKey, recordPreviewDebug, runProxyFocusTransition, view]);
 
   useEffect(() => {
     if (view !== 'grid') return;
@@ -2028,7 +2349,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
     if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
-    const rafId = window.requestAnimationFrame(() => {
+    const rafId = scheduleExplorerRaf('raf-lane-measurement', () => {
+      if (focusPresentationStateRef.current.mode !== 'world-focus') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', selectionKey: activeAssetKey, requestedMode: view, finalMode: 'idle' });
+        return;
+      }
       const next = computeFocusWorldTransform(activeAssetKey, { continueFromCurrent: true });
       if (!next.transform) {
         moveFocusPresentationToFallbackOrIdle(activeAssetKey, next.reason ?? 'unsafe-transform');
@@ -2036,8 +2361,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       setFocusWorldTransform(next.transform);
     });
-    return () => window.cancelAnimationFrame(rafId);
-  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length]);
+    return () => cancelExplorerRaf(rafId);
+  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length, recordPreviewDebug, view]);
 
   useEffect(() => () => {
     resetFocusPresentationToIdle();
@@ -3201,7 +3526,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           const pendingCount = pinchOverlayPendingNodeCountRef.current;
           pinchOverlayPendingNodeCountRef.current = null;
           const nextNodeCount = pendingCount ?? density.getColumns();
-          window.requestAnimationFrame(() => {
+          scheduleExplorerRaf('raf-lane-cinematic-reveal', () => {
             setPinchDisplayNodeCount(nextNodeCount);
           });
           if (pinchPerfTimeoutRef.current) {
@@ -3464,7 +3789,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    window.requestAnimationFrame(() => composeNameInputRef.current?.focus());
+    scheduleExplorerRaf('raf-lane-other', () => composeNameInputRef.current?.focus());
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [composeModalOpen, composeSubmitting]);
 
@@ -3478,7 +3803,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    window.requestAnimationFrame(() => deleteConfirmButtonRef.current?.focus());
+    scheduleExplorerRaf('raf-lane-other', () => deleteConfirmButtonRef.current?.focus());
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [deleteModalOpen, deleteSubmitting, handleDeleteCancel]);
 
@@ -3486,6 +3811,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
   const canSelect = Boolean(activeProject) || mediaScope === 'all';
+  const suppressGridThumbPreviewLane = (
+    view === 'grid'
+    && inspectorOpen
+    && gridCinematicMode === 'grid-focused'
+    && proxyTravelState === 'idle'
+  );
   const projectLabel = useCallback((item: MediaItem) => {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
@@ -3524,7 +3855,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const isHoldEmphasis = holdEmphasisKey === selectionKey;
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
     const activeVideoPreviewUrl = (
-      isActivated && kind === 'video'
+      isActivated && kind === 'video' && !suppressGridThumbPreviewLane
         ? streamUrl
         : undefined
     );
@@ -3566,6 +3897,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     getCachedOrientation,
     holdEmphasisKey,
     projectLabel,
+    suppressGridThumbPreviewLane,
     previewActivationKey,
     previewPlaybackToken,
     reinforcedActiveKey,
@@ -3595,6 +3927,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === 'grid' && gridCinematicMode === 'grid-rest';
   const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
   const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+  const focusedProxyPlaybackOwned = proxyPreviewVisible;
+  useEffect(() => {
+    const stage = focusWorldStageRef.current;
+    if (!stage) return;
+    stage.dataset.focusWorldInteractive = focusWorldActive ? 'true' : 'false';
+    if (focusWorldActive) {
+      focusWorldIdleMarkerRef.current = false;
+      return;
+    }
+    if (focusWorldIdleMarkerRef.current) return;
+    focusWorldIdleMarkerRef.current = true;
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-inert', requestedMode: view, finalMode: 'idle' });
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', requestedMode: view, finalMode: 'idle' });
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-raf-blocked', requestedMode: view, finalMode: 'idle' });
+  }, [focusWorldActive, recordPreviewDebug, view]);
   useEffect(() => {
     proxyPrewarmSelectionKeyRef.current = proxyPrewarmSelectionKey;
     proxyPrewarmUrlRef.current = proxyPrewarmUrl;
@@ -3604,14 +3951,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
 
-    const clearPrewarm = () => {
+    const publishPrewarmMarker = (marker: string) => {
+      (globalThis as typeof globalThis & {
+        __explorerMediaDebugMarker?: { marker: string; selectionKey: string; prewarmUrl?: string };
+      }).__explorerMediaDebugMarker = {
+        marker,
+        selectionKey: proxyPrewarmSelectionKey || '',
+        prewarmUrl: proxyPrewarmUrl || '',
+      };
+    };
+    const clearPrewarm = (reason?: 'blocked' | 'released') => {
+      const shouldEmitPaused = !prewarmVideo.paused || prewarmVideo.currentTime !== 0;
       prewarmVideo.pause();
+      prewarmVideo.currentTime = 0;
+      if (shouldEmitPaused) publishPrewarmMarker('prewarm-video-paused');
       prewarmVideo.removeAttribute('src');
       prewarmVideo.load();
+      if (reason === 'blocked') publishPrewarmMarker('prewarm-video-blocked-non-authoritative');
+      if (reason === 'released' || reason === 'blocked') publishPrewarmMarker('prewarm-video-released');
       proxyPrewarmReadyStateRef.current = 0;
     };
-    if (!proxyPrewarmUrl || proxyPreviewVisible) {
-      clearPrewarm();
+    if (!proxyPrewarmUrl) {
+      clearPrewarm('released');
+      return;
+    }
+    if (focusedProxyPlaybackOwned) {
+      clearPrewarm('blocked');
       return;
     }
 
@@ -3619,42 +3984,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     prewarmVideo.defaultMuted = true;
     prewarmVideo.playsInline = true;
     prewarmVideo.loop = true;
-    prewarmVideo.preload = 'auto';
+    prewarmVideo.preload = 'metadata';
     if (prewarmVideo.src !== proxyPrewarmUrl) {
       prewarmVideo.src = proxyPrewarmUrl;
     }
     prewarmVideo.load();
     proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
 
-    const tryPrimeFrame = () => {
-      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-      if (prewarmVideo.readyState < 2) return;
-      prewarmVideo.play()
-        .then(() => {
-          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-        })
-        .catch(() => {
-          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-        });
-    };
     const onLoadedMetadata = () => {
       proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
     };
-    const onLoadedData = () => {
-      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-      tryPrimeFrame();
-    };
     prewarmVideo.addEventListener('loadedmetadata', onLoadedMetadata);
-    prewarmVideo.addEventListener('loadeddata', onLoadedData);
-    tryPrimeFrame();
 
     return () => {
       prewarmVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
-      prewarmVideo.removeEventListener('loadeddata', onLoadedData);
     };
-  }, [proxyPreviewVisible, proxyPrewarmSelectionKey, proxyPrewarmUrl]);
+  }, [focusedProxyPlaybackOwned, proxyPrewarmSelectionKey, proxyPrewarmUrl]);
   useEffect(() => {
     if (!proxyPreviewVisible) {
+      if (GLOBAL_PROXY_RAF_ID !== null) {
+        cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
+        GLOBAL_PROXY_RAF_ID = null;
+      }
+      GLOBAL_PROXY_RAF_ACTIVE = false;
+      setExplorerRafLaneActive('raf-lane-proxy-active-card', false);
+      publishExplorerRafDebug();
       setActiveProxyCardEl(null);
       setActiveProxyUiSlotEl(null);
       setProxyPlaybackPlaying(false);
@@ -3664,7 +4018,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     const root = focusProxyRootRef.current;
     if (!root) return;
-    let rafId = 0;
+    if (GLOBAL_PROXY_RAF_ID !== null) {
+      cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
+      GLOBAL_PROXY_RAF_ID = null;
+    }
+    GLOBAL_PROXY_RAF_ACTIVE = false;
     const syncActiveCard = () => {
       const activeCard = root.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
       setActiveProxyCardEl((prev) => (prev === activeCard ? prev : activeCard));
@@ -3672,11 +4030,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setActiveProxyUiSlotEl((prev) => (prev === uiSlot ? prev : uiSlot));
     };
     const tick = () => {
+      if (!GLOBAL_PROXY_RAF_ACTIVE) return;
       syncActiveCard();
-      rafId = window.requestAnimationFrame(tick);
+      GLOBAL_PROXY_RAF_ID = scheduleExplorerRaf('raf-lane-proxy-active-card', tick);
+      publishExplorerRafDebug();
     };
-    rafId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(rafId);
+    GLOBAL_PROXY_RAF_ACTIVE = true;
+    setExplorerRafLaneActive('raf-lane-proxy-active-card', true);
+    GLOBAL_PROXY_RAF_ID = scheduleExplorerRaf('raf-lane-proxy-active-card', tick);
+    publishExplorerRafDebug();
+    return () => {
+      GLOBAL_PROXY_RAF_ACTIVE = false;
+      if (GLOBAL_PROXY_RAF_ID !== null) {
+        cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
+        GLOBAL_PROXY_RAF_ID = null;
+      }
+      setExplorerRafLaneActive('raf-lane-proxy-active-card', false);
+      publishExplorerRafDebug();
+    };
   }, [proxyPreviewVisible]);
   const activeProxyVideoEl = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
   const activeProxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';

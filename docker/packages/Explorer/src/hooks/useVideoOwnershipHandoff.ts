@@ -155,6 +155,7 @@ export function useVideoOwnershipHandoff({
   const canPlaySeenRef = useRef(false);
   const playingSeenRef = useRef(false);
   const activeRunTokenRef = useRef<symbol | null>(null);
+  const previewRunVersionRef = useRef(0);
   const resumeSourceRef = useRef<'handoff-live' | 'focused-session-warm-reopen' | 'resume-store-cold-reopen' | 'none-start-at-zero'>('none-start-at-zero');
   const runTokenLabelRef = useRef('run:idle');
   const activeResumeWriterVersionRef = useRef(0);
@@ -385,14 +386,20 @@ export function useVideoOwnershipHandoff({
     }
 
     let alive = true;
+    if (activeRunTokenRef.current) {
+      publishDebug('preview-session-interrupted', proxyVideoEl);
+    }
     const runToken = Symbol('video-ownership-run');
-    runTokenLabelRef.current = `${String(selectionKey)}::${String(playToken)}::${Date.now()}`;
+    const runVersion = previewRunVersionRef.current + 1;
+    previewRunVersionRef.current = runVersion;
+    runTokenLabelRef.current = `${String(selectionKey)}::${String(playToken)}::run-${String(runVersion)}`;
     activeRunTokenRef.current = runToken;
     let sawTimeProgress = false;
     let promoted = false;
     const resumeSnapshot = getVideoResumeSnapshot(continuityKey);
 
     if (isSessionChanged) {
+      publishDebug('preview-session-superseded', proxyVideoEl);
       setVisualOwner('poster');
       authoritativeVisualSurfaceRef.current = 'poster';
       setAudioOwner('none');
@@ -418,7 +425,21 @@ export function useVideoOwnershipHandoff({
     proxyVideoEl.playsInline = true;
     proxyVideoEl.preload = 'auto';
 
+    const isLatestRun = () => (
+      alive
+      && activeRunTokenRef.current === runToken
+      && latestSessionKeyRef.current === continuityKey
+      && previewRunVersionRef.current === runVersion
+    );
+    const guardLatestCommit = (reason: string) => {
+      if (isLatestRun()) return true;
+      publishDebug('preview-session-commit-blocked-stale', proxyVideoEl);
+      publishDebug(reason, proxyVideoEl);
+      return false;
+    };
+
     const syncPlaybackState = (reason: string) => {
+      if (!isLatestRun()) return;
       const currentTime = Number.isFinite(proxyVideoEl.currentTime) ? proxyVideoEl.currentTime : 0;
       const duration = Number.isFinite(proxyVideoEl.duration) ? proxyVideoEl.duration : 0;
       const hasProgress = currentTime > 0.04;
@@ -499,7 +520,7 @@ export function useVideoOwnershipHandoff({
 
       void (async () => {
         const visiblePaint = await awaitVisibleVideoPaint(proxyVideoEl, { timeoutMs: 420 });
-        if (!alive) return;
+        if (!guardLatestCommit('preview-session-commit-blocked-stale-visible-paint')) return;
         if (!visiblePaint.ok) {
           setPromotionBlockedReason('visible-paint-timeout');
           syncPlaybackState('visible-paint-timeout');
@@ -507,11 +528,12 @@ export function useVideoOwnershipHandoff({
         }
         setVisualOwner('proxy-overlap');
         await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-        if (!alive) return;
+        if (!guardLatestCommit('preview-session-commit-blocked-stale-overlap')) return;
         setVideoReady(true);
         setFirstFramePresented(true);
         setVisualOwner('proxy');
         authoritativeVisualSurfaceRef.current = 'proxy';
+        publishDebug('preview-session-latest-commit', proxyVideoEl);
         publishDebug('poster-release-after-paint', proxyVideoEl);
         if (resumeSourceRef.current === 'focused-session-warm-reopen') {
           publishDebug('poster-release-same-asset-reopen', proxyVideoEl);
@@ -566,7 +588,7 @@ export function useVideoOwnershipHandoff({
       }
       playPromise.catch((error: unknown) => {
         const err = error as { name?: string } | null | undefined;
-        if (!alive || activeRunTokenRef.current !== runToken) return;
+        if (!isLatestRun()) return;
         if (latestSessionKeyRef.current !== currentSession) return;
         if (err?.name === 'AbortError') return;
         playPromiseRejectedRef.current = true;
@@ -654,7 +676,7 @@ export function useVideoOwnershipHandoff({
 
     void (async () => {
       const frame = await awaitFirstVideoFrame(proxyVideoEl);
-      if (!alive) return;
+      if (!guardLatestCommit('preview-session-commit-blocked-stale-first-frame')) return;
       if (!frame.ok) {
         setPromotionBlockedReason('first-frame-timeout');
         tryFallbackPromote('immediate-readiness-fallback');
