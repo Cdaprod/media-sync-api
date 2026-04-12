@@ -1,3 +1,92 @@
+### Latest Implementation Notes (2026-04-06)
+- Render-layer continuity follow-up: `FocusTransitionOrchestrator.closeFocusTransition` now retains the mounted proxy renderer tree on close (opacity/pointer suppression only) instead of unmounting, enabling same-asset close/open reuse of the active proxy subtree.
+- `useVideoOwnershipHandoff` now returns poster-threaded state (`hasPoster`, `posterShown`, `posterUrl`), and `ExplorerApp` threads those values onto active proxy card/video datasets for render-lane visibility/debug authority.
+- Added explicit proxy poster visibility dataset selector (`data-poster-shown="true"`) in styles and expanded static contracts to lock retained-close behavior + poster threading markers.
+
+### Latest Implementation Notes (2026-04-06)
+- Strengthened focused continuity resume authority in `useVideoOwnershipHandoff` with per-continuity writer versions so stale/hidden cleanup lanes cannot overwrite newer authoritative resume snapshots.
+- Tightened reopen source precedence so `handoff-live` is used only for true live thumbnail handoff (`wasPlayingBeforeHandoff` + live frame), while same-asset immediate reopen stays on `focused-session-warm-reopen`.
+- Added close-path hardening marker `focus-close-cleanup` and expanded static contracts for poster/debug threading plus authoritative resume-write guards.
+
+### Latest Implementation Notes (2026-04-06)
+- Resolved focused handoff debug-marker naming drift in `useVideoOwnershipHandoff`: disconnected/sync-throw play guards now emit canonical markers (`play-skipped-disconnected`, `play-threw-sync`) used by runtime triage notes and static contracts.
+- Updated Explorer static contracts to lock the canonical play-guard marker strings and prevent regressions back to legacy request-prefixed marker names.
+
+### Latest Implementation Notes (2026-04-06)
+- Advanced first-open focused preview fallback: staged promotion now holds poster authority until visible paint confirms, preventing blank preview when no live thumbnail frame exists yet.
+- Resume-source precedence now distinguishes live handoff vs warm same-asset reopen vs cold store restore (`handoff-live`, `focused-session-warm-reopen`, `resume-store-cold-reopen`, `none-start-at-zero`) with explicit debug attribution.
+- Added authoritative ownership guard rails: disconnected/synchronous-play-throw request lanes are safely skipped/instrumented, and renderer now publishes mount lifecycle markers (`proxy-mounted`, `proxy-reused-mounted`, `proxy-remounted`, `proxy-detached`).
+
+### Latest Implementation Notes (2026-04-06)
+- Fixed early proxy poster drop in staged promotion by deferring `setVideoReady(true)` until after visible paint confirmation + overlap frame, preventing blank focused-open when preview starts before thumbnail playback warms.
+- Hardened `requestPlay` against crash/reload regressions by skipping disconnected proxy nodes, catching synchronous `play()` throws, and emitting debug markers (`play-skipped-disconnected`, `play-threw-sync`).
+- Focused audio reconciliation now no-ops for disconnected proxy nodes, avoiding stale detached-element mutation during close/reopen churn.
+
+### Latest Implementation Notes (2026-04-06)
+- Fixed stale `play()` rejection race in `useVideoOwnershipHandoff` by guarding rejection telemetry/state writes behind both an active run token and matching continuity session key.
+- Added explicit `AbortError` ignore path for `play()` promise rejections so expected Safari abort churn from load/rebind/cleanup no longer marks current handoff as `play-rejected`.
+- Cleanup now clears active run token ownership, preventing delayed stale promise callbacks from mutating newer handoff runs.
+
+### Latest Implementation Notes (2026-04-06)
+- Added `awaitVisibleVideoPaint(...)` utility and upgraded focused promotion to staged ownership (`proxy-preparing` -> `proxy-overlap` -> `proxy`) so thumbnail-to-proxy transfer waits for visible paint confirmation instead of immediate readiness-only swap.
+- Added warm same-asset reopen precedence in `useVideoOwnershipHandoff`: resume target now prefers pending handoff, then focused-session snapshot, then per-asset resume store, with debug marker `resumeSourceUsed` for lane attribution.
+- Added focused audio reconciliation effect driven by focused ownership state (not only play-event timing), publishing explicit debug events (`audio-enabled`, `audio-muted`) and restoring reliable zoomed-preview audio while muting on close.
+
+### Latest Implementation Notes (2026-04-06)
+- Added asset-scoped playback memory utility (`playbackResumeStore`) keyed by `selectionKey::streamUrl` to persist per-asset preview resume snapshots (`currentTime`, `duration`, `wasPlaying`, `updatedAt`) during runtime.
+- `useVideoOwnershipHandoff` now restores resume target from `handoffTime` first and falls back to per-asset resume snapshot, normalizing near-end timestamps to restart-safe positions via `maybeNormalizeResumeTime(...)`.
+- Focus-close, pause, timeupdate, and cleanup paths now persist authoritative per-asset resume snapshots so revisiting previously previewed assets resumes from their last meaningful position across multi-asset preview sessions.
+
+### Latest Implementation Notes (2026-04-06)
+- `useVideoOwnershipHandoff` continuity identity now keys session reset on `continuityKey` (`selectionKey::streamUrl`) while preserving separate `playbackIntentKey` diagnostics so `playToken` churn no longer forces same-asset visual reset.
+- Focus-close behavior no longer tears down proxy decode via pause/reset when selection/source remain valid; close now demotes audio/visual ownership (`inactive-focused-closed`) while keeping warm continuity state available for fast reopen.
+- Expanded proxy playback debug payload with thumbnail-vs-proxy drift telemetry (`thumbnailVideoNodeFound`, `thumbnailCurrentTime`, `thumbnailReadyState`, `thumbnailPaused`, `timeDeltaFromThumbnail`) and wired Explorer hook input to pass active grid thumbnail video.
+
+### Latest Implementation Notes (2026-04-06)
+- Reduced focused proxy continuity churn in `useVideoOwnershipHandoff` by binding/loading the proxy `<video>` only when the stream source actually changed (`source-bound`), and reusing warm decoder state otherwise (`source-reused`).
+- Removed unconditional focused-open `load()` restart lane so same-session focused reopen/refocus no longer forces a decoder reset before play/promotion fallback checks.
+- Expanded static regression contracts to lock conditional source-binding markers and guard against reintroducing unconditional `load()` in the focused-open playback path.
+
+### Latest Implementation Notes (2026-04-06)
+- First-tap focused prewarm now keeps hidden proxy prewarm video actively playing muted/looped (instead of play-then-immediate-pause) so decode/frame state is already warm before focused-open reveal.
+- Focused proxy side-card taps now route directly through explicit refocus transition ownership (`focusAsset` + `runProxyFocusTransition(...,'refocus')`) before fallback preview open, preserving animated lateral/up-down travel while already zoomed.
+- Updated static regression contracts to lock active prewarm playback markers and in-focus side-card refocus routing markers.
+
+### Latest Implementation Notes (2026-04-05)
+- Fixed a runtime `ReferenceError: Cannot access uninitialized variable` in `ExplorerApp` by removing early TDZ usage of `handleProxyTogglePlay` from proxy-root effect dependencies before callback initialization.
+- Active-card tap-to-toggle now executes inline media toggle logic within the proxy pointer handler (same behavior, no forward-reference TDZ risk).
+- Kept focused proxy tap-to-toggle semantics and existing interactive-control guards intact.
+
+### Latest Implementation Notes (2026-04-05)
+- Hardening pass for focused proxy ownership session: `useVideoOwnershipHandoff` now tracks an explicit `sessionKey` (`selectionKey::streamUrl::playToken`) and only performs poster/reset bootstrap on true session changes.
+- Moved handoff callbacks (`onPromoted`, `onHandoffConsumed`, `onDebug`) behind refs to prevent callback identity churn from restarting the ownership bootstrap effect.
+- Added direct promotion write-through on live active card/video datasets (`data-first-frame-presented`, `data-video-ready`, `data-promotion-strategy`, `data-proxy-session-id`) plus expanded runtime diagnostics (`videoStableId`, `cardVideoReady`, `cardFirstFramePresented`, `currentSrc`, `sessionKey`).
+
+### Latest Implementation Notes (2026-04-05)
+- Added focused proxy tap-to-toggle playback in `ExplorerApp` proxy-root pointer handling: tapping the active proxy media surface now routes to `handleProxyTogglePlay()` while preserving existing interactive-control guards.
+- Added a `timeupdate-fallback` promotion lane in `useVideoOwnershipHandoff` so first-frame promotion can recover when earlier readiness events are missed but playback time is advancing.
+- This resolves focused-preview stuck-poster/still-frame behavior while restoring expected tap play/pause semantics on mobile Safari.
+
+### Latest Implementation Notes (2026-04-05)
+- Fixed focused proxy video still-frame regression on LAN/mobile hosts by canonicalizing proxy/grid stream URLs to absolute API-backed URLs (`resolvedApiBase` with `:8787` fallback) before renderer/handoff use.
+- Corrected focused proxy stream fallback to use `proxyAsset?.src` (preview adapter output) instead of non-existent `streamUrl`, preventing empty stream fallback chains.
+- Reordered `useVideoOwnershipHandoff` event listener attachment to occur before `load()/play()` priming so fast `loadeddata/canplay/play` events cannot be missed during focused-open promotion.
+
+### Latest Implementation Notes (2026-04-05)
+- Fixed focused proxy playback regression where `useVideoOwnershipHandoff` effect was restarting on internal debug-state updates, causing repeated teardown/pause/load loops that left video visually stalled.
+- Stabilized debug publishing with a `latestDebugStateRef` snapshot so hook side effects no longer depend on mutable promotion/ownership state transitions.
+- This keeps focused proxy playback continuity intact while preserving full stall-diagnostics payload updates in `__explorerProxyPlaybackDebug`.
+
+### Latest Implementation Notes (2026-04-05)
+- Repaired focused proxy stream-source authority in `ExplorerApp` by deriving a dedicated `proxyAsset`/`proxyStreamUrl` from the active proxy selection + renderer dataset/video source fallback chain.
+- `useVideoOwnershipHandoff` now receives the active proxy stream URL (`proxyStreamUrl`) instead of relying only on focused drawer normalization, preventing empty-stream short-circuiting during focused proxy ownership.
+- Proxy renderer now mirrors active media source on dataset (`data-stream-url`) and first-frame CSS gating also honors `data-first-frame-presented="true"` to hide poster/scrim only after frame-promotion truth is available.
+
+### Latest Implementation Notes (2026-04-05)
+- Updated `useVideoOwnershipHandoff` focused-open priming to always attempt muted `load() + play()` startup and removed promotion start gating on `wasPlayingBeforeHandoff`.
+- Added explicit promotion fallback lanes (`loadeddata-fallback`, `canplay-fallback`, `playing-fallback`, `immediate-readiness-fallback`) so poster ownership can promote even when RVFC readiness does not resolve in Safari-like runtimes.
+- Extended focused handoff debug telemetry with stall diagnostics (`playRequested`, `playPromiseRejected`, `loadedMetadataSeen`, `loadedDataSeen`, `canPlaySeen`, `playingSeen`, `promotionBlockedReason`) for runtime failure triage.
+
 ### Latest Implementation Notes (2026-04-05)
 - Fixed a focused playback runtime crash in `ExplorerApp` by replacing an undefined `proxyAsset` reference with `normalizedPreviewAsset` when wiring `useVideoOwnershipHandoff` stream URL input.
 - This restores hook initialization safety under normal render paths and prevents `ReferenceError: Can't find variable: proxyAsset` in preview open flows.

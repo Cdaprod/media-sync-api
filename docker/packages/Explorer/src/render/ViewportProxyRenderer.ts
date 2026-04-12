@@ -14,6 +14,8 @@ export class ViewportProxyRenderer {
   private activePosterEl: HTMLImageElement | null = null;
   private activeVideoNodeStableId = 0;
   private renderPassCount = 0;
+  private proxyMountedState = 'proxy-detached';
+  private mediaReleaseVersion = 0;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -23,10 +25,10 @@ export class ViewportProxyRenderer {
     if (this.mounted) return;
     this.root.dataset.proxyRendererMounted = 'true';
     this.root.innerHTML = `
-      <div class="proxy-render-surface">
-        <div class="proxy-render-world">
-          <div class="proxy-render-ambient-layer"></div>
-          <div class="proxy-render-active-layer"></div>
+      <div class="proxy-render-surface" data-focus-proxy-layer="true">
+        <div class="proxy-render-world" data-focus-proxy-layer="true">
+          <div class="proxy-render-ambient-layer" data-focus-proxy-layer="true"></div>
+          <div class="proxy-render-active-layer" data-focus-proxy-layer="true"></div>
         </div>
       </div>
     `;
@@ -37,17 +39,53 @@ export class ViewportProxyRenderer {
   }
 
   unmount() {
+    this.clearActiveCard();
     this.root.innerHTML = '';
     delete this.root.dataset.proxyRendererMounted;
     this.mounted = false;
     this.worldEl = null;
     this.ambientLayerEl = null;
     this.activeLayerEl = null;
-    this.activeSelectionKey = '';
-    this.activeCardEl = null;
-    this.activeVideoEl = null;
-    this.activePosterEl = null;
     this.renderPassCount = 0;
+    this.proxyMountedState = 'proxy-detached';
+  }
+
+  private publishLifecycleMarker(marker: string, detail?: Record<string, string>) {
+    this.mediaReleaseVersion += 1;
+    const payload = {
+      marker,
+      version: this.mediaReleaseVersion,
+      selectionKey: this.activeSelectionKey,
+      ...detail,
+    };
+    (globalThis as typeof globalThis & {
+      __explorerProxyRendererLifecycleDebug?: {
+        marker: string;
+        version: number;
+        selectionKey: string;
+      } & Record<string, string | number>;
+    }).__explorerProxyRendererLifecycleDebug = payload;
+  }
+
+  private releaseVideoElement(videoEl: HTMLVideoElement | null) {
+    if (!videoEl) return;
+    videoEl.pause();
+    videoEl.muted = true;
+    videoEl.defaultMuted = true;
+    this.publishLifecycleMarker('proxy-video-released', {
+      stableVideoId: videoEl.dataset.proxyStableVideoId || '',
+    });
+    if (videoEl.hasAttribute('src')) {
+      videoEl.removeAttribute('src');
+      this.publishLifecycleMarker('proxy-video-removed-src', {
+        stableVideoId: videoEl.dataset.proxyStableVideoId || '',
+      });
+    }
+    videoEl.load();
+    this.publishLifecycleMarker('proxy-video-load-reset', {
+      stableVideoId: videoEl.dataset.proxyStableVideoId || '',
+    });
+    videoEl.remove();
   }
 
   private ensureLayers() {
@@ -65,6 +103,7 @@ export class ViewportProxyRenderer {
   }
 
   private buildAmbientCardHtml(card: RenderCardSnapshot) {
+    // Focused retarget contract: the proxy card root is the primary hit target for asset retarget.
     const selectedClass = card.selected ? 'is-selected' : '';
     const thumb = card.thumbUrl
       ? `<img src="${card.thumbUrl}" alt="">`
@@ -73,8 +112,10 @@ export class ViewportProxyRenderer {
     return `
       <div
         class="proxy-render-card is-ambient ${selectedClass}"
+        data-focus-proxy-layer="true"
         data-selection-key="${card.selectionKey}"
         data-select-key="${card.selectionKey}"
+        data-proxy-hit-target="card-root"
         data-proxy-active="false"
         data-video-ready="false"
         data-proxy-media-branch="${card.thumbUrl ? 'thumb' : 'fallback'}"
@@ -86,12 +127,13 @@ export class ViewportProxyRenderer {
           --proxy-chrome-scale:${clampChromeScale(card.rect.width)};
         "
       >
-        <div class="proxy-render-thumb">${thumb}</div>
+        <div class="proxy-render-thumb" data-proxy-hit-target="card-child">${thumb}</div>
       </div>
     `;
   }
 
   private clearActiveCard() {
+    this.releaseVideoElement(this.activeVideoEl);
     if (this.activeLayerEl) {
       this.activeLayerEl.innerHTML = '';
     }
@@ -99,6 +141,7 @@ export class ViewportProxyRenderer {
     this.activeCardEl = null;
     this.activeVideoEl = null;
     this.activePosterEl = null;
+    this.proxyMountedState = 'proxy-detached';
   }
 
   private ensureActiveCardShell(card: RenderCardSnapshot) {
@@ -106,12 +149,14 @@ export class ViewportProxyRenderer {
     this.activeLayerEl.innerHTML = `
       <div
         class="proxy-render-card is-active"
+        data-focus-proxy-layer="true"
         data-selection-key="${card.selectionKey}"
         data-select-key="${card.selectionKey}"
+        data-proxy-hit-target="card-root"
         data-proxy-active="true"
         data-video-ready="false"
       >
-        <div class="proxy-render-thumb"></div>
+        <div class="proxy-render-thumb" data-proxy-hit-target="card-child"></div>
       </div>
     `;
     this.activeCardEl = this.activeLayerEl.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
@@ -129,6 +174,12 @@ export class ViewportProxyRenderer {
     let activeMediaRecreated = false;
 
     if (!sameSelection) {
+      if (this.activeSelectionKey && this.activeSelectionKey !== card.selectionKey) {
+        this.publishLifecycleMarker('proxy-video-stale-selection-blocked', {
+          previousSelectionKey: this.activeSelectionKey,
+          nextSelectionKey: card.selectionKey,
+        });
+      }
       this.activeSelectionKey = card.selectionKey;
       this.ensureActiveCardShell(card);
       this.activeVideoEl = null;
@@ -146,13 +197,17 @@ export class ViewportProxyRenderer {
     if (!thumbEl) {
       return { activeNodeReused: false, activeMediaRecreated: true };
     }
+    thumbEl.dataset.proxyHitTarget = 'card-child';
 
     const mediaBranch = (card.kind === 'video' && card.mediaUrl) ? 'video' : (card.thumbUrl ? 'thumb' : 'fallback');
     activeCardEl.className = `proxy-render-card is-active ${card.selected ? 'is-selected' : ''}`;
+    activeCardEl.dataset.focusProxyLayer = 'true';
     activeCardEl.dataset.selectionKey = card.selectionKey;
     activeCardEl.dataset.selectKey = card.selectionKey;
+    activeCardEl.dataset.proxyHitTarget = 'card-root';
     activeCardEl.dataset.proxyActive = 'true';
     activeCardEl.dataset.proxyMediaBranch = mediaBranch;
+    activeCardEl.dataset.streamUrl = card.mediaUrl || '';
     activeCardEl.style.left = `${card.rect.left}px`;
     activeCardEl.style.top = `${card.rect.top}px`;
     activeCardEl.style.width = `${card.rect.width}px`;
@@ -175,11 +230,27 @@ export class ViewportProxyRenderer {
         thumbEl.appendChild(videoEl);
         this.activeVideoNodeStableId += 1;
         videoEl.dataset.proxyStableVideoId = String(this.activeVideoNodeStableId);
+        this.proxyMountedState = this.proxyMountedState === 'proxy-detached' ? 'proxy-mounted' : 'proxy-remounted';
         activeMediaRecreated = true;
+        this.publishLifecycleMarker('proxy-video-mounted', {
+          stableVideoId: videoEl.dataset.proxyStableVideoId || '',
+        });
+      }
+      else {
+        this.proxyMountedState = 'proxy-reused-mounted';
+        this.publishLifecycleMarker('proxy-video-reused', {
+          stableVideoId: videoEl.dataset.proxyStableVideoId || '',
+        });
       }
       if (videoEl.src !== card.mediaUrl) {
         videoEl.src = card.mediaUrl;
+        this.publishLifecycleMarker('proxy-video-rearm-latest-selection', {
+          stableVideoId: videoEl.dataset.proxyStableVideoId || '',
+          selectionKey: card.selectionKey,
+        });
       }
+      videoEl.dataset.streamUrl = card.mediaUrl;
+      videoEl.dataset.proxyMountedState = this.proxyMountedState;
       this.activeVideoEl = videoEl;
 
       let posterEl = this.activePosterEl;
@@ -213,8 +284,9 @@ export class ViewportProxyRenderer {
     }
     else {
       if (this.activeVideoEl) {
-        this.activeVideoEl.remove();
+        this.releaseVideoElement(this.activeVideoEl);
         this.activeVideoEl = null;
+        this.proxyMountedState = 'proxy-detached';
         activeMediaRecreated = true;
       }
       if (this.activePosterEl) {
@@ -257,6 +329,7 @@ export class ViewportProxyRenderer {
       if (!existingScrim) {
         const scrim = document.createElement('div');
         scrim.className = 'proxy-render-scrim';
+        scrim.dataset.focusProxyLayer = 'true';
         activeCardEl.appendChild(scrim);
       }
       if (!existingUiSlot) {
@@ -302,6 +375,7 @@ export class ViewportProxyRenderer {
         renderPassCount: number;
         activeNodeReused: boolean;
         activeMediaRecreated: boolean;
+        proxyMountedState: string;
       };
     }).__explorerProxyRendererDebug = {
       activeSelectionKey: this.activeSelectionKey,
@@ -309,6 +383,7 @@ export class ViewportProxyRenderer {
       renderPassCount: this.renderPassCount,
       activeNodeReused: reconcile.activeNodeReused,
       activeMediaRecreated: reconcile.activeMediaRecreated,
+      proxyMountedState: this.proxyMountedState,
     };
   }
 }

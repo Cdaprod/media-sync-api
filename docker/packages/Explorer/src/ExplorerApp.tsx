@@ -59,6 +59,7 @@ import {
   type FocusWorldGuardFailureReason,
   type FocusWorldTransform,
 } from './explorer/focus/focusWorldMotion';
+import { resolveFocusedTapTarget } from './explorer/focus/resolveFocusedTapTarget';
 import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
@@ -405,6 +406,92 @@ const SORT_LABELS: Record<SortKey, string> = {
  * Density/view/layout interactions must never replay startup loading effects.
  */
 let hasBootstrappedExplorerSession = false;
+let GLOBAL_PROXY_RAF_ID: number | null = null;
+let GLOBAL_PROXY_RAF_ACTIVE = false;
+type ExplorerRafLaneName =
+  | 'raf-lane-proxy-active-card'
+  | 'raf-lane-focus-world'
+  | 'raf-lane-cinematic-reveal'
+  | 'raf-lane-measurement'
+  | 'raf-lane-other';
+type ExplorerRafLaneDebug = {
+  active: boolean;
+  inFlight: number;
+  scheduled: number;
+  completed: number;
+  canceled: number;
+};
+const EXPLORER_RAF_LANES: ExplorerRafLaneName[] = [
+  'raf-lane-proxy-active-card',
+  'raf-lane-focus-world',
+  'raf-lane-cinematic-reveal',
+  'raf-lane-measurement',
+  'raf-lane-other',
+];
+const GLOBAL_EXPLORER_RAF_DEBUG: Record<ExplorerRafLaneName, ExplorerRafLaneDebug> = {
+  'raf-lane-proxy-active-card': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-focus-world': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-cinematic-reveal': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-measurement': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-other': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+};
+const GLOBAL_EXPLORER_RAF_REQUESTS = new Map<number, ExplorerRafLaneName>();
+
+const publishExplorerRafDebug = () => {
+  const lanes = EXPLORER_RAF_LANES.reduce<Record<ExplorerRafLaneName, ExplorerRafLaneDebug>>((acc, lane) => {
+    const state = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+    acc[lane] = { ...state };
+    return acc;
+  }, {} as Record<ExplorerRafLaneName, ExplorerRafLaneDebug>);
+  (globalThis as typeof globalThis & {
+    __explorerRafDebug?: {
+      active: boolean;
+      rafId: number | null;
+      lanes: Record<ExplorerRafLaneName, ExplorerRafLaneDebug>;
+    };
+  }).__explorerRafDebug = {
+    active: GLOBAL_PROXY_RAF_ACTIVE,
+    rafId: GLOBAL_PROXY_RAF_ID,
+    lanes,
+  };
+};
+
+const setExplorerRafLaneActive = (lane: ExplorerRafLaneName, active: boolean) => {
+  GLOBAL_EXPLORER_RAF_DEBUG[lane].active = active;
+  publishExplorerRafDebug();
+};
+
+const scheduleExplorerRaf = (lane: ExplorerRafLaneName, callback: FrameRequestCallback) => {
+  const laneDebug = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+  laneDebug.scheduled += 1;
+  laneDebug.inFlight += 1;
+  const rafId = window.requestAnimationFrame((timestamp) => {
+    const mappedLane = GLOBAL_EXPLORER_RAF_REQUESTS.get(rafId);
+    if (!mappedLane) return;
+    GLOBAL_EXPLORER_RAF_REQUESTS.delete(rafId);
+    const mappedDebug = GLOBAL_EXPLORER_RAF_DEBUG[mappedLane];
+    mappedDebug.inFlight = Math.max(0, mappedDebug.inFlight - 1);
+    mappedDebug.completed += 1;
+    publishExplorerRafDebug();
+    callback(timestamp);
+  });
+  GLOBAL_EXPLORER_RAF_REQUESTS.set(rafId, lane);
+  publishExplorerRafDebug();
+  return rafId;
+};
+
+const cancelExplorerRaf = (rafId: number | null) => {
+  if (rafId == null) return;
+  const lane = GLOBAL_EXPLORER_RAF_REQUESTS.get(rafId);
+  if (lane) {
+    const laneDebug = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+    laneDebug.inFlight = Math.max(0, laneDebug.inFlight - 1);
+    laneDebug.canceled += 1;
+    GLOBAL_EXPLORER_RAF_REQUESTS.delete(rafId);
+    publishExplorerRafDebug();
+  }
+  window.cancelAnimationFrame(rafId);
+};
 
 function useToastQueue() {
   const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
@@ -583,6 +670,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const toastNodeMapRef = useRef(new Map<string, HTMLDivElement>());
   const toastExitingRef = useRef(new Set<string>());
   const inspectorOpenRef = useRef(false);
+  const gridCinematicModeRef = useRef<GridCinematicMode>('grid-rest');
+  const proxyTravelStateRef = useRef<ProxyTravelState>('idle');
   const focusStartRetryFrameRef = useRef<number | null>(null);
   const pendingGridColumnCommitRef = useRef<number | null>(null);
   const gridColumnCommitScheduledRef = useRef(false);
@@ -600,6 +689,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const proxyPrewarmSelectionKeyRef = useRef('');
   const proxyPrewarmUrlRef = useRef('');
   const proxyPrewarmReadyStateRef = useRef(0);
+  const previewAuthoritySelectionRef = useRef('');
+  const focusedDoubleTapStateRef = useRef({ lastTapAt: 0 });
+  const focusWorldIdleMarkerRef = useRef(false);
+  const focusWorldMotionFrameRef = useRef<number | null>(null);
+  const closeMeasurementFrameRef = useRef<number | null>(null);
+  const focusedRetargetRetryFrameRef = useRef<number | null>(null);
+  const closeSettleTimeoutRef = useRef<number | null>(null);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
@@ -643,6 +739,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         gridCinematicMode,
         proxyTravelState,
         inspectorOpen: inspectorOpenRef.current,
+        activeAssetKey,
+        previewActivationKey,
+        reinforcedActiveKey,
+        holdEmphasisKey,
+        proxyLayerMounted: Boolean(document.querySelector('.focus-proxy-root [data-focus-proxy-layer="true"]')),
+        proxyLayerActive: Boolean(document.querySelector('.focus-proxy-root.is-active')),
+        retainedProxyInert: Boolean(document.querySelector('.focus-proxy-root')?.dataset.proxyRetainedInert === 'true'),
+        gridShouldOwnHits: gridCinematicMode === 'grid-rest' && proxyTravelState === 'idle' && !inspectorOpenRef.current,
+        proxyRootActive: Boolean(document.querySelector('.focus-proxy-root.is-active')),
+        scrollLockActive: Boolean(document.querySelector('.scroll')?.classList.contains('focus-proxy-scroll-lock')),
         candidates: withStyle,
       };
     };
@@ -658,7 +764,45 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         };
       }).__explorerFocusLayerDebug;
     };
-  }, [gridCinematicMode, proxyTravelState]);
+  }, [activeAssetKey, gridCinematicMode, holdEmphasisKey, previewActivationKey, proxyTravelState, reinforcedActiveKey]);
+
+  useEffect(() => {
+    gridCinematicModeRef.current = gridCinematicMode;
+  }, [gridCinematicMode]);
+
+  useEffect(() => {
+    proxyTravelStateRef.current = proxyTravelState;
+  }, [proxyTravelState]);
+
+  useEffect(() => {
+    if (inspectorOpen) return;
+    previewAuthoritySelectionRef.current = '';
+  }, [inspectorOpen]);
+
+  useEffect(() => {
+    if (view !== 'grid') return;
+    if (!inspectorOpen) return;
+    if (!activeAssetKey) return;
+    const previousSelection = previewAuthoritySelectionRef.current;
+    if (previousSelection && previousSelection !== activeAssetKey) {
+      recordPreviewDebug({
+        stage: 'preview-selection-interrupt-previous',
+        selectionKey: previousSelection,
+        requestedMode: view,
+        reason: `superseded-by:${activeAssetKey}`,
+      });
+      previewPlaybackHandoffRef.current = null;
+      proxyPrewarmSelectionKeyRef.current = '';
+      proxyPrewarmUrlRef.current = '';
+      proxyPrewarmReadyStateRef.current = 0;
+    }
+    if (previousSelection !== activeAssetKey) {
+      previewAuthoritySelectionRef.current = activeAssetKey;
+      setPreviewAutoPlayToken((prev) => prev + 1);
+      recordPreviewDebug({ stage: 'preview-selection-new-authority', selectionKey: activeAssetKey, requestedMode: view });
+      recordPreviewDebug({ stage: 'preview-selection-play-rearm', selectionKey: activeAssetKey, requestedMode: view });
+    }
+  }, [activeAssetKey, inspectorOpen, recordPreviewDebug, view]);
 
   const scheduleGridColumnCommit = useCallback((nextColumns: number) => {
     pendingGridColumnCommitRef.current = nextColumns;
@@ -720,17 +864,99 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const clearFocusStartRetryFrame = useCallback(() => {
     if (!focusStartRetryFrameRef.current) return;
-    window.cancelAnimationFrame(focusStartRetryFrameRef.current);
+    cancelExplorerRaf(focusStartRetryFrameRef.current);
     focusStartRetryFrameRef.current = null;
   }, []);
 
+  const clearFocusWorldMotionFrame = useCallback(() => {
+    if (!focusWorldMotionFrameRef.current) return;
+    cancelExplorerRaf(focusWorldMotionFrameRef.current);
+    focusWorldMotionFrameRef.current = null;
+  }, []);
+
+  const clearCloseMeasurementFrame = useCallback(() => {
+    if (!closeMeasurementFrameRef.current) return;
+    cancelExplorerRaf(closeMeasurementFrameRef.current);
+    closeMeasurementFrameRef.current = null;
+  }, []);
+
+  const clearFocusedRetargetRetryFrame = useCallback(() => {
+    if (!focusedRetargetRetryFrameRef.current) return;
+    cancelExplorerRaf(focusedRetargetRetryFrameRef.current);
+    focusedRetargetRetryFrameRef.current = null;
+  }, []);
+
+  const clearCloseSettleTimeout = useCallback(() => {
+    if (!closeSettleTimeoutRef.current) return;
+    window.clearTimeout(closeSettleTimeoutRef.current);
+    closeSettleTimeoutRef.current = null;
+  }, []);
+
+  const removeFocusProxyScrollLock = useCallback(() => {
+    const viewportEl = mediaScrollViewportRef.current;
+    if (!viewportEl) return;
+    if (viewportEl.classList.contains('focus-proxy-scroll-lock')) {
+      viewportEl.classList.remove('focus-proxy-scroll-lock');
+      recordPreviewDebug({ stage: 'focus-close-scroll-lock-removed', requestedMode: view });
+    }
+  }, [recordPreviewDebug, view]);
+
+  const commitCloseStateToRest = useCallback((reason: 'complete' | 'missed') => {
+    setGridCinematicMode('grid-rest');
+    setProxyTravelState('idle');
+    removeFocusProxyScrollLock();
+    recordPreviewDebug({
+      stage: reason === 'complete' ? 'focus-close-reset-rest' : 'focus-close-reset-missed',
+      requestedMode: view,
+      finalMode: 'idle',
+      reason: reason === 'complete' ? 'close-complete' : 'close-settle-timeout',
+    });
+    const proxyRoot = focusProxyRootRef.current;
+    clearCloseMeasurementFrame();
+    closeMeasurementFrameRef.current = scheduleExplorerRaf('raf-lane-measurement', () => {
+      closeMeasurementFrameRef.current = null;
+      if (!inspectorOpenRef.current && focusPresentationStateRef.current.mode === 'idle') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', requestedMode: view, finalMode: 'idle' });
+        return;
+      }
+      if (!proxyRoot) return;
+      const retainedInert = proxyRoot.dataset.proxyRetainedInert === 'true';
+      const pointerEvents = window.getComputedStyle(proxyRoot).pointerEvents;
+      const proxyCard = document.elementFromPoint(window.innerWidth * 0.5, window.innerHeight * 0.5)
+        ?.closest('.proxy-render-card');
+      if (retainedInert) {
+        recordPreviewDebug({ stage: 'focus-close-retained-proxy-inert', requestedMode: view, finalMode: 'idle' });
+      }
+      if (pointerEvents !== 'none' || proxyCard) {
+        recordPreviewDebug({
+          stage: 'focus-close-proxy-hit-owner-still-present',
+          requestedMode: view,
+          finalMode: 'idle',
+          reason: proxyCard ? 'proxy-card-hit-target' : `pointer-events-${pointerEvents}`,
+        });
+        return;
+      }
+      recordPreviewDebug({ stage: 'focus-close-grid-hit-owner-restored', requestedMode: view, finalMode: 'idle' });
+    });
+  }, [clearCloseMeasurementFrame, removeFocusProxyScrollLock, recordPreviewDebug, view]);
+
   const resetFocusPresentationToIdle = useCallback(() => {
     clearFocusStartRetryFrame();
+    clearFocusWorldMotionFrame();
+    clearCloseMeasurementFrame();
+    clearFocusedRetargetRetryFrame();
     clearFocusOverlayRevealTimer();
     setFocusPresentationState({ mode: 'idle' });
     setFocusWorldTransform({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
     resetCinematicRevealState();
-  }, [clearFocusOverlayRevealTimer, clearFocusStartRetryFrame, resetCinematicRevealState]);
+  }, [
+    clearCloseMeasurementFrame,
+    clearFocusOverlayRevealTimer,
+    clearFocusStartRetryFrame,
+    clearFocusWorldMotionFrame,
+    clearFocusedRetargetRetryFrame,
+    resetCinematicRevealState,
+  ]);
 
   const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null, reason = 'unspecified') => {
     clearFocusStartRetryFrame();
@@ -886,7 +1112,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       && focusPresentationStateRef.current.key === selectionKey;
     setFocusPresentationState({ mode: 'world-focus', key: selectionKey, overlayReady: false });
     stageCinematicReveal(isRefocus ? 'refocus' : 'open');
-    window.requestAnimationFrame(() => {
+    clearFocusWorldMotionFrame();
+    focusWorldMotionFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
+      focusWorldMotionFrameRef.current = null;
+      if (focusPresentationStateRef.current.mode !== 'world-focus') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-raf-blocked', selectionKey, requestedMode: view, finalMode: 'idle' });
+        return;
+      }
       const next = computeFocusWorldTransform(selectionKey, { continueFromCurrent: true });
       if (!next.transform) return;
       setFocusWorldTransform(next.transform);
@@ -901,17 +1133,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }, FOCUS_OVERLAY_REVEAL_DELAY_MS);
     recordPreviewDebug({ stage: 'focus-start', selectionKey, finalMode: 'world-focus' });
     return { ok: true };
-  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, recordPreviewDebug, stageCinematicReveal, view]);
+  }, [
+    clearFocusOverlayRevealTimer,
+    clearFocusWorldMotionFrame,
+    computeFocusWorldTransform,
+    recordPreviewDebug,
+    stageCinematicReveal,
+    view,
+  ]);
 
   useEffect(() => {
     if (pinchOverlayGestureActiveRef.current) {
       pinchOverlayPendingNodeCountRef.current = gridColumnCount;
       return;
     }
-    const rafId = window.requestAnimationFrame(() => {
+    const rafId = scheduleExplorerRaf('raf-lane-cinematic-reveal', () => {
       setPinchDisplayNodeCount(gridColumnCount);
     });
-    return () => window.cancelAnimationFrame(rafId);
+    return () => cancelExplorerRaf(rafId);
   }, [gridColumnCount]);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
@@ -977,9 +1216,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const clearActiveAsset = useCallback(() => {
+    focusOrchestratorRef.current?.clearRetainedProxyOnDeselect();
     setActiveAssetKey('');
-    commitPreviewActivationKey('');
+    setPreviewActivationKey('');
     setPreviewPlaybackToken((prev) => prev + 1);
+    setReinforcedActiveKey('');
+    setHoldEmphasisKey('');
+    previewPlaybackHandoffRef.current = null;
     setFocused(null);
     setPreviewDetailsOpen(false);
   }, []);
@@ -1062,6 +1305,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     },
     [api],
   );
+  const absolutizeMediaUrl = useCallback((path?: string) => {
+    if (!path) return '';
+    if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    if (typeof window === 'undefined') return path;
+    const fallbackBase = `${window.location.protocol}//${window.location.hostname}:8787`;
+    const base = resolvedApiBase || fallbackBase;
+    try {
+      return new URL(path, base).toString();
+    } catch {
+      return path;
+    }
+  }, [resolvedApiBase]);
   const proxyPrewarmSelectionKey = useMemo(() => (
     reinforcedActiveKey || previewActivationKey || activeAssetKey || ''
   ), [activeAssetKey, previewActivationKey, reinforcedActiveKey]);
@@ -1070,8 +1327,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const targetItem = itemsBySelectionKey.get(proxyPrewarmSelectionKey);
     if (!targetItem) return '';
     if (guessKind(targetItem) !== 'video') return '';
-    return resolveAssetUrl(normalizeThumbUrl(targetItem.stream_url || targetItem.download_url || '')) || '';
-  }, [itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
+    return absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(targetItem.stream_url || targetItem.download_url || '')) || '');
+  }, [absolutizeMediaUrl, itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
 
   const thumbDatasetSignature = useMemo(() => {
     const dataset = filteredMedia.map((item) => {
@@ -1551,7 +1808,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       requestedMode,
       reason: initialStart.reason,
     });
-    focusStartRetryFrameRef.current = window.requestAnimationFrame(() => {
+    focusStartRetryFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
       focusStartRetryFrameRef.current = null;
       const retryStart = startFocusMotionForSelectionKey(selectionKey);
       recordPreviewDebug({
@@ -1567,9 +1824,107 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     });
   }, [clearFocusStartRetryFrame, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, startFocusMotionForSelectionKey]);
 
+  const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {
+    if (!selectionKey || !gridRef.current) return null;
+    const nodes = Array.from(gridRef.current.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
+    return nodes.find((node) => node.closest<HTMLElement>('.masonry-card[data-select-key]')?.dataset.selectKey === selectionKey) || null;
+  }, []);
+
+  const publishMediaInvariantDebug = useCallback((reason: string) => {
+    if (typeof document === 'undefined') return;
+    const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
+    const proxyVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.proxy-render-video'));
+    const gridThumbVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
+    const prewarmVideos = Array.from(document.querySelectorAll<HTMLVideoElement>('.proxy-prewarm-video'));
+    const playingVideos = videos.filter((video) => !video.paused && !video.ended);
+    const focusedProxyPlaybackOwned = view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+    const unauthorizedGridThumbPlaying = focusedProxyPlaybackOwned
+      && gridThumbVideos.some((video) => !video.paused && !video.ended);
+    const unauthorizedPrewarmPlaying = focusedProxyPlaybackOwned
+      && prewarmVideos.some((video) => !video.paused && !video.ended);
+    const violationClass = unauthorizedGridThumbPlaying
+      ? 'unauthorizedGridThumbPlaying'
+      : (unauthorizedPrewarmPlaying ? 'unauthorizedPrewarmPlaying' : '');
+    const payload = {
+      reason,
+      totalVideos: videos.length,
+      proxyVideos: proxyVideos.length,
+      playingVideos: playingVideos.length,
+      activeSelectionKey: activeAssetKey,
+      focusedProxyPlaybackOwned,
+      unauthorizedGridThumbPlaying,
+      unauthorizedPrewarmPlaying,
+      violationClass,
+    };
+    (globalThis as typeof globalThis & {
+      __explorerMediaDebug?: typeof payload;
+      __explorerMediaInvariantViolation?: typeof payload;
+    }).__explorerMediaDebug = payload;
+    if (playingVideos.length > 2 || unauthorizedGridThumbPlaying || unauthorizedPrewarmPlaying) {
+      (globalThis as typeof globalThis & {
+        __explorerMediaInvariantViolation?: typeof payload;
+      }).__explorerMediaInvariantViolation = {
+        ...payload,
+        reason: 'media-invariant-violation',
+      };
+    }
+  }, [activeAssetKey, gridCinematicMode, inspectorOpen, view]);
+
+  const pauseNonAuthoritativeGridVideos = useCallback((authoritativeSelectionKey: string) => {
+    const gridRoot = gridRef.current;
+    if (!gridRoot) return;
+    const thumbVideos = Array.from(gridRoot.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
+    thumbVideos.forEach((videoEl) => {
+      const selectionKey = videoEl.closest<HTMLElement>('.masonry-card[data-select-key]')?.dataset.selectKey || '';
+      if (selectionKey && selectionKey === authoritativeSelectionKey) return;
+      if (!videoEl.paused || videoEl.currentTime !== 0) {
+        videoEl.pause();
+        videoEl.currentTime = 0;
+        (globalThis as typeof globalThis & {
+          __explorerMediaDebugMarker?: { marker: string; selectionKey: string };
+        }).__explorerMediaDebugMarker = {
+          marker: 'grid-thumb-paused-authority-enforced',
+          selectionKey,
+        };
+      }
+    });
+    publishMediaInvariantDebug('grid-videos-paused');
+  }, [publishMediaInvariantDebug]);
+
+  const playGridThumbForSelectionKey = useCallback((selectionKey: string) => {
+    const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
+    if (!thumbVideo) return;
+    const focusedProxyPlaybackOwned = view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+    if (focusedProxyPlaybackOwned) {
+      thumbVideo.pause();
+      thumbVideo.currentTime = 0;
+      (globalThis as typeof globalThis & {
+        __explorerMediaDebugMarker?: { marker: string; selectionKey: string };
+      }).__explorerMediaDebugMarker = {
+        marker: 'grid-thumb-play-blocked-non-authoritative',
+        selectionKey,
+      };
+      publishMediaInvariantDebug('grid-thumb-play-blocked');
+      return;
+    }
+    thumbVideo.muted = true;
+    thumbVideo.playsInline = true;
+    thumbVideo.loop = true;
+    pauseNonAuthoritativeGridVideos(selectionKey);
+    thumbVideo.play().catch(() => {});
+    publishMediaInvariantDebug('grid-thumb-play-requested');
+  }, [getGridThumbVideoBySelectionKey, gridCinematicMode, inspectorOpen, pauseNonAuthoritativeGridVideos, publishMediaInvariantDebug, view]);
+
+  const pauseGridThumbForSelectionKey = useCallback((selectionKey: string) => {
+    const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
+    if (!thumbVideo) return;
+    thumbVideo.pause();
+    publishMediaInvariantDebug('grid-thumb-paused-selection');
+  }, [getGridThumbVideoBySelectionKey, publishMediaInvariantDebug]);
+
   const runProxyFocusTransition = useCallback((
     selectionKey: string,
-    mode: 'open' | 'refocus',
+    mode: 'open' | 'refocus' | 'retarget',
     onComplete?: () => void,
   ) => {
     if (view !== 'grid') return false;
@@ -1577,19 +1932,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const viewportEl = mediaScrollViewportRef.current;
     const orchestrator = focusOrchestratorRef.current;
     if (!gridRoot || !viewportEl || !orchestrator) return false;
+    orchestrator.interruptActiveTransition();
     const setTravelState = () => setProxyTravelState(mode === 'open' ? 'open-travel' : 'refocus-travel');
     const clearTravelState = () => setProxyTravelState('idle');
     const handleEvent = (event: string) => {
       recordPreviewDebug({ stage: event, selectionKey, requestedMode: view });
     };
+    const continuityItem = itemsBySelectionKey.get(selectionKey) ?? null;
+    const continuityAsset = continuityItem ? normalizePreviewAsset(continuityItem, resolveAssetUrl) : null;
+    const continuityStreamUrl = absolutizeMediaUrl(continuityAsset?.src || '');
+    const continuityKey = continuityStreamUrl ? `${selectionKey}::${continuityStreamUrl}` : selectionKey;
     const transitionArgs = {
       gridRoot,
       viewportEl,
       selectionKey,
+      continuityKey,
       onStart: () => {
         setTravelState();
         setGridCinematicMode(mode === 'open' ? 'grid-opening' : 'grid-refocusing');
         viewportEl.classList.add('focus-proxy-scroll-lock');
+        pauseNonAuthoritativeGridVideos(selectionKey);
       },
       onComplete: () => {
         clearTravelState();
@@ -1601,36 +1963,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
     const opened = mode === 'open'
       ? orchestrator.openFocusTransition(transitionArgs)
-      : orchestrator.refocusTransition(transitionArgs);
+      : (mode === 'retarget'
+        ? orchestrator.retargetTransition(transitionArgs)
+        : orchestrator.refocusTransition(transitionArgs));
     if (!opened) {
+      if (mode === 'retarget') {
+        handleEvent('focused-retarget-runProxyFocusTransition-false');
+        return false;
+      }
       clearTravelState();
       setGridCinematicMode('grid-rest');
       viewportEl.classList.remove('focus-proxy-scroll-lock');
       handleEvent('proxy-failed');
     }
     return opened;
-  }, [recordPreviewDebug, view]);
-
-  const getGridThumbVideoBySelectionKey = useCallback((selectionKey: string) => {
-    if (!selectionKey || !gridRef.current) return null;
-    const nodes = Array.from(gridRef.current.querySelectorAll<HTMLVideoElement>('.masonry-card[data-select-key] .asset-thumb-preview'));
-    return nodes.find((node) => node.closest<HTMLElement>('.masonry-card[data-select-key]')?.dataset.selectKey === selectionKey) || null;
-  }, []);
-
-  const playGridThumbForSelectionKey = useCallback((selectionKey: string) => {
-    const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
-    if (!thumbVideo) return;
-    thumbVideo.muted = true;
-    thumbVideo.playsInline = true;
-    thumbVideo.loop = true;
-    thumbVideo.play().catch(() => {});
-  }, [getGridThumbVideoBySelectionKey]);
-
-  const pauseGridThumbForSelectionKey = useCallback((selectionKey: string) => {
-    const thumbVideo = getGridThumbVideoBySelectionKey(selectionKey);
-    if (!thumbVideo) return;
-    thumbVideo.pause();
-  }, [getGridThumbVideoBySelectionKey]);
+  }, [absolutizeMediaUrl, itemsBySelectionKey, normalizePreviewAsset, pauseNonAuthoritativeGridVideos, recordPreviewDebug, resolveAssetUrl, view]);
 
   const openPreview = useCallback((item: MediaItem) => {
     const nextKey = assetSelectionKey(item, activeProject);
@@ -1672,30 +2019,81 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeAssetKey, activeProject, assetSelectionKey, focusAsset, getGridThumbVideoBySelectionKey, gridCinematicMode, moveFocusPresentationToFallbackOrIdle, recordPreviewDebug, resetFocusPresentationToIdle, runProxyFocusTransition, view]);
 
   const closeGridFocusToRest = useCallback(() => {
+    clearCloseSettleTimeout();
+    recordPreviewDebug({ stage: 'focus-close-start', requestedMode: view });
+    focusOrchestratorRef.current?.interruptActiveTransition();
     gridCinematicTimelineRef.current?.playClose();
     setGridCinematicMode('grid-closing');
     focusOrchestratorRef.current?.closeFocusTransition({
+      onEvent: (event) => {
+        recordPreviewDebug({ stage: event, requestedMode: view });
+      },
       onComplete: () => {
-        setGridCinematicMode('grid-rest');
+        clearCloseSettleTimeout();
+        recordPreviewDebug({ stage: 'focus-close-complete', requestedMode: view });
+        commitCloseStateToRest('complete');
       },
     });
-    const viewportEl = mediaScrollViewportRef.current;
-    if (viewportEl) viewportEl.classList.remove('focus-proxy-scroll-lock');
+    removeFocusProxyScrollLock();
     setProxyTravelState('idle');
-  }, []);
+    closeSettleTimeoutRef.current = window.setTimeout(() => {
+      closeSettleTimeoutRef.current = null;
+      if (gridCinematicModeRef.current !== 'grid-rest' || proxyTravelStateRef.current !== 'idle') {
+        commitCloseStateToRest('missed');
+      }
+    }, 560);
+  }, [
+    clearCloseSettleTimeout,
+    commitCloseStateToRest,
+    recordPreviewDebug,
+    removeFocusProxyScrollLock,
+    view,
+  ]);
 
   const closeDrawer = useCallback(() => {
     if (view === 'grid') {
       closeGridFocusToRest();
     }
+    if (activeAssetKey) {
+      setActiveAssetKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-active-asset', selectionKey: activeAssetKey, requestedMode: view });
+    }
+    if (previewActivationKey) {
+      setPreviewActivationKey('');
+      setPreviewPlaybackToken((prev) => prev + 1);
+      recordPreviewDebug({ stage: 'focus-close-cleared-preview-activation', selectionKey: previewActivationKey, requestedMode: view });
+    }
+    if (reinforcedActiveKey) {
+      setReinforcedActiveKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-reinforced-active', selectionKey: reinforcedActiveKey, requestedMode: view });
+    }
+    if (holdEmphasisKey) {
+      setHoldEmphasisKey('');
+      recordPreviewDebug({ stage: 'focus-close-cleared-hold-emphasis', selectionKey: holdEmphasisKey, requestedMode: view });
+    }
+    previewPlaybackHandoffRef.current = null;
     setInspectorOpen(false);
     inspectorOpenRef.current = false;
     setFocused(null);
     setPreviewDetailsOpen(false);
+    recordPreviewDebug({ stage: 'focus-close-activation-reset-complete', requestedMode: view, finalMode: 'idle' });
     window.setTimeout(() => {
       resetFocusPresentationToIdle();
     }, 96);
-  }, [closeGridFocusToRest, resetFocusPresentationToIdle, view]);
+  }, [
+    activeAssetKey,
+    closeGridFocusToRest,
+    holdEmphasisKey,
+    previewActivationKey,
+    recordPreviewDebug,
+    reinforcedActiveKey,
+    resetFocusPresentationToIdle,
+    view,
+  ]);
+
+  useEffect(() => () => {
+    clearCloseSettleTimeout();
+  }, [clearCloseSettleTimeout]);
 
   const commitPreviewActivationKey = useCallback((nextKey: string) => {
     setPreviewActivationKey((prev) => {
@@ -1718,10 +2116,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused(nextItem);
     setActiveAssetKey(nextKey);
     commitPreviewActivationKey(nextKey);
-    const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');
+    const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');
     if (!proxyOpened) return;
     setPreviewAutoPlayToken((prev) => prev + 1);
   }, [activeProject, assetSelectionKey, commitPreviewActivationKey, filteredMedia, focused, runProxyFocusTransition]);
+
+  const scheduleFocusedRetargetRetry = useCallback((
+    nextItem: MediaItem,
+    nextKey: string,
+  ) => {
+    recordPreviewDebug({ stage: 'focused-retarget-retry-scheduled', selectionKey: nextKey, requestedMode: view });
+    recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: nextKey, requestedMode: view });
+    clearFocusedRetargetRetryFrame();
+    focusedRetargetRetryFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
+      focusedRetargetRetryFrameRef.current = null;
+      recordPreviewDebug({ stage: 'focused-retarget-retry-attempt', selectionKey: nextKey, requestedMode: view });
+      setFocused(nextItem);
+      setActiveAssetKey(nextKey);
+      commitPreviewActivationKey(nextKey);
+      const retryOpened = runProxyFocusTransition(nextKey, 'retarget');
+      if (retryOpened) {
+        recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
+        return;
+      }
+      recordPreviewDebug({ stage: 'focused-retarget-retry-failed', selectionKey: nextKey, requestedMode: view });
+      recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: nextKey, requestedMode: view });
+    });
+  }, [clearFocusedRetargetRetryFrame, commitPreviewActivationKey, recordPreviewDebug, runProxyFocusTransition, view]);
 
   useEffect(() => {
     if (view !== 'grid') return;
@@ -1730,6 +2151,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const viewportEl = mediaScrollViewportRef.current;
     if (!viewportEl) return;
     const handlePointerDown = (event: PointerEvent) => {
+      const isProxyOrigin = event.composedPath().some((node) => (
+        node instanceof HTMLElement
+        && node.dataset.focusProxyLayer === 'true'
+      ));
+      if (isProxyOrigin) {
+        recordPreviewDebug({ stage: 'focused-retarget-delegated-to-proxy-root', selectionKey: activeAssetKey, requestedMode: view });
+        recordPreviewDebug({ stage: 'viewport-close-blocked-proxy-origin', selectionKey: activeAssetKey, requestedMode: view });
+        return;
+      }
       const targetEl = event.target as HTMLElement | null;
       if (!targetEl) return;
       const cardEl = targetEl.closest<HTMLElement>('.masonry-card[data-select-key]');
@@ -1738,20 +2168,30 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         return;
       }
       const nextKey = cardEl.dataset.selectKey || '';
-      if (!nextKey || nextKey === activeAssetKey) return;
+      recordPreviewDebug({ stage: 'focused-retarget-tap', selectionKey: nextKey || activeAssetKey, requestedMode: view });
+      if (!nextKey) return;
+      if (nextKey === activeAssetKey) {
+        recordPreviewDebug({ stage: 'focused-retarget-blocked-same-key', selectionKey: nextKey, requestedMode: view });
+        return;
+      }
       const nextItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === nextKey);
       if (!nextItem) return;
       event.preventDefault();
       event.stopPropagation();
+      recordPreviewDebug({ stage: 'focused-retarget-resolved-key', selectionKey: nextKey, requestedMode: view });
       setFocused(nextItem);
       setActiveAssetKey(nextKey);
       commitPreviewActivationKey(nextKey);
-      const proxyOpened = runProxyFocusTransition(nextKey, 'refocus');
-      if (!proxyOpened) return;
+      const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');
+      if (!proxyOpened) {
+        scheduleFocusedRetargetRetry(nextItem, nextKey);
+        return;
+      }
+      recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
     };
     viewportEl.addEventListener('pointerdown', handlePointerDown, true);
     return () => viewportEl.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, commitPreviewActivationKey, filteredMedia, gridCinematicMode, inspectorOpen, runProxyFocusTransition, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, commitPreviewActivationKey, filteredMedia, gridCinematicMode, inspectorOpen, runProxyFocusTransition, scheduleFocusedRetargetRetry, view]);
 
   useEffect(() => {
     if (view !== 'grid') return;
@@ -1762,6 +2202,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const handleProxyPointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
       if (!target) return;
+      if (event.pointerType === 'touch') {
+        const now = Date.now();
+        const withinDoubleTapWindow = (now - focusedDoubleTapStateRef.current.lastTapAt) <= 320;
+        const isControlTarget = Boolean(
+          target.closest('input, textarea, select, button, a, [contenteditable=\"true\"], [data-interactive=\"true\"]'),
+        );
+        if (withinDoubleTapWindow && !isControlTarget) {
+          event.preventDefault();
+          recordPreviewDebug({ stage: 'focused-doubletap-suppressed', selectionKey: activeAssetKey, requestedMode: view });
+        }
+        if (withinDoubleTapWindow && isControlTarget) {
+          recordPreviewDebug({ stage: 'focused-doubletap-allowed-control', selectionKey: activeAssetKey, requestedMode: view });
+        }
+        focusedDoubleTapStateRef.current.lastTapAt = now;
+      }
       if (target.closest('.proxy-preview-ui')) return;
       const action = target.closest<HTMLElement>('[data-proxy-action]')?.dataset.proxyAction;
       if (action === 'close') {
@@ -1779,29 +2234,126 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         focusRelative(1);
         return;
       }
-      const cardEl = target.closest<HTMLElement>('.proxy-render-card[data-selection-key]');
+      recordPreviewDebug({ stage: 'focused-retarget-tap', selectionKey: activeAssetKey, requestedMode: view });
+      const tapTarget = resolveFocusedTapTarget(target);
+      if (tapTarget.kind === 'proxy-surface') {
+        recordPreviewDebug({ stage: 'focused-tap-hit-proxy-surface', selectionKey: activeAssetKey, requestedMode: view });
+      }
+      if (tapTarget.kind === 'body') {
+        recordPreviewDebug({ stage: 'focused-tap-hit-body', selectionKey: activeAssetKey, requestedMode: view });
+      }
+      const cardEl = tapTarget.proxyCardEl;
+      if (tapTarget.kind === 'proxy-card-root') {
+        recordPreviewDebug({ stage: 'focused-tap-hit-proxy-card-root', selectionKey: tapTarget.selectionKey, requestedMode: view });
+      }
+      if (tapTarget.kind === 'proxy-card-child') {
+        recordPreviewDebug({ stage: 'focused-tap-hit-proxy-card-child', selectionKey: tapTarget.selectionKey, requestedMode: view });
+      }
+      const resolveUnderlyingGridKey = () => {
+        const previousPointerEvents = proxyRoot.style.pointerEvents;
+        proxyRoot.style.pointerEvents = 'none';
+        const underlying = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
+        proxyRoot.style.pointerEvents = previousPointerEvents;
+        const gridCard = underlying?.closest<HTMLElement>('.masonry-card[data-select-key]') ?? null;
+        return gridCard?.dataset.selectKey || '';
+      };
       if (!cardEl) {
-        if (gridCinematicMode === 'grid-focused') {
-          event.preventDefault();
-          closeDrawer();
+        const gridKey = resolveUnderlyingGridKey();
+        if (!gridKey) {
+          if (tapTarget.kind === 'proxy-surface') {
+            recordPreviewDebug({ stage: 'focused-tap-empty-after-proxy-surface', selectionKey: activeAssetKey, requestedMode: view });
+          }
+          if (tapTarget.kind === 'body') {
+            recordPreviewDebug({ stage: 'focused-tap-empty-after-body', selectionKey: activeAssetKey, requestedMode: view });
+          }
+          recordPreviewDebug({ stage: 'focused-tap-hit-empty-space', selectionKey: activeAssetKey, requestedMode: view });
+          recordPreviewDebug({ stage: 'focused-retarget-ambient-card-miss', selectionKey: activeAssetKey, requestedMode: view });
+          recordPreviewDebug({ stage: 'focused-retarget-blocked-overlay', selectionKey: activeAssetKey, requestedMode: view });
+          if (gridCinematicMode === 'grid-focused') {
+            event.preventDefault();
+            recordPreviewDebug({ stage: 'focused-tap-close-empty-space', selectionKey: activeAssetKey, requestedMode: view });
+            closeDrawer();
+          }
+          return;
         }
+        recordPreviewDebug({ stage: 'focused-tap-hit-grid-asset', selectionKey: gridKey, requestedMode: view });
+        recordPreviewDebug({ stage: 'focused-retarget-hit-grid-fallback', selectionKey: gridKey, requestedMode: view });
+        if (gridKey === activeAssetKey) {
+          recordPreviewDebug({ stage: 'focused-retarget-blocked-same-key', selectionKey: gridKey, requestedMode: view });
+          return;
+        }
+        const targetItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === gridKey);
+        if (!targetItem) return;
+        event.preventDefault();
+        recordPreviewDebug({ stage: 'focused-retarget-resolved-key', selectionKey: gridKey, requestedMode: view });
+        focusAsset(targetItem, gridKey);
+        setFocused(targetItem);
+        setPreviewDetailsOpen(false);
+        setInspectorOpen(true);
+        inspectorOpenRef.current = true;
+        const proxyOpened = runProxyFocusTransition(gridKey, 'retarget');
+        if (!proxyOpened) {
+          recordPreviewDebug({ stage: 'focused-retarget-openPreview-fallback-blocked', selectionKey: gridKey, requestedMode: view });
+          scheduleFocusedRetargetRetry(targetItem, gridKey);
+          return;
+        }
+        recordPreviewDebug({ stage: 'focused-tap-retarget-dispatched', selectionKey: gridKey, requestedMode: view });
+        recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: gridKey, requestedMode: view });
         return;
       }
+      recordPreviewDebug({ stage: 'focused-tap-hit-proxy-asset', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
+      if (cardEl.classList.contains('is-ambient')) {
+        recordPreviewDebug({ stage: 'focused-retarget-ambient-card-hit', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
+      }
+      else {
+        recordPreviewDebug({ stage: 'focused-retarget-hit-proxy-card', selectionKey: cardEl.dataset.selectionKey || '', requestedMode: view });
+      }
       const nextKey = cardEl.dataset.selectionKey || '';
-      if (!nextKey || nextKey === activeAssetKey) return;
+      if (!nextKey) return;
+      if (nextKey === activeAssetKey) {
+        recordPreviewDebug({ stage: 'focused-retarget-blocked-same-key', selectionKey: nextKey, requestedMode: view });
+        if (isInteractiveTarget(target)) return;
+        event.preventDefault();
+        const proxyVideo = cardEl.querySelector<HTMLVideoElement>('.proxy-render-video');
+        if (!proxyVideo) return;
+        if (proxyVideo.paused) {
+          proxyVideo.muted = false;
+          proxyVideo.defaultMuted = false;
+          proxyVideo.play().catch(() => {});
+        }
+        else proxyVideo.pause();
+        return;
+      }
       const nextItem = filteredMedia.find((item) => assetSelectionKey(item, activeProject) === nextKey);
       if (!nextItem) return;
       event.preventDefault();
-      openPreview(nextItem);
+      recordPreviewDebug({ stage: 'focused-retarget-resolved-key', selectionKey: nextKey, requestedMode: view });
+      focusAsset(nextItem, nextKey);
+      setFocused(nextItem);
+      setPreviewDetailsOpen(false);
+      setInspectorOpen(true);
+      inspectorOpenRef.current = true;
+      const proxyOpened = runProxyFocusTransition(nextKey, 'retarget');
+      if (!proxyOpened) {
+        recordPreviewDebug({ stage: 'focused-retarget-openPreview-fallback-blocked', selectionKey: nextKey, requestedMode: view });
+        scheduleFocusedRetargetRetry(nextItem, nextKey);
+        return;
+      }
+      recordPreviewDebug({ stage: 'focused-tap-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
+      recordPreviewDebug({ stage: 'focused-retarget-dispatched', selectionKey: nextKey, requestedMode: view });
     };
     proxyRoot.addEventListener('pointerdown', handleProxyPointerDown, true);
     return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
-  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusRelative, gridCinematicMode, inspectorOpen, openPreview, view]);
+  }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusAsset, focusRelative, gridCinematicMode, inspectorOpen, runProxyFocusTransition, scheduleFocusedRetargetRetry, view]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
     if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
-    const rafId = window.requestAnimationFrame(() => {
+    const rafId = scheduleExplorerRaf('raf-lane-measurement', () => {
+      if (focusPresentationStateRef.current.mode !== 'world-focus') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', selectionKey: activeAssetKey, requestedMode: view, finalMode: 'idle' });
+        return;
+      }
       const next = computeFocusWorldTransform(activeAssetKey, { continueFromCurrent: true });
       if (!next.transform) {
         moveFocusPresentationToFallbackOrIdle(activeAssetKey, next.reason ?? 'unsafe-transform');
@@ -1809,8 +2361,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       setFocusWorldTransform(next.transform);
     });
-    return () => window.cancelAnimationFrame(rafId);
-  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length]);
+    return () => cancelExplorerRaf(rafId);
+  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length, recordPreviewDebug, view]);
 
   useEffect(() => () => {
     resetFocusPresentationToIdle();
@@ -2974,7 +3526,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           const pendingCount = pinchOverlayPendingNodeCountRef.current;
           pinchOverlayPendingNodeCountRef.current = null;
           const nextNodeCount = pendingCount ?? density.getColumns();
-          window.requestAnimationFrame(() => {
+          scheduleExplorerRaf('raf-lane-cinematic-reveal', () => {
             setPinchDisplayNodeCount(nextNodeCount);
           });
           if (pinchPerfTimeoutRef.current) {
@@ -3237,7 +3789,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    window.requestAnimationFrame(() => composeNameInputRef.current?.focus());
+    scheduleExplorerRaf('raf-lane-other', () => composeNameInputRef.current?.focus());
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [composeModalOpen, composeSubmitting]);
 
@@ -3251,7 +3803,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    window.requestAnimationFrame(() => deleteConfirmButtonRef.current?.focus());
+    scheduleExplorerRaf('raf-lane-other', () => deleteConfirmButtonRef.current?.focus());
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [deleteModalOpen, deleteSubmitting, handleDeleteCancel]);
 
@@ -3259,6 +3811,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `Upload to ${activeProject.name}${activeProject.source ? ` (${activeProject.source})` : ''}`
     : 'Pick a project first.';
   const canSelect = Boolean(activeProject) || mediaScope === 'all';
+  const suppressGridThumbPreviewLane = (
+    view === 'grid'
+    && inspectorOpen
+    && gridCinematicMode === 'grid-focused'
+    && proxyTravelState === 'idle'
+  );
   const projectLabel = useCallback((item: MediaItem) => {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
@@ -3284,7 +3842,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       || (kind === 'image' ? item.stream_url : undefined));
     const fallbackThumb = buildThumbFallback(kind);
     const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
-    const streamUrl = resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '';
+    const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
     const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
       ? thumbUrl
@@ -3297,7 +3855,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const isHoldEmphasis = holdEmphasisKey === selectionKey;
     const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;
     const activeVideoPreviewUrl = (
-      isActivated && kind === 'video'
+      isActivated && kind === 'video' && !suppressGridThumbPreviewLane
         ? streamUrl
         : undefined
     );
@@ -3332,12 +3890,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [
     activeAssetKey,
     activeProject,
+    absolutizeMediaUrl,
     assetRenderKey,
     buildAssetPointerHandlers,
     dynamicOrientations,
     getCachedOrientation,
     holdEmphasisKey,
     projectLabel,
+    suppressGridThumbPreviewLane,
     previewActivationKey,
     previewPlaybackToken,
     reinforcedActiveKey,
@@ -3367,6 +3927,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const gridCinematicActive = !proxyTravelActive && focusWorldActive && view === 'grid' && gridCinematicMode === 'grid-rest';
   const drawerVisibleOwner = !proxyTravelActive && inspectorOpen && (view === 'list' || focusPresentationState.mode === 'drawer-fallback');
   const proxyPreviewVisible = !proxyTravelActive && view === 'grid' && inspectorOpen && gridCinematicMode === 'grid-focused';
+  const focusedProxyPlaybackOwned = proxyPreviewVisible;
+  useEffect(() => {
+    const stage = focusWorldStageRef.current;
+    if (!stage) return;
+    stage.dataset.focusWorldInteractive = focusWorldActive ? 'true' : 'false';
+    if (focusWorldActive) {
+      focusWorldIdleMarkerRef.current = false;
+      return;
+    }
+    if (focusWorldIdleMarkerRef.current) return;
+    focusWorldIdleMarkerRef.current = true;
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-inert', requestedMode: view, finalMode: 'idle' });
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', requestedMode: view, finalMode: 'idle' });
+    recordPreviewDebug({ stage: 'focus-world-stage-idle-raf-blocked', requestedMode: view, finalMode: 'idle' });
+  }, [focusWorldActive, recordPreviewDebug, view]);
   useEffect(() => {
     proxyPrewarmSelectionKeyRef.current = proxyPrewarmSelectionKey;
     proxyPrewarmUrlRef.current = proxyPrewarmUrl;
@@ -3376,57 +3951,64 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
 
-    const clearPrewarm = () => {
+    const publishPrewarmMarker = (marker: string) => {
+      (globalThis as typeof globalThis & {
+        __explorerMediaDebugMarker?: { marker: string; selectionKey: string; prewarmUrl?: string };
+      }).__explorerMediaDebugMarker = {
+        marker,
+        selectionKey: proxyPrewarmSelectionKey || '',
+        prewarmUrl: proxyPrewarmUrl || '',
+      };
+    };
+    const clearPrewarm = (reason?: 'blocked' | 'released') => {
+      const shouldEmitPaused = !prewarmVideo.paused || prewarmVideo.currentTime !== 0;
       prewarmVideo.pause();
+      prewarmVideo.currentTime = 0;
+      if (shouldEmitPaused) publishPrewarmMarker('prewarm-video-paused');
       prewarmVideo.removeAttribute('src');
       prewarmVideo.load();
+      if (reason === 'blocked') publishPrewarmMarker('prewarm-video-blocked-non-authoritative');
+      if (reason === 'released' || reason === 'blocked') publishPrewarmMarker('prewarm-video-released');
       proxyPrewarmReadyStateRef.current = 0;
     };
-    if (!proxyPrewarmUrl || proxyPreviewVisible) {
-      clearPrewarm();
+    if (!proxyPrewarmUrl) {
+      clearPrewarm('released');
+      return;
+    }
+    if (focusedProxyPlaybackOwned) {
+      clearPrewarm('blocked');
       return;
     }
 
     prewarmVideo.muted = true;
     prewarmVideo.defaultMuted = true;
     prewarmVideo.playsInline = true;
-    prewarmVideo.preload = 'auto';
+    prewarmVideo.loop = true;
+    prewarmVideo.preload = 'metadata';
     if (prewarmVideo.src !== proxyPrewarmUrl) {
       prewarmVideo.src = proxyPrewarmUrl;
     }
     prewarmVideo.load();
     proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
 
-    const tryPrimeFrame = () => {
-      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-      if (prewarmVideo.readyState < 2) return;
-      prewarmVideo.play()
-        .then(() => {
-          prewarmVideo.pause();
-          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-        })
-        .catch(() => {
-          proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-        });
-    };
     const onLoadedMetadata = () => {
       proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
     };
-    const onLoadedData = () => {
-      proxyPrewarmReadyStateRef.current = prewarmVideo.readyState;
-      tryPrimeFrame();
-    };
     prewarmVideo.addEventListener('loadedmetadata', onLoadedMetadata);
-    prewarmVideo.addEventListener('loadeddata', onLoadedData);
-    tryPrimeFrame();
 
     return () => {
       prewarmVideo.removeEventListener('loadedmetadata', onLoadedMetadata);
-      prewarmVideo.removeEventListener('loadeddata', onLoadedData);
     };
-  }, [proxyPreviewVisible, proxyPrewarmSelectionKey, proxyPrewarmUrl]);
+  }, [focusedProxyPlaybackOwned, proxyPrewarmSelectionKey, proxyPrewarmUrl]);
   useEffect(() => {
     if (!proxyPreviewVisible) {
+      if (GLOBAL_PROXY_RAF_ID !== null) {
+        cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
+        GLOBAL_PROXY_RAF_ID = null;
+      }
+      GLOBAL_PROXY_RAF_ACTIVE = false;
+      setExplorerRafLaneActive('raf-lane-proxy-active-card', false);
+      publishExplorerRafDebug();
       setActiveProxyCardEl(null);
       setActiveProxyUiSlotEl(null);
       setProxyPlaybackPlaying(false);
@@ -3436,7 +4018,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     const root = focusProxyRootRef.current;
     if (!root) return;
-    let rafId = 0;
+    if (GLOBAL_PROXY_RAF_ID !== null) {
+      cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
+      GLOBAL_PROXY_RAF_ID = null;
+    }
+    GLOBAL_PROXY_RAF_ACTIVE = false;
     const syncActiveCard = () => {
       const activeCard = root.querySelector<HTMLElement>('.proxy-render-card[data-proxy-active="true"]');
       setActiveProxyCardEl((prev) => (prev === activeCard ? prev : activeCard));
@@ -3444,30 +4030,67 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setActiveProxyUiSlotEl((prev) => (prev === uiSlot ? prev : uiSlot));
     };
     const tick = () => {
+      if (!GLOBAL_PROXY_RAF_ACTIVE) return;
       syncActiveCard();
-      rafId = window.requestAnimationFrame(tick);
+      GLOBAL_PROXY_RAF_ID = scheduleExplorerRaf('raf-lane-proxy-active-card', tick);
+      publishExplorerRafDebug();
     };
-    rafId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(rafId);
+    GLOBAL_PROXY_RAF_ACTIVE = true;
+    setExplorerRafLaneActive('raf-lane-proxy-active-card', true);
+    GLOBAL_PROXY_RAF_ID = scheduleExplorerRaf('raf-lane-proxy-active-card', tick);
+    publishExplorerRafDebug();
+    return () => {
+      GLOBAL_PROXY_RAF_ACTIVE = false;
+      if (GLOBAL_PROXY_RAF_ID !== null) {
+        cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
+        GLOBAL_PROXY_RAF_ID = null;
+      }
+      setExplorerRafLaneActive('raf-lane-proxy-active-card', false);
+      publishExplorerRafDebug();
+    };
   }, [proxyPreviewVisible]);
   const activeProxyVideoEl = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;
   const activeProxySelectionKey = activeProxyCardEl?.dataset.selectionKey || '';
   const activeProxyMediaBranch = activeProxyCardEl?.dataset.proxyMediaBranch || '';
+  const proxyAsset = useMemo(() => {
+    if (activeProxySelectionKey) {
+      const proxyItem = itemsBySelectionKey.get(activeProxySelectionKey);
+      if (proxyItem) return normalizePreviewAsset(proxyItem, resolveAssetUrl);
+    }
+    return normalizedPreviewAsset;
+  }, [activeProxySelectionKey, itemsBySelectionKey, normalizedPreviewAsset, resolveAssetUrl]);
+  const proxyStreamUrl = useMemo(() => {
+    const datasetStream = activeProxyCardEl?.dataset.streamUrl || activeProxyVideoEl?.dataset.streamUrl || '';
+    const elementSrc = activeProxyVideoEl?.currentSrc || activeProxyVideoEl?.src || '';
+    return absolutizeMediaUrl(datasetStream || elementSrc || proxyAsset?.src || '');
+  }, [absolutizeMediaUrl, activeProxyCardEl, activeProxyVideoEl, proxyAsset]);
+  const proxyPlaybackSessionKey = useMemo(() => (
+    `${activeProxySelectionKey}::${proxyStreamUrl}::${previewAutoPlayToken}`
+  ), [activeProxySelectionKey, previewAutoPlayToken, proxyStreamUrl]);
   const handoff = previewPlaybackHandoffRef.current;
   const hasMatchingHandoff = Boolean(handoff && handoff.selectionKey === activeProxySelectionKey);
   const handoffTime = hasMatchingHandoff && handoff ? Math.max(0, handoff.currentTime) : null;
+  const activeThumbnailVideoEl = activeProxySelectionKey
+    ? getGridThumbVideoBySelectionKey(activeProxySelectionKey)
+    : null;
   const {
     videoReady: proxyVideoReady,
     firstFramePresented: proxyFirstFramePresented,
     playbackState: proxyPlaybackState,
     promotionStrategy: proxyPromotionStrategy,
+    hasPoster: proxyHasPoster,
+    posterShown: proxyPosterShown,
+    posterUrl: proxyPosterUrl,
+    authoritativeVisualSurface,
+    authoritativeAudioSurface,
   } = useVideoOwnershipHandoff({
     selectionKey: activeProxySelectionKey,
-    streamUrl: normalizedPreviewAsset?.streamUrl || '',
+    streamUrl: proxyStreamUrl,
     isFocusedOpen: proxyPreviewVisible,
     shouldPlay: proxyPreviewVisible,
     enableFocusedAudio: true,
     proxyVideoEl: activeProxyVideoEl,
+    thumbnailVideoEl: activeThumbnailVideoEl,
     mediaBranch: activeProxyMediaBranch,
     handoffTime,
     wasPlayingBeforeHandoff: hasMatchingHandoff ? Boolean(handoff?.wasPlaying) : true,
@@ -3480,6 +4103,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     onPromoted: () => {
       if (activeProxySelectionKey) {
         pauseGridThumbForSelectionKey(activeProxySelectionKey);
+        pauseNonAuthoritativeGridVideos(activeProxySelectionKey);
+        publishMediaInvariantDebug('proxy-promoted-authority');
       }
     },
     onDebug: (entry) => {
@@ -3487,6 +4112,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         __explorerProxyPlaybackDebug?: Record<string, unknown>;
       }).__explorerProxyPlaybackDebug = {
         ...entry,
+        streamUrl: proxyStreamUrl,
+        sessionKey: entry.sessionKey || proxyPlaybackSessionKey,
+        videoStableId: activeProxyVideoEl?.dataset.proxyStableVideoId || '',
+        cardSelectionKey: activeProxyCardEl?.dataset.selectionKey || '',
+        cardVideoReady: activeProxyCardEl?.dataset.videoReady || '',
+        cardFirstFramePresented: activeProxyCardEl?.dataset.firstFramePresented || '',
+        cardPromotionStrategy: activeProxyCardEl?.dataset.promotionStrategy || '',
+        cardSessionId: activeProxyCardEl?.dataset.proxySessionId || '',
         prewarmSelectionKey: proxyPrewarmSelectionKeyRef.current || '',
         prewarmUrl: proxyPrewarmUrlRef.current || '',
         prewarmReadyState: proxyPrewarmReadyStateRef.current || 0,
@@ -3495,15 +4128,78 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   });
   useEffect(() => {
     if (!activeProxyCardEl) return;
-    activeProxyCardEl.dataset.videoReady = proxyVideoReady ? 'true' : 'false';
+    activeProxyCardEl.dataset.videoReady = (proxyVideoReady || proxyFirstFramePresented) ? 'true' : 'false';
     activeProxyCardEl.dataset.firstFramePresented = proxyFirstFramePresented ? 'true' : 'false';
     activeProxyCardEl.dataset.promotionStrategy = proxyPromotionStrategy;
-  }, [activeProxyCardEl, proxyFirstFramePresented, proxyPromotionStrategy, proxyVideoReady]);
+    activeProxyCardEl.dataset.streamUrl = proxyStreamUrl;
+    activeProxyCardEl.dataset.proxySessionId = proxyPlaybackSessionKey;
+    activeProxyCardEl.dataset.posterShown = proxyPosterShown ? 'true' : 'false';
+    activeProxyCardEl.dataset.posterUrl = proxyPosterUrl;
+    activeProxyCardEl.dataset.hasPoster = proxyHasPoster ? 'true' : 'false';
+    activeProxyCardEl.dataset.authoritativeVisualSurface = authoritativeVisualSurface;
+    activeProxyCardEl.dataset.authoritativeAudioSurface = authoritativeAudioSurface;
+    if (activeProxyVideoEl) {
+      activeProxyVideoEl.dataset.proxySessionId = proxyPlaybackSessionKey;
+      activeProxyVideoEl.dataset.posterShown = proxyPosterShown ? 'true' : 'false';
+      activeProxyVideoEl.dataset.posterUrl = proxyPosterUrl;
+      activeProxyVideoEl.dataset.hasPoster = proxyHasPoster ? 'true' : 'false';
+      activeProxyVideoEl.dataset.authoritativeVisualSurface = authoritativeVisualSurface;
+      activeProxyVideoEl.dataset.authoritativeAudioSurface = authoritativeAudioSurface;
+    }
+  }, [
+    activeProxyCardEl,
+    activeProxyVideoEl,
+    authoritativeAudioSurface,
+    authoritativeVisualSurface,
+    proxyFirstFramePresented,
+    proxyHasPoster,
+    proxyPlaybackSessionKey,
+    proxyPosterShown,
+    proxyPosterUrl,
+    proxyPromotionStrategy,
+    proxyStreamUrl,
+    proxyVideoReady,
+  ]);
+  useEffect(() => {
+    const root = focusProxyRootRef.current;
+    if (!root) return;
+    root.dataset.authoritativeVisualSurface = authoritativeVisualSurface;
+    root.dataset.authoritativeAudioSurface = authoritativeAudioSurface;
+  }, [authoritativeAudioSurface, authoritativeVisualSurface]);
+  useEffect(() => {
+    const root = focusProxyRootRef.current;
+    if (!root) return;
+    const continuityKey = activeProxySelectionKey && proxyStreamUrl
+      ? `${activeProxySelectionKey}::${proxyStreamUrl}`
+      : '';
+    (globalThis as typeof globalThis & {
+      __explorerProxyContinuityDebug?: Record<string, unknown>;
+    }).__explorerProxyContinuityDebug = {
+      continuityKey,
+      retainedOnClose: root.dataset.proxyRetainedOnClose === 'true',
+      mountedState: activeProxyVideoEl?.dataset.proxyMountedState || 'proxy-detached',
+      retainedState: root.dataset.proxyRetainedOnClose === 'true' ? 'retained' : 'active',
+      posterShown: proxyPosterShown,
+      authoritativeVisualSurface,
+      authoritativeAudioSurface,
+    };
+  }, [
+    activeProxySelectionKey,
+    activeProxyVideoEl,
+    authoritativeAudioSurface,
+    authoritativeVisualSurface,
+    proxyPosterShown,
+    proxyStreamUrl,
+  ]);
   useEffect(() => {
     setProxyPlaybackPlaying(proxyPlaybackState.isPlaying);
     setProxyPlaybackCurrentTime(proxyPlaybackState.currentTime);
     setProxyPlaybackDuration(proxyPlaybackState.duration);
   }, [proxyPlaybackState.currentTime, proxyPlaybackState.duration, proxyPlaybackState.isPlaying]);
+
+  useEffect(() => {
+    publishMediaInvariantDebug('proxy-playback-state-sync');
+  }, [proxyPlaybackState.isPlaying, proxyPlaybackState.currentTime, publishMediaInvariantDebug]);
   const cinematicStageReady = (
     cinematicRevealState.mediaVisible
     && cinematicRevealState.topVisible
@@ -4180,10 +4876,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         ref={focusProxyRootRef}
         className={`focus-proxy-root ${gridCinematicMode !== 'grid-rest' ? 'is-active' : ''}`}
         data-focus-proxy-root="true"
+        data-focus-proxy-layer="true"
         aria-hidden="true"
       >
         {proxyPreviewVisible && proxyPreviewPortalTarget ? createPortal(
-          <div className="proxy-preview-ui" onPointerDown={(event) => event.stopPropagation()}>
+          <div className="proxy-preview-ui" data-focus-proxy-layer="true" onPointerDown={(event) => event.stopPropagation()}>
             <ProxyFocusedChromeFullParity
               asset={normalizedPreviewAsset}
               playable={Boolean(normalizedPreviewAsset && (normalizedPreviewAsset.kind === 'video' || normalizedPreviewAsset.kind === 'audio'))}

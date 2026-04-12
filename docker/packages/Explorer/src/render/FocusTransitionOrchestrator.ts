@@ -8,6 +8,8 @@ export class FocusTransitionOrchestrator {
   private renderer: ViewportProxyRenderer;
   private root: HTMLElement;
   private timeline: gsap.core.Timeline | null = null;
+  private activeContinuityKey = '';
+  private retainedContinuityKey = '';
   private currentCamera: ProxyCameraState = {
     x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
   };
@@ -15,6 +17,27 @@ export class FocusTransitionOrchestrator {
   constructor(root: HTMLElement) {
     this.root = root;
     this.renderer = new ViewportProxyRenderer(root);
+  }
+
+  private revokeHitOwnershipForRetainedProxy() {
+    this.root.dataset.proxyRetainedInert = 'true';
+    this.root.style.pointerEvents = 'none';
+    this.root.style.opacity = '0';
+  }
+
+  private clearRetainedInertState() {
+    delete this.root.dataset.proxyRetainedInert;
+  }
+
+  private clearRetainedProxy(reason: 'proxy-retained-cleared-asset-change' | 'proxy-retained-cleared-deselect') {
+    delete this.root.dataset.proxyRetainedOnClose;
+    delete this.root.dataset.proxyRetainedContinuityKey;
+    delete this.root.dataset.proxyRetainedInert;
+    this.retainedContinuityKey = '';
+    this.renderer.unmount();
+    this.root.style.opacity = '0';
+    this.root.style.pointerEvents = 'none';
+    this.root.dataset.proxyContinuityEvent = reason;
   }
 
   private publishCenterDebug(args: {
@@ -61,9 +84,10 @@ export class FocusTransitionOrchestrator {
     gridRoot: HTMLElement;
     viewportEl: HTMLElement;
     selectionKey: string;
+    continuityKey?: string;
     onStart?: () => void;
     onComplete?: () => void;
-    onEvent?: (event: 'proxy-open-start' | 'proxy-open-complete' | 'proxy-failed') => void;
+    onEvent?: (event: 'proxy-open-start' | 'proxy-open-complete' | 'proxy-failed' | 'proxy-retained-reuse-same-key' | 'proxy-retained-blocked-different-key' | 'proxy-retained-cleared-asset-change') => void;
   }) {
     const snapshot = captureFocusSceneSnapshot({
       gridRoot: args.gridRoot,
@@ -84,8 +108,24 @@ export class FocusTransitionOrchestrator {
       viewportHeight: snapshot.viewport.height,
     });
 
+    const continuityKey = args.continuityKey ?? args.selectionKey;
+    const retainedMarker = this.root.dataset.proxyRetainedOnClose === 'true';
+    if (retainedMarker) {
+      if (this.retainedContinuityKey && this.retainedContinuityKey === continuityKey) {
+        args.onEvent?.('proxy-retained-reuse-same-key');
+      }
+      else {
+        args.onEvent?.('proxy-retained-blocked-different-key');
+        this.clearRetainedProxy('proxy-retained-cleared-asset-change');
+        args.onEvent?.('proxy-retained-cleared-asset-change');
+      }
+    }
+    this.activeContinuityKey = continuityKey;
+    this.clearRetainedInertState();
     const startCamera = { ...this.currentCamera, x: 0, y: 0, scale: 1 };
     this.renderer.render(snapshot, startCamera, { showActiveChrome: false });
+    delete this.root.dataset.proxyRetainedOnClose;
+    delete this.root.dataset.proxyRetainedContinuityKey;
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
 
@@ -135,9 +175,10 @@ export class FocusTransitionOrchestrator {
     gridRoot: HTMLElement;
     viewportEl: HTMLElement;
     selectionKey: string;
+    continuityKey?: string;
     onStart?: () => void;
     onComplete?: () => void;
-    onEvent?: (event: 'proxy-refocus-start' | 'proxy-refocus-complete' | 'proxy-failed') => void;
+    onEvent?: (event: 'proxy-refocus-start' | 'proxy-refocus-complete' | 'proxy-failed' | 'proxy-retained-reuse-same-key' | 'proxy-retained-blocked-different-key' | 'proxy-retained-cleared-asset-change') => void;
   }) {
     const snapshot = captureFocusSceneSnapshot({
       gridRoot: args.gridRoot,
@@ -155,7 +196,23 @@ export class FocusTransitionOrchestrator {
       viewportWidth: snapshot.viewport.width,
       viewportHeight: snapshot.viewport.height,
     });
+    const continuityKey = args.continuityKey ?? args.selectionKey;
+    const retainedMarker = this.root.dataset.proxyRetainedOnClose === 'true';
+    if (retainedMarker) {
+      if (this.retainedContinuityKey && this.retainedContinuityKey === continuityKey) {
+        args.onEvent?.('proxy-retained-reuse-same-key');
+      }
+      else {
+        args.onEvent?.('proxy-retained-blocked-different-key');
+        this.clearRetainedProxy('proxy-retained-cleared-asset-change');
+        args.onEvent?.('proxy-retained-cleared-asset-change');
+      }
+    }
+    this.activeContinuityKey = continuityKey;
+    this.clearRetainedInertState();
     this.renderer.render(snapshot, this.currentCamera, { showActiveChrome: false });
+    delete this.root.dataset.proxyRetainedOnClose;
+    delete this.root.dataset.proxyRetainedContinuityKey;
     this.root.style.opacity = '1';
     this.root.style.pointerEvents = 'auto';
     this.timeline?.kill();
@@ -196,31 +253,144 @@ export class FocusTransitionOrchestrator {
     return true;
   }
 
+  retargetTransition(args: {
+    gridRoot: HTMLElement;
+    viewportEl: HTMLElement;
+    selectionKey: string;
+    continuityKey?: string;
+    onStart?: () => void;
+    onComplete?: () => void;
+    onEvent?: (event: 'focus-retarget-start' | 'focus-retarget-commit' | 'focus-retarget-cancel' | 'focus-retarget-recover-world' | 'focus-retarget-recover-world-commit' | 'focus-retarget-hard-fallback' | 'proxy-failed' | 'proxy-retained-reuse-same-key' | 'proxy-retained-blocked-different-key' | 'proxy-retained-cleared-asset-change') => void;
+  }) {
+    const snapshot = captureFocusSceneSnapshot({
+      gridRoot: args.gridRoot,
+      viewportEl: args.viewportEl,
+      activeSelectionKey: args.selectionKey,
+    });
+    if (!snapshot.target) {
+      args.onEvent?.('focus-retarget-cancel');
+      return false;
+    }
+    const camera = computeCameraStateForTarget({
+      target: snapshot.target,
+      viewportLeft: snapshot.viewport.left,
+      viewportTop: snapshot.viewport.top,
+      viewportWidth: snapshot.viewport.width,
+      viewportHeight: snapshot.viewport.height,
+    });
+    const continuityKey = args.continuityKey ?? args.selectionKey;
+    const retainedMarker = this.root.dataset.proxyRetainedOnClose === 'true';
+    if (retainedMarker) {
+      if (this.retainedContinuityKey && this.retainedContinuityKey === continuityKey) {
+        args.onEvent?.('proxy-retained-reuse-same-key');
+      }
+      else {
+        args.onEvent?.('proxy-retained-blocked-different-key');
+        this.clearRetainedProxy('proxy-retained-cleared-asset-change');
+        args.onEvent?.('proxy-retained-cleared-asset-change');
+      }
+    }
+    this.activeContinuityKey = continuityKey;
+    this.clearRetainedInertState();
+    this.renderer.render(snapshot, this.currentCamera, { showActiveChrome: false });
+    delete this.root.dataset.proxyRetainedOnClose;
+    delete this.root.dataset.proxyRetainedContinuityKey;
+    this.root.style.opacity = '1';
+    this.root.style.pointerEvents = 'auto';
+    this.timeline?.kill();
+    let world = this.root.querySelector<HTMLElement>('.proxy-render-world');
+    if (!world) {
+      args.onEvent?.('focus-retarget-recover-world');
+      this.renderer.mount();
+      this.renderer.render(snapshot, this.currentCamera, { showActiveChrome: false });
+      world = this.root.querySelector<HTMLElement>('.proxy-render-world');
+      if (!world) {
+        args.onEvent?.('focus-retarget-hard-fallback');
+        return false;
+      }
+      args.onEvent?.('focus-retarget-recover-world-commit');
+    }
+    this.timeline = gsap.timeline({
+      onStart: () => {
+        args.onEvent?.('focus-retarget-start');
+        args.onStart?.();
+      },
+      onComplete: () => {
+        this.renderer.render(snapshot, camera, { showActiveChrome: true });
+        this.currentCamera = { ...camera };
+        this.publishCenterDebug({
+          viewportLeft: snapshot.viewport.left,
+          viewportTop: snapshot.viewport.top,
+          viewportWidth: snapshot.viewport.width,
+          viewportHeight: snapshot.viewport.height,
+          camera,
+          targetCenterX: snapshot.target!.centerX,
+          targetCenterY: snapshot.target!.centerY,
+        });
+        args.onEvent?.('focus-retarget-commit');
+        args.onComplete?.();
+      },
+    });
+    this.timeline.to(world, {
+      x: camera.x,
+      y: camera.y,
+      scale: camera.scale,
+      duration: 0.5,
+      ease: 'power3.inOut',
+      overwrite: 'auto',
+    });
+    return true;
+  }
+
   closeFocusTransition(args?: {
     onStart?: () => void;
     onComplete?: () => void;
+    onEvent?: (event: 'orchestrator-close-start' | 'orchestrator-close-complete' | 'orchestrator-close-pointer-reset' | 'orchestrator-close-retained' | 'orchestrator-close-retained-inert' | 'orchestrator-close-hit-ownership-revoked' | 'orchestrator-close-ambient-disabled') => void;
   }) {
     const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
     if (!world) {
+      args?.onEvent?.('orchestrator-close-start');
       this.root.style.opacity = '0';
       this.root.style.pointerEvents = 'none';
+      args?.onEvent?.('orchestrator-close-pointer-reset');
       this.currentCamera = {
         x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
       };
+      args?.onEvent?.('orchestrator-close-complete');
       args?.onComplete?.();
       return;
     }
 
     this.timeline?.kill();
     this.timeline = gsap.timeline({
-      onStart: () => args?.onStart?.(),
+      onStart: () => {
+        args?.onEvent?.('orchestrator-close-start');
+        args?.onStart?.();
+      },
       onComplete: () => {
         this.root.style.opacity = '0';
         this.root.style.pointerEvents = 'none';
-        this.renderer.unmount();
+        args?.onEvent?.('orchestrator-close-pointer-reset');
+        this.root.dataset.proxyRetainedOnClose = 'true';
+        this.retainedContinuityKey = this.activeContinuityKey;
+        this.root.dataset.proxyRetainedContinuityKey = this.retainedContinuityKey;
+        args?.onEvent?.('orchestrator-close-retained');
+        this.revokeHitOwnershipForRetainedProxy();
+        args?.onEvent?.('orchestrator-close-retained-inert');
+        args?.onEvent?.('orchestrator-close-hit-ownership-revoked');
+        args?.onEvent?.('orchestrator-close-ambient-disabled');
+        const activeVideo = this.root.querySelector<HTMLVideoElement>('.proxy-render-card[data-proxy-active="true"] .proxy-render-video');
+        if (activeVideo) {
+          activeVideo.muted = true;
+          activeVideo.defaultMuted = true;
+          activeVideo.dataset.authoritativeAudioSurface = 'none';
+        }
+        this.root.dataset.authoritativeAudioSurface = 'none';
+        this.root.dataset.proxyContinuityEvent = 'audio-owner-revoked-close';
         this.currentCamera = {
           x: 0, y: 0, scale: 1, tiltX: 0, tiltY: 0, velocityX: 0, velocityY: 0,
         };
+        args?.onEvent?.('orchestrator-close-complete');
         args?.onComplete?.();
       },
     });
@@ -239,5 +409,20 @@ export class FocusTransitionOrchestrator {
       ease: 'power3.inOut',
       overwrite: 'auto',
     });
+  }
+
+  clearRetainedProxyOnDeselect() {
+    this.clearRetainedProxy('proxy-retained-cleared-deselect');
+  }
+
+  interruptActiveTransition() {
+    this.timeline?.kill();
+    this.timeline = null;
+    const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
+    if (world) {
+      gsap.killTweensOf(world);
+    }
+    gsap.killTweensOf(this.root.querySelectorAll<HTMLElement>('.proxy-render-top, .proxy-render-bottom, .proxy-render-scrim'));
+    this.root.dataset.proxyContinuityEvent = 'proxy-transition-interrupted';
   }
 }
