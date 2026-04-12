@@ -3354,24 +3354,50 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const root = document.documentElement;
     const viewport = window.visualViewport;
 
-    const applyViewportMetrics = () => {
-      const visualHeight = viewport?.height ?? window.innerHeight;
-      const nextHeight = `${Math.max(0, Math.round(visualHeight))}px`;
-      root.style.setProperty('--explorer-visual-viewport-height', nextHeight);
+    const readViewportMeta = () => {
+      const meta = document.querySelector('meta[name="viewport"]');
+      return meta?.getAttribute('content') || '';
     };
 
-    applyViewportMetrics();
-    window.addEventListener('resize', applyViewportMetrics);
-    window.addEventListener('orientationchange', applyViewportMetrics);
-    viewport?.addEventListener('resize', applyViewportMetrics);
-    viewport?.addEventListener('scroll', applyViewportMetrics);
+    const captureViewportSnapshot = () => {
+      const visualHeight = viewport?.height ?? window.innerHeight;
+      const visualWidth = viewport?.width ?? window.innerWidth;
+      const nextHeight = `${Math.max(0, Math.round(visualHeight))}px`;
+      root.style.setProperty('--explorer-visual-viewport-height', nextHeight);
+      const clientWidth = document.documentElement.clientWidth || 1;
+      const scaleLike = Number((window.innerWidth / clientWidth).toFixed(3));
+      const snapshot = {
+        viewportMeta: readViewportMeta(),
+        visualViewportHeight: Number((viewport?.height ?? 0).toFixed(2)),
+        visualViewportWidth: Number((viewport?.width ?? 0).toFixed(2)),
+        innerHeight: window.innerHeight,
+        innerWidth: window.innerWidth,
+        clientHeight: document.documentElement.clientHeight,
+        clientWidth,
+        pageScaleLike: Number.isFinite(scaleLike) ? scaleLike : 1,
+        cssViewportHeightVar: nextHeight,
+      };
+      (window as typeof window & {
+        __explorerViewportDebug?: { getSnapshot: () => typeof snapshot; lastSnapshot: typeof snapshot };
+      }).__explorerViewportDebug = {
+        getSnapshot: () => snapshot,
+        lastSnapshot: snapshot,
+      };
+    };
+
+    captureViewportSnapshot();
+    window.addEventListener('resize', captureViewportSnapshot);
+    window.addEventListener('orientationchange', captureViewportSnapshot);
+    viewport?.addEventListener('resize', captureViewportSnapshot);
+    viewport?.addEventListener('scroll', captureViewportSnapshot);
 
     return () => {
-      window.removeEventListener('resize', applyViewportMetrics);
-      window.removeEventListener('orientationchange', applyViewportMetrics);
-      viewport?.removeEventListener('resize', applyViewportMetrics);
-      viewport?.removeEventListener('scroll', applyViewportMetrics);
+      window.removeEventListener('resize', captureViewportSnapshot);
+      window.removeEventListener('orientationchange', captureViewportSnapshot);
+      viewport?.removeEventListener('resize', captureViewportSnapshot);
+      viewport?.removeEventListener('scroll', captureViewportSnapshot);
       root.style.removeProperty('--explorer-visual-viewport-height');
+      delete (window as typeof window & { __explorerViewportDebug?: unknown }).__explorerViewportDebug;
     };
   }, []);
 

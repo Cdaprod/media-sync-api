@@ -1,3 +1,10 @@
+## 2026-04-12 — Page-level viewport contract + debug exposure follow-up (active)
+- [x] Tightened App Router viewport contract in `app/layout.tsx` with explicit zoom bounds (`minimumScale:1`, `maximumScale:1`, `userScalable:false`) for deterministic mobile page-scale behavior.
+- [x] Upgraded Explorer visual-viewport effect to publish runtime page-level viewport diagnostics (`__explorerViewportDebug`) including viewport meta content, visual viewport metrics, inner/client dimensions, and computed `pageScaleLike`.
+- [x] Kept `--explorer-visual-viewport-height` sync as part of the snapshot capture lane and added cleanup for debug export on unmount.
+- [x] Expanded static contracts to lock the stricter viewport meta fields and the new page-level viewport debug export fields.
+- [ ] Validate on plain iPhone Safari (no inspector overlay) whether remaining zoom is resolved and capture `window.__explorerViewportDebug?.getSnapshot()` evidence if not.
+
 ## 2026-04-12 — Editable-lane unscaled iPhone zoom suppression correction (active)
 - [x] Removed coarse-pointer transform scaling from `.search-input-wrap` and retained unscaled editable search lane authority.
 - [x] Kept mobile-safe editable controls at `font-size: 16px` while increasing search input comfort lane (`min-height: 32px`, `line-height: 1.2`) to avoid tiny rendered focus targets.

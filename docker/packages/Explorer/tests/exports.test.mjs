@@ -55,6 +55,9 @@ test('package app layout owns default App Router not-found fonts and wiring', ()
   assert.ok(layout.includes("viewportFit: 'cover'"));
   assert.ok(layout.includes("width: 'device-width'"));
   assert.ok(layout.includes('initialScale: 1'));
+  assert.ok(layout.includes('minimumScale: 1'));
+  assert.ok(layout.includes('maximumScale: 1'));
+  assert.ok(layout.includes('userScalable: false'));
   assert.ok(globals.includes('--safe-area-top: env(safe-area-inset-top, 0px);'));
   assert.ok(globals.includes('html,'));
   assert.ok(globals.includes('height: 100dvh;'));
@@ -2648,8 +2651,11 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
 
   assert.ok(content.includes('const viewport = window.visualViewport;'));
   assert.ok(content.includes("root.style.setProperty('--explorer-visual-viewport-height', nextHeight);"));
-  assert.ok(content.includes("viewport?.addEventListener('resize', applyViewportMetrics);"));
-  assert.ok(content.includes("viewport?.addEventListener('scroll', applyViewportMetrics);"));
+  assert.ok(content.includes("viewport?.addEventListener('resize', captureViewportSnapshot);"));
+  assert.ok(content.includes("viewport?.addEventListener('scroll', captureViewportSnapshot);"));
+  assert.ok(content.includes('__explorerViewportDebug'));
+  assert.ok(content.includes('viewportMeta: readViewportMeta()'));
+  assert.ok(content.includes('pageScaleLike'));
   assert.ok(styles.includes('height: var(--explorer-visual-viewport-height, 100%);'));
   assert.ok(styles.includes('@media (pointer: coarse){'));
   assert.ok(styles.includes('.search-input,'));
