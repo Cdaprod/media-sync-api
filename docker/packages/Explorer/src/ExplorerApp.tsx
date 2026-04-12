@@ -4571,20 +4571,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     <div className="topbar-controls">
                       <div className="search" role="search" data-interactive="true" data-topbar-control="true">
                         <span className="kbd">⌘K</span>
-                        <input
-                          data-interactive="true"
-                          data-topbar-control="true"
-                          ref={searchInputRef}
-                          placeholder="Search filename, path… (client-side filter)"
-                          autoComplete="off"
-                          value={query}
-                          onChange={(event) => setQuery(event.target.value)}
-                          onFocus={() => topbarIntentRef.current?.setPinned(true)}
-                          onBlur={() => {
-                            topbarIntentRef.current?.setPinned(false);
-                            topbarIntentRef.current?.scheduleClose(360);
-                          }}
-                        />
+                        <div className="search-input-wrap" data-topbar-control="true">
+                          <input
+                            className="search-input"
+                            data-interactive="true"
+                            data-topbar-control="true"
+                            ref={searchInputRef}
+                            placeholder="Search filename, path… (client-side filter)"
+                            autoComplete="off"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            onFocus={() => topbarIntentRef.current?.setPinned(true)}
+                            onBlur={() => {
+                              topbarIntentRef.current?.setPinned(false);
+                              topbarIntentRef.current?.scheduleClose(360);
+                            }}
+                          />
+                        </div>
                         <div className="search-toolbar" aria-label="Search filters" data-interactive="true" data-topbar-control="true">
                           <details className="dropdown" data-interactive="true" data-topbar-control="true">
                             <summary className="control" aria-label="Filter by media type" data-interactive="true" data-topbar-control="true" onPointerDown={() => pinTopbarTemporarily(900)}>

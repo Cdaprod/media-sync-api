@@ -263,7 +263,14 @@ code { font-family: var(--mono); }
   z-index: 1;
   pointer-events: auto;
 }
-.search input{
+.search-input-wrap{
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+.search-input{
   width: 100%;
   flex: 1;
   min-width: 0;
@@ -274,7 +281,7 @@ code { font-family: var(--mono); }
   font-size: 13px;
   pointer-events: auto;
 }
-.search input::placeholder{ color: var(--muted2); }
+.search-input::placeholder{ color: var(--muted2); }
 .search-toolbar{
   display:flex;
   align-items:center;
@@ -2658,13 +2665,37 @@ body.confirm-open{
 }
 
 @media (pointer: coarse){
-  .search input,
-  .control,
+  .search{
+    gap: 6px;
+    padding: 6px 8px;
+    min-height: 40px;
+  }
+  .search-input-wrap{
+    transform: scale(0.86);
+    transform-origin: left center;
+    width: calc(100% / 0.86);
+  }
+  .search .kbd,
+  .search-toolbar .control{
+    transform: scale(0.9);
+    transform-origin: center;
+  }
+  .search-input,
   .compose-field input,
-  .custom-ui-surface input,
+  .custom-ui-surface input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   .custom-ui-surface textarea,
-  .drawer select,
-  .drawer option{
+  .custom-ui-surface select,
+  .drawer input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .drawer textarea,
+  .drawer select{
     font-size: 16px !important;
+    line-height: 1.1;
+  }
+  .search-input::placeholder,
+  .custom-ui-surface input::placeholder,
+  .custom-ui-surface textarea::placeholder,
+  .drawer input::placeholder,
+  .drawer textarea::placeholder{
+    opacity: 0.68;
   }
 }

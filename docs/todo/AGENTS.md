@@ -1,3 +1,11 @@
+## 2026-04-12 — iPhone-safe compact input zoom suppression follow-up (active)
+- [x] Narrowed mobile zoom guard to editable controls only (no blanket `.control` scaling) so non-editable chips/buttons keep compact sizing authority.
+- [x] Added search-field wrapper lane (`.search-input-wrap` + `.search-input`) and coarse-pointer compact visual scale contract (`scale(0.86)`) while preserving actual editable font-size at `16px`.
+- [x] Added compact shell adjustments for coarse-pointer search chrome (reduced gap/padding/min-height and chip scaling) to keep topbar density close to prior visual weight.
+- [x] Added placeholder-opacity compact styling for coarse-pointer editable controls while retaining `16px` technical font-size authority.
+- [x] Expanded static contracts to lock wrapper class wiring + compact-scale CSS lane so future refactors do not regress to sub-16 editable font sizing.
+- [ ] Validate on physical iPhone Safari that focused search/modal/drawer controls no longer trigger auto-zoom while visual size remains compact and caret interaction remains acceptable.
+
 ## 2026-04-12 — Keyboard viewport + list-thumb load-failure hardening (active)
 - [x] Added Explorer visual-viewport height sync lane (`window.visualViewport` resize/scroll/orientation + window resize fallback) and CSS variable wiring so app shell sizing follows keyboard-induced visible viewport changes.
 - [x] Added coarse-pointer input font-size guard rails (`16px`) for search/control/modal form controls to suppress iOS focus auto-zoom triggers.

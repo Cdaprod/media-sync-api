@@ -2652,8 +2652,11 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes("viewport?.addEventListener('scroll', applyViewportMetrics);"));
   assert.ok(styles.includes('height: var(--explorer-visual-viewport-height, 100%);'));
   assert.ok(styles.includes('@media (pointer: coarse){'));
-  assert.ok(styles.includes('.search input,'));
+  assert.ok(styles.includes('.search-input,'));
   assert.ok(styles.includes('font-size: 16px !important;'));
+  assert.ok(styles.includes('transform: scale(0.86);'));
+  assert.ok(content.includes('className="search-input-wrap"'));
+  assert.ok(content.includes('className="search-input"'));
 });
 
 test('thumbnail normalization preserves API port when remapping localhost urls', () => {
