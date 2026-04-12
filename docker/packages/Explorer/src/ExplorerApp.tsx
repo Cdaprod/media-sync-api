@@ -3350,6 +3350,32 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const applyViewportMetrics = () => {
+      const visualHeight = viewport?.height ?? window.innerHeight;
+      const nextHeight = `${Math.max(0, Math.round(visualHeight))}px`;
+      root.style.setProperty('--explorer-visual-viewport-height', nextHeight);
+    };
+
+    applyViewportMetrics();
+    window.addEventListener('resize', applyViewportMetrics);
+    window.addEventListener('orientationchange', applyViewportMetrics);
+    viewport?.addEventListener('resize', applyViewportMetrics);
+    viewport?.addEventListener('scroll', applyViewportMetrics);
+
+    return () => {
+      window.removeEventListener('resize', applyViewportMetrics);
+      window.removeEventListener('orientationchange', applyViewportMetrics);
+      viewport?.removeEventListener('resize', applyViewportMetrics);
+      viewport?.removeEventListener('scroll', applyViewportMetrics);
+      root.style.removeProperty('--explorer-visual-viewport-height');
+    };
+  }, []);
+
+  useEffect(() => {
     const topbar = topbarRef.current;
     if (!topbar) return;
 

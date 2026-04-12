@@ -2639,3 +2639,28 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(styles.includes('.masonry-card.asset:hover{'));
   assert.ok(styles.includes('transform: none;'));
 });
+
+test('mobile keyboard resilience contracts keep visual viewport + input font safeguards wired', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.ok(content.includes('const viewport = window.visualViewport;'));
+  assert.ok(content.includes("root.style.setProperty('--explorer-visual-viewport-height', nextHeight);"));
+  assert.ok(content.includes("viewport?.addEventListener('resize', applyViewportMetrics);"));
+  assert.ok(content.includes("viewport?.addEventListener('scroll', applyViewportMetrics);"));
+  assert.ok(styles.includes('height: var(--explorer-visual-viewport-height, 100%);'));
+  assert.ok(styles.includes('@media (pointer: coarse){'));
+  assert.ok(styles.includes('.search input,'));
+  assert.ok(styles.includes('font-size: 16px !important;'));
+});
+
+test('thumbnail normalization preserves API port when remapping localhost urls', () => {
+  const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
+  const loader = fs.readFileSync(loaderPath, 'utf8');
+
+  assert.ok(loader.includes('const resolvedPort = parsed.port || \'\';'));
+  assert.ok(loader.includes('return `${protocol}//${host}${resolvedPort ? `:${resolvedPort}` : \'\'}${parsed.pathname}${parsed.search}`;'));
+  assert.ok(!loader.includes('`${window.location.origin}${parsed.pathname}${parsed.search}`'));
+});

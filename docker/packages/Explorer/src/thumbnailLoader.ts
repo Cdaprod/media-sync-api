@@ -20,7 +20,11 @@ export const normalizeThumbUrl = (rawUrl?: string): string | undefined => {
     try {
       const parsed = new URL(rawUrl);
       if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
-        return `${window.location.origin}${parsed.pathname}${parsed.search}`;
+        if (typeof window === 'undefined') return parsed.href;
+        const host = window.location.hostname || parsed.hostname;
+        const protocol = window.location.protocol || parsed.protocol;
+        const resolvedPort = parsed.port || '';
+        return `${protocol}//${host}${resolvedPort ? `:${resolvedPort}` : ''}${parsed.pathname}${parsed.search}`;
       }
       return parsed.href;
     } catch {

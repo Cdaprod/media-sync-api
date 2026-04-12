@@ -1,3 +1,10 @@
+## 2026-04-12 — Keyboard viewport + list-thumb load-failure hardening (active)
+- [x] Added Explorer visual-viewport height sync lane (`window.visualViewport` resize/scroll/orientation + window resize fallback) and CSS variable wiring so app shell sizing follows keyboard-induced visible viewport changes.
+- [x] Added coarse-pointer input font-size guard rails (`16px`) for search/control/modal form controls to suppress iOS focus auto-zoom triggers.
+- [x] Fixed localhost thumbnail URL normalization to preserve API port (`:8787` etc.) when remapping to current LAN host, preventing list-view thumbnail request failures on split-origin hosts.
+- [x] Expanded Explorer static regression contracts for visual-viewport wiring, coarse-pointer input guard rails, and localhost thumb remap port preservation.
+- [ ] Device-verify on physical iPhone Safari that keyboard open/close no longer causes perceived page zoom/jump and list-view initial render shows no bulk thumbnail `Loading Failed` entries.
+
 ## 2026-04-12 — RAF lane audit + focus-world idle blocking (active)
 - [x] Audited `requestAnimationFrame` usage in `ExplorerApp` focus/cinematic ownership paths and replaced direct calls with lane-tagged scheduling/cancel helpers.
 - [x] Added per-lane RAF runtime debug breakdown in `window.__explorerRafDebug` (`raf-lane-proxy-active-card`, `raf-lane-focus-world`, `raf-lane-cinematic-reveal`, `raf-lane-measurement`, `raf-lane-other`) with scheduled/completed/canceled/inFlight counters.
