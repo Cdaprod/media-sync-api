@@ -418,5 +418,11 @@ export class FocusTransitionOrchestrator {
   interruptActiveTransition() {
     this.timeline?.kill();
     this.timeline = null;
+    const world = this.root.querySelector<HTMLElement>('.proxy-render-world');
+    if (world) {
+      gsap.killTweensOf(world);
+    }
+    gsap.killTweensOf(this.root.querySelectorAll<HTMLElement>('.proxy-render-top, .proxy-render-bottom, .proxy-render-scrim'));
+    this.root.dataset.proxyContinuityEvent = 'proxy-transition-interrupted';
   }
 }

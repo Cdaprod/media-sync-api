@@ -100,6 +100,29 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('normalizePreviewAsset'));
 });
 
+test('explorer exposes per-lane raf debug breakdown and idle blockers', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes("type ExplorerRafLaneName ="));
+  assert.ok(content.includes("'raf-lane-proxy-active-card'"));
+  assert.ok(content.includes("'raf-lane-focus-world'"));
+  assert.ok(content.includes("'raf-lane-cinematic-reveal'"));
+  assert.ok(content.includes("'raf-lane-measurement'"));
+  assert.ok(content.includes("'raf-lane-other'"));
+  assert.ok(content.includes('__explorerRafDebug?: {'));
+  assert.ok(content.includes('lanes: Record<ExplorerRafLaneName, ExplorerRafLaneDebug>;'));
+  assert.ok(content.includes("recordPreviewDebug({ stage: 'focus-world-stage-idle-raf-blocked'"));
+  assert.ok(content.includes("recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked'"));
+});
+
+test('focus transition orchestrator interruption kills tweens and marks continuity event', () => {
+  const orchestratorPath = path.join(packageRoot, 'src', 'render', 'FocusTransitionOrchestrator.ts');
+  const content = fs.readFileSync(orchestratorPath, 'utf8');
+  assert.ok(content.includes('interruptActiveTransition()'));
+  assert.ok(content.includes('gsap.killTweensOf(world);'));
+  assert.ok(content.includes('proxy-transition-interrupted'));
+});
+
 test('preview adapter and panel keep drawer-based preview contract', () => {
   const adapterPath = path.join(packageRoot, 'src', 'previewAdapter.ts');
   const panelPath = path.join(packageRoot, 'src', 'AssetPreviewPanel.tsx');
@@ -1249,7 +1272,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(content.includes("moveFocusPresentationToFallbackOrIdle(fallbackKey, keyMismatch ? 'key-mismatch' : 'presentation-invalidated');"));
   assert.ok(content.includes('const initialStart = startFocusMotionForSelectionKey(selectionKey);'));
   assert.ok(content.includes('if (!isReadinessFocusReason(initialStart.reason)) {'));
-  assert.ok(content.includes('focusStartRetryFrameRef.current = window.requestAnimationFrame(() => {'));
+  assert.ok(content.includes("focusStartRetryFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {"));
   assert.ok(content.includes('const retryStart = startFocusMotionForSelectionKey(selectionKey);'));
   assert.ok(content.includes("from './explorer/focus/focusWorldMotion'"));
   assert.ok(content.includes("from './explorer/focus/resolveFocusedTapTarget'"));
@@ -2451,7 +2474,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(explorer.includes('setPinchPerfActive(true);'));
   assert.ok(explorer.includes("pinchPerfTimeoutRef.current = window.setTimeout(() => {"));
   assert.ok(explorer.includes('pinch-perf-active'));
-  assert.ok(explorer.includes('window.requestAnimationFrame(() => {'));
+  assert.ok(explorer.includes("scheduleExplorerRaf('raf-lane-cinematic-reveal', () => {"));
   assert.ok(explorer.includes("scrollerEl.addEventListener('wheel', onWheel, { passive: false });"));
   assert.ok(explorer.includes('if (!event.ctrlKey) return;'));
   assert.ok(explorer.includes('event.preventDefault();'));

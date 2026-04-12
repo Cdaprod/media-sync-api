@@ -408,6 +408,90 @@ const SORT_LABELS: Record<SortKey, string> = {
 let hasBootstrappedExplorerSession = false;
 let GLOBAL_PROXY_RAF_ID: number | null = null;
 let GLOBAL_PROXY_RAF_ACTIVE = false;
+type ExplorerRafLaneName =
+  | 'raf-lane-proxy-active-card'
+  | 'raf-lane-focus-world'
+  | 'raf-lane-cinematic-reveal'
+  | 'raf-lane-measurement'
+  | 'raf-lane-other';
+type ExplorerRafLaneDebug = {
+  active: boolean;
+  inFlight: number;
+  scheduled: number;
+  completed: number;
+  canceled: number;
+};
+const EXPLORER_RAF_LANES: ExplorerRafLaneName[] = [
+  'raf-lane-proxy-active-card',
+  'raf-lane-focus-world',
+  'raf-lane-cinematic-reveal',
+  'raf-lane-measurement',
+  'raf-lane-other',
+];
+const GLOBAL_EXPLORER_RAF_DEBUG: Record<ExplorerRafLaneName, ExplorerRafLaneDebug> = {
+  'raf-lane-proxy-active-card': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-focus-world': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-cinematic-reveal': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-measurement': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+  'raf-lane-other': { active: false, inFlight: 0, scheduled: 0, completed: 0, canceled: 0 },
+};
+const GLOBAL_EXPLORER_RAF_REQUESTS = new Map<number, ExplorerRafLaneName>();
+
+const publishExplorerRafDebug = () => {
+  const lanes = EXPLORER_RAF_LANES.reduce<Record<ExplorerRafLaneName, ExplorerRafLaneDebug>>((acc, lane) => {
+    const state = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+    acc[lane] = { ...state };
+    return acc;
+  }, {} as Record<ExplorerRafLaneName, ExplorerRafLaneDebug>);
+  (globalThis as typeof globalThis & {
+    __explorerRafDebug?: {
+      active: boolean;
+      rafId: number | null;
+      lanes: Record<ExplorerRafLaneName, ExplorerRafLaneDebug>;
+    };
+  }).__explorerRafDebug = {
+    active: GLOBAL_PROXY_RAF_ACTIVE,
+    rafId: GLOBAL_PROXY_RAF_ID,
+    lanes,
+  };
+};
+
+const setExplorerRafLaneActive = (lane: ExplorerRafLaneName, active: boolean) => {
+  GLOBAL_EXPLORER_RAF_DEBUG[lane].active = active;
+  publishExplorerRafDebug();
+};
+
+const scheduleExplorerRaf = (lane: ExplorerRafLaneName, callback: FrameRequestCallback) => {
+  const laneDebug = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+  laneDebug.scheduled += 1;
+  laneDebug.inFlight += 1;
+  const rafId = window.requestAnimationFrame((timestamp) => {
+    const mappedLane = GLOBAL_EXPLORER_RAF_REQUESTS.get(rafId);
+    if (!mappedLane) return;
+    GLOBAL_EXPLORER_RAF_REQUESTS.delete(rafId);
+    const mappedDebug = GLOBAL_EXPLORER_RAF_DEBUG[mappedLane];
+    mappedDebug.inFlight = Math.max(0, mappedDebug.inFlight - 1);
+    mappedDebug.completed += 1;
+    publishExplorerRafDebug();
+    callback(timestamp);
+  });
+  GLOBAL_EXPLORER_RAF_REQUESTS.set(rafId, lane);
+  publishExplorerRafDebug();
+  return rafId;
+};
+
+const cancelExplorerRaf = (rafId: number | null) => {
+  if (rafId == null) return;
+  const lane = GLOBAL_EXPLORER_RAF_REQUESTS.get(rafId);
+  if (lane) {
+    const laneDebug = GLOBAL_EXPLORER_RAF_DEBUG[lane];
+    laneDebug.inFlight = Math.max(0, laneDebug.inFlight - 1);
+    laneDebug.canceled += 1;
+    GLOBAL_EXPLORER_RAF_REQUESTS.delete(rafId);
+    publishExplorerRafDebug();
+  }
+  window.cancelAnimationFrame(rafId);
+};
 
 function useToastQueue() {
   const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
@@ -608,6 +692,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const previewAuthoritySelectionRef = useRef('');
   const focusedDoubleTapStateRef = useRef({ lastTapAt: 0 });
   const focusWorldIdleMarkerRef = useRef(false);
+  const focusWorldMotionFrameRef = useRef<number | null>(null);
+  const closeMeasurementFrameRef = useRef<number | null>(null);
+  const focusedRetargetRetryFrameRef = useRef<number | null>(null);
   const closeSettleTimeoutRef = useRef<number | null>(null);
 
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
@@ -777,8 +864,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const clearFocusStartRetryFrame = useCallback(() => {
     if (!focusStartRetryFrameRef.current) return;
-    window.cancelAnimationFrame(focusStartRetryFrameRef.current);
+    cancelExplorerRaf(focusStartRetryFrameRef.current);
     focusStartRetryFrameRef.current = null;
+  }, []);
+
+  const clearFocusWorldMotionFrame = useCallback(() => {
+    if (!focusWorldMotionFrameRef.current) return;
+    cancelExplorerRaf(focusWorldMotionFrameRef.current);
+    focusWorldMotionFrameRef.current = null;
+  }, []);
+
+  const clearCloseMeasurementFrame = useCallback(() => {
+    if (!closeMeasurementFrameRef.current) return;
+    cancelExplorerRaf(closeMeasurementFrameRef.current);
+    closeMeasurementFrameRef.current = null;
+  }, []);
+
+  const clearFocusedRetargetRetryFrame = useCallback(() => {
+    if (!focusedRetargetRetryFrameRef.current) return;
+    cancelExplorerRaf(focusedRetargetRetryFrameRef.current);
+    focusedRetargetRetryFrameRef.current = null;
   }, []);
 
   const clearCloseSettleTimeout = useCallback(() => {
@@ -807,7 +912,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       reason: reason === 'complete' ? 'close-complete' : 'close-settle-timeout',
     });
     const proxyRoot = focusProxyRootRef.current;
-    window.requestAnimationFrame(() => {
+    clearCloseMeasurementFrame();
+    closeMeasurementFrameRef.current = scheduleExplorerRaf('raf-lane-measurement', () => {
+      closeMeasurementFrameRef.current = null;
+      if (!inspectorOpenRef.current && focusPresentationStateRef.current.mode === 'idle') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', requestedMode: view, finalMode: 'idle' });
+        return;
+      }
       if (!proxyRoot) return;
       const retainedInert = proxyRoot.dataset.proxyRetainedInert === 'true';
       const pointerEvents = window.getComputedStyle(proxyRoot).pointerEvents;
@@ -827,15 +938,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       recordPreviewDebug({ stage: 'focus-close-grid-hit-owner-restored', requestedMode: view, finalMode: 'idle' });
     });
-  }, [removeFocusProxyScrollLock, recordPreviewDebug, view]);
+  }, [clearCloseMeasurementFrame, removeFocusProxyScrollLock, recordPreviewDebug, view]);
 
   const resetFocusPresentationToIdle = useCallback(() => {
     clearFocusStartRetryFrame();
+    clearFocusWorldMotionFrame();
+    clearCloseMeasurementFrame();
+    clearFocusedRetargetRetryFrame();
     clearFocusOverlayRevealTimer();
     setFocusPresentationState({ mode: 'idle' });
     setFocusWorldTransform({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
     resetCinematicRevealState();
-  }, [clearFocusOverlayRevealTimer, clearFocusStartRetryFrame, resetCinematicRevealState]);
+  }, [
+    clearCloseMeasurementFrame,
+    clearFocusOverlayRevealTimer,
+    clearFocusStartRetryFrame,
+    clearFocusWorldMotionFrame,
+    clearFocusedRetargetRetryFrame,
+    resetCinematicRevealState,
+  ]);
 
   const moveFocusPresentationToFallbackOrIdle = useCallback((candidateKey?: string | null, reason = 'unspecified') => {
     clearFocusStartRetryFrame();
@@ -991,7 +1112,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       && focusPresentationStateRef.current.key === selectionKey;
     setFocusPresentationState({ mode: 'world-focus', key: selectionKey, overlayReady: false });
     stageCinematicReveal(isRefocus ? 'refocus' : 'open');
-    window.requestAnimationFrame(() => {
+    clearFocusWorldMotionFrame();
+    focusWorldMotionFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
+      focusWorldMotionFrameRef.current = null;
+      if (focusPresentationStateRef.current.mode !== 'world-focus') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-raf-blocked', selectionKey, requestedMode: view, finalMode: 'idle' });
+        return;
+      }
       const next = computeFocusWorldTransform(selectionKey, { continueFromCurrent: true });
       if (!next.transform) return;
       setFocusWorldTransform(next.transform);
@@ -1006,17 +1133,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }, FOCUS_OVERLAY_REVEAL_DELAY_MS);
     recordPreviewDebug({ stage: 'focus-start', selectionKey, finalMode: 'world-focus' });
     return { ok: true };
-  }, [clearFocusOverlayRevealTimer, computeFocusWorldTransform, recordPreviewDebug, stageCinematicReveal, view]);
+  }, [
+    clearFocusOverlayRevealTimer,
+    clearFocusWorldMotionFrame,
+    computeFocusWorldTransform,
+    recordPreviewDebug,
+    stageCinematicReveal,
+    view,
+  ]);
 
   useEffect(() => {
     if (pinchOverlayGestureActiveRef.current) {
       pinchOverlayPendingNodeCountRef.current = gridColumnCount;
       return;
     }
-    const rafId = window.requestAnimationFrame(() => {
+    const rafId = scheduleExplorerRaf('raf-lane-cinematic-reveal', () => {
       setPinchDisplayNodeCount(gridColumnCount);
     });
-    return () => window.cancelAnimationFrame(rafId);
+    return () => cancelExplorerRaf(rafId);
   }, [gridColumnCount]);
 
   const resolveItemOrientation = useCallback((item: MediaItem, thumbKey = '') => {
@@ -1674,7 +1808,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       requestedMode,
       reason: initialStart.reason,
     });
-    focusStartRetryFrameRef.current = window.requestAnimationFrame(() => {
+    focusStartRetryFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
       focusStartRetryFrameRef.current = null;
       const retryStart = startFocusMotionForSelectionKey(selectionKey);
       recordPreviewDebug({
@@ -1993,7 +2127,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   ) => {
     recordPreviewDebug({ stage: 'focused-retarget-retry-scheduled', selectionKey: nextKey, requestedMode: view });
     recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: nextKey, requestedMode: view });
-    window.requestAnimationFrame(() => {
+    clearFocusedRetargetRetryFrame();
+    focusedRetargetRetryFrameRef.current = scheduleExplorerRaf('raf-lane-focus-world', () => {
+      focusedRetargetRetryFrameRef.current = null;
       recordPreviewDebug({ stage: 'focused-retarget-retry-attempt', selectionKey: nextKey, requestedMode: view });
       setFocused(nextItem);
       setActiveAssetKey(nextKey);
@@ -2006,7 +2142,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       recordPreviewDebug({ stage: 'focused-retarget-retry-failed', selectionKey: nextKey, requestedMode: view });
       recordPreviewDebug({ stage: 'focused-retarget-kept-focused', selectionKey: nextKey, requestedMode: view });
     });
-  }, [commitPreviewActivationKey, recordPreviewDebug, runProxyFocusTransition, view]);
+  }, [clearFocusedRetargetRetryFrame, commitPreviewActivationKey, recordPreviewDebug, runProxyFocusTransition, view]);
 
   useEffect(() => {
     if (view !== 'grid') return;
@@ -2213,7 +2349,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
     if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
-    const rafId = window.requestAnimationFrame(() => {
+    const rafId = scheduleExplorerRaf('raf-lane-measurement', () => {
+      if (focusPresentationStateRef.current.mode !== 'world-focus') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', selectionKey: activeAssetKey, requestedMode: view, finalMode: 'idle' });
+        return;
+      }
       const next = computeFocusWorldTransform(activeAssetKey, { continueFromCurrent: true });
       if (!next.transform) {
         moveFocusPresentationToFallbackOrIdle(activeAssetKey, next.reason ?? 'unsafe-transform');
@@ -2221,8 +2361,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       setFocusWorldTransform(next.transform);
     });
-    return () => window.cancelAnimationFrame(rafId);
-  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length]);
+    return () => cancelExplorerRaf(rafId);
+  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length, recordPreviewDebug, view]);
 
   useEffect(() => () => {
     resetFocusPresentationToIdle();
@@ -3386,7 +3526,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           const pendingCount = pinchOverlayPendingNodeCountRef.current;
           pinchOverlayPendingNodeCountRef.current = null;
           const nextNodeCount = pendingCount ?? density.getColumns();
-          window.requestAnimationFrame(() => {
+          scheduleExplorerRaf('raf-lane-cinematic-reveal', () => {
             setPinchDisplayNodeCount(nextNodeCount);
           });
           if (pinchPerfTimeoutRef.current) {
@@ -3649,7 +3789,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    window.requestAnimationFrame(() => composeNameInputRef.current?.focus());
+    scheduleExplorerRaf('raf-lane-other', () => composeNameInputRef.current?.focus());
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [composeModalOpen, composeSubmitting]);
 
@@ -3663,7 +3803,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    window.requestAnimationFrame(() => deleteConfirmButtonRef.current?.focus());
+    scheduleExplorerRaf('raf-lane-other', () => deleteConfirmButtonRef.current?.focus());
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [deleteModalOpen, deleteSubmitting, handleDeleteCancel]);
 
@@ -3863,16 +4003,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (!proxyPreviewVisible) {
       if (GLOBAL_PROXY_RAF_ID !== null) {
-        window.cancelAnimationFrame(GLOBAL_PROXY_RAF_ID);
+        cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
         GLOBAL_PROXY_RAF_ID = null;
       }
       GLOBAL_PROXY_RAF_ACTIVE = false;
-      (globalThis as typeof globalThis & {
-        __explorerRafDebug?: { active: boolean; rafId: number | null };
-      }).__explorerRafDebug = {
-        active: GLOBAL_PROXY_RAF_ACTIVE,
-        rafId: GLOBAL_PROXY_RAF_ID,
-      };
+      setExplorerRafLaneActive('raf-lane-proxy-active-card', false);
+      publishExplorerRafDebug();
       setActiveProxyCardEl(null);
       setActiveProxyUiSlotEl(null);
       setProxyPlaybackPlaying(false);
@@ -3883,7 +4019,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const root = focusProxyRootRef.current;
     if (!root) return;
     if (GLOBAL_PROXY_RAF_ID !== null) {
-      window.cancelAnimationFrame(GLOBAL_PROXY_RAF_ID);
+      cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
       GLOBAL_PROXY_RAF_ID = null;
     }
     GLOBAL_PROXY_RAF_ACTIVE = false;
@@ -3896,34 +4032,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const tick = () => {
       if (!GLOBAL_PROXY_RAF_ACTIVE) return;
       syncActiveCard();
-      GLOBAL_PROXY_RAF_ID = window.requestAnimationFrame(tick);
-      (globalThis as typeof globalThis & {
-        __explorerRafDebug?: { active: boolean; rafId: number | null };
-      }).__explorerRafDebug = {
-        active: GLOBAL_PROXY_RAF_ACTIVE,
-        rafId: GLOBAL_PROXY_RAF_ID,
-      };
+      GLOBAL_PROXY_RAF_ID = scheduleExplorerRaf('raf-lane-proxy-active-card', tick);
+      publishExplorerRafDebug();
     };
     GLOBAL_PROXY_RAF_ACTIVE = true;
-    GLOBAL_PROXY_RAF_ID = window.requestAnimationFrame(tick);
-    (globalThis as typeof globalThis & {
-      __explorerRafDebug?: { active: boolean; rafId: number | null };
-    }).__explorerRafDebug = {
-      active: GLOBAL_PROXY_RAF_ACTIVE,
-      rafId: GLOBAL_PROXY_RAF_ID,
-    };
+    setExplorerRafLaneActive('raf-lane-proxy-active-card', true);
+    GLOBAL_PROXY_RAF_ID = scheduleExplorerRaf('raf-lane-proxy-active-card', tick);
+    publishExplorerRafDebug();
     return () => {
       GLOBAL_PROXY_RAF_ACTIVE = false;
       if (GLOBAL_PROXY_RAF_ID !== null) {
-        window.cancelAnimationFrame(GLOBAL_PROXY_RAF_ID);
+        cancelExplorerRaf(GLOBAL_PROXY_RAF_ID);
         GLOBAL_PROXY_RAF_ID = null;
       }
-      (globalThis as typeof globalThis & {
-        __explorerRafDebug?: { active: boolean; rafId: number | null };
-      }).__explorerRafDebug = {
-        active: GLOBAL_PROXY_RAF_ACTIVE,
-        rafId: GLOBAL_PROXY_RAF_ID,
-      };
+      setExplorerRafLaneActive('raf-lane-proxy-active-card', false);
+      publishExplorerRafDebug();
     };
   }, [proxyPreviewVisible]);
   const activeProxyVideoEl = activeProxyCardEl?.querySelector<HTMLVideoElement>('.proxy-render-video') ?? null;

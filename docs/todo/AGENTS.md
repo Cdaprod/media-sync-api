@@ -1,3 +1,11 @@
+## 2026-04-12 — RAF lane audit + focus-world idle blocking (active)
+- [x] Audited `requestAnimationFrame` usage in `ExplorerApp` focus/cinematic ownership paths and replaced direct calls with lane-tagged scheduling/cancel helpers.
+- [x] Added per-lane RAF runtime debug breakdown in `window.__explorerRafDebug` (`raf-lane-proxy-active-card`, `raf-lane-focus-world`, `raf-lane-cinematic-reveal`, `raf-lane-measurement`, `raf-lane-other`) with scheduled/completed/canceled/inFlight counters.
+- [x] Added idle-state guards + markers for focus-world lanes (`focus-world-stage-idle-raf-blocked`, `focus-world-stage-idle-measure-blocked`) and cleared queued focus/measurement retry RAF frames on reset.
+- [x] Hardened transition interruption in `FocusTransitionOrchestrator` to kill active world/chrome tweens and publish continuity marker `proxy-transition-interrupted`.
+- [x] Expanded static contract tests for RAF lane debug wiring and orchestrator interruption tween-kill marker contracts.
+- [ ] Device-verify RAF stack probe no longer climbs under repeated open/refocus/close churn and capture lane-level `__explorerRafDebug.lanes` evidence during idle/focused transitions.
+
 ## 2026-04-11 — Media invariant stale-closure fix (active)
 - [x] Fixed `publishMediaInvariantDebug` stale-closure dependency gap by including focused ownership inputs (`view`, `inspectorOpen`, `gridCinematicMode`) alongside `activeAssetKey`.
 - [x] Updated static regression contract to lock the widened `useCallback` dependency list for `publishMediaInvariantDebug`.
