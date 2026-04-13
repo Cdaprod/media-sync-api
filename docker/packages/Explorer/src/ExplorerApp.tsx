@@ -3401,6 +3401,80 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, []);
 
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const loadFailures = new Map<string, {
+      key: string;
+      tag: string;
+      url: string;
+      className: string;
+      count: number;
+      firstAt: number;
+      lastAt: number;
+    }>();
+
+    const toSnapshotRows = () => Array.from(loadFailures.values())
+      .sort((a, b) => b.lastAt - a.lastAt)
+      .slice(0, 80)
+      .map((entry) => ({ ...entry }));
+
+    const publishSnapshot = () => {
+      const snapshot = {
+        totalUnique: loadFailures.size,
+        totalEvents: Array.from(loadFailures.values()).reduce((acc, entry) => acc + entry.count, 0),
+        rows: toSnapshotRows(),
+      };
+      (window as typeof window & {
+        __explorerLoadFailureDebug?: { getSnapshot: () => typeof snapshot; lastSnapshot: typeof snapshot };
+      }).__explorerLoadFailureDebug = {
+        getSnapshot: () => snapshot,
+        lastSnapshot: snapshot,
+      };
+    };
+
+    const onResourceError = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName || 'UNKNOWN';
+      const imgTarget = target as HTMLImageElement;
+      const sourceUrl = (
+        imgTarget.currentSrc
+        || target.getAttribute('src')
+        || target.getAttribute('href')
+        || target.getAttribute('poster')
+        || ''
+      ).trim();
+      const className = String(target.className || '');
+      const key = `${tag}:${sourceUrl || '(none)'}`;
+      const now = Date.now();
+      const prior = loadFailures.get(key);
+      if (prior) {
+        prior.count += 1;
+        prior.lastAt = now;
+      } else {
+        loadFailures.set(key, {
+          key,
+          tag,
+          url: sourceUrl,
+          className,
+          count: 1,
+          firstAt: now,
+          lastAt: now,
+        });
+      }
+      publishSnapshot();
+    };
+
+    window.addEventListener('error', onResourceError, true);
+    publishSnapshot();
+
+    return () => {
+      window.removeEventListener('error', onResourceError, true);
+      delete (window as typeof window & { __explorerLoadFailureDebug?: unknown }).__explorerLoadFailureDebug;
+    };
+  }, []);
+
   useEffect(() => {
     const topbar = topbarRef.current;
     if (!topbar) return;

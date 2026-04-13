@@ -66,6 +66,9 @@ function AssetListComponent({
                   event.stopPropagation();
                 }}
                 onError={(event) => {
+                  const native = event.nativeEvent;
+                  native.stopImmediatePropagation?.();
+                  native.stopPropagation?.();
                   const node = event.currentTarget;
                   node.onerror = null;
                   const fallback = node.dataset.thumbFallback || '';

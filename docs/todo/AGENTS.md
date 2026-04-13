@@ -1,3 +1,9 @@
+## 2026-04-13 — Startup `Load failed` emitter traceability + spam suppression follow-up (active)
+- [x] Added runtime global resource-error capture export (`window.__explorerLoadFailureDebug`) in `ExplorerApp` with deduped key/count/tag/url/class snapshots.
+- [x] Hardened grid/list thumbnail onError handlers to stop native error propagation (`stopImmediatePropagation`/`stopPropagation`) before fallback swap, reducing generic repeated tool-level `Load failed` noise from the same failed asset.
+- [x] Expanded static contracts to lock load-failure debug export wiring and native propagation stop guards in both thumbnail card components.
+- [ ] Capture one startup snapshot from `window.__explorerLoadFailureDebug?.getSnapshot()` on device and confirm whether remaining `Load failed` events originate from non-thumbnail resources.
+
 ## 2026-04-13 — List/grid thumbnail URL authority + load-failure fallback hardening (active)
 - [x] Unified Explorer thumbnail URL authority to always run through `normalizeThumbUrl(...) -> resolveAssetUrl(...) -> absolutizeMediaUrl(...)` for both dataset signatures and rendered card thumbs.
 - [x] Added defensive thumbnail `<img>` error fallback handlers in both `AssetGrid` and `AssetList` to clear retry loops (`onerror = null`) and swap to dataset fallback image.

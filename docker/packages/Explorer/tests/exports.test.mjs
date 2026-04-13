@@ -2193,6 +2193,10 @@ test('asset cards apply thumbnail error fallback without retry-loop spam', () =>
 
   assert.ok(grid.includes('onError={(event) => {'));
   assert.ok(list.includes('onError={(event) => {'));
+  assert.ok(grid.includes('native.stopImmediatePropagation?.();'));
+  assert.ok(list.includes('native.stopImmediatePropagation?.();'));
+  assert.ok(grid.includes('native.stopPropagation?.();'));
+  assert.ok(list.includes('native.stopPropagation?.();'));
   assert.ok(grid.includes('node.onerror = null;'));
   assert.ok(list.includes('node.onerror = null;'));
   assert.ok(grid.includes('const fallback = node.dataset.thumbFallback || "";') || grid.includes("const fallback = node.dataset.thumbFallback || '';"));
@@ -2673,6 +2677,7 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes("viewport?.addEventListener('resize', captureViewportSnapshot);"));
   assert.ok(content.includes("viewport?.addEventListener('scroll', captureViewportSnapshot);"));
   assert.ok(content.includes('__explorerViewportDebug'));
+  assert.ok(content.includes('__explorerLoadFailureDebug'));
   assert.ok(content.includes('viewportMeta: readViewportMeta()'));
   assert.ok(content.includes('pageScaleLike'));
   assert.ok(styles.includes('height: var(--explorer-visual-viewport-height, 100%);'));
