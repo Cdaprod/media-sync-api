@@ -839,6 +839,8 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('useThumbnailQueue({'));
   assert.ok(content.includes('thumbDatasetSignature'));
   assert.ok(content.includes('buildThumbJobKey('));
+  assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';"));
+  assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;"));
   assert.ok(gridContent.includes('data-thumb-url'));
   assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
   assert.ok(content.includes('pendingDataLoadOverlay'));
@@ -2180,6 +2182,23 @@ test('preview/backdrop styles and ownership markers remain explicit enough to pr
   assert.ok(drawerMotion.includes("backdropEl.dataset.drawerMotionOwned = 'true';"));
   assert.ok(styles.includes('.inspector-backdrop'));
   assert.ok(styles.includes('.drawer'));
+});
+
+
+test('asset cards apply thumbnail error fallback without retry-loop spam', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+  const list = fs.readFileSync(listPath, 'utf8');
+
+  assert.ok(grid.includes('onError={(event) => {'));
+  assert.ok(list.includes('onError={(event) => {'));
+  assert.ok(grid.includes('node.onerror = null;'));
+  assert.ok(list.includes('node.onerror = null;'));
+  assert.ok(grid.includes('const fallback = node.dataset.thumbFallback || "";') || grid.includes("const fallback = node.dataset.thumbFallback || '';"));
+  assert.ok(list.includes('const fallback = node.dataset.thumbFallback || "";') || list.includes("const fallback = node.dataset.thumbFallback || '';"));
+  assert.ok(grid.includes('if (fallback && node.src !== fallback) node.src = fallback;'));
+  assert.ok(list.includes('if (fallback && node.src !== fallback) node.src = fallback;'));
 });
 
 test('no generic load-failure console spam contract should remain in explorer-facing source', () => {

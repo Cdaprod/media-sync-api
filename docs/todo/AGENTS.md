@@ -1,3 +1,9 @@
+## 2026-04-13 — List/grid thumbnail URL authority + load-failure fallback hardening (active)
+- [x] Unified Explorer thumbnail URL authority to always run through `normalizeThumbUrl(...) -> resolveAssetUrl(...) -> absolutizeMediaUrl(...)` for both dataset signatures and rendered card thumbs.
+- [x] Added defensive thumbnail `<img>` error fallback handlers in both `AssetGrid` and `AssetList` to clear retry loops (`onerror = null`) and swap to dataset fallback image.
+- [x] Expanded static contracts to lock absolute thumbnail URL generation in `ExplorerApp` and fallback error-handler wiring in grid/list card components.
+- [ ] Validate on mobile startup that repeated list-view thumbnail `Load failed` console noise is eliminated and fallback imagery appears deterministically for missing thumbs.
+
 ## 2026-04-12 — Page-level viewport contract + debug exposure follow-up (active)
 - [x] Tightened App Router viewport contract in `app/layout.tsx` with explicit zoom bounds (`minimumScale:1`, `maximumScale:1`, `userScalable:false`) for deterministic mobile page-scale behavior.
 - [x] Upgraded Explorer visual-viewport effect to publish runtime page-level viewport diagnostics (`__explorerViewportDebug`) including viewport meta content, visual viewport metrics, inner/client dimensions, and computed `pageScaleLike`.

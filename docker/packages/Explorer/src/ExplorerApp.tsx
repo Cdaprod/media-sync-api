@@ -1337,11 +1337,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const rawThumbUrl = normalizeThumbUrl(item.thumb_url
         || item.thumbnail_url
         || (kind === 'image' ? item.stream_url : undefined));
-      const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : '';
+      const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';
       return buildThumbJobKey(thumbKey, thumbUrl);
     });
     return `${view}:${view === 'grid' ? gridColumnCount : 'list'}:${dataset.join('\n')}`;
-  }, [activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, view]);
+  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, view]);
 
   useThumbnailQueue({
     beginContentLoading,
@@ -3893,7 +3893,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       || item.thumbnail_url
       || (kind === 'image' ? item.stream_url : undefined));
     const fallbackThumb = buildThumbFallback(kind);
-    const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
+    const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;
     const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
     const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
