@@ -1,3 +1,9 @@
+## 2026-04-13 — Off-DOM thumbnail loader mismatch acknowledgment + verification follow-up (active)
+- [x] Explicitly acknowledged prior summary/code mismatch: previous rollout summary claimed off-DOM probe removal while device evidence still showed `const loader = new Image()` in `thumbnailLoader.ensureThumbLoad`.
+- [x] Re-verified repository truth that `ensureThumbLoad(...)` no longer creates synthetic image objects and now binds `load`/`error` listeners on the rendered target `<img>` node.
+- [x] Re-verified static regression assertion preventing reintroduction of `const loader = new Image();` in package thumbnail loader contracts.
+- [ ] Capture fresh on-device startup logs against this exact commit and confirm whether repeated generic `Load failed` rows are eliminated vs reduced.
+
 ## 2026-04-13 — Off-DOM thumbnail probe lane root-cause correction (active)
 - [x] Identified non-settled thumbnail fetch lane in `thumbnailLoader.ensureThumbLoad` using off-DOM `new Image()` probes as likely source of repeated status-0 hashed `.jpg` startup noise.
 - [x] Replaced off-DOM probe loader with in-DOM target-event loading (`target.addEventListener('load'/'error')` + direct `target.src` assignment) so thumbnail truth follows rendered card elements.
