@@ -1,3 +1,10 @@
+## 2026-04-13 — Off-DOM thumbnail probe lane root-cause correction (active)
+- [x] Identified non-settled thumbnail fetch lane in `thumbnailLoader.ensureThumbLoad` using off-DOM `new Image()` probes as likely source of repeated status-0 hashed `.jpg` startup noise.
+- [x] Replaced off-DOM probe loader with in-DOM target-event loading (`target.addEventListener('load'/'error')` + direct `target.src` assignment) so thumbnail truth follows rendered card elements.
+- [x] Kept thumbnail cache/inflight semantics while removing off-DOM probe object creation to reduce duplicate/transient image request churn.
+- [x] Expanded static contracts to lock absence of `new Image()` in the package thumbnail loader and require in-DOM target load/error listeners.
+- [ ] Validate on device startup that status-0 unknown `.jpg` rows and repeated `Load failed` spam are eliminated (or materially reduced) after off-DOM probe removal.
+
 ## 2026-04-13 — Startup `Load failed` emitter traceability + spam suppression follow-up (active)
 - [x] Added runtime global resource-error capture export (`window.__explorerLoadFailureDebug`) in `ExplorerApp` with deduped key/count/tag/url/class snapshots.
 - [x] Hardened grid/list thumbnail onError handlers to stop native error propagation (`stopImmediatePropagation`/`stopPropagation`) before fallback swap, reducing generic repeated tool-level `Load failed` noise from the same failed asset.

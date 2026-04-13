@@ -64,25 +64,54 @@ const syncThumbNode = (
   target.addEventListener('load', () => onOrientation(target), { once: true });
 };
 
-const ensureThumbLoad = (jobKey: string, url: string): Promise<ThumbLoadState> => {
+const ensureThumbLoad = (
+  target: HTMLImageElement,
+  jobKey: string,
+  url: string,
+  onOrientation: (node: HTMLImageElement) => void,
+): Promise<ThumbLoadState> => {
   const cachedState = thumbLoadStateCache.get(jobKey);
   if (cachedState) return Promise.resolve(cachedState);
   const inflight = inflightThumbLoads.get(jobKey);
   if (inflight) return inflight;
 
   const request = new Promise<ThumbLoadState>((resolve) => {
-    const loader = new Image();
-    loader.onload = () => {
-      thumbLoadStateCache.set(jobKey, 'loaded');
+    let settled = false;
+    const settle = (state: ThumbLoadState) => {
+      if (settled) return;
+      settled = true;
+      thumbLoadStateCache.set(jobKey, state);
       inflightThumbLoads.delete(jobKey);
-      resolve('loaded');
+      resolve(state);
     };
-    loader.onerror = () => {
-      thumbLoadStateCache.set(jobKey, 'error');
-      inflightThumbLoads.delete(jobKey);
-      resolve('error');
+
+    const cleanup = () => {
+      target.removeEventListener('load', handleLoad);
+      target.removeEventListener('error', handleError);
     };
-    loader.src = url;
+
+    const handleLoad = () => {
+      cleanup();
+      onOrientation(target);
+      settle('loaded');
+    };
+
+    const handleError = () => {
+      cleanup();
+      settle('error');
+    };
+
+    target.addEventListener('load', handleLoad, { once: true });
+    target.addEventListener('error', handleError, { once: true });
+
+    if (target.currentSrc === url && target.complete && target.naturalWidth > 0) {
+      handleLoad();
+      return;
+    }
+
+    if (target.src !== url) {
+      target.src = url;
+    }
   });
 
   inflightThumbLoads.set(jobKey, request);
@@ -150,7 +179,7 @@ export const queueThumbLoads = async (
 
         target.dataset.thumbState = 'loading';
         active += 1;
-        void ensureThumbLoad(jobKey, url)
+        void ensureThumbLoad(target, jobKey, url, onOrientation)
           .then((state) => {
             if (target.dataset.thumbJobKey === jobKey) {
               syncThumbNode(target, state, onOrientation);

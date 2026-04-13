@@ -912,6 +912,10 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('endContentLoading'));
   assert.ok(loaderContent.includes('export const THUMB_LOAD_TIMEOUT_MS = 8000;'));
   assert.ok(loaderContent.includes('thumbLoadStateCache'));
+  assert.ok(loaderContent.includes('const ensureThumbLoad = ('));
+  assert.ok(loaderContent.includes("target.addEventListener('load', handleLoad, { once: true });"));
+  assert.ok(loaderContent.includes("target.addEventListener('error', handleError, { once: true });"));
+  assert.ok(!loaderContent.includes('const loader = new Image();'));
   assert.ok(loaderContent.includes('thumbLoadedKey'));
   assert.ok(hookContent.includes('requiresThumbNodeSync'));
   assert.ok(hookContent.includes('hasPendingThumbNetworkLoad'));
