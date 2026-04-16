@@ -280,7 +280,7 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
   assert.ok(explorer.includes("import { useExplorerCommands } from './hooks/useExplorerCommands';"));
   assert.ok(explorer.includes("import { useExplorerUiState } from './hooks/useExplorerUiState';"));
-  assert.ok(explorer.includes('} = useExplorerUiState();'));
+  assert.ok(explorer.includes('} = useExplorerUiState({'));
   assert.ok(explorer.includes('const {\n    handleComposeCompletion,\n    composeMediaCommand,\n    uploadMediaCommand,\n    uploadMediaBatchCommand,\n    sendToProgramMonitorCommand,\n    pushToObsCommand,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
   assert.ok(explorer.includes('onCompletedRefreshScope: handleComposeCompletion,'));
   assert.ok(explorer.includes('scope: \'project\''));
@@ -311,7 +311,14 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
 test('explorer ui-state seam owns modal/context/detail state cluster', () => {
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const content = fs.readFileSync(uiStatePath, 'utf8');
-  assert.ok(content.includes('export function useExplorerUiState() {'));
+  assert.ok(content.includes('export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {'));
+  assert.ok(content.includes('const [view, setView] = useState<ExplorerView>(defaultView);'));
+  assert.ok(content.includes("const [typeFilter, setTypeFilter] = useState<MediaTypeFilter>('all');"));
+  assert.ok(content.includes("const [sortKey, setSortKey] = useState<SortKey>('newest');"));
+  assert.ok(content.includes('const [gridColumnCount, setGridColumnCount] = useState(defaultGridColumns);'));
+  assert.ok(content.includes('const [overlayEnabled, setOverlayEnabled] = useState(true);'));
+  assert.ok(content.includes('const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);'));
+  assert.ok(content.includes('const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);'));
   assert.ok(content.includes('const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);'));
   assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);'));
   assert.ok(content.includes('const [composeModalOpen, setComposeModalOpen] = useState(false);'));
@@ -537,12 +544,14 @@ test('asset tile preview open path requires second tap intent and keeps focus se
 
 test('topbar interaction boundaries protect header controls and nearby asset selectors', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
   const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const uiState = fs.readFileSync(uiStatePath, 'utf8');
   const utils = fs.readFileSync(utilsPath, 'utf8');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
@@ -568,8 +577,8 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('const mediaContentRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes('const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes("const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);"));
-  assert.ok(explorer.includes('const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);'));
-  assert.ok(explorer.includes('const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);'));
+  assert.ok(uiState.includes('const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);'));
+  assert.ok(uiState.includes('const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);'));
   assert.ok(explorer.includes('const topbarInsetPrevRef = useRef(0);'));
   assert.ok(explorer.includes('const updateTopbarMeasuredHeight = () => {'));
   assert.ok(explorer.includes('const observer = new ResizeObserver(() => updateTopbarMeasuredHeight());'));
@@ -1218,7 +1227,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('getClassHostEl: () => mediaContentRef.current,'));
   assert.ok(content.includes('id="asset-density-slider"'));
   assert.ok(content.includes('const OVERLAY_VIS_PREFS_KEY = \'media-sync-explorer-overlay-enabled-v1\';'));
-  assert.ok(content.includes('const [overlayEnabled, setOverlayEnabled] = useState(true);'));
+  assert.ok(content.includes('overlayEnabled,'));
   assert.ok(content.includes('window.localStorage.getItem(OVERLAY_VIS_PREFS_KEY)'));
   assert.ok(content.includes('window.localStorage.setItem(OVERLAY_VIS_PREFS_KEY, overlayEnabled ? \'1\' : \'0\');'));
   assert.ok(content.includes('Overlays: {overlayEnabled ? \'On\' : \'Off\'}'));
@@ -2207,14 +2216,16 @@ test('density controls preserve slider UI and do not regress to mobile stepper-o
 
 test('committed density value is mirrored consistently into layout UI attributes and readout', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts');
 
   const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const uiState = fs.readFileSync(uiStatePath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
   const controller = fs.readFileSync(controllerPath, 'utf8');
 
-  assert.ok(explorer.includes('const [gridColumnCount, setGridColumnCount] = useState('));
+  assert.ok(uiState.includes('const [gridColumnCount, setGridColumnCount] = useState(defaultGridColumns);'));
   assert.ok(explorer.includes('onColumnsCommit: (next) => {') || explorer.includes('onColumnsCommit'));
   assert.ok(grid.includes('data-density-columns={gridColumnCount}'));
   assert.ok(controller.includes('gridEl.dataset.columns = String(currentColumns);') || controller.includes('gridEl.dataset.columns'));

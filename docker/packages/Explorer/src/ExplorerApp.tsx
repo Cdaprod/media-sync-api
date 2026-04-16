@@ -560,12 +560,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaScope, setMediaScope] = useState<'project' | 'all'>('project');
-  const [view, setView] = useState<ExplorerView>(DEFAULT_VIEW);
-  const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<MediaTypeFilter>('all');
-  const [sortKey, setSortKey] = useState<SortKey>('newest');
-  const [selectedOnly, setSelectedOnly] = useState(false);
-  const [untaggedOnly, setUntaggedOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
   const [activeAssetKey, setActiveAssetKey] = useState('');
@@ -581,8 +575,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [dragActive, setDragActive] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
-  const [gridColumnCount, setGridColumnCount] = useState(DEFAULT_COLUMNS_MOBILE);
-  const [overlayEnabled, setOverlayEnabled] = useState(true);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);
   const contentLoadingTokenRef = useRef(0);
@@ -603,9 +595,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [proxyPlaybackCurrentTime, setProxyPlaybackCurrentTime] = useState(0);
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
-  const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);
-  const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);
   const {
+    view,
+    setView,
+    query,
+    setQuery,
+    typeFilter,
+    setTypeFilter,
+    sortKey,
+    setSortKey,
+    selectedOnly,
+    setSelectedOnly,
+    untaggedOnly,
+    setUntaggedOnly,
+    gridColumnCount,
+    setGridColumnCount,
+    overlayEnabled,
+    setOverlayEnabled,
+    topbarHasOpenDropdown,
+    setTopbarHasOpenDropdown,
+    topbarFocusWithin,
+    setTopbarFocusWithin,
     previewDetailsOpen,
     setPreviewDetailsOpen,
     contextMenu,
@@ -626,7 +636,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setDeleteModalRendered,
     pendingDeleteSelectionKeys,
     setPendingDeleteSelectionKeys,
-  } = useExplorerUiState();
+  } = useExplorerUiState({
+    defaultView: DEFAULT_VIEW,
+    defaultGridColumns: DEFAULT_COLUMNS_MOBILE,
+  });
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());

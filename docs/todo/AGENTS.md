@@ -1,8 +1,14 @@
+## 2026-04-16 — Explorer shell reduction (topbar/density/filter preference seam) (active)
+- [x] Expanded `useExplorerUiState` to own topbar/density/filter/view preference state (`view`, `query`, `typeFilter`, `sortKey`, `selectedOnly`, `untaggedOnly`, `gridColumnCount`, `overlayEnabled`, `topbarHasOpenDropdown`, `topbarFocusWithin`) with configurable defaults.
+- [x] Migrated `ExplorerApp` to consume the expanded UI-state seam via `useExplorerUiState({ defaultView, defaultGridColumns })` while preserving existing behavior/wiring.
+- [x] Updated static contracts to assert expanded UI-state seam fields and adjusted topbar/density/compose/delete assertions to follow hook-owned state locations.
+- [ ] Follow-up: evaluate extracting adjacent UI-only project/surface toggles (for example sidebar/actions open state) once this preference seam is validated stable.
+
 ## 2026-04-16 — Explorer shell reduction (UI state seam start) (active)
 - [x] Added `useExplorerUiState` hook under `src/hooks/` to own modal/context/detail state cluster previously declared inline in `ExplorerApp`.
 - [x] Migrated `ExplorerApp` to consume `useExplorerUiState` for preview-details, context-menu, compose modal state, delete modal state, and pending-delete-key state while preserving existing behavior.
 - [x] Added static contracts to assert `useExplorerUiState` import/wiring from `ExplorerApp` and hook-owned modal/context/detail state fields.
-- [ ] Follow-up: continue UI seam extraction for adjacent topbar/density/filter preference state clusters after validating this first modal/context seam remains stable.
+- [x] Follow-up completed in later pass: extracted adjacent topbar/density/filter preference state clusters into `useExplorerUiState`.
 
 ## 2026-04-16 — External integration command-lane extraction (active)
 - [x] Added `sendToProgramMonitorCommand(...)` and `pushToObsCommand(...)` to `useExplorerCommands` so focused external dispatch side effects execute inside the command boundary.

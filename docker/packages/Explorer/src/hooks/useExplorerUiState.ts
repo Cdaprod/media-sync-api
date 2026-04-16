@@ -1,6 +1,12 @@
 import { useState } from 'react';
 
-import type { MediaItem } from '../types';
+import type { MediaTypeFilter, SortKey } from '../state';
+import type { ExplorerView, MediaItem } from '../types';
+
+interface UseExplorerUiStateOptions {
+  defaultView?: ExplorerView;
+  defaultGridColumns?: number;
+}
 
 /**
  * UI-state ownership seam for modal/context/detail presentation controls.
@@ -8,7 +14,22 @@ import type { MediaItem } from '../types';
  * Keeps ExplorerApp focused on wiring + behavior while preserving existing
  * state names and update semantics.
  */
-export function useExplorerUiState() {
+export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {
+  const {
+    defaultView = 'grid',
+    defaultGridColumns = 3,
+  } = options;
+
+  const [view, setView] = useState<ExplorerView>(defaultView);
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<MediaTypeFilter>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
+  const [selectedOnly, setSelectedOnly] = useState(false);
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
+  const [gridColumnCount, setGridColumnCount] = useState(defaultGridColumns);
+  const [overlayEnabled, setOverlayEnabled] = useState(true);
+  const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);
+  const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);
   const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
@@ -21,6 +42,26 @@ export function useExplorerUiState() {
   const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);
 
   return {
+    view,
+    setView,
+    query,
+    setQuery,
+    typeFilter,
+    setTypeFilter,
+    sortKey,
+    setSortKey,
+    selectedOnly,
+    setSelectedOnly,
+    untaggedOnly,
+    setUntaggedOnly,
+    gridColumnCount,
+    setGridColumnCount,
+    overlayEnabled,
+    setOverlayEnabled,
+    topbarHasOpenDropdown,
+    setTopbarHasOpenDropdown,
+    topbarFocusWithin,
+    setTopbarFocusWithin,
     previewDetailsOpen,
     setPreviewDetailsOpen,
     contextMenu,
