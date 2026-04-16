@@ -2454,6 +2454,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const {
     refreshAfterMutation,
     handleComposeCompletion,
+    composeMediaCommand,
     resolveMediaCommand,
     performDeleteMediaSelection,
     moveMediaSelection,
@@ -2590,26 +2591,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
     setComposeSubmitting(true);
-    try {
-      const response = await api.bulkComposeMedia({
-        assets: refs,
-        output_project: targetProject.name,
-        output_name: outputName,
-        output_source: targetProject.source || null,
-        target_dir: 'exports',
-        mode: 'encode',
-        allow_overwrite: false,
-      });
+    const response = await composeMediaCommand({
+      assets: refs,
+      outputProject: targetProject,
+      outputName,
+      title: 'Compose',
+    });
+    if (response) {
       registerAcceptedJob({ envelope: response as ComposeJobEnvelope });
-      addToast('good', 'Compose', 'Compose started');
       setComposeModalOpen(false);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Compose failed';
-      addToast('bad', 'Compose', message);
-    } finally {
-      setComposeSubmitting(false);
     }
-  }, [addToast, api, composeOutputName, composeOutputProject, composeSubmitting, projects, registerAcceptedJob, selectedVideoItems, toAssetRef]);
+    setComposeSubmitting(false);
+  }, [addToast, composeMediaCommand, composeOutputName, composeOutputProject, composeSubmitting, projects, registerAcceptedJob, selectedVideoItems, toAssetRef]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;

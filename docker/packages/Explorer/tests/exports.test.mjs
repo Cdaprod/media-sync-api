@@ -279,17 +279,19 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
   assert.ok(explorer.includes("import { useExplorerCommands } from './hooks/useExplorerCommands';"));
-  assert.ok(explorer.includes('const {\n    refreshAfterMutation,\n    handleComposeCompletion,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
+  assert.ok(explorer.includes('const {\n    refreshAfterMutation,\n    handleComposeCompletion,\n    composeMediaCommand,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
   assert.ok(explorer.includes('onCompletedRefreshScope: handleComposeCompletion,'));
   assert.ok(explorer.includes('scope: \'project\''));
   assert.ok(explorer.includes('await refreshAfterMutation({ project: project.name, source: project.source || undefined });'));
   assert.ok(explorer.includes('await tagSingleMediaItem(focused, addTags, removeTags, \'Tag\');'));
+  assert.ok(explorer.includes('const response = await composeMediaCommand({'));
   assert.ok(explorer.includes('await resolveMediaCommand({'));
   assert.ok(commands.includes('export function useExplorerCommands(args: UseExplorerCommandsArgs) {'));
   assert.ok(commands.includes('const refreshAfterScopedMutation = useCallback(async (scope: RefreshScope | null) => {'));
   assert.ok(commands.includes('const refreshAfterMutation = useCallback(async (scope: RefreshScope | null | undefined) => {'));
   assert.ok(commands.includes('const tagSingleMediaItem = useCallback(async ('));
   assert.ok(commands.includes('const handleComposeCompletion = useCallback(async (scope: RefreshScope | null | undefined) => {'));
+  assert.ok(commands.includes('const composeMediaCommand = useCallback(async (command: ComposeMediaCommand) => {'));
   assert.ok(commands.includes('const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {'));
   assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));
@@ -617,7 +619,9 @@ test('pending compose recovery reconciles stale restored jobs and prefers real a
 
 test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const commandsHookPath = path.join(packageRoot, 'src', 'hooks', 'useExplorerCommands.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const commands = fs.readFileSync(commandsHookPath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
   assert.ok(content.includes('Select one or more video clips'));
   assert.ok(content.includes("addToast('warn', 'Compose', 'Select one or more clips')"));
@@ -631,12 +635,13 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('onSubmit={(event) => {'));
   assert.ok(content.includes('className="btn good" type="submit" disabled={composeSubmitting}'));
   assert.ok(content.includes("registerAcceptedJob({ envelope: response as ComposeJobEnvelope });"));
-  assert.ok(content.includes("addToast('good', 'Compose', 'Compose started');"));
-  assert.ok(content.includes("addToast('good', 'Compose', 'Compose completed');"));
-  assert.ok(content.includes("addToast('bad', 'Compose', 'Compose failed');"));
-  assert.ok(content.includes('target_dir: \'exports\''));
-  assert.ok(content.includes("mode: 'encode'"));
-  assert.ok(content.includes('allow_overwrite: false,'));
+  assert.ok(content.includes('const response = await composeMediaCommand({'));
+  assert.ok(commands.includes("addToast('good', title, 'Compose started');"));
+  assert.ok(commands.includes("addToast('good', 'Compose', 'Compose completed');"));
+  assert.ok(commands.includes("const message = err instanceof Error ? err.message : 'Compose failed';"));
+  assert.ok(commands.includes('target_dir: \'exports\''));
+  assert.ok(commands.includes("mode: 'encode'"));
+  assert.ok(commands.includes('allow_overwrite: false,'));
   assert.ok(content.includes('if (composeSubmitting) {'));
   assert.ok(content.includes('setComposeSubmitting(true);'));
   assert.ok(content.includes('setComposeSubmitting(false);'));
@@ -661,13 +666,13 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(!composeBlock.includes('window.prompt('));
   const confirmEnd = content.indexOf('const handleResolve = useCallback(async () => {', composeEnd);
   const confirmBlock = content.slice(composeEnd, confirmEnd);
-  assert.ok(confirmBlock.includes("mode: 'encode'"));
+  assert.ok(confirmBlock.includes('const response = await composeMediaCommand({'));
   assert.ok(!confirmBlock.includes("mode: 'auto'"));
   assert.ok(confirmBlock.includes("registerAcceptedJob({ envelope: response as ComposeJobEnvelope });"));
   assert.ok(!confirmBlock.includes('await loadProjects();'));
   assert.ok(!confirmBlock.includes('await loadAllMedia();'));
   assert.ok(!confirmBlock.includes('await loadMedia(activeProject);'));
-  assert.ok(confirmBlock.includes('} finally {'));
+  assert.ok(confirmBlock.includes('setComposeSubmitting(false);'));
 });
 
 test('pending compose modules and render wiring are present', () => {

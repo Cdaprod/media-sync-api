@@ -46,6 +46,13 @@ interface ResolveMediaCommand {
   title?: string;
 }
 
+interface ComposeMediaCommand {
+  assets: AssetRef[];
+  outputProject: Project;
+  outputName: string;
+  title?: string;
+}
+
 /**
  * Mutation command orchestration for Explorer media actions.
  *
@@ -239,6 +246,27 @@ export function useExplorerCommands(args: UseExplorerCommandsArgs) {
     addToast('good', 'Compose', 'Compose completed');
   }, [addToast, refreshAfterScopedMutation]);
 
+  const composeMediaCommand = useCallback(async (command: ComposeMediaCommand) => {
+    const title = command.title || 'Compose';
+    try {
+      const response = await api.bulkComposeMedia({
+        assets: command.assets,
+        output_project: command.outputProject.name,
+        output_name: command.outputName,
+        output_source: command.outputProject.source || null,
+        target_dir: 'exports',
+        mode: 'encode',
+        allow_overwrite: false,
+      });
+      addToast('good', title, 'Compose started');
+      return response;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Compose failed';
+      addToast('bad', title, message);
+      return null;
+    }
+  }, [addToast, api]);
+
   const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {
     const title = command.title || 'Resolve';
     try {
@@ -258,6 +286,7 @@ export function useExplorerCommands(args: UseExplorerCommandsArgs) {
   return {
     refreshAfterMutation,
     handleComposeCompletion,
+    composeMediaCommand,
     resolveMediaCommand,
     performDeleteMediaSelection,
     moveMediaSelection,

@@ -1,3 +1,9 @@
+## 2026-04-16 — Compose submit command-lane extraction (active)
+- [x] Added `composeMediaCommand(...)` to `useExplorerCommands` so compose request execution + success/error toasts are command-owned instead of root-owned.
+- [x] Migrated `ExplorerApp` compose-confirm submit path to call `composeMediaCommand(...)` and only keep modal/pending-job UI wiring in root.
+- [x] Expanded Explorer static contracts to assert `composeMediaCommand` wiring in `ExplorerApp` and implementation presence in `useExplorerCommands`.
+- [ ] Follow-up: evaluate extracting upload mutation API lanes (`handleUpload`, drag/drop upload) into command-hook verbs once pre-hook callback ordering is normalized.
+
 ## 2026-04-16 — Focused resolve command-lane extraction (active)
 - [x] Added `resolveMediaCommand(...)` to `useExplorerCommands` so resolve-side effects + outcome toasts no longer require root-owned API try/catch blocks.
 - [x] Migrated both bulk `handleResolve` and focused `handleFocusedResolve` flows in `ExplorerApp` to command-hook resolve execution.
