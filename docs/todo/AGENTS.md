@@ -1,3 +1,8 @@
+## 2026-04-16 — Surface-toggle seam contract hardening (active)
+- [x] Added explicit static contract guards asserting `ExplorerApp` no longer declares inline `sidebarOpen`/`actionsOpen`/`dragActive` state after `useExplorerUiState` migration.
+- [x] Kept UI-only surface-toggle ownership in `useExplorerUiState` without behavior changes.
+- [ ] Follow-up: keep adding negative ownership assertions as new root-local seams are extracted to prevent accidental inline reintroduction.
+
 ## 2026-04-16 — Render-order TDZ hardening + surface-toggle seam follow-up (active)
 - [x] Fixed `ExplorerApp` render-time TDZ crash by ensuring `usePendingComposeJobs(...)` binding is declared before render-time pending compose consumers (`visiblePendingComposeItems` + related pending compose effects/memos).
 - [x] Added static contract guard asserting `usePendingComposeJobs(...)` declaration appears before `visiblePendingComposeItems` memo in `ExplorerApp`.

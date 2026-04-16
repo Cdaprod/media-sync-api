@@ -313,7 +313,9 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
 });
 
 test('explorer ui-state seam owns modal/context/detail state cluster', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
   const content = fs.readFileSync(uiStatePath, 'utf8');
   assert.ok(content.includes('export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {'));
   assert.ok(content.includes('const [view, setView] = useState<ExplorerView>(defaultView);'));
@@ -332,6 +334,9 @@ test('explorer ui-state seam owns modal/context/detail state cluster', () => {
   assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
   assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
   assert.ok(content.includes('return {'));
+  assert.ok(!explorer.includes('const [sidebarOpen, setSidebarOpen] = useState(false);'));
+  assert.ok(!explorer.includes('const [actionsOpen, setActionsOpen] = useState(false);'));
+  assert.ok(!explorer.includes('const [dragActive, setDragActive] = useState(false);'));
 });
 
 test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
