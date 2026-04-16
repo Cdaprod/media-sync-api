@@ -2398,13 +2398,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         : 'Upload stored.';
       setUploadStatus(msg);
       addToast(status === 'duplicate' ? 'warn' : 'good', 'Upload', msg);
-      await loadMedia(project);
+      await refreshAfterMutation({ project: project.name, source: project.source || undefined });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';
       setUploadStatus(`Upload failed: ${message}`);
       addToast('bad', 'Upload', message);
     }
-  }, [activeProject, addToast, api, buildUploadUrl, loadMedia]);
+  }, [activeProject, addToast, api, buildUploadUrl, refreshAfterMutation]);
 
   const toAssetRef = useCallback((item: MediaItem): AssetRef | null => {
     const relativePath = String(item.relative_path || '').trim();
@@ -2466,9 +2466,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeAssetKey, commitPreviewActivationKey, inspectorOpen, itemsBySelectionKey]);
 
   const {
+    refreshAfterMutation,
     performDeleteMediaSelection,
     moveMediaSelection,
     tagMediaSelection,
+    tagSingleMediaItem,
   } = useExplorerCommands({
     api,
     addToast,
@@ -2662,21 +2664,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Tag', 'Nothing to add or remove');
       return;
     }
-    const ref = toAssetRef(focused);
-    if (!ref) {
-      addToast('warn', 'Tag', 'Unable to resolve focused media path');
-      return;
-    }
-    try {
-      await api.bulkTagMedia([ref], addTags, removeTags);
-      addToast('good', 'Tag', 'Updated tags for focused asset');
-      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-      else await loadMedia(activeProject);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Tag update failed';
-      addToast('bad', 'Tag', message);
-    }
-  }, [activeProject, addToast, api, focused, loadAllMedia, loadMedia, mediaScope, toAssetRef]);
+    await tagSingleMediaItem(focused, addTags, removeTags, 'Tag');
+  }, [addToast, focused, tagSingleMediaItem]);
 
   const handleFocusedResolve = useCallback(async () => {
     if (!focused) {
@@ -2798,9 +2787,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         }
       }
       setUploadStatus('Upload stored.');
-      await loadMedia(project);
+      await refreshAfterMutation({ project: project.name, source: project.source || undefined });
     },
-    [activeProject, addToast, api, buildUploadUrl, loadMedia],
+    [activeProject, addToast, api, buildUploadUrl, refreshAfterMutation],
   );
 
   const handleCopyStream = useCallback(async (item: MediaItem) => {

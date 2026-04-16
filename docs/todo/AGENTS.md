@@ -1,3 +1,11 @@
+## 2026-04-16 — Mutation authority continuation pass (active)
+- [x] Extended `useExplorerCommands` with shared mutation aftermath utilities (`refreshAfterMutation`, `tagSingleMediaItem`) to centralize scoped-vs-full refresh decisions.
+- [x] Migrated upload aftermath lanes (`handleUpload`, drag/drop upload) to command-hook refresh strategy instead of direct root-level `loadMedia(project)` calls.
+- [x] Migrated focused single-asset tag mutation to command hook (`tagSingleMediaItem`) so focused tagging follows the same scoped aggregate refresh contract.
+- [x] Added static contract assertions for new command-hook usage in upload/focused-tag pathways and exported mutation refresh helper presence.
+- [ ] Follow-up: move compose completion refresh aftermath onto `useExplorerCommands` without reordering sensitive hook/lifecycle lanes in `ExplorerApp`.
+- [ ] Follow-up: continue extracting remaining focused mutation aftermath handlers (resolve/obs-adjacent tag/move/delete edges) into `useExplorerCommands`.
+
 ## 2026-04-16 — Scoped aggregate refresh + command extraction pass (active)
 - [x] Hardened `/api/library` source visibility for `scope=all` by including disabled sources in the `sources` envelope while still filtering project/asset expansion to enabled+accessible sources.
 - [x] Reused media relative-path validation in aggregate snapshot assembly so malformed/traversal `relative_path` entries are skipped before stream/download/thumbnail URL emission.
