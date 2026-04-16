@@ -1,3 +1,13 @@
+## 2026-04-16 — Explorer snapshot authority shift completion pass (active)
+- [x] Refactored `useLibrarySnapshot` into a stateful authority hook that owns snapshot payload slices (`sources`, `projects`, `assets`, `jobs`, `generatedAt`) plus loading/error lifecycle.
+- [x] Preserved single-flight refresh semantics in the authority hook while adding explicit `applySnapshot(...)` and `clearSnapshotError()` helpers.
+- [x] Removed `ExplorerApp` boot dependency on `Promise.allSettled([loadSources(), loadProjects()])` and replaced it with one aggregate `refreshLibrarySnapshot({ scope: 'all' })` path.
+- [x] Removed standalone `loadSources`/`loadProjects` fetch ownership from `ExplorerApp`; aggregate refresh now hydrates authoritative data via hook state.
+- [x] Kept project-scoped delta lanes (`loadMedia(project)`, `refreshMediaForScope`) intact for mutation aftermath while consolidating all-project hydration against hook-owned assets.
+- [x] Added static contract coverage for authority hook state surface and single aggregate boot/refresh path assertions in Explorer package tests.
+- [ ] Follow-up: evaluate scoped aggregate backend refresh (`/api/library?scope=project`) to replace remaining project-delta re-fetch calls when mutation throughput grows.
+- [ ] Follow-up: extract mutation command lane (`useExplorerCommands`) after snapshot authority lane proves stable on-device.
+
 ## 2026-04-16 — Aggregate library snapshot lane (active)
 - [x] Added backend aggregate snapshot service + API route for Explorer (`GET /api/library?scope=all`) with source/project/asset flattening and generated timestamp payload.
 - [x] Registered the new library router in FastAPI app bootstrap so the endpoint is available without touching legacy media/project routes.

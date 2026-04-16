@@ -246,6 +246,33 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('buildThumbFallback'));
 });
 
+test('library snapshot hook owns authoritative snapshot state and single-flight refresh', () => {
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useLibrarySnapshot.ts');
+  const content = fs.readFileSync(hookPath, 'utf8');
+  assert.ok(content.includes('const inflightRef = useRef<Promise<LibrarySnapshot> | null>(null);'));
+  assert.ok(content.includes('const [snapshot, setSnapshot] = useState<LibrarySnapshot | null>(null);'));
+  assert.ok(content.includes('const [sources, setSources] = useState<Source[]>([]);'));
+  assert.ok(content.includes('const [projects, setProjects] = useState<Project[]>([]);'));
+  assert.ok(content.includes('const [assets, setAssets] = useState<MediaItem[]>([]);'));
+  assert.ok(content.includes('const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([]);'));
+  assert.ok(content.includes('const [generatedAt, setGeneratedAt] = useState<string | null>(null);'));
+  assert.ok(content.includes('const [isLoading, setIsLoading] = useState(false);'));
+  assert.ok(content.includes('const [error, setError] = useState(\'\');'));
+  assert.ok(content.includes('const applySnapshot = useCallback((nextSnapshot: LibrarySnapshot) => {'));
+  assert.ok(content.includes('const refreshLibrarySnapshot = useCallback(async (options: LoadLibraryOptions = {}) => {'));
+  assert.ok(content.includes('const clearSnapshotError = useCallback(() => {'));
+});
+
+test('explorer boot + refresh use one aggregate snapshot authority path', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('void refreshLibrarySnapshot({ scope: \'all\' }).finally(() => {'));
+  assert.ok(content.includes('const refreshAll = useCallback(async () => {'));
+  assert.ok(content.includes('const snapshot = await refreshLibrarySnapshot({ scope: \'all\' });'));
+  assert.ok(content.includes('addToast(\'good\', \'Refresh\', \'Reloaded projects + media\', \'explorer-refresh\');'));
+  assert.ok(!content.includes('Promise.allSettled([loadSources(), loadProjects()])'));
+});
+
 test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
   const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');

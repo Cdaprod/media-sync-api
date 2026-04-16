@@ -545,11 +545,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     : inferApiBaseUrl(apiBaseUrl, window.location);
   const [resolvedApiBase, setResolvedApiBase] = useState(initialApiBase);
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
-  const { loadExplorerSnapshot } = useLibrarySnapshot(api);
+  const {
+    sources,
+    projects,
+    assets: libraryAssets,
+    error: libraryError,
+    refreshLibrarySnapshot,
+    clearSnapshotError,
+  } = useLibrarySnapshot(api);
   const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [sources, setSources] = useState([] as Awaited<ReturnType<typeof api.listSources>>);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaScope, setMediaScope] = useState<'project' | 'all'>('project');
@@ -1530,26 +1535,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [mediaMeta, typeFilter, untaggedOnly, sortKey]);
 
-  const loadSources = useCallback(async () => {
-    try {
-      const payload = await loadExplorerSnapshot({ scope: 'all' });
-      setSources(payload.sources);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to list sources';
-      addToast('bad', 'Sources', message);
-    }
-  }, [addToast, loadExplorerSnapshot]);
-
-  const loadProjects = useCallback(async () => {
-    try {
-      const payload = await loadExplorerSnapshot({ scope: 'all' });
-      setProjects(payload.projects);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to list projects';
-      addToast('bad', 'Projects', message);
-    }
-  }, [addToast, loadExplorerSnapshot]);
-
   const loadMedia = useCallback(
     async (project: Project | null) => {
       if (!project) {
@@ -1588,17 +1573,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setMediaScope('all');
     setPendingDataLoadOverlay(true);
     try {
-      const snapshot = await loadExplorerSnapshot({ scope: 'all' });
-      setSources(snapshot.sources);
-      setProjects(snapshot.projects);
+      const snapshot = await refreshLibrarySnapshot({ scope: 'all' });
       setMedia(sortMediaByRecent(Array.isArray(snapshot.assets) ? snapshot.assets : []));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load media';
-      addToast('bad', 'Media', message);
+    } catch {
+      // error toast is emitted by libraryError effect.
     } finally {
       setPendingDataLoadOverlay(false);
     }
-  }, [addToast, clearActiveAsset, clearSelectionState, loadExplorerSnapshot]);
+  }, [clearActiveAsset, clearSelectionState, refreshLibrarySnapshot]);
 
   const refreshMediaForScope = useCallback(async (
     refreshScope: {
@@ -1666,15 +1648,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   });
 
   const refreshAll = useCallback(async () => {
-    await loadSources();
-    await loadProjects();
+    const snapshot = await refreshLibrarySnapshot({ scope: 'all' });
     if (activeProject) {
-      await loadMedia(activeProject);
+      const filtered = snapshot.assets.filter((item) => (
+        item.project_name === activeProject.name
+        && (item.project_source || item.source || 'primary') === (activeProject.source || 'primary')
+      ));
+      setMedia(sortMediaByRecent(hydrateProjectMediaItems(filtered, activeProject)));
+      setMediaScope('project');
     } else {
-      await loadAllMedia();
+      setMedia(sortMediaByRecent(Array.isArray(snapshot.assets) ? snapshot.assets : []));
+      setMediaScope('all');
     }
     addToast('good', 'Refresh', 'Reloaded projects + media', 'explorer-refresh');
-  }, [activeProject, addToast, loadAllMedia, loadMedia, loadProjects, loadSources]);
+  }, [activeProject, addToast, hydrateProjectMediaItems, refreshLibrarySnapshot]);
 
   useEffect(() => {
     const previous = pendingStatusSnapshotRef.current;
@@ -2577,13 +2564,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         }
         if (mediaScope === 'all' || !activeProject) await loadAllMedia();
         else await loadMedia(activeProject);
-        await loadProjects();
+        await refreshLibrarySnapshot({ scope: 'all' });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Move failed';
         addToast('bad', 'Move', message);
       }
     },
-    [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, loadProjects, mediaScope, resolveItemsForSelection, toAssetRef],
+    [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, mediaScope, refreshLibrarySnapshot, resolveItemsForSelection, toAssetRef],
   );
 
   const handleBulkTag = useCallback(async () => {
@@ -3282,18 +3269,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (hasBootstrappedExplorerSession) return;
     hasBootstrappedExplorerSession = true;
     const bootToastId = addToast('good', 'Boot', 'Loading sources + projects…');
-    void Promise.allSettled([loadSources(), loadProjects()]).finally(() => {
+    void refreshLibrarySnapshot({ scope: 'all' }).finally(() => {
       beginToastExit(bootToastId);
     });
-  }, [addToast, beginToastExit, loadProjects, loadSources]);
+  }, [addToast, beginToastExit, refreshLibrarySnapshot]);
 
   useEffect(() => {
     if (activeProject) {
       void loadMedia(activeProject);
     } else {
-      void loadAllMedia();
+      setMediaScope('all');
+      setMedia(sortMediaByRecent(libraryAssets));
     }
-  }, [activeProject, loadAllMedia, loadMedia]);
+  }, [activeProject, libraryAssets, loadMedia]);
+
+  useEffect(() => {
+    if (!libraryError) return;
+    addToast('bad', 'Library', libraryError);
+    clearSnapshotError();
+  }, [addToast, clearSnapshotError, libraryError]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
