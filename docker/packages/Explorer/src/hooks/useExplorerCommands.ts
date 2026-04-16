@@ -53,6 +53,20 @@ interface ComposeMediaCommand {
   title?: string;
 }
 
+interface UploadMediaCommand {
+  project: Project;
+  uploadUrl: string;
+  file: File;
+  title?: string;
+}
+
+interface UploadMediaBatchCommand {
+  project: Project;
+  uploadUrl: string;
+  files: File[];
+  title?: string;
+}
+
 /**
  * Mutation command orchestration for Explorer media actions.
  *
@@ -267,6 +281,57 @@ export function useExplorerCommands(args: UseExplorerCommandsArgs) {
     }
   }, [addToast, api]);
 
+  const uploadMediaCommand = useCallback(async (command: UploadMediaCommand) => {
+    const title = command.title || 'Upload';
+    try {
+      const payload = await api.uploadMedia(command.uploadUrl, command.file);
+      const status = typeof payload.status === 'string' ? payload.status : '';
+      const message = status === 'duplicate'
+        ? 'Duplicate skipped — already on disk.'
+        : 'Upload stored.';
+      addToast(status === 'duplicate' ? 'warn' : 'good', title, message);
+      await refreshAfterScopedMutation({
+        project: command.project.name,
+        source: command.project.source || undefined,
+      });
+      return {
+        ok: true,
+        message,
+      } as const;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      addToast('bad', title, message);
+      return {
+        ok: false,
+        message,
+      } as const;
+    }
+  }, [addToast, api, refreshAfterScopedMutation]);
+
+  const uploadMediaBatchCommand = useCallback(async (command: UploadMediaBatchCommand) => {
+    const title = command.title || 'Upload';
+    let uploaded = 0;
+    let failed = 0;
+    for (const file of command.files) {
+      try {
+        await api.uploadMedia(command.uploadUrl, file);
+        uploaded += 1;
+      } catch (err) {
+        failed += 1;
+        const message = err instanceof Error ? err.message : 'Upload failed';
+        addToast('bad', title, message);
+      }
+    }
+    await refreshAfterScopedMutation({
+      project: command.project.name,
+      source: command.project.source || undefined,
+    });
+    return {
+      uploaded,
+      failed,
+    } as const;
+  }, [addToast, api, refreshAfterScopedMutation]);
+
   const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {
     const title = command.title || 'Resolve';
     try {
@@ -287,6 +352,8 @@ export function useExplorerCommands(args: UseExplorerCommandsArgs) {
     refreshAfterMutation,
     handleComposeCompletion,
     composeMediaCommand,
+    uploadMediaCommand,
+    uploadMediaBatchCommand,
     resolveMediaCommand,
     performDeleteMediaSelection,
     moveMediaSelection,

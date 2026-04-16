@@ -1,8 +1,15 @@
+## 2026-04-16 — Upload command-lane extraction (active)
+- [x] Added `uploadMediaCommand(...)` and `uploadMediaBatchCommand(...)` to `useExplorerCommands` so upload API execution, error toasts, and scoped refresh aftermath are command-owned.
+- [x] Migrated `ExplorerApp` single-file upload handler to delegate API execution/outcome handling through `uploadMediaCommand(...)` while keeping local upload-status UI ownership in root.
+- [x] Migrated drag/drop upload handler to delegate per-file upload execution through `uploadMediaBatchCommand(...)` and removed root-level upload mutation `api.*` try/catch ownership.
+- [x] Expanded Explorer static contracts to assert upload command surface presence and root wiring through command methods.
+- [ ] Follow-up: evaluate extracting focused external side-effect lanes (program-monitor handoff + OBS push) into command verbs once non-API UX prompts are normalized.
+
 ## 2026-04-16 — Compose submit command-lane extraction (active)
 - [x] Added `composeMediaCommand(...)` to `useExplorerCommands` so compose request execution + success/error toasts are command-owned instead of root-owned.
 - [x] Migrated `ExplorerApp` compose-confirm submit path to call `composeMediaCommand(...)` and only keep modal/pending-job UI wiring in root.
 - [x] Expanded Explorer static contracts to assert `composeMediaCommand` wiring in `ExplorerApp` and implementation presence in `useExplorerCommands`.
-- [ ] Follow-up: evaluate extracting upload mutation API lanes (`handleUpload`, drag/drop upload) into command-hook verbs once pre-hook callback ordering is normalized.
+- [x] Follow-up completed in later pass: upload mutation API lanes (`handleUpload`, drag/drop upload) now route through command-hook verbs.
 
 ## 2026-04-16 — Focused resolve command-lane extraction (active)
 - [x] Added `resolveMediaCommand(...)` to `useExplorerCommands` so resolve-side effects + outcome toasts no longer require root-owned API try/catch blocks.

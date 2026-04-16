@@ -2363,35 +2363,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     moveFocusPresentationToFallbackOrIdle(fallbackKey, keyMismatch ? 'key-mismatch' : 'presentation-invalidated');
   }, [activeAssetKey, focusPresentationState, inspectorOpen, moveFocusPresentationToFallbackOrIdle, resetFocusPresentationToIdle, view]);
 
-  const handleUpload = useCallback(async () => {
-    const project = activeProject;
-    if (!project) {
-      addToast('warn', 'Upload', 'Select a project first');
-      return;
-    }
-    const file = uploadInputRef.current?.files?.[0];
-    if (!file) {
-      addToast('warn', 'Upload', 'Pick a file first');
-      return;
-    }
-
-    setUploadStatus('Uploading…');
-    try {
-      const payload = await api.uploadMedia(buildUploadUrl(project), file);
-      const status = typeof payload.status === 'string' ? payload.status : '';
-      const msg = status === 'duplicate'
-        ? 'Duplicate skipped — already on disk.'
-        : 'Upload stored.';
-      setUploadStatus(msg);
-      addToast(status === 'duplicate' ? 'warn' : 'good', 'Upload', msg);
-      await refreshAfterMutation({ project: project.name, source: project.source || undefined });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Upload failed';
-      setUploadStatus(`Upload failed: ${message}`);
-      addToast('bad', 'Upload', message);
-    }
-  }, [activeProject, addToast, api, buildUploadUrl, refreshAfterMutation]);
-
   const toAssetRef = useCallback((item: MediaItem): AssetRef | null => {
     const relativePath = String(item.relative_path || '').trim();
     if (!relativePath) return null;
@@ -2452,9 +2423,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeAssetKey, commitPreviewActivationKey, inspectorOpen, itemsBySelectionKey]);
 
   const {
-    refreshAfterMutation,
     handleComposeCompletion,
     composeMediaCommand,
+    uploadMediaCommand,
+    uploadMediaBatchCommand,
     resolveMediaCommand,
     performDeleteMediaSelection,
     moveMediaSelection,
@@ -2490,6 +2462,49 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     mediaItems: media,
     onCompletedRefreshScope: handleComposeCompletion,
   });
+
+  const handleUpload = useCallback(async () => {
+    const project = activeProject;
+    if (!project) {
+      addToast('warn', 'Upload', 'Select a project first');
+      return;
+    }
+    const file = uploadInputRef.current?.files?.[0];
+    if (!file) {
+      addToast('warn', 'Upload', 'Pick a file first');
+      return;
+    }
+
+    setUploadStatus('Uploading…');
+    const result = await uploadMediaCommand({
+      project,
+      uploadUrl: buildUploadUrl(project),
+      file,
+      title: 'Upload',
+    });
+    if (result.ok) setUploadStatus(result.message);
+    else setUploadStatus(`Upload failed: ${result.message}`);
+  }, [activeProject, addToast, buildUploadUrl, uploadMediaCommand]);
+
+  const handleDropUpload = useCallback(
+    async (files: FileList) => {
+      const project = activeProject;
+      if (!project) {
+        addToast('warn', 'Upload', 'Select a project first');
+        return;
+      }
+      if (!files.length) return;
+      setUploadStatus('Uploading…');
+      await uploadMediaBatchCommand({
+        project,
+        uploadUrl: buildUploadUrl(project),
+        files: Array.from(files),
+        title: 'Upload',
+      });
+      setUploadStatus('Upload stored.');
+    },
+    [activeProject, addToast, buildUploadUrl, uploadMediaBatchCommand],
+  );
 
   const deleteMediaSelection = useCallback((selectionKeys: string[]) => {
     const items = resolveItemsForSelection(selectionKeys);
@@ -2757,29 +2772,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('bad', 'OBS', message);
     }
   }, [addToast, focused, previewObsExclusive, previewObsMode, previewObsSlot, resolveAssetUrl]);
-
-  const handleDropUpload = useCallback(
-    async (files: FileList) => {
-      const project = activeProject;
-      if (!project) {
-        addToast('warn', 'Upload', 'Select a project first');
-        return;
-      }
-      if (!files.length) return;
-      setUploadStatus('Uploading…');
-      for (const file of Array.from(files)) {
-        try {
-          await api.uploadMedia(buildUploadUrl(project), file);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Upload failed';
-          addToast('bad', 'Upload', message);
-        }
-      }
-      setUploadStatus('Upload stored.');
-      await refreshAfterMutation({ project: project.name, source: project.source || undefined });
-    },
-    [activeProject, addToast, api, buildUploadUrl, refreshAfterMutation],
-  );
 
   const handleCopyStream = useCallback(async (item: MediaItem) => {
     if (!item.stream_url) return;
