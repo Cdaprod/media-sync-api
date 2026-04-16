@@ -1638,20 +1638,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return payload;
   }, [api]);
 
-  const {
-    pendingComposeItems,
-    registerAcceptedJob,
-    removePendingJob,
-  } = usePendingComposeJobs({
-    pollIntervalMs: 2000,
-    fetchJson: fetchComposeJobJson,
-    mediaItems: media,
-    onCompletedRefreshScope: async (refreshScope) => {
-      await refreshMediaForScope(refreshScope);
-      addToast('good', 'Compose', 'Compose completed');
-    },
-  });
-
   const refreshAll = useCallback(async () => {
     const snapshot = await refreshLibrarySnapshot({ scope: 'all' });
     if (activeProject) {
@@ -2467,6 +2453,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const {
     refreshAfterMutation,
+    handleComposeCompletion,
     performDeleteMediaSelection,
     moveMediaSelection,
     tagMediaSelection,
@@ -2489,6 +2476,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setFocused,
     setInspectorOpen,
     setDeleteSubmitting,
+  });
+
+  const {
+    pendingComposeItems,
+    registerAcceptedJob,
+    removePendingJob,
+  } = usePendingComposeJobs({
+    pollIntervalMs: 2000,
+    fetchJson: fetchComposeJobJson,
+    mediaItems: media,
+    onCompletedRefreshScope: handleComposeCompletion,
   });
 
   const deleteMediaSelection = useCallback((selectionKeys: string[]) => {

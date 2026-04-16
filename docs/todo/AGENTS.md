@@ -1,9 +1,15 @@
+## 2026-04-16 — Compose aftermath command-lane extraction (active)
+- [x] Reordered command-hook wiring so `usePendingComposeJobs` completion aftermath now calls `useExplorerCommands.handleComposeCompletion`.
+- [x] Removed compose completion refresh/toast ownership from root inline callback, routing completion aftermath through command authority.
+- [x] Kept compose refresh strategy aligned with command policy (`refreshAfterScopedMutation` inside `useExplorerCommands`).
+- [x] Added static contract assertions for compose completion callback wiring through `handleComposeCompletion`.
+- [ ] Follow-up: continue extracting any remaining focused mutation aftermath lanes that still bypass command hook ownership.
+
 ## 2026-04-16 — Mutation authority continuation pass (active)
 - [x] Extended `useExplorerCommands` with shared mutation aftermath utilities (`refreshAfterMutation`, `tagSingleMediaItem`) to centralize scoped-vs-full refresh decisions.
 - [x] Migrated upload aftermath lanes (`handleUpload`, drag/drop upload) to command-hook refresh strategy instead of direct root-level `loadMedia(project)` calls.
 - [x] Migrated focused single-asset tag mutation to command hook (`tagSingleMediaItem`) so focused tagging follows the same scoped aggregate refresh contract.
 - [x] Added static contract assertions for new command-hook usage in upload/focused-tag pathways and exported mutation refresh helper presence.
-- [ ] Follow-up: move compose completion refresh aftermath onto `useExplorerCommands` without reordering sensitive hook/lifecycle lanes in `ExplorerApp`.
 - [ ] Follow-up: continue extracting remaining focused mutation aftermath handlers (resolve/obs-adjacent tag/move/delete edges) into `useExplorerCommands`.
 
 ## 2026-04-16 — Scoped aggregate refresh + command extraction pass (active)

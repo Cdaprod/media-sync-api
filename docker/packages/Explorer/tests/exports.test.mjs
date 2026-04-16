@@ -279,7 +279,8 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
   assert.ok(explorer.includes("import { useExplorerCommands } from './hooks/useExplorerCommands';"));
-  assert.ok(explorer.includes('const {\n    refreshAfterMutation,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
+  assert.ok(explorer.includes('const {\n    refreshAfterMutation,\n    handleComposeCompletion,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
+  assert.ok(explorer.includes('onCompletedRefreshScope: handleComposeCompletion,'));
   assert.ok(explorer.includes('scope: \'project\''));
   assert.ok(explorer.includes('await refreshAfterMutation({ project: project.name, source: project.source || undefined });'));
   assert.ok(explorer.includes('await tagSingleMediaItem(focused, addTags, removeTags, \'Tag\');'));
@@ -287,6 +288,7 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(commands.includes('const refreshAfterScopedMutation = useCallback(async (scope: RefreshScope | null) => {'));
   assert.ok(commands.includes('const refreshAfterMutation = useCallback(async (scope: RefreshScope | null | undefined) => {'));
   assert.ok(commands.includes('const tagSingleMediaItem = useCallback(async ('));
+  assert.ok(commands.includes('const handleComposeCompletion = useCallback(async (scope: RefreshScope | null | undefined) => {'));
   assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));
 });
@@ -682,7 +684,7 @@ test('pending compose modules and render wiring are present', () => {
 
   assert.ok(explorer.includes("const {\n    pendingComposeItems,\n    registerAcceptedJob,\n    removePendingJob,\n  } = usePendingComposeJobs({"));
   assert.ok(explorer.includes("fetchJson: fetchComposeJobJson,"));
-  assert.ok(explorer.includes("onCompletedRefreshScope: async (refreshScope) => {"));
+  assert.ok(explorer.includes("onCompletedRefreshScope: handleComposeCompletion,"));
   assert.ok(explorer.includes("entries={renderedMediaEntries}"));
   assert.ok(explorer.includes("items={renderedMediaEntries}"));
   assert.ok(explorer.includes("onDismissPendingJob={removePendingJob}"));
