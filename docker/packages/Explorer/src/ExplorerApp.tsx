@@ -1337,11 +1337,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const rawThumbUrl = normalizeThumbUrl(item.thumb_url
         || item.thumbnail_url
         || (kind === 'image' ? item.stream_url : undefined));
-      const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : '';
+      const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';
       return buildThumbJobKey(thumbKey, thumbUrl);
     });
     return `${view}:${view === 'grid' ? gridColumnCount : 'list'}:${dataset.join('\n')}`;
-  }, [activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, view]);
+  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, view]);
 
   useThumbnailQueue({
     beginContentLoading,
@@ -3350,6 +3350,132 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const readViewportMeta = () => {
+      const meta = document.querySelector('meta[name="viewport"]');
+      return meta?.getAttribute('content') || '';
+    };
+
+    const captureViewportSnapshot = () => {
+      const visualHeight = viewport?.height ?? window.innerHeight;
+      const visualWidth = viewport?.width ?? window.innerWidth;
+      const nextHeight = `${Math.max(0, Math.round(visualHeight))}px`;
+      root.style.setProperty('--explorer-visual-viewport-height', nextHeight);
+      const clientWidth = document.documentElement.clientWidth || 1;
+      const scaleLike = Number((window.innerWidth / clientWidth).toFixed(3));
+      const snapshot = {
+        viewportMeta: readViewportMeta(),
+        visualViewportHeight: Number((viewport?.height ?? 0).toFixed(2)),
+        visualViewportWidth: Number((viewport?.width ?? 0).toFixed(2)),
+        innerHeight: window.innerHeight,
+        innerWidth: window.innerWidth,
+        clientHeight: document.documentElement.clientHeight,
+        clientWidth,
+        pageScaleLike: Number.isFinite(scaleLike) ? scaleLike : 1,
+        cssViewportHeightVar: nextHeight,
+      };
+      (window as typeof window & {
+        __explorerViewportDebug?: { getSnapshot: () => typeof snapshot; lastSnapshot: typeof snapshot };
+      }).__explorerViewportDebug = {
+        getSnapshot: () => snapshot,
+        lastSnapshot: snapshot,
+      };
+    };
+
+    captureViewportSnapshot();
+    window.addEventListener('resize', captureViewportSnapshot);
+    window.addEventListener('orientationchange', captureViewportSnapshot);
+    viewport?.addEventListener('resize', captureViewportSnapshot);
+    viewport?.addEventListener('scroll', captureViewportSnapshot);
+
+    return () => {
+      window.removeEventListener('resize', captureViewportSnapshot);
+      window.removeEventListener('orientationchange', captureViewportSnapshot);
+      viewport?.removeEventListener('resize', captureViewportSnapshot);
+      viewport?.removeEventListener('scroll', captureViewportSnapshot);
+      root.style.removeProperty('--explorer-visual-viewport-height');
+      delete (window as typeof window & { __explorerViewportDebug?: unknown }).__explorerViewportDebug;
+    };
+  }, []);
+
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const loadFailures = new Map<string, {
+      key: string;
+      tag: string;
+      url: string;
+      className: string;
+      count: number;
+      firstAt: number;
+      lastAt: number;
+    }>();
+
+    const toSnapshotRows = () => Array.from(loadFailures.values())
+      .sort((a, b) => b.lastAt - a.lastAt)
+      .slice(0, 80)
+      .map((entry) => ({ ...entry }));
+
+    const publishSnapshot = () => {
+      const snapshot = {
+        totalUnique: loadFailures.size,
+        totalEvents: Array.from(loadFailures.values()).reduce((acc, entry) => acc + entry.count, 0),
+        rows: toSnapshotRows(),
+      };
+      (window as typeof window & {
+        __explorerLoadFailureDebug?: { getSnapshot: () => typeof snapshot; lastSnapshot: typeof snapshot };
+      }).__explorerLoadFailureDebug = {
+        getSnapshot: () => snapshot,
+        lastSnapshot: snapshot,
+      };
+    };
+
+    const onResourceError = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName || 'UNKNOWN';
+      const imgTarget = target as HTMLImageElement;
+      const sourceUrl = (
+        imgTarget.currentSrc
+        || target.getAttribute('src')
+        || target.getAttribute('href')
+        || target.getAttribute('poster')
+        || ''
+      ).trim();
+      const className = String(target.className || '');
+      const key = `${tag}:${sourceUrl || '(none)'}`;
+      const now = Date.now();
+      const prior = loadFailures.get(key);
+      if (prior) {
+        prior.count += 1;
+        prior.lastAt = now;
+      } else {
+        loadFailures.set(key, {
+          key,
+          tag,
+          url: sourceUrl,
+          className,
+          count: 1,
+          firstAt: now,
+          lastAt: now,
+        });
+      }
+      publishSnapshot();
+    };
+
+    window.addEventListener('error', onResourceError, true);
+    publishSnapshot();
+
+    return () => {
+      window.removeEventListener('error', onResourceError, true);
+      delete (window as typeof window & { __explorerLoadFailureDebug?: unknown }).__explorerLoadFailureDebug;
+    };
+  }, []);
+
+  useEffect(() => {
     const topbar = topbarRef.current;
     if (!topbar) return;
 
@@ -3841,7 +3967,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       || item.thumbnail_url
       || (kind === 'image' ? item.stream_url : undefined));
     const fallbackThumb = buildThumbFallback(kind);
-    const thumbUrl = rawThumbUrl ? resolveAssetUrl(rawThumbUrl) : undefined;
+    const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;
     const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
     const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
@@ -4545,20 +4671,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     <div className="topbar-controls">
                       <div className="search" role="search" data-interactive="true" data-topbar-control="true">
                         <span className="kbd">⌘K</span>
-                        <input
-                          data-interactive="true"
-                          data-topbar-control="true"
-                          ref={searchInputRef}
-                          placeholder="Search filename, path… (client-side filter)"
-                          autoComplete="off"
-                          value={query}
-                          onChange={(event) => setQuery(event.target.value)}
-                          onFocus={() => topbarIntentRef.current?.setPinned(true)}
-                          onBlur={() => {
-                            topbarIntentRef.current?.setPinned(false);
-                            topbarIntentRef.current?.scheduleClose(360);
-                          }}
-                        />
+                        <div className="search-input-wrap" data-topbar-control="true">
+                          <input
+                            className="search-input"
+                            data-interactive="true"
+                            data-topbar-control="true"
+                            ref={searchInputRef}
+                            placeholder="Search filename, path… (client-side filter)"
+                            autoComplete="off"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            onFocus={() => topbarIntentRef.current?.setPinned(true)}
+                            onBlur={() => {
+                              topbarIntentRef.current?.setPinned(false);
+                              topbarIntentRef.current?.scheduleClose(360);
+                            }}
+                          />
+                        </div>
                         <div className="search-toolbar" aria-label="Search filters" data-interactive="true" data-topbar-control="true">
                           <details className="dropdown" data-interactive="true" data-topbar-control="true">
                             <summary className="control" aria-label="Filter by media type" data-interactive="true" data-topbar-control="true" onPointerDown={() => pinTopbarTemporarily(900)}>

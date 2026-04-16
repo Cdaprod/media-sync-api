@@ -55,6 +55,9 @@ test('package app layout owns default App Router not-found fonts and wiring', ()
   assert.ok(layout.includes("viewportFit: 'cover'"));
   assert.ok(layout.includes("width: 'device-width'"));
   assert.ok(layout.includes('initialScale: 1'));
+  assert.ok(layout.includes('minimumScale: 1'));
+  assert.ok(layout.includes('maximumScale: 1'));
+  assert.ok(layout.includes('userScalable: false'));
   assert.ok(globals.includes('--safe-area-top: env(safe-area-inset-top, 0px);'));
   assert.ok(globals.includes('html,'));
   assert.ok(globals.includes('height: 100dvh;'));
@@ -836,6 +839,8 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('useThumbnailQueue({'));
   assert.ok(content.includes('thumbDatasetSignature'));
   assert.ok(content.includes('buildThumbJobKey('));
+  assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';"));
+  assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;"));
   assert.ok(gridContent.includes('data-thumb-url'));
   assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
   assert.ok(content.includes('pendingDataLoadOverlay'));
@@ -907,6 +912,10 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('endContentLoading'));
   assert.ok(loaderContent.includes('export const THUMB_LOAD_TIMEOUT_MS = 8000;'));
   assert.ok(loaderContent.includes('thumbLoadStateCache'));
+  assert.ok(loaderContent.includes('const ensureThumbLoad = ('));
+  assert.ok(loaderContent.includes("target.addEventListener('load', handleLoad, { once: true });"));
+  assert.ok(loaderContent.includes("target.addEventListener('error', handleError, { once: true });"));
+  assert.ok(!loaderContent.includes('const loader = new Image();'));
   assert.ok(loaderContent.includes('thumbLoadedKey'));
   assert.ok(hookContent.includes('requiresThumbNodeSync'));
   assert.ok(hookContent.includes('hasPendingThumbNetworkLoad'));
@@ -2179,6 +2188,27 @@ test('preview/backdrop styles and ownership markers remain explicit enough to pr
   assert.ok(styles.includes('.drawer'));
 });
 
+
+test('asset cards apply thumbnail error fallback without retry-loop spam', () => {
+  const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
+  const grid = fs.readFileSync(gridPath, 'utf8');
+  const list = fs.readFileSync(listPath, 'utf8');
+
+  assert.ok(grid.includes('onError={(event) => {'));
+  assert.ok(list.includes('onError={(event) => {'));
+  assert.ok(grid.includes('native.stopImmediatePropagation?.();'));
+  assert.ok(list.includes('native.stopImmediatePropagation?.();'));
+  assert.ok(grid.includes('native.stopPropagation?.();'));
+  assert.ok(list.includes('native.stopPropagation?.();'));
+  assert.ok(grid.includes('node.onerror = null;'));
+  assert.ok(list.includes('node.onerror = null;'));
+  assert.ok(grid.includes('const fallback = node.dataset.thumbFallback || "";') || grid.includes("const fallback = node.dataset.thumbFallback || '';"));
+  assert.ok(list.includes('const fallback = node.dataset.thumbFallback || "";') || list.includes("const fallback = node.dataset.thumbFallback || '';"));
+  assert.ok(grid.includes('if (fallback && node.src !== fallback) node.src = fallback;'));
+  assert.ok(list.includes('if (fallback && node.src !== fallback) node.src = fallback;'));
+});
+
 test('no generic load-failure console spam contract should remain in explorer-facing source', () => {
   const filesToCheck = [
     path.join(packageRoot, 'src', 'ExplorerApp.tsx'),
@@ -2638,4 +2668,38 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   assert.ok(styles.includes('transition: filter 120ms ease, border-color 120ms ease;'));
   assert.ok(styles.includes('.masonry-card.asset:hover{'));
   assert.ok(styles.includes('transform: none;'));
+});
+
+test('mobile keyboard resilience contracts keep visual viewport + input font safeguards wired', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.ok(content.includes('const viewport = window.visualViewport;'));
+  assert.ok(content.includes("root.style.setProperty('--explorer-visual-viewport-height', nextHeight);"));
+  assert.ok(content.includes("viewport?.addEventListener('resize', captureViewportSnapshot);"));
+  assert.ok(content.includes("viewport?.addEventListener('scroll', captureViewportSnapshot);"));
+  assert.ok(content.includes('__explorerViewportDebug'));
+  assert.ok(content.includes('__explorerLoadFailureDebug'));
+  assert.ok(content.includes('viewportMeta: readViewportMeta()'));
+  assert.ok(content.includes('pageScaleLike'));
+  assert.ok(styles.includes('height: var(--explorer-visual-viewport-height, 100%);'));
+  assert.ok(styles.includes('@media (pointer: coarse){'));
+  assert.ok(styles.includes('.search-input,'));
+  assert.ok(styles.includes('font-size: 16px !important;'));
+  assert.ok(styles.includes('.search-input-wrap{'));
+  assert.ok(styles.includes('transform: none;'));
+  assert.ok(!styles.includes('transform: scale(0.86);'));
+  assert.ok(content.includes('className="search-input-wrap"'));
+  assert.ok(content.includes('className="search-input"'));
+});
+
+test('thumbnail normalization preserves API port when remapping localhost urls', () => {
+  const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
+  const loader = fs.readFileSync(loaderPath, 'utf8');
+
+  assert.ok(loader.includes('const resolvedPort = parsed.port || \'\';'));
+  assert.ok(loader.includes('return `${protocol}//${host}${resolvedPort ? `:${resolvedPort}` : \'\'}${parsed.pathname}${parsed.search}`;'));
+  assert.ok(!loader.includes('`${window.location.origin}${parsed.pathname}${parsed.search}`'));
 });

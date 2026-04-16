@@ -573,6 +573,15 @@ function AssetGridComponent({
                     event.preventDefault();
                     event.stopPropagation();
                   }}
+                  onError={(event) => {
+                    const native = event.nativeEvent;
+                    native.stopImmediatePropagation?.();
+                    native.stopPropagation?.();
+                    const node = event.currentTarget;
+                    node.onerror = null;
+                    const fallback = node.dataset.thumbFallback || '';
+                    if (fallback && node.src !== fallback) node.src = fallback;
+                  }}
                   data-thumb-url={viewModel.thumbUrl}
                   data-thumb-fallback={viewModel.fallbackThumb}
                   data-thumb-job-key={viewModel.thumbJobKey}

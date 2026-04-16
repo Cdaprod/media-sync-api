@@ -1,3 +1,57 @@
+## 2026-04-13 — Off-DOM thumbnail loader mismatch acknowledgment + verification follow-up (active)
+- [x] Explicitly acknowledged prior summary/code mismatch: previous rollout summary claimed off-DOM probe removal while device evidence still showed `const loader = new Image()` in `thumbnailLoader.ensureThumbLoad`.
+- [x] Re-verified repository truth that `ensureThumbLoad(...)` no longer creates synthetic image objects and now binds `load`/`error` listeners on the rendered target `<img>` node.
+- [x] Re-verified static regression assertion preventing reintroduction of `const loader = new Image();` in package thumbnail loader contracts.
+- [ ] Capture fresh on-device startup logs against this exact commit and confirm whether repeated generic `Load failed` rows are eliminated vs reduced.
+
+## 2026-04-13 — Off-DOM thumbnail probe lane root-cause correction (active)
+- [x] Identified non-settled thumbnail fetch lane in `thumbnailLoader.ensureThumbLoad` using off-DOM `new Image()` probes as likely source of repeated status-0 hashed `.jpg` startup noise.
+- [x] Replaced off-DOM probe loader with in-DOM target-event loading (`target.addEventListener('load'/'error')` + direct `target.src` assignment) so thumbnail truth follows rendered card elements.
+- [x] Kept thumbnail cache/inflight semantics while removing off-DOM probe object creation to reduce duplicate/transient image request churn.
+- [x] Expanded static contracts to lock absence of `new Image()` in the package thumbnail loader and require in-DOM target load/error listeners.
+- [ ] Validate on device startup that status-0 unknown `.jpg` rows and repeated `Load failed` spam are eliminated (or materially reduced) after off-DOM probe removal.
+
+## 2026-04-13 — Startup `Load failed` emitter traceability + spam suppression follow-up (active)
+- [x] Added runtime global resource-error capture export (`window.__explorerLoadFailureDebug`) in `ExplorerApp` with deduped key/count/tag/url/class snapshots.
+- [x] Hardened grid/list thumbnail onError handlers to stop native error propagation (`stopImmediatePropagation`/`stopPropagation`) before fallback swap, reducing generic repeated tool-level `Load failed` noise from the same failed asset.
+- [x] Expanded static contracts to lock load-failure debug export wiring and native propagation stop guards in both thumbnail card components.
+- [ ] Capture one startup snapshot from `window.__explorerLoadFailureDebug?.getSnapshot()` on device and confirm whether remaining `Load failed` events originate from non-thumbnail resources.
+
+## 2026-04-13 — List/grid thumbnail URL authority + load-failure fallback hardening (active)
+- [x] Unified Explorer thumbnail URL authority to always run through `normalizeThumbUrl(...) -> resolveAssetUrl(...) -> absolutizeMediaUrl(...)` for both dataset signatures and rendered card thumbs.
+- [x] Added defensive thumbnail `<img>` error fallback handlers in both `AssetGrid` and `AssetList` to clear retry loops (`onerror = null`) and swap to dataset fallback image.
+- [x] Expanded static contracts to lock absolute thumbnail URL generation in `ExplorerApp` and fallback error-handler wiring in grid/list card components.
+- [ ] Validate on mobile startup that repeated list-view thumbnail `Load failed` console noise is eliminated and fallback imagery appears deterministically for missing thumbs.
+
+## 2026-04-12 — Page-level viewport contract + debug exposure follow-up (active)
+- [x] Tightened App Router viewport contract in `app/layout.tsx` with explicit zoom bounds (`minimumScale:1`, `maximumScale:1`, `userScalable:false`) for deterministic mobile page-scale behavior.
+- [x] Upgraded Explorer visual-viewport effect to publish runtime page-level viewport diagnostics (`__explorerViewportDebug`) including viewport meta content, visual viewport metrics, inner/client dimensions, and computed `pageScaleLike`.
+- [x] Kept `--explorer-visual-viewport-height` sync as part of the snapshot capture lane and added cleanup for debug export on unmount.
+- [x] Expanded static contracts to lock the stricter viewport meta fields and the new page-level viewport debug export fields.
+- [ ] Validate on plain iPhone Safari (no inspector overlay) whether remaining zoom is resolved and capture `window.__explorerViewportDebug?.getSnapshot()` evidence if not.
+
+## 2026-04-12 — Editable-lane unscaled iPhone zoom suppression correction (active)
+- [x] Removed coarse-pointer transform scaling from `.search-input-wrap` and retained unscaled editable search lane authority.
+- [x] Kept mobile-safe editable controls at `font-size: 16px` while increasing search input comfort lane (`min-height: 32px`, `line-height: 1.2`) to avoid tiny rendered focus targets.
+- [x] Preserved compact topbar feel by shrinking non-editable chrome only (search shell padding/gap, kbd chip styling, search-toolbar control sizing).
+- [x] Updated Explorer static contracts to assert wrapper remains unscaled (`transform:none`) and prevent regression back to wrapper-scale compacting.
+- [ ] Validate on physical iPhone Safari (without inspector console focus lane) that Explorer search focus no longer triggers page zoom.
+
+## 2026-04-12 — iPhone-safe compact input zoom suppression follow-up (active)
+- [x] Narrowed mobile zoom guard to editable controls only (no blanket `.control` scaling) so non-editable chips/buttons keep compact sizing authority.
+- [x] Added search-field wrapper lane (`.search-input-wrap` + `.search-input`) and coarse-pointer compact visual scale contract (`scale(0.86)`) while preserving actual editable font-size at `16px`.
+- [x] Added compact shell adjustments for coarse-pointer search chrome (reduced gap/padding/min-height and chip scaling) to keep topbar density close to prior visual weight.
+- [x] Added placeholder-opacity compact styling for coarse-pointer editable controls while retaining `16px` technical font-size authority.
+- [x] Expanded static contracts to lock wrapper class wiring + compact-scale CSS lane so future refactors do not regress to sub-16 editable font sizing.
+- [ ] Validate on physical iPhone Safari that focused search/modal/drawer controls no longer trigger auto-zoom while visual size remains compact and caret interaction remains acceptable.
+
+## 2026-04-12 — Keyboard viewport + list-thumb load-failure hardening (active)
+- [x] Added Explorer visual-viewport height sync lane (`window.visualViewport` resize/scroll/orientation + window resize fallback) and CSS variable wiring so app shell sizing follows keyboard-induced visible viewport changes.
+- [x] Added coarse-pointer input font-size guard rails (`16px`) for search/control/modal form controls to suppress iOS focus auto-zoom triggers.
+- [x] Fixed localhost thumbnail URL normalization to preserve API port (`:8787` etc.) when remapping to current LAN host, preventing list-view thumbnail request failures on split-origin hosts.
+- [x] Expanded Explorer static regression contracts for visual-viewport wiring, coarse-pointer input guard rails, and localhost thumb remap port preservation.
+- [ ] Device-verify on physical iPhone Safari that keyboard open/close no longer causes perceived page zoom/jump and list-view initial render shows no bulk thumbnail `Loading Failed` entries.
+
 ## 2026-04-12 — RAF lane audit + focus-world idle blocking (active)
 - [x] Audited `requestAnimationFrame` usage in `ExplorerApp` focus/cinematic ownership paths and replaced direct calls with lane-tagged scheduling/cancel helpers.
 - [x] Added per-lane RAF runtime debug breakdown in `window.__explorerRafDebug` (`raf-lane-proxy-active-card`, `raf-lane-focus-world`, `raf-lane-cinematic-reveal`, `raf-lane-measurement`, `raf-lane-other`) with scheduled/completed/canceled/inFlight counters.
