@@ -1,8 +1,14 @@
+## 2026-04-16 — Explorer shell reduction (surface-toggle seam) (active)
+- [x] Expanded `useExplorerUiState` to own adjacent UI-only surface toggles (`sidebarOpen`, `actionsOpen`, `dragActive`) alongside existing preference/modal/context state.
+- [x] Migrated `ExplorerApp` to consume surface-toggle state through `useExplorerUiState`, removing inline root declarations while preserving behavior/wiring.
+- [x] Updated static contracts to assert the expanded UI-state hook surface includes the migrated surface-toggle fields.
+- [ ] Follow-up: evaluate whether remaining root-local UI booleans (`inspectorOpen` and closely related preview-surface toggles) should be split into a dedicated preview-shell seam or intentionally kept local.
+
 ## 2026-04-16 — Explorer shell reduction (topbar/density/filter preference seam) (active)
 - [x] Expanded `useExplorerUiState` to own topbar/density/filter/view preference state (`view`, `query`, `typeFilter`, `sortKey`, `selectedOnly`, `untaggedOnly`, `gridColumnCount`, `overlayEnabled`, `topbarHasOpenDropdown`, `topbarFocusWithin`) with configurable defaults.
 - [x] Migrated `ExplorerApp` to consume the expanded UI-state seam via `useExplorerUiState({ defaultView, defaultGridColumns })` while preserving existing behavior/wiring.
 - [x] Updated static contracts to assert expanded UI-state seam fields and adjusted topbar/density/compose/delete assertions to follow hook-owned state locations.
-- [ ] Follow-up: evaluate extracting adjacent UI-only project/surface toggles (for example sidebar/actions open state) once this preference seam is validated stable.
+- [x] Follow-up completed in later pass: extracted adjacent UI-only project/surface toggles (`sidebarOpen`, `actionsOpen`, `dragActive`) into `useExplorerUiState`.
 
 ## 2026-04-16 — Explorer shell reduction (UI state seam start) (active)
 - [x] Added `useExplorerUiState` hook under `src/hooks/` to own modal/context/detail state cluster previously declared inline in `ExplorerApp`.

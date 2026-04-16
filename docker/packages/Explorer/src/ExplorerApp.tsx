@@ -566,13 +566,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewActivationKey, setPreviewActivationKey] = useState('');
   const [previewPlaybackToken, setPreviewPlaybackToken] = useState(0);
   const [focused, setFocused] = useState<MediaItem | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [touchPinchCapable, setTouchPinchCapable] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
-  const [dragActive, setDragActive] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
@@ -616,6 +613,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setTopbarHasOpenDropdown,
     topbarFocusWithin,
     setTopbarFocusWithin,
+    sidebarOpen,
+    setSidebarOpen,
+    actionsOpen,
+    setActionsOpen,
+    dragActive,
+    setDragActive,
     previewDetailsOpen,
     setPreviewDetailsOpen,
     contextMenu,

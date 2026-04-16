@@ -30,6 +30,9 @@ export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {
   const [overlayEnabled, setOverlayEnabled] = useState(true);
   const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);
   const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
@@ -62,6 +65,12 @@ export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {
     setTopbarHasOpenDropdown,
     topbarFocusWithin,
     setTopbarFocusWithin,
+    sidebarOpen,
+    setSidebarOpen,
+    actionsOpen,
+    setActionsOpen,
+    dragActive,
+    setDragActive,
     previewDetailsOpen,
     setPreviewDetailsOpen,
     contextMenu,
