@@ -279,6 +279,8 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
   assert.ok(explorer.includes("import { useExplorerCommands } from './hooks/useExplorerCommands';"));
+  assert.ok(explorer.includes("import { useExplorerUiState } from './hooks/useExplorerUiState';"));
+  assert.ok(explorer.includes('} = useExplorerUiState();'));
   assert.ok(explorer.includes('const {\n    handleComposeCompletion,\n    composeMediaCommand,\n    uploadMediaCommand,\n    uploadMediaBatchCommand,\n    sendToProgramMonitorCommand,\n    pushToObsCommand,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
   assert.ok(explorer.includes('onCompletedRefreshScope: handleComposeCompletion,'));
   assert.ok(explorer.includes('scope: \'project\''));
@@ -304,6 +306,18 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(commands.includes('const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {'));
   assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));
+});
+
+test('explorer ui-state seam owns modal/context/detail state cluster', () => {
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
+  const content = fs.readFileSync(uiStatePath, 'utf8');
+  assert.ok(content.includes('export function useExplorerUiState() {'));
+  assert.ok(content.includes('const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);'));
+  assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);'));
+  assert.ok(content.includes('const [composeModalOpen, setComposeModalOpen] = useState(false);'));
+  assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
+  assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
+  assert.ok(content.includes('return {'));
 });
 
 test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
@@ -629,8 +643,10 @@ test('pending compose recovery reconciles stale restored jobs and prefers real a
 test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const commandsHookPath = path.join(packageRoot, 'src', 'hooks', 'useExplorerCommands.ts');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
+  const uiState = fs.readFileSync(uiStatePath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
   assert.ok(content.includes('Select one or more video clips'));
   assert.ok(content.includes("addToast('warn', 'Compose', 'Select one or more clips')"));
@@ -639,7 +655,7 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('setComposeModalOpen(true);'));
   assert.ok(content.includes('{composeModalRendered ? ('));
   assert.ok(content.includes('className="compose-modal open"'));
-  assert.ok(content.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
+  assert.ok(uiState.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
   assert.ok(content.includes('data-compose-project-picker="1"'));
   assert.ok(content.includes('onSubmit={(event) => {'));
   assert.ok(content.includes('className="btn good" type="submit" disabled={composeSubmitting}'));
@@ -766,11 +782,13 @@ test('pending compose modules and render wiring are present', () => {
 
 test('package explorer delete actions route through custom confirmation modal', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const uiState = fs.readFileSync(uiStatePath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
-  assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
-  assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
+  assert.ok(uiState.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
+  assert.ok(uiState.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
   assert.ok(content.includes('performDeleteMediaSelection,'));
   assert.ok(content.includes('} = useExplorerCommands({'));
   assert.ok(content.includes('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {'));

@@ -66,6 +66,7 @@ import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
 import { FocusTransitionOrchestrator } from './render/FocusTransitionOrchestrator';
 import { useLibrarySnapshot } from './hooks/useLibrarySnapshot';
 import { useExplorerCommands } from './hooks/useExplorerCommands';
+import { useExplorerUiState } from './hooks/useExplorerUiState';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
 
 interface ExplorerAppProps {
@@ -573,13 +574,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [touchPinchCapable, setTouchPinchCapable] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [dragActive, setDragActive] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
   const [gridColumnCount, setGridColumnCount] = useState(DEFAULT_COLUMNS_MOBILE);
@@ -603,17 +602,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [proxyPlaybackPlaying, setProxyPlaybackPlaying] = useState(false);
   const [proxyPlaybackCurrentTime, setProxyPlaybackCurrentTime] = useState(0);
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
-  const [composeModalOpen, setComposeModalOpen] = useState(false);
-  const [composeModalRendered, setComposeModalRendered] = useState(false);
-  const [composeSubmitting, setComposeSubmitting] = useState(false);
-  const [composeOutputName, setComposeOutputName] = useState('');
-  const [composeOutputProject, setComposeOutputProject] = useState('');
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteModalRendered, setDeleteModalRendered] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
-  const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);
   const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);
   const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);
+  const {
+    previewDetailsOpen,
+    setPreviewDetailsOpen,
+    contextMenu,
+    setContextMenu,
+    composeModalOpen,
+    setComposeModalOpen,
+    composeModalRendered,
+    setComposeModalRendered,
+    composeSubmitting,
+    setComposeSubmitting,
+    composeOutputName,
+    setComposeOutputName,
+    composeOutputProject,
+    setComposeOutputProject,
+    deleteModalOpen,
+    setDeleteModalOpen,
+    deleteModalRendered,
+    setDeleteModalRendered,
+    pendingDeleteSelectionKeys,
+    setPendingDeleteSelectionKeys,
+  } = useExplorerUiState();
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());

@@ -1,3 +1,9 @@
+## 2026-04-16 — Explorer shell reduction (UI state seam start) (active)
+- [x] Added `useExplorerUiState` hook under `src/hooks/` to own modal/context/detail state cluster previously declared inline in `ExplorerApp`.
+- [x] Migrated `ExplorerApp` to consume `useExplorerUiState` for preview-details, context-menu, compose modal state, delete modal state, and pending-delete-key state while preserving existing behavior.
+- [x] Added static contracts to assert `useExplorerUiState` import/wiring from `ExplorerApp` and hook-owned modal/context/detail state fields.
+- [ ] Follow-up: continue UI seam extraction for adjacent topbar/density/filter preference state clusters after validating this first modal/context seam remains stable.
+
 ## 2026-04-16 — External integration command-lane extraction (active)
 - [x] Added `sendToProgramMonitorCommand(...)` and `pushToObsCommand(...)` to `useExplorerCommands` so focused external dispatch side effects execute inside the command boundary.
 - [x] Migrated `ExplorerApp` focused Program Monitor handoff lane to command-hook execution, removing root-owned popup/postMessage side-effect flow.
