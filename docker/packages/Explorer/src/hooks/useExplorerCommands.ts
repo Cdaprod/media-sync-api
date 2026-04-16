@@ -67,6 +67,21 @@ interface UploadMediaBatchCommand {
   title?: string;
 }
 
+interface ProgramMonitorCommand {
+  streamUrl?: string;
+  monitorUrl?: string;
+  source?: string;
+  title?: string;
+}
+
+interface ObsPushCommand {
+  assetUrl?: string;
+  fit: 'contain' | 'cover' | 'fill';
+  slot: number;
+  ensureExclusiveScene: boolean;
+  title?: string;
+}
+
 /**
  * Mutation command orchestration for Explorer media actions.
  *
@@ -332,6 +347,76 @@ export function useExplorerCommands(args: UseExplorerCommandsArgs) {
     } as const;
   }, [addToast, api, refreshAfterScopedMutation]);
 
+  const sendToProgramMonitorCommand = useCallback(async (command: ProgramMonitorCommand) => {
+    const title = command.title || 'Program Monitor';
+    const streamUrl = String(command.streamUrl || '').trim();
+    const monitorUrl = String(command.monitorUrl || '').trim();
+    if (!streamUrl) {
+      addToast('warn', title, 'No stream URL available');
+      return false;
+    }
+    if (!monitorUrl) {
+      addToast('warn', title, 'Program monitor URL is unavailable');
+      return false;
+    }
+    const payload = {
+      type: 'media-sync/program-monitor/import',
+      items: [streamUrl],
+      source: command.source || 'explorer-overlay',
+      sent_at: new Date().toISOString(),
+    };
+    const target = window.open(monitorUrl, '_blank', 'noopener,noreferrer');
+    if (!target) {
+      addToast('warn', title, 'Allow popups to hand off media');
+      return false;
+    }
+    const targetOrigin = new URL(monitorUrl).origin;
+    window.setTimeout(() => {
+      try {
+        target.postMessage(payload, targetOrigin);
+      } catch {
+        addToast('warn', title, 'Unable to deliver handoff payload');
+      }
+    }, 220);
+    addToast('good', title, 'Sent focused asset to monitor');
+    return true;
+  }, [addToast]);
+
+  const pushToObsCommand = useCallback(async (command: ObsPushCommand) => {
+    const title = command.title || 'OBS';
+    const assetUrl = String(command.assetUrl || '').trim();
+    if (!assetUrl) {
+      addToast('warn', title, 'No stream URL available for this asset');
+      return false;
+    }
+    const obsPush = (window as Window & {
+      obsPushBrowserMedia?: (opts: {
+        assetUrl: string;
+        fit?: string;
+        slot?: number;
+        ensureExclusiveScene?: boolean;
+      }) => Promise<void>;
+    }).obsPushBrowserMedia;
+    if (!obsPush) {
+      addToast('warn', title, 'OBS push helper is unavailable in this surface');
+      return false;
+    }
+    try {
+      await obsPush({
+        assetUrl,
+        fit: command.fit,
+        slot: command.slot,
+        ensureExclusiveScene: command.ensureExclusiveScene,
+      });
+      addToast('good', title, 'Browser source updated');
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'OBS push failed';
+      addToast('bad', title, message);
+      return false;
+    }
+  }, [addToast]);
+
   const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {
     const title = command.title || 'Resolve';
     try {
@@ -354,6 +439,8 @@ export function useExplorerCommands(args: UseExplorerCommandsArgs) {
     composeMediaCommand,
     uploadMediaCommand,
     uploadMediaBatchCommand,
+    sendToProgramMonitorCommand,
+    pushToObsCommand,
     resolveMediaCommand,
     performDeleteMediaSelection,
     moveMediaSelection,

@@ -1,9 +1,16 @@
+## 2026-04-16 — External integration command-lane extraction (active)
+- [x] Added `sendToProgramMonitorCommand(...)` and `pushToObsCommand(...)` to `useExplorerCommands` so focused external dispatch side effects execute inside the command boundary.
+- [x] Migrated `ExplorerApp` focused Program Monitor handoff lane to command-hook execution, removing root-owned popup/postMessage side-effect flow.
+- [x] Migrated `ExplorerApp` focused OBS push lane to command-hook execution, removing root-owned OBS helper resolution and success/error try/catch ownership.
+- [x] Expanded Explorer static contracts to assert new integration command verbs and root wiring via command methods.
+- [ ] Follow-up: evaluate command-lane extraction for remaining non-mutation utility side effects (clipboard copy lanes) only if they begin to accumulate custom error-policy branching.
+
 ## 2026-04-16 — Upload command-lane extraction (active)
 - [x] Added `uploadMediaCommand(...)` and `uploadMediaBatchCommand(...)` to `useExplorerCommands` so upload API execution, error toasts, and scoped refresh aftermath are command-owned.
 - [x] Migrated `ExplorerApp` single-file upload handler to delegate API execution/outcome handling through `uploadMediaCommand(...)` while keeping local upload-status UI ownership in root.
 - [x] Migrated drag/drop upload handler to delegate per-file upload execution through `uploadMediaBatchCommand(...)` and removed root-level upload mutation `api.*` try/catch ownership.
 - [x] Expanded Explorer static contracts to assert upload command surface presence and root wiring through command methods.
-- [ ] Follow-up: evaluate extracting focused external side-effect lanes (program-monitor handoff + OBS push) into command verbs once non-API UX prompts are normalized.
+- [x] Follow-up completed in later pass: focused external side-effect lanes (program-monitor handoff + OBS push) now route through command verbs.
 
 ## 2026-04-16 — Compose submit command-lane extraction (active)
 - [x] Added `composeMediaCommand(...)` to `useExplorerCommands` so compose request execution + success/error toasts are command-owned instead of root-owned.

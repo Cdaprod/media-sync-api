@@ -279,14 +279,18 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
   assert.ok(explorer.includes("import { useExplorerCommands } from './hooks/useExplorerCommands';"));
-  assert.ok(explorer.includes('const {\n    handleComposeCompletion,\n    composeMediaCommand,\n    uploadMediaCommand,\n    uploadMediaBatchCommand,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
+  assert.ok(explorer.includes('const {\n    handleComposeCompletion,\n    composeMediaCommand,\n    uploadMediaCommand,\n    uploadMediaBatchCommand,\n    sendToProgramMonitorCommand,\n    pushToObsCommand,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
   assert.ok(explorer.includes('onCompletedRefreshScope: handleComposeCompletion,'));
   assert.ok(explorer.includes('scope: \'project\''));
   assert.ok(explorer.includes('await tagSingleMediaItem(focused, addTags, removeTags, \'Tag\');'));
   assert.ok(explorer.includes('const response = await composeMediaCommand({'));
   assert.ok(explorer.includes('const result = await uploadMediaCommand({'));
   assert.ok(explorer.includes('await uploadMediaBatchCommand({'));
+  assert.ok(explorer.includes('await sendToProgramMonitorCommand({'));
+  assert.ok(explorer.includes('await pushToObsCommand({'));
   assert.ok(explorer.includes('await resolveMediaCommand({'));
+  assert.ok(!explorer.includes('window.open(monitorUrl,'));
+  assert.ok(!explorer.includes('obsPushBrowserMedia'));
   assert.ok(commands.includes('export function useExplorerCommands(args: UseExplorerCommandsArgs) {'));
   assert.ok(commands.includes('const refreshAfterScopedMutation = useCallback(async (scope: RefreshScope | null) => {'));
   assert.ok(commands.includes('const refreshAfterMutation = useCallback(async (scope: RefreshScope | null | undefined) => {'));
@@ -295,6 +299,8 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(commands.includes('const composeMediaCommand = useCallback(async (command: ComposeMediaCommand) => {'));
   assert.ok(commands.includes('const uploadMediaCommand = useCallback(async (command: UploadMediaCommand) => {'));
   assert.ok(commands.includes('const uploadMediaBatchCommand = useCallback(async (command: UploadMediaBatchCommand) => {'));
+  assert.ok(commands.includes('const sendToProgramMonitorCommand = useCallback(async (command: ProgramMonitorCommand) => {'));
+  assert.ok(commands.includes('const pushToObsCommand = useCallback(async (command: ObsPushCommand) => {'));
   assert.ok(commands.includes('const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {'));
   assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));

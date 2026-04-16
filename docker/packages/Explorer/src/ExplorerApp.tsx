@@ -2427,6 +2427,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     composeMediaCommand,
     uploadMediaCommand,
     uploadMediaBatchCommand,
+    sendToProgramMonitorCommand,
+    pushToObsCommand,
     resolveMediaCommand,
     performDeleteMediaSelection,
     moveMediaSelection,
@@ -2705,35 +2707,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Program Monitor', 'Open a preview first');
       return;
     }
-    const streamUrl = resolveAssetUrl(focused.stream_url);
-    if (!streamUrl) {
-      addToast('warn', 'Program Monitor', 'No stream URL available');
-      return;
-    }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const absoluteStream = toAbsoluteUrl(streamUrl, origin);
+    const absoluteStream = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
     const monitorUrl = new URL('/program-monitor/index.html', origin).toString();
-    const payload = {
-      type: 'media-sync/program-monitor/import',
-      items: [absoluteStream],
+    await sendToProgramMonitorCommand({
+      streamUrl: absoluteStream,
+      monitorUrl,
       source: 'explorer-overlay',
-      sent_at: new Date().toISOString(),
-    };
-    const target = window.open(monitorUrl, '_blank', 'noopener,noreferrer');
-    if (!target) {
-      addToast('warn', 'Program Monitor', 'Allow popups to hand off media');
-      return;
-    }
-    const targetOrigin = new URL(monitorUrl).origin;
-    window.setTimeout(() => {
-      try {
-        target.postMessage(payload, targetOrigin);
-      } catch {
-        addToast('warn', 'Program Monitor', 'Unable to deliver handoff payload');
-      }
-    }, 220);
-    addToast('good', 'Program Monitor', 'Sent focused asset to monitor');
-  }, [addToast, focused, resolveAssetUrl]);
+      title: 'Program Monitor',
+    });
+  }, [addToast, focused, resolveAssetUrl, sendToProgramMonitorCommand]);
 
   const handleFocusedObs = useCallback(async () => {
     if (!focused) {
@@ -2742,36 +2725,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const assetUrl = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
-    if (!assetUrl) {
-      addToast('warn', 'OBS', 'No stream URL available for this asset');
-      return;
-    }
-    const obsPush = (window as Window & {
-      obsPushBrowserMedia?: (opts: {
-        assetUrl: string;
-        fit?: string;
-        slot?: number;
-        ensureExclusiveScene?: boolean;
-      }) => Promise<void>;
-    }).obsPushBrowserMedia;
-    if (!obsPush) {
-      addToast('warn', 'OBS', 'OBS push helper is unavailable in this surface');
-      return;
-    }
     const fit = previewObsMode === 'fit' ? 'contain' : (previewObsMode === 'fill' ? 'fill' : 'cover');
-    try {
-      await obsPush({
-        assetUrl,
-        fit,
-        slot: Number.parseInt(previewObsSlot, 10) || 1,
-        ensureExclusiveScene: previewObsExclusive,
-      });
-      addToast('good', 'OBS', 'Browser source updated');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'OBS push failed';
-      addToast('bad', 'OBS', message);
-    }
-  }, [addToast, focused, previewObsExclusive, previewObsMode, previewObsSlot, resolveAssetUrl]);
+    await pushToObsCommand({
+      assetUrl,
+      fit,
+      slot: Number.parseInt(previewObsSlot, 10) || 1,
+      ensureExclusiveScene: previewObsExclusive,
+      title: 'OBS',
+    });
+  }, [addToast, focused, previewObsExclusive, previewObsMode, previewObsSlot, pushToObsCommand, resolveAssetUrl]);
 
   const handleCopyStream = useCallback(async (item: MediaItem) => {
     if (!item.stream_url) return;
