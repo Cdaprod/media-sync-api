@@ -1,3 +1,9 @@
+## 2026-04-16 — Render-order TDZ hardening + surface-toggle seam follow-up (active)
+- [x] Fixed `ExplorerApp` render-time TDZ crash by ensuring `usePendingComposeJobs(...)` binding is declared before render-time pending compose consumers (`visiblePendingComposeItems` + related pending compose effects/memos).
+- [x] Added static contract guard asserting `usePendingComposeJobs(...)` declaration appears before `visiblePendingComposeItems` memo in `ExplorerApp`.
+- [x] Preserved prior surface-toggle seam extraction (`sidebarOpen`, `actionsOpen`, `dragActive`) in `useExplorerUiState` with unchanged behavior.
+- [ ] Follow-up: evaluate splitting remaining preview-shell-adjacent UI booleans (`inspectorOpen` and related toggles) into a dedicated seam only if it can be done without entangling focus/cinematic ownership lanes.
+
 ## 2026-04-16 — Explorer shell reduction (surface-toggle seam) (active)
 - [x] Expanded `useExplorerUiState` to own adjacent UI-only surface toggles (`sidebarOpen`, `actionsOpen`, `dragActive`) alongside existing preference/modal/context state.
 - [x] Migrated `ExplorerApp` to consume surface-toggle state through `useExplorerUiState`, removing inline root declarations while preserving behavior/wiring.

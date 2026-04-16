@@ -1683,65 +1683,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     addToast('good', 'Refresh', 'Reloaded projects + media', 'explorer-refresh');
   }, [activeProject, addToast, hydrateProjectMediaItems, refreshLibrarySnapshot]);
 
-  useEffect(() => {
-    const previous = pendingStatusSnapshotRef.current;
-    const next = new Map<string, PendingComposeItem['status']>();
-    pendingComposeItems.forEach((item) => {
-      next.set(item.jobId, item.status);
-      const previousStatus = previous.get(item.jobId);
-      if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {
-        addToast('good', 'Compose', 'Compose completed');
-      }
-      if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
-        addToast('bad', 'Compose', 'Compose failed');
-      }
-    });
-    pendingStatusSnapshotRef.current = next;
-  }, [addToast, pendingComposeItems]);
-
-  const visiblePendingComposeItems = useMemo(() => {
-    const relevant = pendingComposeItems.filter((item) => {
-      if (mediaScope === 'all') return true;
-      if (!activeProject) return false;
-      return item.project === activeProject.name
-        && (item.source || 'primary') === (activeProject.source || 'primary');
-    });
-    return sortPendingComposeItemsForDisplay(relevant);
-  }, [activeProject, mediaScope, pendingComposeItems]);
-
-  const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({
-    kind: 'pending' as const,
-    pendingItem,
-  })), [visiblePendingComposeItems]);
-
-  const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
-      kind: 'asset' as const,
-      item,
-    })), [filteredMedia]);
-
-  const renderedMediaEntries = useMemo<RenderedMediaEntry[]>(() => ([
-    ...pendingEntries,
-    ...assetEntries,
-  ]), [assetEntries, pendingEntries]);
-
-  useEffect(() => {
-    if (!pendingComposeItems.length) return;
-    pendingComposeItems.forEach((item) => {
-      if (item.status !== 'finalizing') return;
-      if (!item.completedPath) return;
-      const visible = media.some((mediaItem) => {
-        const relativePath = String(mediaItem.relative_path || '').trim();
-        if (relativePath !== item.completedPath) return false;
-        const mediaProject = String(mediaItem.project_name || mediaItem.project || activeProject?.name || '').trim();
-        const mediaSource = String(mediaItem.project_source || mediaItem.source || activeProject?.source || '').trim() || 'primary';
-        return mediaProject === item.project && mediaSource === (item.source || 'primary');
-      });
-      if (visible) {
-        removePendingJob(item.jobId);
-      }
-    });
-  }, [activeProject, media, pendingComposeItems, removePendingJob]);
-
   const selectProject = useCallback(
     (project: Project) => {
       const alreadySelected = Boolean(activeProject)
@@ -2493,6 +2434,65 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     mediaItems: media,
     onCompletedRefreshScope: handleComposeCompletion,
   });
+
+  useEffect(() => {
+    const previous = pendingStatusSnapshotRef.current;
+    const next = new Map<string, PendingComposeItem['status']>();
+    pendingComposeItems.forEach((item) => {
+      next.set(item.jobId, item.status);
+      const previousStatus = previous.get(item.jobId);
+      if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {
+        addToast('good', 'Compose', 'Compose completed');
+      }
+      if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
+        addToast('bad', 'Compose', 'Compose failed');
+      }
+    });
+    pendingStatusSnapshotRef.current = next;
+  }, [addToast, pendingComposeItems]);
+
+  const visiblePendingComposeItems = useMemo(() => {
+    const relevant = pendingComposeItems.filter((item) => {
+      if (mediaScope === 'all') return true;
+      if (!activeProject) return false;
+      return item.project === activeProject.name
+        && (item.source || 'primary') === (activeProject.source || 'primary');
+    });
+    return sortPendingComposeItemsForDisplay(relevant);
+  }, [activeProject, mediaScope, pendingComposeItems]);
+
+  const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({
+    kind: 'pending' as const,
+    pendingItem,
+  })), [visiblePendingComposeItems]);
+
+  const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
+      kind: 'asset' as const,
+      item,
+    })), [filteredMedia]);
+
+  const renderedMediaEntries = useMemo<RenderedMediaEntry[]>(() => ([
+    ...pendingEntries,
+    ...assetEntries,
+  ]), [assetEntries, pendingEntries]);
+
+  useEffect(() => {
+    if (!pendingComposeItems.length) return;
+    pendingComposeItems.forEach((item) => {
+      if (item.status !== 'finalizing') return;
+      if (!item.completedPath) return;
+      const visible = media.some((mediaItem) => {
+        const relativePath = String(mediaItem.relative_path || '').trim();
+        if (relativePath !== item.completedPath) return false;
+        const mediaProject = String(mediaItem.project_name || mediaItem.project || activeProject?.name || '').trim();
+        const mediaSource = String(mediaItem.project_source || mediaItem.source || activeProject?.source || '').trim() || 'primary';
+        return mediaProject === item.project && mediaSource === (item.source || 'primary');
+      });
+      if (visible) {
+        removePendingJob(item.jobId);
+      }
+    });
+  }, [activeProject, media, pendingComposeItems, removePendingJob]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;

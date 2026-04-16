@@ -306,6 +306,10 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(commands.includes('const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {'));
   assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));
+  const pendingComposeHookIndex = explorer.indexOf('} = usePendingComposeJobs({');
+  const visiblePendingComposeIndex = explorer.indexOf('const visiblePendingComposeItems = useMemo(() => {');
+  assert.ok(pendingComposeHookIndex >= 0);
+  assert.ok(visiblePendingComposeIndex > pendingComposeHookIndex);
 });
 
 test('explorer ui-state seam owns modal/context/detail state cluster', () => {
