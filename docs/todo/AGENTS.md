@@ -1,3 +1,12 @@
+## 2026-04-16 — Aggregate library snapshot lane (active)
+- [x] Added backend aggregate snapshot service + API route for Explorer (`GET /api/library?scope=all`) with source/project/asset flattening and generated timestamp payload.
+- [x] Registered the new library router in FastAPI app bootstrap so the endpoint is available without touching legacy media/project routes.
+- [x] Added backend tests for aggregate payload shape and unsupported-scope rejection behavior.
+- [x] Added Explorer API client + types for `LibrarySnapshot` and introduced a single-flight `useLibrarySnapshot` hook.
+- [x] Rewired Explorer aggregate load path to consume the snapshot endpoint for source/project/all-media loading and refresh dedupe toast operation key.
+- [ ] Follow up by migrating remaining per-project refresh lanes (`refreshMediaForScope`) to snapshot-delta or backend scoped aggregate refresh.
+- [ ] Split command mutations into `useExplorerCommands` and isolate UI-only state into `useExplorerUI` once snapshot loading is stabilized on-device.
+
 ## 2026-04-13 — Off-DOM thumbnail loader mismatch acknowledgment + verification follow-up (active)
 - [x] Explicitly acknowledged prior summary/code mismatch: previous rollout summary claimed off-DOM probe removal while device evidence still showed `const loader = new Image()` in `thumbnailLoader.ensureThumbLoad`.
 - [x] Re-verified repository truth that `ensureThumbLoad(...)` no longer creates synthetic image objects and now binds `load`/`error` listeners on the rendered target `<img>` node.

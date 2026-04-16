@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.compose import router as compose_router
 from app.api.compose import shutdown_compose_jobs
+from app.api.library import router as library_router
 from app.api.media import bulk_router as assets_bulk_router
 from app.api.media import global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
 from app.api.projects import router as projects_router
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     application.include_router(compose_router)
     application.include_router(reindex_router)
     application.include_router(reindex_all_router)
+    application.include_router(library_router)
     application.include_router(media_router)
     application.include_router(thumbnail_router)
     application.include_router(resolve_router)

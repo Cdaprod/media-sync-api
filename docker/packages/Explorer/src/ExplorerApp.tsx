@@ -64,6 +64,7 @@ import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
 import { FocusTransitionOrchestrator } from './render/FocusTransitionOrchestrator';
+import { useLibrarySnapshot } from './hooks/useLibrarySnapshot';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
 
 interface ExplorerAppProps {
@@ -496,12 +497,26 @@ const cancelExplorerRaf = (rafId: number | null) => {
 function useToastQueue() {
   const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
   const timeouts = useRef<number[]>([]);
+  const lastOperationToastRef = useRef<Map<string, number>>(new Map());
 
   const beginToastExit = useCallback((id: string) => {
     setToasts((prev) => prev.map((toast) => (toast.id === id ? { ...toast, exiting: true } : toast)));
   }, []);
 
-  const addToast = useCallback((type: ToastMessage['type'], title: string, message: string) => {
+  const addToast = useCallback((
+    type: ToastMessage['type'],
+    title: string,
+    message: string,
+    operationId?: string,
+  ) => {
+    if (operationId) {
+      const now = Date.now();
+      const lastShownAt = lastOperationToastRef.current.get(operationId) ?? 0;
+      if (now - lastShownAt < 500) {
+        return `${operationId}-deduped`;
+      }
+      lastOperationToastRef.current.set(operationId, now);
+    }
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setToasts((prev) => [...prev, { id, type, title, message, exiting: false }]);
     const timeout = window.setTimeout(() => {
@@ -530,6 +545,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     : inferApiBaseUrl(apiBaseUrl, window.location);
   const [resolvedApiBase, setResolvedApiBase] = useState(initialApiBase);
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
+  const { loadExplorerSnapshot } = useLibrarySnapshot(api);
   const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -1516,23 +1532,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const loadSources = useCallback(async () => {
     try {
-      const payload = await api.listSources();
-      setSources(payload);
+      const payload = await loadExplorerSnapshot({ scope: 'all' });
+      setSources(payload.sources);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to list sources';
       addToast('bad', 'Sources', message);
     }
-  }, [api, addToast]);
+  }, [addToast, loadExplorerSnapshot]);
 
   const loadProjects = useCallback(async () => {
     try {
-      const payload = await api.listProjects();
-      setProjects(payload);
+      const payload = await loadExplorerSnapshot({ scope: 'all' });
+      setProjects(payload.projects);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to list projects';
       addToast('bad', 'Projects', message);
     }
-  }, [api, addToast]);
+  }, [addToast, loadExplorerSnapshot]);
 
   const loadMedia = useCallback(
     async (project: Project | null) => {
@@ -1571,30 +1587,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearActiveAsset();
     setMediaScope('all');
     setPendingDataLoadOverlay(true);
-    if (!projects.length) {
-      setMedia([]);
+    try {
+      const snapshot = await loadExplorerSnapshot({ scope: 'all' });
+      setSources(snapshot.sources);
+      setProjects(snapshot.projects);
+      setMedia(sortMediaByRecent(Array.isArray(snapshot.assets) ? snapshot.assets : []));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load media';
+      addToast('bad', 'Media', message);
+    } finally {
       setPendingDataLoadOverlay(false);
-      return;
     }
-    const gathered: MediaItem[] = [];
-    for (const project of projects) {
-      try {
-        const payload = await api.listMedia(project.name, project.source);
-        const items = Array.isArray(payload.media) ? payload.media : [];
-        items.forEach((item) => {
-          gathered.push({
-            ...item,
-            project_name: project.name,
-            project_source: project.source && project.source !== 'primary' ? project.source : null,
-          });
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load media';
-        addToast('warn', 'Media', `Skipped ${project.name}: ${message}`);
-      }
-    }
-    setMedia(sortMediaByRecent(gathered));
-  }, [addToast, api, clearActiveAsset, clearSelectionState, projects]);
+  }, [addToast, clearActiveAsset, clearSelectionState, loadExplorerSnapshot]);
 
   const refreshMediaForScope = useCallback(async (
     refreshScope: {
@@ -1669,7 +1673,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     } else {
       await loadAllMedia();
     }
-    addToast('good', 'Refresh', 'Reloaded projects + media');
+    addToast('good', 'Refresh', 'Reloaded projects + media', 'explorer-refresh');
   }, [activeProject, addToast, loadAllMedia, loadMedia, loadProjects, loadSources]);
 
   useEffect(() => {

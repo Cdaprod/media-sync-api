@@ -57,6 +57,15 @@ export interface MediaResponse {
   instructions?: string;
 }
 
+export interface LibrarySnapshot {
+  generated_at: string;
+  scope: 'all';
+  sources: Source[];
+  projects: Project[];
+  assets: MediaItem[];
+  jobs: Array<Record<string, unknown>>;
+}
+
 export interface ResolveOpenResponse {
   ok: boolean;
   job_id?: string;
