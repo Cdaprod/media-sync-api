@@ -2454,6 +2454,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const {
     refreshAfterMutation,
     handleComposeCompletion,
+    resolveMediaCommand,
     performDeleteMediaSelection,
     moveMediaSelection,
     tagMediaSelection,
@@ -2637,14 +2638,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       mode: resolveMode || 'import',
     };
 
-    try {
-      const result = await api.sendResolve(payload, project.source);
-      addToast('good', 'Resolve', `Sent. Job: ${result.job_id || 'ok'}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Resolve request failed';
-      addToast('bad', 'Resolve', message);
-    }
-  }, [activeProject, addToast, api, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName, selected, selectionItems]);
+    await resolveMediaCommand({
+      project: payload.project,
+      newProjectName: payload.new_project_name,
+      mode: payload.mode,
+      mediaRelativePaths: payload.media_rel_paths,
+      source: project.source || undefined,
+      title: 'Resolve',
+    });
+  }, [activeProject, addToast, resolveMediaCommand, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName, selected, selectionItems]);
 
 
   const handleFocusedTag = useCallback(async () => {
@@ -2680,19 +2682,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (resolveProjectMode === '__new__') projectValue = '__new__';
     else if (resolveProjectMode === '__select__') projectValue = '__select__';
     else if (resolveProjectName.trim()) projectValue = resolveProjectName.trim();
-    try {
-      const result = await api.sendResolve({
-        project: projectValue,
-        new_project_name: resolveProjectMode === '__new__' ? resolveNewName.trim() || null : null,
-        media_rel_paths: [focused.relative_path].filter((value): value is string => Boolean(value)),
-        mode: resolveMode || 'import',
-      }, sourceName);
-      addToast('good', 'Resolve', `Sent. Job: ${result.job_id || 'ok'}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Resolve request failed';
-      addToast('bad', 'Resolve', message);
-    }
-  }, [activeProject?.name, activeProject?.source, addToast, api, focused, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName]);
+    await resolveMediaCommand({
+      project: projectValue,
+      newProjectName: resolveProjectMode === '__new__' ? resolveNewName.trim() || null : null,
+      mediaRelativePaths: [focused.relative_path].filter((value): value is string => Boolean(value)),
+      mode: resolveMode || 'import',
+      source: sourceName,
+      title: 'Resolve',
+    });
+  }, [activeProject?.name, activeProject?.source, addToast, focused, resolveMediaCommand, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName]);
 
   const handleFocusedProgramMonitor = useCallback(async () => {
     if (!focused) {

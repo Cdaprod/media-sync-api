@@ -1,3 +1,10 @@
+## 2026-04-16 — Focused resolve command-lane extraction (active)
+- [x] Added `resolveMediaCommand(...)` to `useExplorerCommands` so resolve-side effects + outcome toasts no longer require root-owned API try/catch blocks.
+- [x] Migrated both bulk `handleResolve` and focused `handleFocusedResolve` flows in `ExplorerApp` to command-hook resolve execution.
+- [x] Reduced root-level resolve mutation branching to payload assembly + guard checks, with command lane handling request outcome reporting.
+- [x] Expanded Explorer static contracts to assert `resolveMediaCommand` wiring from `ExplorerApp` and command-hook implementation presence.
+- [ ] Follow-up: evaluate moving resolve payload-shape assembly helpers into command hook once UI mode inputs are normalized.
+
 ## 2026-04-16 — Compose aftermath command-lane extraction (active)
 - [x] Reordered command-hook wiring so `usePendingComposeJobs` completion aftermath now calls `useExplorerCommands.handleComposeCompletion`.
 - [x] Removed compose completion refresh/toast ownership from root inline callback, routing completion aftermath through command authority.

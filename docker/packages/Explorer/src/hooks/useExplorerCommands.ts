@@ -37,6 +37,15 @@ interface UseExplorerCommandsArgs {
   setDeleteSubmitting: Dispatch<SetStateAction<boolean>>;
 }
 
+interface ResolveMediaCommand {
+  project: string;
+  newProjectName?: string | null;
+  mode: string;
+  mediaRelativePaths: string[];
+  source?: string;
+  title?: string;
+}
+
 /**
  * Mutation command orchestration for Explorer media actions.
  *
@@ -230,9 +239,26 @@ export function useExplorerCommands(args: UseExplorerCommandsArgs) {
     addToast('good', 'Compose', 'Compose completed');
   }, [addToast, refreshAfterScopedMutation]);
 
+  const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {
+    const title = command.title || 'Resolve';
+    try {
+      const result = await api.sendResolve({
+        project: command.project,
+        new_project_name: command.newProjectName ?? null,
+        media_rel_paths: command.mediaRelativePaths,
+        mode: command.mode || 'import',
+      }, command.source);
+      addToast('good', title, `Sent. Job: ${result.job_id || 'ok'}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Resolve request failed';
+      addToast('bad', title, message);
+    }
+  }, [addToast, api]);
+
   return {
     refreshAfterMutation,
     handleComposeCompletion,
+    resolveMediaCommand,
     performDeleteMediaSelection,
     moveMediaSelection,
     tagMediaSelection,
