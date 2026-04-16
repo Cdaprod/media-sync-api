@@ -1,3 +1,14 @@
+## 2026-04-16 — Scoped aggregate refresh + command extraction pass (active)
+- [x] Hardened `/api/library` source visibility for `scope=all` by including disabled sources in the `sources` envelope while still filtering project/asset expansion to enabled+accessible sources.
+- [x] Reused media relative-path validation in aggregate snapshot assembly so malformed/traversal `relative_path` entries are skipped before stream/download/thumbnail URL emission.
+- [x] Extended aggregate endpoint to support `scope=project` with required `project` query and optional `source`, keeping the same top-level envelope shape.
+- [x] Migrated Explorer scoped refresh lane (`refreshMediaForScope`) to use scoped aggregate snapshots instead of raw per-project list fanout.
+- [x] Introduced `useExplorerCommands` and moved high-churn mutation orchestration (bulk move, bulk tag, bulk delete refresh logic) out of `ExplorerApp`.
+- [x] Added backend tests for scoped aggregate success, missing-project rejection, disabled source visibility, and invalid-relative-path filtering.
+- [x] Added Explorer static contract coverage for command extraction and scoped aggregate refresh usage.
+- [ ] Follow-up: migrate remaining single-project mutation aftermath lanes (compose completion + focused action handlers) to `useExplorerCommands`.
+- [ ] Follow-up: consider typed backend response models for `/api/library` (`LibrarySnapshot` pydantic schema family).
+
 ## 2026-04-16 — Explorer snapshot authority shift completion pass (active)
 - [x] Refactored `useLibrarySnapshot` into a stateful authority hook that owns snapshot payload slices (`sources`, `projects`, `assets`, `jobs`, `generatedAt`) plus loading/error lifecycle.
 - [x] Preserved single-flight refresh semantics in the authority hook while adding explicit `applySnapshot(...)` and `clearSnapshotError()` helpers.

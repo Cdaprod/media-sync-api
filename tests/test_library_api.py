@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -32,11 +33,69 @@ def test_library_snapshot_returns_aggregate_payload(client: TestClient, env_sett
     asset = matching_assets[0]
     assert asset["relative_path"] == "ingest/originals/sample.mov"
     assert asset["stream_url"].startswith(f"/media/{project_name}/")
-    assert asset["download_url"].startswith(f"/api/projects/{project_name}/media/file")
+    assert asset["download_url"].startswith(f"/media/{project_name}/download/")
     assert payload.get("jobs") == []
 
 
 def test_library_snapshot_rejects_unsupported_scope(client: TestClient) -> None:
+    response = client.get("/api/library?scope=unsupported")
+    assert response.status_code == 400
+    assert "scope must be 'all' or 'project'" in response.json().get("detail", "")
+
+
+def test_library_snapshot_rejects_project_scope_without_project(client: TestClient) -> None:
     response = client.get("/api/library?scope=project")
     assert response.status_code == 400
-    assert "scope must be 'all'" in response.json().get("detail", "")
+    assert "project is required" in response.json().get("detail", "")
+
+
+def test_library_snapshot_scope_project_returns_target_project_only(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client, "scoped-demo")
+    media_path = env_settings / project_name / "ingest" / "originals" / "sample.mov"
+    media_path.parent.mkdir(parents=True, exist_ok=True)
+    media_path.write_bytes(b"media-bytes")
+    reindex_response = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_response.status_code == 200
+
+    response = client.get(f"/api/library?scope=project&project={project_name}")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scope"] == "project"
+    assert len(payload["projects"]) == 1
+    assert payload["projects"][0]["name"] == project_name
+    assert len(payload["sources"]) == 1
+    assert payload["assets"]
+    assert all(item["project_name"] == project_name for item in payload["assets"])
+
+
+def test_library_snapshot_scope_all_includes_disabled_sources(client: TestClient) -> None:
+    register_response = client.post("/api/sources", json={"name": "archive", "root": "/tmp", "type": "local"})
+    assert register_response.status_code == 201
+    toggle_response = client.post("/api/sources/archive/toggle?enabled=false")
+    assert toggle_response.status_code == 200
+
+    response = client.get("/api/library?scope=all")
+    assert response.status_code == 200
+    payload = response.json()
+    disabled = [source for source in payload["sources"] if source["name"] == "archive"]
+    assert disabled
+    assert disabled[0]["enabled"] is False
+
+
+def test_library_snapshot_skips_invalid_relative_paths(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client, "path-guard")
+    media_path = env_settings / project_name / "ingest" / "originals" / "sample.mov"
+    media_path.parent.mkdir(parents=True, exist_ok=True)
+    media_path.write_bytes(b"media-bytes")
+    reindex_response = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_response.status_code == 200
+
+    index_path = env_settings / project_name / "index.json"
+    payload = json.loads(index_path.read_text())
+    payload.setdefault("files", []).append({"relative_path": "../escape.mov", "sha256": "bad"})
+    index_path.write_text(json.dumps(payload))
+
+    response = client.get("/api/library?scope=all")
+    assert response.status_code == 200
+    assets = response.json()["assets"]
+    assert not any(item.get("relative_path") == "../escape.mov" for item in assets)

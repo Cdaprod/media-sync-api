@@ -273,6 +273,20 @@ test('explorer boot + refresh use one aggregate snapshot authority path', () => 
   assert.ok(!content.includes('Promise.allSettled([loadSources(), loadProjects()])'));
 });
 
+test('explorer command extraction exists and scoped aggregate refresh is wired', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const commandsHookPath = path.join(packageRoot, 'src', 'hooks', 'useExplorerCommands.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const commands = fs.readFileSync(commandsHookPath, 'utf8');
+  assert.ok(explorer.includes("import { useExplorerCommands } from './hooks/useExplorerCommands';"));
+  assert.ok(explorer.includes('const {\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n  } = useExplorerCommands({'));
+  assert.ok(explorer.includes('scope: \'project\''));
+  assert.ok(commands.includes('export function useExplorerCommands(args: UseExplorerCommandsArgs) {'));
+  assert.ok(commands.includes('const refreshAfterScopedMutation = useCallback(async (scope: RefreshScope | null) => {'));
+  assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
+  assert.ok(commands.includes('await refreshMediaForScope(scope);'));
+});
+
 test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
   const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
@@ -735,7 +749,8 @@ test('package explorer delete actions route through custom confirmation modal', 
   const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
   assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
-  assert.ok(content.includes('const performDeleteMediaSelection = useCallback('));
+  assert.ok(content.includes('performDeleteMediaSelection,'));
+  assert.ok(content.includes('} = useExplorerCommands({'));
   assert.ok(content.includes('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {'));
   assert.ok(content.includes('setPendingDeleteSelectionKeys(resolveSelectionKeysForItems(items));'));
   assert.ok(content.includes('setDeleteModalOpen(true);'));

@@ -59,7 +59,7 @@ export interface MediaResponse {
 
 export interface LibrarySnapshot {
   generated_at: string;
-  scope: 'all';
+  scope: 'all' | 'project';
   sources: Source[];
   projects: Project[];
   assets: MediaItem[];

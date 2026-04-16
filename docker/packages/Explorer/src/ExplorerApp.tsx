@@ -65,6 +65,7 @@ import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
 import { FocusTransitionOrchestrator } from './render/FocusTransitionOrchestrator';
 import { useLibrarySnapshot } from './hooks/useLibrarySnapshot';
+import { useExplorerCommands } from './hooks/useExplorerCommands';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
 
 interface ExplorerAppProps {
@@ -1599,9 +1600,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       name: projectName,
       source: sourceName || null,
     };
-    const payload = await api.listMedia(refreshedProject.name, refreshedProject.source || undefined);
-    const items = Array.isArray(payload.media) ? payload.media : [];
-    const hydratedItems = hydrateProjectMediaItems(items, refreshedProject);
+    const scopedSnapshot = await refreshLibrarySnapshot({
+      scope: 'project',
+      project: refreshedProject.name,
+      source: refreshedProject.source || undefined,
+    });
+    const snapshotAssets = Array.isArray(scopedSnapshot.assets) ? scopedSnapshot.assets : [];
+    const hydratedItems = hydrateProjectMediaItems(snapshotAssets, refreshedProject);
 
     if (mediaScope === 'all' || !activeProject) {
       setMedia((current) => {
@@ -1622,7 +1627,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ) {
       setMedia((current) => sortMediaByRecent(mergeMediaItemsPreservingIdentity(current, hydratedItems)));
     }
-  }, [activeProject, api, hydrateProjectMediaItems, mediaScope, projects]);
+  }, [activeProject, hydrateProjectMediaItems, mediaScope, projects, refreshLibrarySnapshot]);
 
   const fetchComposeJobJson = useCallback(async (url: string) => {
     const response = await fetch(api.buildUrl(url));
@@ -2460,48 +2465,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [activeAssetKey, commitPreviewActivationKey, inspectorOpen, itemsBySelectionKey]);
 
-  const performDeleteMediaSelection = useCallback(
-    async (selectionKeys: string[]) => {
-      const items = resolveItemsForSelection(selectionKeys);
-      if (!items.length) {
-        addToast('warn', 'Delete', 'Select one or more clips');
-        return;
-      }
-      const refs = items
-        .map((item) => toAssetRef(item))
-        .filter((item): item is AssetRef => Boolean(item));
-      if (!refs.length) {
-        addToast('warn', 'Delete', 'Unable to resolve selected media paths');
-        return;
-      }
-      setDeleteSubmitting(true);
-      try {
-        await api.bulkDeleteMedia(refs);
-        addToast('good', 'Delete', 'Removed media from disk and index');
-        const removedKeys = new Set(resolveSelectionKeysForItems(items));
-        setSelected((current) => {
-          const next = new Set(current);
-          removedKeys.forEach((key) => next.delete(key));
-          return next;
-        });
-        if (focused) {
-          const focusedKey = assetSelectionKey(focused, activeProject);
-          if (removedKeys.has(focusedKey)) {
-            setFocused(null);
-            setInspectorOpen(false);
-          }
-        }
-        if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-        else await loadMedia(activeProject);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Delete failed';
-        addToast('bad', 'Delete', message);
-      } finally {
-        setDeleteSubmitting(false);
-      }
-    },
-    [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, mediaScope, resolveItemsForSelection, resolveSelectionKeysForItems, toAssetRef],
-  );
+  const {
+    performDeleteMediaSelection,
+    moveMediaSelection,
+    tagMediaSelection,
+  } = useExplorerCommands({
+    api,
+    addToast,
+    activeProject,
+    mediaScope,
+    focused,
+    assetSelectionKey,
+    loadAllMedia,
+    loadMedia,
+    refreshLibrarySnapshot,
+    refreshMediaForScope,
+    resolveItemsForSelection,
+    resolveSelectionKeysForItems,
+    toAssetRef,
+    setSelected,
+    setFocused,
+    setInspectorOpen,
+    setDeleteSubmitting,
+  });
 
   const deleteMediaSelection = useCallback((selectionKeys: string[]) => {
     const items = resolveItemsForSelection(selectionKeys);
@@ -2538,41 +2524,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setPendingDeleteSelectionKeys([]);
   }, [deleteSubmitting]);
 
-  const moveMediaSelection = useCallback(
-    async (selectionKeys: string[], targetProject: Project) => {
-      const refs = resolveItemsForSelection(selectionKeys)
-        .map((item) => toAssetRef(item))
-        .filter((item): item is AssetRef => Boolean(item));
-      if (!refs.length) {
-        addToast('warn', 'Move', 'Unable to resolve selected media paths');
-        return;
-      }
-      try {
-        await api.bulkMoveMedia(refs, targetProject.name, targetProject.source || null);
-        addToast('good', 'Move', `Moved ${refs.length} item(s) to ${targetProject.name}`);
-        setSelected((current) => {
-          const next = new Set(current);
-          selectionKeys.forEach((key) => next.delete(key));
-          return next;
-        });
-        if (focused) {
-          const focusedKey = assetSelectionKey(focused, activeProject);
-          if (selectionKeys.includes(focusedKey)) {
-            setFocused(null);
-            setInspectorOpen(false);
-          }
-        }
-        if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-        else await loadMedia(activeProject);
-        await refreshLibrarySnapshot({ scope: 'all' });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Move failed';
-        addToast('bad', 'Move', message);
-      }
-    },
-    [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, mediaScope, refreshLibrarySnapshot, resolveItemsForSelection, toAssetRef],
-  );
-
   const handleBulkTag = useCallback(async () => {
     if (!selected.size) {
       addToast('warn', 'Tags', 'Select one or more clips first');
@@ -2588,23 +2539,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Tags', 'Nothing to add or remove');
       return;
     }
-    const refs = selectionItems
-      .map((item) => toAssetRef(item))
-      .filter((item): item is AssetRef => Boolean(item));
-    if (!refs.length) {
-      addToast('warn', 'Tags', 'Unable to resolve selected media paths');
-      return;
-    }
-    try {
-      await api.bulkTagMedia(refs, addTags, removeTags);
-      addToast('good', 'Tags', `Updated tags for ${refs.length} item(s)`);
-      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-      else await loadMedia(activeProject);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Tag update failed';
-      addToast('bad', 'Tags', message);
-    }
-  }, [activeProject, addToast, api, loadAllMedia, loadMedia, mediaScope, selected, selectionItems, toAssetRef]);
+    await tagMediaSelection(selectionItems, addTags, removeTags);
+  }, [addToast, selected, selectionItems, tagMediaSelection]);
 
   const handleComposeSelected = useCallback(async () => {
     if (!selected.size) {

@@ -17,11 +17,12 @@ router = APIRouter(prefix="/api/library", tags=["library"])
 @router.get("")
 async def get_library_snapshot(
     source: str | None = Query(default=None, description="Optional source name"),
-    scope: str = Query(default="all", description="Snapshot scope. Currently only 'all' is supported."),
+    scope: str = Query(default="all", description="Snapshot scope: 'all' or 'project'."),
+    project: str | None = Query(default=None, description="Required when scope=project"),
 ):
     """Return the Explorer aggregate snapshot in a single request."""
 
     try:
-        return build_library_snapshot(source_name=source, scope=scope)
+        return build_library_snapshot(source_name=source, scope=scope, project_name=project)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

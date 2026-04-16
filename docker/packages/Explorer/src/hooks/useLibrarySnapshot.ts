@@ -5,7 +5,8 @@ import type { LibrarySnapshot, MediaItem, Project, Source } from '../types';
 
 interface LoadLibraryOptions {
   source?: string;
-  scope?: 'all';
+  scope?: 'all' | 'project';
+  project?: string;
 }
 
 interface UseLibrarySnapshotState {
@@ -26,8 +27,8 @@ interface UseLibrarySnapshotState {
  * Single-flight aggregate library snapshot loader.
  *
  * Example:
- *   const { loadExplorerSnapshot } = useLibrarySnapshot(api);
- *   const snapshot = await loadExplorerSnapshot({ scope: 'all' });
+ *   const { refreshLibrarySnapshot } = useLibrarySnapshot(api);
+ *   const snapshot = await refreshLibrarySnapshot({ scope: 'all' });
  */
 export function useLibrarySnapshot(api: ApiClient): UseLibrarySnapshotState {
   const inflightRef = useRef<Promise<LibrarySnapshot> | null>(null);
@@ -59,7 +60,11 @@ export function useLibrarySnapshot(api: ApiClient): UseLibrarySnapshotState {
       return inflightRef.current;
     }
     setIsLoading(true);
-    const request = api.listLibrarySnapshot(options.source, options.scope ?? 'all')
+    const request = api.listLibrarySnapshot({
+      source: options.source,
+      scope: options.scope ?? 'all',
+      project: options.project,
+    })
       .then((nextSnapshot) => {
         applySnapshot(nextSnapshot);
         return nextSnapshot;

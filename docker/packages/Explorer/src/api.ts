@@ -18,7 +18,7 @@ export interface ApiClient {
   listSources: () => Promise<Source[]>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
-  listLibrarySnapshot: (source?: string, scope?: 'all') => Promise<LibrarySnapshot>;
+  listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
   uploadMedia: (url: string, file: File) => Promise<Record<string, unknown>>;
   sendResolve: (payload: ResolveRequest, source?: string) => Promise<ResolveOpenResponse>;
   deleteMedia: (project: string, relativePaths: string[], source?: string) => Promise<Record<string, unknown>>;
@@ -82,10 +82,12 @@ export function createApiClient(baseUrl: string): ApiClient {
       }
       return response.json();
     },
-    async listLibrarySnapshot(source?: string, scope: 'all' = 'all'): Promise<LibrarySnapshot> {
+    async listLibrarySnapshot(params: { source?: string; scope?: 'all' | 'project'; project?: string } = {}): Promise<LibrarySnapshot> {
+      const { source, scope = 'all', project } = params;
       const query = new URLSearchParams();
       query.set('scope', scope);
       if (source) query.set('source', source);
+      if (project) query.set('project', project);
       const response = await fetch(buildUrl(`/api/library?${query.toString()}`));
       if (!response.ok) {
         throw new Error('Failed to load library snapshot');
