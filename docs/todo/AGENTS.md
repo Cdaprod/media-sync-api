@@ -1,3 +1,10 @@
+## 2026-04-17 — Retained prefs boot-order overwrite regression fix (active)
+- [x] Fixed retained prefs boot ordering in `ExplorerApp` with an explicit hydration gate (`retainedPrefsHydratedRef`) so save-back cannot write default boot values before restore/migration completes.
+- [x] Extended retained prefs debug surface (`window.__explorerRetainedPrefsDebug`) with hydration/save-skip markers to verify boot sequencing (`hydrated`, `saveSkippedUntilHydrated`).
+- [x] Re-verified legacy fallback behavior remains gated to unified-payload absence only (legacy keys are read in the `else` branch when unified payload parsing does not produce an object).
+- [x] Persisted prefs now survive reload without default overwrite (`gridColumnCount`, `overlayEnabled`, and other retained fields).
+- [ ] Follow-up: capture one on-device boot snapshot from `__explorerRetainedPrefsDebug` after reload to archive proof before opening PR #159 scope.
+
 ## 2026-04-17 — PR #158 stability/hardening verification pass (active)
 - [x] Hardened retained prefs restore safety by using non-throwing JSON object parsing (`parseStoredJsonObject`) so malformed retained payloads no longer block legacy fallback restore paths.
 - [x] Added lightweight runtime prefs debug export (`window.__explorerRetainedPrefsDebug`) publishing restore source (`retained` / `legacy` / `none`), malformed retained payload flag, and last-saved payload snapshot.
