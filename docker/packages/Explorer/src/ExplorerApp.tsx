@@ -262,13 +262,15 @@ const buildThumbFallback = (label: string) => {
 };
 
 const CONTENT_LOADING_DELAY_MS = 180;
-const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
-const LAYOUT_PREFS_KEY = 'media-sync-explorer-layout-v1';
+const RETAINED_UI_PREFS_KEY = 'media-sync-explorer-ui-prefs-v1';
+const LEGACY_FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
+const LEGACY_OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
-const OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
 const clampLayoutColumns = (value: number) => (
   Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
 );
+const VALID_SORT_KEYS = new Set<SortKey>(['newest', 'oldest', 'name-asc', 'name-desc', 'size-desc', 'size-asc']);
+const VALID_TYPE_FILTERS = new Set<MediaTypeFilter>(['all', 'video', 'image', 'audio', 'overlay', 'unknown']);
 
 const buildComposeTimestampName = () => {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
@@ -1552,16 +1554,54 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const raw = window.localStorage.getItem(LAYOUT_PREFS_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return;
-      const storedView = parsed.view;
-      if (storedView === 'grid' || storedView === 'list') {
-        setView(storedView);
+      const raw = window.localStorage.getItem(RETAINED_UI_PREFS_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === 'object') {
+        const storedView = parsed.view;
+        if (storedView === 'grid' || storedView === 'list') {
+          setView(storedView);
+        }
+        if (typeof parsed.gridColumnCount === 'number' && Number.isFinite(parsed.gridColumnCount)) {
+          setGridColumnCount(clampLayoutColumns(parsed.gridColumnCount));
+        }
+        if (VALID_SORT_KEYS.has(parsed.sortKey as SortKey)) {
+          setSortKey(parsed.sortKey as SortKey);
+        }
+        if (VALID_TYPE_FILTERS.has(parsed.typeFilter as MediaTypeFilter)) {
+          setTypeFilter(parsed.typeFilter as MediaTypeFilter);
+        }
+        if (typeof parsed.selectedOnly === 'boolean') {
+          setSelectedOnly(parsed.selectedOnly);
+        }
+        if (typeof parsed.untaggedOnly === 'boolean') {
+          setUntaggedOnly(parsed.untaggedOnly);
+        }
+        if (typeof parsed.overlayEnabled === 'boolean') {
+          setOverlayEnabled(parsed.overlayEnabled);
+        }
+        return;
       }
-      if (typeof parsed.gridColumnCount === 'number' && Number.isFinite(parsed.gridColumnCount)) {
-        setGridColumnCount(clampLayoutColumns(parsed.gridColumnCount));
+      const legacyFilterRaw = window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY);
+      if (legacyFilterRaw) {
+        const legacyFilterParsed = JSON.parse(legacyFilterRaw);
+        if (legacyFilterParsed && typeof legacyFilterParsed === 'object') {
+          if (VALID_TYPE_FILTERS.has(legacyFilterParsed.type as MediaTypeFilter)) {
+            setTypeFilter(legacyFilterParsed.type as MediaTypeFilter);
+          }
+          if (VALID_SORT_KEYS.has(legacyFilterParsed.sort as SortKey)) {
+            setSortKey(legacyFilterParsed.sort as SortKey);
+          }
+          if (typeof legacyFilterParsed.selectedOnly === 'boolean') {
+            setSelectedOnly(legacyFilterParsed.selectedOnly);
+          }
+          if (typeof legacyFilterParsed.untaggedOnly === 'boolean') {
+            setUntaggedOnly(legacyFilterParsed.untaggedOnly);
+          }
+        }
+      }
+      const legacyOverlayRaw = window.localStorage.getItem(LEGACY_OVERLAY_VIS_PREFS_KEY);
+      if (legacyOverlayRaw != null) {
+        setOverlayEnabled(legacyOverlayRaw !== '0');
       }
     } catch {
       // ignore malformed prefs
@@ -1571,62 +1611,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      window.localStorage.setItem(LAYOUT_PREFS_KEY, JSON.stringify({
+      window.localStorage.setItem(RETAINED_UI_PREFS_KEY, JSON.stringify({
         view,
         gridColumnCount: clampLayoutColumns(gridColumnCount),
+        sortKey,
+        typeFilter,
+        selectedOnly,
+        untaggedOnly,
+        overlayEnabled,
       }));
     } catch {
       // ignore storage errors
     }
-  }, [gridColumnCount, view]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(FILTER_PREFS_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        setTypeFilter((parsed.type as MediaTypeFilter) || 'all');
-        setSortKey((parsed.sort as SortKey) || 'newest');
-        setSelectedOnly(Boolean(parsed.selectedOnly));
-        setUntaggedOnly(Boolean(parsed.untaggedOnly));
-      }
-    } catch {
-      // ignore malformed prefs
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const payload = {
-      type: typeFilter,
-      sort: sortKey,
-      selectedOnly,
-      untaggedOnly,
-    };
-    window.localStorage.setItem(FILTER_PREFS_KEY, JSON.stringify(payload));
-  }, [typeFilter, sortKey, selectedOnly, untaggedOnly]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(OVERLAY_VIS_PREFS_KEY);
-      if (raw == null) return;
-      setOverlayEnabled(raw !== '0');
-    } catch {
-      // ignore malformed prefs
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(OVERLAY_VIS_PREFS_KEY, overlayEnabled ? '1' : '0');
-    } catch {
-      // ignore storage errors
-    }
-  }, [overlayEnabled]);
+  }, [gridColumnCount, overlayEnabled, selectedOnly, sortKey, typeFilter, untaggedOnly, view]);
 
   useEffect(() => {
     if (typeFilter === 'overlay' && !mediaMeta.types.has('overlay')) {

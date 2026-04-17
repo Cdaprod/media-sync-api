@@ -1,3 +1,10 @@
+## 2026-04-17 — Explorer retained UI prefs expansion (active)
+- [x] Extended retained Explorer UI prefs storage to include `overlayEnabled`, `sortKey`, `typeFilter`, `selectedOnly`, and `untaggedOnly` alongside existing retained layout fields (`view`, `gridColumnCount`).
+- [x] Hardened boot restore with field-level validation guards (type/sort enum checks + boolean checks + density clamping) so malformed payloads cannot break startup.
+- [x] Added legacy fallback reads for prior filter/overlay preference keys when the new retained payload is absent, preserving existing user prefs during migration.
+- [x] Expanded Explorer static contracts to lock retained key usage plus restore/save markers for the newly persisted fields.
+- [ ] Intentionally ephemeral (not persisted): `actionsOpen`, `sidebarOpen`, `dragActive`, modal open/rendered state, and context-menu open state.
+
 ## 2026-04-17 — Explorer layout preference retention hardening (active)
 - [x] Added dedicated layout preference storage key in `ExplorerApp` (`media-sync-explorer-layout-v1`) and restore/write-through wiring for `view` + `gridColumnCount`.
 - [x] Added restore-time guards for malformed storage values and explicit mobile density clamping for persisted `gridColumnCount`.
