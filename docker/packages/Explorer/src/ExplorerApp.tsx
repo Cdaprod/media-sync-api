@@ -263,8 +263,12 @@ const buildThumbFallback = (label: string) => {
 
 const CONTENT_LOADING_DELAY_MS = 180;
 const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
+const LAYOUT_PREFS_KEY = 'media-sync-explorer-layout-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 const OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
+const clampLayoutColumns = (value: number) => (
+  Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
+);
 
 const buildComposeTimestampName = () => {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
@@ -1544,6 +1548,37 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     lastCommittedColumnsRef.current = gridColumnCount;
   }, [gridColumnCount]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(LAYOUT_PREFS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return;
+      const storedView = parsed.view;
+      if (storedView === 'grid' || storedView === 'list') {
+        setView(storedView);
+      }
+      if (typeof parsed.gridColumnCount === 'number' && Number.isFinite(parsed.gridColumnCount)) {
+        setGridColumnCount(clampLayoutColumns(parsed.gridColumnCount));
+      }
+    } catch {
+      // ignore malformed prefs
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(LAYOUT_PREFS_KEY, JSON.stringify({
+        view,
+        gridColumnCount: clampLayoutColumns(gridColumnCount),
+      }));
+    } catch {
+      // ignore storage errors
+    }
+  }, [gridColumnCount, view]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

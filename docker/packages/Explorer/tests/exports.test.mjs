@@ -1268,6 +1268,11 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('createPinchDensityController({'));
   assert.ok(content.includes('getClassHostEl: () => mediaContentRef.current,'));
   assert.ok(content.includes('id="asset-density-slider"'));
+  assert.ok(content.includes('const LAYOUT_PREFS_KEY = \'media-sync-explorer-layout-v1\';'));
+  assert.ok(content.includes('window.localStorage.getItem(LAYOUT_PREFS_KEY)'));
+  assert.ok(content.includes('gridColumnCount: clampLayoutColumns(gridColumnCount),'));
+  assert.ok(content.includes('setGridColumnCount(clampLayoutColumns(parsed.gridColumnCount));'));
+  assert.ok(content.includes('setView(storedView);'));
   assert.ok(content.includes('const OVERLAY_VIS_PREFS_KEY = \'media-sync-explorer-overlay-enabled-v1\';'));
   assert.ok(content.includes('overlayEnabled,'));
   assert.ok(content.includes('window.localStorage.getItem(OVERLAY_VIS_PREFS_KEY)'));

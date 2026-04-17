@@ -1,3 +1,9 @@
+## 2026-04-17 — Explorer layout preference retention hardening (active)
+- [x] Added dedicated layout preference storage key in `ExplorerApp` (`media-sync-explorer-layout-v1`) and restore/write-through wiring for `view` + `gridColumnCount`.
+- [x] Added restore-time guards for malformed storage values and explicit mobile density clamping for persisted `gridColumnCount`.
+- [x] Expanded Explorer static contracts to lock layout preference key usage and restore/save wiring markers.
+- [ ] Follow-up: if future desktop-specific density bounds are introduced, split persisted clamp policy by viewport mode instead of reusing mobile min/max constants globally.
+
 ## 2026-04-17 — Hook-layer relocation + topbar scroll-source regression repair (active)
 - [x] Relocated behavioral hook modules from `src/` root into `src/hooks/` (`useTopbarScrollState`, `useThumbnailQueue`, `usePendingComposeJobs`, `useAssetInteractions`) and updated all import paths/wiring.
 - [x] Repaired topbar hide/reveal regression by wiring `useTopbarScrollState` to the actual scroll surface node (`mediaScrollViewportEl`) instead of relying on a ref object that may be null during initial effect binding.
