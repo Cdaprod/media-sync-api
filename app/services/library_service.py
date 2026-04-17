@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.api.media import _build_download_url, _build_stream_url, _validate_relative_media_path
+from app.api.media import _build_download_url, _build_stream_url, _is_thumbable_media, _validate_relative_media_path
 from app.api.projects import _bootstrap_existing_projects
 from app.config import get_settings
 from app.storage.index import load_index
@@ -82,7 +82,7 @@ def _iter_project_rows(source) -> tuple[list[dict[str, Any]], list[dict[str, Any
             item["stream_url"] = _build_stream_url(project_dir.name, safe_relative, source.name)
             item["download_url"] = _build_download_url(project_dir.name, safe_relative, source.name)
             sha256 = item.get("sha256")
-            if isinstance(sha256, str):
+            if isinstance(sha256, str) and _is_thumbable_media(relative_obj):
                 thumb_url = _build_thumbnail_url(project_dir.name, sha256, source.name)
                 item["thumb_url"] = thumb_url
                 item["thumbnail_url"] = thumb_url
@@ -154,7 +154,7 @@ def build_library_snapshot(
                         item["stream_url"] = _build_stream_url(project_dir.name, safe_relative, source.name)
                         item["download_url"] = _build_download_url(project_dir.name, safe_relative, source.name)
                         sha256 = item.get("sha256")
-                        if isinstance(sha256, str):
+                        if isinstance(sha256, str) and _is_thumbable_media(relative_obj):
                             thumb_url = _build_thumbnail_url(project_dir.name, sha256, source.name)
                             item["thumb_url"] = thumb_url
                             item["thumbnail_url"] = thumb_url

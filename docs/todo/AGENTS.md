@@ -1,3 +1,9 @@
+## 2026-04-17 — Aggregate snapshot thumbnail contract regression fix (active)
+- [x] Fixed `/api/library` thumbnail contract divergence in `app/services/library_service.py`: `thumb_url` / `thumbnail_url` are now emitted only when `_is_thumbable_media(Path(relative_path))` is true (matching `list_media(...)` behavior).
+- [x] Kept thumbnail endpoint behavior unchanged in this pass; primary fix is preventing invalid thumbnail URLs from being emitted for non-thumbable assets.
+- [x] Added backend regression coverage in `tests/test_library_api.py` asserting thumbable assets include thumbnail aliases while non-thumbable assets do not.
+- [ ] Follow-up: evaluate optional `/thumbnails/...` soft-fallback response for unsupported media types as a separate hardening pass (not required for contract correctness).
+
 ## 2026-04-17 — Explorer pending-entry TDZ ordering fix (active)
 - [x] Fixed a render-time TDZ hazard in `ExplorerApp`: a `useEffect` dependency array referenced `pendingEntries.length` before `pendingEntries` declaration.
 - [x] Kept the patch ordering-only (no behavior redesign) by moving the focus-world measurement effect below pending/rendered entry memo declarations.

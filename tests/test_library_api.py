@@ -99,3 +99,30 @@ def test_library_snapshot_skips_invalid_relative_paths(client: TestClient, env_s
     assert response.status_code == 200
     assets = response.json()["assets"]
     assert not any(item.get("relative_path") == "../escape.mov" for item in assets)
+
+
+def test_library_snapshot_emits_thumbnail_urls_only_for_thumbable_assets(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client, "thumb-guard")
+    video_path = env_settings / project_name / "ingest" / "originals" / "sample.mov"
+    audio_path = env_settings / project_name / "ingest" / "originals" / "notes.mp3"
+    video_path.parent.mkdir(parents=True, exist_ok=True)
+    video_path.write_bytes(b"video-bytes")
+    audio_path.write_bytes(b"audio-bytes")
+    reindex_response = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindex_response.status_code == 200
+
+    response = client.get("/api/library?scope=all")
+    assert response.status_code == 200
+    assets = [item for item in response.json()["assets"] if item.get("project_name") == project_name]
+    by_path = {item["relative_path"]: item for item in assets}
+
+    assert "ingest/originals/sample.mov" in by_path
+    assert "ingest/originals/notes.mp3" in by_path
+
+    thumbable = by_path["ingest/originals/sample.mov"]
+    non_thumbable = by_path["ingest/originals/notes.mp3"]
+
+    assert thumbable.get("thumb_url")
+    assert thumbable.get("thumbnail_url")
+    assert "thumb_url" not in non_thumbable
+    assert "thumbnail_url" not in non_thumbable
