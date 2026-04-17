@@ -3443,6 +3443,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    type LoadFailureEmitter = 'asset-grid' | 'asset-list' | 'proxy-render' | 'other';
+    type LoadFailureEvent = {
+      at: number;
+      key: string;
+      tag: string;
+      url: string;
+      className: string;
+      emitter: LoadFailureEmitter;
+      suppressed: boolean;
+      dataset: Record<string, string>;
+      targetPath: string;
+    };
+
     const loadFailures = new Map<string, {
       key: string;
       tag: string;
@@ -3451,11 +3464,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       count: number;
       firstAt: number;
       lastAt: number;
-      emitter: 'asset-grid' | 'asset-list' | 'proxy-render' | 'other';
+      emitter: LoadFailureEmitter;
+      suppressedCount: number;
+      lastDataset: Record<string, string>;
+      lastTargetPath: string;
     }>();
+    const recentEvents: LoadFailureEvent[] = [];
+    const MAX_RECENT_EVENTS = 80;
     let suppressedMediaErrorCount = 0;
 
-    const classifyEmitter = (target: HTMLElement): 'asset-grid' | 'asset-list' | 'proxy-render' | 'other' => {
+    const classifyEmitter = (target: HTMLElement): LoadFailureEmitter => {
       if (target.closest('.masonry-card.asset')) return 'asset-grid';
       if (target.closest('.list-row.asset')) return 'asset-list';
       if (target.closest('.proxy-render-card,.focus-proxy-root')) return 'proxy-render';
@@ -3468,6 +3486,39 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (target.closest('.proxy-render-card,.focus-proxy-root')) return true;
       return false;
     };
+    const getTargetPath = (target: HTMLElement) => (
+      target.closest('[data-select-key]')?.getAttribute('data-select-key')
+      || target.closest('.masonry-card.asset,.list-row.asset')?.getAttribute('data-relative')
+      || target.getAttribute('data-relative')
+      || target.getAttribute('data-thumb-key')
+      || ''
+    );
+    const getTargetDatasetSnapshot = (target: HTMLElement): Record<string, string> => {
+      const keep = new Set([
+        'thumbUrl',
+        'thumbFallback',
+        'thumbJobKey',
+        'thumbState',
+        'thumbLoadedKey',
+        'streamUrl',
+        'relative',
+        'selectKey',
+      ]);
+      const snapshot: Record<string, string> = {};
+      const entries = Object.entries(target.dataset || {});
+      entries.forEach(([key, value]) => {
+        if (!keep.has(key)) return;
+        if (!value) return;
+        snapshot[key] = value;
+      });
+      return snapshot;
+    };
+    const pushRecentEvent = (entry: LoadFailureEvent) => {
+      recentEvents.push(entry);
+      if (recentEvents.length > MAX_RECENT_EVENTS) {
+        recentEvents.splice(0, recentEvents.length - MAX_RECENT_EVENTS);
+      }
+    };
 
     const toSnapshotRows = () => Array.from(loadFailures.values())
       .sort((a, b) => b.lastAt - a.lastAt)
@@ -3479,7 +3530,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         totalUnique: loadFailures.size,
         totalEvents: Array.from(loadFailures.values()).reduce((acc, entry) => acc + entry.count, 0),
         suppressedMediaErrorCount,
+        emitterTotals: Array.from(loadFailures.values()).reduce<Record<LoadFailureEmitter, number>>((acc, entry) => {
+          acc[entry.emitter] += entry.count;
+          return acc;
+        }, { 'asset-grid': 0, 'asset-list': 0, 'proxy-render': 0, other: 0 }),
         rows: toSnapshotRows(),
+        recentEvents: recentEvents.map((event) => ({ ...event })),
       };
       (window as typeof window & {
         __explorerLoadFailureDebug?: { getSnapshot: () => typeof snapshot; lastSnapshot: typeof snapshot };
@@ -3503,12 +3559,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ).trim();
       const className = String(target.className || '');
       const emitter = classifyEmitter(target);
+      const dataset = getTargetDatasetSnapshot(target);
+      const targetPath = getTargetPath(target);
       const key = `${tag}:${sourceUrl || '(none)'}`;
       const now = Date.now();
+      const isMediaTarget = tag === 'IMG' || tag === 'VIDEO' || tag === 'SOURCE';
+      const suppressed = isMediaTarget && shouldSuppressMediaError(target);
       const prior = loadFailures.get(key);
       if (prior) {
         prior.count += 1;
         prior.lastAt = now;
+        prior.lastDataset = dataset;
+        prior.lastTargetPath = targetPath;
+        if (suppressed) prior.suppressedCount += 1;
       } else {
         loadFailures.set(key, {
           key,
@@ -3519,10 +3582,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           count: 1,
           firstAt: now,
           lastAt: now,
+          suppressedCount: suppressed ? 1 : 0,
+          lastDataset: dataset,
+          lastTargetPath: targetPath,
         });
       }
-      const isMediaTarget = tag === 'IMG' || tag === 'VIDEO' || tag === 'SOURCE';
-      if (isMediaTarget && shouldSuppressMediaError(target)) {
+      pushRecentEvent({
+        at: now,
+        key,
+        tag,
+        url: sourceUrl,
+        className,
+        emitter,
+        suppressed,
+        dataset,
+        targetPath,
+      });
+      if (suppressed) {
         suppressedMediaErrorCount += 1;
         event.stopImmediatePropagation?.();
         event.stopPropagation();

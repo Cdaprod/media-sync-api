@@ -1,3 +1,9 @@
+## 2026-04-17 — Final emitter-identification debug expansion (active)
+- [x] Expanded `__explorerLoadFailureDebug` with bounded recent-event ring buffer (`recentEvents`), per-key suppression counts (`suppressedCount`), last dataset/path snapshots, and emitter totals to make the dominant failing resource lane explicit on-device.
+- [x] Kept capture bounded/lightweight (max 80 recent rows) and retained existing suppression behavior, now with explicit per-event `suppressed` truth in the debug payload.
+- [x] Updated Explorer static contracts to lock the expanded debug snapshot surface markers.
+- [ ] Next verification step: run `window.__explorerLoadFailureDebug?.getSnapshot()` on device after reproducing spam and patch only the dominant remaining emitter lane.
+
 ## 2026-04-17 — Load-failure regression re-audit + emitter diagnostics hardening (active)
 - [x] Re-audited prior load-failure protections in current repo truth: `__explorerLoadFailureDebug` export present, grid/list thumb handlers still stop native propagation, and off-DOM `new Image()` probing remains absent in `thumbnailLoader`.
 - [x] Added emitter classification + suppression counters to `__explorerLoadFailureDebug` snapshots (`asset-grid` / `asset-list` / `proxy-render` / `other`) for on-device lane attribution.
