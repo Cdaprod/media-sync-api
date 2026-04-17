@@ -33,6 +33,11 @@ export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [touchPinchCapable, setTouchPinchCapable] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [contentLoading, setContentLoading] = useState(false);
+  const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
   const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
@@ -71,6 +76,16 @@ export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {
     setActionsOpen,
     dragActive,
     setDragActive,
+    isMobile,
+    setIsMobile,
+    touchPinchCapable,
+    setTouchPinchCapable,
+    uploadStatus,
+    setUploadStatus,
+    contentLoading,
+    setContentLoading,
+    pendingDataLoadOverlay,
+    setPendingDataLoadOverlay,
     previewDetailsOpen,
     setPreviewDetailsOpen,
     contextMenu,
