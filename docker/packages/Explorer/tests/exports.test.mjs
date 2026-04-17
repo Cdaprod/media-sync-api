@@ -970,6 +970,7 @@ test('explorer queues thumbnail loads from server urls', () => {
   const stateContent = fs.readFileSync(statePath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(content.includes('useThumbnailQueue({'));
+  assert.ok(content.includes('isThumbableRelativePath(item.relative_path)'));
   assert.ok(content.includes('thumbDatasetSignature'));
   assert.ok(content.includes('buildThumbJobKey('));
   assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';"));
@@ -1045,6 +1046,8 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('endContentLoading'));
   assert.ok(loaderContent.includes('export const THUMB_LOAD_TIMEOUT_MS = 8000;'));
   assert.ok(loaderContent.includes('thumbLoadStateCache'));
+  assert.ok(loaderContent.includes('const THUMBNAILABLE_EXTENSIONS = new Set'));
+  assert.ok(loaderContent.includes('export const isThumbableRelativePath = (relativePath?: string): boolean => {'));
   assert.ok(loaderContent.includes('const ensureThumbLoad = ('));
   assert.ok(loaderContent.includes("target.addEventListener('load', handleLoad, { once: true });"));
   assert.ok(loaderContent.includes("target.addEventListener('error', handleError, { once: true });"));
@@ -1271,6 +1274,8 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('const RETAINED_UI_PREFS_KEY = \'media-sync-explorer-ui-prefs-v1\';'));
   assert.ok(content.includes('const parseStoredJsonObject = (raw: string | null): Record<string, unknown> | null => {'));
   assert.ok(content.includes('const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {'));
+  assert.ok(content.includes('if (!isThumbableRelativePath(item.relative_path)) {'));
+  assert.ok(content.includes("return kind === 'image' ? normalizeThumbUrl(item.stream_url || '') : undefined;"));
   assert.ok(content.includes('const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);'));
   assert.ok(content.includes('window.localStorage.getItem(RETAINED_UI_PREFS_KEY)'));
   assert.ok(content.includes('setRetainedPrefsHydrated(false);'));

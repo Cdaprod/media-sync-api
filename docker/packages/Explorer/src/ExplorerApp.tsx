@@ -38,7 +38,7 @@ import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewP
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
-import { buildThumbJobKey, getThumbCacheKey, getThumbLoadState, normalizeThumbUrl } from './thumbnailLoader';
+import { buildThumbJobKey, getThumbCacheKey, getThumbLoadState, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
 import { useThumbnailQueue } from './hooks/useThumbnailQueue';
@@ -1428,6 +1428,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [resolvedApiBase]);
   const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {
+    if (!isThumbableRelativePath(item.relative_path)) {
+      return kind === 'image' ? normalizeThumbUrl(item.stream_url || '') : undefined;
+    }
     if (kind === 'image') {
       return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || item.stream_url || '');
     }

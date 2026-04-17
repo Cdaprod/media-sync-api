@@ -1,3 +1,10 @@
+## 2026-04-17 — Strict thumbability gate follow-up (active)
+- [x] Added a shared frontend thumbability extension gate (`isThumbableRelativePath`) in `thumbnailLoader` to mirror backend thumbnail eligibility (`.mp4/.mov/.avi/.mkv/.jpg/.jpeg/.png/.heic`).
+- [x] Updated `ExplorerApp` thumbnail candidate resolution to require thumbable relative-path eligibility before using `thumb_url`/`thumbnail_url`, with image-only stream fallback when not thumbable.
+- [x] Kept thumbnail candidate policy centralized (`resolveThumbCandidateUrl`) and reused it in both dataset-signature + rendered card view-model paths.
+- [x] Expanded static contracts to lock strict thumbability gate markers in both Explorer app and thumbnail loader.
+- [ ] Follow-up: confirm on-device console/network no longer shows repeated non-thumbable thumbnail 400s (`Media type does not support thumbnails`) during all-project browsing.
+
 ## 2026-04-17 — Thumbnail request opt-in + restore-wins density hardening (active)
 - [x] Added explicit thumb-candidate resolver in `ExplorerApp` so thumbnail requests are opt-in by media kind (`image`/`video`) and no fallback thumbnail URL is constructed for non-thumbable kinds.
 - [x] Updated both dataset-signature and asset view-model thumbnail lanes to use the shared resolver, keeping request behavior consistent between queueing and rendered thumb sources.
