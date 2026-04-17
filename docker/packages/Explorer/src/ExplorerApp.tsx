@@ -567,24 +567,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewPlaybackToken, setPreviewPlaybackToken] = useState(0);
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [touchPinchCapable, setTouchPinchCapable] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState('');
-  const [contentLoading, setContentLoading] = useState(false);
-  const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);
   const contentLoadingTokenRef = useRef(0);
   const contentLoadingTimerRef = useRef<number | null>(null);
-
-  const [resolveProjectMode, setResolveProjectMode] = useState('current');
-  const [resolveProjectName, setResolveProjectName] = useState('');
-  const [resolveNewName, setResolveNewName] = useState('');
-  const [resolveMode, setResolveMode] = useState('import');
-
-  const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');
-  const [previewObsSlot, setPreviewObsSlot] = useState('1');
-  const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
   const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
   const [activeProxyCardEl, setActiveProxyCardEl] = useState<HTMLElement | null>(null);
   const [activeProxyUiSlotEl, setActiveProxyUiSlotEl] = useState<HTMLElement | null>(null);
@@ -619,6 +605,30 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setActionsOpen,
     dragActive,
     setDragActive,
+    isMobile,
+    setIsMobile,
+    touchPinchCapable,
+    setTouchPinchCapable,
+    uploadStatus,
+    setUploadStatus,
+    contentLoading,
+    setContentLoading,
+    pendingDataLoadOverlay,
+    setPendingDataLoadOverlay,
+    resolveProjectMode,
+    setResolveProjectMode,
+    resolveProjectName,
+    setResolveProjectName,
+    resolveNewName,
+    setResolveNewName,
+    resolveMode,
+    setResolveMode,
+    previewObsMode,
+    setPreviewObsMode,
+    previewObsSlot,
+    setPreviewObsSlot,
+    previewObsExclusive,
+    setPreviewObsExclusive,
     previewDetailsOpen,
     setPreviewDetailsOpen,
     contextMenu,

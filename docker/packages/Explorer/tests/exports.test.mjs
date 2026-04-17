@@ -312,7 +312,7 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(visiblePendingComposeIndex > pendingComposeHookIndex);
 });
 
-test('explorer ui-state seam owns modal/context/detail state cluster', () => {
+test('explorer ui-state seam owns root-local modal/surface/runtime state cluster', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
@@ -328,6 +328,18 @@ test('explorer ui-state seam owns modal/context/detail state cluster', () => {
   assert.ok(content.includes('const [sidebarOpen, setSidebarOpen] = useState(false);'));
   assert.ok(content.includes('const [actionsOpen, setActionsOpen] = useState(false);'));
   assert.ok(content.includes('const [dragActive, setDragActive] = useState(false);'));
+  assert.ok(content.includes('const [isMobile, setIsMobile] = useState(false);'));
+  assert.ok(content.includes('const [touchPinchCapable, setTouchPinchCapable] = useState(false);'));
+  assert.ok(content.includes("const [uploadStatus, setUploadStatus] = useState('');"));
+  assert.ok(content.includes('const [contentLoading, setContentLoading] = useState(false);'));
+  assert.ok(content.includes('const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);'));
+  assert.ok(content.includes("const [resolveProjectMode, setResolveProjectMode] = useState('current');"));
+  assert.ok(content.includes("const [resolveProjectName, setResolveProjectName] = useState('');"));
+  assert.ok(content.includes("const [resolveNewName, setResolveNewName] = useState('');"));
+  assert.ok(content.includes("const [resolveMode, setResolveMode] = useState('import');"));
+  assert.ok(content.includes("const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');"));
+  assert.ok(content.includes("const [previewObsSlot, setPreviewObsSlot] = useState('1');"));
+  assert.ok(content.includes('const [previewObsExclusive, setPreviewObsExclusive] = useState(false);'));
   assert.ok(content.includes('const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);'));
   assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);'));
   assert.ok(content.includes('const [composeModalOpen, setComposeModalOpen] = useState(false);'));
@@ -337,6 +349,18 @@ test('explorer ui-state seam owns modal/context/detail state cluster', () => {
   assert.ok(!explorer.includes('const [sidebarOpen, setSidebarOpen] = useState(false);'));
   assert.ok(!explorer.includes('const [actionsOpen, setActionsOpen] = useState(false);'));
   assert.ok(!explorer.includes('const [dragActive, setDragActive] = useState(false);'));
+  assert.ok(!explorer.includes('const [isMobile, setIsMobile] = useState(false);'));
+  assert.ok(!explorer.includes('const [touchPinchCapable, setTouchPinchCapable] = useState(false);'));
+  assert.ok(!explorer.includes("const [uploadStatus, setUploadStatus] = useState('');"));
+  assert.ok(!explorer.includes('const [contentLoading, setContentLoading] = useState(false);'));
+  assert.ok(!explorer.includes('const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);'));
+  assert.ok(!explorer.includes("const [resolveProjectMode, setResolveProjectMode] = useState('current');"));
+  assert.ok(!explorer.includes("const [resolveProjectName, setResolveProjectName] = useState('');"));
+  assert.ok(!explorer.includes("const [resolveNewName, setResolveNewName] = useState('');"));
+  assert.ok(!explorer.includes("const [resolveMode, setResolveMode] = useState('import');"));
+  assert.ok(!explorer.includes("const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');"));
+  assert.ok(!explorer.includes("const [previewObsSlot, setPreviewObsSlot] = useState('1');"));
+  assert.ok(!explorer.includes('const [previewObsExclusive, setPreviewObsExclusive] = useState(false);'));
 });
 
 test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
@@ -1668,7 +1692,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes('window.cancelAnimationFrame(scrubFrameId);'));
   assert.ok(content.includes('scheduleGridColumnCommit(nextColumns);'));
   assert.ok(content.includes('setGridColumnCount((prev) => (prev === pendingColumns ? prev : pendingColumns));'));
-  assert.ok(content.includes('const [touchPinchCapable, setTouchPinchCapable] = useState(false);'));
+  assert.ok(content.includes('touchPinchCapable,'));
   assert.ok(content.includes('const hasMultiTouch = (window.navigator.maxTouchPoints || 0) > 1;'));
   assert.ok(content.includes('setTouchPinchCapable(coarsePointer || hasMultiTouch);'));
   assert.ok(!densityController.includes('setTimeout('));

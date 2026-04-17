@@ -1,3 +1,10 @@
+## 2026-04-17 — Explorer shell reduction (runtime/status + resolve/OBS UI seam) (active)
+- [x] Expanded `useExplorerUiState` to own additional low-risk root-local UI/runtime state previously inline in `ExplorerApp` (`isMobile`, `touchPinchCapable`, `uploadStatus`, `contentLoading`, `pendingDataLoadOverlay`).
+- [x] Extended the same seam with adjacent non-focus UI surface state (`resolveProjectMode`, `resolveProjectName`, `resolveNewName`, `resolveMode`, `previewObsMode`, `previewObsSlot`, `previewObsExclusive`) and rewired `ExplorerApp` to consume setters/values from the hook.
+- [x] Updated Explorer static contracts to lock the expanded `useExplorerUiState` surface and prevent reintroduction of migrated inline `useState(...)` declarations in `ExplorerApp`.
+- [ ] Follow-up: continue shell reduction for any remaining low-risk root-local UI-only toggles/status fields that are still inline, while intentionally deferring focus/cinematic/video-ownership/gesture internals.
+- [ ] Deferred seam (intentional): keep `inspectorOpen` and focus/preview-adjacent ownership state local until a dedicated preview-shell seam can be isolated without coupling risk.
+
 ## 2026-04-16 — Surface-toggle seam contract hardening (active)
 - [x] Added explicit static contract guards asserting `ExplorerApp` no longer declares inline `sidebarOpen`/`actionsOpen`/`dragActive` state after `useExplorerUiState` migration.
 - [x] Kept UI-only surface-toggle ownership in `useExplorerUiState` without behavior changes.
