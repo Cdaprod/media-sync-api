@@ -1,3 +1,11 @@
+## 2026-04-17 — PR #158 stability/hardening verification pass (active)
+- [x] Hardened retained prefs restore safety by using non-throwing JSON object parsing (`parseStoredJsonObject`) so malformed retained payloads no longer block legacy fallback restore paths.
+- [x] Added lightweight runtime prefs debug export (`window.__explorerRetainedPrefsDebug`) publishing restore source (`retained` / `legacy` / `none`), malformed retained payload flag, and last-saved payload snapshot.
+- [x] Extended Explorer static contracts to lock parser usage, fallback source markers, and retained-prefs debug wiring.
+- [x] Re-ran Explorer static contracts and library API tests after hardening changes.
+- [x] Merge signal: PR #158 appears ready for merge after this stability pass (no new architecture lane introduced).
+- [ ] Follow-up (next PR, not this one): perform on-device sanity capture for retained prefs + topbar behavior using runtime debug exports before starting PR #159 work.
+
 ## 2026-04-17 — Explorer retained UI prefs expansion (active)
 - [x] Extended retained Explorer UI prefs storage to include `overlayEnabled`, `sortKey`, `typeFilter`, `selectedOnly`, and `untaggedOnly` alongside existing retained layout fields (`view`, `gridColumnCount`).
 - [x] Hardened boot restore with field-level validation guards (type/sort enum checks + boolean checks + density clamping) so malformed payloads cannot break startup.

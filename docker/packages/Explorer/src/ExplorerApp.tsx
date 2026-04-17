@@ -271,6 +271,16 @@ const clampLayoutColumns = (value: number) => (
 );
 const VALID_SORT_KEYS = new Set<SortKey>(['newest', 'oldest', 'name-asc', 'name-desc', 'size-desc', 'size-asc']);
 const VALID_TYPE_FILTERS = new Set<MediaTypeFilter>(['all', 'video', 'image', 'audio', 'overlay', 'unknown']);
+const parseStoredJsonObject = (raw: string | null): Record<string, unknown> | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
 
 const buildComposeTimestampName = () => {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
@@ -1553,65 +1563,77 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(RETAINED_UI_PREFS_KEY);
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && typeof parsed === 'object') {
-        const storedView = parsed.view;
-        if (storedView === 'grid' || storedView === 'list') {
-          setView(storedView);
-        }
-        if (typeof parsed.gridColumnCount === 'number' && Number.isFinite(parsed.gridColumnCount)) {
-          setGridColumnCount(clampLayoutColumns(parsed.gridColumnCount));
-        }
-        if (VALID_SORT_KEYS.has(parsed.sortKey as SortKey)) {
-          setSortKey(parsed.sortKey as SortKey);
-        }
-        if (VALID_TYPE_FILTERS.has(parsed.typeFilter as MediaTypeFilter)) {
-          setTypeFilter(parsed.typeFilter as MediaTypeFilter);
-        }
-        if (typeof parsed.selectedOnly === 'boolean') {
-          setSelectedOnly(parsed.selectedOnly);
-        }
-        if (typeof parsed.untaggedOnly === 'boolean') {
-          setUntaggedOnly(parsed.untaggedOnly);
-        }
-        if (typeof parsed.overlayEnabled === 'boolean') {
-          setOverlayEnabled(parsed.overlayEnabled);
-        }
-        return;
+    const retainedRaw = window.localStorage.getItem(RETAINED_UI_PREFS_KEY);
+    const retainedParsed = parseStoredJsonObject(retainedRaw);
+    let restoreSource: 'retained' | 'legacy' | 'none' = 'none';
+    if (retainedParsed) {
+      const storedView = retainedParsed.view;
+      if (storedView === 'grid' || storedView === 'list') {
+        setView(storedView);
       }
-      const legacyFilterRaw = window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY);
-      if (legacyFilterRaw) {
-        const legacyFilterParsed = JSON.parse(legacyFilterRaw);
-        if (legacyFilterParsed && typeof legacyFilterParsed === 'object') {
-          if (VALID_TYPE_FILTERS.has(legacyFilterParsed.type as MediaTypeFilter)) {
-            setTypeFilter(legacyFilterParsed.type as MediaTypeFilter);
-          }
-          if (VALID_SORT_KEYS.has(legacyFilterParsed.sort as SortKey)) {
-            setSortKey(legacyFilterParsed.sort as SortKey);
-          }
-          if (typeof legacyFilterParsed.selectedOnly === 'boolean') {
-            setSelectedOnly(legacyFilterParsed.selectedOnly);
-          }
-          if (typeof legacyFilterParsed.untaggedOnly === 'boolean') {
-            setUntaggedOnly(legacyFilterParsed.untaggedOnly);
-          }
+      if (typeof retainedParsed.gridColumnCount === 'number' && Number.isFinite(retainedParsed.gridColumnCount)) {
+        setGridColumnCount(clampLayoutColumns(retainedParsed.gridColumnCount));
+      }
+      if (VALID_SORT_KEYS.has(retainedParsed.sortKey as SortKey)) {
+        setSortKey(retainedParsed.sortKey as SortKey);
+      }
+      if (VALID_TYPE_FILTERS.has(retainedParsed.typeFilter as MediaTypeFilter)) {
+        setTypeFilter(retainedParsed.typeFilter as MediaTypeFilter);
+      }
+      if (typeof retainedParsed.selectedOnly === 'boolean') {
+        setSelectedOnly(retainedParsed.selectedOnly);
+      }
+      if (typeof retainedParsed.untaggedOnly === 'boolean') {
+        setUntaggedOnly(retainedParsed.untaggedOnly);
+      }
+      if (typeof retainedParsed.overlayEnabled === 'boolean') {
+        setOverlayEnabled(retainedParsed.overlayEnabled);
+      }
+      restoreSource = 'retained';
+    } else {
+      const legacyFilterParsed = parseStoredJsonObject(window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY));
+      if (legacyFilterParsed) {
+        if (VALID_TYPE_FILTERS.has(legacyFilterParsed.type as MediaTypeFilter)) {
+          setTypeFilter(legacyFilterParsed.type as MediaTypeFilter);
         }
+        if (VALID_SORT_KEYS.has(legacyFilterParsed.sort as SortKey)) {
+          setSortKey(legacyFilterParsed.sort as SortKey);
+        }
+        if (typeof legacyFilterParsed.selectedOnly === 'boolean') {
+          setSelectedOnly(legacyFilterParsed.selectedOnly);
+        }
+        if (typeof legacyFilterParsed.untaggedOnly === 'boolean') {
+          setUntaggedOnly(legacyFilterParsed.untaggedOnly);
+        }
+        restoreSource = 'legacy';
       }
       const legacyOverlayRaw = window.localStorage.getItem(LEGACY_OVERLAY_VIS_PREFS_KEY);
       if (legacyOverlayRaw != null) {
         setOverlayEnabled(legacyOverlayRaw !== '0');
+        restoreSource = 'legacy';
       }
-    } catch {
-      // ignore malformed prefs
     }
+    (window as typeof window & {
+      __explorerRetainedPrefsDebug?: {
+        key: string;
+        legacyFilterKey: string;
+        legacyOverlayKey: string;
+        malformedRetainedPayload: boolean;
+        restoreSource: 'retained' | 'legacy' | 'none';
+      };
+    }).__explorerRetainedPrefsDebug = {
+      key: RETAINED_UI_PREFS_KEY,
+      legacyFilterKey: LEGACY_FILTER_PREFS_KEY,
+      legacyOverlayKey: LEGACY_OVERLAY_VIS_PREFS_KEY,
+      malformedRetainedPayload: Boolean(retainedRaw) && !retainedParsed,
+      restoreSource,
+    };
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      window.localStorage.setItem(RETAINED_UI_PREFS_KEY, JSON.stringify({
+      const retainedPayload = {
         view,
         gridColumnCount: clampLayoutColumns(gridColumnCount),
         sortKey,
@@ -1619,7 +1641,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         selectedOnly,
         untaggedOnly,
         overlayEnabled,
-      }));
+      };
+      window.localStorage.setItem(RETAINED_UI_PREFS_KEY, JSON.stringify(retainedPayload));
+      (window as typeof window & {
+        __explorerRetainedPrefsDebug?: {
+          lastSavedPayload?: typeof retainedPayload;
+          lastSavedAt?: string;
+        };
+      }).__explorerRetainedPrefsDebug = {
+        ...(window as typeof window & {
+          __explorerRetainedPrefsDebug?: Record<string, unknown>;
+        }).__explorerRetainedPrefsDebug,
+        lastSavedPayload: retainedPayload,
+        lastSavedAt: new Date().toISOString(),
+      };
     } catch {
       // ignore storage errors
     }
