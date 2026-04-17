@@ -1,3 +1,9 @@
+## 2026-04-17 — Explorer pending-entry TDZ ordering fix (active)
+- [x] Fixed a render-time TDZ hazard in `ExplorerApp`: a `useEffect` dependency array referenced `pendingEntries.length` before `pendingEntries` declaration.
+- [x] Kept the patch ordering-only (no behavior redesign) by moving the focus-world measurement effect below pending/rendered entry memo declarations.
+- [x] Added static regression ordering guards in Explorer contract tests to ensure `pendingEntries` declaration appears before any `pendingEntries.length` dependency reference.
+- [ ] Follow-up: keep declaration-order guards for render-evaluated dependencies when refactoring long `ExplorerApp` hook/effect blocks.
+
 ## 2026-04-17 — Deferred preview/focus domain mapping pass (active)
 - [x] Mapped the remaining root-owned coupled domain in `ExplorerApp` as a single deferred architecture lane:
   - focus presentation state (`focusPresentationState`, `focusWorldTransform`)

@@ -2332,24 +2332,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
   }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusAsset, focusRelative, gridCinematicMode, inspectorOpen, runProxyFocusTransition, scheduleFocusedRetargetRetry, view]);
 
-  useEffect(() => {
-    if (!inspectorOpen || !activeAssetKey) return;
-    if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
-    const rafId = scheduleExplorerRaf('raf-lane-measurement', () => {
-      if (focusPresentationStateRef.current.mode !== 'world-focus') {
-        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', selectionKey: activeAssetKey, requestedMode: view, finalMode: 'idle' });
-        return;
-      }
-      const next = computeFocusWorldTransform(activeAssetKey, { continueFromCurrent: true });
-      if (!next.transform) {
-        moveFocusPresentationToFallbackOrIdle(activeAssetKey, next.reason ?? 'unsafe-transform');
-        return;
-      }
-      setFocusWorldTransform(next.transform);
-    });
-    return () => cancelExplorerRaf(rafId);
-  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length, recordPreviewDebug, view]);
-
   useEffect(() => () => {
     resetFocusPresentationToIdle();
   }, [resetFocusPresentationToIdle]);
@@ -2515,6 +2497,24 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ...pendingEntries,
     ...assetEntries,
   ]), [assetEntries, pendingEntries]);
+
+  useEffect(() => {
+    if (!inspectorOpen || !activeAssetKey) return;
+    if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
+    const rafId = scheduleExplorerRaf('raf-lane-measurement', () => {
+      if (focusPresentationStateRef.current.mode !== 'world-focus') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', selectionKey: activeAssetKey, requestedMode: view, finalMode: 'idle' });
+        return;
+      }
+      const next = computeFocusWorldTransform(activeAssetKey, { continueFromCurrent: true });
+      if (!next.transform) {
+        moveFocusPresentationToFallbackOrIdle(activeAssetKey, next.reason ?? 'unsafe-transform');
+        return;
+      }
+      setFocusWorldTransform(next.transform);
+    });
+    return () => cancelExplorerRaf(rafId);
+  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length, recordPreviewDebug, view]);
 
   useEffect(() => {
     if (!pendingComposeItems.length) return;

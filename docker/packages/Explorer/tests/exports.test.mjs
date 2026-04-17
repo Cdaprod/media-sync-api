@@ -308,8 +308,12 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));
   const pendingComposeHookIndex = explorer.indexOf('} = usePendingComposeJobs({');
   const visiblePendingComposeIndex = explorer.indexOf('const visiblePendingComposeItems = useMemo(() => {');
+  const pendingEntriesMemoIndex = explorer.indexOf('const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({');
+  const pendingEntriesDependencyIndex = explorer.indexOf('pendingEntries.length');
   assert.ok(pendingComposeHookIndex >= 0);
   assert.ok(visiblePendingComposeIndex > pendingComposeHookIndex);
+  assert.ok(pendingEntriesMemoIndex > visiblePendingComposeIndex);
+  assert.ok(pendingEntriesDependencyIndex > pendingEntriesMemoIndex);
 });
 
 test('explorer ui-state seam owns root-local modal/surface/runtime state cluster', () => {
