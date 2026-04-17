@@ -716,6 +716,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
+
+  // ---------------------------------------------------------------------------
+  // Deferred preview/focus coupled domain (intentionally root-owned for now).
+  // This cluster combines focus presentation state, cinematic travel ownership,
+  // proxy/handoff refs, and lifecycle timing channels. Keep co-located until a
+  // dedicated domain extraction plan is approved.
+  // ---------------------------------------------------------------------------
   const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
   const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
   const [proxyTravelState, setProxyTravelState] = useState<ProxyTravelState>('idle');
@@ -774,6 +781,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const focusedRetargetRetryFrameRef = useRef<number | null>(null);
   const closeSettleTimeoutRef = useRef<number | null>(null);
 
+  // Coupled-domain diagnostics + ownership effects (kept adjacent by design).
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
     previewDebugLogRef.current = [...previewDebugLogRef.current.slice(-31), debugEntry];

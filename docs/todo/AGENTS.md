@@ -1,3 +1,21 @@
+## 2026-04-17 — Deferred preview/focus domain mapping pass (active)
+- [x] Mapped the remaining root-owned coupled domain in `ExplorerApp` as a single deferred architecture lane:
+  - focus presentation state (`focusPresentationState`, `focusWorldTransform`)
+  - cinematic/proxy travel ownership (`gridCinematicMode`, `proxyTravelState`, `cinematicRevealState`)
+  - preview ownership/handoff refs (`previewPlaybackHandoffRef`, prewarm refs, authority-selection refs)
+  - lifecycle timers/retry frames and coupled diagnostic channels.
+- [x] Mapped nearby coupled behavior ownership that should move together (if extracted in future):
+  - focus/proxy transition handlers (`runProxyFocusTransition`, close/reset lanes, retarget/recover lanes)
+  - preview authority + autoplay rearm effects
+  - coupled focus-layer diagnostics/debug exports.
+- [x] Marked the deferred coupled domain directly in `ExplorerApp` with section labels so future extraction work can follow an explicit boundary without behavior drift.
+- [x] Explicitly retained shell-owned seams:
+  - `useLibrarySnapshot` → query/data authority
+  - `useExplorerCommands` → command authority
+  - `useExplorerUiState` → UI/runtime authority (including `inspectorOpen`).
+- [x] Recommendation from this mapping pass: next chapter should be a dedicated preview/focus domain extraction design+implementation pass (Option A) before any live-source/stream platform pivot.
+- [ ] Follow-up: draft the concrete extraction contract for a future dedicated preview/focus domain hook/module (proposed shape: state bag + transition orchestration + lifecycle cleanup API), then decide implementation timing vs platform pivot.
+
 ## 2026-04-17 — Explorer shell composition cleanup (authority-first sectioning) (active)
 - [x] Performed a non-behavioral readability pass in `ExplorerApp` to section the shell by authority/domain (query/data, root-owned coupled state, UI-state seam, command seam, compose integration lane).
 - [x] Added explicit in-file section markers to reduce cognitive interleaving and make authority boundaries easier to scan during future refactors.
