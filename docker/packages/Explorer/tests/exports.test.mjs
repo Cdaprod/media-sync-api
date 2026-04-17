@@ -2854,6 +2854,11 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes("viewport?.addEventListener('scroll', captureViewportSnapshot);"));
   assert.ok(content.includes('__explorerViewportDebug'));
   assert.ok(content.includes('__explorerLoadFailureDebug'));
+  assert.ok(content.includes('const classifyEmitter = (target: HTMLElement): \'asset-grid\' | \'asset-list\' | \'proxy-render\' | \'other\' => {'));
+  assert.ok(content.includes('const shouldSuppressMediaError = (target: HTMLElement) => {'));
+  assert.ok(content.includes('suppressedMediaErrorCount,'));
+  assert.ok(content.includes("if (target.closest('.proxy-render-card,.focus-proxy-root')) return 'proxy-render';"));
+  assert.ok(content.includes('event.stopImmediatePropagation?.();'));
   assert.ok(content.includes('viewportMeta: readViewportMeta()'));
   assert.ok(content.includes('pageScaleLike'));
   assert.ok(styles.includes('height: var(--explorer-visual-viewport-height, 100%);'));

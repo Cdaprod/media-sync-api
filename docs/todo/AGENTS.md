@@ -1,3 +1,10 @@
+## 2026-04-17 — Load-failure regression re-audit + emitter diagnostics hardening (active)
+- [x] Re-audited prior load-failure protections in current repo truth: `__explorerLoadFailureDebug` export present, grid/list thumb handlers still stop native propagation, and off-DOM `new Image()` probing remains absent in `thumbnailLoader`.
+- [x] Added emitter classification + suppression counters to `__explorerLoadFailureDebug` snapshots (`asset-grid` / `asset-list` / `proxy-render` / `other`) for on-device lane attribution.
+- [x] Extended runtime suppression for media resource errors originating from explorer thumb/proxy surfaces at the global capture layer (`window` error capture) to reduce repeated generic Safari `Load failed` spam while preserving debug visibility.
+- [x] Updated Explorer static contracts to lock the new load-failure emitter/suppression diagnostics markers.
+- [ ] Follow-up: capture one device snapshot from `window.__explorerLoadFailureDebug.getSnapshot()` after full-grid scroll to confirm dominant emitter lane and whether any remaining spam is non-explorer.
+
 ## 2026-04-17 — Strict thumbability gate follow-up (active)
 - [x] Added a shared frontend thumbability extension gate (`isThumbableRelativePath`) in `thumbnailLoader` to mirror backend thumbnail eligibility (`.mp4/.mov/.avi/.mkv/.jpg/.jpeg/.png/.heic`).
 - [x] Updated `ExplorerApp` thumbnail candidate resolution to require thumbable relative-path eligibility before using `thumb_url`/`thumbnail_url`, with image-only stream fallback when not thumbable.

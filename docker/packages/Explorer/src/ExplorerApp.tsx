@@ -3451,7 +3451,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       count: number;
       firstAt: number;
       lastAt: number;
+      emitter: 'asset-grid' | 'asset-list' | 'proxy-render' | 'other';
     }>();
+    let suppressedMediaErrorCount = 0;
+
+    const classifyEmitter = (target: HTMLElement): 'asset-grid' | 'asset-list' | 'proxy-render' | 'other' => {
+      if (target.closest('.masonry-card.asset')) return 'asset-grid';
+      if (target.closest('.list-row.asset')) return 'asset-list';
+      if (target.closest('.proxy-render-card,.focus-proxy-root')) return 'proxy-render';
+      return 'other';
+    };
+
+    const shouldSuppressMediaError = (target: HTMLElement) => {
+      if (!target.closest('.app')) return false;
+      if (target.closest('.masonry-card.asset .thumb,.list-row.asset .thumb')) return true;
+      if (target.closest('.proxy-render-card,.focus-proxy-root')) return true;
+      return false;
+    };
 
     const toSnapshotRows = () => Array.from(loadFailures.values())
       .sort((a, b) => b.lastAt - a.lastAt)
@@ -3462,6 +3478,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const snapshot = {
         totalUnique: loadFailures.size,
         totalEvents: Array.from(loadFailures.values()).reduce((acc, entry) => acc + entry.count, 0),
+        suppressedMediaErrorCount,
         rows: toSnapshotRows(),
       };
       (window as typeof window & {
@@ -3485,6 +3502,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         || ''
       ).trim();
       const className = String(target.className || '');
+      const emitter = classifyEmitter(target);
       const key = `${tag}:${sourceUrl || '(none)'}`;
       const now = Date.now();
       const prior = loadFailures.get(key);
@@ -3497,10 +3515,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           tag,
           url: sourceUrl,
           className,
+          emitter,
           count: 1,
           firstAt: now,
           lastAt: now,
         });
+      }
+      const isMediaTarget = tag === 'IMG' || tag === 'VIDEO' || tag === 'SOURCE';
+      if (isMediaTarget && shouldSuppressMediaError(target)) {
+        suppressedMediaErrorCount += 1;
+        event.stopImmediatePropagation?.();
+        event.stopPropagation();
       }
       publishSnapshot();
     };
