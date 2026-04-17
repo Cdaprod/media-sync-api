@@ -699,7 +699,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const topbarPinTimeoutRef = useRef<number | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
-  const retainedPrefsHydratedRef = useRef(false);
+  const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);
   const lastCommittedColumnsRef = useRef(DEFAULT_COLUMNS_MOBILE);
   const selectedOrderRef = useRef<string[]>([]);
   const topbarRef = useRef<HTMLDivElement | null>(null);
@@ -1564,7 +1564,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    retainedPrefsHydratedRef.current = false;
+    setRetainedPrefsHydrated(false);
     const retainedRaw = window.localStorage.getItem(RETAINED_UI_PREFS_KEY);
     const retainedParsed = parseStoredJsonObject(retainedRaw);
     let restoreSource: 'retained' | 'legacy' | 'none' = 'none';
@@ -1632,12 +1632,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       restoreSource,
       hydrated: true,
     };
-    retainedPrefsHydratedRef.current = true;
+    setRetainedPrefsHydrated(true);
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!retainedPrefsHydratedRef.current) {
+    if (!retainedPrefsHydrated) {
       (window as typeof window & {
         __explorerRetainedPrefsDebug?: Record<string, unknown>;
       }).__explorerRetainedPrefsDebug = {
@@ -1672,11 +1672,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         lastSavedPayload: retainedPayload,
         lastSavedAt: new Date().toISOString(),
         saveSkippedUntilHydrated: false,
+        hydrated: retainedPrefsHydrated,
       };
     } catch {
       // ignore storage errors
     }
-  }, [gridColumnCount, overlayEnabled, selectedOnly, sortKey, typeFilter, untaggedOnly, view]);
+  }, [gridColumnCount, overlayEnabled, retainedPrefsHydrated, selectedOnly, sortKey, typeFilter, untaggedOnly, view]);
 
   useEffect(() => {
     if (typeFilter === 'overlay' && !mediaMeta.types.has('overlay')) {

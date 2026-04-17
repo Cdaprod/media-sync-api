@@ -1,3 +1,10 @@
+## 2026-04-17 — Retained prefs save-path live-state regression fix (active)
+- [x] Reworked retained prefs hydration gate from a passive ref to explicit state (`retainedPrefsHydrated`) so the save effect re-runs after hydration completion and cannot remain silently gated.
+- [x] Confirmed save effect dependencies include all retained fields plus hydration state, ensuring density/overlay and other retained UI prefs persist from live hook-owned state changes.
+- [x] Extended retained prefs debug payload with live hydration state on successful saves (`hydrated: retainedPrefsHydrated`) to support device-side verification of save attempts.
+- [x] Updated Explorer static contracts to lock hydration-state save gating markers and retained-field dependency marker coverage.
+- [ ] Follow-up: capture one physical-device interaction trace (`overlay toggle` + `density change`) with `__explorerRetainedPrefsDebug.lastSavedPayload` to archive proof in PR notes.
+
 ## 2026-04-17 — Retained prefs boot-order overwrite regression fix (active)
 - [x] Fixed retained prefs boot ordering in `ExplorerApp` with an explicit hydration gate (`retainedPrefsHydratedRef`) so save-back cannot write default boot values before restore/migration completes.
 - [x] Extended retained prefs debug surface (`window.__explorerRetainedPrefsDebug`) with hydration/save-skip markers to verify boot sequencing (`hydrated`, `saveSkippedUntilHydrated`).
