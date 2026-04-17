@@ -1,3 +1,10 @@
+## 2026-04-17 — Explorer shell composition cleanup (authority-first sectioning) (active)
+- [x] Performed a non-behavioral readability pass in `ExplorerApp` to section the shell by authority/domain (query/data, root-owned coupled state, UI-state seam, command seam, compose integration lane).
+- [x] Added explicit in-file section markers to reduce cognitive interleaving and make authority boundaries easier to scan during future refactors.
+- [x] Kept focus/cinematic/focus-world/proxy-handoff ownership lanes root-local in this pass (no extraction), preserving existing lifecycle coupling and behavior.
+- [x] Confirmed `inspectorOpen` is no longer deferred (already hook-owned in prior pass) and kept deferred scope limited to tightly coupled focus/preview ownership state.
+- [ ] Follow-up: if/when a dedicated focus/preview domain seam is designed, treat it as a separate architecture pass instead of incremental boolean extraction.
+
 ## 2026-04-17 — Explorer preview-shell seam probe (`inspectorOpen`) (active)
 - [x] Evaluated preview-shell-adjacent inline root state for low-risk extraction and moved `inspectorOpen` ownership into `useExplorerUiState`.
 - [x] Rewired `ExplorerApp` to consume `inspectorOpen`/`setInspectorOpen` from UI-state authority without changing focus/cinematic/handoff behavior.

@@ -542,6 +542,9 @@ function useToastQueue() {
 }
 
 export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
+  // ---------------------------------------------------------------------------
+  // Query/data authority: API client + aggregate snapshot ownership.
+  // ---------------------------------------------------------------------------
   const initialApiBase = typeof window === 'undefined'
     ? apiBaseUrl
     : inferApiBaseUrl(apiBaseUrl, window.location);
@@ -557,6 +560,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   } = useLibrarySnapshot(api);
   const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
 
+  // ---------------------------------------------------------------------------
+  // Local composition shell state that intentionally remains root-owned.
+  // (selection identity, focused media identity, focus/cinematic ownership lanes)
+  // ---------------------------------------------------------------------------
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaScope, setMediaScope] = useState<'project' | 'all'>('project');
@@ -577,6 +584,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [proxyPlaybackCurrentTime, setProxyPlaybackCurrentTime] = useState(0);
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // UI/runtime authority seam.
+  // ---------------------------------------------------------------------------
   const {
     view,
     setView,
@@ -654,6 +665,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     defaultView: DEFAULT_VIEW,
     defaultGridColumns: DEFAULT_COLUMNS_MOBILE,
   });
+
+  // ---------------------------------------------------------------------------
+  // Runtime refs + controllers.
+  // ---------------------------------------------------------------------------
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
@@ -2403,6 +2418,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [activeAssetKey, commitPreviewActivationKey, inspectorOpen, itemsBySelectionKey]);
 
+  // ---------------------------------------------------------------------------
+  // Command/action authority seam.
+  // ---------------------------------------------------------------------------
   const {
     handleComposeCompletion,
     composeMediaCommand,
@@ -2435,6 +2453,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setDeleteSubmitting,
   });
 
+  // ---------------------------------------------------------------------------
+  // Pending compose integration lane.
+  // ---------------------------------------------------------------------------
   const {
     pendingComposeItems,
     registerAcceptedJob,
