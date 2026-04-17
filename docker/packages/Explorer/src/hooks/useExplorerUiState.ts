@@ -45,6 +45,7 @@ export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {
   const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');
   const [previewObsSlot, setPreviewObsSlot] = useState('1');
   const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
@@ -107,6 +108,8 @@ export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {
     setPreviewObsSlot,
     previewObsExclusive,
     setPreviewObsExclusive,
+    inspectorOpen,
+    setInspectorOpen,
     previewDetailsOpen,
     setPreviewDetailsOpen,
     contextMenu,

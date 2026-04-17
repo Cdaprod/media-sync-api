@@ -566,7 +566,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [previewActivationKey, setPreviewActivationKey] = useState('');
   const [previewPlaybackToken, setPreviewPlaybackToken] = useState(0);
   const [focused, setFocused] = useState<MediaItem | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);
   const contentLoadingTokenRef = useRef(0);
@@ -629,6 +628,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setPreviewObsSlot,
     previewObsExclusive,
     setPreviewObsExclusive,
+    inspectorOpen,
+    setInspectorOpen,
     previewDetailsOpen,
     setPreviewDetailsOpen,
     contextMenu,

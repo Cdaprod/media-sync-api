@@ -1,9 +1,16 @@
+## 2026-04-17 — Explorer preview-shell seam probe (`inspectorOpen`) (active)
+- [x] Evaluated preview-shell-adjacent inline root state for low-risk extraction and moved `inspectorOpen` ownership into `useExplorerUiState`.
+- [x] Rewired `ExplorerApp` to consume `inspectorOpen`/`setInspectorOpen` from UI-state authority without changing focus/cinematic/handoff behavior.
+- [x] Expanded static contracts to assert hook ownership and prevent reintroduction of inline `inspectorOpen` declaration in `ExplorerApp`.
+- [ ] Deferred seam (intentional): keep focus/cinematic/focus-world/proxy-handoff state in root because those lanes remain behaviorally coupled to transition ownership.
+- [ ] Follow-up: if additional preview-adjacent booleans are considered, only extract fields that can remain purely UI-state with no ownership/lifecycle coupling.
+
 ## 2026-04-17 — Explorer shell reduction (runtime/status + resolve/OBS UI seam) (active)
 - [x] Expanded `useExplorerUiState` to own additional low-risk root-local UI/runtime state previously inline in `ExplorerApp` (`isMobile`, `touchPinchCapable`, `uploadStatus`, `contentLoading`, `pendingDataLoadOverlay`).
 - [x] Extended the same seam with adjacent non-focus UI surface state (`resolveProjectMode`, `resolveProjectName`, `resolveNewName`, `resolveMode`, `previewObsMode`, `previewObsSlot`, `previewObsExclusive`) and rewired `ExplorerApp` to consume setters/values from the hook.
 - [x] Updated Explorer static contracts to lock the expanded `useExplorerUiState` surface and prevent reintroduction of migrated inline `useState(...)` declarations in `ExplorerApp`.
 - [ ] Follow-up: continue shell reduction for any remaining low-risk root-local UI-only toggles/status fields that are still inline, while intentionally deferring focus/cinematic/video-ownership/gesture internals.
-- [ ] Deferred seam (intentional): keep `inspectorOpen` and focus/preview-adjacent ownership state local until a dedicated preview-shell seam can be isolated without coupling risk.
+- [ ] Deferred seam (intentional): keep focus/preview-adjacent ownership state (focus/cinematic/video handoff lanes) local until a dedicated preview-shell seam can be isolated without coupling risk.
 
 ## 2026-04-16 — Surface-toggle seam contract hardening (active)
 - [x] Added explicit static contract guards asserting `ExplorerApp` no longer declares inline `sidebarOpen`/`actionsOpen`/`dragActive` state after `useExplorerUiState` migration.

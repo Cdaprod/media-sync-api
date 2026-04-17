@@ -340,6 +340,7 @@ test('explorer ui-state seam owns root-local modal/surface/runtime state cluster
   assert.ok(content.includes("const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');"));
   assert.ok(content.includes("const [previewObsSlot, setPreviewObsSlot] = useState('1');"));
   assert.ok(content.includes('const [previewObsExclusive, setPreviewObsExclusive] = useState(false);'));
+  assert.ok(content.includes('const [inspectorOpen, setInspectorOpen] = useState(false);'));
   assert.ok(content.includes('const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);'));
   assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);'));
   assert.ok(content.includes('const [composeModalOpen, setComposeModalOpen] = useState(false);'));
@@ -361,6 +362,7 @@ test('explorer ui-state seam owns root-local modal/surface/runtime state cluster
   assert.ok(!explorer.includes("const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');"));
   assert.ok(!explorer.includes("const [previewObsSlot, setPreviewObsSlot] = useState('1');"));
   assert.ok(!explorer.includes('const [previewObsExclusive, setPreviewObsExclusive] = useState(false);'));
+  assert.ok(!explorer.includes('const [inspectorOpen, setInspectorOpen] = useState(false);'));
 });
 
 test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
