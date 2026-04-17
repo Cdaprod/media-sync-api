@@ -39,10 +39,10 @@ import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
 import { buildThumbJobKey, getThumbCacheKey, getThumbLoadState, normalizeThumbUrl } from './thumbnailLoader';
-import { usePendingComposeJobs } from './usePendingComposeJobs';
-import { useAssetInteractions } from './useAssetInteractions';
-import { useThumbnailQueue } from './useThumbnailQueue';
-import { useTopbarScrollState } from './useTopbarScrollState';
+import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
+import { useAssetInteractions } from './hooks/useAssetInteractions';
+import { useThumbnailQueue } from './hooks/useThumbnailQueue';
+import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -677,6 +677,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const mediaContentRef = useRef<HTMLDivElement | null>(null);
   const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);
+  const [mediaScrollViewportEl, setMediaScrollViewportEl] = useState<HTMLDivElement | null>(null);
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -780,6 +781,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const closeMeasurementFrameRef = useRef<number | null>(null);
   const focusedRetargetRetryFrameRef = useRef<number | null>(null);
   const closeSettleTimeoutRef = useRef<number | null>(null);
+
+  const setMediaScrollViewportNode = useCallback((node: HTMLDivElement | null) => {
+    mediaScrollViewportRef.current = node;
+    setMediaScrollViewportEl(node);
+  }, []);
 
   // Coupled-domain diagnostics + ownership effects (kept adjacent by design).
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
@@ -3072,7 +3078,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       || actionsOpen
       || topbarHasOpenDropdown
       || topbarFocusWithin,
-    scrollRef: mediaScrollViewportRef,
+    scrollEl: mediaScrollViewportEl,
     topbarMeasuredHeight,
   });
   topbarHiddenRef.current = topbarHidden;
@@ -4567,7 +4573,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             completionBeat={holdOverlayCompleteBeat}
           />
           <div
-            ref={mediaScrollViewportRef}
+            ref={setMediaScrollViewportNode}
             className="scroll"
             onScroll={clearPendingLongPress}
             data-topbar-hidden={topbarHidden ? 'true' : 'false'}

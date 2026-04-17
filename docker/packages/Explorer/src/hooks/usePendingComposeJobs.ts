@@ -9,8 +9,8 @@ import {
   serializePendingComposeItemsForStorage,
   type ComposeJobEnvelope,
   type PendingComposeItem,
-} from "./composeJobs";
-import type { MediaItem } from "./types";
+} from "../composeJobs";
+import type { MediaItem } from "../types";
 
 const RESTORED_PENDING_COMPOSE_RECOVERY_MS = 8_000;
 const RESTORED_PENDING_COMPOSE_MAX_ATTEMPTS = 2;

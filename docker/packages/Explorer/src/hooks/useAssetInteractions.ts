@@ -5,16 +5,16 @@ import {
   createPinchSession,
   type InteractionMode,
   type PointerSession,
-} from './explorer/interactions/gestureContract';
+} from '../explorer/interactions/gestureContract';
 import {
   assignPointerDownSession,
   computePointerMoveMetrics,
   createPointerSessionState,
   isTouchLikePointer,
   resetPointerSessionState,
-} from './explorer/interactions/pointerSession';
-import type { MediaItem, Project } from './types';
-import { isInteractiveTarget } from './utils';
+} from '../explorer/interactions/pointerSession';
+import type { MediaItem, Project } from '../types';
+import { isInteractiveTarget } from '../utils';
 const LONG_PRESS_MS = 620;
 type GestureMode = Exclude<InteractionMode, 'cancelled'>;
 

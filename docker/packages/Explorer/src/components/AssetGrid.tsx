@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react';
 
 import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';
-import type { AssetPointerHandlers } from '../useAssetInteractions';
+import type { AssetPointerHandlers } from '../hooks/useAssetInteractions';
 import type { MediaItem } from '../types';
 import { computeMasonryLayout } from '../explorer/masonry/computeMasonryLayout';
 

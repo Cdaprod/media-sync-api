@@ -15,14 +15,14 @@ test('package exports include entrypoints', () => {
   assert.equal(pkg.exports['./styles.css'], './src/styles.css');
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'thumbnailLoader.ts')));
-  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useThumbnailQueue.ts')));
-  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useAssetInteractions.ts')));
-  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useTopbarScrollState.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'composeJobs.ts')));
-  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'usePendingComposeJobs.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'usePendingComposeJobs.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'lib', 'gsap.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts')));
@@ -370,7 +370,7 @@ test('explorer ui-state seam owns root-local modal/surface/runtime state cluster
 });
 
 test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
@@ -588,7 +588,7 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
@@ -639,9 +639,9 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes("topbar.addEventListener('toggle', handleDropdownToggle, true);"));
   assert.ok(explorer.includes("topbar.removeEventListener('toggle', handleDropdownToggle, true);"));
   assert.ok(explorer.includes('rootRef: mediaContentRef,'));
-  assert.ok(explorer.includes('scrollRef: mediaScrollViewportRef,'));
+  assert.ok(explorer.includes('scrollEl: mediaScrollViewportEl,'));
   assert.ok(explorer.includes('ref={mediaContentRef}'));
-  assert.ok(explorer.includes('ref={mediaScrollViewportRef}'));
+  assert.ok(explorer.includes('ref={setMediaScrollViewportNode}'));
   assert.ok(explorer.includes('className="scroll"'));
   assert.ok(explorer.includes("data-topbar-hidden={topbarHidden ? 'true' : 'false'}"));
   assert.ok(explorer.includes("style={{ '--topbar-measured-height': `${topbarMeasuredHeight}px` } as React.CSSProperties}"));
@@ -673,7 +673,7 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
 });
 
 test('pending compose recovery reconciles stale restored jobs and prefers real assets over zombie placeholders', () => {
-  const hookPath = path.join(packageRoot, 'src', 'usePendingComposeJobs.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'usePendingComposeJobs.ts');
   const jobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const jobs = fs.readFileSync(jobsPath, 'utf8');
@@ -756,7 +756,7 @@ test('pending compose modules and render wiring are present', () => {
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const cardPath = path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'usePendingComposeJobs.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'usePendingComposeJobs.ts');
   const jobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
@@ -960,7 +960,7 @@ test('explorer queues thumbnail loads from server urls', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
-  const hookPath = path.join(packageRoot, 'src', 'useThumbnailQueue.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts');
   const statePath = path.join(packageRoot, 'src', 'state.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
@@ -1056,7 +1056,7 @@ test('explorer queues thumbnail loads from server urls', () => {
 });
 
 test('package explorer interaction handlers do not trigger loading overlay state', () => {
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const content = fs.readFileSync(hookPath, 'utf8');
   const start = content.indexOf('const buildAssetPointerHandlers = useCallback(');
   const end = content.indexOf('return {', start);
@@ -1072,7 +1072,7 @@ test('package explorer interaction handlers do not trigger loading overlay state
 
 test('package explorer context menu opens only on deliberate long press or context click', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const pointerSessionPath = path.join(packageRoot, 'src', 'explorer', 'interactions', 'pointerSession.ts');
   const explorerContent = fs.readFileSync(explorerPath, 'utf8');
   const content = fs.readFileSync(hookPath, 'utf8');
@@ -1167,7 +1167,7 @@ test('package explorer context menu styles are explicit and stable', () => {
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useThumbnailQueue.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   assert.ok(content.includes('setPendingDataLoadOverlay(true);'));
@@ -1180,7 +1180,7 @@ test('package explorer data load paths explicitly request loading overlay owners
 
 test('package explorer uses static-parity asset interaction semantics', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
@@ -1199,7 +1199,7 @@ test('package explorer uses static-parity asset interaction semantics', () => {
 });
 
 test('package explorer suppresses default context menu in tile preview zone', () => {
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const content = fs.readFileSync(hookPath, 'utf8');
   assert.ok(content.includes('const handleContextMenu = (event: React.MouseEvent<HTMLElement>) => {'));
   assert.ok(content.includes('event.preventDefault();'));
@@ -1218,7 +1218,7 @@ test('package explorer styles include static-parity selected glow and order badg
 
 test('package explorer topbar layout follows static two-row structure', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useTopbarScrollState.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
@@ -1997,7 +1997,7 @@ test('density controller keeps committed columns as single truth and mobile clam
 
 test('density-related local interactions remain layout-only and do not trigger boot/data loaders', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
 
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const hook = fs.readFileSync(hookPath, 'utf8');
@@ -2348,7 +2348,7 @@ test('no generic load-failure console spam contract should remain in explorer-fa
   const filesToCheck = [
     path.join(packageRoot, 'src', 'ExplorerApp.tsx'),
     path.join(packageRoot, 'src', 'thumbnailLoader.ts'),
-    path.join(packageRoot, 'src', 'useThumbnailQueue.ts'),
+    path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts'),
     path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx'),
     path.join(packageRoot, 'src', 'AssetPreviewPanel.tsx'),
   ];
@@ -2585,7 +2585,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   const holdOverlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold', 'HoldShaderOverlay.tsx');
   const coreHelperPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'core', 'createFullscreenWebGLProgram.ts');
   const sharedTypesPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'shared', 'interactionShaderTypes.ts');
-  const interactionsPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const interactionsPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
 

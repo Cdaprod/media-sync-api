@@ -1,3 +1,10 @@
+## 2026-04-17 — Hook-layer relocation + topbar scroll-source regression repair (active)
+- [x] Relocated behavioral hook modules from `src/` root into `src/hooks/` (`useTopbarScrollState`, `useThumbnailQueue`, `usePendingComposeJobs`, `useAssetInteractions`) and updated all import paths/wiring.
+- [x] Repaired topbar hide/reveal regression by wiring `useTopbarScrollState` to the actual scroll surface node (`mediaScrollViewportEl`) instead of relying on a ref object that may be null during initial effect binding.
+- [x] Added callback-ref bridge in `ExplorerApp` (`setMediaScrollViewportNode`) to keep imperative ref consumers and hook-driven scroll listener binding synchronized.
+- [x] Updated Explorer static/contract assertions to lock hook relocation paths and topbar hook wiring (`scrollEl: mediaScrollViewportEl`, `ref={setMediaScrollViewportNode}`) so stale root-level imports/scroll wiring cannot silently return.
+- [ ] Follow-up: if topbar behavior still jitters on specific iOS inertial edge-cases, tune hysteresis/suppression constants only (no ownership-layer changes).
+
 ## 2026-04-17 — Aggregate snapshot thumbnail contract regression fix (active)
 - [x] Fixed `/api/library` thumbnail contract divergence in `app/services/library_service.py`: `thumb_url` / `thumbnail_url` are now emitted only when `_is_thumbable_media(Path(relative_path))` is true (matching `list_media(...)` behavior).
 - [x] Kept thumbnail endpoint behavior unchanged in this pass; primary fix is preventing invalid thumbnail URLs from being emitted for non-thumbable assets.

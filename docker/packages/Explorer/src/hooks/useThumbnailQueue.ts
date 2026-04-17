@@ -6,7 +6,7 @@ import {
   hasPendingThumbNetworkLoad,
   queueThumbLoads,
   requiresThumbNodeSync,
-} from './thumbnailLoader';
+} from '../thumbnailLoader';
 
 interface UseThumbnailQueueOptions {
   beginContentLoading: () => number;

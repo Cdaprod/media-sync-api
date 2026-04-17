@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RefObject } from 'react';
 
 const TOPBAR_REVEAL_HYSTERESIS_PX = 20;
 const TOPBAR_COMPENSATION_SUPPRESS_MS = 140;
 
 interface UseTopbarScrollStateOptions {
   disabled?: boolean;
-  scrollRef: RefObject<HTMLDivElement>;
+  scrollEl: HTMLDivElement | null;
   topbarMeasuredHeight: number;
 }
 
@@ -19,7 +18,7 @@ interface UseTopbarScrollStateResult {
 }
 
 export function useTopbarScrollState(
-  { disabled = false, scrollRef, topbarMeasuredHeight }: UseTopbarScrollStateOptions,
+  { disabled = false, scrollEl, topbarMeasuredHeight }: UseTopbarScrollStateOptions,
 ): UseTopbarScrollStateResult {
   const [topbarHidden, setTopbarHiddenState] = useState(false);
   const hiddenRef = useRef(false);
@@ -54,7 +53,7 @@ export function useTopbarScrollState(
   }, [setTopbarHidden]);
 
   useEffect(() => {
-    const host = scrollRef.current;
+    const host = scrollEl;
     if (!host) return;
     scrollHostRef.current = host;
 
@@ -110,7 +109,7 @@ export function useTopbarScrollState(
         scrollRafRef.current = null;
       }
     };
-  }, [disabled, hideTopbar, revealTopbar, scrollRef, topbarMeasuredHeight]);
+  }, [disabled, hideTopbar, revealTopbar, scrollEl, topbarMeasuredHeight]);
 
   return {
     hideTopbar,
