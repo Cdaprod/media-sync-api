@@ -1,3 +1,10 @@
+## 2026-04-17 — Thumbnail request opt-in + restore-wins density hardening (active)
+- [x] Added explicit thumb-candidate resolver in `ExplorerApp` so thumbnail requests are opt-in by media kind (`image`/`video`) and no fallback thumbnail URL is constructed for non-thumbable kinds.
+- [x] Updated both dataset-signature and asset view-model thumbnail lanes to use the shared resolver, keeping request behavior consistent between queueing and rendered thumb sources.
+- [x] Fixed post-restore density override by syncing `lastCommittedColumnsRef` when restored `gridColumnCount` is applied, preventing density controller bootstrap from re-seeding stale default columns.
+- [x] Expanded Explorer static contracts to lock thumb opt-in resolver usage and restored-density ref sync markers.
+- [ ] Follow-up: capture one device trace confirming no repeated non-thumbable `/thumbnails/...` 400 spam after entering all-project grid with mixed media.
+
 ## 2026-04-17 — Retained prefs save-path live-state regression fix (active)
 - [x] Reworked retained prefs hydration gate from a passive ref to explicit state (`retainedPrefsHydrated`) so the save effect re-runs after hydration completion and cannot remain silently gated.
 - [x] Confirmed save effect dependencies include all retained fields plus hydration state, ensuring density/overlay and other retained UI prefs persist from live hook-owned state changes.

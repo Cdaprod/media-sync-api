@@ -1270,6 +1270,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('id="asset-density-slider"'));
   assert.ok(content.includes('const RETAINED_UI_PREFS_KEY = \'media-sync-explorer-ui-prefs-v1\';'));
   assert.ok(content.includes('const parseStoredJsonObject = (raw: string | null): Record<string, unknown> | null => {'));
+  assert.ok(content.includes('const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {'));
   assert.ok(content.includes('const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);'));
   assert.ok(content.includes('window.localStorage.getItem(RETAINED_UI_PREFS_KEY)'));
   assert.ok(content.includes('setRetainedPrefsHydrated(false);'));
@@ -1284,7 +1285,9 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('hydrated: retainedPrefsHydrated,'));
   assert.ok(content.includes('__explorerRetainedPrefsDebug'));
   assert.ok(content.includes('gridColumnCount: clampLayoutColumns(gridColumnCount),'));
-  assert.ok(content.includes('setGridColumnCount(clampLayoutColumns(retainedParsed.gridColumnCount));'));
+  assert.ok(content.includes('const restoredColumns = clampLayoutColumns(retainedParsed.gridColumnCount);'));
+  assert.ok(content.includes('lastCommittedColumnsRef.current = restoredColumns;'));
+  assert.ok(content.includes('setGridColumnCount(restoredColumns);'));
   assert.ok(content.includes('if (storedView === \'grid\' || storedView === \'list\') {'));
   assert.ok(content.includes('if (VALID_SORT_KEYS.has(retainedParsed.sortKey as SortKey)) {'));
   assert.ok(content.includes('if (VALID_TYPE_FILTERS.has(retainedParsed.typeFilter as MediaTypeFilter)) {'));
@@ -1297,6 +1300,8 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('untaggedOnly,'));
   assert.ok(content.includes('overlayEnabled,'));
   assert.ok(content.includes('retainedPrefsHydrated,'));
+  assert.ok(content.includes('if (kind === \'video\') {'));
+  assert.ok(content.includes('return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || \'\');'));
   assert.ok(content.includes('const legacyFilterParsed = parseStoredJsonObject(window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY));'));
   assert.ok(content.includes('window.localStorage.getItem(LEGACY_OVERLAY_VIS_PREFS_KEY)'));
   assert.ok(content.includes('Overlays: {overlayEnabled ? \'On\' : \'Off\'}'));

@@ -1427,6 +1427,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return path;
     }
   }, [resolvedApiBase]);
+  const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {
+    if (kind === 'image') {
+      return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || item.stream_url || '');
+    }
+    if (kind === 'video') {
+      return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || '');
+    }
+    return undefined;
+  }, []);
   const proxyPrewarmSelectionKey = useMemo(() => (
     reinforcedActiveKey || previewActivationKey || activeAssetKey || ''
   ), [activeAssetKey, previewActivationKey, reinforcedActiveKey]);
@@ -1442,14 +1451,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const dataset = filteredMedia.map((item) => {
       const kind = guessKind(item);
       const thumbKey = getThumbCacheKey(item) || assetRenderKey(item, activeProject);
-      const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-        || item.thumbnail_url
-        || (kind === 'image' ? item.stream_url : undefined));
+      const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
       const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';
       return buildThumbJobKey(thumbKey, thumbUrl);
     });
     return `${view}:${view === 'grid' ? gridColumnCount : 'list'}:${dataset.join('\n')}`;
-  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, view]);
+  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, resolveThumbCandidateUrl, view]);
 
   useThumbnailQueue({
     beginContentLoading,
@@ -1574,7 +1581,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setView(storedView);
       }
       if (typeof retainedParsed.gridColumnCount === 'number' && Number.isFinite(retainedParsed.gridColumnCount)) {
-        setGridColumnCount(clampLayoutColumns(retainedParsed.gridColumnCount));
+        const restoredColumns = clampLayoutColumns(retainedParsed.gridColumnCount);
+        lastCommittedColumnsRef.current = restoredColumns;
+        setGridColumnCount(restoredColumns);
       }
       if (VALID_SORT_KEYS.has(retainedParsed.sortKey as SortKey)) {
         setSortKey(retainedParsed.sortKey as SortKey);
@@ -3990,9 +3999,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const cachedOrient = getCachedOrientation(orientationKey);
     const orient = resolveItemOrientation(item, orientationKey);
     const orientLocked = Boolean(itemOrient || dynamicOrient || cachedOrient);
-    const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-      || item.thumbnail_url
-      || (kind === 'image' ? item.stream_url : undefined));
+    const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
     const fallbackThumb = buildThumbFallback(kind);
     const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;
     const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
@@ -4055,6 +4062,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     previewPlaybackToken,
     reinforcedActiveKey,
     resolveAssetUrl,
+    resolveThumbCandidateUrl,
     resolveItemOrientation,
     selected,
     selectedOrderMap,
