@@ -3476,6 +3476,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       inExplorerApp: boolean;
       maybeNextAsset: boolean;
       maybeHotReload: boolean;
+      suppressedDefault: boolean;
     };
 
     const loadFailures = new Map<string, {
@@ -3616,6 +3617,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       networkLaneTotals[event.lane] += 1;
     };
+    const shouldSuppressGenericLoadFailedRejection = ({
+      lane,
+      message,
+      url,
+      inExplorerApp,
+      reasonStack,
+    }: {
+      lane: NetworkFailureLane;
+      message: string;
+      url: string;
+      inExplorerApp: boolean;
+      reasonStack: string;
+    }) => {
+      if (lane !== 'promise-rejection') return false;
+      if (inExplorerApp) return false;
+      if (message !== 'Load failed') return false;
+      if (url.trim().length > 0) return false;
+      if (reasonStack.trim().length > 0) return false;
+      return true;
+    };
 
     const toSnapshotRows = () => Array.from(loadFailures.values())
       .sort((a, b) => b.lastAt - a.lastAt)
@@ -3692,6 +3713,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         inExplorerApp,
         maybeNextAsset: sourceUrl.includes('/_next/'),
         maybeHotReload: sourceUrl.includes('hot-update') || sourceUrl.includes('webpack-hmr'),
+        suppressedDefault: false,
       });
       const prior = loadFailures.get(key);
       if (prior) {
@@ -3756,6 +3778,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         inExplorerApp: false,
         maybeNextAsset: url.includes('/_next/'),
         maybeHotReload: url.includes('hot-update') || message.toLowerCase().includes('fast refresh'),
+        suppressedDefault: false,
       });
       publishSnapshot();
     };
@@ -3770,6 +3793,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         (reason && typeof reason === 'object' && 'url' in reason && String((reason as { url?: unknown }).url))
         || ''
       );
+      const reasonStack = String(
+        (reason && typeof reason === 'object' && 'stack' in reason && String((reason as { stack?: unknown }).stack))
+        || ''
+      );
       const now = Date.now();
       const lane = classifyNetworkLane({
         url: reasonUrl,
@@ -3777,6 +3804,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         inExplorerApp: false,
         message,
         source: 'promise-rejection',
+      });
+      const shouldSuppressDefault = shouldSuppressGenericLoadFailedRejection({
+        lane,
+        message,
+        url: reasonUrl,
+        inExplorerApp: false,
+        reasonStack,
       });
       pushNetworkRecentEvent({
         at: now,
@@ -3788,7 +3822,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         inExplorerApp: false,
         maybeNextAsset: reasonUrl.includes('/_next/') || message.includes('/_next/'),
         maybeHotReload: reasonUrl.includes('hot-update') || message.toLowerCase().includes('fast refresh'),
+        suppressedDefault: shouldSuppressDefault,
       });
+      if (shouldSuppressDefault) {
+        event.preventDefault();
+      }
       publishSnapshot();
     };
 

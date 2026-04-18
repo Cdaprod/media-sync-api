@@ -1,3 +1,10 @@
+## 2026-04-18 — Promise-rejection noise suppression follow-up (active)
+- [x] Confirmed remaining Safari console spam lane is generic `promise-rejection` with repeated `message: "Load failed"` and empty URL/stack metadata, while Explorer media lane remains zero.
+- [x] Added narrow unhandled-rejection suppression predicate for the exact noisy signature (`Load failed`, no URL, no stack, not Explorer lane) and call `event.preventDefault()` only for that class.
+- [x] Retained full attribution visibility by continuing to publish suppressed promise events into `window.__explorerNetworkFailureDebug` with explicit `suppressedDefault` marker.
+- [x] Updated Explorer static contracts to lock the new rejection-signature predicate and suppression marker wiring.
+- [ ] Next verification step: reproduce on iPhone Safari, confirm console flood is suppressed, and confirm `__explorerNetworkFailureDebug` still records suppressed rejection events for auditability.
+
 ## 2026-04-18 — Non-media load-failure attribution pass (active)
 - [x] Confirmed on-device evidence that `window.__explorerLoadFailureDebug?.getSnapshot()` can remain zeroed (`totalEvents: 0`) while Safari console still emits repeated generic `Load failed` spam.
 - [x] Added lightweight global network/resource attribution surface (`window.__explorerNetworkFailureDebug`) with bounded recent-event buffer, lane totals, and coarse lane classification (`next-static`, `next-hmr`, `script`, `stylesheet`, `font`, `sourcemap`, runtime/promise lanes).
