@@ -1,3 +1,10 @@
+## 2026-04-18 — Residual 2-event promise rejection suppression hardening (active)
+- [x] Captured post-fanout residual state: startup console spam reduced to two same-timestamp generic `promise-rejection` events (`message: "Load failed"`, empty URL, non-explorer lane) with `suppressedDefault: true`.
+- [x] Strengthened unhandled-rejection suppression path in `ExplorerApp` for the matched signature by using capture-phase listener registration and explicit default + propagation suppression (`preventDefault`, `stopPropagation`, `stopImmediatePropagation`, `returnValue = false`).
+- [x] Kept existing debug visibility intact so the residual events remain inspectable in `__explorerNetworkFailureDebug` while browser default logging is further suppressed.
+- [x] Updated static contracts to lock capture-phase unhandled-rejection listener wiring and suppression helper markers.
+- [ ] Next verification step: reload iPhone Safari and confirm residual red `Load failed` console rows drop from 2→0 while `__explorerNetworkFailureDebug` still records the suppressed events.
+
 ## 2026-04-18 — Render-time native thumb-load suppression pass (active)
 - [x] Re-audited post-queue behavior and confirmed card render lanes still assigned network thumb URLs directly to `<img src>` (`AssetGrid` / `AssetList`), which can bypass queue throttling and trigger startup browser-native fan-out.
 - [x] Updated grid/list render paths to boot from local fallback thumb source while retaining real thumb URL in dataset attributes (`data-thumb-url`) for queue-owned promotion.

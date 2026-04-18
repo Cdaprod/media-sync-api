@@ -3637,6 +3637,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (reasonStack.trim().length > 0) return false;
       return true;
     };
+    const suppressUnhandledRejectionDefault = (event: PromiseRejectionEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      (event as PromiseRejectionEvent & { returnValue?: boolean }).returnValue = false;
+    };
 
     const toSnapshotRows = () => Array.from(loadFailures.values())
       .sort((a, b) => b.lastAt - a.lastAt)
@@ -3825,20 +3831,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         suppressedDefault: shouldSuppressDefault,
       });
       if (shouldSuppressDefault) {
-        event.preventDefault();
+        suppressUnhandledRejectionDefault(event);
       }
       publishSnapshot();
     };
 
     window.addEventListener('error', onResourceError, true);
     window.addEventListener('error', onRuntimeError);
-    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    window.addEventListener('unhandledrejection', onUnhandledRejection, true);
     publishSnapshot();
 
     return () => {
       window.removeEventListener('error', onResourceError, true);
       window.removeEventListener('error', onRuntimeError);
-      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection, true);
       delete (window as typeof window & { __explorerLoadFailureDebug?: unknown }).__explorerLoadFailureDebug;
       delete (window as typeof window & { __explorerNetworkFailureDebug?: unknown }).__explorerNetworkFailureDebug;
     };

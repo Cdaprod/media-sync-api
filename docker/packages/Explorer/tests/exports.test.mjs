@@ -2888,10 +2888,13 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes('const networkLaneTotals: Record<NetworkFailureLane, number> = {'));
   assert.ok(content.includes('const onUnhandledRejection = (event: PromiseRejectionEvent) => {'));
   assert.ok(content.includes('const shouldSuppressGenericLoadFailedRejection = ({'));
+  assert.ok(content.includes('const suppressUnhandledRejectionDefault = (event: PromiseRejectionEvent) => {'));
   assert.ok(content.includes("if (message !== 'Load failed') return false;"));
   assert.ok(content.includes('if (reasonStack.trim().length > 0) return false;'));
   assert.ok(content.includes('suppressedDefault: shouldSuppressDefault,'));
-  assert.ok(content.includes('event.preventDefault();'));
+  assert.ok(content.includes('suppressUnhandledRejectionDefault(event);'));
+  assert.ok(content.includes('event.stopImmediatePropagation?.();'));
+  assert.ok(content.includes('window.addEventListener(\'unhandledrejection\', onUnhandledRejection, true);'));
   assert.ok(content.includes('const MAX_RECENT_EVENTS = 80;'));
   assert.ok(content.includes('suppressedCount: suppressed ? 1 : 0,'));
   assert.ok(content.includes('lastDataset: dataset,'));
