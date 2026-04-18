@@ -1559,6 +1559,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(focusMotion.includes('if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || !Number.isFinite(scale)) {'));
   assert.ok(renderTypes.includes('export type FocusSceneSnapshot'));
   assert.ok(sceneSnapshot.includes('export function captureFocusSceneSnapshot'));
+  assert.ok(sceneSnapshot.includes('function readRenderableCardThumbUrl(img: HTMLImageElement | null | undefined) {'));
+  assert.ok(sceneSnapshot.includes('const liveSrc = String(img.currentSrc || img.src || \'\').trim();'));
+  assert.ok(!sceneSnapshot.includes('img?.dataset.thumbUrl'));
   assert.ok(sceneSnapshot.includes('const ambientNeighborLimit = Math.min(Math.max(0, maxCards - 1), 8);'));
   assert.ok(sceneSnapshot.includes('sampledEls = [activeEl, ...neighbors];'));
   assert.ok(cameraController.includes('export function computeCameraStateForTarget'));
@@ -1572,6 +1575,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('private activeSelectionKey = \'\';'));
   assert.ok(proxyRenderer.includes('private activeVideoEl: HTMLVideoElement | null = null;'));
   assert.ok(proxyRenderer.includes('private renderPassCount = 0;'));
+  assert.ok(proxyRenderer.includes('private getRenderableThumbUrl(card: RenderCardSnapshot) {'));
+  assert.ok(proxyRenderer.includes('private escapeHtmlAttr(value: string) {'));
+  assert.ok(proxyRenderer.includes('.replaceAll(\'&\', \'&amp;\')'));
   assert.ok(proxyRenderer.includes('<div class=\"proxy-render-ambient-layer\" data-focus-proxy-layer=\"true\"></div>'));
   assert.ok(proxyRenderer.includes('<div class=\"proxy-render-active-layer\" data-focus-proxy-layer=\"true\"></div>'));
   assert.ok(proxyRenderer.includes('data-focus-proxy-layer=\"true\"'));

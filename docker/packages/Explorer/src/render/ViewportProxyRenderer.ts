@@ -102,11 +102,26 @@ export class ViewportProxyRenderer {
     return Boolean(this.worldEl && this.ambientLayerEl && this.activeLayerEl);
   }
 
+  private getRenderableThumbUrl(card: RenderCardSnapshot) {
+    const candidate = String(card.thumbUrl || '').trim();
+    if (!candidate || candidate === 'undefined' || candidate === 'null') return '';
+    return candidate;
+  }
+
+  private escapeHtmlAttr(value: string) {
+    return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+  }
+
   private buildAmbientCardHtml(card: RenderCardSnapshot) {
     // Focused retarget contract: the proxy card root is the primary hit target for asset retarget.
     const selectedClass = card.selected ? 'is-selected' : '';
-    const thumb = card.thumbUrl
-      ? `<img src="${card.thumbUrl}" alt="">`
+    const thumbUrl = this.getRenderableThumbUrl(card);
+    const thumb = thumbUrl
+      ? `<img src="${this.escapeHtmlAttr(thumbUrl)}" alt="">`
       : `<div class="proxy-render-fallback">${card.kind}</div>`;
 
     return `
@@ -118,7 +133,7 @@ export class ViewportProxyRenderer {
         data-proxy-hit-target="card-root"
         data-proxy-active="false"
         data-video-ready="false"
-        data-proxy-media-branch="${card.thumbUrl ? 'thumb' : 'fallback'}"
+        data-proxy-media-branch="${thumbUrl ? 'thumb' : 'fallback'}"
         style="
           left:${card.rect.left}px;
           top:${card.rect.top}px;
@@ -199,7 +214,8 @@ export class ViewportProxyRenderer {
     }
     thumbEl.dataset.proxyHitTarget = 'card-child';
 
-    const mediaBranch = (card.kind === 'video' && card.mediaUrl) ? 'video' : (card.thumbUrl ? 'thumb' : 'fallback');
+    const thumbUrl = this.getRenderableThumbUrl(card);
+    const mediaBranch = (card.kind === 'video' && card.mediaUrl) ? 'video' : (thumbUrl ? 'thumb' : 'fallback');
     activeCardEl.className = `proxy-render-card is-active ${card.selected ? 'is-selected' : ''}`;
     activeCardEl.dataset.focusProxyLayer = 'true';
     activeCardEl.dataset.selectionKey = card.selectionKey;
@@ -257,7 +273,7 @@ export class ViewportProxyRenderer {
       if (!posterEl || posterEl.parentElement !== thumbEl) {
         posterEl = thumbEl.querySelector<HTMLImageElement>('.proxy-render-poster');
       }
-      if (card.thumbUrl) {
+      if (thumbUrl) {
         if (!posterEl) {
           posterEl = document.createElement('img');
           posterEl.className = 'proxy-render-poster';
@@ -265,8 +281,8 @@ export class ViewportProxyRenderer {
           thumbEl.appendChild(posterEl);
           activeMediaRecreated = true;
         }
-        if (posterEl.src !== card.thumbUrl) {
-          posterEl.src = card.thumbUrl;
+        if (posterEl.src !== thumbUrl) {
+          posterEl.src = thumbUrl;
         }
       }
       else if (posterEl) {
@@ -295,7 +311,7 @@ export class ViewportProxyRenderer {
         activeMediaRecreated = true;
       }
       const fallbackKind = card.kind;
-      if (card.thumbUrl) {
+      if (thumbUrl) {
         let imgEl = thumbEl.querySelector<HTMLImageElement>('img:not(.proxy-render-poster)');
         if (!imgEl) {
           imgEl = document.createElement('img');
@@ -303,8 +319,8 @@ export class ViewportProxyRenderer {
           thumbEl.appendChild(imgEl);
           activeMediaRecreated = true;
         }
-        if (imgEl.src !== card.thumbUrl) {
-          imgEl.src = card.thumbUrl;
+        if (imgEl.src !== thumbUrl) {
+          imgEl.src = thumbUrl;
         }
         const fallbackEl = thumbEl.querySelector<HTMLElement>('.proxy-render-fallback');
         if (fallbackEl) fallbackEl.remove();

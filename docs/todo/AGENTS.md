@@ -1,3 +1,10 @@
+## 2026-04-18 — Proxy/thumb canonical lane hardening follow-up (active)
+- [x] Audited render-lane thumb usage after `img` search feedback and found proxy/snapshot seams still capable of trusting raw thumb dataset paths instead of live-rendered thumb sources.
+- [x] Added `readRenderableCardThumbUrl(...)` in `SceneSnapshot` so proxy snapshot capture prefers live `currentSrc/src` (then fallback thumb) and no longer promotes raw `data-thumb-url` into proxy render state.
+- [x] Hardened `ViewportProxyRenderer` thumb handling with `getRenderableThumbUrl(...)` normalization + HTML attribute escaping for ambient `<img src="...">` construction, and reused normalized thumb URL across active poster/image branches.
+- [x] Updated Explorer static contracts to lock the new scene/proxy thumb normalization markers.
+- [ ] Next verification step: re-run iPhone Safari repro and inspect whether proxy/ambient thumb lanes remain stable (no stale raw thumbnail path promotion) while promise-rejection suppression stays effective.
+
 ## 2026-04-18 — Promise-rejection noise suppression follow-up (active)
 - [x] Confirmed remaining Safari console spam lane is generic `promise-rejection` with repeated `message: "Load failed"` and empty URL/stack metadata, while Explorer media lane remains zero.
 - [x] Added narrow unhandled-rejection suppression predicate for the exact noisy signature (`Load failed`, no URL, no stack, not Explorer lane) and call `event.preventDefault()` only for that class.

@@ -10,6 +10,14 @@ function rectOf(el: Element) {
   };
 }
 
+function readRenderableCardThumbUrl(img: HTMLImageElement | null | undefined) {
+  if (!img) return undefined;
+  const liveSrc = String(img.currentSrc || img.src || '').trim();
+  if (liveSrc) return liveSrc;
+  const fallbackSrc = String(img.dataset.thumbFallback || '').trim();
+  return fallbackSrc || undefined;
+}
+
 export function captureFocusSceneSnapshot(args: {
   gridRoot: HTMLElement;
   viewportEl: HTMLElement;
@@ -80,7 +88,7 @@ export function captureFocusSceneSnapshot(args: {
       id: el.dataset.cardId || selectionKey || `card-${index}`,
       selectionKey,
       rect: rectOf(el),
-      thumbUrl: img?.currentSrc || img?.src || img?.dataset.thumbUrl || img?.dataset.thumbFallback || undefined,
+      thumbUrl: readRenderableCardThumbUrl(img),
       mediaUrl: el.dataset.streamUrl || undefined,
       kind: el.dataset.kind || 'unknown',
       title: titleNode?.textContent?.trim() || '',
