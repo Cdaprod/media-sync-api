@@ -1,3 +1,10 @@
+## 2026-04-18 — Render-time native thumb-load suppression pass (active)
+- [x] Re-audited post-queue behavior and confirmed card render lanes still assigned network thumb URLs directly to `<img src>` (`AssetGrid` / `AssetList`), which can bypass queue throttling and trigger startup browser-native fan-out.
+- [x] Updated grid/list render paths to boot from local fallback thumb source while retaining real thumb URL in dataset attributes (`data-thumb-url`) for queue-owned promotion.
+- [x] Removed now-stale `safeThumbUrl` derivation in `ExplorerApp` view-model shaping so render-time thumb ownership is unambiguous (fallback at render, queue promotion on sync).
+- [x] Expanded Explorer static contracts to lock fallback-at-render image source markers and guard against reintroducing direct `safeThumbUrl` src assignment.
+- [ ] Next verification step: on iPhone Safari verify `__explorerThumbQueueDebug.queueTargets` remains bounded and console `Load failed` count no longer scales 1:1 with total thumbable cards at initial paint.
+
 ## 2026-04-18 — Startup thumbnail fan-out throttling pass (active)
 - [x] Verified remaining Safari `Load failed` flood pattern still matches boot-time thumbnail queue fan-out (counts align with thumbable asset total and trigger at initial load).
 - [x] Hardened `useThumbnailQueue` startup scheduling to prioritize near-viewport thumb nodes and cap first-pass queue targets (`THUMB_QUEUE_BOOT_MAX_TARGETS`) instead of queueing every sync candidate immediately.

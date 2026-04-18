@@ -56,7 +56,7 @@ function AssetListComponent({
             <div className="mini">
               <img
                 className="asset-thumb"
-                src={viewModel.safeThumbUrl}
+                src={viewModel.fallbackThumb}
                 alt={viewModel.title}
                 loading="lazy"
                 draggable={false}

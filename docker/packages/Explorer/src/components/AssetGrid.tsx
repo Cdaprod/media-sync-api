@@ -23,7 +23,6 @@ export interface ExplorerAssetViewModel {
   thumbUrl?: string;
   title: string;
   fallbackThumb: string;
-  safeThumbUrl: string;
   activeVideoPreviewUrl?: string;
   previewPlaybackKey: string;
   pointerHandlers: AssetPointerHandlers;
@@ -564,7 +563,7 @@ function AssetGridComponent({
               <div className="thumb">
                 <img
                   className="asset-thumb"
-                  src={viewModel.safeThumbUrl}
+                  src={viewModel.fallbackThumb}
                   alt={viewModel.title}
                   loading="lazy"
                   draggable={false}

@@ -775,7 +775,8 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(explorer.includes("const hydrateProjectMediaItems = useCallback((items: MediaItem[], project: { name: string; source?: string | null }): MediaItem[] => ("));
   assert.ok(explorer.includes('mergeMediaItemsPreservingIdentity(current, hydratedItems)'));
   assert.ok(explorer.includes('buildMediaIdentityKey(item, projectOverride)'));
-  assert.ok(explorer.includes("const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'"));
+  assert.ok(explorer.includes('const fallbackThumb = buildThumbFallback(kind);'));
+  assert.ok(!explorer.includes("const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'"));
   assert.ok(grid.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
   assert.ok(grid.includes("if (entry.kind === 'pending') {"));
   assert.ok(list.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
@@ -959,12 +960,14 @@ test('OBS websocket helper includes browser source defaults', () => {
 test('explorer queues thumbnail loads from server urls', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
   const hookPath = path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts');
   const statePath = path.join(packageRoot, 'src', 'state.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const gridContent = fs.readFileSync(gridPath, 'utf8');
+  const list = fs.readFileSync(listPath, 'utf8');
   const loaderContent = fs.readFileSync(loaderPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const stateContent = fs.readFileSync(statePath, 'utf8');
@@ -976,6 +979,11 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';"));
   assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;"));
   assert.ok(gridContent.includes('data-thumb-url'));
+  assert.ok(gridContent.includes('src={viewModel.fallbackThumb}'));
+  assert.ok(list.includes('src={viewModel.fallbackThumb}'));
+  assert.ok(!gridContent.includes('src={viewModel.safeThumbUrl}'));
+  assert.ok(!list.includes('src={viewModel.safeThumbUrl}'));
+  assert.ok(!content.includes('const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== \'error\''));
   assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
   assert.ok(content.includes('pendingDataLoadOverlay'));
   assert.ok(content.includes('dynamicOrientations'));

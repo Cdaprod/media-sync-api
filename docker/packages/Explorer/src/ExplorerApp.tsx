@@ -38,7 +38,7 @@ import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewP
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
-import { buildThumbJobKey, getThumbCacheKey, getThumbLoadState, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
+import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
 import { useThumbnailQueue } from './hooks/useThumbnailQueue';
@@ -4337,9 +4337,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;
     const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
-    const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
-      ? thumbUrl
-      : fallbackThumb;
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
@@ -4369,7 +4366,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       pointerHandlers,
       previewPlaybackKey,
       renderKey,
-      safeThumbUrl,
       selectionKey,
       selectionOrderLabel: selectionOrderIndex ? String(Math.min(selectionOrderIndex, 99)) : '',
       size,
