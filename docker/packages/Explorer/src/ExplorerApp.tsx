@@ -3455,6 +3455,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       dataset: Record<string, string>;
       targetPath: string;
     };
+    type NetworkFailureLane =
+      | 'explorer-media'
+      | 'next-static'
+      | 'next-hmr'
+      | 'sourcemap'
+      | 'script'
+      | 'stylesheet'
+      | 'font'
+      | 'runtime-error'
+      | 'promise-rejection'
+      | 'other';
+    type NetworkFailureEvent = {
+      at: number;
+      lane: NetworkFailureLane;
+      tag: string;
+      url: string;
+      message: string;
+      source: 'resource-error' | 'runtime-error' | 'promise-rejection';
+      inExplorerApp: boolean;
+      maybeNextAsset: boolean;
+      maybeHotReload: boolean;
+    };
 
     const loadFailures = new Map<string, {
       key: string;
@@ -3471,6 +3493,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }>();
     const recentEvents: LoadFailureEvent[] = [];
     const MAX_RECENT_EVENTS = 80;
+    const networkRecentEvents: NetworkFailureEvent[] = [];
+    const MAX_NETWORK_RECENT_EVENTS = 120;
+    const networkLaneTotals: Record<NetworkFailureLane, number> = {
+      'explorer-media': 0,
+      'next-static': 0,
+      'next-hmr': 0,
+      sourcemap: 0,
+      script: 0,
+      stylesheet: 0,
+      font: 0,
+      'runtime-error': 0,
+      'promise-rejection': 0,
+      other: 0,
+    };
     let suppressedMediaErrorCount = 0;
 
     const classifyEmitter = (target: HTMLElement): LoadFailureEmitter => {
@@ -3485,6 +3521,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (target.closest('.masonry-card.asset .thumb,.list-row.asset .thumb')) return true;
       if (target.closest('.proxy-render-card,.focus-proxy-root')) return true;
       return false;
+    };
+    const getSourceUrlFromTarget = (target: HTMLElement) => {
+      const imgTarget = target as HTMLImageElement;
+      return (
+        imgTarget.currentSrc
+        || target.getAttribute('src')
+        || target.getAttribute('href')
+        || target.getAttribute('poster')
+        || ''
+      ).trim();
     };
     const getTargetPath = (target: HTMLElement) => (
       target.closest('[data-select-key]')?.getAttribute('data-select-key')
@@ -3519,6 +3565,57 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         recentEvents.splice(0, recentEvents.length - MAX_RECENT_EVENTS);
       }
     };
+    const classifyNetworkLane = ({
+      url,
+      tag,
+      rel,
+      inExplorerApp,
+      message,
+      source,
+    }: {
+      url: string;
+      tag: string;
+      rel?: string;
+      inExplorerApp: boolean;
+      message: string;
+      source: 'resource-error' | 'runtime-error' | 'promise-rejection';
+    }): NetworkFailureLane => {
+      const normalizedUrl = url.toLowerCase();
+      const normalizedTag = tag.toUpperCase();
+      const normalizedRel = String(rel || '').toLowerCase();
+      const normalizedMessage = message.toLowerCase();
+      if (
+        normalizedUrl.includes('/_next/webpack-hmr')
+        || normalizedUrl.includes('hot-update')
+        || normalizedMessage.includes('hot-update')
+        || normalizedMessage.includes('fast refresh')
+        || normalizedMessage.includes('webpack-hmr')
+      ) return 'next-hmr';
+      if (normalizedUrl.includes('/_next/')) return 'next-static';
+      if (normalizedUrl.endsWith('.map') || normalizedMessage.includes('source map')) return 'sourcemap';
+      if (
+        normalizedUrl.endsWith('.woff')
+        || normalizedUrl.endsWith('.woff2')
+        || normalizedUrl.endsWith('.ttf')
+        || normalizedUrl.endsWith('.otf')
+      ) return 'font';
+      if (normalizedTag === 'SCRIPT') return 'script';
+      if (normalizedTag === 'LINK' || normalizedUrl.endsWith('.css') || normalizedRel === 'stylesheet') return 'stylesheet';
+      if (source === 'runtime-error') return 'runtime-error';
+      if (source === 'promise-rejection') return 'promise-rejection';
+      if (
+        inExplorerApp
+        && (normalizedTag === 'IMG' || normalizedTag === 'VIDEO' || normalizedTag === 'SOURCE')
+      ) return 'explorer-media';
+      return 'other';
+    };
+    const pushNetworkRecentEvent = (event: NetworkFailureEvent) => {
+      networkRecentEvents.push(event);
+      if (networkRecentEvents.length > MAX_NETWORK_RECENT_EVENTS) {
+        networkRecentEvents.splice(0, networkRecentEvents.length - MAX_NETWORK_RECENT_EVENTS);
+      }
+      networkLaneTotals[event.lane] += 1;
+    };
 
     const toSnapshotRows = () => Array.from(loadFailures.values())
       .sort((a, b) => b.lastAt - a.lastAt)
@@ -3537,11 +3634,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         rows: toSnapshotRows(),
         recentEvents: recentEvents.map((event) => ({ ...event })),
       };
+      const networkSnapshot = {
+        totalEvents: networkRecentEvents.length,
+        laneTotals: { ...networkLaneTotals },
+        recentEvents: networkRecentEvents.map((event) => ({ ...event })),
+      };
       (window as typeof window & {
         __explorerLoadFailureDebug?: { getSnapshot: () => typeof snapshot; lastSnapshot: typeof snapshot };
+        __explorerNetworkFailureDebug?: {
+          getSnapshot: () => typeof networkSnapshot;
+          lastSnapshot: typeof networkSnapshot;
+        };
       }).__explorerLoadFailureDebug = {
         getSnapshot: () => snapshot,
         lastSnapshot: snapshot,
+      };
+      (window as typeof window & {
+        __explorerNetworkFailureDebug?: {
+          getSnapshot: () => typeof networkSnapshot;
+          lastSnapshot: typeof networkSnapshot;
+        };
+      }).__explorerNetworkFailureDebug = {
+        getSnapshot: () => networkSnapshot,
+        lastSnapshot: networkSnapshot,
       };
     };
 
@@ -3549,22 +3664,35 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const target = event.target as HTMLElement | null;
       if (!target) return;
       const tag = target.tagName || 'UNKNOWN';
-      const imgTarget = target as HTMLImageElement;
-      const sourceUrl = (
-        imgTarget.currentSrc
-        || target.getAttribute('src')
-        || target.getAttribute('href')
-        || target.getAttribute('poster')
-        || ''
-      ).trim();
+      const sourceUrl = getSourceUrlFromTarget(target);
       const className = String(target.className || '');
       const emitter = classifyEmitter(target);
       const dataset = getTargetDatasetSnapshot(target);
       const targetPath = getTargetPath(target);
       const key = `${tag}:${sourceUrl || '(none)'}`;
       const now = Date.now();
+      const inExplorerApp = Boolean(target.closest('.app'));
       const isMediaTarget = tag === 'IMG' || tag === 'VIDEO' || tag === 'SOURCE';
       const suppressed = isMediaTarget && shouldSuppressMediaError(target);
+      const lane = classifyNetworkLane({
+        url: sourceUrl,
+        tag,
+        rel: target.getAttribute('rel') || '',
+        inExplorerApp,
+        message: '',
+        source: 'resource-error',
+      });
+      pushNetworkRecentEvent({
+        at: now,
+        lane,
+        tag,
+        url: sourceUrl,
+        message: '',
+        source: 'resource-error',
+        inExplorerApp,
+        maybeNextAsset: sourceUrl.includes('/_next/'),
+        maybeHotReload: sourceUrl.includes('hot-update') || sourceUrl.includes('webpack-hmr'),
+      });
       const prior = loadFailures.get(key);
       if (prior) {
         prior.count += 1;
@@ -3605,13 +3733,76 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       }
       publishSnapshot();
     };
+    const onRuntimeError = (event: ErrorEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && target !== window && target instanceof HTMLElement) return;
+      const now = Date.now();
+      const url = String(event.filename || '');
+      const message = String(event.message || '');
+      const lane = classifyNetworkLane({
+        url,
+        tag: 'RUNTIME',
+        inExplorerApp: false,
+        message,
+        source: 'runtime-error',
+      });
+      pushNetworkRecentEvent({
+        at: now,
+        lane,
+        tag: 'RUNTIME',
+        url,
+        message,
+        source: 'runtime-error',
+        inExplorerApp: false,
+        maybeNextAsset: url.includes('/_next/'),
+        maybeHotReload: url.includes('hot-update') || message.toLowerCase().includes('fast refresh'),
+      });
+      publishSnapshot();
+    };
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message = String(
+        (typeof reason === 'string' && reason)
+        || (reason && typeof reason === 'object' && 'message' in reason && String((reason as { message?: unknown }).message))
+        || ''
+      );
+      const reasonUrl = String(
+        (reason && typeof reason === 'object' && 'url' in reason && String((reason as { url?: unknown }).url))
+        || ''
+      );
+      const now = Date.now();
+      const lane = classifyNetworkLane({
+        url: reasonUrl,
+        tag: 'PROMISE',
+        inExplorerApp: false,
+        message,
+        source: 'promise-rejection',
+      });
+      pushNetworkRecentEvent({
+        at: now,
+        lane,
+        tag: 'PROMISE',
+        url: reasonUrl,
+        message,
+        source: 'promise-rejection',
+        inExplorerApp: false,
+        maybeNextAsset: reasonUrl.includes('/_next/') || message.includes('/_next/'),
+        maybeHotReload: reasonUrl.includes('hot-update') || message.toLowerCase().includes('fast refresh'),
+      });
+      publishSnapshot();
+    };
 
     window.addEventListener('error', onResourceError, true);
+    window.addEventListener('error', onRuntimeError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
     publishSnapshot();
 
     return () => {
       window.removeEventListener('error', onResourceError, true);
+      window.removeEventListener('error', onRuntimeError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
       delete (window as typeof window & { __explorerLoadFailureDebug?: unknown }).__explorerLoadFailureDebug;
+      delete (window as typeof window & { __explorerNetworkFailureDebug?: unknown }).__explorerNetworkFailureDebug;
     };
   }, []);
 

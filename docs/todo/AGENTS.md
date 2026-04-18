@@ -1,3 +1,10 @@
+## 2026-04-18 — Non-media load-failure attribution pass (active)
+- [x] Confirmed on-device evidence that `window.__explorerLoadFailureDebug?.getSnapshot()` can remain zeroed (`totalEvents: 0`) while Safari console still emits repeated generic `Load failed` spam.
+- [x] Added lightweight global network/resource attribution surface (`window.__explorerNetworkFailureDebug`) with bounded recent-event buffer, lane totals, and coarse lane classification (`next-static`, `next-hmr`, `script`, `stylesheet`, `font`, `sourcemap`, runtime/promise lanes).
+- [x] Wired attribution capture across resource `error`, runtime `error`, and `unhandledrejection` so non-media/dev-tooling failures are visible even when Explorer media lanes remain quiet.
+- [x] Updated Explorer static contracts to lock the new network attribution markers.
+- [ ] Next verification step: capture Safari Network + `window.__explorerNetworkFailureDebug?.getSnapshot()` concurrently and isolate the dominant failing lane (`/_next/*`, sourcemap, HMR/eventstream, or other).
+
 ## 2026-04-17 — Final emitter-identification debug expansion (active)
 - [x] Expanded `__explorerLoadFailureDebug` with bounded recent-event ring buffer (`recentEvents`), per-key suppression counts (`suppressedCount`), last dataset/path snapshots, and emitter totals to make the dominant failing resource lane explicit on-device.
 - [x] Kept capture bounded/lightweight (max 80 recent rows) and retained existing suppression behavior, now with explicit per-event `suppressed` truth in the debug payload.
