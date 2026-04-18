@@ -1065,7 +1065,15 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(hookContent.includes('hasPendingThumbNetworkLoad'));
   assert.ok(hookContent.includes('const THUMB_QUEUE_VIEWPORT_BUFFER_PX = 320;'));
   assert.ok(hookContent.includes('const THUMB_QUEUE_BOOT_MAX_TARGETS = 24;'));
+  assert.ok(hookContent.includes('const THUMB_QUEUE_REQUEUE_DELAY_MS = 90;'));
+  assert.ok(hookContent.includes('const THUMB_QUEUE_IDLE_REQUEUE_MS = 1400;'));
   assert.ok(hookContent.includes('const nearViewportTargets = syncTargets.filter((target) => isNearViewportTarget(target, root));'));
+  assert.ok(hookContent.includes('const relevantTargets = nearViewportTargets.length ? nearViewportTargets : syncTargets;'));
+  assert.ok(hookContent.includes('const hasRemaining = relevantTargets.some((target) => requiresThumbNodeSync(target));'));
+  assert.ok(hookContent.includes('scrollHost?.addEventListener(\'scroll\', onViewportActivity, { passive: true });'));
+  assert.ok(hookContent.includes('const idleInterval = window.setInterval(() => scheduleQueuePass(), THUMB_QUEUE_IDLE_REQUEUE_MS);'));
+  assert.ok(hookContent.includes('const domObserver = new MutationObserver(() => scheduleQueuePass());'));
+  assert.ok(hookContent.includes('remainingSyncTargets: Math.max(0, relevantTargets.length - queueTargets.length),'));
   assert.ok(hookContent.includes('__explorerThumbQueueDebug'));
   assert.ok(content.includes('project_source'));
 });
@@ -1191,6 +1199,8 @@ test('package explorer data load paths explicitly request loading overlay owners
   assert.ok(hookContent.includes('const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;'));
   assert.ok(hookContent.includes('clearPendingDataLoadOverlay();'));
   assert.ok(hookContent.includes('queueThumbLoads(queueTargets, THUMB_LOAD_TIMEOUT_MS, updateCardOrientation)'));
+  assert.ok(hookContent.includes('window.clearInterval(idleInterval);'));
+  assert.ok(hookContent.includes('domObserver.disconnect();'));
 });
 
 

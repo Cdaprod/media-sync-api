@@ -1,3 +1,11 @@
+## 2026-04-18 — Thumbnail lifecycle completion pass (active)
+- [x] Confirmed post-throttle regression: fallback-first render + boot queue cap reduced startup storm but left stale placeholders after scroll/remount because queue behavior was effectively one-shot.
+- [x] Upgraded `useThumbnailQueue` from boot-only pass to lifecycle queue runner with requeue scheduling on viewport activity (scroll/resize), DOM mutation, and periodic idle passes.
+- [x] Kept startup fan-out guardrails (fallback-first render + queue cap) while adding continuation for remaining sync targets (`hasRemaining` + delayed pass) and cached thumb node rehydration via repeated queue sync passes.
+- [x] Expanded `__explorerThumbQueueDebug` payload with pass count + remaining sync targets to verify lifecycle progression on-device.
+- [x] Updated static contracts to lock lifecycle queue markers (requeue delay, idle interval, mutation observer, viewport listeners, continuation checks).
+- [ ] Next verification step: iPhone Safari grid/list run should progressively promote fallback cards while preserving low console-noise startup behavior; capture `__explorerThumbQueueDebug` progression across scroll.
+
 ## 2026-04-18 — Residual 2-event promise rejection suppression hardening (active)
 - [x] Captured post-fanout residual state: startup console spam reduced to two same-timestamp generic `promise-rejection` events (`message: "Load failed"`, empty URL, non-explorer lane) with `suppressedDefault: true`.
 - [x] Strengthened unhandled-rejection suppression path in `ExplorerApp` for the matched signature by using capture-phase listener registration and explicit default + propagation suppression (`preventDefault`, `stopPropagation`, `stopImmediatePropagation`, `returnValue = false`).
