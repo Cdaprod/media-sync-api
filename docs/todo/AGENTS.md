@@ -1,3 +1,10 @@
+## 2026-04-18 — Startup thumbnail fan-out throttling pass (active)
+- [x] Verified remaining Safari `Load failed` flood pattern still matches boot-time thumbnail queue fan-out (counts align with thumbable asset total and trigger at initial load).
+- [x] Hardened `useThumbnailQueue` startup scheduling to prioritize near-viewport thumb nodes and cap first-pass queue targets (`THUMB_QUEUE_BOOT_MAX_TARGETS`) instead of queueing every sync candidate immediately.
+- [x] Added lightweight runtime queue attribution marker (`window.__explorerThumbQueueDebug`) exposing total/sync/near-viewport/queued counts for on-device evidence capture.
+- [x] Updated Explorer static contracts to lock viewport-aware queue target selection markers and queue-target overlay gating.
+- [ ] Next verification step: on iPhone Safari capture `__explorerThumbQueueDebug` + `__explorerNetworkFailureDebug` at first load and confirm promise-rejection count drops with near-viewport queueing.
+
 ## 2026-04-18 — Proxy/thumb canonical lane hardening follow-up (active)
 - [x] Audited render-lane thumb usage after `img` search feedback and found proxy/snapshot seams still capable of trusting raw thumb dataset paths instead of live-rendered thumb sources.
 - [x] Added `readRenderableCardThumbUrl(...)` in `SceneSnapshot` so proxy snapshot capture prefers live `currentSrc/src` (then fallback thumb) and no longer promotes raw `data-thumb-url` into proxy render state.

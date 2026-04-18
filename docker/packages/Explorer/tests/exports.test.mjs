@@ -1055,6 +1055,10 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(loaderContent.includes('thumbLoadedKey'));
   assert.ok(hookContent.includes('requiresThumbNodeSync'));
   assert.ok(hookContent.includes('hasPendingThumbNetworkLoad'));
+  assert.ok(hookContent.includes('const THUMB_QUEUE_VIEWPORT_BUFFER_PX = 320;'));
+  assert.ok(hookContent.includes('const THUMB_QUEUE_BOOT_MAX_TARGETS = 24;'));
+  assert.ok(hookContent.includes('const nearViewportTargets = syncTargets.filter((target) => isNearViewportTarget(target, root));'));
+  assert.ok(hookContent.includes('__explorerThumbQueueDebug'));
   assert.ok(content.includes('project_source'));
 });
 
@@ -1175,9 +1179,10 @@ test('package explorer data load paths explicitly request loading overlay owners
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   assert.ok(content.includes('setPendingDataLoadOverlay(true);'));
   assert.ok(content.includes('setPendingDataLoadOverlay(false);'));
-  assert.ok(hookContent.includes('const shouldShowOverlay = pendingDataLoadOverlay && syncTargets.some((target) => hasPendingThumbNetworkLoad(target));'));
+  assert.ok(hookContent.includes('const shouldShowOverlay = pendingDataLoadOverlay && queueTargets.some((target) => hasPendingThumbNetworkLoad(target));'));
   assert.ok(hookContent.includes('const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;'));
   assert.ok(hookContent.includes('clearPendingDataLoadOverlay();'));
+  assert.ok(hookContent.includes('queueThumbLoads(queueTargets, THUMB_LOAD_TIMEOUT_MS, updateCardOrientation)'));
 });
 
 
