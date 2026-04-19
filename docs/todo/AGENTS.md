@@ -1,3 +1,10 @@
+## 2026-04-19 — Dashboard card preview lane + compact diagnostics UX (active)
+- [x] Added a thumbnail/preview lane to compose dashboard cards with a new item preview model (`previewKind`, `previewUrl`, `previewLabel`, `previewIndexLabel`).
+- [x] Implemented resilient phase-1 placeholder previews (kind/clip index) with status-aware tinting (`accepted/done`, `failed`, `blocked`) and layout split (`card-main`, `card-body`).
+- [x] Updated server diagnostics presentation to collapsed-by-default `<details>` blocks so rows remain scannable during larger runs.
+- [x] Re-synced alias scripts from canonical dashboard after preview-lane and diagnostics UI updates.
+- [ ] Next verification step on iPhone: confirm each row shows the new preview tile and that server JSON is collapsed by default while status/progress remain readable on 10+ clip runs.
+
 ## 2026-04-19 — Fresh-run cleanup + client-side finalization guard (active)
 - [x] Added fresh-run reset behavior for new incoming share runs: clear `last_run.json` pointer and remove prior run directories before creating a new run skeleton.
 - [x] Added client-side blocking guard in `runOneStateStepPersistent(...)` so uploads are blocked when earlier indices already failed, preventing misleading final-clip 409 finalize attempts.

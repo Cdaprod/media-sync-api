@@ -255,7 +255,21 @@ function createRunSkeletonPersistent(incomingItems) {
       note: "Queued for staging",
       server: null,
       error: null,
+      previewKind: "placeholder",
+      previewUrl: null,
+      previewLabel: null,
+      previewIndexLabel: null,
     };
+
+    const preview = buildPreviewDescriptor({
+      name: item.originalName,
+      kind: item.guessedKind,
+      index1: item.index1,
+    });
+    item.previewKind = preview.previewKind;
+    item.previewUrl = preview.previewUrl;
+    item.previewLabel = preview.previewLabel;
+    item.previewIndexLabel = preview.previewIndexLabel;
 
     items.push({
       ...item,
@@ -448,6 +462,18 @@ function guessKind(path) {
   if ([".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"].includes(ext)) return "image";
   if ([".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"].includes(ext)) return "audio";
   return "unknown";
+}
+
+function buildPreviewDescriptor({ name, kind, index1 }) {
+  const ext = extname(name).replace(".", "").toUpperCase();
+  const fallback = (kind || "FILE").slice(0, 4).toUpperCase();
+  const label = ext || fallback;
+  return {
+    previewKind: "placeholder",
+    previewUrl: null,
+    previewLabel: label,
+    previewIndexLabel: `#${String(index1).padStart(2, "0")}`,
+  };
 }
 
 function normalizeResponseStatus(resp) {
@@ -892,6 +918,57 @@ function buildHTML() {
     padding: 12px;
     margin-bottom: 10px;
   }
+  .card-main {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .card-body {
+    min-width: 0;
+    flex: 1;
+  }
+  .thumb {
+    width: 84px;
+    height: 84px;
+    border-radius: 12px;
+    border: 1px solid #2a2a2a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #1a1a1a, #0f0f0f);
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .thumb-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #d0d0d0;
+    letter-spacing: 0.08em;
+  }
+  .thumb-index {
+    font-size: 11px;
+    color: #9d9d9d;
+  }
+  .thumb.accepted, .thumb.done {
+    border-color: #275c33;
+    background: linear-gradient(180deg, #102315, #0f1b12);
+  }
+  .thumb.failed {
+    border-color: #6a2626;
+    background: linear-gradient(180deg, #2c1010, #1e0e0e);
+  }
+  .thumb.blocked {
+    border-color: #7a5925;
+    background: linear-gradient(180deg, #2a1b07, #1f170d);
+  }
   .row1 {
     display: flex;
     align-items: center;
@@ -944,6 +1021,18 @@ function buildHTML() {
     color: #cfcfcf;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  details.server-details {
+    margin-top: 8px;
+  }
+  details.server-details > summary {
+    font-size: 12px;
+    color: #a7a7a7;
+    cursor: pointer;
+    list-style: none;
+  }
+  details.server-details > summary::-webkit-details-marker {
+    display: none;
   }
   .hidden {
     display: none !important;
@@ -1050,25 +1139,40 @@ function buildHTML() {
     const list = document.getElementById("list");
     list.innerHTML = items.map(item => {
       const badge = esc(item.status || "queued");
+      const previewKind = item.previewKind || "placeholder";
+      const previewLabel = esc(item.previewLabel || "FILE");
+      const previewIndexLabel = esc(item.previewIndexLabel || "");
+      const previewUrl = item.previewUrl ? esc(item.previewUrl) : "";
+      const thumbHtml = previewKind === "data_url" && previewUrl
+        ? '<div class="thumb ' + badge + '"><img src="' + previewUrl + '" alt="preview" /></div>'
+        : '<div class="thumb ' + badge + '">' +
+            '<div class="thumb-label">' + previewLabel + '</div>' +
+            (previewIndexLabel ? '<div class="thumb-index">' + previewIndexLabel + '</div>' : '') +
+          '</div>';
       const serverBlock = item.server
-        ? '<div class="server">' + esc(JSON.stringify(item.server, null, 2)) + '</div>'
+        ? '<details class="server-details"><summary>Server details</summary><div class="server">' + esc(JSON.stringify(item.server, null, 2)) + '</div></details>'
         : '';
 
       return (
         '<div class="card">' +
-          '<div class="row1">' +
-            '<div class="name">' + esc(item.index1) + '. ' + esc(item.originalName) + '</div>' +
-            '<div class="badge ' + badge + '">' + badge + '</div>' +
+          '<div class="card-main">' +
+            thumbHtml +
+            '<div class="card-body">' +
+              '<div class="row1">' +
+                '<div class="name">' + esc(item.index1) + '. ' + esc(item.originalName) + '</div>' +
+                '<div class="badge ' + badge + '">' + badge + '</div>' +
+              '</div>' +
+              '<div class="sub">' +
+                'kind: ' + esc(item.guessedKind) + ' · ' +
+                'readable: ' + esc(item.originalReadableBytesHuman || "--") + ' · ' +
+                'staged: ' + esc(item.stagedBytesHuman || "--") + ' · ' +
+                'method: ' + esc(item.stageMethod || "--") +
+              '</div>' +
+              '<div class="sub" style="margin-top:6px;">' + esc(item.note || "") + '</div>' +
+              (item.error ? '<div class="sub" style="margin-top:6px;color:#ff9b9b;">' + esc(item.error) + '</div>' : '') +
+              '<div class="path">' + esc(item.stagedPath || item.originalPath || "") + '</div>' +
+            '</div>' +
           '</div>' +
-          '<div class="sub">' +
-            'kind: ' + esc(item.guessedKind) + ' · ' +
-            'readable: ' + esc(item.originalReadableBytesHuman || "--") + ' · ' +
-            'staged: ' + esc(item.stagedBytesHuman || "--") + ' · ' +
-            'method: ' + esc(item.stageMethod || "--") +
-          '</div>' +
-          '<div class="sub" style="margin-top:6px;">' + esc(item.note || "") + '</div>' +
-          (item.error ? '<div class="sub" style="margin-top:6px;color:#ff9b9b;">' + esc(item.error) + '</div>' : '') +
-          '<div class="path">' + esc(item.stagedPath || item.originalPath || "") + '</div>' +
           serverBlock +
         '</div>'
       );
@@ -1130,6 +1234,10 @@ async function pushUI(wv, state) {
         status: item?.status ?? "queued",
         note: item?.note ?? null,
         error: item?.error ? short(item.error, 160) : null,
+        previewKind: item?.previewKind ?? "placeholder",
+        previewUrl: item?.previewUrl ?? null,
+        previewLabel: item?.previewLabel ?? null,
+        previewIndexLabel: item?.previewIndexLabel ?? null,
         stagedPath: item?.stagedPath ?? null,
         originalPath: item?.originalPath ?? null,
       })),
