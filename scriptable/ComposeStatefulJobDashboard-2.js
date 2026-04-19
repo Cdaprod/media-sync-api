@@ -1,4 +1,4 @@
-// /scriptable/ComposeJobDashboard.js
+// /scriptable/ComposeStatefulJobDashboard-2.js
 // Name in Scriptable iOS: `ComposeJobDashboard 2.js`
 //
 // WebView queue UI for media compose/upload jobs.
@@ -109,16 +109,68 @@ function loadLatestRecoverableRun() {
   return runs.length > 0 ? runs[0] : null;
 }
 
+function stagePersistentSource(srcPath, stagedPath) {
+  if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
+    return {
+      ok: false,
+      method: null,
+      bytes: null,
+      error: "source_unreadable_or_transient:file_not_found",
+    };
+  }
+
+  try {
+    _fmRun.copy(srcPath, stagedPath);
+    return {
+      ok: true,
+      method: "copy",
+      bytes: _fmRun.fileSize(stagedPath),
+      error: null,
+    };
+  } catch (copyErr) {
+    try {
+      const data = _fmRun.read(srcPath);
+      if (!data) throw new Error("read returned null data");
+      _fmRun.write(stagedPath, data);
+      return {
+        ok: true,
+        method: "read_write",
+        bytes: _fmRun.fileSize(stagedPath),
+        error: null,
+      };
+    } catch (readWriteErr) {
+      try {
+        const data = Data.fromFile(srcPath);
+        if (!data) throw new Error("Data.fromFile returned null data");
+        _fmRun.write(stagedPath, data);
+        return {
+          ok: true,
+          method: "data_from_file",
+          bytes: _fmRun.fileSize(stagedPath),
+          error: null,
+        };
+      } catch (dataErr) {
+        return {
+          ok: false,
+          method: null,
+          bytes: null,
+          error:
+            `source_unreadable_or_transient: copy=${String(copyErr)} read_write=${String(readWriteErr)} data_from_file=${String(dataErr)}`,
+        };
+      }
+    }
+  }
+}
+
 // Create a new run from incoming file paths. This stages all inputs into a
 // persistent directory so that uploads can resume if the script is interrupted.
 function createRunFromIncomingPathsPersistent(paths) {
   const runId = makeRunId(paths.length);
   const runDir = runDirForPersistent(runId);
   const stagedDir = stagedDirForPersistent(runId);
-  // Use the compose URL derived from global constants. Each run uses the same
-  // request URL; the runId is passed via headers.
   const requestUrl = buildComposeUrl();
   const items = [];
+
   for (let i = 0; i < paths.length; i++) {
     const src = paths[i];
     const base = src.split("/").pop() || `item_${i + 1}`;
@@ -134,43 +186,31 @@ function createRunFromIncomingPathsPersistent(paths) {
       stagedPath,
       stagedBytes: null,
       stageMethod: null,
-      status: "staged",
-      note: null,
+      status: "queued",
+      note: "Queued for staging",
       server: null,
       error: null,
     };
-    // Stage file into persistent directory
-    try {
-      _fmRun.copy(src, stagedPath);
-      item.stagedBytes = _fmRun.fileSize(stagedPath);
-      item.stageMethod = "copy";
+
+    const staged = stagePersistentSource(src, stagedPath);
+    if (staged.ok) {
+      item.stagedBytes = staged.bytes;
+      item.stageMethod = staged.method;
       item.status = "staged";
-      item.note = "Staged via copy";
-    } catch (copyErr) {
-      try {
-        // Fallback: read the file via Data.fromFile to handle file provider sources
-        const data = Data.fromFile(src);
-        if (data) {
-          _fmRun.write(stagedPath, data);
-          item.stagedBytes = _fmRun.fileSize(stagedPath);
-          item.stageMethod = "read_write";
-          item.status = "staged";
-          item.note = "Staged via read_write";
-        } else {
-          throw new Error("Data is null");
-        }
-      } catch (rwErr) {
-        item.status = "failed";
-        item.error = `Staging failed: copy=${String(copyErr)} read_write=${String(rwErr)}`;
-        item.note = "Staging failed";
-      }
+      item.note = `Staged via ${staged.method}`;
+    } else {
+      item.status = "failed";
+      item.note = "Staging failed";
+      item.error = staged.error;
     }
+
     items.push({
       ...item,
       originalReadableBytesHuman: humanBytes(item.originalReadableBytes),
       stagedBytesHuman: humanBytes(item.stagedBytes),
     });
   }
+
   const state = {
     meta: {
       project: PROJECT,
@@ -186,6 +226,7 @@ function createRunFromIncomingPathsPersistent(paths) {
     },
     items,
   };
+
   saveRun(state);
   return state;
 }
@@ -879,6 +920,31 @@ async function pushUI(wv, state) {
 // upload
 // --------------------------------------------------
 
+function guessMimeTypeFromPath(path) {
+  const ext = extname(path);
+  if (ext === ".mp4") return "video/mp4";
+  if (ext === ".mov") return "video/quicktime";
+  if (ext === ".m4v") return "video/x-m4v";
+  if (ext === ".avi") return "video/x-msvideo";
+  if (ext === ".mkv") return "video/x-matroska";
+  if (ext === ".webm") return "video/webm";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  return "application/octet-stream";
+}
+
+function addMultipartFileWithFallback(req, filePath, fieldName, filename) {
+  try {
+    req.addFileToMultipart(filePath, fieldName, filename);
+    return "file_path";
+  } catch (_) {
+    const data = Data.fromFile(filePath);
+    if (!data) throw new Error(`Failed to read staged file for multipart fallback: ${filePath}`);
+    req.addFileDataToMultipart(data, guessMimeTypeFromPath(filePath), fieldName, filename);
+    return "file_data";
+  }
+}
+
 async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
   const filename = String(filePath).split("/").pop() || `clip_${fileIndex1}.mov`;
 
@@ -890,7 +956,7 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
     "X-Compose-Count": String(totalCount),
   };
 
-  req.addFileToMultipart(filePath, "files", filename);
+  addMultipartFileWithFallback(req, filePath, "files", filename);
   req.addParameterToMultipart("client", "scriptable-dashboard");
   req.addParameterToMultipart("file_count", "1");
 
@@ -909,7 +975,7 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
       "X-Compose-Index": String(fileIndex1),
       "X-Compose-Count": String(totalCount),
     };
-    req2.addFileToMultipart(filePath, "files", filename);
+    addMultipartFileWithFallback(req2, filePath, "files", filename);
     req2.addParameterToMultipart("client", "scriptable-dashboard");
     req2.addParameterToMultipart("file_count", "1");
 

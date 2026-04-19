@@ -1,3 +1,10 @@
+## 2026-04-19 — Scriptable compose dashboard consolidation + iOS staging hardening (active)
+- [x] Consolidated `/scriptable` to a single canonical Scriptable entrypoint (`ComposeStatefulJobDashboard-2.js`) by removing legacy duplicate variants (`ComposeUpload.js`, `ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) to prevent drift and mismatched behavior.
+- [x] Hardened persistent run import in `createRunFromIncomingPathsPersistent(...)` with explicit source readability checks and ordered staging fallbacks (`copy` → `FileManager.read/write` → `Data.fromFile/write`) so transient provider paths fail with clear `source_unreadable_or_transient` diagnostics instead of ambiguous staging state.
+- [x] Corrected run-item lifecycle truth: items now initialize as `queued` and only transition to `staged` after successful import into Scriptable-owned storage.
+- [x] Added multipart upload attachment fallback in `sendOneClip(...)` (`addFileToMultipart` → `addFileDataToMultipart`) with MIME inference so staged uploads remain resilient when path-based multipart attachment fails.
+- [ ] Next verification step on device: run the Shortcuts share-sheet flow with 10+ clips and confirm dashboard rows move past staging into `accepted`/`done` without `Data null` staging errors.
+
 ## 2026-04-18 — Thumbnail lifecycle completion pass (active)
 - [x] Confirmed post-throttle regression: fallback-first render + boot queue cap reduced startup storm but left stale placeholders after scroll/remount because queue behavior was effectively one-shot.
 - [x] Upgraded `useThumbnailQueue` from boot-only pass to lifecycle queue runner with requeue scheduling on viewport activity (scroll/resize), DOM mutation, and periodic idle passes.
