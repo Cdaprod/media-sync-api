@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react';
 
 import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';
-import type { AssetPointerHandlers } from '../useAssetInteractions';
+import type { AssetPointerHandlers } from '../hooks/useAssetInteractions';
 import type { MediaItem } from '../types';
 import { computeMasonryLayout } from '../explorer/masonry/computeMasonryLayout';
 
@@ -23,7 +23,6 @@ export interface ExplorerAssetViewModel {
   thumbUrl?: string;
   title: string;
   fallbackThumb: string;
-  safeThumbUrl: string;
   activeVideoPreviewUrl?: string;
   previewPlaybackKey: string;
   pointerHandlers: AssetPointerHandlers;
@@ -564,7 +563,7 @@ function AssetGridComponent({
               <div className="thumb">
                 <img
                   className="asset-thumb"
-                  src={viewModel.safeThumbUrl}
+                  src={viewModel.fallbackThumb}
                   alt={viewModel.title}
                   loading="lazy"
                   draggable={false}

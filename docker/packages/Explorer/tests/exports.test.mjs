@@ -15,14 +15,14 @@ test('package exports include entrypoints', () => {
   assert.equal(pkg.exports['./styles.css'], './src/styles.css');
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'thumbnailLoader.ts')));
-  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useThumbnailQueue.ts')));
-  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useAssetInteractions.ts')));
-  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'useTopbarScrollState.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'composeJobs.ts')));
-  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'usePendingComposeJobs.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'usePendingComposeJobs.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'lib', 'gsap.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'topbarMotion.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'ui', 'motion', 'drawerMotion.ts')));
@@ -246,8 +246,131 @@ test('explorer supports all-project media view', () => {
   assert.ok(content.includes('buildThumbFallback'));
 });
 
+test('library snapshot hook owns authoritative snapshot state and single-flight refresh', () => {
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useLibrarySnapshot.ts');
+  const content = fs.readFileSync(hookPath, 'utf8');
+  assert.ok(content.includes('const inflightRef = useRef<Promise<LibrarySnapshot> | null>(null);'));
+  assert.ok(content.includes('const [snapshot, setSnapshot] = useState<LibrarySnapshot | null>(null);'));
+  assert.ok(content.includes('const [sources, setSources] = useState<Source[]>([]);'));
+  assert.ok(content.includes('const [projects, setProjects] = useState<Project[]>([]);'));
+  assert.ok(content.includes('const [assets, setAssets] = useState<MediaItem[]>([]);'));
+  assert.ok(content.includes('const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([]);'));
+  assert.ok(content.includes('const [generatedAt, setGeneratedAt] = useState<string | null>(null);'));
+  assert.ok(content.includes('const [isLoading, setIsLoading] = useState(false);'));
+  assert.ok(content.includes('const [error, setError] = useState(\'\');'));
+  assert.ok(content.includes('const applySnapshot = useCallback((nextSnapshot: LibrarySnapshot) => {'));
+  assert.ok(content.includes('const refreshLibrarySnapshot = useCallback(async (options: LoadLibraryOptions = {}) => {'));
+  assert.ok(content.includes('const clearSnapshotError = useCallback(() => {'));
+});
+
+test('explorer boot + refresh use one aggregate snapshot authority path', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('void refreshLibrarySnapshot({ scope: \'all\' }).finally(() => {'));
+  assert.ok(content.includes('const refreshAll = useCallback(async () => {'));
+  assert.ok(content.includes('const snapshot = await refreshLibrarySnapshot({ scope: \'all\' });'));
+  assert.ok(content.includes('addToast(\'good\', \'Refresh\', \'Reloaded projects + media\', \'explorer-refresh\');'));
+  assert.ok(!content.includes('Promise.allSettled([loadSources(), loadProjects()])'));
+});
+
+test('explorer command extraction exists and scoped aggregate refresh is wired', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const commandsHookPath = path.join(packageRoot, 'src', 'hooks', 'useExplorerCommands.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const commands = fs.readFileSync(commandsHookPath, 'utf8');
+  assert.ok(explorer.includes("import { useExplorerCommands } from './hooks/useExplorerCommands';"));
+  assert.ok(explorer.includes("import { useExplorerUiState } from './hooks/useExplorerUiState';"));
+  assert.ok(explorer.includes('} = useExplorerUiState({'));
+  assert.ok(explorer.includes('const {\n    handleComposeCompletion,\n    composeMediaCommand,\n    uploadMediaCommand,\n    uploadMediaBatchCommand,\n    sendToProgramMonitorCommand,\n    pushToObsCommand,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
+  assert.ok(explorer.includes('onCompletedRefreshScope: handleComposeCompletion,'));
+  assert.ok(explorer.includes('scope: \'project\''));
+  assert.ok(explorer.includes('await tagSingleMediaItem(focused, addTags, removeTags, \'Tag\');'));
+  assert.ok(explorer.includes('const response = await composeMediaCommand({'));
+  assert.ok(explorer.includes('const result = await uploadMediaCommand({'));
+  assert.ok(explorer.includes('await uploadMediaBatchCommand({'));
+  assert.ok(explorer.includes('await sendToProgramMonitorCommand({'));
+  assert.ok(explorer.includes('await pushToObsCommand({'));
+  assert.ok(explorer.includes('await resolveMediaCommand({'));
+  assert.ok(!explorer.includes('window.open(monitorUrl,'));
+  assert.ok(!explorer.includes('obsPushBrowserMedia'));
+  assert.ok(commands.includes('export function useExplorerCommands(args: UseExplorerCommandsArgs) {'));
+  assert.ok(commands.includes('const refreshAfterScopedMutation = useCallback(async (scope: RefreshScope | null) => {'));
+  assert.ok(commands.includes('const refreshAfterMutation = useCallback(async (scope: RefreshScope | null | undefined) => {'));
+  assert.ok(commands.includes('const tagSingleMediaItem = useCallback(async ('));
+  assert.ok(commands.includes('const handleComposeCompletion = useCallback(async (scope: RefreshScope | null | undefined) => {'));
+  assert.ok(commands.includes('const composeMediaCommand = useCallback(async (command: ComposeMediaCommand) => {'));
+  assert.ok(commands.includes('const uploadMediaCommand = useCallback(async (command: UploadMediaCommand) => {'));
+  assert.ok(commands.includes('const uploadMediaBatchCommand = useCallback(async (command: UploadMediaBatchCommand) => {'));
+  assert.ok(commands.includes('const sendToProgramMonitorCommand = useCallback(async (command: ProgramMonitorCommand) => {'));
+  assert.ok(commands.includes('const pushToObsCommand = useCallback(async (command: ObsPushCommand) => {'));
+  assert.ok(commands.includes('const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {'));
+  assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
+  assert.ok(commands.includes('await refreshMediaForScope(scope);'));
+  const pendingComposeHookIndex = explorer.indexOf('} = usePendingComposeJobs({');
+  const visiblePendingComposeIndex = explorer.indexOf('const visiblePendingComposeItems = useMemo(() => {');
+  const pendingEntriesMemoIndex = explorer.indexOf('const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({');
+  const pendingEntriesDependencyIndex = explorer.indexOf('pendingEntries.length');
+  assert.ok(pendingComposeHookIndex >= 0);
+  assert.ok(visiblePendingComposeIndex > pendingComposeHookIndex);
+  assert.ok(pendingEntriesMemoIndex > visiblePendingComposeIndex);
+  assert.ok(pendingEntriesDependencyIndex > pendingEntriesMemoIndex);
+});
+
+test('explorer ui-state seam owns root-local modal/surface/runtime state cluster', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const content = fs.readFileSync(uiStatePath, 'utf8');
+  assert.ok(content.includes('export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {'));
+  assert.ok(content.includes('const [view, setView] = useState<ExplorerView>(defaultView);'));
+  assert.ok(content.includes("const [typeFilter, setTypeFilter] = useState<MediaTypeFilter>('all');"));
+  assert.ok(content.includes("const [sortKey, setSortKey] = useState<SortKey>('newest');"));
+  assert.ok(content.includes('const [gridColumnCount, setGridColumnCount] = useState(defaultGridColumns);'));
+  assert.ok(content.includes('const [overlayEnabled, setOverlayEnabled] = useState(true);'));
+  assert.ok(content.includes('const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);'));
+  assert.ok(content.includes('const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);'));
+  assert.ok(content.includes('const [sidebarOpen, setSidebarOpen] = useState(false);'));
+  assert.ok(content.includes('const [actionsOpen, setActionsOpen] = useState(false);'));
+  assert.ok(content.includes('const [dragActive, setDragActive] = useState(false);'));
+  assert.ok(content.includes('const [isMobile, setIsMobile] = useState(false);'));
+  assert.ok(content.includes('const [touchPinchCapable, setTouchPinchCapable] = useState(false);'));
+  assert.ok(content.includes("const [uploadStatus, setUploadStatus] = useState('');"));
+  assert.ok(content.includes('const [contentLoading, setContentLoading] = useState(false);'));
+  assert.ok(content.includes('const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);'));
+  assert.ok(content.includes("const [resolveProjectMode, setResolveProjectMode] = useState('current');"));
+  assert.ok(content.includes("const [resolveProjectName, setResolveProjectName] = useState('');"));
+  assert.ok(content.includes("const [resolveNewName, setResolveNewName] = useState('');"));
+  assert.ok(content.includes("const [resolveMode, setResolveMode] = useState('import');"));
+  assert.ok(content.includes("const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');"));
+  assert.ok(content.includes("const [previewObsSlot, setPreviewObsSlot] = useState('1');"));
+  assert.ok(content.includes('const [previewObsExclusive, setPreviewObsExclusive] = useState(false);'));
+  assert.ok(content.includes('const [inspectorOpen, setInspectorOpen] = useState(false);'));
+  assert.ok(content.includes('const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);'));
+  assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);'));
+  assert.ok(content.includes('const [composeModalOpen, setComposeModalOpen] = useState(false);'));
+  assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
+  assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
+  assert.ok(content.includes('return {'));
+  assert.ok(!explorer.includes('const [sidebarOpen, setSidebarOpen] = useState(false);'));
+  assert.ok(!explorer.includes('const [actionsOpen, setActionsOpen] = useState(false);'));
+  assert.ok(!explorer.includes('const [dragActive, setDragActive] = useState(false);'));
+  assert.ok(!explorer.includes('const [isMobile, setIsMobile] = useState(false);'));
+  assert.ok(!explorer.includes('const [touchPinchCapable, setTouchPinchCapable] = useState(false);'));
+  assert.ok(!explorer.includes("const [uploadStatus, setUploadStatus] = useState('');"));
+  assert.ok(!explorer.includes('const [contentLoading, setContentLoading] = useState(false);'));
+  assert.ok(!explorer.includes('const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);'));
+  assert.ok(!explorer.includes("const [resolveProjectMode, setResolveProjectMode] = useState('current');"));
+  assert.ok(!explorer.includes("const [resolveProjectName, setResolveProjectName] = useState('');"));
+  assert.ok(!explorer.includes("const [resolveNewName, setResolveNewName] = useState('');"));
+  assert.ok(!explorer.includes("const [resolveMode, setResolveMode] = useState('import');"));
+  assert.ok(!explorer.includes("const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');"));
+  assert.ok(!explorer.includes("const [previewObsSlot, setPreviewObsSlot] = useState('1');"));
+  assert.ok(!explorer.includes('const [previewObsExclusive, setPreviewObsExclusive] = useState(false);'));
+  assert.ok(!explorer.includes('const [inspectorOpen, setInspectorOpen] = useState(false);'));
+});
+
 test('asset tile preview open path requires second tap intent and keeps focus separate from selection', () => {
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
@@ -463,12 +586,14 @@ test('asset tile preview open path requires second tap intent and keeps focus se
 
 test('topbar interaction boundaries protect header controls and nearby asset selectors', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const uiState = fs.readFileSync(uiStatePath, 'utf8');
   const utils = fs.readFileSync(utilsPath, 'utf8');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
@@ -494,8 +619,8 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes('const mediaContentRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes('const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);'));
   assert.ok(explorer.includes("const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);"));
-  assert.ok(explorer.includes('const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);'));
-  assert.ok(explorer.includes('const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);'));
+  assert.ok(uiState.includes('const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);'));
+  assert.ok(uiState.includes('const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);'));
   assert.ok(explorer.includes('const topbarInsetPrevRef = useRef(0);'));
   assert.ok(explorer.includes('const updateTopbarMeasuredHeight = () => {'));
   assert.ok(explorer.includes('const observer = new ResizeObserver(() => updateTopbarMeasuredHeight());'));
@@ -514,9 +639,9 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
   assert.ok(explorer.includes("topbar.addEventListener('toggle', handleDropdownToggle, true);"));
   assert.ok(explorer.includes("topbar.removeEventListener('toggle', handleDropdownToggle, true);"));
   assert.ok(explorer.includes('rootRef: mediaContentRef,'));
-  assert.ok(explorer.includes('scrollRef: mediaScrollViewportRef,'));
+  assert.ok(explorer.includes('scrollEl: mediaScrollViewportEl,'));
   assert.ok(explorer.includes('ref={mediaContentRef}'));
-  assert.ok(explorer.includes('ref={mediaScrollViewportRef}'));
+  assert.ok(explorer.includes('ref={setMediaScrollViewportNode}'));
   assert.ok(explorer.includes('className="scroll"'));
   assert.ok(explorer.includes("data-topbar-hidden={topbarHidden ? 'true' : 'false'}"));
   assert.ok(explorer.includes("style={{ '--topbar-measured-height': `${topbarMeasuredHeight}px` } as React.CSSProperties}"));
@@ -548,7 +673,7 @@ test('topbar interaction boundaries protect header controls and nearby asset sel
 });
 
 test('pending compose recovery reconciles stale restored jobs and prefers real assets over zombie placeholders', () => {
-  const hookPath = path.join(packageRoot, 'src', 'usePendingComposeJobs.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'usePendingComposeJobs.ts');
   const jobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const jobs = fs.readFileSync(jobsPath, 'utf8');
@@ -568,7 +693,11 @@ test('pending compose recovery reconciles stale restored jobs and prefers real a
 
 test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const commandsHookPath = path.join(packageRoot, 'src', 'hooks', 'useExplorerCommands.ts');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const commands = fs.readFileSync(commandsHookPath, 'utf8');
+  const uiState = fs.readFileSync(uiStatePath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
   assert.ok(content.includes('Select one or more video clips'));
   assert.ok(content.includes("addToast('warn', 'Compose', 'Select one or more clips')"));
@@ -577,17 +706,18 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('setComposeModalOpen(true);'));
   assert.ok(content.includes('{composeModalRendered ? ('));
   assert.ok(content.includes('className="compose-modal open"'));
-  assert.ok(content.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
+  assert.ok(uiState.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
   assert.ok(content.includes('data-compose-project-picker="1"'));
   assert.ok(content.includes('onSubmit={(event) => {'));
   assert.ok(content.includes('className="btn good" type="submit" disabled={composeSubmitting}'));
   assert.ok(content.includes("registerAcceptedJob({ envelope: response as ComposeJobEnvelope });"));
-  assert.ok(content.includes("addToast('good', 'Compose', 'Compose started');"));
-  assert.ok(content.includes("addToast('good', 'Compose', 'Compose completed');"));
-  assert.ok(content.includes("addToast('bad', 'Compose', 'Compose failed');"));
-  assert.ok(content.includes('target_dir: \'exports\''));
-  assert.ok(content.includes("mode: 'encode'"));
-  assert.ok(content.includes('allow_overwrite: false,'));
+  assert.ok(content.includes('const response = await composeMediaCommand({'));
+  assert.ok(commands.includes("addToast('good', title, 'Compose started');"));
+  assert.ok(commands.includes("addToast('good', 'Compose', 'Compose completed');"));
+  assert.ok(commands.includes("const message = err instanceof Error ? err.message : 'Compose failed';"));
+  assert.ok(commands.includes('target_dir: \'exports\''));
+  assert.ok(commands.includes("mode: 'encode'"));
+  assert.ok(commands.includes('allow_overwrite: false,'));
   assert.ok(content.includes('if (composeSubmitting) {'));
   assert.ok(content.includes('setComposeSubmitting(true);'));
   assert.ok(content.includes('setComposeSubmitting(false);'));
@@ -612,13 +742,13 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(!composeBlock.includes('window.prompt('));
   const confirmEnd = content.indexOf('const handleResolve = useCallback(async () => {', composeEnd);
   const confirmBlock = content.slice(composeEnd, confirmEnd);
-  assert.ok(confirmBlock.includes("mode: 'encode'"));
+  assert.ok(confirmBlock.includes('const response = await composeMediaCommand({'));
   assert.ok(!confirmBlock.includes("mode: 'auto'"));
   assert.ok(confirmBlock.includes("registerAcceptedJob({ envelope: response as ComposeJobEnvelope });"));
   assert.ok(!confirmBlock.includes('await loadProjects();'));
   assert.ok(!confirmBlock.includes('await loadAllMedia();'));
   assert.ok(!confirmBlock.includes('await loadMedia(activeProject);'));
-  assert.ok(confirmBlock.includes('} finally {'));
+  assert.ok(confirmBlock.includes('setComposeSubmitting(false);'));
 });
 
 test('pending compose modules and render wiring are present', () => {
@@ -626,7 +756,7 @@ test('pending compose modules and render wiring are present', () => {
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const cardPath = path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'usePendingComposeJobs.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'usePendingComposeJobs.ts');
   const jobsPath = path.join(packageRoot, 'src', 'composeJobs.ts');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
@@ -637,7 +767,7 @@ test('pending compose modules and render wiring are present', () => {
 
   assert.ok(explorer.includes("const {\n    pendingComposeItems,\n    registerAcceptedJob,\n    removePendingJob,\n  } = usePendingComposeJobs({"));
   assert.ok(explorer.includes("fetchJson: fetchComposeJobJson,"));
-  assert.ok(explorer.includes("onCompletedRefreshScope: async (refreshScope) => {"));
+  assert.ok(explorer.includes("onCompletedRefreshScope: handleComposeCompletion,"));
   assert.ok(explorer.includes("entries={renderedMediaEntries}"));
   assert.ok(explorer.includes("items={renderedMediaEntries}"));
   assert.ok(explorer.includes("onDismissPendingJob={removePendingJob}"));
@@ -645,7 +775,8 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(explorer.includes("const hydrateProjectMediaItems = useCallback((items: MediaItem[], project: { name: string; source?: string | null }): MediaItem[] => ("));
   assert.ok(explorer.includes('mergeMediaItemsPreservingIdentity(current, hydratedItems)'));
   assert.ok(explorer.includes('buildMediaIdentityKey(item, projectOverride)'));
-  assert.ok(explorer.includes("const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'"));
+  assert.ok(explorer.includes('const fallbackThumb = buildThumbFallback(kind);'));
+  assert.ok(!explorer.includes("const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'"));
   assert.ok(grid.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
   assert.ok(grid.includes("if (entry.kind === 'pending') {"));
   assert.ok(list.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
@@ -703,12 +834,15 @@ test('pending compose modules and render wiring are present', () => {
 
 test('package explorer delete actions route through custom confirmation modal', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
+  const uiState = fs.readFileSync(uiStatePath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
-  assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
-  assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
-  assert.ok(content.includes('const performDeleteMediaSelection = useCallback('));
+  assert.ok(uiState.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
+  assert.ok(uiState.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
+  assert.ok(content.includes('performDeleteMediaSelection,'));
+  assert.ok(content.includes('} = useExplorerCommands({'));
   assert.ok(content.includes('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {'));
   assert.ok(content.includes('setPendingDeleteSelectionKeys(resolveSelectionKeysForItems(items));'));
   assert.ok(content.includes('setDeleteModalOpen(true);'));
@@ -826,22 +960,30 @@ test('OBS websocket helper includes browser source defaults', () => {
 test('explorer queues thumbnail loads from server urls', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const listPath = path.join(packageRoot, 'src', 'components', 'AssetList.tsx');
   const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
-  const hookPath = path.join(packageRoot, 'src', 'useThumbnailQueue.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts');
   const statePath = path.join(packageRoot, 'src', 'state.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const gridContent = fs.readFileSync(gridPath, 'utf8');
+  const list = fs.readFileSync(listPath, 'utf8');
   const loaderContent = fs.readFileSync(loaderPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const stateContent = fs.readFileSync(statePath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
   assert.ok(content.includes('useThumbnailQueue({'));
+  assert.ok(content.includes('isThumbableRelativePath(item.relative_path)'));
   assert.ok(content.includes('thumbDatasetSignature'));
   assert.ok(content.includes('buildThumbJobKey('));
   assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';"));
   assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;"));
   assert.ok(gridContent.includes('data-thumb-url'));
+  assert.ok(gridContent.includes('src={viewModel.fallbackThumb}'));
+  assert.ok(list.includes('src={viewModel.fallbackThumb}'));
+  assert.ok(!gridContent.includes('src={viewModel.safeThumbUrl}'));
+  assert.ok(!list.includes('src={viewModel.safeThumbUrl}'));
+  assert.ok(!content.includes('const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== \'error\''));
   assert.ok(content.includes('CONTENT_LOADING_DELAY_MS'));
   assert.ok(content.includes('pendingDataLoadOverlay'));
   assert.ok(content.includes('dynamicOrientations'));
@@ -912,6 +1054,8 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('endContentLoading'));
   assert.ok(loaderContent.includes('export const THUMB_LOAD_TIMEOUT_MS = 8000;'));
   assert.ok(loaderContent.includes('thumbLoadStateCache'));
+  assert.ok(loaderContent.includes('const THUMBNAILABLE_EXTENSIONS = new Set'));
+  assert.ok(loaderContent.includes('export const isThumbableRelativePath = (relativePath?: string): boolean => {'));
   assert.ok(loaderContent.includes('const ensureThumbLoad = ('));
   assert.ok(loaderContent.includes("target.addEventListener('load', handleLoad, { once: true });"));
   assert.ok(loaderContent.includes("target.addEventListener('error', handleError, { once: true });"));
@@ -919,11 +1063,23 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(loaderContent.includes('thumbLoadedKey'));
   assert.ok(hookContent.includes('requiresThumbNodeSync'));
   assert.ok(hookContent.includes('hasPendingThumbNetworkLoad'));
+  assert.ok(hookContent.includes('const THUMB_QUEUE_VIEWPORT_BUFFER_PX = 320;'));
+  assert.ok(hookContent.includes('const THUMB_QUEUE_BOOT_MAX_TARGETS = 24;'));
+  assert.ok(hookContent.includes('const THUMB_QUEUE_REQUEUE_DELAY_MS = 90;'));
+  assert.ok(hookContent.includes('const THUMB_QUEUE_IDLE_REQUEUE_MS = 1400;'));
+  assert.ok(hookContent.includes('const nearViewportTargets = syncTargets.filter((target) => isNearViewportTarget(target, root));'));
+  assert.ok(hookContent.includes('const relevantTargets = nearViewportTargets.length ? nearViewportTargets : syncTargets;'));
+  assert.ok(hookContent.includes('const hasRemaining = relevantTargets.some((target) => requiresThumbNodeSync(target));'));
+  assert.ok(hookContent.includes('scrollHost?.addEventListener(\'scroll\', onViewportActivity, { passive: true });'));
+  assert.ok(hookContent.includes('const idleInterval = window.setInterval(() => scheduleQueuePass(), THUMB_QUEUE_IDLE_REQUEUE_MS);'));
+  assert.ok(hookContent.includes('const domObserver = new MutationObserver(() => scheduleQueuePass());'));
+  assert.ok(hookContent.includes('remainingSyncTargets: Math.max(0, relevantTargets.length - queueTargets.length),'));
+  assert.ok(hookContent.includes('__explorerThumbQueueDebug'));
   assert.ok(content.includes('project_source'));
 });
 
 test('package explorer interaction handlers do not trigger loading overlay state', () => {
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const content = fs.readFileSync(hookPath, 'utf8');
   const start = content.indexOf('const buildAssetPointerHandlers = useCallback(');
   const end = content.indexOf('return {', start);
@@ -939,7 +1095,7 @@ test('package explorer interaction handlers do not trigger loading overlay state
 
 test('package explorer context menu opens only on deliberate long press or context click', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const pointerSessionPath = path.join(packageRoot, 'src', 'explorer', 'interactions', 'pointerSession.ts');
   const explorerContent = fs.readFileSync(explorerPath, 'utf8');
   const content = fs.readFileSync(hookPath, 'utf8');
@@ -1034,20 +1190,23 @@ test('package explorer context menu styles are explicit and stable', () => {
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useThumbnailQueue.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   assert.ok(content.includes('setPendingDataLoadOverlay(true);'));
   assert.ok(content.includes('setPendingDataLoadOverlay(false);'));
-  assert.ok(hookContent.includes('const shouldShowOverlay = pendingDataLoadOverlay && syncTargets.some((target) => hasPendingThumbNetworkLoad(target));'));
+  assert.ok(hookContent.includes('const shouldShowOverlay = pendingDataLoadOverlay && queueTargets.some((target) => hasPendingThumbNetworkLoad(target));'));
   assert.ok(hookContent.includes('const loadingToken = shouldShowOverlay ? beginContentLoading() : 0;'));
   assert.ok(hookContent.includes('clearPendingDataLoadOverlay();'));
+  assert.ok(hookContent.includes('queueThumbLoads(queueTargets, THUMB_LOAD_TIMEOUT_MS, updateCardOrientation)'));
+  assert.ok(hookContent.includes('window.clearInterval(idleInterval);'));
+  assert.ok(hookContent.includes('domObserver.disconnect();'));
 });
 
 
 test('package explorer uses static-parity asset interaction semantics', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
@@ -1066,7 +1225,7 @@ test('package explorer uses static-parity asset interaction semantics', () => {
 });
 
 test('package explorer suppresses default context menu in tile preview zone', () => {
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const content = fs.readFileSync(hookPath, 'utf8');
   assert.ok(content.includes('const handleContextMenu = (event: React.MouseEvent<HTMLElement>) => {'));
   assert.ok(content.includes('event.preventDefault();'));
@@ -1085,7 +1244,7 @@ test('package explorer styles include static-parity selected glow and order badg
 
 test('package explorer topbar layout follows static two-row structure', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useTopbarScrollState.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
@@ -1135,10 +1294,44 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('createPinchDensityController({'));
   assert.ok(content.includes('getClassHostEl: () => mediaContentRef.current,'));
   assert.ok(content.includes('id="asset-density-slider"'));
-  assert.ok(content.includes('const OVERLAY_VIS_PREFS_KEY = \'media-sync-explorer-overlay-enabled-v1\';'));
-  assert.ok(content.includes('const [overlayEnabled, setOverlayEnabled] = useState(true);'));
-  assert.ok(content.includes('window.localStorage.getItem(OVERLAY_VIS_PREFS_KEY)'));
-  assert.ok(content.includes('window.localStorage.setItem(OVERLAY_VIS_PREFS_KEY, overlayEnabled ? \'1\' : \'0\');'));
+  assert.ok(content.includes('const RETAINED_UI_PREFS_KEY = \'media-sync-explorer-ui-prefs-v1\';'));
+  assert.ok(content.includes('const parseStoredJsonObject = (raw: string | null): Record<string, unknown> | null => {'));
+  assert.ok(content.includes('const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {'));
+  assert.ok(content.includes('if (!isThumbableRelativePath(item.relative_path)) {'));
+  assert.ok(content.includes("return kind === 'image' ? normalizeThumbUrl(item.stream_url || '') : undefined;"));
+  assert.ok(content.includes('const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);'));
+  assert.ok(content.includes('window.localStorage.getItem(RETAINED_UI_PREFS_KEY)'));
+  assert.ok(content.includes('setRetainedPrefsHydrated(false);'));
+  assert.ok(content.includes('setRetainedPrefsHydrated(true);'));
+  assert.ok(content.includes('if (!retainedPrefsHydrated) {'));
+  assert.ok(content.includes('const retainedParsed = parseStoredJsonObject(retainedRaw);'));
+  assert.ok(content.includes('malformedRetainedPayload: Boolean(retainedRaw) && !retainedParsed,'));
+  assert.ok(content.includes('restoreSource: \'retained\' | \'legacy\' | \'none\';'));
+  assert.ok(content.includes('hydrated: true,'));
+  assert.ok(content.includes('saveSkippedUntilHydrated: true,'));
+  assert.ok(content.includes('saveSkippedUntilHydrated: false,'));
+  assert.ok(content.includes('hydrated: retainedPrefsHydrated,'));
+  assert.ok(content.includes('__explorerRetainedPrefsDebug'));
+  assert.ok(content.includes('gridColumnCount: clampLayoutColumns(gridColumnCount),'));
+  assert.ok(content.includes('const restoredColumns = clampLayoutColumns(retainedParsed.gridColumnCount);'));
+  assert.ok(content.includes('lastCommittedColumnsRef.current = restoredColumns;'));
+  assert.ok(content.includes('setGridColumnCount(restoredColumns);'));
+  assert.ok(content.includes('if (storedView === \'grid\' || storedView === \'list\') {'));
+  assert.ok(content.includes('if (VALID_SORT_KEYS.has(retainedParsed.sortKey as SortKey)) {'));
+  assert.ok(content.includes('if (VALID_TYPE_FILTERS.has(retainedParsed.typeFilter as MediaTypeFilter)) {'));
+  assert.ok(content.includes('if (typeof retainedParsed.selectedOnly === \'boolean\') {'));
+  assert.ok(content.includes('if (typeof retainedParsed.untaggedOnly === \'boolean\') {'));
+  assert.ok(content.includes('if (typeof retainedParsed.overlayEnabled === \'boolean\') {'));
+  assert.ok(content.includes('sortKey,'));
+  assert.ok(content.includes('typeFilter,'));
+  assert.ok(content.includes('selectedOnly,'));
+  assert.ok(content.includes('untaggedOnly,'));
+  assert.ok(content.includes('overlayEnabled,'));
+  assert.ok(content.includes('retainedPrefsHydrated,'));
+  assert.ok(content.includes('if (kind === \'video\') {'));
+  assert.ok(content.includes('return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || \'\');'));
+  assert.ok(content.includes('const legacyFilterParsed = parseStoredJsonObject(window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY));'));
+  assert.ok(content.includes('window.localStorage.getItem(LEGACY_OVERLAY_VIS_PREFS_KEY)'));
   assert.ok(content.includes('Overlays: {overlayEnabled ? \'On\' : \'Off\'}'));
   assert.ok(content.includes("overlayEnabled ? '' : 'overlay-hidden'"));
   assert.ok(content.includes('data-density-pinch-surface="true"'));
@@ -1389,6 +1582,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(focusMotion.includes('if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || !Number.isFinite(scale)) {'));
   assert.ok(renderTypes.includes('export type FocusSceneSnapshot'));
   assert.ok(sceneSnapshot.includes('export function captureFocusSceneSnapshot'));
+  assert.ok(sceneSnapshot.includes('function readRenderableCardThumbUrl(img: HTMLImageElement | null | undefined) {'));
+  assert.ok(sceneSnapshot.includes('const liveSrc = String(img.currentSrc || img.src || \'\').trim();'));
+  assert.ok(!sceneSnapshot.includes('img?.dataset.thumbUrl'));
   assert.ok(sceneSnapshot.includes('const ambientNeighborLimit = Math.min(Math.max(0, maxCards - 1), 8);'));
   assert.ok(sceneSnapshot.includes('sampledEls = [activeEl, ...neighbors];'));
   assert.ok(cameraController.includes('export function computeCameraStateForTarget'));
@@ -1402,6 +1598,9 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(proxyRenderer.includes('private activeSelectionKey = \'\';'));
   assert.ok(proxyRenderer.includes('private activeVideoEl: HTMLVideoElement | null = null;'));
   assert.ok(proxyRenderer.includes('private renderPassCount = 0;'));
+  assert.ok(proxyRenderer.includes('private getRenderableThumbUrl(card: RenderCardSnapshot) {'));
+  assert.ok(proxyRenderer.includes('private escapeHtmlAttr(value: string) {'));
+  assert.ok(proxyRenderer.includes('.replaceAll(\'&\', \'&amp;\')'));
   assert.ok(proxyRenderer.includes('<div class=\"proxy-render-ambient-layer\" data-focus-proxy-layer=\"true\"></div>'));
   assert.ok(proxyRenderer.includes('<div class=\"proxy-render-active-layer\" data-focus-proxy-layer=\"true\"></div>'));
   assert.ok(proxyRenderer.includes('data-focus-proxy-layer=\"true\"'));
@@ -1565,7 +1764,7 @@ test('motion architecture keeps density, drawer, toast, and topbar contracts exp
   assert.ok(densityController.includes('window.cancelAnimationFrame(scrubFrameId);'));
   assert.ok(content.includes('scheduleGridColumnCommit(nextColumns);'));
   assert.ok(content.includes('setGridColumnCount((prev) => (prev === pendingColumns ? prev : pendingColumns));'));
-  assert.ok(content.includes('const [touchPinchCapable, setTouchPinchCapable] = useState(false);'));
+  assert.ok(content.includes('touchPinchCapable,'));
   assert.ok(content.includes('const hasMultiTouch = (window.navigator.maxTouchPoints || 0) > 1;'));
   assert.ok(content.includes('setTouchPinchCapable(coarsePointer || hasMultiTouch);'));
   assert.ok(!densityController.includes('setTimeout('));
@@ -1864,7 +2063,7 @@ test('density controller keeps committed columns as single truth and mobile clam
 
 test('density-related local interactions remain layout-only and do not trigger boot/data loaders', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const hookPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
 
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const hook = fs.readFileSync(hookPath, 'utf8');
@@ -2125,14 +2324,16 @@ test('density controls preserve slider UI and do not regress to mobile stepper-o
 
 test('committed density value is mirrored consistently into layout UI attributes and readout', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
   const controllerPath = path.join(packageRoot, 'src', 'explorer', 'density', 'createExplorerDensityController.ts');
 
   const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const uiState = fs.readFileSync(uiStatePath, 'utf8');
   const grid = fs.readFileSync(gridPath, 'utf8');
   const controller = fs.readFileSync(controllerPath, 'utf8');
 
-  assert.ok(explorer.includes('const [gridColumnCount, setGridColumnCount] = useState('));
+  assert.ok(uiState.includes('const [gridColumnCount, setGridColumnCount] = useState(defaultGridColumns);'));
   assert.ok(explorer.includes('onColumnsCommit: (next) => {') || explorer.includes('onColumnsCommit'));
   assert.ok(grid.includes('data-density-columns={gridColumnCount}'));
   assert.ok(controller.includes('gridEl.dataset.columns = String(currentColumns);') || controller.includes('gridEl.dataset.columns'));
@@ -2213,7 +2414,7 @@ test('no generic load-failure console spam contract should remain in explorer-fa
   const filesToCheck = [
     path.join(packageRoot, 'src', 'ExplorerApp.tsx'),
     path.join(packageRoot, 'src', 'thumbnailLoader.ts'),
-    path.join(packageRoot, 'src', 'useThumbnailQueue.ts'),
+    path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts'),
     path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx'),
     path.join(packageRoot, 'src', 'AssetPreviewPanel.tsx'),
   ];
@@ -2450,7 +2651,7 @@ test('pinch shader overlay mounts as a visual-only layer and exposes safe pulse/
   const holdOverlayPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'hold', 'HoldShaderOverlay.tsx');
   const coreHelperPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'core', 'createFullscreenWebGLProgram.ts');
   const sharedTypesPath = path.join(packageRoot, 'src', 'ui', 'shaders', 'shared', 'interactionShaderTypes.ts');
-  const interactionsPath = path.join(packageRoot, 'src', 'useAssetInteractions.ts');
+  const interactionsPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
 
@@ -2682,6 +2883,41 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes("viewport?.addEventListener('scroll', captureViewportSnapshot);"));
   assert.ok(content.includes('__explorerViewportDebug'));
   assert.ok(content.includes('__explorerLoadFailureDebug'));
+  assert.ok(content.includes('__explorerNetworkFailureDebug'));
+  assert.ok(content.includes("type LoadFailureEmitter = 'asset-grid' | 'asset-list' | 'proxy-render' | 'other';"));
+  assert.ok(content.includes("type NetworkFailureLane ="));
+  assert.ok(content.includes('const classifyEmitter = (target: HTMLElement): LoadFailureEmitter => {'));
+  assert.ok(content.includes('const classifyNetworkLane = ({'));
+  assert.ok(content.includes("if (normalizedUrl.includes('/_next/')) return 'next-static';"));
+  assert.ok(content.includes("if (normalizedTag === 'SCRIPT') return 'script';"));
+  assert.ok(content.includes("if (source === 'promise-rejection') return 'promise-rejection';"));
+  assert.ok(content.includes('const shouldSuppressMediaError = (target: HTMLElement) => {'));
+  assert.ok(content.includes('const recentEvents: LoadFailureEvent[] = [];'));
+  assert.ok(content.includes('const networkRecentEvents: NetworkFailureEvent[] = [];'));
+  assert.ok(content.includes('const MAX_NETWORK_RECENT_EVENTS = 120;'));
+  assert.ok(content.includes('const networkLaneTotals: Record<NetworkFailureLane, number> = {'));
+  assert.ok(content.includes('const onUnhandledRejection = (event: PromiseRejectionEvent) => {'));
+  assert.ok(content.includes('const shouldSuppressGenericLoadFailedRejection = ({'));
+  assert.ok(content.includes('const suppressUnhandledRejectionDefault = (event: PromiseRejectionEvent) => {'));
+  assert.ok(content.includes("if (message !== 'Load failed') return false;"));
+  assert.ok(content.includes('if (reasonStack.trim().length > 0) return false;'));
+  assert.ok(content.includes('suppressedDefault: shouldSuppressDefault,'));
+  assert.ok(content.includes('suppressUnhandledRejectionDefault(event);'));
+  assert.ok(content.includes('event.stopImmediatePropagation?.();'));
+  assert.ok(content.includes('window.addEventListener(\'unhandledrejection\', onUnhandledRejection, true);'));
+  assert.ok(content.includes('const MAX_RECENT_EVENTS = 80;'));
+  assert.ok(content.includes('suppressedCount: suppressed ? 1 : 0,'));
+  assert.ok(content.includes('lastDataset: dataset,'));
+  assert.ok(content.includes('lastTargetPath: targetPath,'));
+  assert.ok(content.includes('laneTotals: { ...networkLaneTotals },'));
+  assert.ok(content.includes('emitterTotals: Array.from(loadFailures.values()).reduce'));
+  assert.ok(content.includes('recentEvents: recentEvents.map((event) => ({ ...event })),'));
+  assert.ok(content.includes('recentEvents: networkRecentEvents.map((event) => ({ ...event })),'));
+  assert.ok(content.includes('const getTargetDatasetSnapshot = (target: HTMLElement): Record<string, string> => {'));
+  assert.ok(content.includes('const getTargetPath = (target: HTMLElement) => ('));
+  assert.ok(content.includes('suppressedMediaErrorCount,'));
+  assert.ok(content.includes("if (target.closest('.proxy-render-card,.focus-proxy-root')) return 'proxy-render';"));
+  assert.ok(content.includes('event.stopImmediatePropagation?.();'));
   assert.ok(content.includes('viewportMeta: readViewportMeta()'));
   assert.ok(content.includes('pageScaleLike'));
   assert.ok(styles.includes('height: var(--explorer-visual-viewport-height, 100%);'));

@@ -38,11 +38,11 @@ import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewP
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { normalizePreviewAsset } from './previewAdapter';
-import { buildThumbJobKey, getThumbCacheKey, getThumbLoadState, normalizeThumbUrl } from './thumbnailLoader';
-import { usePendingComposeJobs } from './usePendingComposeJobs';
-import { useAssetInteractions } from './useAssetInteractions';
-import { useThumbnailQueue } from './useThumbnailQueue';
-import { useTopbarScrollState } from './useTopbarScrollState';
+import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
+import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
+import { useAssetInteractions } from './hooks/useAssetInteractions';
+import { useThumbnailQueue } from './hooks/useThumbnailQueue';
+import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -64,6 +64,9 @@ import PinchShaderOverlay from './ui/shaders/pinch/PinchShaderOverlay';
 import TapShaderOverlay from './ui/shaders/tap/TapShaderOverlay';
 import HoldShaderOverlay from './ui/shaders/hold/HoldShaderOverlay';
 import { FocusTransitionOrchestrator } from './render/FocusTransitionOrchestrator';
+import { useLibrarySnapshot } from './hooks/useLibrarySnapshot';
+import { useExplorerCommands } from './hooks/useExplorerCommands';
+import { useExplorerUiState } from './hooks/useExplorerUiState';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
 
 interface ExplorerAppProps {
@@ -259,9 +262,25 @@ const buildThumbFallback = (label: string) => {
 };
 
 const CONTENT_LOADING_DELAY_MS = 180;
-const FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
+const RETAINED_UI_PREFS_KEY = 'media-sync-explorer-ui-prefs-v1';
+const LEGACY_FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
+const LEGACY_OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
-const OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
+const clampLayoutColumns = (value: number) => (
+  Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
+);
+const VALID_SORT_KEYS = new Set<SortKey>(['newest', 'oldest', 'name-asc', 'name-desc', 'size-desc', 'size-asc']);
+const VALID_TYPE_FILTERS = new Set<MediaTypeFilter>(['all', 'video', 'image', 'audio', 'overlay', 'unknown']);
+const parseStoredJsonObject = (raw: string | null): Record<string, unknown> | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
 
 const buildComposeTimestampName = () => {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
@@ -496,12 +515,26 @@ const cancelExplorerRaf = (rafId: number | null) => {
 function useToastQueue() {
   const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
   const timeouts = useRef<number[]>([]);
+  const lastOperationToastRef = useRef<Map<string, number>>(new Map());
 
   const beginToastExit = useCallback((id: string) => {
     setToasts((prev) => prev.map((toast) => (toast.id === id ? { ...toast, exiting: true } : toast)));
   }, []);
 
-  const addToast = useCallback((type: ToastMessage['type'], title: string, message: string) => {
+  const addToast = useCallback((
+    type: ToastMessage['type'],
+    title: string,
+    message: string,
+    operationId?: string,
+  ) => {
+    if (operationId) {
+      const now = Date.now();
+      const lastShownAt = lastOperationToastRef.current.get(operationId) ?? 0;
+      if (now - lastShownAt < 500) {
+        return `${operationId}-deduped`;
+      }
+      lastOperationToastRef.current.set(operationId, now);
+    }
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setToasts((prev) => [...prev, { id, type, title, message, exiting: false }]);
     const timeout = window.setTimeout(() => {
@@ -525,73 +558,133 @@ function useToastQueue() {
 }
 
 export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
+  // ---------------------------------------------------------------------------
+  // Query/data authority: API client + aggregate snapshot ownership.
+  // ---------------------------------------------------------------------------
   const initialApiBase = typeof window === 'undefined'
     ? apiBaseUrl
     : inferApiBaseUrl(apiBaseUrl, window.location);
   const [resolvedApiBase, setResolvedApiBase] = useState(initialApiBase);
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
+  const {
+    sources,
+    projects,
+    assets: libraryAssets,
+    error: libraryError,
+    refreshLibrarySnapshot,
+    clearSnapshotError,
+  } = useLibrarySnapshot(api);
   const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [sources, setSources] = useState([] as Awaited<ReturnType<typeof api.listSources>>);
+  // ---------------------------------------------------------------------------
+  // Local composition shell state that intentionally remains root-owned.
+  // (selection identity, focused media identity, focus/cinematic ownership lanes)
+  // ---------------------------------------------------------------------------
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaScope, setMediaScope] = useState<'project' | 'all'>('project');
-  const [view, setView] = useState<ExplorerView>(DEFAULT_VIEW);
-  const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<MediaTypeFilter>('all');
-  const [sortKey, setSortKey] = useState<SortKey>('newest');
-  const [selectedOnly, setSelectedOnly] = useState(false);
-  const [untaggedOnly, setUntaggedOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
   const [activeAssetKey, setActiveAssetKey] = useState('');
   const [previewActivationKey, setPreviewActivationKey] = useState('');
   const [previewPlaybackToken, setPreviewPlaybackToken] = useState(0);
   const [focused, setFocused] = useState<MediaItem | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [touchPinchCapable, setTouchPinchCapable] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState('');
-  const [dragActive, setDragActive] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
-  const [contentLoading, setContentLoading] = useState(false);
-  const [pendingDataLoadOverlay, setPendingDataLoadOverlay] = useState(false);
-  const [gridColumnCount, setGridColumnCount] = useState(DEFAULT_COLUMNS_MOBILE);
-  const [overlayEnabled, setOverlayEnabled] = useState(true);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);
   const contentLoadingTokenRef = useRef(0);
   const contentLoadingTimerRef = useRef<number | null>(null);
-
-  const [resolveProjectMode, setResolveProjectMode] = useState('current');
-  const [resolveProjectName, setResolveProjectName] = useState('');
-  const [resolveNewName, setResolveNewName] = useState('');
-  const [resolveMode, setResolveMode] = useState('import');
-
-  const [previewObsMode, setPreviewObsMode] = useState<'cover' | 'fit' | 'fill'>('cover');
-  const [previewObsSlot, setPreviewObsSlot] = useState('1');
-  const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
   const [previewAutoPlayToken, setPreviewAutoPlayToken] = useState(0);
   const [activeProxyCardEl, setActiveProxyCardEl] = useState<HTMLElement | null>(null);
   const [activeProxyUiSlotEl, setActiveProxyUiSlotEl] = useState<HTMLElement | null>(null);
   const [proxyPlaybackPlaying, setProxyPlaybackPlaying] = useState(false);
   const [proxyPlaybackCurrentTime, setProxyPlaybackCurrentTime] = useState(0);
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
-  const [composeModalOpen, setComposeModalOpen] = useState(false);
-  const [composeModalRendered, setComposeModalRendered] = useState(false);
-  const [composeSubmitting, setComposeSubmitting] = useState(false);
-  const [composeOutputName, setComposeOutputName] = useState('');
-  const [composeOutputProject, setComposeOutputProject] = useState('');
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteModalRendered, setDeleteModalRendered] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
-  const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);
-  const [topbarHasOpenDropdown, setTopbarHasOpenDropdown] = useState(false);
-  const [topbarFocusWithin, setTopbarFocusWithin] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // UI/runtime authority seam.
+  // ---------------------------------------------------------------------------
+  const {
+    view,
+    setView,
+    query,
+    setQuery,
+    typeFilter,
+    setTypeFilter,
+    sortKey,
+    setSortKey,
+    selectedOnly,
+    setSelectedOnly,
+    untaggedOnly,
+    setUntaggedOnly,
+    gridColumnCount,
+    setGridColumnCount,
+    overlayEnabled,
+    setOverlayEnabled,
+    topbarHasOpenDropdown,
+    setTopbarHasOpenDropdown,
+    topbarFocusWithin,
+    setTopbarFocusWithin,
+    sidebarOpen,
+    setSidebarOpen,
+    actionsOpen,
+    setActionsOpen,
+    dragActive,
+    setDragActive,
+    isMobile,
+    setIsMobile,
+    touchPinchCapable,
+    setTouchPinchCapable,
+    uploadStatus,
+    setUploadStatus,
+    contentLoading,
+    setContentLoading,
+    pendingDataLoadOverlay,
+    setPendingDataLoadOverlay,
+    resolveProjectMode,
+    setResolveProjectMode,
+    resolveProjectName,
+    setResolveProjectName,
+    resolveNewName,
+    setResolveNewName,
+    resolveMode,
+    setResolveMode,
+    previewObsMode,
+    setPreviewObsMode,
+    previewObsSlot,
+    setPreviewObsSlot,
+    previewObsExclusive,
+    setPreviewObsExclusive,
+    inspectorOpen,
+    setInspectorOpen,
+    previewDetailsOpen,
+    setPreviewDetailsOpen,
+    contextMenu,
+    setContextMenu,
+    composeModalOpen,
+    setComposeModalOpen,
+    composeModalRendered,
+    setComposeModalRendered,
+    composeSubmitting,
+    setComposeSubmitting,
+    composeOutputName,
+    setComposeOutputName,
+    composeOutputProject,
+    setComposeOutputProject,
+    deleteModalOpen,
+    setDeleteModalOpen,
+    deleteModalRendered,
+    setDeleteModalRendered,
+    pendingDeleteSelectionKeys,
+    setPendingDeleteSelectionKeys,
+  } = useExplorerUiState({
+    defaultView: DEFAULT_VIEW,
+    defaultGridColumns: DEFAULT_COLUMNS_MOBILE,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Runtime refs + controllers.
+  // ---------------------------------------------------------------------------
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
@@ -600,11 +693,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const mediaContentRef = useRef<HTMLDivElement | null>(null);
   const mediaScrollViewportRef = useRef<HTMLDivElement | null>(null);
+  const [mediaScrollViewportEl, setMediaScrollViewportEl] = useState<HTMLDivElement | null>(null);
   const sortSelectRef = useRef<HTMLSelectElement | null>(null);
   const brandRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const topbarPinTimeoutRef = useRef<number | null>(null);
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
+  const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);
   const lastCommittedColumnsRef = useRef(DEFAULT_COLUMNS_MOBILE);
   const selectedOrderRef = useRef<string[]>([]);
   const topbarRef = useRef<HTMLDivElement | null>(null);
@@ -639,6 +734,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
   const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
+
+  // ---------------------------------------------------------------------------
+  // Deferred preview/focus coupled domain (intentionally root-owned for now).
+  // This cluster combines focus presentation state, cinematic travel ownership,
+  // proxy/handoff refs, and lifecycle timing channels. Keep co-located until a
+  // dedicated domain extraction plan is approved.
+  // ---------------------------------------------------------------------------
   const [focusPresentationState, setFocusPresentationState] = useState<FocusPresentationState>({ mode: 'idle' });
   const [focusWorldTransform, setFocusWorldTransform] = useState<FocusWorldTransform>({ scale: 1, x: 0, y: 0, originX: 50, originY: 50 });
   const [proxyTravelState, setProxyTravelState] = useState<ProxyTravelState>('idle');
@@ -697,6 +799,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const focusedRetargetRetryFrameRef = useRef<number | null>(null);
   const closeSettleTimeoutRef = useRef<number | null>(null);
 
+  const setMediaScrollViewportNode = useCallback((node: HTMLDivElement | null) => {
+    mediaScrollViewportRef.current = node;
+    setMediaScrollViewportEl(node);
+  }, []);
+
+  // Coupled-domain diagnostics + ownership effects (kept adjacent by design).
   const recordPreviewDebug = useCallback((entry: PreviewDebugEntry) => {
     const debugEntry = { ...entry };
     previewDebugLogRef.current = [...previewDebugLogRef.current.slice(-31), debugEntry];
@@ -1319,6 +1427,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return path;
     }
   }, [resolvedApiBase]);
+  const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {
+    if (!isThumbableRelativePath(item.relative_path)) {
+      return kind === 'image' ? normalizeThumbUrl(item.stream_url || '') : undefined;
+    }
+    if (kind === 'image') {
+      return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || item.stream_url || '');
+    }
+    if (kind === 'video') {
+      return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || '');
+    }
+    return undefined;
+  }, []);
   const proxyPrewarmSelectionKey = useMemo(() => (
     reinforcedActiveKey || previewActivationKey || activeAssetKey || ''
   ), [activeAssetKey, previewActivationKey, reinforcedActiveKey]);
@@ -1334,14 +1454,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const dataset = filteredMedia.map((item) => {
       const kind = guessKind(item);
       const thumbKey = getThumbCacheKey(item) || assetRenderKey(item, activeProject);
-      const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-        || item.thumbnail_url
-        || (kind === 'image' ? item.stream_url : undefined));
+      const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
       const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';
       return buildThumbJobKey(thumbKey, thumbUrl);
     });
     return `${view}:${view === 'grid' ? gridColumnCount : 'list'}:${dataset.join('\n')}`;
-  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, view]);
+  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, resolveThumbCandidateUrl, view]);
 
   useThumbnailQueue({
     beginContentLoading,
@@ -1456,51 +1574,122 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(FILTER_PREFS_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        setTypeFilter((parsed.type as MediaTypeFilter) || 'all');
-        setSortKey((parsed.sort as SortKey) || 'newest');
-        setSelectedOnly(Boolean(parsed.selectedOnly));
-        setUntaggedOnly(Boolean(parsed.untaggedOnly));
+    setRetainedPrefsHydrated(false);
+    const retainedRaw = window.localStorage.getItem(RETAINED_UI_PREFS_KEY);
+    const retainedParsed = parseStoredJsonObject(retainedRaw);
+    let restoreSource: 'retained' | 'legacy' | 'none' = 'none';
+    if (retainedParsed) {
+      const storedView = retainedParsed.view;
+      if (storedView === 'grid' || storedView === 'list') {
+        setView(storedView);
       }
-    } catch {
-      // ignore malformed prefs
+      if (typeof retainedParsed.gridColumnCount === 'number' && Number.isFinite(retainedParsed.gridColumnCount)) {
+        const restoredColumns = clampLayoutColumns(retainedParsed.gridColumnCount);
+        lastCommittedColumnsRef.current = restoredColumns;
+        setGridColumnCount(restoredColumns);
+      }
+      if (VALID_SORT_KEYS.has(retainedParsed.sortKey as SortKey)) {
+        setSortKey(retainedParsed.sortKey as SortKey);
+      }
+      if (VALID_TYPE_FILTERS.has(retainedParsed.typeFilter as MediaTypeFilter)) {
+        setTypeFilter(retainedParsed.typeFilter as MediaTypeFilter);
+      }
+      if (typeof retainedParsed.selectedOnly === 'boolean') {
+        setSelectedOnly(retainedParsed.selectedOnly);
+      }
+      if (typeof retainedParsed.untaggedOnly === 'boolean') {
+        setUntaggedOnly(retainedParsed.untaggedOnly);
+      }
+      if (typeof retainedParsed.overlayEnabled === 'boolean') {
+        setOverlayEnabled(retainedParsed.overlayEnabled);
+      }
+      restoreSource = 'retained';
+    } else {
+      const legacyFilterParsed = parseStoredJsonObject(window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY));
+      if (legacyFilterParsed) {
+        if (VALID_TYPE_FILTERS.has(legacyFilterParsed.type as MediaTypeFilter)) {
+          setTypeFilter(legacyFilterParsed.type as MediaTypeFilter);
+        }
+        if (VALID_SORT_KEYS.has(legacyFilterParsed.sort as SortKey)) {
+          setSortKey(legacyFilterParsed.sort as SortKey);
+        }
+        if (typeof legacyFilterParsed.selectedOnly === 'boolean') {
+          setSelectedOnly(legacyFilterParsed.selectedOnly);
+        }
+        if (typeof legacyFilterParsed.untaggedOnly === 'boolean') {
+          setUntaggedOnly(legacyFilterParsed.untaggedOnly);
+        }
+        restoreSource = 'legacy';
+      }
+      const legacyOverlayRaw = window.localStorage.getItem(LEGACY_OVERLAY_VIS_PREFS_KEY);
+      if (legacyOverlayRaw != null) {
+        setOverlayEnabled(legacyOverlayRaw !== '0');
+        restoreSource = 'legacy';
+      }
     }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const payload = {
-      type: typeFilter,
-      sort: sortKey,
-      selectedOnly,
-      untaggedOnly,
+    (window as typeof window & {
+      __explorerRetainedPrefsDebug?: {
+        key: string;
+        legacyFilterKey: string;
+        legacyOverlayKey: string;
+        malformedRetainedPayload: boolean;
+        restoreSource: 'retained' | 'legacy' | 'none';
+        hydrated: boolean;
+      };
+    }).__explorerRetainedPrefsDebug = {
+      key: RETAINED_UI_PREFS_KEY,
+      legacyFilterKey: LEGACY_FILTER_PREFS_KEY,
+      legacyOverlayKey: LEGACY_OVERLAY_VIS_PREFS_KEY,
+      malformedRetainedPayload: Boolean(retainedRaw) && !retainedParsed,
+      restoreSource,
+      hydrated: true,
     };
-    window.localStorage.setItem(FILTER_PREFS_KEY, JSON.stringify(payload));
-  }, [typeFilter, sortKey, selectedOnly, untaggedOnly]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(OVERLAY_VIS_PREFS_KEY);
-      if (raw == null) return;
-      setOverlayEnabled(raw !== '0');
-    } catch {
-      // ignore malformed prefs
-    }
+    setRetainedPrefsHydrated(true);
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!retainedPrefsHydrated) {
+      (window as typeof window & {
+        __explorerRetainedPrefsDebug?: Record<string, unknown>;
+      }).__explorerRetainedPrefsDebug = {
+        ...(window as typeof window & {
+          __explorerRetainedPrefsDebug?: Record<string, unknown>;
+        }).__explorerRetainedPrefsDebug,
+        saveSkippedUntilHydrated: true,
+      };
+      return;
+    }
     try {
-      window.localStorage.setItem(OVERLAY_VIS_PREFS_KEY, overlayEnabled ? '1' : '0');
+      const retainedPayload = {
+        view,
+        gridColumnCount: clampLayoutColumns(gridColumnCount),
+        sortKey,
+        typeFilter,
+        selectedOnly,
+        untaggedOnly,
+        overlayEnabled,
+      };
+      window.localStorage.setItem(RETAINED_UI_PREFS_KEY, JSON.stringify(retainedPayload));
+      (window as typeof window & {
+        __explorerRetainedPrefsDebug?: {
+          lastSavedPayload?: typeof retainedPayload;
+          lastSavedAt?: string;
+          saveSkippedUntilHydrated?: boolean;
+        };
+      }).__explorerRetainedPrefsDebug = {
+        ...(window as typeof window & {
+          __explorerRetainedPrefsDebug?: Record<string, unknown>;
+        }).__explorerRetainedPrefsDebug,
+        lastSavedPayload: retainedPayload,
+        lastSavedAt: new Date().toISOString(),
+        saveSkippedUntilHydrated: false,
+        hydrated: retainedPrefsHydrated,
+      };
     } catch {
       // ignore storage errors
     }
-  }, [overlayEnabled]);
+  }, [gridColumnCount, overlayEnabled, retainedPrefsHydrated, selectedOnly, sortKey, typeFilter, untaggedOnly, view]);
 
   useEffect(() => {
     if (typeFilter === 'overlay' && !mediaMeta.types.has('overlay')) {
@@ -1513,26 +1702,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setSortKey('newest');
     }
   }, [mediaMeta, typeFilter, untaggedOnly, sortKey]);
-
-  const loadSources = useCallback(async () => {
-    try {
-      const payload = await api.listSources();
-      setSources(payload);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to list sources';
-      addToast('bad', 'Sources', message);
-    }
-  }, [api, addToast]);
-
-  const loadProjects = useCallback(async () => {
-    try {
-      const payload = await api.listProjects();
-      setProjects(payload);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to list projects';
-      addToast('bad', 'Projects', message);
-    }
-  }, [api, addToast]);
 
   const loadMedia = useCallback(
     async (project: Project | null) => {
@@ -1571,30 +1740,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearActiveAsset();
     setMediaScope('all');
     setPendingDataLoadOverlay(true);
-    if (!projects.length) {
-      setMedia([]);
+    try {
+      const snapshot = await refreshLibrarySnapshot({ scope: 'all' });
+      setMedia(sortMediaByRecent(Array.isArray(snapshot.assets) ? snapshot.assets : []));
+    } catch {
+      // error toast is emitted by libraryError effect.
+    } finally {
       setPendingDataLoadOverlay(false);
-      return;
     }
-    const gathered: MediaItem[] = [];
-    for (const project of projects) {
-      try {
-        const payload = await api.listMedia(project.name, project.source);
-        const items = Array.isArray(payload.media) ? payload.media : [];
-        items.forEach((item) => {
-          gathered.push({
-            ...item,
-            project_name: project.name,
-            project_source: project.source && project.source !== 'primary' ? project.source : null,
-          });
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load media';
-        addToast('warn', 'Media', `Skipped ${project.name}: ${message}`);
-      }
-    }
-    setMedia(sortMediaByRecent(gathered));
-  }, [addToast, api, clearActiveAsset, clearSelectionState, projects]);
+  }, [clearActiveAsset, clearSelectionState, refreshLibrarySnapshot]);
 
   const refreshMediaForScope = useCallback(async (
     refreshScope: {
@@ -1613,9 +1767,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       name: projectName,
       source: sourceName || null,
     };
-    const payload = await api.listMedia(refreshedProject.name, refreshedProject.source || undefined);
-    const items = Array.isArray(payload.media) ? payload.media : [];
-    const hydratedItems = hydrateProjectMediaItems(items, refreshedProject);
+    const scopedSnapshot = await refreshLibrarySnapshot({
+      scope: 'project',
+      project: refreshedProject.name,
+      source: refreshedProject.source || undefined,
+    });
+    const snapshotAssets = Array.isArray(scopedSnapshot.assets) ? scopedSnapshot.assets : [];
+    const hydratedItems = hydrateProjectMediaItems(snapshotAssets, refreshedProject);
 
     if (mediaScope === 'all' || !activeProject) {
       setMedia((current) => {
@@ -1636,7 +1794,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ) {
       setMedia((current) => sortMediaByRecent(mergeMediaItemsPreservingIdentity(current, hydratedItems)));
     }
-  }, [activeProject, api, hydrateProjectMediaItems, mediaScope, projects]);
+  }, [activeProject, hydrateProjectMediaItems, mediaScope, projects, refreshLibrarySnapshot]);
 
   const fetchComposeJobJson = useCallback(async (url: string) => {
     const response = await fetch(api.buildUrl(url));
@@ -1647,89 +1805,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return payload;
   }, [api]);
 
-  const {
-    pendingComposeItems,
-    registerAcceptedJob,
-    removePendingJob,
-  } = usePendingComposeJobs({
-    pollIntervalMs: 2000,
-    fetchJson: fetchComposeJobJson,
-    mediaItems: media,
-    onCompletedRefreshScope: async (refreshScope) => {
-      await refreshMediaForScope(refreshScope);
-      addToast('good', 'Compose', 'Compose completed');
-    },
-  });
-
   const refreshAll = useCallback(async () => {
-    await loadSources();
-    await loadProjects();
+    const snapshot = await refreshLibrarySnapshot({ scope: 'all' });
     if (activeProject) {
-      await loadMedia(activeProject);
+      const filtered = snapshot.assets.filter((item) => (
+        item.project_name === activeProject.name
+        && (item.project_source || item.source || 'primary') === (activeProject.source || 'primary')
+      ));
+      setMedia(sortMediaByRecent(hydrateProjectMediaItems(filtered, activeProject)));
+      setMediaScope('project');
     } else {
-      await loadAllMedia();
+      setMedia(sortMediaByRecent(Array.isArray(snapshot.assets) ? snapshot.assets : []));
+      setMediaScope('all');
     }
-    addToast('good', 'Refresh', 'Reloaded projects + media');
-  }, [activeProject, addToast, loadAllMedia, loadMedia, loadProjects, loadSources]);
-
-  useEffect(() => {
-    const previous = pendingStatusSnapshotRef.current;
-    const next = new Map<string, PendingComposeItem['status']>();
-    pendingComposeItems.forEach((item) => {
-      next.set(item.jobId, item.status);
-      const previousStatus = previous.get(item.jobId);
-      if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {
-        addToast('good', 'Compose', 'Compose completed');
-      }
-      if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
-        addToast('bad', 'Compose', 'Compose failed');
-      }
-    });
-    pendingStatusSnapshotRef.current = next;
-  }, [addToast, pendingComposeItems]);
-
-  const visiblePendingComposeItems = useMemo(() => {
-    const relevant = pendingComposeItems.filter((item) => {
-      if (mediaScope === 'all') return true;
-      if (!activeProject) return false;
-      return item.project === activeProject.name
-        && (item.source || 'primary') === (activeProject.source || 'primary');
-    });
-    return sortPendingComposeItemsForDisplay(relevant);
-  }, [activeProject, mediaScope, pendingComposeItems]);
-
-  const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({
-    kind: 'pending' as const,
-    pendingItem,
-  })), [visiblePendingComposeItems]);
-
-  const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
-      kind: 'asset' as const,
-      item,
-    })), [filteredMedia]);
-
-  const renderedMediaEntries = useMemo<RenderedMediaEntry[]>(() => ([
-    ...pendingEntries,
-    ...assetEntries,
-  ]), [assetEntries, pendingEntries]);
-
-  useEffect(() => {
-    if (!pendingComposeItems.length) return;
-    pendingComposeItems.forEach((item) => {
-      if (item.status !== 'finalizing') return;
-      if (!item.completedPath) return;
-      const visible = media.some((mediaItem) => {
-        const relativePath = String(mediaItem.relative_path || '').trim();
-        if (relativePath !== item.completedPath) return false;
-        const mediaProject = String(mediaItem.project_name || mediaItem.project || activeProject?.name || '').trim();
-        const mediaSource = String(mediaItem.project_source || mediaItem.source || activeProject?.source || '').trim() || 'primary';
-        return mediaProject === item.project && mediaSource === (item.source || 'primary');
-      });
-      if (visible) {
-        removePendingJob(item.jobId);
-      }
-    });
-  }, [activeProject, media, pendingComposeItems, removePendingJob]);
+    addToast('good', 'Refresh', 'Reloaded projects + media', 'explorer-refresh');
+  }, [activeProject, addToast, hydrateProjectMediaItems, refreshLibrarySnapshot]);
 
   const selectProject = useCallback(
     (project: Project) => {
@@ -2346,24 +2436,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return () => proxyRoot.removeEventListener('pointerdown', handleProxyPointerDown, true);
   }, [activeAssetKey, activeProject, assetSelectionKey, closeDrawer, filteredMedia, focusAsset, focusRelative, gridCinematicMode, inspectorOpen, runProxyFocusTransition, scheduleFocusedRetargetRetry, view]);
 
-  useEffect(() => {
-    if (!inspectorOpen || !activeAssetKey) return;
-    if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
-    const rafId = scheduleExplorerRaf('raf-lane-measurement', () => {
-      if (focusPresentationStateRef.current.mode !== 'world-focus') {
-        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', selectionKey: activeAssetKey, requestedMode: view, finalMode: 'idle' });
-        return;
-      }
-      const next = computeFocusWorldTransform(activeAssetKey, { continueFromCurrent: true });
-      if (!next.transform) {
-        moveFocusPresentationToFallbackOrIdle(activeAssetKey, next.reason ?? 'unsafe-transform');
-        return;
-      }
-      setFocusWorldTransform(next.transform);
-    });
-    return () => cancelExplorerRaf(rafId);
-  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length, recordPreviewDebug, view]);
-
   useEffect(() => () => {
     resetFocusPresentationToIdle();
   }, [resetFocusPresentationToIdle]);
@@ -2380,35 +2452,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const fallbackKey = activeAssetKey || focusPresentationState.key;
     moveFocusPresentationToFallbackOrIdle(fallbackKey, keyMismatch ? 'key-mismatch' : 'presentation-invalidated');
   }, [activeAssetKey, focusPresentationState, inspectorOpen, moveFocusPresentationToFallbackOrIdle, resetFocusPresentationToIdle, view]);
-
-  const handleUpload = useCallback(async () => {
-    const project = activeProject;
-    if (!project) {
-      addToast('warn', 'Upload', 'Select a project first');
-      return;
-    }
-    const file = uploadInputRef.current?.files?.[0];
-    if (!file) {
-      addToast('warn', 'Upload', 'Pick a file first');
-      return;
-    }
-
-    setUploadStatus('Uploading…');
-    try {
-      const payload = await api.uploadMedia(buildUploadUrl(project), file);
-      const status = typeof payload.status === 'string' ? payload.status : '';
-      const msg = status === 'duplicate'
-        ? 'Duplicate skipped — already on disk.'
-        : 'Upload stored.';
-      setUploadStatus(msg);
-      addToast(status === 'duplicate' ? 'warn' : 'good', 'Upload', msg);
-      await loadMedia(project);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Upload failed';
-      setUploadStatus(`Upload failed: ${message}`);
-      addToast('bad', 'Upload', message);
-    }
-  }, [activeProject, addToast, api, buildUploadUrl, loadMedia]);
 
   const toAssetRef = useCallback((item: MediaItem): AssetRef | null => {
     const relativePath = String(item.relative_path || '').trim();
@@ -2469,47 +2512,173 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [activeAssetKey, commitPreviewActivationKey, inspectorOpen, itemsBySelectionKey]);
 
-  const performDeleteMediaSelection = useCallback(
-    async (selectionKeys: string[]) => {
-      const items = resolveItemsForSelection(selectionKeys);
-      if (!items.length) {
-        addToast('warn', 'Delete', 'Select one or more clips');
+  // ---------------------------------------------------------------------------
+  // Command/action authority seam.
+  // ---------------------------------------------------------------------------
+  const {
+    handleComposeCompletion,
+    composeMediaCommand,
+    uploadMediaCommand,
+    uploadMediaBatchCommand,
+    sendToProgramMonitorCommand,
+    pushToObsCommand,
+    resolveMediaCommand,
+    performDeleteMediaSelection,
+    moveMediaSelection,
+    tagMediaSelection,
+    tagSingleMediaItem,
+  } = useExplorerCommands({
+    api,
+    addToast,
+    activeProject,
+    mediaScope,
+    focused,
+    assetSelectionKey,
+    loadAllMedia,
+    loadMedia,
+    refreshLibrarySnapshot,
+    refreshMediaForScope,
+    resolveItemsForSelection,
+    resolveSelectionKeysForItems,
+    toAssetRef,
+    setSelected,
+    setFocused,
+    setInspectorOpen,
+    setDeleteSubmitting,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Pending compose integration lane.
+  // ---------------------------------------------------------------------------
+  const {
+    pendingComposeItems,
+    registerAcceptedJob,
+    removePendingJob,
+  } = usePendingComposeJobs({
+    pollIntervalMs: 2000,
+    fetchJson: fetchComposeJobJson,
+    mediaItems: media,
+    onCompletedRefreshScope: handleComposeCompletion,
+  });
+
+  useEffect(() => {
+    const previous = pendingStatusSnapshotRef.current;
+    const next = new Map<string, PendingComposeItem['status']>();
+    pendingComposeItems.forEach((item) => {
+      next.set(item.jobId, item.status);
+      const previousStatus = previous.get(item.jobId);
+      if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {
+        addToast('good', 'Compose', 'Compose completed');
+      }
+      if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
+        addToast('bad', 'Compose', 'Compose failed');
+      }
+    });
+    pendingStatusSnapshotRef.current = next;
+  }, [addToast, pendingComposeItems]);
+
+  const visiblePendingComposeItems = useMemo(() => {
+    const relevant = pendingComposeItems.filter((item) => {
+      if (mediaScope === 'all') return true;
+      if (!activeProject) return false;
+      return item.project === activeProject.name
+        && (item.source || 'primary') === (activeProject.source || 'primary');
+    });
+    return sortPendingComposeItemsForDisplay(relevant);
+  }, [activeProject, mediaScope, pendingComposeItems]);
+
+  const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({
+    kind: 'pending' as const,
+    pendingItem,
+  })), [visiblePendingComposeItems]);
+
+  const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
+      kind: 'asset' as const,
+      item,
+    })), [filteredMedia]);
+
+  const renderedMediaEntries = useMemo<RenderedMediaEntry[]>(() => ([
+    ...pendingEntries,
+    ...assetEntries,
+  ]), [assetEntries, pendingEntries]);
+
+  useEffect(() => {
+    if (!inspectorOpen || !activeAssetKey) return;
+    if (focusPresentationState.mode !== 'world-focus' || focusPresentationState.key !== activeAssetKey) return;
+    const rafId = scheduleExplorerRaf('raf-lane-measurement', () => {
+      if (focusPresentationStateRef.current.mode !== 'world-focus') {
+        recordPreviewDebug({ stage: 'focus-world-stage-idle-measure-blocked', selectionKey: activeAssetKey, requestedMode: view, finalMode: 'idle' });
         return;
       }
-      const refs = items
-        .map((item) => toAssetRef(item))
-        .filter((item): item is AssetRef => Boolean(item));
-      if (!refs.length) {
-        addToast('warn', 'Delete', 'Unable to resolve selected media paths');
+      const next = computeFocusWorldTransform(activeAssetKey, { continueFromCurrent: true });
+      if (!next.transform) {
+        moveFocusPresentationToFallbackOrIdle(activeAssetKey, next.reason ?? 'unsafe-transform');
         return;
       }
-      setDeleteSubmitting(true);
-      try {
-        await api.bulkDeleteMedia(refs);
-        addToast('good', 'Delete', 'Removed media from disk and index');
-        const removedKeys = new Set(resolveSelectionKeysForItems(items));
-        setSelected((current) => {
-          const next = new Set(current);
-          removedKeys.forEach((key) => next.delete(key));
-          return next;
-        });
-        if (focused) {
-          const focusedKey = assetSelectionKey(focused, activeProject);
-          if (removedKeys.has(focusedKey)) {
-            setFocused(null);
-            setInspectorOpen(false);
-          }
-        }
-        if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-        else await loadMedia(activeProject);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Delete failed';
-        addToast('bad', 'Delete', message);
-      } finally {
-        setDeleteSubmitting(false);
+      setFocusWorldTransform(next.transform);
+    });
+    return () => cancelExplorerRaf(rafId);
+  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length, recordPreviewDebug, view]);
+
+  useEffect(() => {
+    if (!pendingComposeItems.length) return;
+    pendingComposeItems.forEach((item) => {
+      if (item.status !== 'finalizing') return;
+      if (!item.completedPath) return;
+      const visible = media.some((mediaItem) => {
+        const relativePath = String(mediaItem.relative_path || '').trim();
+        if (relativePath !== item.completedPath) return false;
+        const mediaProject = String(mediaItem.project_name || mediaItem.project || activeProject?.name || '').trim();
+        const mediaSource = String(mediaItem.project_source || mediaItem.source || activeProject?.source || '').trim() || 'primary';
+        return mediaProject === item.project && mediaSource === (item.source || 'primary');
+      });
+      if (visible) {
+        removePendingJob(item.jobId);
       }
+    });
+  }, [activeProject, media, pendingComposeItems, removePendingJob]);
+
+  const handleUpload = useCallback(async () => {
+    const project = activeProject;
+    if (!project) {
+      addToast('warn', 'Upload', 'Select a project first');
+      return;
+    }
+    const file = uploadInputRef.current?.files?.[0];
+    if (!file) {
+      addToast('warn', 'Upload', 'Pick a file first');
+      return;
+    }
+
+    setUploadStatus('Uploading…');
+    const result = await uploadMediaCommand({
+      project,
+      uploadUrl: buildUploadUrl(project),
+      file,
+      title: 'Upload',
+    });
+    if (result.ok) setUploadStatus(result.message);
+    else setUploadStatus(`Upload failed: ${result.message}`);
+  }, [activeProject, addToast, buildUploadUrl, uploadMediaCommand]);
+
+  const handleDropUpload = useCallback(
+    async (files: FileList) => {
+      const project = activeProject;
+      if (!project) {
+        addToast('warn', 'Upload', 'Select a project first');
+        return;
+      }
+      if (!files.length) return;
+      setUploadStatus('Uploading…');
+      await uploadMediaBatchCommand({
+        project,
+        uploadUrl: buildUploadUrl(project),
+        files: Array.from(files),
+        title: 'Upload',
+      });
+      setUploadStatus('Upload stored.');
     },
-    [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, mediaScope, resolveItemsForSelection, resolveSelectionKeysForItems, toAssetRef],
+    [activeProject, addToast, buildUploadUrl, uploadMediaBatchCommand],
   );
 
   const deleteMediaSelection = useCallback((selectionKeys: string[]) => {
@@ -2547,41 +2716,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setPendingDeleteSelectionKeys([]);
   }, [deleteSubmitting]);
 
-  const moveMediaSelection = useCallback(
-    async (selectionKeys: string[], targetProject: Project) => {
-      const refs = resolveItemsForSelection(selectionKeys)
-        .map((item) => toAssetRef(item))
-        .filter((item): item is AssetRef => Boolean(item));
-      if (!refs.length) {
-        addToast('warn', 'Move', 'Unable to resolve selected media paths');
-        return;
-      }
-      try {
-        await api.bulkMoveMedia(refs, targetProject.name, targetProject.source || null);
-        addToast('good', 'Move', `Moved ${refs.length} item(s) to ${targetProject.name}`);
-        setSelected((current) => {
-          const next = new Set(current);
-          selectionKeys.forEach((key) => next.delete(key));
-          return next;
-        });
-        if (focused) {
-          const focusedKey = assetSelectionKey(focused, activeProject);
-          if (selectionKeys.includes(focusedKey)) {
-            setFocused(null);
-            setInspectorOpen(false);
-          }
-        }
-        if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-        else await loadMedia(activeProject);
-        await loadProjects();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Move failed';
-        addToast('bad', 'Move', message);
-      }
-    },
-    [activeProject, addToast, api, assetSelectionKey, focused, loadAllMedia, loadMedia, loadProjects, mediaScope, resolveItemsForSelection, toAssetRef],
-  );
-
   const handleBulkTag = useCallback(async () => {
     if (!selected.size) {
       addToast('warn', 'Tags', 'Select one or more clips first');
@@ -2597,23 +2731,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Tags', 'Nothing to add or remove');
       return;
     }
-    const refs = selectionItems
-      .map((item) => toAssetRef(item))
-      .filter((item): item is AssetRef => Boolean(item));
-    if (!refs.length) {
-      addToast('warn', 'Tags', 'Unable to resolve selected media paths');
-      return;
-    }
-    try {
-      await api.bulkTagMedia(refs, addTags, removeTags);
-      addToast('good', 'Tags', `Updated tags for ${refs.length} item(s)`);
-      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-      else await loadMedia(activeProject);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Tag update failed';
-      addToast('bad', 'Tags', message);
-    }
-  }, [activeProject, addToast, api, loadAllMedia, loadMedia, mediaScope, selected, selectionItems, toAssetRef]);
+    await tagMediaSelection(selectionItems, addTags, removeTags);
+  }, [addToast, selected, selectionItems, tagMediaSelection]);
 
   const handleComposeSelected = useCallback(async () => {
     if (!selected.size) {
@@ -2662,26 +2781,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
     setComposeSubmitting(true);
-    try {
-      const response = await api.bulkComposeMedia({
-        assets: refs,
-        output_project: targetProject.name,
-        output_name: outputName,
-        output_source: targetProject.source || null,
-        target_dir: 'exports',
-        mode: 'encode',
-        allow_overwrite: false,
-      });
+    const response = await composeMediaCommand({
+      assets: refs,
+      outputProject: targetProject,
+      outputName,
+      title: 'Compose',
+    });
+    if (response) {
       registerAcceptedJob({ envelope: response as ComposeJobEnvelope });
-      addToast('good', 'Compose', 'Compose started');
       setComposeModalOpen(false);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Compose failed';
-      addToast('bad', 'Compose', message);
-    } finally {
-      setComposeSubmitting(false);
     }
-  }, [addToast, api, composeOutputName, composeOutputProject, composeSubmitting, projects, registerAcceptedJob, selectedVideoItems, toAssetRef]);
+    setComposeSubmitting(false);
+  }, [addToast, composeMediaCommand, composeOutputName, composeOutputProject, composeSubmitting, projects, registerAcceptedJob, selectedVideoItems, toAssetRef]);
 
   const handleResolve = useCallback(async () => {
     const project = activeProject;
@@ -2710,14 +2821,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       mode: resolveMode || 'import',
     };
 
-    try {
-      const result = await api.sendResolve(payload, project.source);
-      addToast('good', 'Resolve', `Sent. Job: ${result.job_id || 'ok'}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Resolve request failed';
-      addToast('bad', 'Resolve', message);
-    }
-  }, [activeProject, addToast, api, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName, selected, selectionItems]);
+    await resolveMediaCommand({
+      project: payload.project,
+      newProjectName: payload.new_project_name,
+      mode: payload.mode,
+      mediaRelativePaths: payload.media_rel_paths,
+      source: project.source || undefined,
+      title: 'Resolve',
+    });
+  }, [activeProject, addToast, resolveMediaCommand, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName, selected, selectionItems]);
 
 
   const handleFocusedTag = useCallback(async () => {
@@ -2735,21 +2847,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'Tag', 'Nothing to add or remove');
       return;
     }
-    const ref = toAssetRef(focused);
-    if (!ref) {
-      addToast('warn', 'Tag', 'Unable to resolve focused media path');
-      return;
-    }
-    try {
-      await api.bulkTagMedia([ref], addTags, removeTags);
-      addToast('good', 'Tag', 'Updated tags for focused asset');
-      if (mediaScope === 'all' || !activeProject) await loadAllMedia();
-      else await loadMedia(activeProject);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Tag update failed';
-      addToast('bad', 'Tag', message);
-    }
-  }, [activeProject, addToast, api, focused, loadAllMedia, loadMedia, mediaScope, toAssetRef]);
+    await tagSingleMediaItem(focused, addTags, removeTags, 'Tag');
+  }, [addToast, focused, tagSingleMediaItem]);
 
   const handleFocusedResolve = useCallback(async () => {
     if (!focused) {
@@ -2766,54 +2865,31 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (resolveProjectMode === '__new__') projectValue = '__new__';
     else if (resolveProjectMode === '__select__') projectValue = '__select__';
     else if (resolveProjectName.trim()) projectValue = resolveProjectName.trim();
-    try {
-      const result = await api.sendResolve({
-        project: projectValue,
-        new_project_name: resolveProjectMode === '__new__' ? resolveNewName.trim() || null : null,
-        media_rel_paths: [focused.relative_path].filter((value): value is string => Boolean(value)),
-        mode: resolveMode || 'import',
-      }, sourceName);
-      addToast('good', 'Resolve', `Sent. Job: ${result.job_id || 'ok'}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Resolve request failed';
-      addToast('bad', 'Resolve', message);
-    }
-  }, [activeProject?.name, activeProject?.source, addToast, api, focused, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName]);
+    await resolveMediaCommand({
+      project: projectValue,
+      newProjectName: resolveProjectMode === '__new__' ? resolveNewName.trim() || null : null,
+      mediaRelativePaths: [focused.relative_path].filter((value): value is string => Boolean(value)),
+      mode: resolveMode || 'import',
+      source: sourceName,
+      title: 'Resolve',
+    });
+  }, [activeProject?.name, activeProject?.source, addToast, focused, resolveMediaCommand, resolveMode, resolveNewName, resolveProjectMode, resolveProjectName]);
 
   const handleFocusedProgramMonitor = useCallback(async () => {
     if (!focused) {
       addToast('warn', 'Program Monitor', 'Open a preview first');
       return;
     }
-    const streamUrl = resolveAssetUrl(focused.stream_url);
-    if (!streamUrl) {
-      addToast('warn', 'Program Monitor', 'No stream URL available');
-      return;
-    }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const absoluteStream = toAbsoluteUrl(streamUrl, origin);
+    const absoluteStream = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
     const monitorUrl = new URL('/program-monitor/index.html', origin).toString();
-    const payload = {
-      type: 'media-sync/program-monitor/import',
-      items: [absoluteStream],
+    await sendToProgramMonitorCommand({
+      streamUrl: absoluteStream,
+      monitorUrl,
       source: 'explorer-overlay',
-      sent_at: new Date().toISOString(),
-    };
-    const target = window.open(monitorUrl, '_blank', 'noopener,noreferrer');
-    if (!target) {
-      addToast('warn', 'Program Monitor', 'Allow popups to hand off media');
-      return;
-    }
-    const targetOrigin = new URL(monitorUrl).origin;
-    window.setTimeout(() => {
-      try {
-        target.postMessage(payload, targetOrigin);
-      } catch {
-        addToast('warn', 'Program Monitor', 'Unable to deliver handoff payload');
-      }
-    }, 220);
-    addToast('good', 'Program Monitor', 'Sent focused asset to monitor');
-  }, [addToast, focused, resolveAssetUrl]);
+      title: 'Program Monitor',
+    });
+  }, [addToast, focused, resolveAssetUrl, sendToProgramMonitorCommand]);
 
   const handleFocusedObs = useCallback(async () => {
     if (!focused) {
@@ -2822,59 +2898,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const assetUrl = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
-    if (!assetUrl) {
-      addToast('warn', 'OBS', 'No stream URL available for this asset');
-      return;
-    }
-    const obsPush = (window as Window & {
-      obsPushBrowserMedia?: (opts: {
-        assetUrl: string;
-        fit?: string;
-        slot?: number;
-        ensureExclusiveScene?: boolean;
-      }) => Promise<void>;
-    }).obsPushBrowserMedia;
-    if (!obsPush) {
-      addToast('warn', 'OBS', 'OBS push helper is unavailable in this surface');
-      return;
-    }
     const fit = previewObsMode === 'fit' ? 'contain' : (previewObsMode === 'fill' ? 'fill' : 'cover');
-    try {
-      await obsPush({
-        assetUrl,
-        fit,
-        slot: Number.parseInt(previewObsSlot, 10) || 1,
-        ensureExclusiveScene: previewObsExclusive,
-      });
-      addToast('good', 'OBS', 'Browser source updated');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'OBS push failed';
-      addToast('bad', 'OBS', message);
-    }
-  }, [addToast, focused, previewObsExclusive, previewObsMode, previewObsSlot, resolveAssetUrl]);
-
-  const handleDropUpload = useCallback(
-    async (files: FileList) => {
-      const project = activeProject;
-      if (!project) {
-        addToast('warn', 'Upload', 'Select a project first');
-        return;
-      }
-      if (!files.length) return;
-      setUploadStatus('Uploading…');
-      for (const file of Array.from(files)) {
-        try {
-          await api.uploadMedia(buildUploadUrl(project), file);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Upload failed';
-          addToast('bad', 'Upload', message);
-        }
-      }
-      setUploadStatus('Upload stored.');
-      await loadMedia(project);
-    },
-    [activeProject, addToast, api, buildUploadUrl, loadMedia],
-  );
+    await pushToObsCommand({
+      assetUrl,
+      fit,
+      slot: Number.parseInt(previewObsSlot, 10) || 1,
+      ensureExclusiveScene: previewObsExclusive,
+      title: 'OBS',
+    });
+  }, [addToast, focused, previewObsExclusive, previewObsMode, previewObsSlot, pushToObsCommand, resolveAssetUrl]);
 
   const handleCopyStream = useCallback(async (item: MediaItem) => {
     if (!item.stream_url) return;
@@ -3144,7 +3176,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       || actionsOpen
       || topbarHasOpenDropdown
       || topbarFocusWithin,
-    scrollRef: mediaScrollViewportRef,
+    scrollEl: mediaScrollViewportEl,
     topbarMeasuredHeight,
   });
   topbarHiddenRef.current = topbarHidden;
@@ -3278,18 +3310,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (hasBootstrappedExplorerSession) return;
     hasBootstrappedExplorerSession = true;
     const bootToastId = addToast('good', 'Boot', 'Loading sources + projects…');
-    void Promise.allSettled([loadSources(), loadProjects()]).finally(() => {
+    void refreshLibrarySnapshot({ scope: 'all' }).finally(() => {
       beginToastExit(bootToastId);
     });
-  }, [addToast, beginToastExit, loadProjects, loadSources]);
+  }, [addToast, beginToastExit, refreshLibrarySnapshot]);
 
   useEffect(() => {
     if (activeProject) {
       void loadMedia(activeProject);
     } else {
-      void loadAllMedia();
+      setMediaScope('all');
+      setMedia(sortMediaByRecent(libraryAssets));
     }
-  }, [activeProject, loadAllMedia, loadMedia]);
+  }, [activeProject, libraryAssets, loadMedia]);
+
+  useEffect(() => {
+    if (!libraryError) return;
+    addToast('bad', 'Library', libraryError);
+    clearSnapshotError();
+  }, [addToast, clearSnapshotError, libraryError]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -3404,6 +3443,42 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    type LoadFailureEmitter = 'asset-grid' | 'asset-list' | 'proxy-render' | 'other';
+    type LoadFailureEvent = {
+      at: number;
+      key: string;
+      tag: string;
+      url: string;
+      className: string;
+      emitter: LoadFailureEmitter;
+      suppressed: boolean;
+      dataset: Record<string, string>;
+      targetPath: string;
+    };
+    type NetworkFailureLane =
+      | 'explorer-media'
+      | 'next-static'
+      | 'next-hmr'
+      | 'sourcemap'
+      | 'script'
+      | 'stylesheet'
+      | 'font'
+      | 'runtime-error'
+      | 'promise-rejection'
+      | 'other';
+    type NetworkFailureEvent = {
+      at: number;
+      lane: NetworkFailureLane;
+      tag: string;
+      url: string;
+      message: string;
+      source: 'resource-error' | 'runtime-error' | 'promise-rejection';
+      inExplorerApp: boolean;
+      maybeNextAsset: boolean;
+      maybeHotReload: boolean;
+      suppressedDefault: boolean;
+    };
+
     const loadFailures = new Map<string, {
       key: string;
       tag: string;
@@ -3412,7 +3487,162 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       count: number;
       firstAt: number;
       lastAt: number;
+      emitter: LoadFailureEmitter;
+      suppressedCount: number;
+      lastDataset: Record<string, string>;
+      lastTargetPath: string;
     }>();
+    const recentEvents: LoadFailureEvent[] = [];
+    const MAX_RECENT_EVENTS = 80;
+    const networkRecentEvents: NetworkFailureEvent[] = [];
+    const MAX_NETWORK_RECENT_EVENTS = 120;
+    const networkLaneTotals: Record<NetworkFailureLane, number> = {
+      'explorer-media': 0,
+      'next-static': 0,
+      'next-hmr': 0,
+      sourcemap: 0,
+      script: 0,
+      stylesheet: 0,
+      font: 0,
+      'runtime-error': 0,
+      'promise-rejection': 0,
+      other: 0,
+    };
+    let suppressedMediaErrorCount = 0;
+
+    const classifyEmitter = (target: HTMLElement): LoadFailureEmitter => {
+      if (target.closest('.masonry-card.asset')) return 'asset-grid';
+      if (target.closest('.list-row.asset')) return 'asset-list';
+      if (target.closest('.proxy-render-card,.focus-proxy-root')) return 'proxy-render';
+      return 'other';
+    };
+
+    const shouldSuppressMediaError = (target: HTMLElement) => {
+      if (!target.closest('.app')) return false;
+      if (target.closest('.masonry-card.asset .thumb,.list-row.asset .thumb')) return true;
+      if (target.closest('.proxy-render-card,.focus-proxy-root')) return true;
+      return false;
+    };
+    const getSourceUrlFromTarget = (target: HTMLElement) => {
+      const imgTarget = target as HTMLImageElement;
+      return (
+        imgTarget.currentSrc
+        || target.getAttribute('src')
+        || target.getAttribute('href')
+        || target.getAttribute('poster')
+        || ''
+      ).trim();
+    };
+    const getTargetPath = (target: HTMLElement) => (
+      target.closest('[data-select-key]')?.getAttribute('data-select-key')
+      || target.closest('.masonry-card.asset,.list-row.asset')?.getAttribute('data-relative')
+      || target.getAttribute('data-relative')
+      || target.getAttribute('data-thumb-key')
+      || ''
+    );
+    const getTargetDatasetSnapshot = (target: HTMLElement): Record<string, string> => {
+      const keep = new Set([
+        'thumbUrl',
+        'thumbFallback',
+        'thumbJobKey',
+        'thumbState',
+        'thumbLoadedKey',
+        'streamUrl',
+        'relative',
+        'selectKey',
+      ]);
+      const snapshot: Record<string, string> = {};
+      const entries = Object.entries(target.dataset || {});
+      entries.forEach(([key, value]) => {
+        if (!keep.has(key)) return;
+        if (!value) return;
+        snapshot[key] = value;
+      });
+      return snapshot;
+    };
+    const pushRecentEvent = (entry: LoadFailureEvent) => {
+      recentEvents.push(entry);
+      if (recentEvents.length > MAX_RECENT_EVENTS) {
+        recentEvents.splice(0, recentEvents.length - MAX_RECENT_EVENTS);
+      }
+    };
+    const classifyNetworkLane = ({
+      url,
+      tag,
+      rel,
+      inExplorerApp,
+      message,
+      source,
+    }: {
+      url: string;
+      tag: string;
+      rel?: string;
+      inExplorerApp: boolean;
+      message: string;
+      source: 'resource-error' | 'runtime-error' | 'promise-rejection';
+    }): NetworkFailureLane => {
+      const normalizedUrl = url.toLowerCase();
+      const normalizedTag = tag.toUpperCase();
+      const normalizedRel = String(rel || '').toLowerCase();
+      const normalizedMessage = message.toLowerCase();
+      if (
+        normalizedUrl.includes('/_next/webpack-hmr')
+        || normalizedUrl.includes('hot-update')
+        || normalizedMessage.includes('hot-update')
+        || normalizedMessage.includes('fast refresh')
+        || normalizedMessage.includes('webpack-hmr')
+      ) return 'next-hmr';
+      if (normalizedUrl.includes('/_next/')) return 'next-static';
+      if (normalizedUrl.endsWith('.map') || normalizedMessage.includes('source map')) return 'sourcemap';
+      if (
+        normalizedUrl.endsWith('.woff')
+        || normalizedUrl.endsWith('.woff2')
+        || normalizedUrl.endsWith('.ttf')
+        || normalizedUrl.endsWith('.otf')
+      ) return 'font';
+      if (normalizedTag === 'SCRIPT') return 'script';
+      if (normalizedTag === 'LINK' || normalizedUrl.endsWith('.css') || normalizedRel === 'stylesheet') return 'stylesheet';
+      if (source === 'runtime-error') return 'runtime-error';
+      if (source === 'promise-rejection') return 'promise-rejection';
+      if (
+        inExplorerApp
+        && (normalizedTag === 'IMG' || normalizedTag === 'VIDEO' || normalizedTag === 'SOURCE')
+      ) return 'explorer-media';
+      return 'other';
+    };
+    const pushNetworkRecentEvent = (event: NetworkFailureEvent) => {
+      networkRecentEvents.push(event);
+      if (networkRecentEvents.length > MAX_NETWORK_RECENT_EVENTS) {
+        networkRecentEvents.splice(0, networkRecentEvents.length - MAX_NETWORK_RECENT_EVENTS);
+      }
+      networkLaneTotals[event.lane] += 1;
+    };
+    const shouldSuppressGenericLoadFailedRejection = ({
+      lane,
+      message,
+      url,
+      inExplorerApp,
+      reasonStack,
+    }: {
+      lane: NetworkFailureLane;
+      message: string;
+      url: string;
+      inExplorerApp: boolean;
+      reasonStack: string;
+    }) => {
+      if (lane !== 'promise-rejection') return false;
+      if (inExplorerApp) return false;
+      if (message !== 'Load failed') return false;
+      if (url.trim().length > 0) return false;
+      if (reasonStack.trim().length > 0) return false;
+      return true;
+    };
+    const suppressUnhandledRejectionDefault = (event: PromiseRejectionEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      (event as PromiseRejectionEvent & { returnValue?: boolean }).returnValue = false;
+    };
 
     const toSnapshotRows = () => Array.from(loadFailures.values())
       .sort((a, b) => b.lastAt - a.lastAt)
@@ -3423,13 +3653,37 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const snapshot = {
         totalUnique: loadFailures.size,
         totalEvents: Array.from(loadFailures.values()).reduce((acc, entry) => acc + entry.count, 0),
+        suppressedMediaErrorCount,
+        emitterTotals: Array.from(loadFailures.values()).reduce<Record<LoadFailureEmitter, number>>((acc, entry) => {
+          acc[entry.emitter] += entry.count;
+          return acc;
+        }, { 'asset-grid': 0, 'asset-list': 0, 'proxy-render': 0, other: 0 }),
         rows: toSnapshotRows(),
+        recentEvents: recentEvents.map((event) => ({ ...event })),
+      };
+      const networkSnapshot = {
+        totalEvents: networkRecentEvents.length,
+        laneTotals: { ...networkLaneTotals },
+        recentEvents: networkRecentEvents.map((event) => ({ ...event })),
       };
       (window as typeof window & {
         __explorerLoadFailureDebug?: { getSnapshot: () => typeof snapshot; lastSnapshot: typeof snapshot };
+        __explorerNetworkFailureDebug?: {
+          getSnapshot: () => typeof networkSnapshot;
+          lastSnapshot: typeof networkSnapshot;
+        };
       }).__explorerLoadFailureDebug = {
         getSnapshot: () => snapshot,
         lastSnapshot: snapshot,
+      };
+      (window as typeof window & {
+        __explorerNetworkFailureDebug?: {
+          getSnapshot: () => typeof networkSnapshot;
+          lastSnapshot: typeof networkSnapshot;
+        };
+      }).__explorerNetworkFailureDebug = {
+        getSnapshot: () => networkSnapshot,
+        lastSnapshot: networkSnapshot,
       };
     };
 
@@ -3437,41 +3691,162 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const target = event.target as HTMLElement | null;
       if (!target) return;
       const tag = target.tagName || 'UNKNOWN';
-      const imgTarget = target as HTMLImageElement;
-      const sourceUrl = (
-        imgTarget.currentSrc
-        || target.getAttribute('src')
-        || target.getAttribute('href')
-        || target.getAttribute('poster')
-        || ''
-      ).trim();
+      const sourceUrl = getSourceUrlFromTarget(target);
       const className = String(target.className || '');
+      const emitter = classifyEmitter(target);
+      const dataset = getTargetDatasetSnapshot(target);
+      const targetPath = getTargetPath(target);
       const key = `${tag}:${sourceUrl || '(none)'}`;
       const now = Date.now();
+      const inExplorerApp = Boolean(target.closest('.app'));
+      const isMediaTarget = tag === 'IMG' || tag === 'VIDEO' || tag === 'SOURCE';
+      const suppressed = isMediaTarget && shouldSuppressMediaError(target);
+      const lane = classifyNetworkLane({
+        url: sourceUrl,
+        tag,
+        rel: target.getAttribute('rel') || '',
+        inExplorerApp,
+        message: '',
+        source: 'resource-error',
+      });
+      pushNetworkRecentEvent({
+        at: now,
+        lane,
+        tag,
+        url: sourceUrl,
+        message: '',
+        source: 'resource-error',
+        inExplorerApp,
+        maybeNextAsset: sourceUrl.includes('/_next/'),
+        maybeHotReload: sourceUrl.includes('hot-update') || sourceUrl.includes('webpack-hmr'),
+        suppressedDefault: false,
+      });
       const prior = loadFailures.get(key);
       if (prior) {
         prior.count += 1;
         prior.lastAt = now;
+        prior.lastDataset = dataset;
+        prior.lastTargetPath = targetPath;
+        if (suppressed) prior.suppressedCount += 1;
       } else {
         loadFailures.set(key, {
           key,
           tag,
           url: sourceUrl,
           className,
+          emitter,
           count: 1,
           firstAt: now,
           lastAt: now,
+          suppressedCount: suppressed ? 1 : 0,
+          lastDataset: dataset,
+          lastTargetPath: targetPath,
         });
+      }
+      pushRecentEvent({
+        at: now,
+        key,
+        tag,
+        url: sourceUrl,
+        className,
+        emitter,
+        suppressed,
+        dataset,
+        targetPath,
+      });
+      if (suppressed) {
+        suppressedMediaErrorCount += 1;
+        event.stopImmediatePropagation?.();
+        event.stopPropagation();
+      }
+      publishSnapshot();
+    };
+    const onRuntimeError = (event: ErrorEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && target !== window && target instanceof HTMLElement) return;
+      const now = Date.now();
+      const url = String(event.filename || '');
+      const message = String(event.message || '');
+      const lane = classifyNetworkLane({
+        url,
+        tag: 'RUNTIME',
+        inExplorerApp: false,
+        message,
+        source: 'runtime-error',
+      });
+      pushNetworkRecentEvent({
+        at: now,
+        lane,
+        tag: 'RUNTIME',
+        url,
+        message,
+        source: 'runtime-error',
+        inExplorerApp: false,
+        maybeNextAsset: url.includes('/_next/'),
+        maybeHotReload: url.includes('hot-update') || message.toLowerCase().includes('fast refresh'),
+        suppressedDefault: false,
+      });
+      publishSnapshot();
+    };
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message = String(
+        (typeof reason === 'string' && reason)
+        || (reason && typeof reason === 'object' && 'message' in reason && String((reason as { message?: unknown }).message))
+        || ''
+      );
+      const reasonUrl = String(
+        (reason && typeof reason === 'object' && 'url' in reason && String((reason as { url?: unknown }).url))
+        || ''
+      );
+      const reasonStack = String(
+        (reason && typeof reason === 'object' && 'stack' in reason && String((reason as { stack?: unknown }).stack))
+        || ''
+      );
+      const now = Date.now();
+      const lane = classifyNetworkLane({
+        url: reasonUrl,
+        tag: 'PROMISE',
+        inExplorerApp: false,
+        message,
+        source: 'promise-rejection',
+      });
+      const shouldSuppressDefault = shouldSuppressGenericLoadFailedRejection({
+        lane,
+        message,
+        url: reasonUrl,
+        inExplorerApp: false,
+        reasonStack,
+      });
+      pushNetworkRecentEvent({
+        at: now,
+        lane,
+        tag: 'PROMISE',
+        url: reasonUrl,
+        message,
+        source: 'promise-rejection',
+        inExplorerApp: false,
+        maybeNextAsset: reasonUrl.includes('/_next/') || message.includes('/_next/'),
+        maybeHotReload: reasonUrl.includes('hot-update') || message.toLowerCase().includes('fast refresh'),
+        suppressedDefault: shouldSuppressDefault,
+      });
+      if (shouldSuppressDefault) {
+        suppressUnhandledRejectionDefault(event);
       }
       publishSnapshot();
     };
 
     window.addEventListener('error', onResourceError, true);
+    window.addEventListener('error', onRuntimeError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection, true);
     publishSnapshot();
 
     return () => {
       window.removeEventListener('error', onResourceError, true);
+      window.removeEventListener('error', onRuntimeError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection, true);
       delete (window as typeof window & { __explorerLoadFailureDebug?: unknown }).__explorerLoadFailureDebug;
+      delete (window as typeof window & { __explorerNetworkFailureDebug?: unknown }).__explorerNetworkFailureDebug;
     };
   }, []);
 
@@ -3963,16 +4338,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const cachedOrient = getCachedOrientation(orientationKey);
     const orient = resolveItemOrientation(item, orientationKey);
     const orientLocked = Boolean(itemOrient || dynamicOrient || cachedOrient);
-    const rawThumbUrl = normalizeThumbUrl(item.thumb_url
-      || item.thumbnail_url
-      || (kind === 'image' ? item.stream_url : undefined));
+    const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
     const fallbackThumb = buildThumbFallback(kind);
     const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;
     const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
-    const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'
-      ? thumbUrl
-      : fallbackThumb;
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
@@ -4002,7 +4372,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       pointerHandlers,
       previewPlaybackKey,
       renderKey,
-      safeThumbUrl,
       selectionKey,
       selectionOrderLabel: selectionOrderIndex ? String(Math.min(selectionOrderIndex, 99)) : '',
       size,
@@ -4028,6 +4397,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     previewPlaybackToken,
     reinforcedActiveKey,
     resolveAssetUrl,
+    resolveThumbCandidateUrl,
     resolveItemOrientation,
     selected,
     selectedOrderMap,
@@ -4632,7 +5002,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             completionBeat={holdOverlayCompleteBeat}
           />
           <div
-            ref={mediaScrollViewportRef}
+            ref={setMediaScrollViewportNode}
             className="scroll"
             onScroll={clearPendingLongPress}
             data-topbar-hidden={topbarHidden ? 'true' : 'false'}

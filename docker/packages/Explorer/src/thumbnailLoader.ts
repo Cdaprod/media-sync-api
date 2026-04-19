@@ -3,6 +3,7 @@ import type { MediaItem } from './types';
 
 export const THUMB_LOAD_TIMEOUT_MS = 8000;
 const THUMB_MAX_WORKERS = 3;
+const THUMBNAILABLE_EXTENSIONS = new Set(['.mp4', '.mov', '.avi', '.mkv', '.jpg', '.jpeg', '.png', '.heic']);
 
 type ThumbLoadState = 'loaded' | 'error';
 
@@ -43,6 +44,13 @@ export const getThumbCacheKey = (item: MediaItem) => {
 };
 
 export const buildThumbJobKey = (thumbKey: string, thumbUrl?: string) => `${thumbKey}::${thumbUrl || ''}`;
+
+export const isThumbableRelativePath = (relativePath?: string): boolean => {
+  const normalized = String(relativePath || '').trim().toLowerCase();
+  if (!normalized) return false;
+  const ext = normalized.includes('.') ? normalized.slice(normalized.lastIndexOf('.')) : '';
+  return THUMBNAILABLE_EXTENSIONS.has(ext);
+};
 
 const syncThumbNode = (
   target: HTMLImageElement,

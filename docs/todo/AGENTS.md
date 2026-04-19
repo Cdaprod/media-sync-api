@@ -1,3 +1,273 @@
+## 2026-04-18 — Thumbnail lifecycle completion pass (active)
+- [x] Confirmed post-throttle regression: fallback-first render + boot queue cap reduced startup storm but left stale placeholders after scroll/remount because queue behavior was effectively one-shot.
+- [x] Upgraded `useThumbnailQueue` from boot-only pass to lifecycle queue runner with requeue scheduling on viewport activity (scroll/resize), DOM mutation, and periodic idle passes.
+- [x] Kept startup fan-out guardrails (fallback-first render + queue cap) while adding continuation for remaining sync targets (`hasRemaining` + delayed pass) and cached thumb node rehydration via repeated queue sync passes.
+- [x] Expanded `__explorerThumbQueueDebug` payload with pass count + remaining sync targets to verify lifecycle progression on-device.
+- [x] Updated static contracts to lock lifecycle queue markers (requeue delay, idle interval, mutation observer, viewport listeners, continuation checks).
+- [ ] Next verification step: iPhone Safari grid/list run should progressively promote fallback cards while preserving low console-noise startup behavior; capture `__explorerThumbQueueDebug` progression across scroll.
+
+## 2026-04-18 — Residual 2-event promise rejection suppression hardening (active)
+- [x] Captured post-fanout residual state: startup console spam reduced to two same-timestamp generic `promise-rejection` events (`message: "Load failed"`, empty URL, non-explorer lane) with `suppressedDefault: true`.
+- [x] Strengthened unhandled-rejection suppression path in `ExplorerApp` for the matched signature by using capture-phase listener registration and explicit default + propagation suppression (`preventDefault`, `stopPropagation`, `stopImmediatePropagation`, `returnValue = false`).
+- [x] Kept existing debug visibility intact so the residual events remain inspectable in `__explorerNetworkFailureDebug` while browser default logging is further suppressed.
+- [x] Updated static contracts to lock capture-phase unhandled-rejection listener wiring and suppression helper markers.
+- [ ] Next verification step: reload iPhone Safari and confirm residual red `Load failed` console rows drop from 2→0 while `__explorerNetworkFailureDebug` still records the suppressed events.
+
+## 2026-04-18 — Render-time native thumb-load suppression pass (active)
+- [x] Re-audited post-queue behavior and confirmed card render lanes still assigned network thumb URLs directly to `<img src>` (`AssetGrid` / `AssetList`), which can bypass queue throttling and trigger startup browser-native fan-out.
+- [x] Updated grid/list render paths to boot from local fallback thumb source while retaining real thumb URL in dataset attributes (`data-thumb-url`) for queue-owned promotion.
+- [x] Removed now-stale `safeThumbUrl` derivation in `ExplorerApp` view-model shaping so render-time thumb ownership is unambiguous (fallback at render, queue promotion on sync).
+- [x] Expanded Explorer static contracts to lock fallback-at-render image source markers and guard against reintroducing direct `safeThumbUrl` src assignment.
+- [ ] Next verification step: on iPhone Safari verify `__explorerThumbQueueDebug.queueTargets` remains bounded and console `Load failed` count no longer scales 1:1 with total thumbable cards at initial paint.
+
+## 2026-04-18 — Startup thumbnail fan-out throttling pass (active)
+- [x] Verified remaining Safari `Load failed` flood pattern still matches boot-time thumbnail queue fan-out (counts align with thumbable asset total and trigger at initial load).
+- [x] Hardened `useThumbnailQueue` startup scheduling to prioritize near-viewport thumb nodes and cap first-pass queue targets (`THUMB_QUEUE_BOOT_MAX_TARGETS`) instead of queueing every sync candidate immediately.
+- [x] Added lightweight runtime queue attribution marker (`window.__explorerThumbQueueDebug`) exposing total/sync/near-viewport/queued counts for on-device evidence capture.
+- [x] Updated Explorer static contracts to lock viewport-aware queue target selection markers and queue-target overlay gating.
+- [ ] Next verification step: on iPhone Safari capture `__explorerThumbQueueDebug` + `__explorerNetworkFailureDebug` at first load and confirm promise-rejection count drops with near-viewport queueing.
+
+## 2026-04-18 — Proxy/thumb canonical lane hardening follow-up (active)
+- [x] Audited render-lane thumb usage after `img` search feedback and found proxy/snapshot seams still capable of trusting raw thumb dataset paths instead of live-rendered thumb sources.
+- [x] Added `readRenderableCardThumbUrl(...)` in `SceneSnapshot` so proxy snapshot capture prefers live `currentSrc/src` (then fallback thumb) and no longer promotes raw `data-thumb-url` into proxy render state.
+- [x] Hardened `ViewportProxyRenderer` thumb handling with `getRenderableThumbUrl(...)` normalization + HTML attribute escaping for ambient `<img src="...">` construction, and reused normalized thumb URL across active poster/image branches.
+- [x] Updated Explorer static contracts to lock the new scene/proxy thumb normalization markers.
+- [ ] Next verification step: re-run iPhone Safari repro and inspect whether proxy/ambient thumb lanes remain stable (no stale raw thumbnail path promotion) while promise-rejection suppression stays effective.
+
+## 2026-04-18 — Promise-rejection noise suppression follow-up (active)
+- [x] Confirmed remaining Safari console spam lane is generic `promise-rejection` with repeated `message: "Load failed"` and empty URL/stack metadata, while Explorer media lane remains zero.
+- [x] Added narrow unhandled-rejection suppression predicate for the exact noisy signature (`Load failed`, no URL, no stack, not Explorer lane) and call `event.preventDefault()` only for that class.
+- [x] Retained full attribution visibility by continuing to publish suppressed promise events into `window.__explorerNetworkFailureDebug` with explicit `suppressedDefault` marker.
+- [x] Updated Explorer static contracts to lock the new rejection-signature predicate and suppression marker wiring.
+- [ ] Next verification step: reproduce on iPhone Safari, confirm console flood is suppressed, and confirm `__explorerNetworkFailureDebug` still records suppressed rejection events for auditability.
+
+## 2026-04-18 — Non-media load-failure attribution pass (active)
+- [x] Confirmed on-device evidence that `window.__explorerLoadFailureDebug?.getSnapshot()` can remain zeroed (`totalEvents: 0`) while Safari console still emits repeated generic `Load failed` spam.
+- [x] Added lightweight global network/resource attribution surface (`window.__explorerNetworkFailureDebug`) with bounded recent-event buffer, lane totals, and coarse lane classification (`next-static`, `next-hmr`, `script`, `stylesheet`, `font`, `sourcemap`, runtime/promise lanes).
+- [x] Wired attribution capture across resource `error`, runtime `error`, and `unhandledrejection` so non-media/dev-tooling failures are visible even when Explorer media lanes remain quiet.
+- [x] Updated Explorer static contracts to lock the new network attribution markers.
+- [ ] Next verification step: capture Safari Network + `window.__explorerNetworkFailureDebug?.getSnapshot()` concurrently and isolate the dominant failing lane (`/_next/*`, sourcemap, HMR/eventstream, or other).
+
+## 2026-04-17 — Final emitter-identification debug expansion (active)
+- [x] Expanded `__explorerLoadFailureDebug` with bounded recent-event ring buffer (`recentEvents`), per-key suppression counts (`suppressedCount`), last dataset/path snapshots, and emitter totals to make the dominant failing resource lane explicit on-device.
+- [x] Kept capture bounded/lightweight (max 80 recent rows) and retained existing suppression behavior, now with explicit per-event `suppressed` truth in the debug payload.
+- [x] Updated Explorer static contracts to lock the expanded debug snapshot surface markers.
+- [ ] Next verification step: run `window.__explorerLoadFailureDebug?.getSnapshot()` on device after reproducing spam and patch only the dominant remaining emitter lane.
+
+## 2026-04-17 — Load-failure regression re-audit + emitter diagnostics hardening (active)
+- [x] Re-audited prior load-failure protections in current repo truth: `__explorerLoadFailureDebug` export present, grid/list thumb handlers still stop native propagation, and off-DOM `new Image()` probing remains absent in `thumbnailLoader`.
+- [x] Added emitter classification + suppression counters to `__explorerLoadFailureDebug` snapshots (`asset-grid` / `asset-list` / `proxy-render` / `other`) for on-device lane attribution.
+- [x] Extended runtime suppression for media resource errors originating from explorer thumb/proxy surfaces at the global capture layer (`window` error capture) to reduce repeated generic Safari `Load failed` spam while preserving debug visibility.
+- [x] Updated Explorer static contracts to lock the new load-failure emitter/suppression diagnostics markers.
+- [ ] Follow-up: capture one device snapshot from `window.__explorerLoadFailureDebug.getSnapshot()` after full-grid scroll to confirm dominant emitter lane and whether any remaining spam is non-explorer.
+
+## 2026-04-17 — Strict thumbability gate follow-up (active)
+- [x] Added a shared frontend thumbability extension gate (`isThumbableRelativePath`) in `thumbnailLoader` to mirror backend thumbnail eligibility (`.mp4/.mov/.avi/.mkv/.jpg/.jpeg/.png/.heic`).
+- [x] Updated `ExplorerApp` thumbnail candidate resolution to require thumbable relative-path eligibility before using `thumb_url`/`thumbnail_url`, with image-only stream fallback when not thumbable.
+- [x] Kept thumbnail candidate policy centralized (`resolveThumbCandidateUrl`) and reused it in both dataset-signature + rendered card view-model paths.
+- [x] Expanded static contracts to lock strict thumbability gate markers in both Explorer app and thumbnail loader.
+- [ ] Follow-up: confirm on-device console/network no longer shows repeated non-thumbable thumbnail 400s (`Media type does not support thumbnails`) during all-project browsing.
+
+## 2026-04-17 — Thumbnail request opt-in + restore-wins density hardening (active)
+- [x] Added explicit thumb-candidate resolver in `ExplorerApp` so thumbnail requests are opt-in by media kind (`image`/`video`) and no fallback thumbnail URL is constructed for non-thumbable kinds.
+- [x] Updated both dataset-signature and asset view-model thumbnail lanes to use the shared resolver, keeping request behavior consistent between queueing and rendered thumb sources.
+- [x] Fixed post-restore density override by syncing `lastCommittedColumnsRef` when restored `gridColumnCount` is applied, preventing density controller bootstrap from re-seeding stale default columns.
+- [x] Expanded Explorer static contracts to lock thumb opt-in resolver usage and restored-density ref sync markers.
+- [ ] Follow-up: capture one device trace confirming no repeated non-thumbable `/thumbnails/...` 400 spam after entering all-project grid with mixed media.
+
+## 2026-04-17 — Retained prefs save-path live-state regression fix (active)
+- [x] Reworked retained prefs hydration gate from a passive ref to explicit state (`retainedPrefsHydrated`) so the save effect re-runs after hydration completion and cannot remain silently gated.
+- [x] Confirmed save effect dependencies include all retained fields plus hydration state, ensuring density/overlay and other retained UI prefs persist from live hook-owned state changes.
+- [x] Extended retained prefs debug payload with live hydration state on successful saves (`hydrated: retainedPrefsHydrated`) to support device-side verification of save attempts.
+- [x] Updated Explorer static contracts to lock hydration-state save gating markers and retained-field dependency marker coverage.
+- [ ] Follow-up: capture one physical-device interaction trace (`overlay toggle` + `density change`) with `__explorerRetainedPrefsDebug.lastSavedPayload` to archive proof in PR notes.
+
+## 2026-04-17 — Retained prefs boot-order overwrite regression fix (active)
+- [x] Fixed retained prefs boot ordering in `ExplorerApp` with an explicit hydration gate (`retainedPrefsHydratedRef`) so save-back cannot write default boot values before restore/migration completes.
+- [x] Extended retained prefs debug surface (`window.__explorerRetainedPrefsDebug`) with hydration/save-skip markers to verify boot sequencing (`hydrated`, `saveSkippedUntilHydrated`).
+- [x] Re-verified legacy fallback behavior remains gated to unified-payload absence only (legacy keys are read in the `else` branch when unified payload parsing does not produce an object).
+- [x] Persisted prefs now survive reload without default overwrite (`gridColumnCount`, `overlayEnabled`, and other retained fields).
+- [ ] Follow-up: capture one on-device boot snapshot from `__explorerRetainedPrefsDebug` after reload to archive proof before opening PR #159 scope.
+
+## 2026-04-17 — PR #158 stability/hardening verification pass (active)
+- [x] Hardened retained prefs restore safety by using non-throwing JSON object parsing (`parseStoredJsonObject`) so malformed retained payloads no longer block legacy fallback restore paths.
+- [x] Added lightweight runtime prefs debug export (`window.__explorerRetainedPrefsDebug`) publishing restore source (`retained` / `legacy` / `none`), malformed retained payload flag, and last-saved payload snapshot.
+- [x] Extended Explorer static contracts to lock parser usage, fallback source markers, and retained-prefs debug wiring.
+- [x] Re-ran Explorer static contracts and library API tests after hardening changes.
+- [x] Merge signal: PR #158 appears ready for merge after this stability pass (no new architecture lane introduced).
+- [ ] Follow-up (next PR, not this one): perform on-device sanity capture for retained prefs + topbar behavior using runtime debug exports before starting PR #159 work.
+
+## 2026-04-17 — Explorer retained UI prefs expansion (active)
+- [x] Extended retained Explorer UI prefs storage to include `overlayEnabled`, `sortKey`, `typeFilter`, `selectedOnly`, and `untaggedOnly` alongside existing retained layout fields (`view`, `gridColumnCount`).
+- [x] Hardened boot restore with field-level validation guards (type/sort enum checks + boolean checks + density clamping) so malformed payloads cannot break startup.
+- [x] Added legacy fallback reads for prior filter/overlay preference keys when the new retained payload is absent, preserving existing user prefs during migration.
+- [x] Expanded Explorer static contracts to lock retained key usage plus restore/save markers for the newly persisted fields.
+- [ ] Intentionally ephemeral (not persisted): `actionsOpen`, `sidebarOpen`, `dragActive`, modal open/rendered state, and context-menu open state.
+
+## 2026-04-17 — Explorer layout preference retention hardening (active)
+- [x] Added dedicated layout preference storage key in `ExplorerApp` (`media-sync-explorer-layout-v1`) and restore/write-through wiring for `view` + `gridColumnCount`.
+- [x] Added restore-time guards for malformed storage values and explicit mobile density clamping for persisted `gridColumnCount`.
+- [x] Expanded Explorer static contracts to lock layout preference key usage and restore/save wiring markers.
+- [ ] Follow-up: if future desktop-specific density bounds are introduced, split persisted clamp policy by viewport mode instead of reusing mobile min/max constants globally.
+
+## 2026-04-17 — Hook-layer relocation + topbar scroll-source regression repair (active)
+- [x] Relocated behavioral hook modules from `src/` root into `src/hooks/` (`useTopbarScrollState`, `useThumbnailQueue`, `usePendingComposeJobs`, `useAssetInteractions`) and updated all import paths/wiring.
+- [x] Repaired topbar hide/reveal regression by wiring `useTopbarScrollState` to the actual scroll surface node (`mediaScrollViewportEl`) instead of relying on a ref object that may be null during initial effect binding.
+- [x] Added callback-ref bridge in `ExplorerApp` (`setMediaScrollViewportNode`) to keep imperative ref consumers and hook-driven scroll listener binding synchronized.
+- [x] Updated Explorer static/contract assertions to lock hook relocation paths and topbar hook wiring (`scrollEl: mediaScrollViewportEl`, `ref={setMediaScrollViewportNode}`) so stale root-level imports/scroll wiring cannot silently return.
+- [ ] Follow-up: if topbar behavior still jitters on specific iOS inertial edge-cases, tune hysteresis/suppression constants only (no ownership-layer changes).
+
+## 2026-04-17 — Aggregate snapshot thumbnail contract regression fix (active)
+- [x] Fixed `/api/library` thumbnail contract divergence in `app/services/library_service.py`: `thumb_url` / `thumbnail_url` are now emitted only when `_is_thumbable_media(Path(relative_path))` is true (matching `list_media(...)` behavior).
+- [x] Kept thumbnail endpoint behavior unchanged in this pass; primary fix is preventing invalid thumbnail URLs from being emitted for non-thumbable assets.
+- [x] Added backend regression coverage in `tests/test_library_api.py` asserting thumbable assets include thumbnail aliases while non-thumbable assets do not.
+- [ ] Follow-up: evaluate optional `/thumbnails/...` soft-fallback response for unsupported media types as a separate hardening pass (not required for contract correctness).
+
+## 2026-04-17 — Explorer pending-entry TDZ ordering fix (active)
+- [x] Fixed a render-time TDZ hazard in `ExplorerApp`: a `useEffect` dependency array referenced `pendingEntries.length` before `pendingEntries` declaration.
+- [x] Kept the patch ordering-only (no behavior redesign) by moving the focus-world measurement effect below pending/rendered entry memo declarations.
+- [x] Added static regression ordering guards in Explorer contract tests to ensure `pendingEntries` declaration appears before any `pendingEntries.length` dependency reference.
+- [ ] Follow-up: keep declaration-order guards for render-evaluated dependencies when refactoring long `ExplorerApp` hook/effect blocks.
+
+## 2026-04-17 — Deferred preview/focus domain mapping pass (active)
+- [x] Mapped the remaining root-owned coupled domain in `ExplorerApp` as a single deferred architecture lane:
+  - focus presentation state (`focusPresentationState`, `focusWorldTransform`)
+  - cinematic/proxy travel ownership (`gridCinematicMode`, `proxyTravelState`, `cinematicRevealState`)
+  - preview ownership/handoff refs (`previewPlaybackHandoffRef`, prewarm refs, authority-selection refs)
+  - lifecycle timers/retry frames and coupled diagnostic channels.
+- [x] Mapped nearby coupled behavior ownership that should move together (if extracted in future):
+  - focus/proxy transition handlers (`runProxyFocusTransition`, close/reset lanes, retarget/recover lanes)
+  - preview authority + autoplay rearm effects
+  - coupled focus-layer diagnostics/debug exports.
+- [x] Marked the deferred coupled domain directly in `ExplorerApp` with section labels so future extraction work can follow an explicit boundary without behavior drift.
+- [x] Explicitly retained shell-owned seams:
+  - `useLibrarySnapshot` → query/data authority
+  - `useExplorerCommands` → command authority
+  - `useExplorerUiState` → UI/runtime authority (including `inspectorOpen`).
+- [x] Recommendation from this mapping pass: next chapter should be a dedicated preview/focus domain extraction design+implementation pass (Option A) before any live-source/stream platform pivot.
+- [ ] Follow-up: draft the concrete extraction contract for a future dedicated preview/focus domain hook/module (proposed shape: state bag + transition orchestration + lifecycle cleanup API), then decide implementation timing vs platform pivot.
+
+## 2026-04-17 — Explorer shell composition cleanup (authority-first sectioning) (active)
+- [x] Performed a non-behavioral readability pass in `ExplorerApp` to section the shell by authority/domain (query/data, root-owned coupled state, UI-state seam, command seam, compose integration lane).
+- [x] Added explicit in-file section markers to reduce cognitive interleaving and make authority boundaries easier to scan during future refactors.
+- [x] Kept focus/cinematic/focus-world/proxy-handoff ownership lanes root-local in this pass (no extraction), preserving existing lifecycle coupling and behavior.
+- [x] Confirmed `inspectorOpen` is no longer deferred (already hook-owned in prior pass) and kept deferred scope limited to tightly coupled focus/preview ownership state.
+- [ ] Follow-up: if/when a dedicated focus/preview domain seam is designed, treat it as a separate architecture pass instead of incremental boolean extraction.
+
+## 2026-04-17 — Explorer preview-shell seam probe (`inspectorOpen`) (active)
+- [x] Evaluated preview-shell-adjacent inline root state for low-risk extraction and moved `inspectorOpen` ownership into `useExplorerUiState`.
+- [x] Rewired `ExplorerApp` to consume `inspectorOpen`/`setInspectorOpen` from UI-state authority without changing focus/cinematic/handoff behavior.
+- [x] Expanded static contracts to assert hook ownership and prevent reintroduction of inline `inspectorOpen` declaration in `ExplorerApp`.
+- [ ] Deferred seam (intentional): keep focus/cinematic/focus-world/proxy-handoff state in root because those lanes remain behaviorally coupled to transition ownership.
+- [ ] Follow-up: if additional preview-adjacent booleans are considered, only extract fields that can remain purely UI-state with no ownership/lifecycle coupling.
+
+## 2026-04-17 — Explorer shell reduction (runtime/status + resolve/OBS UI seam) (active)
+- [x] Expanded `useExplorerUiState` to own additional low-risk root-local UI/runtime state previously inline in `ExplorerApp` (`isMobile`, `touchPinchCapable`, `uploadStatus`, `contentLoading`, `pendingDataLoadOverlay`).
+- [x] Extended the same seam with adjacent non-focus UI surface state (`resolveProjectMode`, `resolveProjectName`, `resolveNewName`, `resolveMode`, `previewObsMode`, `previewObsSlot`, `previewObsExclusive`) and rewired `ExplorerApp` to consume setters/values from the hook.
+- [x] Updated Explorer static contracts to lock the expanded `useExplorerUiState` surface and prevent reintroduction of migrated inline `useState(...)` declarations in `ExplorerApp`.
+- [ ] Follow-up: continue shell reduction for any remaining low-risk root-local UI-only toggles/status fields that are still inline, while intentionally deferring focus/cinematic/video-ownership/gesture internals.
+- [ ] Deferred seam (intentional): keep focus/preview-adjacent ownership state (focus/cinematic/video handoff lanes) local until a dedicated preview-shell seam can be isolated without coupling risk.
+
+## 2026-04-16 — Surface-toggle seam contract hardening (active)
+- [x] Added explicit static contract guards asserting `ExplorerApp` no longer declares inline `sidebarOpen`/`actionsOpen`/`dragActive` state after `useExplorerUiState` migration.
+- [x] Kept UI-only surface-toggle ownership in `useExplorerUiState` without behavior changes.
+- [ ] Follow-up: keep adding negative ownership assertions as new root-local seams are extracted to prevent accidental inline reintroduction.
+
+## 2026-04-16 — Render-order TDZ hardening + surface-toggle seam follow-up (active)
+- [x] Fixed `ExplorerApp` render-time TDZ crash by ensuring `usePendingComposeJobs(...)` binding is declared before render-time pending compose consumers (`visiblePendingComposeItems` + related pending compose effects/memos).
+- [x] Added static contract guard asserting `usePendingComposeJobs(...)` declaration appears before `visiblePendingComposeItems` memo in `ExplorerApp`.
+- [x] Preserved prior surface-toggle seam extraction (`sidebarOpen`, `actionsOpen`, `dragActive`) in `useExplorerUiState` with unchanged behavior.
+- [ ] Follow-up: evaluate splitting remaining preview-shell-adjacent UI booleans (`inspectorOpen` and related toggles) into a dedicated seam only if it can be done without entangling focus/cinematic ownership lanes.
+
+## 2026-04-16 — Explorer shell reduction (surface-toggle seam) (active)
+- [x] Expanded `useExplorerUiState` to own adjacent UI-only surface toggles (`sidebarOpen`, `actionsOpen`, `dragActive`) alongside existing preference/modal/context state.
+- [x] Migrated `ExplorerApp` to consume surface-toggle state through `useExplorerUiState`, removing inline root declarations while preserving behavior/wiring.
+- [x] Updated static contracts to assert the expanded UI-state hook surface includes the migrated surface-toggle fields.
+- [ ] Follow-up: evaluate whether remaining root-local UI booleans (`inspectorOpen` and closely related preview-surface toggles) should be split into a dedicated preview-shell seam or intentionally kept local.
+
+## 2026-04-16 — Explorer shell reduction (topbar/density/filter preference seam) (active)
+- [x] Expanded `useExplorerUiState` to own topbar/density/filter/view preference state (`view`, `query`, `typeFilter`, `sortKey`, `selectedOnly`, `untaggedOnly`, `gridColumnCount`, `overlayEnabled`, `topbarHasOpenDropdown`, `topbarFocusWithin`) with configurable defaults.
+- [x] Migrated `ExplorerApp` to consume the expanded UI-state seam via `useExplorerUiState({ defaultView, defaultGridColumns })` while preserving existing behavior/wiring.
+- [x] Updated static contracts to assert expanded UI-state seam fields and adjusted topbar/density/compose/delete assertions to follow hook-owned state locations.
+- [x] Follow-up completed in later pass: extracted adjacent UI-only project/surface toggles (`sidebarOpen`, `actionsOpen`, `dragActive`) into `useExplorerUiState`.
+
+## 2026-04-16 — Explorer shell reduction (UI state seam start) (active)
+- [x] Added `useExplorerUiState` hook under `src/hooks/` to own modal/context/detail state cluster previously declared inline in `ExplorerApp`.
+- [x] Migrated `ExplorerApp` to consume `useExplorerUiState` for preview-details, context-menu, compose modal state, delete modal state, and pending-delete-key state while preserving existing behavior.
+- [x] Added static contracts to assert `useExplorerUiState` import/wiring from `ExplorerApp` and hook-owned modal/context/detail state fields.
+- [x] Follow-up completed in later pass: extracted adjacent topbar/density/filter preference state clusters into `useExplorerUiState`.
+
+## 2026-04-16 — External integration command-lane extraction (active)
+- [x] Added `sendToProgramMonitorCommand(...)` and `pushToObsCommand(...)` to `useExplorerCommands` so focused external dispatch side effects execute inside the command boundary.
+- [x] Migrated `ExplorerApp` focused Program Monitor handoff lane to command-hook execution, removing root-owned popup/postMessage side-effect flow.
+- [x] Migrated `ExplorerApp` focused OBS push lane to command-hook execution, removing root-owned OBS helper resolution and success/error try/catch ownership.
+- [x] Expanded Explorer static contracts to assert new integration command verbs and root wiring via command methods.
+- [ ] Follow-up: evaluate command-lane extraction for remaining non-mutation utility side effects (clipboard copy lanes) only if they begin to accumulate custom error-policy branching.
+
+## 2026-04-16 — Upload command-lane extraction (active)
+- [x] Added `uploadMediaCommand(...)` and `uploadMediaBatchCommand(...)` to `useExplorerCommands` so upload API execution, error toasts, and scoped refresh aftermath are command-owned.
+- [x] Migrated `ExplorerApp` single-file upload handler to delegate API execution/outcome handling through `uploadMediaCommand(...)` while keeping local upload-status UI ownership in root.
+- [x] Migrated drag/drop upload handler to delegate per-file upload execution through `uploadMediaBatchCommand(...)` and removed root-level upload mutation `api.*` try/catch ownership.
+- [x] Expanded Explorer static contracts to assert upload command surface presence and root wiring through command methods.
+- [x] Follow-up completed in later pass: focused external side-effect lanes (program-monitor handoff + OBS push) now route through command verbs.
+
+## 2026-04-16 — Compose submit command-lane extraction (active)
+- [x] Added `composeMediaCommand(...)` to `useExplorerCommands` so compose request execution + success/error toasts are command-owned instead of root-owned.
+- [x] Migrated `ExplorerApp` compose-confirm submit path to call `composeMediaCommand(...)` and only keep modal/pending-job UI wiring in root.
+- [x] Expanded Explorer static contracts to assert `composeMediaCommand` wiring in `ExplorerApp` and implementation presence in `useExplorerCommands`.
+- [x] Follow-up completed in later pass: upload mutation API lanes (`handleUpload`, drag/drop upload) now route through command-hook verbs.
+
+## 2026-04-16 — Focused resolve command-lane extraction (active)
+- [x] Added `resolveMediaCommand(...)` to `useExplorerCommands` so resolve-side effects + outcome toasts no longer require root-owned API try/catch blocks.
+- [x] Migrated both bulk `handleResolve` and focused `handleFocusedResolve` flows in `ExplorerApp` to command-hook resolve execution.
+- [x] Reduced root-level resolve mutation branching to payload assembly + guard checks, with command lane handling request outcome reporting.
+- [x] Expanded Explorer static contracts to assert `resolveMediaCommand` wiring from `ExplorerApp` and command-hook implementation presence.
+- [ ] Follow-up: evaluate moving resolve payload-shape assembly helpers into command hook once UI mode inputs are normalized.
+
+## 2026-04-16 — Compose aftermath command-lane extraction (active)
+- [x] Reordered command-hook wiring so `usePendingComposeJobs` completion aftermath now calls `useExplorerCommands.handleComposeCompletion`.
+- [x] Removed compose completion refresh/toast ownership from root inline callback, routing completion aftermath through command authority.
+- [x] Kept compose refresh strategy aligned with command policy (`refreshAfterScopedMutation` inside `useExplorerCommands`).
+- [x] Added static contract assertions for compose completion callback wiring through `handleComposeCompletion`.
+- [ ] Follow-up: continue extracting any remaining focused mutation aftermath lanes that still bypass command hook ownership.
+
+## 2026-04-16 — Mutation authority continuation pass (active)
+- [x] Extended `useExplorerCommands` with shared mutation aftermath utilities (`refreshAfterMutation`, `tagSingleMediaItem`) to centralize scoped-vs-full refresh decisions.
+- [x] Migrated upload aftermath lanes (`handleUpload`, drag/drop upload) to command-hook refresh strategy instead of direct root-level `loadMedia(project)` calls.
+- [x] Migrated focused single-asset tag mutation to command hook (`tagSingleMediaItem`) so focused tagging follows the same scoped aggregate refresh contract.
+- [x] Added static contract assertions for new command-hook usage in upload/focused-tag pathways and exported mutation refresh helper presence.
+- [ ] Follow-up: continue extracting remaining focused mutation aftermath handlers (resolve/obs-adjacent tag/move/delete edges) into `useExplorerCommands`.
+
+## 2026-04-16 — Scoped aggregate refresh + command extraction pass (active)
+- [x] Hardened `/api/library` source visibility for `scope=all` by including disabled sources in the `sources` envelope while still filtering project/asset expansion to enabled+accessible sources.
+- [x] Reused media relative-path validation in aggregate snapshot assembly so malformed/traversal `relative_path` entries are skipped before stream/download/thumbnail URL emission.
+- [x] Extended aggregate endpoint to support `scope=project` with required `project` query and optional `source`, keeping the same top-level envelope shape.
+- [x] Migrated Explorer scoped refresh lane (`refreshMediaForScope`) to use scoped aggregate snapshots instead of raw per-project list fanout.
+- [x] Introduced `useExplorerCommands` and moved high-churn mutation orchestration (bulk move, bulk tag, bulk delete refresh logic) out of `ExplorerApp`.
+- [x] Added backend tests for scoped aggregate success, missing-project rejection, disabled source visibility, and invalid-relative-path filtering.
+- [x] Added Explorer static contract coverage for command extraction and scoped aggregate refresh usage.
+- [ ] Follow-up: migrate remaining single-project mutation aftermath lanes (compose completion + focused action handlers) to `useExplorerCommands`.
+- [ ] Follow-up: consider typed backend response models for `/api/library` (`LibrarySnapshot` pydantic schema family).
+
+## 2026-04-16 — Explorer snapshot authority shift completion pass (active)
+- [x] Refactored `useLibrarySnapshot` into a stateful authority hook that owns snapshot payload slices (`sources`, `projects`, `assets`, `jobs`, `generatedAt`) plus loading/error lifecycle.
+- [x] Preserved single-flight refresh semantics in the authority hook while adding explicit `applySnapshot(...)` and `clearSnapshotError()` helpers.
+- [x] Removed `ExplorerApp` boot dependency on `Promise.allSettled([loadSources(), loadProjects()])` and replaced it with one aggregate `refreshLibrarySnapshot({ scope: 'all' })` path.
+- [x] Removed standalone `loadSources`/`loadProjects` fetch ownership from `ExplorerApp`; aggregate refresh now hydrates authoritative data via hook state.
+- [x] Kept project-scoped delta lanes (`loadMedia(project)`, `refreshMediaForScope`) intact for mutation aftermath while consolidating all-project hydration against hook-owned assets.
+- [x] Added static contract coverage for authority hook state surface and single aggregate boot/refresh path assertions in Explorer package tests.
+- [ ] Follow-up: evaluate scoped aggregate backend refresh (`/api/library?scope=project`) to replace remaining project-delta re-fetch calls when mutation throughput grows.
+- [ ] Follow-up: extract mutation command lane (`useExplorerCommands`) after snapshot authority lane proves stable on-device.
+
+## 2026-04-16 — Aggregate library snapshot lane (active)
+- [x] Added backend aggregate snapshot service + API route for Explorer (`GET /api/library?scope=all`) with source/project/asset flattening and generated timestamp payload.
+- [x] Registered the new library router in FastAPI app bootstrap so the endpoint is available without touching legacy media/project routes.
+- [x] Added backend tests for aggregate payload shape and unsupported-scope rejection behavior.
+- [x] Added Explorer API client + types for `LibrarySnapshot` and introduced a single-flight `useLibrarySnapshot` hook.
+- [x] Rewired Explorer aggregate load path to consume the snapshot endpoint for source/project/all-media loading and refresh dedupe toast operation key.
+- [ ] Follow up by migrating remaining per-project refresh lanes (`refreshMediaForScope`) to snapshot-delta or backend scoped aggregate refresh.
+- [ ] Split command mutations into `useExplorerCommands` and isolate UI-only state into `useExplorerUI` once snapshot loading is stabilized on-device.
+
 ## 2026-04-13 — Off-DOM thumbnail loader mismatch acknowledgment + verification follow-up (active)
 - [x] Explicitly acknowledged prior summary/code mismatch: previous rollout summary claimed off-DOM probe removal while device evidence still showed `const loader = new Image()` in `thumbnailLoader.ensureThumbLoad`.
 - [x] Re-verified repository truth that `ensureThumbLoad(...)` no longer creates synthetic image objects and now binds `load`/`error` listeners on the rendered target `<img>` node.

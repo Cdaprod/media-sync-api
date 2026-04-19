@@ -1,4 +1,4 @@
-import type { MediaResponse, Project, ResolveOpenResponse, Source } from './types';
+import type { LibrarySnapshot, MediaResponse, Project, ResolveOpenResponse, Source } from './types';
 import type { ComposeJobEnvelope } from './composeJobs';
 
 export interface ResolveRequest {
@@ -18,6 +18,7 @@ export interface ApiClient {
   listSources: () => Promise<Source[]>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
+  listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
   uploadMedia: (url: string, file: File) => Promise<Record<string, unknown>>;
   sendResolve: (payload: ResolveRequest, source?: string) => Promise<ResolveOpenResponse>;
   deleteMedia: (project: string, relativePaths: string[], source?: string) => Promise<Record<string, unknown>>;
@@ -78,6 +79,18 @@ export function createApiClient(baseUrl: string): ApiClient {
       const response = await fetch(buildUrl(`/api/projects/${encodeURIComponent(project)}/media${query}`));
       if (!response.ok) {
         throw new Error('Failed to load media list');
+      }
+      return response.json();
+    },
+    async listLibrarySnapshot(params: { source?: string; scope?: 'all' | 'project'; project?: string } = {}): Promise<LibrarySnapshot> {
+      const { source, scope = 'all', project } = params;
+      const query = new URLSearchParams();
+      query.set('scope', scope);
+      if (source) query.set('source', source);
+      if (project) query.set('project', project);
+      const response = await fetch(buildUrl(`/api/library?${query.toString()}`));
+      if (!response.ok) {
+        throw new Error('Failed to load library snapshot');
       }
       return response.json();
     },
