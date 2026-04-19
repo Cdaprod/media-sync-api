@@ -1,3 +1,10 @@
+## 2026-04-19 — Scriptable shortcut contract hinting + startup probe defaults (active)
+- [x] Enabled startup smoke alert by default (`ENABLE_STARTUP_ALERT = true`) while keeping fatal alert enabled so launch-path failures surface immediately during on-device triage.
+- [x] Added `deriveInputContractHints(...)` and threaded `inputHints` into run metadata/output to explicitly flag non-files-only Shortcuts mapping issues (`Images/URLs/Texts` lanes populated).
+- [x] Updated dashboard header rendering to include inline warning hints when shortcut input contract looks inconsistent for compose flows.
+- [x] Re-synced compatibility alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical script after contract-hint additions.
+- [ ] Next verification step on iPhone: run with current shortcut, confirm startup alert appears, then clear Images lane and verify dashboard header warning disappears.
+
 ## 2026-04-19 — Scriptable launch-path hardening + alias compatibility restore (active)
 - [x] Refactored compose run bootstrap to present WebView before expensive staging work by splitting run creation into `createRunSkeletonPersistent(...)` + `stageRunInputsPersistent(...)`.
 - [x] Added optional startup smoke alert (`ENABLE_STARTUP_ALERT`) and fatal alert (`ENABLE_FATAL_ALERT`) so on-device script execution failures can be surfaced immediately when Scriptable opens without dashboard.

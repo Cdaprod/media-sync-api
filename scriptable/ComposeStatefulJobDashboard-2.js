@@ -24,7 +24,9 @@ const SOURCE = "primary";
 
 const STAGE_TO_TEMP = true;
 const MAX_TEXT = 220;
-const ENABLE_STARTUP_ALERT = false;
+// Debug toggles for on-device shortcut triage.
+// Keep ENABLE_STARTUP_ALERT=true while diagnosing launch issues.
+const ENABLE_STARTUP_ALERT = true;
 const ENABLE_FATAL_ALERT = true;
 
 // -----------------------------
@@ -466,6 +468,28 @@ function inspectIncomingArgs() {
     shortcutParameter: mapEntries(args?.shortcutParameter),
     urls: mapEntries(args?.urls),
   };
+}
+
+function deriveInputContractHints(incomingDebug, incomingItems) {
+  const hints = [];
+  const fileURLsCount = incomingDebug?.fileURLs?.length ?? 0;
+  const shortcutInputCount = incomingDebug?.shortcutInput?.length ?? 0;
+  const shortcutParameterCount = incomingDebug?.shortcutParameter?.length ?? 0;
+  const urlsCount = incomingDebug?.urls?.length ?? 0;
+
+  if (fileURLsCount === 0 && shortcutInputCount > 0) {
+    hints.push("No args.fileURLs detected; in Shortcuts set Run Script to Files = Shortcut Input and clear Images/Texts/URLs lanes.");
+  }
+
+  if (shortcutParameterCount > 0 || urlsCount > 0) {
+    hints.push("Shortcut passed parameter/url data; keep only Files lane populated for compose dashboard runs.");
+  }
+
+  if (incomingItems.length === 0 && (fileURLsCount + shortcutInputCount + shortcutParameterCount + urlsCount) > 0) {
+    hints.push("Share input was received but no usable path/data entries were collectable.");
+  }
+
+  return hints;
 }
 
 function collectIncomingItems() {
@@ -934,11 +958,15 @@ function buildHTML() {
     const meta = state.meta || {};
     const items = state.items || [];
 
-    document.getElementById("meta").textContent =
+    const hints = Array.isArray(meta.inputHints) ? meta.inputHints : [];
+    const headerText =
       (meta.project || "--") + " · " +
       (meta.mode || "--") + " · " +
       (meta.outputName || "--") + " · " +
       (meta.runId || "--");
+    document.getElementById("meta").textContent = hints.length
+      ? headerText + "\\n⚠ " + hints.join(" | ")
+      : headerText;
 
     document.getElementById("sum-total").textContent = String(items.length);
     document.getElementById("sum-done").textContent = String(items.filter(x => x.status === "done").length);
@@ -1092,6 +1120,7 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
 async function main() {
   const incomingDebug = inspectIncomingArgs();
   const incomingItems = collectIncomingItems();
+  const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
   const rawPaths = incomingItems.filter(x => x.sourceType === "path").map(x => x.path);
   // When no new files are provided, try to resume the most recent unfinished run
   if (!incomingItems.length) {
@@ -1101,6 +1130,7 @@ async function main() {
         ok: false,
         reason: "No usable share input received from Shortcuts/share sheet and no previous run found to resume.",
         incomingDebug,
+        inputHints,
       };
     }
     const wv = new WebView();
@@ -1118,6 +1148,7 @@ async function main() {
       stagedDir: state.meta.stagedDir,
       rawPaths: [],
       incomingDebug,
+      inputHints,
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -1128,6 +1159,7 @@ async function main() {
   // Otherwise, create a new run with the incoming files
   const state = createRunSkeletonPersistent(incomingItems);
   state.meta.incomingDebug = incomingDebug;
+  state.meta.inputHints = inputHints;
   saveRun(state);
   const wv = new WebView();
   await wv.loadHTML(buildHTML());
@@ -1145,6 +1177,7 @@ async function main() {
     stagedDir: state.meta.stagedDir,
     rawPaths,
     incomingDebug,
+    inputHints,
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,
