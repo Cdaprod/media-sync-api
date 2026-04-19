@@ -1,3 +1,10 @@
+## 2026-04-19 — Scriptable share-input diagnostics + non-path ingestion hardening (active)
+- [x] Added explicit share-argument diagnostics (`inspectIncomingArgs`) capturing channel types and stringified entries for `fileURLs`, `shortcutInput`, `shortcutParameter`, and `urls` to expose real Shortcuts→Scriptable payload shape on-device.
+- [x] Replaced path-only collection with `collectIncomingItems()` so Scriptable can ingest both local path entries and Data-like share payloads from all incoming channels.
+- [x] Extended persistent staging to accept `sourceType: data` items (`incoming_data` stage method) and write those directly into `compose-runs/.../staged` before upload.
+- [x] Threaded `incomingDebug` into run metadata + final shortcut output for quick transport-layer triage when staging fails before upload.
+- [ ] Next verification step on iPhone: run the same 8-video share flow and confirm whether `incomingDebug` reports `dataLike: true` payloads and whether rows progress with `method: incoming_data`.
+
 ## 2026-04-19 — Scriptable compose dashboard consolidation + iOS staging hardening (active)
 - [x] Consolidated `/scriptable` to a single canonical Scriptable entrypoint (`ComposeStatefulJobDashboard-2.js`) by removing legacy duplicate variants (`ComposeUpload.js`, `ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) to prevent drift and mismatched behavior.
 - [x] Hardened persistent run import in `createRunFromIncomingPathsPersistent(...)` with explicit source readability checks and ordered staging fallbacks (`copy` → `FileManager.read/write` → `Data.fromFile/write`) so transient provider paths fail with clear `source_unreadable_or_transient` diagnostics instead of ambiguous staging state.

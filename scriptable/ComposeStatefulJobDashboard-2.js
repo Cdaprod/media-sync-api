@@ -109,8 +109,28 @@ function loadLatestRecoverableRun() {
   return runs.length > 0 ? runs[0] : null;
 }
 
-function stagePersistentSource(srcPath, stagedPath) {
-  if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
+function stagePersistentSource(source, stagedPath) {
+  if (source?.sourceType === "data" && source?.data) {
+    try {
+      _fmRun.write(stagedPath, source.data);
+      return {
+        ok: true,
+        method: "incoming_data",
+        bytes: _fmRun.fileSize(stagedPath),
+        error: null,
+      };
+    } catch (dataWriteErr) {
+      return {
+        ok: false,
+        method: null,
+        bytes: null,
+        error: `source_data_write_failed:${String(dataWriteErr)}`,
+      };
+    }
+  }
+
+  const srcPath = source?.path;
+  if (!srcPath || !_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
     return {
       ok: false,
       method: null,
@@ -164,25 +184,31 @@ function stagePersistentSource(srcPath, stagedPath) {
 
 // Create a new run from incoming file paths. This stages all inputs into a
 // persistent directory so that uploads can resume if the script is interrupted.
-function createRunFromIncomingPathsPersistent(paths) {
-  const runId = makeRunId(paths.length);
+function createRunFromIncomingPathsPersistent(incomingItems) {
+  const runId = makeRunId(incomingItems.length);
   const runDir = runDirForPersistent(runId);
   const stagedDir = stagedDirForPersistent(runId);
   const requestUrl = buildComposeUrl();
   const items = [];
 
-  for (let i = 0; i < paths.length; i++) {
-    const src = paths[i];
-    const base = src.split("/").pop() || `item_${i + 1}`;
-    const ext = extname(src) || ".bin";
+  for (let i = 0; i < incomingItems.length; i++) {
+    const incoming = incomingItems[i];
+    const fallbackBase = `item_${i + 1}`;
+    const base = incoming?.displayName || fallbackBase;
+    const inferredExt = incoming?.sourceType === "path" ? (extname(incoming.path) || ".bin") : ".mov";
+    const ext = inferredExt || ".bin";
     const stagedPath = _fmRun.joinPath(stagedDir, `clip_${String(i).padStart(4, "0")}${ext}`);
     const item = {
       id: `item-${i + 1}`,
       index1: i + 1,
-      originalPath: src,
+      originalPath: incoming?.path ?? null,
       originalName: base,
-      guessedKind: guessKind(src),
-      originalReadableBytes: readDataLengthMaybe(src),
+      guessedKind: guessKind(base),
+      originalReadableBytes: incoming?.originalReadableBytes ?? null,
+      sourceType: incoming?.sourceType ?? "unknown",
+      sourceChannel: incoming?.sourceChannel ?? "unknown",
+      sourceIndex: incoming?.sourceIndex ?? i,
+      sourceValue: incoming?.sourceValue ?? null,
       stagedPath,
       stagedBytes: null,
       stageMethod: null,
@@ -192,7 +218,7 @@ function createRunFromIncomingPathsPersistent(paths) {
       error: null,
     };
 
-    const staged = stagePersistentSource(src, stagedPath);
+    const staged = stagePersistentSource(incoming, stagedPath);
     if (staged.ok) {
       item.stagedBytes = staged.bytes;
       item.stageMethod = staged.method;
@@ -221,7 +247,8 @@ function createRunFromIncomingPathsPersistent(paths) {
       requestUrl,
       runDir,
       stagedDir,
-      rawPathCount: paths.length,
+      rawPathCount: incomingItems.filter(x => x.sourceType === "path").length,
+      incomingCount: incomingItems.length,
       finalMedia: null,
     },
     items,
@@ -379,55 +406,100 @@ function makeRunId(fileCount) {
   return `ios-${Date.now()}-${fileCount}-${rand}`;
 }
 
-function collectPaths() {
-  const fileURLs = asArray(args.fileURLs);
-  const shortcutInput = asArray(args.shortcutInput);
-  const shortcutParameter = asArray(args.shortcutParameter);
-  const urls = asArray(args.urls);
+function isDataLike(value) {
+  return !!value && typeof value.toBase64String === "function";
+}
 
-  const primary =
-    fileURLs.length > 0
-      ? fileURLs
-      : shortcutInput.length > 0
-        ? shortcutInput
-        : shortcutParameter.length > 0
-          ? shortcutParameter
-          : urls;
+function readDataLengthFromData(data) {
+  try {
+    const b64 = data.toBase64String();
+    const padding = (b64.match(/=*$/)?.[0]?.length) || 0;
+    const bytes = Math.floor((b64.length * 3) / 4) - padding;
+    return bytes >= 0 ? bytes : null;
+  } catch (_) {
+    return null;
+  }
+}
 
-  const fm = FileManager.local();
-  const out = [];
-  const seenPaths = new Set();
-  const seenFingerprints = new Set();
-
-  for (const item of primary) {
-    const p = toLocalPath(item);
-    if (!p) continue;
-
-    const normalized = p.replace(/\/+/g, "/");
-    if (seenPaths.has(normalized)) continue;
-
-    const base = normalized.split("/").pop() || normalized;
-    let size = null;
-    let mtime = null;
-
+function inspectIncomingArgs() {
+  function stringifyEntry(value) {
     try {
-      if (fm.fileExists(normalized) && !fm.isDirectory(normalized)) {
-        size = fm.fileSize(normalized);
-        try {
-          const d = fm.modificationDate(normalized);
-          mtime = d ? d.toISOString() : null;
-        } catch (_) {
-          mtime = null;
-        }
+      return String(value);
+    } catch (_) {
+      return "<unstringifiable>";
+    }
+  }
+  function mapEntries(value) {
+    return asArray(value).map((entry, index) => ({
+      index,
+      type: typeof entry,
+      dataLike: isDataLike(entry),
+      value: stringifyEntry(entry),
+    }));
+  }
+  return {
+    argsKeys: Object.keys(args ?? {}),
+    fileURLsType: typeof args?.fileURLs,
+    shortcutInputType: typeof args?.shortcutInput,
+    shortcutParameterType: typeof args?.shortcutParameter,
+    urlsType: typeof args?.urls,
+    fileURLs: mapEntries(args?.fileURLs),
+    shortcutInput: mapEntries(args?.shortcutInput),
+    shortcutParameter: mapEntries(args?.shortcutParameter),
+    urls: mapEntries(args?.urls),
+  };
+}
+
+function collectIncomingItems() {
+  const channels = [
+    { key: "fileURLs", values: asArray(args.fileURLs) },
+    { key: "shortcutInput", values: asArray(args.shortcutInput) },
+    { key: "shortcutParameter", values: asArray(args.shortcutParameter) },
+    { key: "urls", values: asArray(args.urls) },
+  ];
+
+  const out = [];
+  const seen = new Set();
+
+  for (const channel of channels) {
+    for (let i = 0; i < channel.values.length; i++) {
+      const raw = channel.values[i];
+      const asPath = toLocalPath(raw);
+      if (asPath) {
+        const normalizedPath = asPath.replace(/\/+/g, "/");
+        const pathKey = `path:${normalizedPath}`;
+        if (seen.has(pathKey)) continue;
+        seen.add(pathKey);
+        out.push({
+          sourceType: "path",
+          sourceChannel: channel.key,
+          sourceIndex: i,
+          sourceValue: String(raw),
+          displayName: normalizedPath.split("/").pop() || normalizedPath,
+          path: normalizedPath,
+          data: null,
+          originalReadableBytes: readDataLengthMaybe(normalizedPath),
+        });
+        continue;
       }
-    } catch (_) {}
 
-    const fingerprint = `${base}::${size ?? "?"}::${mtime ?? "?"}`;
-    if (seenFingerprints.has(fingerprint)) continue;
-
-    seenPaths.add(normalized);
-    seenFingerprints.add(fingerprint);
-    out.push(normalized);
+      if (isDataLike(raw)) {
+        const bytes = readDataLengthFromData(raw);
+        const dataKey = `data:${channel.key}:${i}:${bytes ?? "?"}`;
+        if (seen.has(dataKey)) continue;
+        seen.add(dataKey);
+        out.push({
+          sourceType: "data",
+          sourceChannel: channel.key,
+          sourceIndex: i,
+          sourceValue: String(raw),
+          displayName: `shared_${channel.key}_${String(i + 1).padStart(3, "0")}.mov`,
+          path: null,
+          data: raw,
+          originalReadableBytes: bytes,
+        });
+      }
+    }
   }
 
   return out;
@@ -1000,14 +1072,17 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
 // --------------------------------------------------
 
 async function main() {
-  const rawPaths = collectPaths();
+  const incomingDebug = inspectIncomingArgs();
+  const incomingItems = collectIncomingItems();
+  const rawPaths = incomingItems.filter(x => x.sourceType === "path").map(x => x.path);
   // When no new files are provided, try to resume the most recent unfinished run
-  if (!rawPaths.length) {
+  if (!incomingItems.length) {
     let state = loadLastRunPersistent() || loadLatestRecoverableRun();
     if (!state) {
       return {
         ok: false,
-        reason: "No files received from Shortcuts/share sheet and no previous run found to resume.",
+        reason: "No usable share input received from Shortcuts/share sheet and no previous run found to resume.",
+        incomingDebug,
       };
     }
     const wv = new WebView();
@@ -1024,6 +1099,7 @@ async function main() {
       requestUrl: state.meta.requestUrl,
       stagedDir: state.meta.stagedDir,
       rawPaths: [],
+      incomingDebug,
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -1032,7 +1108,9 @@ async function main() {
     };
   }
   // Otherwise, create a new run with the incoming files
-  const state = createRunFromIncomingPathsPersistent(rawPaths);
+  const state = createRunFromIncomingPathsPersistent(incomingItems);
+  state.meta.incomingDebug = incomingDebug;
+  saveRun(state);
   const wv = new WebView();
   await wv.loadHTML(buildHTML());
   await pushUI(wv, state);
@@ -1047,6 +1125,7 @@ async function main() {
     requestUrl: state.meta.requestUrl,
     stagedDir: state.meta.stagedDir,
     rawPaths,
+    incomingDebug,
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,
