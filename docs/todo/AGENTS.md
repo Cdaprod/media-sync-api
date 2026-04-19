@@ -1,3 +1,9 @@
+## 2026-04-19 — Scriptable launch-path hardening + alias compatibility restore (active)
+- [x] Refactored compose run bootstrap to present WebView before expensive staging work by splitting run creation into `createRunSkeletonPersistent(...)` + `stageRunInputsPersistent(...)`.
+- [x] Added optional startup smoke alert (`ENABLE_STARTUP_ALERT`) and fatal alert (`ENABLE_FATAL_ALERT`) so on-device script execution failures can be surfaced immediately when Scriptable opens without dashboard.
+- [x] Restored compatibility alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) by mirroring the canonical dashboard script body so older Shortcuts bindings continue to execute.
+- [ ] Next verification step on iPhone: bind Shortcuts action with only `Files = Shortcut Input`, run each alias script once, and confirm WebView opens before staging rows transition.
+
 ## 2026-04-19 — Scriptable share-input diagnostics + non-path ingestion hardening (active)
 - [x] Added explicit share-argument diagnostics (`inspectIncomingArgs`) capturing channel types and stringified entries for `fileURLs`, `shortcutInput`, `shortcutParameter`, and `urls` to expose real Shortcuts→Scriptable payload shape on-device.
 - [x] Replaced path-only collection with `collectIncomingItems()` so Scriptable can ingest both local path entries and Data-like share payloads from all incoming channels.

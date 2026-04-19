@@ -1,4 +1,4 @@
-// /scriptable/ComposeStatefulJobDashboard-2.js
+// /scriptable/ComposeStatefulJobDashboard.js
 // Name in Scriptable iOS: `ComposeJobDashboard 2.js`
 //
 // WebView queue UI for media compose/upload jobs.
