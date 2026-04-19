@@ -1,3 +1,11 @@
+## 2026-04-19 — Scriptable blank-WebView mitigation for mixed shortcut channels (active)
+- [x] Tightened ingestion channel selection in `collectIncomingItems()` to consume only the first non-empty canonical channel (`fileURLs` → `shortcutInput` → `shortcutParameter` → `urls`) instead of merging all channels, preventing duplicate/mixed payload fan-in.
+- [x] Added explicit mixed-lane warning hint when both `fileURLs` and `shortcutParameter` are present so shortcut pollution is visible in-dashboard.
+- [x] Reduced debug payload pressure by truncating `inspectIncomingArgs()` sample values and exposing bounded entry samples + channel counts.
+- [x] Hardened `pushUI(...)` with a compact-state fallback retry path if full-state WebView bridge injection fails.
+- [x] Re-synced alias dashboard scripts from canonical implementation after mixed-channel and UI-bridge hardening.
+- [ ] Next verification step on iPhone: run with existing shortcut (expect warning about parameter lane), then clear parameter/images lanes and confirm dashboard no longer lands on blank WebView.
+
 ## 2026-04-19 — Scriptable shortcut contract hinting + startup probe defaults (active)
 - [x] Enabled startup smoke alert by default (`ENABLE_STARTUP_ALERT = true`) while keeping fatal alert enabled so launch-path failures surface immediately during on-device triage.
 - [x] Added `deriveInputContractHints(...)` and threaded `inputHints` into run metadata/output to explicitly flag non-files-only Shortcuts mapping issues (`Images/URLs/Texts` lanes populated).

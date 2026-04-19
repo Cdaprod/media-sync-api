@@ -442,15 +442,18 @@ function readDataLengthFromData(data) {
 }
 
 function inspectIncomingArgs() {
+  function countEntries(value) {
+    return asArray(value).length;
+  }
   function stringifyEntry(value) {
     try {
-      return String(value);
+      return short(String(value), 180);
     } catch (_) {
       return "<unstringifiable>";
     }
   }
   function mapEntries(value) {
-    return asArray(value).map((entry, index) => ({
+    return asArray(value).slice(0, 6).map((entry, index) => ({
       index,
       type: typeof entry,
       dataLike: isDataLike(entry),
@@ -463,6 +466,10 @@ function inspectIncomingArgs() {
     shortcutInputType: typeof args?.shortcutInput,
     shortcutParameterType: typeof args?.shortcutParameter,
     urlsType: typeof args?.urls,
+    fileURLsCount: countEntries(args?.fileURLs),
+    shortcutInputCount: countEntries(args?.shortcutInput),
+    shortcutParameterCount: countEntries(args?.shortcutParameter),
+    urlsCount: countEntries(args?.urls),
     fileURLs: mapEntries(args?.fileURLs),
     shortcutInput: mapEntries(args?.shortcutInput),
     shortcutParameter: mapEntries(args?.shortcutParameter),
@@ -481,6 +488,10 @@ function deriveInputContractHints(incomingDebug, incomingItems) {
     hints.push("No args.fileURLs detected; in Shortcuts set Run Script to Files = Shortcut Input and clear Images/Texts/URLs lanes.");
   }
 
+  if (fileURLsCount > 0 && shortcutParameterCount > 0) {
+    hints.push("fileURLs + shortcutParameter were both provided; dashboard is now using fileURLs only. Clear Parameter lane in Shortcuts.");
+  }
+
   if (shortcutParameterCount > 0 || urlsCount > 0) {
     hints.push("Shortcut passed parameter/url data; keep only Files lane populated for compose dashboard runs.");
   }
@@ -493,12 +504,18 @@ function deriveInputContractHints(incomingDebug, incomingItems) {
 }
 
 function collectIncomingItems() {
-  const channels = [
+  const allChannels = [
     { key: "fileURLs", values: asArray(args.fileURLs) },
     { key: "shortcutInput", values: asArray(args.shortcutInput) },
     { key: "shortcutParameter", values: asArray(args.shortcutParameter) },
     { key: "urls", values: asArray(args.urls) },
   ];
+
+  const primaryChannel =
+    allChannels.find(channel => channel.values.length > 0) ??
+    { key: "none", values: [] };
+
+  const channels = [primaryChannel];
 
   const out = [];
   const seen = new Set();
@@ -1015,23 +1032,54 @@ function buildHTML() {
 }
 
 async function pushUI(wv, state) {
-  const payloadB64 = stateToBase64(state);
-  await wv.evaluateJavaScript(
-    `
-      (function () {
-        try {
-          const json = atob(${JSON.stringify(payloadB64)});
-          const parsed = JSON.parse(json);
-          window.setState(parsed);
-          return "ok";
-        } catch (e) {
-          document.body.innerHTML = "<pre style='color:white;background:black;padding:16px;white-space:pre-wrap;word-break:break-word;'>" + String(e) + "</pre>";
-          return "error:" + String(e);
-        }
-      })();
-    `,
-    false
-  );
+  async function evalState(nextState) {
+    const payloadB64 = stateToBase64(nextState);
+    return wv.evaluateJavaScript(
+      `
+        (function () {
+          try {
+            const json = atob(${JSON.stringify(payloadB64)});
+            const parsed = JSON.parse(json);
+            window.setState(parsed);
+            return "ok";
+          } catch (e) {
+            document.body.innerHTML = "<pre style='color:white;background:black;padding:16px;white-space:pre-wrap;word-break:break-word;'>" + String(e) + "</pre>";
+            return "error:" + String(e);
+          }
+        })();
+      `,
+      false
+    );
+  }
+
+  try {
+    await evalState(state);
+  } catch (_) {
+    const compactState = {
+      meta: {
+        project: state?.meta?.project ?? null,
+        mode: state?.meta?.mode ?? null,
+        outputName: state?.meta?.outputName ?? null,
+        runId: state?.meta?.runId ?? null,
+        inputHints: state?.meta?.inputHints ?? [],
+        finalMedia: state?.meta?.finalMedia ?? null,
+      },
+      items: (state?.items ?? []).map(item => ({
+        index1: item?.index1,
+        originalName: item?.originalName,
+        guessedKind: item?.guessedKind,
+        originalReadableBytesHuman: item?.originalReadableBytesHuman ?? "--",
+        stagedBytesHuman: item?.stagedBytesHuman ?? "--",
+        stageMethod: item?.stageMethod ?? null,
+        status: item?.status ?? "queued",
+        note: item?.note ?? null,
+        error: item?.error ? short(item.error, 160) : null,
+        stagedPath: item?.stagedPath ?? null,
+        originalPath: item?.originalPath ?? null,
+      })),
+    };
+    await evalState(compactState);
+  }
 }
 
 // --------------------------------------------------
