@@ -113,6 +113,41 @@ function loadLatestRecoverableRun() {
   return runs.length > 0 ? runs[0] : null;
 }
 
+function clearLastRunPointer() {
+  if (!_fmRun.fileExists(LAST_RUN_PATH)) return;
+  try {
+    _fmRun.remove(LAST_RUN_PATH);
+  } catch (_) {}
+}
+
+function cleanupOldRuns({ keepRunId = null } = {}) {
+  const names = _fmRun.listContents(RUNS_DIR) || [];
+  for (const name of names) {
+    if (name === "last_run.json") continue;
+    if (keepRunId && name === keepRunId) continue;
+    const fullPath = _fmRun.joinPath(RUNS_DIR, name);
+    try {
+      if (_fmRun.isDirectory(fullPath)) _fmRun.remove(fullPath);
+    } catch (_) {}
+  }
+}
+
+function hasBlockingFailuresBeforeIndex(state, index1) {
+  return (state?.items ?? []).some(item => (
+    item.index1 < index1 && (item.status === "failed" || item.status === "blocked")
+  ));
+}
+
+function markRemainingItemsBlocked(state, reason, errorCode) {
+  for (const item of state.items) {
+    if (item.status === "queued" || item.status === "staged") {
+      item.status = "blocked";
+      item.note = reason;
+      item.error = errorCode;
+    }
+  }
+}
+
 function stagePersistentSource(source, stagedPath) {
   if (source?.sourceType === "data" && source?.data) {
     try {
@@ -283,6 +318,26 @@ async function stageRunInputsPersistent(wv, state, incomingItems) {
 async function runOneStateStepPersistent(wv, state) {
   const item = state.items.find(x => x.status === "staged");
   if (!item) return false;
+
+  if (hasBlockingFailuresBeforeIndex(state, item.index1)) {
+    const isFinalItem = item.index1 === state.items.length;
+    item.status = "blocked";
+    item.note = isFinalItem
+      ? "Cannot finalize compose because earlier clips failed."
+      : "Blocked from upload because earlier clips failed.";
+    item.error = isFinalItem
+      ? "client_prevented_finalization_missing_prior_indices"
+      : "client_blocked_due_to_prior_failures";
+    markRemainingItemsBlocked(
+      state,
+      "Run blocked until a fresh upload is started.",
+      "client_blocked_due_to_prior_failures"
+    );
+    saveRun(state);
+    await pushUI(wv, state);
+    return true;
+  }
+
   item.status = "uploading";
   item.note = "Uploading to compose session…";
   saveRun(state);
@@ -864,6 +919,7 @@ function buildHTML() {
   .badge.accepted { background: #102315; color: #87df9b; border-color: #275c33; }
   .badge.done { background: #0f2a1b; color: #7ef0a3; border-color: #296942; }
   .badge.failed { background: #2c1010; color: #ff8f8f; border-color: #6a2626; }
+  .badge.blocked { background: #2a1b07; color: #f7ce86; border-color: #7a5925; }
   .sub {
     font-size: 12px;
     color: #aaa;
@@ -904,7 +960,7 @@ function buildHTML() {
         <div class="v" id="sum-total">0</div>
       </div>
       <div class="pill">
-        <div class="k">Completed</div>
+        <div class="k">Progress</div>
         <div class="v" id="sum-done">0</div>
       </div>
       <div class="pill">
@@ -986,8 +1042,8 @@ function buildHTML() {
       : headerText;
 
     document.getElementById("sum-total").textContent = String(items.length);
-    document.getElementById("sum-done").textContent = String(items.filter(x => x.status === "done").length);
-    document.getElementById("sum-failed").textContent = String(items.filter(x => x.status === "failed").length);
+    document.getElementById("sum-done").textContent = String(items.filter(x => x.status === "accepted" || x.status === "done").length);
+    document.getElementById("sum-failed").textContent = String(items.filter(x => x.status === "failed" || x.status === "blocked").length);
 
     renderResult(meta);
 
@@ -1170,6 +1226,12 @@ async function main() {
   const incomingItems = collectIncomingItems();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
   const rawPaths = incomingItems.filter(x => x.sourceType === "path").map(x => x.path);
+
+  if (incomingItems.length > 0) {
+    clearLastRunPointer();
+    cleanupOldRuns();
+  }
+
   // When no new files are provided, try to resume the most recent unfinished run
   if (!incomingItems.length) {
     let state = loadLastRunPersistent() || loadLatestRecoverableRun();

@@ -1,3 +1,11 @@
+## 2026-04-19 — Fresh-run cleanup + client-side finalization guard (active)
+- [x] Added fresh-run reset behavior for new incoming share runs: clear `last_run.json` pointer and remove prior run directories before creating a new run skeleton.
+- [x] Added client-side blocking guard in `runOneStateStepPersistent(...)` so uploads are blocked when earlier indices already failed, preventing misleading final-clip 409 finalize attempts.
+- [x] Added helper routines `hasBlockingFailuresBeforeIndex(...)` and `markRemainingItemsBlocked(...)` to keep state coherent once a run is no longer safely completable.
+- [x] Updated dashboard summary semantics from `Completed` to `Progress` (`accepted + done`) and included `blocked` in failed count with dedicated badge styling.
+- [x] Re-synced alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) after cleanup/finalization guard updates.
+- [ ] Next verification step on iPhone: start a fresh share-sheet run after prior failures and confirm stale rows do not carry into the new run; then force one early failure and verify later clips are marked `blocked` (no server 409 finalization attempt).
+
 ## 2026-04-19 — Scriptable blank-WebView mitigation for mixed shortcut channels (active)
 - [x] Tightened ingestion channel selection in `collectIncomingItems()` to consume only the first non-empty canonical channel (`fileURLs` → `shortcutInput` → `shortcutParameter` → `urls`) instead of merging all channels, preventing duplicate/mixed payload fan-in.
 - [x] Added explicit mixed-lane warning hint when both `fileURLs` and `shortcutParameter` are present so shortcut pollution is visible in-dashboard.
