@@ -1,3 +1,13 @@
+## 2026-04-20 — Bridge recovery permissive restore + compact operator-first UI (active)
+- [x] Restored permissive dead-OutgoingTemp bridge recovery behavior by removing fingerprint/count mismatch from mandatory rejection gates in main fallback path.
+- [x] Kept recovery order stable: inline durable ingest first, bridge fallback second, hard-fail only when both yield zero usable staged files.
+- [x] Simplified header to compact operator view (title + one metadata line + concise warning line) and moved verbose fallback diagnostics into collapsed run debug details.
+- [x] Collapsed per-card staging debug behind `Staging debug` details so cards default to filename/status/bytes/method/note/path.
+- [x] Compacted retry/re-share action row to a small inline control and note (removed oversized full-width failure banner block).
+- [x] Reduced final result panel media height from `62vh` to `38vh` for balanced mobile layout while preserving top-of-list visibility.
+- [x] Re-synced alias dashboard scripts from canonical compact/permissive regression fix.
+- [ ] Next verification step on iPhone: confirm dead OutgoingTemp run can recover from latest live bridge-staged files even when fingerprint/count differ, and confirm header remains compact with verbose diagnostics only in collapsed details.
+
 ## 2026-04-20 — Inline durable ingest promoted + retryability UX split (active)
 - [x] Promoted inline durable ingest to primary lane for fresh share runs: dashboard now attempts inline staging from current args first and only keeps direct-path lane when inline import cannot fully match item count.
 - [x] Dead-OutgoingTemp failure remains terminal only after inline primary and bridge secondary/manual lanes both yield zero usable staged files for the current invocation.

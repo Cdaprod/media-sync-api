@@ -145,8 +145,10 @@ function loadBridgeFallbackEntries({
   maxAgeMs = 60000,
   nowMs = Date.now(),
   expectedFingerprint = null,
+  enforceFingerprintMatch = false,
   expectedInvocationId = null,
   enforceInvocationMatch = false,
+  enforceCountMatch = false,
   allowStaleWhenDeadOutgoingOnly = false,
 } = {}) {
   const base = { bridgeFingerprint: null, bridgeCount: 0 };
@@ -166,12 +168,12 @@ function loadBridgeFallbackEntries({
     return { ok: false, reason: "bridge_fallback_zero_staged_rows", entries: [], ...withReport };
   }
 
-  if (expectedFingerprint && bridgeFingerprint !== String(expectedFingerprint)) {
+  if (enforceFingerprintMatch && expectedFingerprint && bridgeFingerprint !== String(expectedFingerprint)) {
     return { ok: false, reason: "stale_bridge_report_fingerprint_mismatch", entries: [], ...withReport };
   }
 
   const reportItemCount = Number(report?.itemCount ?? staged.length);
-  if (expectedCount != null && expectedCount > 0 && Number.isFinite(reportItemCount) && reportItemCount !== expectedCount) {
+  if (enforceCountMatch && expectedCount != null && expectedCount > 0 && Number.isFinite(reportItemCount) && reportItemCount !== expectedCount) {
     return { ok: false, reason: "stale_bridge_report_count_mismatch", entries: [], ...withReport };
   }
 
@@ -211,7 +213,7 @@ function loadBridgeFallbackEntries({
   if (out.length === 0) {
     return { ok: false, reason: "bridge_fallback_no_live_staged_paths", entries: [], ...withReport };
   }
-  if (expectedCount != null && expectedCount > 0 && out.length !== expectedCount) {
+  if (enforceCountMatch && expectedCount != null && expectedCount > 0 && out.length !== expectedCount) {
     return { ok: false, reason: "stale_bridge_report_count_mismatch", entries: [], ...withReport };
   }
 
@@ -1466,14 +1468,14 @@ function buildHTML() {
   iframe.result-frame {
     display: block;
     width: 100%;
-    height: 62vh;
+    height: 38vh;
     border: 0;
     background: #000;
   }
   video.result-video {
     display: block;
     width: 100%;
-    max-height: 62vh;
+    max-height: 38vh;
     background: #000;
   }
   .hint {
@@ -1617,18 +1619,16 @@ function buildHTML() {
   details.server-details > summary::-webkit-details-marker {
     display: none;
   }
-  .action-root {
-    margin-top: 10px;
-  }
+  .action-root { margin-top: 8px; }
+  .action-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .action-note {
-    font-size: 12px;
-    color: #bdbdbd;
-    margin-bottom: 8px;
-    line-height: 1.4;
+    font-size: 11px;
+    color: #a8a8a8;
+    line-height: 1.3;
   }
   .action-btn {
     display: inline-block;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-radius: 10px;
     border: 1px solid #3b3b3b;
     background: #171717;
@@ -1645,6 +1645,30 @@ function buildHTML() {
     border-color: #7a5925;
     background: #2a1b07;
     color: #f7ce86;
+  }
+  details.run-debug-details {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #a9a9a9;
+  }
+  details.run-debug-details > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  details.run-debug-details > summary::-webkit-details-marker {
+    display: none;
+  }
+  .run-debug-body {
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #232323;
+    border-radius: 10px;
+    background: #0d0d0d;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: #b7b7b7;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
   .hidden {
     display: none !important;
@@ -1670,6 +1694,10 @@ function buildHTML() {
       </div>
     </div>
     <div id="action-root" class="action-root"></div>
+    <details id="run-debug-details" class="run-debug-details">
+      <summary>Run debug details</summary>
+      <div id="run-debug-body" class="run-debug-body">No debug data.</div>
+    </details>
   </div>
 
   <div id="result-root" class="hidden"></div>
@@ -1738,13 +1766,36 @@ function buildHTML() {
     }
     if (retryable) {
       root.innerHTML =
-        '<div class="action-note">Failure appears retryable (network/request/polling). Re-run the shortcut to resume this persisted run.</div>' +
-        '<span class="action-btn retryable">Retry upload</span>';
+        '<div class="action-row">' +
+          '<span class="action-btn retryable">Retry upload</span>' +
+          '<span class="action-note">Re-run shortcut to resume persisted run.</span>' +
+        '</div>';
       return;
     }
     root.innerHTML =
-      '<div class="action-note">This failure is not retryable from current dashboard state because source share paths are no longer live.</div>' +
-      '<span class="action-btn non-retryable">Re-share from Photos</span>';
+      '<div class="action-row">' +
+        '<span class="action-btn non-retryable">Re-share from Photos</span>' +
+        '<span class="action-note">Current share paths are no longer live.</span>' +
+      '</div>';
+  }
+
+  function renderRunDebug(meta) {
+    const details = document.getElementById("run-debug-details");
+    const body = document.getElementById("run-debug-body");
+    const debug = {
+      recoveryPathUsed: meta.recoveryPathUsed || "none",
+      inlineBridgeRecoveredCount: meta.inlineBridgeRecoveredCount ?? 0,
+      bridgeReportRecoveredCount: meta.bridgeReportRecoveredCount ?? 0,
+      bridgeReportRejectReason: meta.bridgeReportRejectReason || null,
+      currentInvocationFingerprint: meta.currentInvocationFingerprint || null,
+      bridgeInvocationFingerprint: meta.bridgeInvocationFingerprint || null,
+      fallbackCurrentCount: meta.fallbackCurrentCount ?? 0,
+      fallbackBridgeCount: meta.fallbackBridgeCount ?? 0,
+      retryableFailure: meta.retryableFailure == null ? null : !!meta.retryableFailure,
+      fallbackRecoveryDebug: meta.fallbackRecoveryDebug || null,
+    };
+    body.textContent = JSON.stringify(debug, null, 2);
+    details.open = false;
   }
 
   function render() {
@@ -1758,18 +1809,8 @@ function buildHTML() {
       (meta.mode || "--") + " · " +
       (meta.outputName || "--") + " · " +
       (meta.runId || "--");
-    const fallbackDiagLine =
-      "fallback inline=" + String(meta.inlineBridgeRecoveredCount ?? 0) +
-      " · report=" + String(meta.bridgeReportRecoveredCount ?? 0) +
-      " · reject=" + String(meta.bridgeReportRejectReason || "none") +
-      " · path=" + String(meta.recoveryPathUsed || "none");
-    const fallbackMatchLine =
-      "fp current=" + String(meta.currentInvocationFingerprint || "none") +
-      " · bridge=" + String(meta.bridgeInvocationFingerprint || "none") +
-      " · count current=" + String(meta.fallbackCurrentCount ?? 0) +
-      " · bridge=" + String(meta.fallbackBridgeCount ?? 0);
     const warningLine = hints.length ? "⚠ " + hints.join(" | ") : "";
-    const metaLines = [headerText, fallbackDiagLine, fallbackMatchLine, warningLine].filter(Boolean);
+    const metaLines = [headerText, warningLine].filter(Boolean);
     document.getElementById("meta").textContent = metaLines.join("\\n");
 
     document.getElementById("sum-total").textContent = String(items.length);
@@ -1778,6 +1819,7 @@ function buildHTML() {
 
     renderResult(meta);
     renderAction(meta, items);
+    renderRunDebug(meta);
 
     const list = document.getElementById("list");
     list.innerHTML = items.map(item => {
@@ -1814,7 +1856,7 @@ function buildHTML() {
               '<div class="sub" style="margin-top:6px;">' + esc(item.note || "") + '</div>' +
               (item.error ? '<div class="sub" style="margin-top:6px;color:#ff9b9b;">' + esc(item.error) + '</div>' : '') +
               (item.stagingDebug ? (
-                '<div class="debug-mini">' +
+                '<details class="server-details"><summary>Staging debug</summary><div class="debug-mini">' +
                   'srcType=' + esc(item.stagingDebug.sourceType || "--") + ' · ' +
                   'path=' + esc(item.stagingDebug.hasPath ? "yes" : "no") + ' · ' +
                   'origPath=' + esc(item.stagingDebug.hasOriginalPath ? "yes" : "no") + ' · ' +
@@ -1835,7 +1877,7 @@ function buildHTML() {
                   ) + ' · ' +
                   'candidates=' + esc((item.stagingDebug.pathCandidates || []).length) + '<br>' +
                   'resolved=' + esc(item.stagingDebug.resolvedPath || "--") +
-                '</div>'
+                '</div></details>'
               ) : '') +
               '<div class="path">' + esc(item.stagedPath || item.originalPath || "") + '</div>' +
             '</div>' +
@@ -2164,12 +2206,12 @@ async function main() {
         reportBridgeFallbackUsed = true;
         fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
         inputHints.push(
-          `Incoming share paths were dead OutgoingTemp entries; recovered from bridge report (${bridgeFallback.entries.length} live staged files).`
+          "Recovered using bridge-staged files."
         );
       } else {
         fallbackRecoveryDebug.recoveryPathUsed = inlineBridgeIngestUsed ? "inline_bridge" : "none";
         inputHints.push(
-          `Dead OutgoingTemp recovery failed: inline=${inlineBridgeEntries.length}, bridge=${bridgeFallback.entries.length}, reason=${fallbackRecoveryDebug.bridgeReportRejectReason || "none"}.`
+          "Dead OutgoingTemp recovery failed: no usable inline or bridge-staged files."
         );
       }
     }
@@ -2183,7 +2225,7 @@ async function main() {
   const inputFamilySummary = summarizeRawPathEntries(rawPathEntries);
   if (deadOutgoingTempOnly) {
     inputHints.push(
-      "Share input only provided dead Photos compatibility-export paths. Re-run using Files-only shortcut wiring so Scriptable receives live fileURLs or RunScriptIntent temp paths."
+      "Share input paths were dead; re-share from Photos to retry."
     );
   }
 
