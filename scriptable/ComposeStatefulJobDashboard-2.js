@@ -26,7 +26,7 @@ const STAGE_TO_TEMP = true;
 const MAX_TEXT = 220;
 // Debug toggles for on-device shortcut triage.
 // Keep ENABLE_STARTUP_ALERT=true while diagnosing launch issues.
-const ENABLE_STARTUP_ALERT = true;
+const ENABLE_STARTUP_ALERT = false;
 const ENABLE_FATAL_ALERT = true;
 
 // -----------------------------
@@ -428,6 +428,10 @@ function asArray(x) {
 function short(s, n = MAX_TEXT) {
   s = String(s ?? "");
   return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function toLocalPath(v) {
@@ -1246,6 +1250,18 @@ async function pushUI(wv, state) {
   }
 }
 
+async function presentDashboardWebView(wv, state) {
+  await wv.loadHTML(buildHTML());
+  await pushUI(wv, state);
+  // Share-sheet -> Shortcuts -> Scriptable transitions can race the first present.
+  await sleep(150);
+  try {
+    await wv.present(false);
+  } catch (_) {
+    await wv.present(true);
+  }
+}
+
 // --------------------------------------------------
 // upload
 // --------------------------------------------------
@@ -1352,9 +1368,7 @@ async function main() {
       };
     }
     const wv = new WebView();
-    await wv.loadHTML(buildHTML());
-    await pushUI(wv, state);
-    wv.present(false);
+    await presentDashboardWebView(wv, state);
     await drainRunPersistent(wv, state);
     const completedCount = state.items.filter(x => x.status === "done" || x.status === "accepted").length;
     const failedCount = state.items.filter(x => x.status === "failed").length;
@@ -1380,9 +1394,7 @@ async function main() {
   state.meta.inputHints = inputHints;
   saveRun(state);
   const wv = new WebView();
-  await wv.loadHTML(buildHTML());
-  await pushUI(wv, state);
-  wv.present(false);
+  await presentDashboardWebView(wv, state);
   await stageRunInputsPersistent(wv, state, incomingItems);
   await drainRunPersistent(wv, state);
   const completedCountNew = state.items.filter(x => x.status === "done" || x.status === "accepted").length;

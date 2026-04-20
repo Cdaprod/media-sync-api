@@ -1,3 +1,10 @@
+## 2026-04-19 — Share-sheet launch timing hardening + startup alert defaults (active)
+- [x] Disabled startup smoke alert by default (`ENABLE_STARTUP_ALERT = false`) now that execution is proven, while keeping fatal alerts enabled for actionable crash visibility.
+- [x] Added `sleep(ms)` helper and centralized first-open presentation path (`presentDashboardWebView(...)`) to add a short post-load delay before present.
+- [x] Added present fallback (`present(false)` then `present(true)` on failure) to improve first-launch reliability from Photos → Shortcuts → Scriptable foreground handoff.
+- [x] Re-synced alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical dashboard after launch-timing hardening changes.
+- [ ] Next verification step on iPhone: run from share sheet with the top `with Shortcut Input` parameter removed (Files lane only) and confirm first-open no longer lands on blank WebView.
+
 ## 2026-04-19 — Dashboard card preview lane + compact diagnostics UX (active)
 - [x] Added a thumbnail/preview lane to compose dashboard cards with a new item preview model (`previewKind`, `previewUrl`, `previewLabel`, `previewIndexLabel`).
 - [x] Implemented resilient phase-1 placeholder previews (kind/clip index) with status-aware tinting (`accepted/done`, `failed`, `blocked`) and layout split (`card-main`, `card-body`).
