@@ -1,3 +1,10 @@
+## 2026-04-20 — Final-report awaited WebView presentation mode (active)
+- [x] Switched compose dashboard presentation model from non-awaited live-progress present to final-report present after drain completion for both fresh and resumed runs.
+- [x] Updated `presentDashboardWebView(...)` to `await wv.present(...)` (with awaited fallback) and added explicit comment documenting Scriptable paint reliability rationale.
+- [x] Added `pushUI(...)` null-guard so drain/update code paths can run without an attached WebView while work completes in background.
+- [x] Increased header top padding to `68px` to clear Scriptable native chrome more reliably on iPhone.
+- [ ] Next verification step on iPhone: run compose from share sheet and confirm first-open dashboard paints immediately (no blank gray page) while still showing final completed run state.
+
 ## 2026-04-20 — Dashboard bridge-ingest fallback for dead OutgoingTemp runs (active)
 - [x] Added dashboard-side fallback loader for `share-debug/compose-upload-inspect-latest.json` so compose can ingest live staged files from the bridge report when incoming share paths are dead OutgoingTemp-only.
 - [x] Fresh-run startup now attempts bridge fallback before hard-failing `share_input_only_dead_outgoingtemp_paths`; when used, metadata marks `bridgeFallbackUsed=true` and hint text explains the fallback source.

@@ -1183,7 +1183,7 @@ function buildHTML() {
     z-index: 10;
     background: rgba(18,18,18,.96);
     border-bottom: 1px solid #2a2a2a;
-    padding: 52px 14px 12px;
+    padding: 68px 14px 12px;
     backdrop-filter: blur(10px);
   }
   .title {
@@ -1595,6 +1595,7 @@ function buildHTML() {
 }
 
 async function pushUI(wv, state) {
+  if (!wv) return;
   async function evalState(nextState) {
     const payloadB64 = stateToBase64(nextState);
     return wv.evaluateJavaScript(
@@ -1653,13 +1654,11 @@ async function pushUI(wv, state) {
 async function presentDashboardWebView(wv, state) {
   await wv.loadHTML(buildHTML());
   await pushUI(wv, state);
-  // Share-sheet -> Shortcuts -> Scriptable transitions can race the first present.
-  await sleep(150);
+  // Scriptable paints more reliably when this is a final awaited report view.
   try {
-    // Do not await present: we want staging/upload to continue while dashboard is open.
-    wv.present(false);
+    await wv.present(false);
   } catch (_) {
-    wv.present(true);
+    await wv.present(true);
   }
 }
 
@@ -1789,9 +1788,9 @@ async function main() {
         inputFamilySummary,
       };
     }
+    await drainRunPersistent(null, state);
     const wv = new WebView();
     await presentDashboardWebView(wv, state);
-    await drainRunPersistent(wv, state);
     const completedCount = state.items.filter(x => x.status === "done" || x.status === "accepted").length;
     const failedCount = state.items.filter(x => x.status === "failed").length;
     return {
@@ -1893,9 +1892,9 @@ async function main() {
     await stageRunInputsPersistentFast(state, incomingItems);
   }
 
+  await drainRunPersistent(null, state);
   const wv = new WebView();
   await presentDashboardWebView(wv, state);
-  await drainRunPersistent(wv, state);
   const completedCountNew = state.items.filter(x => x.status === "done" || x.status === "accepted").length;
   const failedCountNew = state.items.filter(x => x.status === "failed").length;
   return {
