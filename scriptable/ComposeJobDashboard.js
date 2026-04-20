@@ -637,16 +637,55 @@ async function runOneStateStepPersistent(wv, state) {
     await pushUI(wv, state);
     return true;
   }
-  // Final clip completed the compose job
-  item.status = "done";
-  item.note = "Compose flow completed for final step";
   const finalServer = result.body || null;
   if (
     finalServer?.status === "stored" &&
-    (finalServer?.served?.stream_url || finalServer?.served?.download_url)
+    (finalServer?.served?.stream_url || finalServer?.served?.download_url || finalServer?.stream_url || finalServer?.download_url)
   ) {
+    item.status = "done";
+    item.note = "Compose flow completed for final step";
+    item.server = finalServer;
     state.meta.finalMedia = buildFinalMediaDescriptor(finalServer);
+    saveRun(state);
+    await pushUI(wv, state);
+    return true;
   }
+
+  if (finalServer?.job_url) {
+    item.status = "uploading";
+    item.note = "Polling compose job for final media…";
+    item.server = finalServer;
+    saveRun(state);
+    await pushUI(wv, state);
+
+    const polled = await pollComposeJobUntilComplete({
+      jobUrl: finalServer.job_url,
+      intervalMs: 1200,
+      maxAttempts: 90,
+    });
+
+    if (!polled.ok) {
+      item.status = "failed";
+      item.note = "Compose job polling failed";
+      item.error = polled.error || "job_poll_failed";
+      item.server = polled.body || finalServer;
+      saveRun(state);
+      await pushUI(wv, state);
+      return true;
+    }
+
+    item.status = "done";
+    item.note = "Compose job completed and final media is ready";
+    item.server = polled.body || finalServer;
+    state.meta.finalMedia = buildFinalMediaDescriptor(item.server);
+    saveRun(state);
+    await pushUI(wv, state);
+    return true;
+  }
+
+  item.status = "done";
+  item.note = "Compose flow completed for final step";
+  item.server = finalServer;
   saveRun(state);
   await pushUI(wv, state);
   return true;
@@ -1089,9 +1128,10 @@ function readDataLengthMaybe(path) {
 }
 
 function buildFinalMediaDescriptor(server) {
-  const streamUrl = server?.served?.stream_url ?? null;
-  const downloadUrl = server?.served?.download_url ?? null;
-  const path = server?.path ?? null;
+  const served = server?.served ?? {};
+  const streamUrl = served?.stream_url ?? server?.stream_url ?? null;
+  const downloadUrl = served?.download_url ?? server?.download_url ?? null;
+  const path = server?.path ?? served?.path ?? null;
 
   const playerUrl = streamUrl
     ? `${BASE}/player.html?src=${encodeURIComponent(streamUrl)}`
@@ -1319,14 +1359,14 @@ function buildHTML() {
   iframe.result-frame {
     display: block;
     width: 100%;
-    height: 52vh;
+    height: 62vh;
     border: 0;
-    background: #fff;
+    background: #000;
   }
   video.result-video {
     display: block;
     width: 100%;
-    max-height: 52vh;
+    max-height: 62vh;
     background: #000;
   }
   .hint {
@@ -1796,6 +1836,39 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
       raw,
     };
   }
+}
+
+async function pollComposeJobUntilComplete({ jobUrl, intervalMs = 1200, maxAttempts = 90 }) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const req = new Request(jobUrl);
+    req.method = "GET";
+
+    let body = null;
+    try {
+      body = await req.loadJSON();
+    } catch (e) {
+      if (attempt === maxAttempts - 1) {
+        return { ok: false, error: `job_poll_failed:${String(e)}`, body: null };
+      }
+      await sleep(intervalMs);
+      continue;
+    }
+
+    const served = body?.served ?? null;
+    const hasFinalMedia = !!(served?.stream_url || served?.download_url || body?.stream_url || body?.download_url);
+    if (hasFinalMedia) {
+      return { ok: true, body };
+    }
+
+    const status = String(body?.job_status ?? body?.status ?? "").toLowerCase();
+    if (["failed", "error", "cancelled", "canceled"].includes(status)) {
+      return { ok: false, error: `job_terminal_state:${status}`, body };
+    }
+
+    await sleep(intervalMs);
+  }
+
+  return { ok: false, error: "job_poll_timeout", body: null };
 }
 
 // --------------------------------------------------

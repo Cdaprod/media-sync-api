@@ -1,3 +1,10 @@
+## 2026-04-20 — Async compose job polling for final player panel (active)
+- [x] Added `pollComposeJobUntilComplete(...)` to the dashboard script so final upload responses with `job_url` are polled until final media (`served.stream_url`/`download_url`) is available or terminal failure/timeout occurs.
+- [x] Updated final-step state handling in `runOneStateStepPersistent(...)` to keep non-terminal job responses in polling state (`item.note = Polling compose job...`) and only mark `done` after poll success with final media payload.
+- [x] Expanded `buildFinalMediaDescriptor(...)` to accept both nested `served.*` and top-level `stream_url/download_url` response shapes.
+- [x] Increased top result player viewport sizing (`iframe.result-frame` and `video.result-video` to 62vh) so final media panel is prominent on iPhone.
+- [ ] Next verification step on iPhone: run a compose that returns `status=accepted` + `job_url`, confirm dashboard transitions through polling and then shows top iframe player (`/player.html?src=...`) without reopening script.
+
 ## 2026-04-20 — Inline bridge-style ingest in main dashboard (active)
 - [x] Added inline bridge-style durable ingest helper inside `ComposeStatefulJobDashboard-2.js` so dead OutgoingTemp-only fresh runs can recover within the same invocation (no prior bridge report required).
 - [x] Recovery order is now: (1) inline bridge ingest, (2) report-based bridge fallback from `compose-upload-inspect-latest.json`, (3) explicit hard-fail if neither yields live files.
