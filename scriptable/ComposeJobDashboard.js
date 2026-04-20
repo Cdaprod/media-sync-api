@@ -579,7 +579,7 @@ function deriveInputContractHints(incomingDebug, incomingItems) {
     hints.push("fileURLs + shortcutParameter were both provided; dashboard is now using fileURLs only. Clear Parameter lane in Shortcuts.");
   }
 
-  if (shortcutParameterCount > 0 || urlsCount > 0) {
+  if ((shortcutParameterCount > 0 || urlsCount > 0) && fileURLsCount === 0) {
     hints.push("Shortcut passed parameter/url data; keep only Files lane populated for compose dashboard runs.");
   }
 
@@ -1258,9 +1258,10 @@ async function presentDashboardWebView(wv, state) {
   // Share-sheet -> Shortcuts -> Scriptable transitions can race the first present.
   await sleep(150);
   try {
-    await wv.present(false);
+    // Do not await present: we want staging/upload to continue while dashboard is open.
+    wv.present(false);
   } catch (_) {
-    await wv.present(true);
+    wv.present(true);
   }
 }
 

@@ -1,3 +1,10 @@
+## 2026-04-20 — Non-blocking dashboard presentation + hint noise reduction (active)
+- [x] Updated `presentDashboardWebView(...)` to launch WebView non-blocking (`wv.present(...)` without await) so staging/upload progress continues while dashboard is visible.
+- [x] Kept delayed first-present timing hardening (`sleep(150)`) but removed await-block behavior that left rows stuck at `queued`.
+- [x] Reduced header warning noise by suppressing the generic parameter/url hint when `fileURLs` already exists (retain targeted mixed-lane warning only).
+- [x] Re-synced alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical dashboard after non-blocking present changes.
+- [ ] Next verification step on iPhone: run with current mixed shortcut and confirm rows progress past `queued` while dashboard stays open; then remove top parameter lane and confirm warning banner disappears fully.
+
 ## 2026-04-20 — Scriptable Timer-based sleep runtime compatibility fix (active)
 - [x] Replaced browser-only `setTimeout` sleep helper with Scriptable-compatible `Timer.schedule(ms, false, resolve)` promise wrapper.
 - [x] Re-synced alias dashboard scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical implementation so all entrypoints avoid `setTimeout`.
