@@ -119,10 +119,47 @@ function loadLatestRecoverableRun() {
   return runs.length > 0 ? runs[0] : null;
 }
 
-function loadBridgeFallbackEntries() {
-  if (!_fmRun.fileExists(BRIDGE_LATEST_REPORT_PATH)) return [];
+function loadBridgeFallbackEntries({
+  expectedCount = null,
+  maxAgeMs = 60000,
+  nowMs = Date.now(),
+  expectedInvocationId = null,
+  enforceInvocationMatch = false,
+  allowStaleWhenDeadOutgoingOnly = false,
+} = {}) {
+  if (!_fmRun.fileExists(BRIDGE_LATEST_REPORT_PATH)) {
+    return { ok: false, reason: "bridge_fallback_missing_report", entries: [] };
+  }
   const report = safeJsonParse(_fmRun.readString(BRIDGE_LATEST_REPORT_PATH), null);
+  if (!report) {
+    return { ok: false, reason: "bridge_fallback_malformed_report", entries: [] };
+  }
+
   const staged = Array.isArray(report?.staged) ? report.staged : [];
+  if (staged.length === 0) {
+    return { ok: false, reason: "bridge_fallback_zero_staged_rows", entries: [] };
+  }
+
+  const reportItemCount = Number(report?.itemCount ?? staged.length);
+  if (expectedCount != null && expectedCount > 0 && Number.isFinite(reportItemCount) && reportItemCount !== expectedCount) {
+    return { ok: false, reason: "bridge_fallback_count_mismatch", entries: [] };
+  }
+
+  if (enforceInvocationMatch && expectedInvocationId) {
+    const invocationId = report?.invocationId ? String(report.invocationId) : null;
+    if (!invocationId || invocationId !== String(expectedInvocationId)) {
+      return { ok: false, reason: "bridge_fallback_invocation_mismatch", entries: [] };
+    }
+  }
+
+  const createdMs = Date.parse(report?.createdAt ?? report?.generatedAt ?? "");
+  if (!allowStaleWhenDeadOutgoingOnly && Number.isFinite(createdMs)) {
+    const ageMs = nowMs - createdMs;
+    if (ageMs > maxAgeMs) {
+      return { ok: false, reason: "bridge_fallback_report_too_old", entries: [] };
+    }
+  }
+
   const out = [];
   for (let i = 0; i < staged.length; i++) {
     const row = staged[i];
@@ -137,10 +174,20 @@ function loadBridgeFallbackEntries() {
       family: classifyPathFamily(path),
       existsAtCollect: true,
       fromBridgeReport: true,
+      bridgeInvocationId: report?.invocationId ?? null,
     });
   }
-  return out;
+
+  if (out.length === 0) {
+    return { ok: false, reason: "bridge_fallback_no_live_staged_paths", entries: [] };
+  }
+  if (expectedCount != null && expectedCount > 0 && out.length !== expectedCount) {
+    return { ok: false, reason: "bridge_fallback_count_mismatch", entries: [] };
+  }
+
+  return { ok: true, reason: null, entries: out };
 }
+
 
 function ingestInlineBridgeStyleFromArgs() {
   const lanes = [
@@ -1602,9 +1649,13 @@ function buildHTML() {
       (meta.mode || "--") + " · " +
       (meta.outputName || "--") + " · " +
       (meta.runId || "--");
-    document.getElementById("meta").textContent = hints.length
-      ? headerText + "\\n⚠ " + hints.join(" | ")
-      : headerText;
+    const fallbackDiagLine =
+      "fallback inline=" + String(meta.inlineBridgeRecoveredCount ?? 0) +
+      " · report=" + String(meta.bridgeReportRecoveredCount ?? 0) +
+      " · reject=" + String(meta.bridgeReportRejectReason || "none");
+    const warningLine = hints.length ? "⚠ " + hints.join(" | ") : "";
+    const metaLines = [headerText, fallbackDiagLine, warningLine].filter(Boolean);
+    document.getElementById("meta").textContent = metaLines.join("\\n");
 
     document.getElementById("sum-total").textContent = String(items.length);
     document.getElementById("sum-done").textContent = String(items.filter(x => x.status === "accepted" || x.status === "done").length);
@@ -1882,26 +1933,50 @@ async function main() {
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
   let inlineBridgeIngestUsed = false;
   let reportBridgeFallbackUsed = false;
+  const fallbackRecoveryDebug = {
+    deadOutgoingTempOnly: false,
+    inlineBridgeAttempted: false,
+    inlineBridgeRecoveredCount: 0,
+    bridgeReportAttempted: false,
+    bridgeReportRecoveredCount: 0,
+    bridgeReportRejectReason: null,
+  };
+
   let deadOutgoingTempOnly =
     rawPathEntries.length > 0 &&
     rawPathEntries.every(entry => entry.family?.isOutgoingTemp && !entry.existsAtCollect);
+  fallbackRecoveryDebug.deadOutgoingTempOnly = deadOutgoingTempOnly;
+
   if (deadOutgoingTempOnly) {
+    fallbackRecoveryDebug.inlineBridgeAttempted = true;
     const inlineBridgeEntries = ingestInlineBridgeStyleFromArgs();
+    fallbackRecoveryDebug.inlineBridgeRecoveredCount = inlineBridgeEntries.length;
     if (inlineBridgeEntries.length > 0) {
       rawPathEntries = inlineBridgeEntries;
       deadOutgoingTempOnly = false;
       inlineBridgeIngestUsed = true;
       inputHints.push(
-        "Incoming share paths were dead OutgoingTemp entries; recovered by inline bridge-style durable ingest in this invocation."
+        `Incoming share paths were dead OutgoingTemp entries; recovered by inline bridge-style durable ingest in this invocation (${inlineBridgeEntries.length} staged).`
       );
     } else {
-      const bridgeFallbackEntries = loadBridgeFallbackEntries();
-      if (bridgeFallbackEntries.length > 0) {
-        rawPathEntries = bridgeFallbackEntries;
+      fallbackRecoveryDebug.bridgeReportAttempted = true;
+      const bridgeFallback = loadBridgeFallbackEntries({
+        expectedCount: rawPathEntries.length,
+        allowStaleWhenDeadOutgoingOnly: true,
+      });
+      fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
+      fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
+
+      if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
+        rawPathEntries = bridgeFallback.entries;
         deadOutgoingTempOnly = false;
         reportBridgeFallbackUsed = true;
         inputHints.push(
-          "Incoming share paths were dead OutgoingTemp entries; using live staged files from compose-upload-inspect bridge report."
+          `Incoming share paths were dead OutgoingTemp entries; recovered from bridge report (${bridgeFallback.entries.length} live staged files).`
+        );
+      } else {
+        inputHints.push(
+          `Dead OutgoingTemp recovery failed: inline=${inlineBridgeEntries.length}, bridge=${bridgeFallback.entries.length}, reason=${fallbackRecoveryDebug.bridgeReportRejectReason || "none"}.`
         );
       }
     }
@@ -1949,6 +2024,12 @@ async function main() {
       bridgeFallbackUsed: !!state.meta.bridgeFallbackUsed,
       inlineBridgeIngestUsed: !!state.meta.inlineBridgeIngestUsed,
       reportBridgeFallbackUsed: !!state.meta.reportBridgeFallbackUsed,
+      deadOutgoingTempOnly: !!state.meta.deadOutgoingTempOnly,
+      inlineBridgeAttempted: !!state.meta.inlineBridgeAttempted,
+      inlineBridgeRecoveredCount: Number(state.meta.inlineBridgeRecoveredCount || 0),
+      bridgeReportAttempted: !!state.meta.bridgeReportAttempted,
+      bridgeReportRecoveredCount: Number(state.meta.bridgeReportRecoveredCount || 0),
+      bridgeReportRejectReason: state.meta.bridgeReportRejectReason || null,
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -1980,6 +2061,13 @@ async function main() {
   state.meta.bridgeFallbackUsed = rawPathEntries.some(entry => !!entry.fromBridgeReport);
   state.meta.inlineBridgeIngestUsed = inlineBridgeIngestUsed;
   state.meta.reportBridgeFallbackUsed = reportBridgeFallbackUsed;
+  state.meta.fallbackRecoveryDebug = fallbackRecoveryDebug;
+  state.meta.deadOutgoingTempOnly = fallbackRecoveryDebug.deadOutgoingTempOnly;
+  state.meta.inlineBridgeAttempted = fallbackRecoveryDebug.inlineBridgeAttempted;
+  state.meta.inlineBridgeRecoveredCount = fallbackRecoveryDebug.inlineBridgeRecoveredCount;
+  state.meta.bridgeReportAttempted = fallbackRecoveryDebug.bridgeReportAttempted;
+  state.meta.bridgeReportRecoveredCount = fallbackRecoveryDebug.bridgeReportRecoveredCount;
+  state.meta.bridgeReportRejectReason = fallbackRecoveryDebug.bridgeReportRejectReason;
   saveRun(state);
 
   if (deadOutgoingTempOnly) {
@@ -2003,6 +2091,7 @@ async function main() {
         resolvedPath: rawEntry?.rawPath ?? null,
         existedBeforeStage: !!rawEntry?.existsAtCollect,
         sourceChannel: rawEntry?.sourceChannel ?? null,
+        fallbackRecoveryDebug,
       };
       item.stageMethod = null;
       item.stagedBytes = null;
@@ -2025,6 +2114,12 @@ async function main() {
       bridgeFallbackUsed: false,
       inlineBridgeIngestUsed: false,
       reportBridgeFallbackUsed: false,
+      deadOutgoingTempOnly: fallbackRecoveryDebug.deadOutgoingTempOnly,
+      inlineBridgeAttempted: fallbackRecoveryDebug.inlineBridgeAttempted,
+      inlineBridgeRecoveredCount: fallbackRecoveryDebug.inlineBridgeRecoveredCount,
+      bridgeReportAttempted: fallbackRecoveryDebug.bridgeReportAttempted,
+      bridgeReportRecoveredCount: fallbackRecoveryDebug.bridgeReportRecoveredCount,
+      bridgeReportRejectReason: fallbackRecoveryDebug.bridgeReportRejectReason,
       totalCount: state.items.length,
       completedCount: 0,
       failedCount: state.items.length,
@@ -2059,6 +2154,12 @@ async function main() {
     bridgeFallbackUsed: !!state.meta.bridgeFallbackUsed,
     inlineBridgeIngestUsed: !!state.meta.inlineBridgeIngestUsed,
     reportBridgeFallbackUsed: !!state.meta.reportBridgeFallbackUsed,
+    deadOutgoingTempOnly: !!state.meta.deadOutgoingTempOnly,
+    inlineBridgeAttempted: !!state.meta.inlineBridgeAttempted,
+    inlineBridgeRecoveredCount: Number(state.meta.inlineBridgeRecoveredCount || 0),
+    bridgeReportAttempted: !!state.meta.bridgeReportAttempted,
+    bridgeReportRecoveredCount: Number(state.meta.bridgeReportRecoveredCount || 0),
+    bridgeReportRejectReason: state.meta.bridgeReportRejectReason || null,
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,

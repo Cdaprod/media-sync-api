@@ -1,3 +1,11 @@
+## 2026-04-20 — Dead OutgoingTemp fallback diagnostics + relaxed bridge recovery (active)
+- [x] Instrumented dead-OutgoingTemp-only startup recovery with explicit counters/flags (`deadOutgoingTempOnly`, `inlineBridgeAttempted`, `inlineBridgeRecoveredCount`, `bridgeReportAttempted`, `bridgeReportRecoveredCount`, `bridgeReportRejectReason`) persisted in run metadata and shortcut output.
+- [x] Hardened bridge report reject taxonomy with explicit reasons (`missing_report`, `malformed_report`, `zero_staged_rows`, `no_live_staged_paths`, `count_mismatch`, `invocation_mismatch`, `report_too_old`) so failures are no longer collapsed into a generic dead-path error.
+- [x] Relaxed bridge report age checks only for dead-OutgoingTemp-only recovery attempts while retaining strict count-match protection against stale wrong-sized imports.
+- [x] Added compact header diagnostics line in dashboard UI: `fallback inline=<count> · report=<count> · reject=<reason>`.
+- [x] Re-synced alias dashboard scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical fallback diagnostics/behavior updates.
+- [ ] Next verification step on iPhone: rerun dead-OutgoingTemp share flow and confirm either recovery succeeds with `report=2` or reject reason is explicit (`count_mismatch`, `no_live_staged_paths`, etc.).
+
 ## 2026-04-20 — Async compose job polling for final player panel (active)
 - [x] Added `pollComposeJobUntilComplete(...)` to the dashboard script so final upload responses with `job_url` are polled until final media (`served.stream_url`/`download_url`) is available or terminal failure/timeout occurs.
 - [x] Updated final-step state handling in `runOneStateStepPersistent(...)` to keep non-terminal job responses in polling state (`item.note = Polling compose job...`) and only mark `done` after poll success with final media payload.
