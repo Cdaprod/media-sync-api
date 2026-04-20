@@ -1,3 +1,12 @@
+## 2026-04-20 — Live shell-first submit loop (non-blocking spinner mitigation) (active)
+- [x] Reintroduced early live dashboard bootstrap for submit mode: load HTML + push initial state + non-awaited `wv.present(...)` before long staging/upload orchestration.
+- [x] Fresh-run submit flow now drives staging/upload with live `pushUI(...)` updates and cooperative yields, so operator sees transitions while requests run.
+- [x] `drainRunPersistent(...)` now yields briefly after each stepped transition to improve Scriptable responsiveness and paint cadence.
+- [x] Submit-mode dead-input failure path now updates already-present live WebView state instead of relying on post-run presentation only.
+- [x] Kept inspect/reopen mode awaited and resumable for detailed polling/final player rendering.
+- [x] Re-synced alias dashboards from canonical live-submit implementation.
+- [ ] Next verification step on iPhone: share from Photos and confirm dashboard appears quickly with live per-item status transitions (stage/upload/fail/blocked) without waiting for end-of-run presentation.
+
 ## 2026-04-20 — Submit-vs-inspect split to stop share-sheet spinner blocking (active)
 - [x] Added explicit invocation split in dashboard flow: fresh share input runs now execute in `submit` mode; reopen/no-input runs execute in `inspect` mode.
 - [x] Submit mode no longer polls compose `job_url` to completion after final clip acceptance; it persists queued job state and exits quickly with submission metadata (`runId`, `job_url`, `job_status`, `started_at`).

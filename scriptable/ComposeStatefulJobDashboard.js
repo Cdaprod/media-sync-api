@@ -815,6 +815,7 @@ async function drainRunPersistent(wv, state, options = {}) {
   while (true) {
     const stepped = await runOneStateStepPersistent(wv, state, options);
     if (!stepped) break;
+    await sleep(30);
   }
   return state;
 }
@@ -2021,14 +2022,22 @@ async function pushUI(wv, state) {
   }
 }
 
-async function presentDashboardWebView(wv, state) {
+async function presentDashboardWebView(wv, state, { awaitPresent = true } = {}) {
   await wv.loadHTML(buildHTML());
   await pushUI(wv, state);
-  // Scriptable paints more reliably when this is a final awaited report view.
+  if (awaitPresent) {
+    // Scriptable paints more reliably when this is a final awaited report view.
+    try {
+      await wv.present(false);
+    } catch (_) {
+      await wv.present(true);
+    }
+    return;
+  }
   try {
-    await wv.present(false);
+    wv.present(false);
   } catch (_) {
-    await wv.present(true);
+    try { wv.present(true); } catch (_) {}
   }
 }
 
@@ -2397,6 +2406,12 @@ async function main() {
   state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
   saveRun(state);
+  let liveWv = null;
+  if (submitMode) {
+    liveWv = new WebView();
+    await presentDashboardWebView(liveWv, state, { awaitPresent: false });
+    await sleep(60);
+  }
 
   if (deadOutgoingTempOnly) {
     for (let i = 0; i < state.items.length; i++) {
@@ -2428,6 +2443,7 @@ async function main() {
     state.meta.retryableFailure = false;
     state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
     saveRun(state);
+    await pushUI(liveWv, state);
     if (!submitMode) {
       const wv = new WebView();
       await presentDashboardWebView(wv, state);
@@ -2475,12 +2491,16 @@ async function main() {
   // For fresh runs, import raw shared paths immediately using old working ComposeUpload-style staging.
   if (rawPathEntries.length > 0) {
     await stageRawSharePathsImmediatelyIntoRun(state, rawPathEntries);
+    await pushUI(liveWv, state);
+    await sleep(30);
   } else {
     // Fallback for non-path payloads.
     await stageRunInputsPersistentFast(state, incomingItems);
+    await pushUI(liveWv, state);
+    await sleep(30);
   }
 
-  await drainRunPersistent(null, state, { allowFinalJobPolling: !submitMode });
+  await drainRunPersistent(liveWv, state, { allowFinalJobPolling: !submitMode });
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
   state.meta.recoveryPathUsed = state.meta.recoveryPathUsed || fallbackRecoveryDebug.recoveryPathUsed || "none";
   state.meta.invocationMode = submitMode ? "submit" : "inspect";
