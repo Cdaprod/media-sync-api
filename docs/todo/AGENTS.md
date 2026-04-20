@@ -1,3 +1,10 @@
+## 2026-04-20 — Inline bridge-style ingest in main dashboard (active)
+- [x] Added inline bridge-style durable ingest helper inside `ComposeStatefulJobDashboard-2.js` so dead OutgoingTemp-only fresh runs can recover within the same invocation (no prior bridge report required).
+- [x] Recovery order is now: (1) inline bridge ingest, (2) report-based bridge fallback from `compose-upload-inspect-latest.json`, (3) explicit hard-fail if neither yields live files.
+- [x] Added metadata flags `inlineBridgeIngestUsed` and `reportBridgeFallbackUsed` in script outputs/state to distinguish recovery path used at runtime.
+- [x] Kept report-based fallback as compatibility shim only (last resort) while preserving existing dashboard cards/debug fields.
+- [ ] Next verification step on iPhone: run dead-OutgoingTemp share flow without running bridge first and confirm dashboard reports `inlineBridgeIngestUsed=true` and proceeds through staging/upload.
+
 ## 2026-04-20 — Final-report awaited WebView presentation mode (active)
 - [x] Switched compose dashboard presentation model from non-awaited live-progress present to final-report present after drain completion for both fresh and resumed runs.
 - [x] Updated `presentDashboardWebView(...)` to `await wv.present(...)` (with awaited fallback) and added explicit comment documenting Scriptable paint reliability rationale.

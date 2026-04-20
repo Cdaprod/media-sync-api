@@ -40,7 +40,10 @@ const RUNS_DIR = _fmRun.joinPath(_fmRun.documentsDirectory(), "compose-runs");
 const LAST_RUN_PATH = _fmRun.joinPath(RUNS_DIR, "last_run.json");
 const SHARE_DEBUG_DIR = _fmRun.joinPath(_fmRun.documentsDirectory(), "share-debug");
 const BRIDGE_LATEST_REPORT_PATH = _fmRun.joinPath(SHARE_DEBUG_DIR, "compose-upload-inspect-latest.json");
+const INLINE_BRIDGE_STAGE_ROOT = _fmRun.joinPath(SHARE_DEBUG_DIR, "inline-bridge-staged");
 if (!_fmRun.fileExists(RUNS_DIR)) _fmRun.createDirectory(RUNS_DIR, true);
+if (!_fmRun.fileExists(SHARE_DEBUG_DIR)) _fmRun.createDirectory(SHARE_DEBUG_DIR, true);
+if (!_fmRun.fileExists(INLINE_BRIDGE_STAGE_ROOT)) _fmRun.createDirectory(INLINE_BRIDGE_STAGE_ROOT, true);
 
 function nowIso() {
   return new Date().toISOString();
@@ -135,6 +138,60 @@ function loadBridgeFallbackEntries() {
       existsAtCollect: true,
       fromBridgeReport: true,
     });
+  }
+  return out;
+}
+
+function ingestInlineBridgeStyleFromArgs() {
+  const lanes = [
+    { key: "fileURLs", values: asArray(args.fileURLs) },
+    { key: "shortcutParameter", values: asArray(args.shortcutParameter) },
+    { key: "shortcutInput", values: asArray(args.shortcutInput) },
+    { key: "urls", values: asArray(args.urls) },
+  ];
+  const runDir = _fmRun.joinPath(INLINE_BRIDGE_STAGE_ROOT, `inline-bridge-${Date.now()}`);
+  if (!_fmRun.fileExists(runDir)) _fmRun.createDirectory(runDir, true);
+
+  const out = [];
+  const seen = new Set();
+  let index = 0;
+  for (const lane of lanes) {
+    for (let i = 0; i < lane.values.length; i++) {
+      const raw = lane.values[i];
+      const srcPath = toLocalPath(raw);
+      if (!srcPath || seen.has(srcPath)) continue;
+      seen.add(srcPath);
+      if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) continue;
+      const ext = extname(srcPath) || ".mov";
+      const dstPath = _fmRun.joinPath(runDir, `clip_${String(index).padStart(4, "0")}${ext}`);
+      try {
+        _fmRun.copy(srcPath, dstPath);
+      } catch (copyErr) {
+        try {
+          const data = _fmRun.read(srcPath);
+          if (!data) throw new Error("read returned null data");
+          _fmRun.write(dstPath, data);
+        } catch (readErr) {
+          try {
+            const data = Data.fromFile(srcPath);
+            if (!data) throw new Error("Data.fromFile returned null data");
+            _fmRun.write(dstPath, data);
+          } catch (_) {
+            continue;
+          }
+        }
+      }
+      out.push({
+        sourceChannel: "inline_bridge",
+        sourceIndex: index,
+        sourceValue: String(raw),
+        rawPath: dstPath,
+        family: classifyPathFamily(dstPath),
+        existsAtCollect: true,
+        fromInlineBridge: true,
+      });
+      index += 1;
+    }
   }
   return out;
 }
@@ -1750,17 +1807,30 @@ async function main() {
   const incomingItems = collectIncomingItems();
   let rawPathEntries = collectRawSharePaths();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
+  let inlineBridgeIngestUsed = false;
+  let reportBridgeFallbackUsed = false;
   let deadOutgoingTempOnly =
     rawPathEntries.length > 0 &&
     rawPathEntries.every(entry => entry.family?.isOutgoingTemp && !entry.existsAtCollect);
   if (deadOutgoingTempOnly) {
-    const bridgeFallbackEntries = loadBridgeFallbackEntries();
-    if (bridgeFallbackEntries.length > 0) {
-      rawPathEntries = bridgeFallbackEntries;
+    const inlineBridgeEntries = ingestInlineBridgeStyleFromArgs();
+    if (inlineBridgeEntries.length > 0) {
+      rawPathEntries = inlineBridgeEntries;
       deadOutgoingTempOnly = false;
+      inlineBridgeIngestUsed = true;
       inputHints.push(
-        "Incoming share paths were dead OutgoingTemp entries; using live staged files from compose-upload-inspect bridge report."
+        "Incoming share paths were dead OutgoingTemp entries; recovered by inline bridge-style durable ingest in this invocation."
       );
+    } else {
+      const bridgeFallbackEntries = loadBridgeFallbackEntries();
+      if (bridgeFallbackEntries.length > 0) {
+        rawPathEntries = bridgeFallbackEntries;
+        deadOutgoingTempOnly = false;
+        reportBridgeFallbackUsed = true;
+        inputHints.push(
+          "Incoming share paths were dead OutgoingTemp entries; using live staged files from compose-upload-inspect bridge report."
+        );
+      }
     }
   }
   const rawPaths = rawPathEntries.map(x => x.rawPath);
@@ -1804,6 +1874,8 @@ async function main() {
       inputHints,
       inputFamilySummary,
       bridgeFallbackUsed: !!state.meta.bridgeFallbackUsed,
+      inlineBridgeIngestUsed: !!state.meta.inlineBridgeIngestUsed,
+      reportBridgeFallbackUsed: !!state.meta.reportBridgeFallbackUsed,
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -1833,6 +1905,8 @@ async function main() {
   state.meta.inputHints = inputHints;
   state.meta.inputFamilySummary = inputFamilySummary;
   state.meta.bridgeFallbackUsed = rawPathEntries.some(entry => !!entry.fromBridgeReport);
+  state.meta.inlineBridgeIngestUsed = inlineBridgeIngestUsed;
+  state.meta.reportBridgeFallbackUsed = reportBridgeFallbackUsed;
   saveRun(state);
 
   if (deadOutgoingTempOnly) {
@@ -1876,6 +1950,8 @@ async function main() {
       inputHints,
       inputFamilySummary,
       bridgeFallbackUsed: false,
+      inlineBridgeIngestUsed: false,
+      reportBridgeFallbackUsed: false,
       totalCount: state.items.length,
       completedCount: 0,
       failedCount: state.items.length,
@@ -1908,6 +1984,8 @@ async function main() {
     inputHints,
     inputFamilySummary,
     bridgeFallbackUsed: !!state.meta.bridgeFallbackUsed,
+    inlineBridgeIngestUsed: !!state.meta.inlineBridgeIngestUsed,
+    reportBridgeFallbackUsed: !!state.meta.reportBridgeFallbackUsed,
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,
