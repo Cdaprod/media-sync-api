@@ -673,7 +673,8 @@ async function stageRunInputsPersistentFast(state, incomingItems) {
 
 // Process a single item in the run. This uploads one staged clip and updates
 // the run state accordingly. It also updates the UI and persists state.
-async function runOneStateStepPersistent(wv, state) {
+async function runOneStateStepPersistent(wv, state, options = {}) {
+  const allowFinalJobPolling = options.allowFinalJobPolling !== false;
   const item = state.items.find(x => x.status === "staged");
   if (!item) return false;
 
@@ -752,11 +753,20 @@ async function runOneStateStepPersistent(wv, state) {
   }
 
   if (finalServer?.job_url) {
-    item.status = "uploading";
-    item.note = "Compose job queued; waiting for backend worker to start.";
+    item.status = allowFinalJobPolling ? "uploading" : "accepted";
+    item.note = allowFinalJobPolling
+      ? "Compose job queued; waiting for backend worker to start."
+      : "Submission complete. Compose job queued on backend. Reopen dashboard to inspect progress.";
     item.server = finalServer;
+    state.meta.lastKnownJobUrl = finalServer.job_url;
+    state.meta.lastKnownJobStatus = String(finalServer?.job_status || finalServer?.status || "queued");
+    state.meta.lastKnownJobStartedAt = finalServer?.started_at ?? null;
+    state.meta.submissionSucceeded = true;
+    state.meta.submissionPendingInspect = !allowFinalJobPolling;
     saveRun(state);
     await pushUI(wv, state);
+
+    if (!allowFinalJobPolling) return true;
 
     const polled = await pollComposeJobUntilComplete({
       jobUrl: finalServer.job_url,
@@ -801,12 +811,63 @@ async function runOneStateStepPersistent(wv, state) {
 }
 
 // Drain the run by continuously processing staged items until none remain
-async function drainRunPersistent(wv, state) {
+async function drainRunPersistent(wv, state, options = {}) {
   while (true) {
-    const stepped = await runOneStateStepPersistent(wv, state);
+    const stepped = await runOneStateStepPersistent(wv, state, options);
     if (!stepped) break;
   }
   return state;
+}
+
+function findPendingComposeJobItem(state) {
+  if (state?.meta?.finalMedia) return null;
+  const items = state?.items ?? [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (!item?.server?.job_url) continue;
+    if (item.status === "done" && state.meta?.finalMedia) continue;
+    return item;
+  }
+  return null;
+}
+
+async function refreshPendingComposeJobForInspect(state, { intervalMs = 1200, maxAttempts = 8 } = {}) {
+  const item = findPendingComposeJobItem(state);
+  if (!item?.server?.job_url) return false;
+
+  const polled = await pollComposeJobUntilComplete({
+    jobUrl: item.server.job_url,
+    intervalMs,
+    maxAttempts,
+  });
+
+  if (polled.ok) {
+    item.status = "done";
+    item.note = "Compose job completed and final media is ready";
+    item.server = polled.body || item.server;
+    state.meta.finalMedia = buildFinalMediaDescriptor(item.server);
+    state.meta.submissionPendingInspect = false;
+    state.meta.lastKnownJobStatus = "completed";
+    saveRun(state);
+    return true;
+  }
+
+  const status = polled.lastStatus || String(item.server?.job_status || item.server?.status || "queued");
+  item.status = "accepted";
+  item.note = "Submission complete. Compose job still running. Refresh status.";
+  item.server = {
+    ...(polled.body || item.server || {}),
+    poll_debug: {
+      lastStatus: polled.lastStatus ?? null,
+      lastStartedAt: polled.lastStartedAt ?? null,
+      inspectPollError: polled.error || null,
+    },
+  };
+  state.meta.lastKnownJobStatus = status;
+  state.meta.lastKnownJobStartedAt = polled.lastStartedAt ?? null;
+  state.meta.submissionPendingInspect = true;
+  saveRun(state);
+  return true;
 }
 
 // --------------------------------------------------
@@ -1810,7 +1871,10 @@ function buildHTML() {
       (meta.outputName || "--") + " · " +
       (meta.runId || "--");
     const warningLine = hints.length ? "⚠ " + hints.join(" | ") : "";
-    const metaLines = [headerText, warningLine].filter(Boolean);
+    const modeLine = meta.invocationMode === "submit"
+      ? "Submitted. Reopen dashboard to inspect progress."
+      : "";
+    const metaLines = [headerText, warningLine, modeLine].filter(Boolean);
     document.getElementById("meta").textContent = metaLines.join("\\n");
 
     document.getElementById("sum-total").textContent = String(items.length);
@@ -2122,6 +2186,7 @@ async function pollComposeJobUntilComplete({
 // --------------------------------------------------
 
 async function main() {
+  const submitMode = (asArray(args.fileURLs).length + asArray(args.shortcutInput).length + asArray(args.shortcutParameter).length + asArray(args.urls).length) > 0;
   const incomingDebug = inspectIncomingArgs();
   const incomingItems = collectIncomingItems();
   let rawPathEntries = collectRawSharePaths();
@@ -2246,9 +2311,11 @@ async function main() {
         inputFamilySummary,
       };
     }
-    await drainRunPersistent(null, state);
+    await refreshPendingComposeJobForInspect(state, { intervalMs: 1200, maxAttempts: 8 });
+    await drainRunPersistent(null, state, { allowFinalJobPolling: true });
     state.meta.retryableFailure = deriveRetryableFailure(state.items);
     state.meta.recoveryPathUsed = state.meta.recoveryPathUsed || "none";
+    state.meta.invocationMode = "inspect";
     saveRun(state);
     const wv = new WebView();
     await presentDashboardWebView(wv, state);
@@ -2261,6 +2328,7 @@ async function main() {
       requestUrl: state.meta.requestUrl,
       stagedDir: state.meta.stagedDir,
       rawPaths: [],
+      invocationMode: "inspect",
       incomingDebug,
       inputHints,
       inputFamilySummary,
@@ -2279,6 +2347,11 @@ async function main() {
       fallbackBridgeCount: Number(state.meta.fallbackBridgeCount || 0),
       retryableFailure: state.meta.retryableFailure == null ? null : !!state.meta.retryableFailure,
       recoveryPathUsed: state.meta.recoveryPathUsed || "none",
+      submissionSucceeded: !!state.meta.submissionSucceeded,
+      submissionPendingInspect: !!state.meta.submissionPendingInspect,
+      lastKnownJobUrl: state.meta.lastKnownJobUrl || null,
+      lastKnownJobStatus: state.meta.lastKnownJobStatus || null,
+      lastKnownJobStartedAt: state.meta.lastKnownJobStartedAt || null,
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -2355,13 +2428,16 @@ async function main() {
     state.meta.retryableFailure = false;
     state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
     saveRun(state);
-    const wv = new WebView();
-    await presentDashboardWebView(wv, state);
+    if (!submitMode) {
+      const wv = new WebView();
+      await presentDashboardWebView(wv, state);
+    }
     return {
       ok: false,
       reason: "All incoming paths were dead OutgoingTemp compatibility exports.",
       error: "share_input_only_dead_outgoingtemp_paths",
       runId: state.meta.runId,
+      invocationMode: submitMode ? "submit" : "inspect",
       requestUrl: state.meta.requestUrl,
       stagedDir: state.meta.stagedDir,
       rawPaths,
@@ -2383,6 +2459,11 @@ async function main() {
       fallbackBridgeCount: fallbackRecoveryDebug.bridgeCount,
       retryableFailure: false,
       recoveryPathUsed: fallbackRecoveryDebug.recoveryPathUsed || "none",
+      submissionSucceeded: false,
+      submissionPendingInspect: false,
+      lastKnownJobUrl: null,
+      lastKnownJobStatus: null,
+      lastKnownJobStartedAt: null,
       totalCount: state.items.length,
       completedCount: 0,
       failedCount: state.items.length,
@@ -2399,17 +2480,21 @@ async function main() {
     await stageRunInputsPersistentFast(state, incomingItems);
   }
 
-  await drainRunPersistent(null, state);
+  await drainRunPersistent(null, state, { allowFinalJobPolling: !submitMode });
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
   state.meta.recoveryPathUsed = state.meta.recoveryPathUsed || fallbackRecoveryDebug.recoveryPathUsed || "none";
+  state.meta.invocationMode = submitMode ? "submit" : "inspect";
   saveRun(state);
-  const wv = new WebView();
-  await presentDashboardWebView(wv, state);
+  if (!submitMode) {
+    const wv = new WebView();
+    await presentDashboardWebView(wv, state);
+  }
   const completedCountNew = state.items.filter(x => x.status === "done" || x.status === "accepted").length;
   const failedCountNew = state.items.filter(x => x.status === "failed").length;
   return {
     ok: true,
-    mode: "incremental-dashboard",
+    mode: submitMode ? "incremental-submit" : "incremental-dashboard",
+    invocationMode: submitMode ? "submit" : "inspect",
     runId: state.meta.runId,
     requestUrl: state.meta.requestUrl,
     stagedDir: state.meta.stagedDir,
@@ -2432,6 +2517,11 @@ async function main() {
     fallbackBridgeCount: Number(state.meta.fallbackBridgeCount || 0),
     retryableFailure: state.meta.retryableFailure == null ? null : !!state.meta.retryableFailure,
     recoveryPathUsed: state.meta.recoveryPathUsed || "none",
+    submissionSucceeded: !!state.meta.submissionSucceeded,
+    submissionPendingInspect: !!state.meta.submissionPendingInspect,
+    lastKnownJobUrl: state.meta.lastKnownJobUrl || null,
+    lastKnownJobStatus: state.meta.lastKnownJobStatus || null,
+    lastKnownJobStartedAt: state.meta.lastKnownJobStartedAt || null,
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,

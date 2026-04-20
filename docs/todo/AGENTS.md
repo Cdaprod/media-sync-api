@@ -1,3 +1,13 @@
+## 2026-04-20 — Submit-vs-inspect split to stop share-sheet spinner blocking (active)
+- [x] Added explicit invocation split in dashboard flow: fresh share input runs now execute in `submit` mode; reopen/no-input runs execute in `inspect` mode.
+- [x] Submit mode no longer polls compose `job_url` to completion after final clip acceptance; it persists queued job state and exits quickly with submission metadata (`runId`, `job_url`, `job_status`, `started_at`).
+- [x] Inspect mode now performs bounded job refresh (`refreshPendingComposeJobForInspect`) and updates final media when available, otherwise keeps a concise “still running” note.
+- [x] Final-clip queued responses now persist submission fields (`submissionSucceeded`, `submissionPendingInspect`, `lastKnownJobUrl`, `lastKnownJobStatus`, `lastKnownJobStartedAt`).
+- [x] Dead-input hard-fail path no longer forces WebView presentation in submit mode, reducing foreground spinner dwell.
+- [x] Header copy now surfaces submit-mode status line (“Submitted. Reopen dashboard to inspect progress.”) while keeping compact layout.
+- [x] Re-synced alias dashboard scripts from canonical submit/inspect split.
+- [ ] Next verification step on iPhone: share 3 clips and confirm Scriptable exits soon after submission (no long queued-job wait), then reopen dashboard manually to refresh queued job and show final player when completed.
+
 ## 2026-04-20 — Bridge recovery permissive restore + compact operator-first UI (active)
 - [x] Restored permissive dead-OutgoingTemp bridge recovery behavior by removing fingerprint/count mismatch from mandatory rejection gates in main fallback path.
 - [x] Kept recovery order stable: inline durable ingest first, bridge fallback second, hard-fail only when both yield zero usable staged files.
