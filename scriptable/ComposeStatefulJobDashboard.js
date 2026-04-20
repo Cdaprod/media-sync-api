@@ -327,6 +327,28 @@ async function stageRunInputsPersistent(wv, state, incomingItems) {
   }
 }
 
+async function stageRunInputsPersistentFast(state, incomingItems) {
+  for (let i = 0; i < state.items.length; i++) {
+    const item = state.items[i];
+    if (item.status !== "queued") continue;
+
+    const incoming = incomingItems[i];
+    const staged = stagePersistentSource(incoming, item.stagedPath);
+    if (staged.ok) {
+      item.stagedBytes = staged.bytes;
+      item.stageMethod = staged.method;
+      item.status = "staged";
+      item.note = `Staged via ${staged.method}`;
+    } else {
+      item.status = "failed";
+      item.note = "Staging failed";
+      item.error = staged.error;
+    }
+    item.stagedBytesHuman = humanBytes(item.stagedBytes);
+  }
+  saveRun(state);
+}
+
 // Process a single item in the run. This uploads one staged clip and updates
 // the run state accordingly. It also updates the UI and persists state.
 async function runOneStateStepPersistent(wv, state) {
@@ -566,10 +588,10 @@ function inspectIncomingArgs() {
 
 function deriveInputContractHints(incomingDebug, incomingItems) {
   const hints = [];
-  const fileURLsCount = incomingDebug?.fileURLs?.length ?? 0;
-  const shortcutInputCount = incomingDebug?.shortcutInput?.length ?? 0;
-  const shortcutParameterCount = incomingDebug?.shortcutParameter?.length ?? 0;
-  const urlsCount = incomingDebug?.urls?.length ?? 0;
+  const fileURLsCount = incomingDebug?.fileURLsCount ?? 0;
+  const shortcutInputCount = incomingDebug?.shortcutInputCount ?? 0;
+  const shortcutParameterCount = incomingDebug?.shortcutParameterCount ?? 0;
+  const urlsCount = incomingDebug?.urlsCount ?? 0;
 
   if (fileURLsCount === 0 && shortcutInputCount > 0) {
     hints.push("No args.fileURLs detected; in Shortcuts set Run Script to Files = Shortcut Input and clear Images/Texts/URLs lanes.");
@@ -1396,9 +1418,12 @@ async function main() {
   state.meta.incomingDebug = incomingDebug;
   state.meta.inputHints = inputHints;
   saveRun(state);
+
+  // Import transient share-sheet files before any WebView timing delay.
+  await stageRunInputsPersistentFast(state, incomingItems);
+
   const wv = new WebView();
   await presentDashboardWebView(wv, state);
-  await stageRunInputsPersistent(wv, state, incomingItems);
   await drainRunPersistent(wv, state);
   const completedCountNew = state.items.filter(x => x.status === "done" || x.status === "accepted").length;
   const failedCountNew = state.items.filter(x => x.status === "failed").length;

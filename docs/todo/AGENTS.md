@@ -1,3 +1,10 @@
+## 2026-04-20 — Stage-before-present startup reorder for transient share paths (active)
+- [x] Reordered fresh-run startup to import/stage incoming share items immediately (`stageRunInputsPersistentFast`) before any WebView presentation delay.
+- [x] Kept existing presentation helper for staged state display + upload drain, but removed pre-stage timing gap that could let temporary share paths expire.
+- [x] Fixed `deriveInputContractHints(...)` count source to use explicit `...Count` fields from `inspectIncomingArgs()` instead of truncated sample-array lengths.
+- [x] Re-synced alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical dashboard after startup reorder.
+- [ ] Next verification step on iPhone: run share-sheet upload and verify staged items no longer flip from readable-at-collect-time to `file_not_found` before staging.
+
 ## 2026-04-20 — Non-blocking dashboard presentation + hint noise reduction (active)
 - [x] Updated `presentDashboardWebView(...)` to launch WebView non-blocking (`wv.present(...)` without await) so staging/upload progress continues while dashboard is visible.
 - [x] Kept delayed first-present timing hardening (`sleep(150)`) but removed await-block behavior that left rows stuck at `queued`.
