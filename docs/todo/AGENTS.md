@@ -1,3 +1,11 @@
+## 2026-04-20 — Bridge contract parity pass (active)
+- [x] Added bridge-compatible startup diagnostics in both dashboard + bridge scripts (argsKeys, per-lane counts, first raw samples, first normalized samples, existence samples).
+- [x] Added submit-mode bridge-inline import routine in dashboard that mirrors `ComposeUploadInspectBridge` raw iteration + durable stage order (`copy` → `read/write` → `Data.fromFile`) before any dashboard-specific failure path.
+- [x] Updated submit flow to consume only bridge-inline staged outputs as authoritative upload inputs and to defer dead/unrecoverable marking until after that routine executes.
+- [x] Kept stale bridge-report auto-submit disabled in submit mode.
+- [x] Re-synced alias dashboards from canonical bridge-parity patch.
+- [ ] Next verification step on iPhone: run the same 2 selected clips through `ComposeUploadInspectBridge` and `ComposeJobDashboard 2` and compare startup diagnostics blocks for lane raw/normalized/existence parity.
+
 ## 2026-04-20 — Submit-mode bridge-inline authority refactor (active)
 - [x] Refactored fresh submit ingestion authority so dashboard submit mode now uses bridge-inline durable ingest as source-of-truth (`submissionSource=bridge_inline`) and no longer submits from raw direct-path Photos payloads.
 - [x] Added submit metadata field `importSourceUsed` (`bridge_inline` | `none`) and threaded it into run metadata/output for compact provenance checks.

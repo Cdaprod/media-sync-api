@@ -95,6 +95,31 @@ function collectRawSharePaths() {
   return out;
 }
 
+function collectStartupDiagnostics(fm) {
+  const lanes = [
+    { key: "fileURLs", values: asArray(args.fileURLs) },
+    { key: "shortcutParameter", values: asArray(args.shortcutParameter) },
+    { key: "shortcutInput", values: asArray(args.shortcutInput) },
+    { key: "urls", values: asArray(args.urls) },
+  ];
+  const laneDiagnostics = {};
+  for (const lane of lanes) {
+    const normalized = lane.values.map(v => toLocalPath(v)).filter(Boolean);
+    laneDiagnostics[lane.key] = {
+      rawCount: lane.values.length,
+      rawSamples: lane.values.slice(0, 2).map(v => String(v)),
+      normalizedPathSamples: normalized.slice(0, 2),
+      normalizedPathExistsSamples: normalized.slice(0, 2).map(path => (
+        fm.fileExists(path) && !fm.isDirectory(path)
+      )),
+    };
+  }
+  return {
+    argsKeys: Object.keys(args ?? {}),
+    lanes: laneDiagnostics,
+  };
+}
+
 function countByFamily(entries) {
   const counts = {
     PluginKitPlugin: 0,
@@ -231,6 +256,7 @@ function buildSummaryText(report) {
 async function main() {
   const fm = FileManager.local();
   const reportPaths = buildReportPath(fm);
+  const startupDiagnostics = collectStartupDiagnostics(fm);
   const rawEntries = collectRawSharePaths();
   const invocationFingerprint = computeInvocationFingerprint(rawEntries);
 
@@ -248,6 +274,7 @@ async function main() {
       shortcutParameterCount: asArray(args.shortcutParameter).length,
       urlsCount: asArray(args.urls).length,
     },
+    startupDiagnostics,
     rawEntries,
     invocationFingerprint,
     pathFamilyCounts: countByFamily(rawEntries),

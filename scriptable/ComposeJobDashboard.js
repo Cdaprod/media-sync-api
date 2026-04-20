@@ -1239,6 +1239,149 @@ function collectRawSharePaths() {
   return out;
 }
 
+function collectBridgeCompatibleRawSharePaths() {
+  const lanes = [
+    { key: "fileURLs", values: asArray(args.fileURLs) },
+    { key: "shortcutParameter", values: asArray(args.shortcutParameter) },
+    { key: "shortcutInput", values: asArray(args.shortcutInput) },
+    { key: "urls", values: asArray(args.urls) },
+  ];
+  const out = [];
+  const seen = new Set();
+  for (const lane of lanes) {
+    for (let i = 0; i < lane.values.length; i++) {
+      const raw = lane.values[i];
+      const path = toLocalPath(raw);
+      if (!path || seen.has(path)) continue;
+      seen.add(path);
+      out.push({
+        sourceChannel: lane.key,
+        sourceIndex: i,
+        sourceValue: String(raw),
+        rawPath: path,
+      });
+    }
+  }
+  return out;
+}
+
+function collectBridgeStartupDiagnostics() {
+  const lanes = [
+    { key: "fileURLs", values: asArray(args.fileURLs) },
+    { key: "shortcutParameter", values: asArray(args.shortcutParameter) },
+    { key: "shortcutInput", values: asArray(args.shortcutInput) },
+    { key: "urls", values: asArray(args.urls) },
+  ];
+  const laneDiagnostics = {};
+  for (const lane of lanes) {
+    const normalized = lane.values.map(v => toLocalPath(v)).filter(Boolean);
+    laneDiagnostics[lane.key] = {
+      rawCount: lane.values.length,
+      rawSamples: lane.values.slice(0, 2).map(v => String(v)),
+      normalizedPathSamples: normalized.slice(0, 2),
+      normalizedPathExistsSamples: normalized.slice(0, 2).map(path => (
+        _fmRun.fileExists(path) && !_fmRun.isDirectory(path)
+      )),
+    };
+  }
+  return {
+    argsKeys: Object.keys(args ?? {}),
+    lanes: laneDiagnostics,
+  };
+}
+
+async function runBridgeInlineImportFromArgs() {
+  const rawEntries = collectBridgeCompatibleRawSharePaths();
+  const invocationFingerprint = computeInvocationFingerprint(rawEntries);
+  const startupDiagnostics = collectBridgeStartupDiagnostics();
+  const runDir = _fmRun.joinPath(INLINE_BRIDGE_STAGE_ROOT, `inline-bridge-${Date.now()}`);
+  if (!_fmRun.fileExists(runDir)) _fmRun.createDirectory(runDir, true);
+  const staged = [];
+  const failures = [];
+  for (let i = 0; i < rawEntries.length; i++) {
+    const entry = rawEntries[i];
+    const srcPath = entry.rawPath;
+    const exists = _fmRun.fileExists(srcPath) && !_fmRun.isDirectory(srcPath);
+    entry.fileExistsAtCollect = exists;
+    entry.pathFamily = classifyPathFamily(srcPath);
+    if (!exists) {
+      failures.push({
+        index1: i + 1,
+        sourcePath: srcPath,
+        sourceChannel: entry.sourceChannel,
+        pathFamily: entry.pathFamily,
+        error: "source_unreadable_or_transient:file_not_found",
+      });
+      continue;
+    }
+    const ext = extname(srcPath) || ".mov";
+    const dstPath = _fmRun.joinPath(runDir, `clip_${String(i).padStart(4, "0")}${ext}`);
+    try {
+      _fmRun.copy(srcPath, dstPath);
+      staged.push({
+        sourceChannel: "bridge_inline",
+        sourceIndex: i,
+        sourceValue: entry.sourceValue,
+        rawPath: dstPath,
+        family: classifyPathFamily(dstPath),
+        existsAtCollect: true,
+        fromInlineBridge: true,
+        stageMethod: "copy",
+      });
+      continue;
+    } catch (copyErr) {
+      try {
+        const data = _fmRun.read(srcPath);
+        if (!data) throw new Error("read returned null data");
+        _fmRun.write(dstPath, data);
+        staged.push({
+          sourceChannel: "bridge_inline",
+          sourceIndex: i,
+          sourceValue: entry.sourceValue,
+          rawPath: dstPath,
+          family: classifyPathFamily(dstPath),
+          existsAtCollect: true,
+          fromInlineBridge: true,
+          stageMethod: "read_write",
+        });
+        continue;
+      } catch (readErr) {
+        try {
+          const data = Data.fromFile(srcPath);
+          if (!data) throw new Error("Data.fromFile returned null data");
+          _fmRun.write(dstPath, data);
+          staged.push({
+            sourceChannel: "bridge_inline",
+            sourceIndex: i,
+            sourceValue: entry.sourceValue,
+            rawPath: dstPath,
+            family: classifyPathFamily(dstPath),
+            existsAtCollect: true,
+            fromInlineBridge: true,
+            stageMethod: "data_from_file",
+          });
+          continue;
+        } catch (dataErr) {
+          failures.push({
+            index1: i + 1,
+            sourcePath: srcPath,
+            sourceChannel: entry.sourceChannel,
+            pathFamily: entry.pathFamily,
+            error: `copy=${String(copyErr)} read_write=${String(readErr)} data_from_file=${String(dataErr)}`,
+          });
+        }
+      }
+    }
+  }
+  return {
+    rawEntries,
+    stagedEntries: staged,
+    failures,
+    invocationFingerprint,
+    startupDiagnostics,
+  };
+}
+
 function collectCurrentInvocationLaneDiagnostics() {
   const lanes = [
     { key: "fileURLs", values: asArray(args.fileURLs) },
@@ -2307,12 +2450,12 @@ async function main() {
   const incomingDebug = inspectIncomingArgs();
   const incomingItems = collectIncomingItems();
   const bridgeInlineResult = submitMode
-    ? ingestInlineBridgeStyleFromArgs()
-    : { entries: [], diagnostics: null };
+    ? await runBridgeInlineImportFromArgs()
+    : { rawEntries: [], stagedEntries: [], failures: [], invocationFingerprint: null, startupDiagnostics: collectBridgeStartupDiagnostics() };
   let rawPathEntries = collectRawSharePaths();
   const currentInvocationLaneDiagnostics = collectCurrentInvocationLaneDiagnostics();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
-  let inlineBridgeIngestUsed = bridgeInlineResult.entries.length > 0;
+  let inlineBridgeIngestUsed = bridgeInlineResult.stagedEntries.length > 0;
   let reportBridgeFallbackUsed = false;
   let bridgeIngestFailed = false;
   let importSourceUsed = inlineBridgeIngestUsed ? "bridge_inline" : "none";
@@ -2323,18 +2466,20 @@ async function main() {
     ? "bridge_inline"
     : "none";
   const inlinePrimaryAttempted = submitMode;
-  const inlinePrimaryRecoveredCount = bridgeInlineResult.entries.length;
+  const inlinePrimaryRecoveredCount = bridgeInlineResult.stagedEntries.length;
   const inlinePrimaryRejectReason = inlinePrimaryRecoveredCount > 0
     ? null
     : (submitMode ? "inline_primary_no_live_paths" : null);
   if (inlineBridgeIngestUsed) {
-    rawPathEntries = bridgeInlineResult.entries;
+    rawPathEntries = bridgeInlineResult.stagedEntries;
     inputHints.push(
       "Imported from current selection and submitted."
     );
   }
 
-  const currentInvocationFingerprint = computeInvocationFingerprint(rawPathEntries);
+  const currentInvocationFingerprint = submitMode
+    ? (bridgeInlineResult.invocationFingerprint || computeInvocationFingerprint(rawPathEntries))
+    : computeInvocationFingerprint(rawPathEntries);
   const fallbackRecoveryDebug = {
     deadOutgoingTempOnly: false,
     inlinePrimaryAttempted,
@@ -2342,7 +2487,16 @@ async function main() {
     inlinePrimaryRejectReason,
     inlineBridgeAttempted: inlinePrimaryAttempted,
     inlineBridgeRecoveredCount: inlinePrimaryRecoveredCount,
-    inlineBridgeDiagnostics: bridgeInlineResult.diagnostics,
+    inlineBridgeDiagnostics: {
+      rawEntriesSeen: bridgeInlineResult.rawEntries?.length || 0,
+      localPathCount: bridgeInlineResult.rawEntries?.length || 0,
+      copiedCount: bridgeInlineResult.stagedEntries?.filter(e => e.stageMethod === "copy").length || 0,
+      readWriteCount: bridgeInlineResult.stagedEntries?.filter(e => e.stageMethod === "read_write").length || 0,
+      dataFromFileCount: bridgeInlineResult.stagedEntries?.filter(e => e.stageMethod === "data_from_file").length || 0,
+      failedCount: bridgeInlineResult.failures?.length || 0,
+      firstSuccessLane: bridgeInlineResult.stagedEntries?.[0]?.sourceChannel || null,
+      recoveredCount: bridgeInlineResult.stagedEntries?.length || 0,
+    },
     bridgeReportAttempted: false,
     bridgeReportRecoveredCount: 0,
     bridgeReportRejectReason: null,
@@ -2354,6 +2508,7 @@ async function main() {
     currentInvocationLaneDiagnostics,
     currentInvocationInputKind: "unknown",
     importSourceUsed,
+    bridgeStartupDiagnostics: bridgeInlineResult.startupDiagnostics || collectBridgeStartupDiagnostics(),
   };
 
   let deadOutgoingTempOnly =
@@ -2376,7 +2531,7 @@ async function main() {
     fallbackRecoveryDebug.inlineBridgeAttempted = inlinePrimaryAttempted;
     fallbackRecoveryDebug.inlineBridgeRecoveredCount = inlinePrimaryRecoveredCount;
     if (inlinePrimaryRecoveredCount > 0) {
-      rawPathEntries = bridgeInlineResult.entries;
+      rawPathEntries = bridgeInlineResult.stagedEntries;
       deadOutgoingTempOnly = false;
       inlineBridgeIngestUsed = true;
       submissionSource = "bridge_inline";
