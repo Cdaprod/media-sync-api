@@ -1,3 +1,12 @@
+## 2026-04-20 — Safe current-selection submit source (bridge auto-submit disabled) (active)
+- [x] Disabled automatic bridge-report recovery for fresh share-sheet submit mode to prevent stale prior-selection artifacts from being submitted.
+- [x] Fresh submit mode now allows automatic submission only from `direct_path` or `inline_bridge` current-invocation durable ingest lanes.
+- [x] Added explicit unrecoverable current-selection failure code/message when submit-mode direct + inline recovery both fail: `share_input_current_invocation_unrecoverable`.
+- [x] Added submission provenance fields to state/output/debug: `submissionSource` (`direct_path`/`inline_bridge`/`bridge_report`/`none`) and `submittedItemCount`.
+- [x] Kept bridge-report recovery available for inspect/manual workflows; submit-mode safety now blocks bridge replay from becoming automatic source-of-truth.
+- [x] Re-synced alias dashboards from canonical safety patch.
+- [ ] Next verification step on iPhone: share exactly 2 clips, run submit mode, verify `submissionSource` is `direct_path` or `inline_bridge` (never `bridge_report`), and verify final composed output matches current 2-clip selection.
+
 ## 2026-04-20 — Live shell-first submit loop (non-blocking spinner mitigation) (active)
 - [x] Reintroduced early live dashboard bootstrap for submit mode: load HTML + push initial state + non-awaited `wv.present(...)` before long staging/upload orchestration.
 - [x] Fresh-run submit flow now drives staging/upload with live `pushUI(...)` updates and cooperative yields, so operator sees transitions while requests run.

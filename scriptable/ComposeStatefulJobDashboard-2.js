@@ -315,6 +315,7 @@ function isRetryableFailureItem(item) {
   const note = String(item?.note || "");
   const nonRetryableErrors = [
     "share_input_only_dead_outgoingtemp_paths",
+    "share_input_current_invocation_unrecoverable",
     "source_unreadable_or_transient:file_not_found",
     "source_missing_path_property",
     "source_missing_raw_entry",
@@ -1854,6 +1855,8 @@ function buildHTML() {
       fallbackCurrentCount: meta.fallbackCurrentCount ?? 0,
       fallbackBridgeCount: meta.fallbackBridgeCount ?? 0,
       retryableFailure: meta.retryableFailure == null ? null : !!meta.retryableFailure,
+      submissionSource: meta.submissionSource || "none",
+      submittedItemCount: meta.submittedItemCount ?? 0,
       fallbackRecoveryDebug: meta.fallbackRecoveryDebug || null,
     };
     body.textContent = JSON.stringify(debug, null, 2);
@@ -2203,6 +2206,7 @@ async function main() {
   let inlineBridgeIngestUsed = false;
   let reportBridgeFallbackUsed = false;
   let recoveryPathUsed = rawPathEntries.length > 0 ? "direct_path" : "none";
+  let submissionSource = rawPathEntries.length > 0 ? "direct_path" : "none";
   let inlinePrimaryAttempted = false;
   let inlinePrimaryRecoveredCount = 0;
   let inlinePrimaryRejectReason = null;
@@ -2215,6 +2219,7 @@ async function main() {
       rawPathEntries = primaryInlineEntries;
       inlineBridgeIngestUsed = true;
       recoveryPathUsed = "inline_bridge";
+      submissionSource = "inline_bridge";
       inputHints.push(
         `Primary durable ingest succeeded in current invocation (${primaryInlineEntries.length} staged).`
       );
@@ -2259,10 +2264,17 @@ async function main() {
       rawPathEntries = inlineBridgeEntries;
       deadOutgoingTempOnly = false;
       inlineBridgeIngestUsed = true;
+      submissionSource = "inline_bridge";
       inputHints.push(
         `Incoming share paths were dead OutgoingTemp entries; recovered by inline bridge-style durable ingest in this invocation (${inlineBridgeEntries.length} staged).`
       );
     } else {
+      if (submitMode) {
+        fallbackRecoveryDebug.recoveryPathUsed = "none";
+        inputHints.push(
+          "Current share selection could not be durably imported in this invocation."
+        );
+      } else {
       fallbackRecoveryDebug.bridgeReportAttempted = true;
       const bridgeFallback = loadBridgeFallbackEntries({
         expectedCount: rawPathEntries.length,
@@ -2279,22 +2291,24 @@ async function main() {
         deadOutgoingTempOnly = false;
         reportBridgeFallbackUsed = true;
         fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
-        inputHints.push(
-          "Recovered using bridge-staged files."
-        );
+        submissionSource = "bridge_report";
+        inputHints.push("Recovered using bridge-staged files.");
       } else {
         fallbackRecoveryDebug.recoveryPathUsed = inlineBridgeIngestUsed ? "inline_bridge" : "none";
         inputHints.push(
           "Dead OutgoingTemp recovery failed: no usable inline or bridge-staged files."
         );
       }
+      }
     }
   }
   const rawPaths = rawPathEntries.map(x => x.rawPath);
   if (!reportBridgeFallbackUsed && !inlineBridgeIngestUsed && rawPathEntries.length > 0) {
     fallbackRecoveryDebug.recoveryPathUsed = "direct_path";
+    submissionSource = "direct_path";
   } else if (inlineBridgeIngestUsed) {
     fallbackRecoveryDebug.recoveryPathUsed = "inline_bridge";
+    submissionSource = "inline_bridge";
   }
   const inputFamilySummary = summarizeRawPathEntries(rawPathEntries);
   if (deadOutgoingTempOnly) {
@@ -2325,6 +2339,8 @@ async function main() {
     state.meta.retryableFailure = deriveRetryableFailure(state.items);
     state.meta.recoveryPathUsed = state.meta.recoveryPathUsed || "none";
     state.meta.invocationMode = "inspect";
+    state.meta.submissionSource = state.meta.submissionSource || "none";
+    state.meta.submittedItemCount = Number(state.meta.submittedItemCount || 0);
     saveRun(state);
     const wv = new WebView();
     await presentDashboardWebView(wv, state);
@@ -2361,6 +2377,8 @@ async function main() {
       lastKnownJobUrl: state.meta.lastKnownJobUrl || null,
       lastKnownJobStatus: state.meta.lastKnownJobStatus || null,
       lastKnownJobStartedAt: state.meta.lastKnownJobStartedAt || null,
+      submissionSource: state.meta.submissionSource || "none",
+      submittedItemCount: Number(state.meta.submittedItemCount || 0),
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -2405,6 +2423,8 @@ async function main() {
   state.meta.fallbackBridgeCount = fallbackRecoveryDebug.bridgeCount;
   state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
+  state.meta.submissionSource = submissionSource;
+  state.meta.submittedItemCount = 0;
   saveRun(state);
   let liveWv = null;
   if (submitMode) {
@@ -2418,8 +2438,8 @@ async function main() {
       const item = state.items[i];
       const rawEntry = rawPathEntries[i];
       item.status = "failed";
-      item.note = "Share input did not provide a live temp file path.";
-      item.error = "share_input_only_dead_outgoingtemp_paths";
+      item.note = "Current share selection could not be durably imported in this invocation.";
+      item.error = "share_input_current_invocation_unrecoverable";
       item.stagingDebug = {
         sourceType: "path",
         hasPath: true,
@@ -2450,8 +2470,8 @@ async function main() {
     }
     return {
       ok: false,
-      reason: "All incoming paths were dead OutgoingTemp compatibility exports.",
-      error: "share_input_only_dead_outgoingtemp_paths",
+      reason: "Current share selection could not be durably imported in this invocation.",
+      error: "share_input_current_invocation_unrecoverable",
       runId: state.meta.runId,
       invocationMode: submitMode ? "submit" : "inspect",
       requestUrl: state.meta.requestUrl,
@@ -2480,6 +2500,8 @@ async function main() {
       lastKnownJobUrl: null,
       lastKnownJobStatus: null,
       lastKnownJobStartedAt: null,
+      submissionSource: "none",
+      submittedItemCount: 0,
       totalCount: state.items.length,
       completedCount: 0,
       failedCount: state.items.length,
@@ -2504,6 +2526,10 @@ async function main() {
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
   state.meta.recoveryPathUsed = state.meta.recoveryPathUsed || fallbackRecoveryDebug.recoveryPathUsed || "none";
   state.meta.invocationMode = submitMode ? "submit" : "inspect";
+  state.meta.submissionSource = state.meta.submissionSource || submissionSource || "none";
+  state.meta.submittedItemCount = state.items.filter(item => (
+    item.status === "accepted" || item.status === "done" || item.status === "uploading"
+  )).length;
   saveRun(state);
   if (!submitMode) {
     const wv = new WebView();
@@ -2542,6 +2568,8 @@ async function main() {
     lastKnownJobUrl: state.meta.lastKnownJobUrl || null,
     lastKnownJobStatus: state.meta.lastKnownJobStatus || null,
     lastKnownJobStartedAt: state.meta.lastKnownJobStartedAt || null,
+    submissionSource: state.meta.submissionSource || "none",
+    submittedItemCount: Number(state.meta.submittedItemCount || 0),
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,
