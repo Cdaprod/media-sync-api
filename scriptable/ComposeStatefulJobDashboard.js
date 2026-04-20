@@ -431,7 +431,9 @@ function short(s, n = MAX_TEXT) {
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise(resolve => {
+    Timer.schedule(ms, false, resolve);
+  });
 }
 
 function toLocalPath(v) {

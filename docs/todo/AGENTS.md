@@ -1,3 +1,9 @@
+## 2026-04-20 — Scriptable Timer-based sleep runtime compatibility fix (active)
+- [x] Replaced browser-only `setTimeout` sleep helper with Scriptable-compatible `Timer.schedule(ms, false, resolve)` promise wrapper.
+- [x] Re-synced alias dashboard scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical implementation so all entrypoints avoid `setTimeout`.
+- [x] Kept launch timing hardening intact (`presentDashboardWebView(...)` still uses delayed present flow) while removing JSCore runtime crash source.
+- [ ] Next verification step on iPhone: rerun share-sheet launch and confirm no `ReferenceError: Can't find variable: setTimeout` fatal alert appears.
+
 ## 2026-04-19 — Share-sheet launch timing hardening + startup alert defaults (active)
 - [x] Disabled startup smoke alert by default (`ENABLE_STARTUP_ALERT = false`) now that execution is proven, while keeping fatal alerts enabled for actionable crash visibility.
 - [x] Added `sleep(ms)` helper and centralized first-open presentation path (`presentDashboardWebView(...)`) to add a short post-load delay before present.
