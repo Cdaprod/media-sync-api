@@ -263,7 +263,11 @@ function ingestInlineBridgeStyleFromArgs() {
       diagnostics.localPathCount += 1;
       diagnostics.laneStats[lane.key].localPathCount += 1;
       seen.add(srcPath);
-      if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) continue;
+      if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
+        diagnostics.failedCount += 1;
+        diagnostics.laneStats[lane.key].failedCount += 1;
+        continue;
+      }
       const ext = extname(srcPath) || ".mov";
       const dstPath = _fmRun.joinPath(runDir, `clip_${String(index).padStart(4, "0")}${ext}`);
       let stageMethod = null;
@@ -1231,6 +1235,31 @@ function collectRawSharePaths() {
         existsAtCollect: _fmRun.fileExists(path) && !_fmRun.isDirectory(path),
       });
     }
+  }
+  return out;
+}
+
+function collectCurrentInvocationLaneDiagnostics() {
+  const lanes = [
+    { key: "fileURLs", values: asArray(args.fileURLs) },
+    { key: "shortcutParameter", values: asArray(args.shortcutParameter) },
+    { key: "shortcutInput", values: asArray(args.shortcutInput) },
+    { key: "urls", values: asArray(args.urls) },
+  ];
+  const out = {};
+  for (const lane of lanes) {
+    const samples = lane.values.slice(0, 2).map(v => String(v));
+    const localPaths = lane.values.map(v => toLocalPath(v)).filter(Boolean);
+    const families = localPaths.map(path => classifyPathFamily(path));
+    out[lane.key] = {
+      lanePresent: lane.values.length > 0,
+      rawEntryCount: lane.values.length,
+      rawSamples: samples,
+      sawPluginKitPath: families.some(f => !!f?.isPluginKit),
+      sawRunScriptIntentPath: families.some(f => !!f?.isRunScriptIntent),
+      sawOutgoingTempPath: families.some(f => !!f?.isOutgoingTemp),
+      anyPathExistedAtCollect: localPaths.some(path => _fmRun.fileExists(path) && !_fmRun.isDirectory(path)),
+    };
   }
   return out;
 }
@@ -2247,6 +2276,7 @@ async function main() {
     ? ingestInlineBridgeStyleFromArgs()
     : { entries: [], diagnostics: null };
   let rawPathEntries = collectRawSharePaths();
+  const currentInvocationLaneDiagnostics = collectCurrentInvocationLaneDiagnostics();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
   let inlineBridgeIngestUsed = inlinePrimaryResult.entries.length > 0;
   let reportBridgeFallbackUsed = false;
@@ -2285,12 +2315,17 @@ async function main() {
     currentCount: rawPathEntries.length,
     bridgeCount: 0,
     recoveryPathUsed,
+    currentInvocationLaneDiagnostics,
+    currentInvocationInputKind: "unknown",
   };
 
   let deadOutgoingTempOnly =
     rawPathEntries.length > 0 &&
     rawPathEntries.every(entry => entry.family?.isOutgoingTemp && !entry.existsAtCollect);
   fallbackRecoveryDebug.deadOutgoingTempOnly = deadOutgoingTempOnly;
+  fallbackRecoveryDebug.currentInvocationInputKind = deadOutgoingTempOnly
+    ? "outgoingtemp_only_dead"
+    : (rawPathEntries.length > 0 ? "mixed_or_live_paths" : "no_paths");
 
   if (deadOutgoingTempOnly) {
     fallbackRecoveryDebug.inlineBridgeAttempted = inlinePrimaryAttempted;
@@ -2308,6 +2343,9 @@ async function main() {
         fallbackRecoveryDebug.recoveryPathUsed = "none";
         inputHints.push(
           "Current share selection could not be durably imported in this invocation."
+        );
+        inputHints.push(
+          "This invocation did not receive live PluginKit or RunScriptIntent temp files."
         );
       } else {
       fallbackRecoveryDebug.bridgeReportAttempted = true;
@@ -2338,7 +2376,7 @@ async function main() {
     }
   }
   const rawPaths = rawPathEntries.map(x => x.rawPath);
-  if (!reportBridgeFallbackUsed && !inlineBridgeIngestUsed && rawPathEntries.length > 0) {
+  if (!deadOutgoingTempOnly && !reportBridgeFallbackUsed && !inlineBridgeIngestUsed && rawPathEntries.length > 0) {
     fallbackRecoveryDebug.recoveryPathUsed = "direct_path";
     submissionSource = "direct_path";
   } else if (inlineBridgeIngestUsed) {
@@ -2405,6 +2443,7 @@ async function main() {
       bridgeInvocationFingerprint: state.meta.bridgeInvocationFingerprint || null,
       fallbackCurrentCount: Number(state.meta.fallbackCurrentCount || 0),
       fallbackBridgeCount: Number(state.meta.fallbackBridgeCount || 0),
+      currentInvocationInputKind: state.meta.currentInvocationInputKind || "unknown",
       retryableFailure: state.meta.retryableFailure == null ? null : !!state.meta.retryableFailure,
       recoveryPathUsed: state.meta.recoveryPathUsed || "none",
       submissionSucceeded: !!state.meta.submissionSucceeded,
@@ -2457,9 +2496,13 @@ async function main() {
   state.meta.fallbackCurrentCount = fallbackRecoveryDebug.currentCount;
   state.meta.fallbackBridgeCount = fallbackRecoveryDebug.bridgeCount;
   state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
+  state.meta.currentInvocationInputKind = fallbackRecoveryDebug.currentInvocationInputKind || "unknown";
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
   state.meta.submissionSource = submissionSource;
   state.meta.submittedItemCount = submissionSource === "inline_bridge" ? rawPathEntries.length : 0;
+  if (state.meta.submittedItemCount === 0) {
+    state.meta.submissionSource = "none";
+  }
   saveRun(state);
   let liveWv = null;
   if (submitMode) {
@@ -2528,6 +2571,7 @@ async function main() {
       bridgeInvocationFingerprint: fallbackRecoveryDebug.bridgeFingerprint,
       fallbackCurrentCount: fallbackRecoveryDebug.currentCount,
       fallbackBridgeCount: fallbackRecoveryDebug.bridgeCount,
+      currentInvocationInputKind: fallbackRecoveryDebug.currentInvocationInputKind || "unknown",
       retryableFailure: false,
       recoveryPathUsed: fallbackRecoveryDebug.recoveryPathUsed || "none",
       submissionSucceeded: false,
@@ -2566,6 +2610,9 @@ async function main() {
     item.status === "accepted" || item.status === "done" || item.status === "uploading"
   )).length;
   state.meta.submittedItemCount = Math.max(Number(state.meta.submittedItemCount || 0), acceptedOrUploadedCount);
+  if (state.meta.submittedItemCount === 0) {
+    state.meta.submissionSource = "none";
+  }
   saveRun(state);
   if (!submitMode) {
     const wv = new WebView();
@@ -2606,6 +2653,7 @@ async function main() {
     lastKnownJobStartedAt: state.meta.lastKnownJobStartedAt || null,
     submissionSource: state.meta.submissionSource || "none",
     submittedItemCount: Number(state.meta.submittedItemCount || 0),
+    currentInvocationInputKind: state.meta.currentInvocationInputKind || "unknown",
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,

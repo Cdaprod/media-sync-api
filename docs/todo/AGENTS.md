@@ -1,3 +1,12 @@
+## 2026-04-20 — Current invocation contract diagnostics tightening (active)
+- [x] Added compact lane-level startup diagnostics for current invocation inputs (`fileURLs`, `shortcutParameter`, `shortcutInput`, `urls`) including lane presence, raw counts, sample values, path-family flags, and collect-time existence indicators.
+- [x] Updated inline bridge diagnostics to count dead local-path candidates as failed ingest attempts (`failedCount`) so dead OutgoingTemp scenarios no longer look like no-op attempts.
+- [x] Added explicit top-level current invocation classification in run debug/output (`currentInvocationInputKind`) with `outgoingtemp_only_dead` classification when all current paths are dead OutgoingTemp.
+- [x] Added operator hint for dead-contract runs: `This invocation did not receive live PluginKit or RunScriptIntent temp files.`
+- [x] Normalized submit provenance so `submissionSource` is forced to `none` when `submittedItemCount` remains zero.
+- [x] Re-synced alias dashboards from canonical diagnostics patch.
+- [ ] Next verification step on iPhone: compare failing Photos share route vs known-good route and confirm lane diagnostics expose which invocation path yields live PluginKit/RunScriptIntent files.
+
 ## 2026-04-20 — Fresh submit inline-bridge authority + lane diagnostics (active)
 - [x] Promoted same-invocation inline bridge ingest to first-class submit source-of-truth: fresh submit now runs inline ingest before relying on direct-path staging.
 - [x] Updated inline ingest to preserve/share raw lane coverage (`fileURLs`, `shortcutParameter`, `shortcutInput`, `urls`) while attempting durable writes via ordered fallback (`copy` → `read/write` → `Data.fromFile`).
