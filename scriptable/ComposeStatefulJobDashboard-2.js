@@ -157,6 +157,14 @@ function stagePersistentSource(source, stagedPath) {
         ok: true,
         method: "incoming_data",
         bytes: dataBytes ?? _fmRun.fileSize(stagedPath),
+        debug: {
+          resolvedPath: null,
+          preferredPath: source?.preferredPath ?? null,
+          rawPath: source?.rawPath ?? null,
+          pathCandidates: source?.pathCandidates ?? [],
+          family: classifyPathFamily(null),
+          existedBeforeStage: null,
+        },
         error: null,
       };
     } catch (dataWriteErr) {
@@ -169,20 +177,48 @@ function stagePersistentSource(source, stagedPath) {
     }
   }
 
-  const srcPath = source?.path ?? source?.originalPath ?? null;
+  const fallbackSelection = choosePreferredPath([
+    source?.preferredPath,
+    source?.rawPath,
+    source?.path,
+    source?.originalPath,
+    ...(source?.pathCandidates ?? []),
+  ]);
+  const srcPath = fallbackSelection.preferredPath ?? null;
   if (!srcPath) {
     return {
       ok: false,
       method: null,
       bytes: null,
+      debug: {
+        resolvedPath: null,
+        preferredPath: source?.preferredPath ?? null,
+        rawPath: source?.rawPath ?? null,
+        pathCandidates: fallbackSelection.pathCandidates,
+        family: classifyPathFamily(null),
+        existedBeforeStage: null,
+        hasPreferredPath: !!source?.preferredPath,
+        hasRawPath: !!source?.rawPath,
+        hasPath: !!source?.path,
+        hasOriginalPath: !!source?.originalPath,
+      },
       error: "source_missing_path_property",
     };
   }
-  if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
+  const srcExists = _fmRun.fileExists(srcPath) && !_fmRun.isDirectory(srcPath);
+  if (!srcExists) {
     return {
       ok: false,
       method: null,
       bytes: null,
+      debug: {
+        resolvedPath: srcPath,
+        preferredPath: source?.preferredPath ?? null,
+        rawPath: source?.rawPath ?? null,
+        pathCandidates: fallbackSelection.pathCandidates,
+        family: classifyPathFamily(srcPath),
+        existedBeforeStage: false,
+      },
       error: "source_unreadable_or_transient:file_not_found",
     };
   }
@@ -196,6 +232,14 @@ function stagePersistentSource(source, stagedPath) {
       ok: true,
       method: "data_from_file",
       bytes: dataBytes ?? _fmRun.fileSize(stagedPath),
+      debug: {
+        resolvedPath: srcPath,
+        preferredPath: source?.preferredPath ?? null,
+        rawPath: source?.rawPath ?? null,
+        pathCandidates: fallbackSelection.pathCandidates,
+        family: classifyPathFamily(srcPath),
+        existedBeforeStage: true,
+      },
       error: null,
     };
   } catch (dataErr) {
@@ -208,6 +252,14 @@ function stagePersistentSource(source, stagedPath) {
         ok: true,
         method: "read_write",
         bytes: dataBytes ?? _fmRun.fileSize(stagedPath),
+        debug: {
+          resolvedPath: srcPath,
+          preferredPath: source?.preferredPath ?? null,
+          rawPath: source?.rawPath ?? null,
+          pathCandidates: fallbackSelection.pathCandidates,
+          family: classifyPathFamily(srcPath),
+          existedBeforeStage: true,
+        },
         error: null,
       };
     } catch (readWriteErr) {
@@ -217,6 +269,14 @@ function stagePersistentSource(source, stagedPath) {
           ok: true,
           method: "copy",
           bytes: _fmRun.fileSize(stagedPath),
+          debug: {
+            resolvedPath: srcPath,
+            preferredPath: source?.preferredPath ?? null,
+            rawPath: source?.rawPath ?? null,
+            pathCandidates: fallbackSelection.pathCandidates,
+            family: classifyPathFamily(srcPath),
+            existedBeforeStage: true,
+          },
           error: null,
         };
       } catch (copyErr) {
@@ -224,6 +284,14 @@ function stagePersistentSource(source, stagedPath) {
           ok: false,
           method: null,
           bytes: null,
+          debug: {
+            resolvedPath: srcPath,
+            preferredPath: source?.preferredPath ?? null,
+            rawPath: source?.rawPath ?? null,
+            pathCandidates: fallbackSelection.pathCandidates,
+            family: classifyPathFamily(srcPath),
+            existedBeforeStage: true,
+          },
           error:
             `source_unreadable_or_transient: data_from_file=${String(dataErr)} read_write=${String(readWriteErr)} copy=${String(copyErr)}`,
         };
@@ -259,6 +327,13 @@ function createRunSkeletonPersistent(incomingItems) {
       sourceChannel: incoming?.sourceChannel ?? "unknown",
       sourceIndex: incoming?.sourceIndex ?? i,
       sourceValue: incoming?.sourceValue ?? null,
+      rawPath: incoming?.rawPath ?? null,
+      preferredPath: incoming?.preferredPath ?? incoming?.path ?? null,
+      pathCandidates: incoming?.pathCandidates ?? [],
+      pathFamily: incoming?.pathFamily ?? classifyPathFamily(incoming?.path ?? null),
+      debugRawSourceValue: incoming?.sourceValue ?? null,
+      debugPreferredPath: incoming?.preferredPath ?? incoming?.path ?? null,
+      debugPathCandidates: incoming?.pathCandidates ?? [],
       stagingDebug: null,
       stagedPath,
       stagedBytes: null,
@@ -321,11 +396,21 @@ async function stageRunInputsPersistent(wv, state, incomingItems) {
     await pushUI(wv, state);
 
     const incoming = incomingItems[i];
-    const resolvedSourcePath = incoming?.path ?? incoming?.originalPath ?? null;
+    const resolvedSourcePath =
+      incoming?.preferredPath ??
+      incoming?.rawPath ??
+      incoming?.path ??
+      incoming?.originalPath ??
+      null;
     item.stagingDebug = {
       sourceType: incoming?.sourceType ?? null,
       hasPath: !!incoming?.path,
       hasOriginalPath: !!incoming?.originalPath,
+      rawSourceValue: incoming?.sourceValue ?? null,
+      normalizedPath: incoming?.path ?? null,
+      hasPluginKitPath: !!incoming?.pathFamily?.isPluginKit,
+      hasRunScriptIntentPath: !!incoming?.pathFamily?.isRunScriptIntent,
+      hasOutgoingTempPath: !!incoming?.pathFamily?.isOutgoingTemp,
       resolvedPath: resolvedSourcePath,
       existedBeforeStage:
         !!resolvedSourcePath &&
@@ -333,6 +418,11 @@ async function stageRunInputsPersistent(wv, state, incomingItems) {
         !_fmRun.isDirectory(resolvedSourcePath),
     };
     const staged = stagePersistentSource(incoming, item.stagedPath);
+    item.stagingDebug = {
+      ...(item.stagingDebug ?? {}),
+      ...(staged?.debug ?? {}),
+      resolvedPath: staged?.debug?.resolvedPath ?? resolvedSourcePath,
+    };
     if (staged.ok) {
       item.stagedBytes = staged.bytes;
       item.stageMethod = staged.method;
@@ -356,11 +446,21 @@ async function stageRunInputsPersistentFast(state, incomingItems) {
     if (item.status !== "queued") continue;
 
     const incoming = incomingItems[i];
-    const resolvedSourcePath = incoming?.path ?? incoming?.originalPath ?? null;
+    const resolvedSourcePath =
+      incoming?.preferredPath ??
+      incoming?.rawPath ??
+      incoming?.path ??
+      incoming?.originalPath ??
+      null;
     item.stagingDebug = {
       sourceType: incoming?.sourceType ?? null,
       hasPath: !!incoming?.path,
       hasOriginalPath: !!incoming?.originalPath,
+      rawSourceValue: incoming?.sourceValue ?? null,
+      normalizedPath: incoming?.path ?? null,
+      hasPluginKitPath: !!incoming?.pathFamily?.isPluginKit,
+      hasRunScriptIntentPath: !!incoming?.pathFamily?.isRunScriptIntent,
+      hasOutgoingTempPath: !!incoming?.pathFamily?.isOutgoingTemp,
       resolvedPath: resolvedSourcePath,
       existedBeforeStage:
         !!resolvedSourcePath &&
@@ -368,6 +468,11 @@ async function stageRunInputsPersistentFast(state, incomingItems) {
         !_fmRun.isDirectory(resolvedSourcePath),
     };
     const staged = stagePersistentSource(incoming, item.stagedPath);
+    item.stagingDebug = {
+      ...(item.stagingDebug ?? {}),
+      ...(staged?.debug ?? {}),
+      resolvedPath: staged?.debug?.resolvedPath ?? resolvedSourcePath,
+    };
     if (staged.ok) {
       item.stagedBytes = staged.bytes;
       item.stageMethod = staged.method;
@@ -513,6 +618,46 @@ function toLocalPath(v) {
   return null;
 }
 
+function normalizeCandidatePath(value) {
+  const p = toLocalPath(value);
+  return p ? p.replace(/\/+/g, "/") : null;
+}
+
+function classifyPathFamily(path) {
+  const p = String(path || "");
+  return {
+    isPluginKit: p.includes("/Containers/Data/PluginKitPlugin/"),
+    isRunScriptIntent: p.includes("/tmp/RunScriptIntent/"),
+    isOutgoingTemp: p.includes("/var/mobile/Media/PhotoData/OutgoingTemp/"),
+  };
+}
+
+function scorePath(path) {
+  if (!path) return -9999;
+  const family = classifyPathFamily(path);
+  if (family.isPluginKit) return 300;
+  if (family.isRunScriptIntent) return 200;
+  if (family.isOutgoingTemp) return -100;
+  return 0;
+}
+
+function choosePreferredPath(paths) {
+  const unique = [];
+  const seen = new Set();
+  for (const path of paths || []) {
+    const normalized = normalizeCandidatePath(path);
+    if (!normalized) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    unique.push(normalized);
+  }
+  unique.sort((a, b) => scorePath(b) - scorePath(a));
+  return {
+    preferredPath: unique[0] || null,
+    pathCandidates: unique,
+  };
+}
+
 function extname(path) {
   const m = String(path).match(/(\.[A-Za-z0-9]+)$/);
   return m ? m[1].toLowerCase() : "";
@@ -643,6 +788,18 @@ function deriveInputContractHints(incomingDebug, incomingItems) {
     hints.push("Share input was received but no usable path/data entries were collectable.");
   }
 
+  const hasOutgoingTempOnly = incomingItems.some(item => (
+    item?.sourceType === "path" &&
+    !!item?.pathFamily?.isOutgoingTemp &&
+    !item?.pathCandidates?.some(candidate => {
+      const f = classifyPathFamily(candidate);
+      return f.isPluginKit || f.isRunScriptIntent;
+    })
+  ));
+  if (hasOutgoingTempOnly) {
+    hints.push("Incoming path resolved to Photos OutgoingTemp compatibility export; this path family is unstable.");
+  }
+
   return hints;
 }
 
@@ -666,21 +823,27 @@ function collectIncomingItems() {
   for (const channel of channels) {
     for (let i = 0; i < channel.values.length; i++) {
       const raw = channel.values[i];
-      const asPath = toLocalPath(raw);
-      if (asPath) {
-        const normalizedPath = asPath.replace(/\/+/g, "/");
-        const pathKey = `path:${normalizedPath}`;
+      const sourceValue = String(raw);
+      const rawPath = normalizeCandidatePath(raw);
+      if (rawPath) {
+        const selection = choosePreferredPath([rawPath, sourceValue]);
+        const preferredPath = selection.preferredPath ?? rawPath;
+        const pathKey = `path:${preferredPath}`;
         if (seen.has(pathKey)) continue;
         seen.add(pathKey);
         out.push({
           sourceType: "path",
           sourceChannel: channel.key,
           sourceIndex: i,
-          sourceValue: String(raw),
-          displayName: normalizedPath.split("/").pop() || normalizedPath,
-          path: normalizedPath,
+          sourceValue,
+          displayName: preferredPath.split("/").pop() || preferredPath,
+          path: preferredPath,
+          rawPath,
+          preferredPath,
+          pathCandidates: selection.pathCandidates,
+          pathFamily: classifyPathFamily(preferredPath),
           data: null,
-          originalReadableBytes: readDataLengthMaybe(normalizedPath),
+          originalReadableBytes: readDataLengthMaybe(preferredPath),
         });
         continue;
       }
@@ -694,7 +857,7 @@ function collectIncomingItems() {
           sourceType: "data",
           sourceChannel: channel.key,
           sourceIndex: i,
-          sourceValue: String(raw),
+          sourceValue,
           displayName: `shared_${channel.key}_${String(i + 1).padStart(3, "0")}.mov`,
           path: null,
           data: raw,
@@ -1245,6 +1408,21 @@ function buildHTML() {
                   'path=' + esc(item.stagingDebug.hasPath ? "yes" : "no") + ' · ' +
                   'origPath=' + esc(item.stagingDebug.hasOriginalPath ? "yes" : "no") + ' · ' +
                   'exists=' + esc(item.stagingDebug.existedBeforeStage ? "yes" : "no") + '<br>' +
+                  'raw=' + esc(item.stagingDebug.rawSourceValue || "--") + '<br>' +
+                  'normalized=' + esc(item.stagingDebug.normalizedPath || "--") + '<br>' +
+                  'pluginKit=' + esc(item.stagingDebug.hasPluginKitPath ? "yes" : "no") + ' · ' +
+                  'runIntent=' + esc(item.stagingDebug.hasRunScriptIntentPath ? "yes" : "no") + ' · ' +
+                  'outgoing=' + esc(item.stagingDebug.hasOutgoingTempPath ? "yes" : "no") + '<br>' +
+                  'family=' + esc(
+                    item.stagingDebug?.family?.isPluginKit
+                      ? "PluginKit"
+                      : item.stagingDebug?.family?.isRunScriptIntent
+                        ? "RunScriptIntent"
+                        : item.stagingDebug?.family?.isOutgoingTemp
+                          ? "OutgoingTemp"
+                          : "other"
+                  ) + ' · ' +
+                  'candidates=' + esc((item.stagingDebug.pathCandidates || []).length) + '<br>' +
                   'resolved=' + esc(item.stagingDebug.resolvedPath || "--") +
                 '</div>'
               ) : '') +

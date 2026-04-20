@@ -1,3 +1,12 @@
+## 2026-04-20 — Scriptable share path-family selection hardening (active)
+- [x] Confirmed compose staging failures were resolving to unstable Photos compatibility export paths (`/var/mobile/Media/PhotoData/OutgoingTemp/.../Compatible/...`) while inspect runs proved container temp paths are valid/copyable.
+- [x] Added explicit path-family classification/scoring and incoming path selection (`choosePreferredPath`) so container temp families are preferred (`PluginKitPlugin` > `RunScriptIntent` > other > `OutgoingTemp`).
+- [x] Updated collector/source shaping to preserve raw path, preferred path, candidate paths, and path-family diagnostics without rewriting valid incoming fileURLs to alternate path families.
+- [x] Updated staging resolution to use `preferredPath/rawPath/path/originalPath` fallback order and return detailed debug payload for selected path family + candidate count.
+- [x] Added temporary per-item path debug rendering (raw source value, normalized path, PluginKit/RunScriptIntent/OutgoingTemp flags, resolved family, candidate count, resolved path).
+- [x] Re-synced alias entrypoints (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical script after path-family hardening.
+- [ ] Next verification step on iPhone: share 2 clips, confirm dashboard debug resolves to PluginKitPlugin or RunScriptIntent families (not OutgoingTemp) and staged bytes are non-zero before upload begins.
+
 ## 2026-04-20 — Share import staging parity fix: Data.fromFile-first + source-shape hardening (active)
 - [x] Patched `stagePersistentSource(...)` to resolve source path defensively via `source.path ?? source.originalPath ?? null` and return explicit `source_missing_path_property` when neither field exists.
 - [x] Reordered path staging fallback for provider-backed share files to `Data.fromFile(...)` first, then `_fmRun.read(...)`, then `_fmRun.copy(...)`, with `data_from_file` bytes measured from the Data payload.
