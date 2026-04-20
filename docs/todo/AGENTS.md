@@ -1,3 +1,12 @@
+## 2026-04-20 — Invocation fingerprint-gated bridge fallback (active)
+- [x] Added deterministic share-invocation fingerprinting in dashboard + bridge scripts (`fp-<hash>`) based on item count + normalized raw source payloads so fallback can verify invocation identity, not just count.
+- [x] Updated dead-OutgoingTemp recovery to keep inline ingest as primary path and treat persisted bridge reports as strictly secondary/manual recovery with exact fingerprint match required.
+- [x] Added explicit stale-bridge reject reason names (`stale_bridge_report_fingerprint_mismatch`, `stale_bridge_report_count_mismatch`) while preserving count protection and existing reject taxonomy.
+- [x] Extended dashboard header diagnostics with compact fallback match line (`currentFingerprint`, `bridgeFingerprint`, `currentCount`, `bridgeCount`) for on-device triage.
+- [x] Persisted fingerprint and count diagnostics into run metadata + shortcut output payloads for both fresh and resumed flows.
+- [x] Updated `ComposeUploadInspectBridge` reports/staged rows to carry `invocationFingerprint` and `itemCount` so dashboard fallback can enforce deterministic report matching.
+- [ ] Next verification step on iPhone: run bridge + dashboard from the same share invocation and confirm fingerprint match enables report recovery; rerun dashboard from a different invocation and confirm explicit `stale_bridge_report_fingerprint_mismatch` reject.
+
 ## 2026-04-20 — Dead OutgoingTemp fallback diagnostics + relaxed bridge recovery (active)
 - [x] Instrumented dead-OutgoingTemp-only startup recovery with explicit counters/flags (`deadOutgoingTempOnly`, `inlineBridgeAttempted`, `inlineBridgeRecoveredCount`, `bridgeReportAttempted`, `bridgeReportRecoveredCount`, `bridgeReportRejectReason`) persisted in run metadata and shortcut output.
 - [x] Hardened bridge report reject taxonomy with explicit reasons (`missing_report`, `malformed_report`, `zero_staged_rows`, `no_live_staged_paths`, `count_mismatch`, `invocation_mismatch`, `report_too_old`) so failures are no longer collapsed into a generic dead-path error.

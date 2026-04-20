@@ -119,36 +119,66 @@ function loadLatestRecoverableRun() {
   return runs.length > 0 ? runs[0] : null;
 }
 
+function hashString32(input) {
+  let h = 2166136261;
+  const s = String(input || "");
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+function computeInvocationFingerprint(rawEntries) {
+  const lines = (rawEntries ?? []).map((entry, index) => {
+    const rawPath = normalizeCandidatePath(entry?.rawPath) || "";
+    const sourceValue = String(entry?.sourceValue ?? "");
+    const name = rawPath.split("/").pop() || "";
+    return `${index + 1}|${rawPath}|${name}|${sourceValue}`;
+  });
+  const payload = `count=${lines.length};${lines.join(";")}`;
+  return `fp-${hashString32(payload)}`;
+}
+
 function loadBridgeFallbackEntries({
   expectedCount = null,
   maxAgeMs = 60000,
   nowMs = Date.now(),
+  expectedFingerprint = null,
   expectedInvocationId = null,
   enforceInvocationMatch = false,
   allowStaleWhenDeadOutgoingOnly = false,
 } = {}) {
+  const base = { bridgeFingerprint: null, bridgeCount: 0 };
   if (!_fmRun.fileExists(BRIDGE_LATEST_REPORT_PATH)) {
-    return { ok: false, reason: "bridge_fallback_missing_report", entries: [] };
+    return { ok: false, reason: "bridge_fallback_missing_report", entries: [], ...base };
   }
   const report = safeJsonParse(_fmRun.readString(BRIDGE_LATEST_REPORT_PATH), null);
   if (!report) {
-    return { ok: false, reason: "bridge_fallback_malformed_report", entries: [] };
+    return { ok: false, reason: "bridge_fallback_malformed_report", entries: [], ...base };
   }
 
   const staged = Array.isArray(report?.staged) ? report.staged : [];
+  const bridgeFingerprint = String(report?.invocationFingerprint || computeInvocationFingerprint(report?.rawEntries || []));
+  const bridgeCount = staged.length;
+  const withReport = { bridgeFingerprint, bridgeCount };
   if (staged.length === 0) {
-    return { ok: false, reason: "bridge_fallback_zero_staged_rows", entries: [] };
+    return { ok: false, reason: "bridge_fallback_zero_staged_rows", entries: [], ...withReport };
+  }
+
+  if (expectedFingerprint && bridgeFingerprint !== String(expectedFingerprint)) {
+    return { ok: false, reason: "stale_bridge_report_fingerprint_mismatch", entries: [], ...withReport };
   }
 
   const reportItemCount = Number(report?.itemCount ?? staged.length);
   if (expectedCount != null && expectedCount > 0 && Number.isFinite(reportItemCount) && reportItemCount !== expectedCount) {
-    return { ok: false, reason: "bridge_fallback_count_mismatch", entries: [] };
+    return { ok: false, reason: "stale_bridge_report_count_mismatch", entries: [], ...withReport };
   }
 
   if (enforceInvocationMatch && expectedInvocationId) {
     const invocationId = report?.invocationId ? String(report.invocationId) : null;
     if (!invocationId || invocationId !== String(expectedInvocationId)) {
-      return { ok: false, reason: "bridge_fallback_invocation_mismatch", entries: [] };
+      return { ok: false, reason: "bridge_fallback_invocation_mismatch", entries: [], ...withReport };
     }
   }
 
@@ -156,7 +186,7 @@ function loadBridgeFallbackEntries({
   if (!allowStaleWhenDeadOutgoingOnly && Number.isFinite(createdMs)) {
     const ageMs = nowMs - createdMs;
     if (ageMs > maxAgeMs) {
-      return { ok: false, reason: "bridge_fallback_report_too_old", entries: [] };
+      return { ok: false, reason: "bridge_fallback_report_too_old", entries: [], ...withReport };
     }
   }
 
@@ -179,13 +209,13 @@ function loadBridgeFallbackEntries({
   }
 
   if (out.length === 0) {
-    return { ok: false, reason: "bridge_fallback_no_live_staged_paths", entries: [] };
+    return { ok: false, reason: "bridge_fallback_no_live_staged_paths", entries: [], ...withReport };
   }
   if (expectedCount != null && expectedCount > 0 && out.length !== expectedCount) {
-    return { ok: false, reason: "bridge_fallback_count_mismatch", entries: [] };
+    return { ok: false, reason: "stale_bridge_report_count_mismatch", entries: [], ...withReport };
   }
 
-  return { ok: true, reason: null, entries: out };
+  return { ok: true, reason: null, entries: out, ...withReport };
 }
 
 
@@ -700,7 +730,7 @@ async function runOneStateStepPersistent(wv, state) {
 
   if (finalServer?.job_url) {
     item.status = "uploading";
-    item.note = "Polling compose job for final media…";
+    item.note = "Compose job queued; waiting for backend worker to start.";
     item.server = finalServer;
     saveRun(state);
     await pushUI(wv, state);
@@ -714,8 +744,17 @@ async function runOneStateStepPersistent(wv, state) {
     if (!polled.ok) {
       item.status = "failed";
       item.note = "Compose job polling failed";
-      item.error = polled.error || "job_poll_failed";
+      item.error = polled.error || "compose_job_poll_timeout";
       item.server = polled.body || finalServer;
+      if (polled.lastStatus || polled.lastStartedAt != null) {
+        item.server = {
+          ...(item.server ?? {}),
+          poll_debug: {
+            lastStatus: polled.lastStatus ?? null,
+            lastStartedAt: polled.lastStartedAt ?? null,
+          },
+        };
+      }
       saveRun(state);
       await pushUI(wv, state);
       return true;
@@ -1653,8 +1692,13 @@ function buildHTML() {
       "fallback inline=" + String(meta.inlineBridgeRecoveredCount ?? 0) +
       " · report=" + String(meta.bridgeReportRecoveredCount ?? 0) +
       " · reject=" + String(meta.bridgeReportRejectReason || "none");
+    const fallbackMatchLine =
+      "fp current=" + String(meta.currentInvocationFingerprint || "none") +
+      " · bridge=" + String(meta.bridgeInvocationFingerprint || "none") +
+      " · count current=" + String(meta.fallbackCurrentCount ?? 0) +
+      " · bridge=" + String(meta.fallbackBridgeCount ?? 0);
     const warningLine = hints.length ? "⚠ " + hints.join(" | ") : "";
-    const metaLines = [headerText, fallbackDiagLine, warningLine].filter(Boolean);
+    const metaLines = [headerText, fallbackDiagLine, fallbackMatchLine, warningLine].filter(Boolean);
     document.getElementById("meta").textContent = metaLines.join("\\n");
 
     document.getElementById("sum-total").textContent = String(items.length);
@@ -1889,7 +1933,16 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
   }
 }
 
-async function pollComposeJobUntilComplete({ jobUrl, intervalMs = 1200, maxAttempts = 90 }) {
+async function pollComposeJobUntilComplete({
+  jobUrl,
+  intervalMs = 1200,
+  maxAttempts = 90,
+  queuedNoStartMaxAttempts = 25,
+} = {}) {
+  let queuedNoStartAttempts = 0;
+  let lastStatus = null;
+  let lastStartedAt = null;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const req = new Request(jobUrl);
     req.method = "GET";
@@ -1899,7 +1952,13 @@ async function pollComposeJobUntilComplete({ jobUrl, intervalMs = 1200, maxAttem
       body = await req.loadJSON();
     } catch (e) {
       if (attempt === maxAttempts - 1) {
-        return { ok: false, error: `job_poll_failed:${String(e)}`, body: null };
+        return {
+          ok: false,
+          error: `compose_job_poll_timeout:job_poll_failed:${String(e)}`,
+          body: null,
+          lastStatus,
+          lastStartedAt,
+        };
       }
       await sleep(intervalMs);
       continue;
@@ -1912,14 +1971,36 @@ async function pollComposeJobUntilComplete({ jobUrl, intervalMs = 1200, maxAttem
     }
 
     const status = String(body?.job_status ?? body?.status ?? "").toLowerCase();
+    lastStatus = status || null;
+    lastStartedAt = body?.started_at ?? null;
+    if (status === "queued" && !body?.started_at) {
+      queuedNoStartAttempts += 1;
+      if (queuedNoStartAttempts >= queuedNoStartMaxAttempts) {
+        return {
+          ok: false,
+          error: "compose_job_poll_timeout:queued_not_started",
+          body,
+          lastStatus,
+          lastStartedAt,
+        };
+      }
+    } else {
+      queuedNoStartAttempts = 0;
+    }
     if (["failed", "error", "cancelled", "canceled"].includes(status)) {
-      return { ok: false, error: `job_terminal_state:${status}`, body };
+      return { ok: false, error: `job_terminal_state:${status}`, body, lastStatus, lastStartedAt };
     }
 
     await sleep(intervalMs);
   }
 
-  return { ok: false, error: "job_poll_timeout", body: null };
+  return {
+    ok: false,
+    error: "compose_job_poll_timeout:max_attempts_exceeded",
+    body: null,
+    lastStatus,
+    lastStartedAt,
+  };
 }
 
 // --------------------------------------------------
@@ -1933,6 +2014,7 @@ async function main() {
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
   let inlineBridgeIngestUsed = false;
   let reportBridgeFallbackUsed = false;
+  const currentInvocationFingerprint = computeInvocationFingerprint(rawPathEntries);
   const fallbackRecoveryDebug = {
     deadOutgoingTempOnly: false,
     inlineBridgeAttempted: false,
@@ -1940,6 +2022,10 @@ async function main() {
     bridgeReportAttempted: false,
     bridgeReportRecoveredCount: 0,
     bridgeReportRejectReason: null,
+    currentFingerprint: currentInvocationFingerprint,
+    bridgeFingerprint: null,
+    currentCount: rawPathEntries.length,
+    bridgeCount: 0,
   };
 
   let deadOutgoingTempOnly =
@@ -1962,10 +2048,13 @@ async function main() {
       fallbackRecoveryDebug.bridgeReportAttempted = true;
       const bridgeFallback = loadBridgeFallbackEntries({
         expectedCount: rawPathEntries.length,
+        expectedFingerprint: currentInvocationFingerprint,
         allowStaleWhenDeadOutgoingOnly: true,
       });
       fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
       fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
+      fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
+      fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
 
       if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
         rawPathEntries = bridgeFallback.entries;
@@ -2030,6 +2119,10 @@ async function main() {
       bridgeReportAttempted: !!state.meta.bridgeReportAttempted,
       bridgeReportRecoveredCount: Number(state.meta.bridgeReportRecoveredCount || 0),
       bridgeReportRejectReason: state.meta.bridgeReportRejectReason || null,
+      currentInvocationFingerprint: state.meta.currentInvocationFingerprint || null,
+      bridgeInvocationFingerprint: state.meta.bridgeInvocationFingerprint || null,
+      fallbackCurrentCount: Number(state.meta.fallbackCurrentCount || 0),
+      fallbackBridgeCount: Number(state.meta.fallbackBridgeCount || 0),
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -2068,6 +2161,10 @@ async function main() {
   state.meta.bridgeReportAttempted = fallbackRecoveryDebug.bridgeReportAttempted;
   state.meta.bridgeReportRecoveredCount = fallbackRecoveryDebug.bridgeReportRecoveredCount;
   state.meta.bridgeReportRejectReason = fallbackRecoveryDebug.bridgeReportRejectReason;
+  state.meta.currentInvocationFingerprint = fallbackRecoveryDebug.currentFingerprint;
+  state.meta.bridgeInvocationFingerprint = fallbackRecoveryDebug.bridgeFingerprint;
+  state.meta.fallbackCurrentCount = fallbackRecoveryDebug.currentCount;
+  state.meta.fallbackBridgeCount = fallbackRecoveryDebug.bridgeCount;
   saveRun(state);
 
   if (deadOutgoingTempOnly) {
@@ -2120,6 +2217,10 @@ async function main() {
       bridgeReportAttempted: fallbackRecoveryDebug.bridgeReportAttempted,
       bridgeReportRecoveredCount: fallbackRecoveryDebug.bridgeReportRecoveredCount,
       bridgeReportRejectReason: fallbackRecoveryDebug.bridgeReportRejectReason,
+      currentInvocationFingerprint: fallbackRecoveryDebug.currentFingerprint,
+      bridgeInvocationFingerprint: fallbackRecoveryDebug.bridgeFingerprint,
+      fallbackCurrentCount: fallbackRecoveryDebug.currentCount,
+      fallbackBridgeCount: fallbackRecoveryDebug.bridgeCount,
       totalCount: state.items.length,
       completedCount: 0,
       failedCount: state.items.length,
@@ -2160,6 +2261,10 @@ async function main() {
     bridgeReportAttempted: !!state.meta.bridgeReportAttempted,
     bridgeReportRecoveredCount: Number(state.meta.bridgeReportRecoveredCount || 0),
     bridgeReportRejectReason: state.meta.bridgeReportRejectReason || null,
+    currentInvocationFingerprint: state.meta.currentInvocationFingerprint || null,
+    bridgeInvocationFingerprint: state.meta.bridgeInvocationFingerprint || null,
+    fallbackCurrentCount: Number(state.meta.fallbackCurrentCount || 0),
+    fallbackBridgeCount: Number(state.meta.fallbackBridgeCount || 0),
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,

@@ -47,6 +47,27 @@ function classifyPathFamily(path) {
   return "other";
 }
 
+function hashString32(input) {
+  let h = 2166136261;
+  const s = String(input || "");
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+function computeInvocationFingerprint(rawEntries) {
+  const lines = (rawEntries ?? []).map((entry, index) => {
+    const rawPath = toLocalPath(entry?.rawPath) || String(entry?.rawPath || "");
+    const sourceValue = String(entry?.sourceValue ?? "");
+    const name = rawPath.split("/").pop() || "";
+    return `${index + 1}|${rawPath}|${name}|${sourceValue}`;
+  });
+  const payload = `count=${lines.length};${lines.join(";")}`;
+  return `fp-${hashString32(payload)}`;
+}
+
 function collectRawSharePaths() {
   const lanes = [
     { key: "fileURLs", values: asArray(args.fileURLs) },
@@ -109,7 +130,7 @@ function writeJson(fm, path, value) {
   fm.move(tmp, path);
 }
 
-async function stageImmediately(fm, rawEntries, stageDir) {
+async function stageImmediately(fm, rawEntries, stageDir, invocationFingerprint) {
   const staged = [];
   const failures = [];
 
@@ -143,6 +164,7 @@ async function stageImmediately(fm, rawEntries, stageDir) {
         stageMethod: "copy",
         stagedBytes: fm.fileSize(dst),
         pathFamily: entry.pathFamily,
+        invocationFingerprint,
       });
       continue;
     } catch (copyErr) {
@@ -157,6 +179,7 @@ async function stageImmediately(fm, rawEntries, stageDir) {
           stageMethod: "read_write",
           stagedBytes: fm.fileSize(dst),
           pathFamily: entry.pathFamily,
+          invocationFingerprint,
         });
         continue;
       } catch (readErr) {
@@ -171,6 +194,7 @@ async function stageImmediately(fm, rawEntries, stageDir) {
             stageMethod: "data_from_file",
             stagedBytes: fm.fileSize(dst),
             pathFamily: entry.pathFamily,
+            invocationFingerprint,
           });
           continue;
         } catch (dataErr) {
@@ -208,11 +232,12 @@ async function main() {
   const fm = FileManager.local();
   const reportPaths = buildReportPath(fm);
   const rawEntries = collectRawSharePaths();
+  const invocationFingerprint = computeInvocationFingerprint(rawEntries);
 
   const stageDir = fm.joinPath(reportPaths.stagedRoot, `compose_bridge_${Date.now()}`);
   if (!fm.fileExists(stageDir)) fm.createDirectory(stageDir, true);
 
-  const stageResult = await stageImmediately(fm, rawEntries, stageDir);
+  const stageResult = await stageImmediately(fm, rawEntries, stageDir, invocationFingerprint);
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -224,7 +249,9 @@ async function main() {
       urlsCount: asArray(args.urls).length,
     },
     rawEntries,
+    invocationFingerprint,
     pathFamilyCounts: countByFamily(rawEntries),
+    itemCount: rawEntries.length,
     staged: stageResult.staged,
     failures: stageResult.failures,
     stageDir,
@@ -249,6 +276,7 @@ try {
   out = {
     ok: true,
     reportPath: report.reportPaths.latest,
+    invocationFingerprint: report.invocationFingerprint,
     stagedCount: report.staged.length,
     failureCount: report.failures.length,
     familyCounts: report.pathFamilyCounts,
