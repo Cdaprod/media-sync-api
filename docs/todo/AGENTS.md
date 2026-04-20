@@ -1,3 +1,11 @@
+## 2026-04-20 — Share import staging parity fix: Data.fromFile-first + source-shape hardening (active)
+- [x] Patched `stagePersistentSource(...)` to resolve source path defensively via `source.path ?? source.originalPath ?? null` and return explicit `source_missing_path_property` when neither field exists.
+- [x] Reordered path staging fallback for provider-backed share files to `Data.fromFile(...)` first, then `_fmRun.read(...)`, then `_fmRun.copy(...)`, with `data_from_file` bytes measured from the Data payload.
+- [x] Added temporary per-item staging debug payload (`sourceType`, `hasPath`, `hasOriginalPath`, `resolvedPath`, `existedBeforeStage`) and rendered it compactly in dashboard cards for on-device shape mismatch triage.
+- [x] Increased dashboard header top padding to avoid title overlap with Scriptable’s native Close button.
+- [x] Re-synced alias entrypoints (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical script after staging hardening.
+- [ ] Next verification step on iPhone: run the same Photos/Shortcuts share flow and confirm `stageMethod=data_from_file`, full staged byte sizes (not tiny provider `fileSize` values), and debug rows show expected `path/originalPath` presence with `exists=yes`.
+
 ## 2026-04-20 — Stage-before-present startup reorder for transient share paths (active)
 - [x] Reordered fresh-run startup to import/stage incoming share items immediately (`stageRunInputsPersistentFast`) before any WebView presentation delay.
 - [x] Kept existing presentation helper for staged state display + upload drain, but removed pre-stage timing gap that could let temporary share paths expire.

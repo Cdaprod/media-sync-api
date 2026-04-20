@@ -1,4 +1,4 @@
-// /scriptable/ComposeStatefulJobDashboard.js
+// /scriptable/ComposeStatefulJobDashboard-2.js
 // Name in Scriptable iOS: `ComposeJobDashboard 2.js`
 //
 // WebView queue UI for media compose/upload jobs.
@@ -151,11 +151,12 @@ function markRemainingItemsBlocked(state, reason, errorCode) {
 function stagePersistentSource(source, stagedPath) {
   if (source?.sourceType === "data" && source?.data) {
     try {
+      const dataBytes = readDataLengthFromData(source.data);
       _fmRun.write(stagedPath, source.data);
       return {
         ok: true,
         method: "incoming_data",
-        bytes: _fmRun.fileSize(stagedPath),
+        bytes: dataBytes ?? _fmRun.fileSize(stagedPath),
         error: null,
       };
     } catch (dataWriteErr) {
@@ -168,8 +169,16 @@ function stagePersistentSource(source, stagedPath) {
     }
   }
 
-  const srcPath = source?.path;
-  if (!srcPath || !_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
+  const srcPath = source?.path ?? source?.originalPath ?? null;
+  if (!srcPath) {
+    return {
+      ok: false,
+      method: null,
+      bytes: null,
+      error: "source_missing_path_property",
+    };
+  }
+  if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
     return {
       ok: false,
       method: null,
@@ -179,42 +188,44 @@ function stagePersistentSource(source, stagedPath) {
   }
 
   try {
-    _fmRun.copy(srcPath, stagedPath);
+    const data = Data.fromFile(srcPath);
+    if (!data) throw new Error("Data.fromFile returned null data");
+    const dataBytes = readDataLengthFromData(data);
+    _fmRun.write(stagedPath, data);
     return {
       ok: true,
-      method: "copy",
-      bytes: _fmRun.fileSize(stagedPath),
+      method: "data_from_file",
+      bytes: dataBytes ?? _fmRun.fileSize(stagedPath),
       error: null,
     };
-  } catch (copyErr) {
+  } catch (dataErr) {
     try {
       const data = _fmRun.read(srcPath);
       if (!data) throw new Error("read returned null data");
+      const dataBytes = readDataLengthFromData(data);
       _fmRun.write(stagedPath, data);
       return {
         ok: true,
         method: "read_write",
-        bytes: _fmRun.fileSize(stagedPath),
+        bytes: dataBytes ?? _fmRun.fileSize(stagedPath),
         error: null,
       };
     } catch (readWriteErr) {
       try {
-        const data = Data.fromFile(srcPath);
-        if (!data) throw new Error("Data.fromFile returned null data");
-        _fmRun.write(stagedPath, data);
+        _fmRun.copy(srcPath, stagedPath);
         return {
           ok: true,
-          method: "data_from_file",
+          method: "copy",
           bytes: _fmRun.fileSize(stagedPath),
           error: null,
         };
-      } catch (dataErr) {
+      } catch (copyErr) {
         return {
           ok: false,
           method: null,
           bytes: null,
           error:
-            `source_unreadable_or_transient: copy=${String(copyErr)} read_write=${String(readWriteErr)} data_from_file=${String(dataErr)}`,
+            `source_unreadable_or_transient: data_from_file=${String(dataErr)} read_write=${String(readWriteErr)} copy=${String(copyErr)}`,
         };
       }
     }
@@ -248,6 +259,7 @@ function createRunSkeletonPersistent(incomingItems) {
       sourceChannel: incoming?.sourceChannel ?? "unknown",
       sourceIndex: incoming?.sourceIndex ?? i,
       sourceValue: incoming?.sourceValue ?? null,
+      stagingDebug: null,
       stagedPath,
       stagedBytes: null,
       stageMethod: null,
@@ -309,6 +321,17 @@ async function stageRunInputsPersistent(wv, state, incomingItems) {
     await pushUI(wv, state);
 
     const incoming = incomingItems[i];
+    const resolvedSourcePath = incoming?.path ?? incoming?.originalPath ?? null;
+    item.stagingDebug = {
+      sourceType: incoming?.sourceType ?? null,
+      hasPath: !!incoming?.path,
+      hasOriginalPath: !!incoming?.originalPath,
+      resolvedPath: resolvedSourcePath,
+      existedBeforeStage:
+        !!resolvedSourcePath &&
+        _fmRun.fileExists(resolvedSourcePath) &&
+        !_fmRun.isDirectory(resolvedSourcePath),
+    };
     const staged = stagePersistentSource(incoming, item.stagedPath);
     if (staged.ok) {
       item.stagedBytes = staged.bytes;
@@ -333,6 +356,17 @@ async function stageRunInputsPersistentFast(state, incomingItems) {
     if (item.status !== "queued") continue;
 
     const incoming = incomingItems[i];
+    const resolvedSourcePath = incoming?.path ?? incoming?.originalPath ?? null;
+    item.stagingDebug = {
+      sourceType: incoming?.sourceType ?? null,
+      hasPath: !!incoming?.path,
+      hasOriginalPath: !!incoming?.originalPath,
+      resolvedPath: resolvedSourcePath,
+      existedBeforeStage:
+        !!resolvedSourcePath &&
+        _fmRun.fileExists(resolvedSourcePath) &&
+        !_fmRun.isDirectory(resolvedSourcePath),
+    };
     const staged = stagePersistentSource(incoming, item.stagedPath);
     if (staged.ok) {
       item.stagedBytes = staged.bytes;
@@ -839,7 +873,7 @@ function buildHTML() {
     z-index: 10;
     background: rgba(18,18,18,.96);
     border-bottom: 1px solid #2a2a2a;
-    padding: 14px 14px 12px;
+    padding: 52px 14px 12px;
     backdrop-filter: blur(10px);
   }
   .title {
@@ -1038,6 +1072,13 @@ function buildHTML() {
     color: #8f8f8f;
     word-break: break-all;
   }
+  .debug-mini {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #8d8d8d;
+    line-height: 1.4;
+    word-break: break-word;
+  }
   .server {
     margin-top: 8px;
     padding: 8px;
@@ -1198,6 +1239,15 @@ function buildHTML() {
               '</div>' +
               '<div class="sub" style="margin-top:6px;">' + esc(item.note || "") + '</div>' +
               (item.error ? '<div class="sub" style="margin-top:6px;color:#ff9b9b;">' + esc(item.error) + '</div>' : '') +
+              (item.stagingDebug ? (
+                '<div class="debug-mini">' +
+                  'srcType=' + esc(item.stagingDebug.sourceType || "--") + ' · ' +
+                  'path=' + esc(item.stagingDebug.hasPath ? "yes" : "no") + ' · ' +
+                  'origPath=' + esc(item.stagingDebug.hasOriginalPath ? "yes" : "no") + ' · ' +
+                  'exists=' + esc(item.stagingDebug.existedBeforeStage ? "yes" : "no") + '<br>' +
+                  'resolved=' + esc(item.stagingDebug.resolvedPath || "--") +
+                '</div>'
+              ) : '') +
               '<div class="path">' + esc(item.stagedPath || item.originalPath || "") + '</div>' +
             '</div>' +
           '</div>' +
@@ -1266,6 +1316,7 @@ async function pushUI(wv, state) {
         previewUrl: item?.previewUrl ?? null,
         previewLabel: item?.previewLabel ?? null,
         previewIndexLabel: item?.previewIndexLabel ?? null,
+        stagingDebug: item?.stagingDebug ?? null,
         stagedPath: item?.stagedPath ?? null,
         originalPath: item?.originalPath ?? null,
       })),
