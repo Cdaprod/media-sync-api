@@ -119,10 +119,28 @@ function loadLatestRecoverableRun() {
   return runs.length > 0 ? runs[0] : null;
 }
 
-function loadBridgeFallbackEntries() {
-  if (!_fmRun.fileExists(BRIDGE_LATEST_REPORT_PATH)) return [];
+function loadBridgeFallbackEntries({ expectedCount = null, maxAgeMs = 60000, nowMs = Date.now() } = {}) {
+  if (!_fmRun.fileExists(BRIDGE_LATEST_REPORT_PATH)) {
+    return { ok: false, reason: "bridge_fallback_missing_report", entries: [] };
+  }
   const report = safeJsonParse(_fmRun.readString(BRIDGE_LATEST_REPORT_PATH), null);
+  if (!report) {
+    return { ok: false, reason: "bridge_fallback_invalid_report_json", entries: [] };
+  }
+  const createdMs = Date.parse(report?.createdAt ?? report?.generatedAt ?? "");
+  if (Number.isFinite(createdMs)) {
+    const ageMs = nowMs - createdMs;
+    if (ageMs > maxAgeMs) {
+      return { ok: false, reason: "bridge_fallback_stale_or_mismatched:report_too_old", entries: [] };
+    }
+  }
+
   const staged = Array.isArray(report?.staged) ? report.staged : [];
+  const reportItemCount = Number(report?.itemCount ?? staged.length);
+  if (expectedCount != null && expectedCount > 0 && Number.isFinite(reportItemCount) && reportItemCount !== expectedCount) {
+    return { ok: false, reason: "bridge_fallback_stale_or_mismatched:item_count_mismatch", entries: [] };
+  }
+
   const out = [];
   for (let i = 0; i < staged.length; i++) {
     const row = staged[i];
@@ -137,9 +155,13 @@ function loadBridgeFallbackEntries() {
       family: classifyPathFamily(path),
       existsAtCollect: true,
       fromBridgeReport: true,
+      bridgeInvocationId: report?.invocationId ?? null,
     });
   }
-  return out;
+  if (out.length === 0) {
+    return { ok: false, reason: "bridge_fallback_stale_or_mismatched:no_live_staged_paths", entries: [] };
+  }
+  return { ok: true, reason: null, entries: out };
 }
 
 function ingestInlineBridgeStyleFromArgs() {
@@ -653,7 +675,7 @@ async function runOneStateStepPersistent(wv, state) {
 
   if (finalServer?.job_url) {
     item.status = "uploading";
-    item.note = "Polling compose job for final media…";
+    item.note = "Compose job queued; waiting for backend worker to start.";
     item.server = finalServer;
     saveRun(state);
     await pushUI(wv, state);
@@ -667,8 +689,17 @@ async function runOneStateStepPersistent(wv, state) {
     if (!polled.ok) {
       item.status = "failed";
       item.note = "Compose job polling failed";
-      item.error = polled.error || "job_poll_failed";
+      item.error = polled.error || "compose_job_poll_timeout";
       item.server = polled.body || finalServer;
+      if (polled.lastStatus || polled.lastStartedAt != null) {
+        item.server = {
+          ...(item.server ?? {}),
+          poll_debug: {
+            lastStatus: polled.lastStatus ?? null,
+            lastStartedAt: polled.lastStartedAt ?? null,
+          },
+        };
+      }
       saveRun(state);
       await pushUI(wv, state);
       return true;
@@ -1838,7 +1869,16 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
   }
 }
 
-async function pollComposeJobUntilComplete({ jobUrl, intervalMs = 1200, maxAttempts = 90 }) {
+async function pollComposeJobUntilComplete({
+  jobUrl,
+  intervalMs = 1200,
+  maxAttempts = 90,
+  queuedNoStartMaxAttempts = 25,
+} = {}) {
+  let queuedNoStartAttempts = 0;
+  let lastStatus = null;
+  let lastStartedAt = null;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const req = new Request(jobUrl);
     req.method = "GET";
@@ -1848,7 +1888,13 @@ async function pollComposeJobUntilComplete({ jobUrl, intervalMs = 1200, maxAttem
       body = await req.loadJSON();
     } catch (e) {
       if (attempt === maxAttempts - 1) {
-        return { ok: false, error: `job_poll_failed:${String(e)}`, body: null };
+        return {
+          ok: false,
+          error: `compose_job_poll_timeout:job_poll_failed:${String(e)}`,
+          body: null,
+          lastStatus,
+          lastStartedAt,
+        };
       }
       await sleep(intervalMs);
       continue;
@@ -1861,14 +1907,36 @@ async function pollComposeJobUntilComplete({ jobUrl, intervalMs = 1200, maxAttem
     }
 
     const status = String(body?.job_status ?? body?.status ?? "").toLowerCase();
+    lastStatus = status || null;
+    lastStartedAt = body?.started_at ?? null;
+    if (status === "queued" && !body?.started_at) {
+      queuedNoStartAttempts += 1;
+      if (queuedNoStartAttempts >= queuedNoStartMaxAttempts) {
+        return {
+          ok: false,
+          error: "compose_job_poll_timeout:queued_not_started",
+          body,
+          lastStatus,
+          lastStartedAt,
+        };
+      }
+    } else {
+      queuedNoStartAttempts = 0;
+    }
     if (["failed", "error", "cancelled", "canceled"].includes(status)) {
-      return { ok: false, error: `job_terminal_state:${status}`, body };
+      return { ok: false, error: `job_terminal_state:${status}`, body, lastStatus, lastStartedAt };
     }
 
     await sleep(intervalMs);
   }
 
-  return { ok: false, error: "job_poll_timeout", body: null };
+  return {
+    ok: false,
+    error: "compose_job_poll_timeout:max_attempts_exceeded",
+    body: null,
+    lastStatus,
+    lastStartedAt,
+  };
 }
 
 // --------------------------------------------------
