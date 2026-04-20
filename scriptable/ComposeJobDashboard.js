@@ -14,6 +14,7 @@
 // - updates each row as it moves through states
 // - shows the final composed video in a result panel using player.html?src=...
 // - returns final JSON to Shortcuts
+// - expects Files-only Shortcuts wiring; OutgoingTemp-only compatibility paths may be dead on arrival
 
 const BASE = "http://192.168.0.25:8787";
 const PROJECT = "P3-SHARED-iOS-Exports";
@@ -870,6 +871,127 @@ function collectIncomingItems() {
   return out;
 }
 
+function collectRawSharePaths() {
+  const lanes = [
+    { key: "fileURLs", values: asArray(args.fileURLs) },
+    { key: "shortcutParameter", values: asArray(args.shortcutParameter) },
+    { key: "shortcutInput", values: asArray(args.shortcutInput) },
+    { key: "urls", values: asArray(args.urls) },
+  ];
+  const out = [];
+  const seen = new Set();
+  for (const lane of lanes) {
+    for (let i = 0; i < lane.values.length; i++) {
+      const raw = lane.values[i];
+      const path = toLocalPath(raw);
+      if (!path || seen.has(path)) continue;
+      seen.add(path);
+      const family = classifyPathFamily(path);
+      out.push({
+        sourceChannel: lane.key,
+        sourceIndex: i,
+        sourceValue: String(raw),
+        rawPath: path,
+        family,
+        existsAtCollect: _fmRun.fileExists(path) && !_fmRun.isDirectory(path),
+      });
+    }
+  }
+  return out;
+}
+
+function summarizeRawPathEntries(rawEntries) {
+  return (rawEntries ?? []).map(entry => ({
+    sourceChannel: entry.sourceChannel,
+    rawPath: entry.rawPath,
+    pathFamily: entry.family?.isPluginKit
+      ? "PluginKit"
+      : entry.family?.isRunScriptIntent
+        ? "RunScriptIntent"
+        : entry.family?.isOutgoingTemp
+          ? "OutgoingTemp"
+          : "other",
+    existsAtCollect: !!entry.existsAtCollect,
+  }));
+}
+
+async function stageRawSharePathsImmediatelyIntoRun(state, rawEntries) {
+  for (let i = 0; i < state.items.length; i++) {
+    const item = state.items[i];
+    const rawEntry = rawEntries[i];
+    if (!rawEntry) {
+      item.status = "failed";
+      item.note = "Missing raw source entry";
+      item.error = "source_missing_raw_entry";
+      continue;
+    }
+
+    const srcPath = rawEntry.rawPath;
+    item.stagingDebug = {
+      sourceType: "path",
+      hasPath: true,
+      hasOriginalPath: !!item.originalPath,
+      rawSourceValue: rawEntry.sourceValue,
+      normalizedPath: srcPath,
+      hasPluginKitPath: !!rawEntry.family?.isPluginKit,
+      hasRunScriptIntentPath: !!rawEntry.family?.isRunScriptIntent,
+      hasOutgoingTempPath: !!rawEntry.family?.isOutgoingTemp,
+      family: rawEntry.family ?? classifyPathFamily(srcPath),
+      pathCandidates: [srcPath],
+      resolvedPath: srcPath,
+      existedBeforeStage: !!rawEntry.existsAtCollect,
+      sourceChannel: rawEntry.sourceChannel,
+    };
+
+    if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
+      item.status = "failed";
+      item.note = "Staging failed";
+      item.error = "source_unreadable_or_transient:file_not_found";
+      item.stagedBytes = null;
+      item.stageMethod = null;
+      item.stagedBytesHuman = humanBytes(item.stagedBytes);
+      continue;
+    }
+
+    try {
+      _fmRun.copy(srcPath, item.stagedPath);
+      item.stageMethod = "copy";
+      item.stagedBytes = _fmRun.fileSize(item.stagedPath);
+      item.status = "staged";
+      item.note = "Staged via copy";
+    } catch (copyErr) {
+      try {
+        const data = _fmRun.read(srcPath);
+        if (!data) throw new Error("read returned null data");
+        _fmRun.write(item.stagedPath, data);
+        item.stageMethod = "read_write";
+        item.stagedBytes = readDataLengthFromData(data) ?? _fmRun.fileSize(item.stagedPath);
+        item.status = "staged";
+        item.note = "Staged via read_write";
+      } catch (readWriteErr) {
+        try {
+          const data = Data.fromFile(srcPath);
+          if (!data) throw new Error("Data.fromFile returned null data");
+          _fmRun.write(item.stagedPath, data);
+          item.stageMethod = "data_from_file";
+          item.stagedBytes = readDataLengthFromData(data) ?? _fmRun.fileSize(item.stagedPath);
+          item.status = "staged";
+          item.note = "Staged via data_from_file";
+        } catch (dataErr) {
+          item.status = "failed";
+          item.note = "Staging failed";
+          item.error =
+            `source_unreadable_or_transient: copy=${String(copyErr)} read_write=${String(readWriteErr)} data_from_file=${String(dataErr)}`;
+          item.stageMethod = null;
+          item.stagedBytes = null;
+        }
+      }
+    }
+    item.stagedBytesHuman = humanBytes(item.stagedBytes);
+  }
+  saveRun(state);
+}
+
 function readDataLengthMaybe(path) {
   try {
     const data = Data.fromFile(path);
@@ -1602,10 +1724,20 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
 async function main() {
   const incomingDebug = inspectIncomingArgs();
   const incomingItems = collectIncomingItems();
+  const rawPathEntries = collectRawSharePaths();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
-  const rawPaths = incomingItems.filter(x => x.sourceType === "path").map(x => x.path);
+  const rawPaths = rawPathEntries.map(x => x.rawPath);
+  const inputFamilySummary = summarizeRawPathEntries(rawPathEntries);
+  const deadOutgoingTempOnly =
+    rawPathEntries.length > 0 &&
+    rawPathEntries.every(entry => entry.family?.isOutgoingTemp && !entry.existsAtCollect);
+  if (deadOutgoingTempOnly) {
+    inputHints.push(
+      "Share input only provided dead Photos compatibility-export paths. Re-run using Files-only shortcut wiring so Scriptable receives live fileURLs or RunScriptIntent temp paths."
+    );
+  }
 
-  if (incomingItems.length > 0) {
+  if (incomingItems.length > 0 || rawPathEntries.length > 0) {
     clearLastRunPointer();
     cleanupOldRuns();
   }
@@ -1619,6 +1751,7 @@ async function main() {
         reason: "No usable share input received from Shortcuts/share sheet and no previous run found to resume.",
         incomingDebug,
         inputHints,
+        inputFamilySummary,
       };
     }
     const wv = new WebView();
@@ -1635,6 +1768,7 @@ async function main() {
       rawPaths: [],
       incomingDebug,
       inputHints,
+      inputFamilySummary,
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -1642,14 +1776,84 @@ async function main() {
       items: state.items,
     };
   }
-  // Otherwise, create a new run with the incoming files
-  const state = createRunSkeletonPersistent(incomingItems);
+  // Otherwise, create a new run with incoming files.
+  const incomingForFreshRun = rawPathEntries.length > 0
+    ? rawPathEntries.map(entry => ({
+        sourceType: "path",
+        sourceChannel: entry.sourceChannel,
+        sourceIndex: entry.sourceIndex,
+        sourceValue: entry.sourceValue,
+        displayName: entry.rawPath.split("/").pop() || entry.rawPath,
+        path: entry.rawPath,
+        rawPath: entry.rawPath,
+        preferredPath: entry.rawPath,
+        pathCandidates: [entry.rawPath],
+        pathFamily: entry.family,
+        data: null,
+        originalReadableBytes: readDataLengthMaybe(entry.rawPath),
+      }))
+    : incomingItems;
+  const state = createRunSkeletonPersistent(incomingForFreshRun);
   state.meta.incomingDebug = incomingDebug;
   state.meta.inputHints = inputHints;
+  state.meta.inputFamilySummary = inputFamilySummary;
   saveRun(state);
 
-  // Import transient share-sheet files before any WebView timing delay.
-  await stageRunInputsPersistentFast(state, incomingItems);
+  if (deadOutgoingTempOnly) {
+    for (let i = 0; i < state.items.length; i++) {
+      const item = state.items[i];
+      const rawEntry = rawPathEntries[i];
+      item.status = "failed";
+      item.note = "Share input did not provide a live temp file path.";
+      item.error = "share_input_only_dead_outgoingtemp_paths";
+      item.stagingDebug = {
+        sourceType: "path",
+        hasPath: true,
+        hasOriginalPath: !!item.originalPath,
+        rawSourceValue: rawEntry?.sourceValue ?? null,
+        normalizedPath: rawEntry?.rawPath ?? null,
+        hasPluginKitPath: !!rawEntry?.family?.isPluginKit,
+        hasRunScriptIntentPath: !!rawEntry?.family?.isRunScriptIntent,
+        hasOutgoingTempPath: !!rawEntry?.family?.isOutgoingTemp,
+        family: rawEntry?.family ?? classifyPathFamily(rawEntry?.rawPath ?? null),
+        pathCandidates: rawEntry?.rawPath ? [rawEntry.rawPath] : [],
+        resolvedPath: rawEntry?.rawPath ?? null,
+        existedBeforeStage: !!rawEntry?.existsAtCollect,
+        sourceChannel: rawEntry?.sourceChannel ?? null,
+      };
+      item.stageMethod = null;
+      item.stagedBytes = null;
+      item.stagedBytesHuman = humanBytes(item.stagedBytes);
+    }
+    saveRun(state);
+    const wv = new WebView();
+    await presentDashboardWebView(wv, state);
+    return {
+      ok: false,
+      reason: "All incoming paths were dead OutgoingTemp compatibility exports.",
+      error: "share_input_only_dead_outgoingtemp_paths",
+      runId: state.meta.runId,
+      requestUrl: state.meta.requestUrl,
+      stagedDir: state.meta.stagedDir,
+      rawPaths,
+      incomingDebug,
+      inputHints,
+      inputFamilySummary,
+      totalCount: state.items.length,
+      completedCount: 0,
+      failedCount: state.items.length,
+      finalMedia: null,
+      items: state.items,
+    };
+  }
+
+  // For fresh runs, import raw shared paths immediately using old working ComposeUpload-style staging.
+  if (rawPathEntries.length > 0) {
+    await stageRawSharePathsImmediatelyIntoRun(state, rawPathEntries);
+  } else {
+    // Fallback for non-path payloads.
+    await stageRunInputsPersistentFast(state, incomingItems);
+  }
 
   const wv = new WebView();
   await presentDashboardWebView(wv, state);
@@ -1665,6 +1869,7 @@ async function main() {
     rawPaths,
     incomingDebug,
     inputHints,
+    inputFamilySummary,
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,

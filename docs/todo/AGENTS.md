@@ -1,3 +1,12 @@
+## 2026-04-20 — Fresh-run import reset to old ComposeUpload behavior (active)
+- [x] Refactored fresh-run import path to mirror old working `ComposeUpload.js`: collect raw share paths directly from Shortcuts args and stage immediately into Scriptable-owned run storage before presenting the dashboard.
+- [x] Added immediate raw-path staging helper (`copy` -> `read/write` -> `Data.fromFile`) so fresh runs no longer depend on path-family substitution before durable import.
+- [x] Added startup input-family summary persisted in run metadata (`sourceChannel`, raw path, family, `existsAtCollect`) for direct compare against inspect-script evidence.
+- [x] Added explicit dead OutgoingTemp-only guard: if all incoming raw paths are OutgoingTemp and already missing at collect time, run fails fast with `share_input_only_dead_outgoingtemp_paths` and user-visible guidance.
+- [x] Kept path-family diagnostics for visibility only; import logic now prioritizes raw shared paths for fresh runs.
+- [x] Re-synced alias entrypoints (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical script after fresh-run import reset.
+- [ ] Next verification step on iPhone: run the same shortcut that previously worked in old `ComposeUpload` flow and confirm dashboard fresh run stages non-zero bytes before WebView upload starts; then run known-bad lane and confirm fast-fail `share_input_only_dead_outgoingtemp_paths` with explicit guidance.
+
 ## 2026-04-20 — Scriptable share path-family selection hardening (active)
 - [x] Confirmed compose staging failures were resolving to unstable Photos compatibility export paths (`/var/mobile/Media/PhotoData/OutgoingTemp/.../Compatible/...`) while inspect runs proved container temp paths are valid/copyable.
 - [x] Added explicit path-family classification/scoring and incoming path selection (`choosePreferredPath`) so container temp families are preferred (`PluginKitPlugin` > `RunScriptIntent` > other > `OutgoingTemp`).
