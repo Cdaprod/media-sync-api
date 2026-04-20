@@ -1,3 +1,12 @@
+## 2026-04-20 — Inline durable ingest promoted + retryability UX split (active)
+- [x] Promoted inline durable ingest to primary lane for fresh share runs: dashboard now attempts inline staging from current args first and only keeps direct-path lane when inline import cannot fully match item count.
+- [x] Dead-OutgoingTemp failure remains terminal only after inline primary and bridge secondary/manual lanes both yield zero usable staged files for the current invocation.
+- [x] Added persisted failure semantics in run metadata/output: `retryableFailure` and `recoveryPathUsed` (`inline_bridge`, `bridge_report`, `direct_path`, `none`).
+- [x] Added action UX split in dashboard header: retryable failures show `Retry upload`; non-retryable dead-input failures show `Re-share from Photos`.
+- [x] Extended compact fallback header diagnostics with `path=<recoveryPathUsed>` so operator can quickly verify which lane was used.
+- [x] Re-synced alias dashboard scripts from canonical implementation after retryability/recovery-path updates.
+- [ ] Next verification step on iPhone: confirm dead OutgoingTemp-only run shows `Re-share from Photos` and `retryableFailure=false`, while a simulated network/poll failure shows `Retry upload` with `retryableFailure=true`.
+
 ## 2026-04-20 — Invocation fingerprint-gated bridge fallback (active)
 - [x] Added deterministic share-invocation fingerprinting in dashboard + bridge scripts (`fp-<hash>`) based on item count + normalized raw source payloads so fallback can verify invocation identity, not just count.
 - [x] Updated dead-OutgoingTemp recovery to keep inline ingest as primary path and treat persisted bridge reports as strictly secondary/manual recovery with exact fingerprint match required.

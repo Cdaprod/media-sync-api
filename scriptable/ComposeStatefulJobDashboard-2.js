@@ -308,6 +308,27 @@ function markRemainingItemsBlocked(state, reason, errorCode) {
   }
 }
 
+function isRetryableFailureItem(item) {
+  const err = String(item?.error || "");
+  const note = String(item?.note || "");
+  const nonRetryableErrors = [
+    "share_input_only_dead_outgoingtemp_paths",
+    "source_unreadable_or_transient:file_not_found",
+    "source_missing_path_property",
+    "source_missing_raw_entry",
+  ];
+  if (nonRetryableErrors.includes(err)) return false;
+  if (note.includes("Share input did not provide a live temp file path")) return false;
+  if (item?.status !== "failed" && item?.status !== "blocked") return false;
+  return true;
+}
+
+function deriveRetryableFailure(items) {
+  const failed = (items ?? []).filter(item => item?.status === "failed" || item?.status === "blocked");
+  if (failed.length === 0) return null;
+  return failed.some(isRetryableFailureItem);
+}
+
 function stagePersistentSource(source, stagedPath) {
   if (source?.sourceType === "data" && source?.data) {
     try {
@@ -1596,6 +1617,35 @@ function buildHTML() {
   details.server-details > summary::-webkit-details-marker {
     display: none;
   }
+  .action-root {
+    margin-top: 10px;
+  }
+  .action-note {
+    font-size: 12px;
+    color: #bdbdbd;
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .action-btn {
+    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #3b3b3b;
+    background: #171717;
+    color: #f2f2f2;
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .action-btn.retryable {
+    border-color: #275c33;
+    background: #102315;
+    color: #95e6aa;
+  }
+  .action-btn.non-retryable {
+    border-color: #7a5925;
+    background: #2a1b07;
+    color: #f7ce86;
+  }
   .hidden {
     display: none !important;
   }
@@ -1619,6 +1669,7 @@ function buildHTML() {
         <div class="v" id="sum-failed">0</div>
       </div>
     </div>
+    <div id="action-root" class="action-root"></div>
   </div>
 
   <div id="result-root" class="hidden"></div>
@@ -1677,6 +1728,25 @@ function buildHTML() {
       playerHtml;
   }
 
+  function renderAction(meta, items) {
+    const root = document.getElementById("action-root");
+    const hasFailures = items.some(item => item.status === "failed" || item.status === "blocked");
+    const retryable = meta.retryableFailure === true;
+    if (!hasFailures) {
+      root.innerHTML = "";
+      return;
+    }
+    if (retryable) {
+      root.innerHTML =
+        '<div class="action-note">Failure appears retryable (network/request/polling). Re-run the shortcut to resume this persisted run.</div>' +
+        '<span class="action-btn retryable">Retry upload</span>';
+      return;
+    }
+    root.innerHTML =
+      '<div class="action-note">This failure is not retryable from current dashboard state because source share paths are no longer live.</div>' +
+      '<span class="action-btn non-retryable">Re-share from Photos</span>';
+  }
+
   function render() {
     const state = window.STATE || { meta: {}, items: [] };
     const meta = state.meta || {};
@@ -1691,7 +1761,8 @@ function buildHTML() {
     const fallbackDiagLine =
       "fallback inline=" + String(meta.inlineBridgeRecoveredCount ?? 0) +
       " · report=" + String(meta.bridgeReportRecoveredCount ?? 0) +
-      " · reject=" + String(meta.bridgeReportRejectReason || "none");
+      " · reject=" + String(meta.bridgeReportRejectReason || "none") +
+      " · path=" + String(meta.recoveryPathUsed || "none");
     const fallbackMatchLine =
       "fp current=" + String(meta.currentInvocationFingerprint || "none") +
       " · bridge=" + String(meta.bridgeInvocationFingerprint || "none") +
@@ -1706,6 +1777,7 @@ function buildHTML() {
     document.getElementById("sum-failed").textContent = String(items.filter(x => x.status === "failed" || x.status === "blocked").length);
 
     renderResult(meta);
+    renderAction(meta, items);
 
     const list = document.getElementById("list");
     list.innerHTML = items.map(item => {
@@ -2014,9 +2086,38 @@ async function main() {
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
   let inlineBridgeIngestUsed = false;
   let reportBridgeFallbackUsed = false;
+  let recoveryPathUsed = rawPathEntries.length > 0 ? "direct_path" : "none";
+  let inlinePrimaryAttempted = false;
+  let inlinePrimaryRecoveredCount = 0;
+  let inlinePrimaryRejectReason = null;
+
+  if (rawPathEntries.length > 0) {
+    inlinePrimaryAttempted = true;
+    const primaryInlineEntries = ingestInlineBridgeStyleFromArgs();
+    inlinePrimaryRecoveredCount = primaryInlineEntries.length;
+    if (primaryInlineEntries.length > 0 && primaryInlineEntries.length === rawPathEntries.length) {
+      rawPathEntries = primaryInlineEntries;
+      inlineBridgeIngestUsed = true;
+      recoveryPathUsed = "inline_bridge";
+      inputHints.push(
+        `Primary durable ingest succeeded in current invocation (${primaryInlineEntries.length} staged).`
+      );
+    } else if (primaryInlineEntries.length > 0 && primaryInlineEntries.length !== rawPathEntries.length) {
+      inlinePrimaryRejectReason = "inline_primary_count_mismatch";
+      inputHints.push(
+        `Primary inline ingest skipped due to count mismatch (raw=${rawPathEntries.length}, inline=${primaryInlineEntries.length}).`
+      );
+    } else {
+      inlinePrimaryRejectReason = "inline_primary_no_live_paths";
+    }
+  }
+
   const currentInvocationFingerprint = computeInvocationFingerprint(rawPathEntries);
   const fallbackRecoveryDebug = {
     deadOutgoingTempOnly: false,
+    inlinePrimaryAttempted,
+    inlinePrimaryRecoveredCount,
+    inlinePrimaryRejectReason,
     inlineBridgeAttempted: false,
     inlineBridgeRecoveredCount: 0,
     bridgeReportAttempted: false,
@@ -2026,6 +2127,7 @@ async function main() {
     bridgeFingerprint: null,
     currentCount: rawPathEntries.length,
     bridgeCount: 0,
+    recoveryPathUsed,
   };
 
   let deadOutgoingTempOnly =
@@ -2060,10 +2162,12 @@ async function main() {
         rawPathEntries = bridgeFallback.entries;
         deadOutgoingTempOnly = false;
         reportBridgeFallbackUsed = true;
+        fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
         inputHints.push(
           `Incoming share paths were dead OutgoingTemp entries; recovered from bridge report (${bridgeFallback.entries.length} live staged files).`
         );
       } else {
+        fallbackRecoveryDebug.recoveryPathUsed = inlineBridgeIngestUsed ? "inline_bridge" : "none";
         inputHints.push(
           `Dead OutgoingTemp recovery failed: inline=${inlineBridgeEntries.length}, bridge=${bridgeFallback.entries.length}, reason=${fallbackRecoveryDebug.bridgeReportRejectReason || "none"}.`
         );
@@ -2071,6 +2175,11 @@ async function main() {
     }
   }
   const rawPaths = rawPathEntries.map(x => x.rawPath);
+  if (!reportBridgeFallbackUsed && !inlineBridgeIngestUsed && rawPathEntries.length > 0) {
+    fallbackRecoveryDebug.recoveryPathUsed = "direct_path";
+  } else if (inlineBridgeIngestUsed) {
+    fallbackRecoveryDebug.recoveryPathUsed = "inline_bridge";
+  }
   const inputFamilySummary = summarizeRawPathEntries(rawPathEntries);
   if (deadOutgoingTempOnly) {
     inputHints.push(
@@ -2096,6 +2205,9 @@ async function main() {
       };
     }
     await drainRunPersistent(null, state);
+    state.meta.retryableFailure = deriveRetryableFailure(state.items);
+    state.meta.recoveryPathUsed = state.meta.recoveryPathUsed || "none";
+    saveRun(state);
     const wv = new WebView();
     await presentDashboardWebView(wv, state);
     const completedCount = state.items.filter(x => x.status === "done" || x.status === "accepted").length;
@@ -2123,6 +2235,8 @@ async function main() {
       bridgeInvocationFingerprint: state.meta.bridgeInvocationFingerprint || null,
       fallbackCurrentCount: Number(state.meta.fallbackCurrentCount || 0),
       fallbackBridgeCount: Number(state.meta.fallbackBridgeCount || 0),
+      retryableFailure: state.meta.retryableFailure == null ? null : !!state.meta.retryableFailure,
+      recoveryPathUsed: state.meta.recoveryPathUsed || "none",
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -2165,6 +2279,8 @@ async function main() {
   state.meta.bridgeInvocationFingerprint = fallbackRecoveryDebug.bridgeFingerprint;
   state.meta.fallbackCurrentCount = fallbackRecoveryDebug.currentCount;
   state.meta.fallbackBridgeCount = fallbackRecoveryDebug.bridgeCount;
+  state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
+  state.meta.retryableFailure = deriveRetryableFailure(state.items);
   saveRun(state);
 
   if (deadOutgoingTempOnly) {
@@ -2194,6 +2310,8 @@ async function main() {
       item.stagedBytes = null;
       item.stagedBytesHuman = humanBytes(item.stagedBytes);
     }
+    state.meta.retryableFailure = false;
+    state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
     saveRun(state);
     const wv = new WebView();
     await presentDashboardWebView(wv, state);
@@ -2221,6 +2339,8 @@ async function main() {
       bridgeInvocationFingerprint: fallbackRecoveryDebug.bridgeFingerprint,
       fallbackCurrentCount: fallbackRecoveryDebug.currentCount,
       fallbackBridgeCount: fallbackRecoveryDebug.bridgeCount,
+      retryableFailure: false,
+      recoveryPathUsed: fallbackRecoveryDebug.recoveryPathUsed || "none",
       totalCount: state.items.length,
       completedCount: 0,
       failedCount: state.items.length,
@@ -2238,6 +2358,9 @@ async function main() {
   }
 
   await drainRunPersistent(null, state);
+  state.meta.retryableFailure = deriveRetryableFailure(state.items);
+  state.meta.recoveryPathUsed = state.meta.recoveryPathUsed || fallbackRecoveryDebug.recoveryPathUsed || "none";
+  saveRun(state);
   const wv = new WebView();
   await presentDashboardWebView(wv, state);
   const completedCountNew = state.items.filter(x => x.status === "done" || x.status === "accepted").length;
@@ -2265,6 +2388,8 @@ async function main() {
     bridgeInvocationFingerprint: state.meta.bridgeInvocationFingerprint || null,
     fallbackCurrentCount: Number(state.meta.fallbackCurrentCount || 0),
     fallbackBridgeCount: Number(state.meta.fallbackBridgeCount || 0),
+    retryableFailure: state.meta.retryableFailure == null ? null : !!state.meta.retryableFailure,
+    recoveryPathUsed: state.meta.recoveryPathUsed || "none",
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,
