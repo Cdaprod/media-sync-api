@@ -234,32 +234,73 @@ function ingestInlineBridgeStyleFromArgs() {
   const out = [];
   const seen = new Set();
   let index = 0;
+  const diagnostics = {
+    rawEntriesSeen: 0,
+    localPathCount: 0,
+    copiedCount: 0,
+    readWriteCount: 0,
+    dataFromFileCount: 0,
+    failedCount: 0,
+    firstSuccessLane: null,
+    laneStats: {},
+  };
   for (const lane of lanes) {
+    diagnostics.laneStats[lane.key] = {
+      rawEntriesSeen: 0,
+      localPathCount: 0,
+      copiedCount: 0,
+      readWriteCount: 0,
+      dataFromFileCount: 0,
+      failedCount: 0,
+      recoveredCount: 0,
+    };
     for (let i = 0; i < lane.values.length; i++) {
       const raw = lane.values[i];
+      diagnostics.rawEntriesSeen += 1;
+      diagnostics.laneStats[lane.key].rawEntriesSeen += 1;
       const srcPath = toLocalPath(raw);
       if (!srcPath || seen.has(srcPath)) continue;
+      diagnostics.localPathCount += 1;
+      diagnostics.laneStats[lane.key].localPathCount += 1;
       seen.add(srcPath);
       if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) continue;
       const ext = extname(srcPath) || ".mov";
       const dstPath = _fmRun.joinPath(runDir, `clip_${String(index).padStart(4, "0")}${ext}`);
+      let stageMethod = null;
       try {
         _fmRun.copy(srcPath, dstPath);
+        stageMethod = "copy";
       } catch (copyErr) {
         try {
           const data = _fmRun.read(srcPath);
           if (!data) throw new Error("read returned null data");
           _fmRun.write(dstPath, data);
+          stageMethod = "read_write";
         } catch (readErr) {
           try {
             const data = Data.fromFile(srcPath);
             if (!data) throw new Error("Data.fromFile returned null data");
             _fmRun.write(dstPath, data);
+            stageMethod = "data_from_file";
           } catch (_) {
+            diagnostics.failedCount += 1;
+            diagnostics.laneStats[lane.key].failedCount += 1;
             continue;
           }
         }
       }
+      if (stageMethod === "copy") {
+        diagnostics.copiedCount += 1;
+        diagnostics.laneStats[lane.key].copiedCount += 1;
+      } else if (stageMethod === "read_write") {
+        diagnostics.readWriteCount += 1;
+        diagnostics.laneStats[lane.key].readWriteCount += 1;
+      } else if (stageMethod === "data_from_file") {
+        diagnostics.dataFromFileCount += 1;
+        diagnostics.laneStats[lane.key].dataFromFileCount += 1;
+      }
+      diagnostics.laneStats[lane.key].recoveredCount += 1;
+      if (!diagnostics.firstSuccessLane) diagnostics.firstSuccessLane = lane.key;
       out.push({
         sourceChannel: "inline_bridge",
         sourceIndex: index,
@@ -272,7 +313,8 @@ function ingestInlineBridgeStyleFromArgs() {
       index += 1;
     }
   }
-  return out;
+  diagnostics.recoveredCount = out.length;
+  return { entries: out, diagnostics };
 }
 
 function clearLastRunPointer() {
@@ -2201,36 +2243,29 @@ async function main() {
   const submitMode = (asArray(args.fileURLs).length + asArray(args.shortcutInput).length + asArray(args.shortcutParameter).length + asArray(args.urls).length) > 0;
   const incomingDebug = inspectIncomingArgs();
   const incomingItems = collectIncomingItems();
+  const inlinePrimaryResult = submitMode
+    ? ingestInlineBridgeStyleFromArgs()
+    : { entries: [], diagnostics: null };
   let rawPathEntries = collectRawSharePaths();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
-  let inlineBridgeIngestUsed = false;
+  let inlineBridgeIngestUsed = inlinePrimaryResult.entries.length > 0;
   let reportBridgeFallbackUsed = false;
-  let recoveryPathUsed = rawPathEntries.length > 0 ? "direct_path" : "none";
-  let submissionSource = rawPathEntries.length > 0 ? "direct_path" : "none";
-  let inlinePrimaryAttempted = false;
-  let inlinePrimaryRecoveredCount = 0;
-  let inlinePrimaryRejectReason = null;
-
-  if (rawPathEntries.length > 0) {
-    inlinePrimaryAttempted = true;
-    const primaryInlineEntries = ingestInlineBridgeStyleFromArgs();
-    inlinePrimaryRecoveredCount = primaryInlineEntries.length;
-    if (primaryInlineEntries.length > 0 && primaryInlineEntries.length === rawPathEntries.length) {
-      rawPathEntries = primaryInlineEntries;
-      inlineBridgeIngestUsed = true;
-      recoveryPathUsed = "inline_bridge";
-      submissionSource = "inline_bridge";
-      inputHints.push(
-        `Primary durable ingest succeeded in current invocation (${primaryInlineEntries.length} staged).`
-      );
-    } else if (primaryInlineEntries.length > 0 && primaryInlineEntries.length !== rawPathEntries.length) {
-      inlinePrimaryRejectReason = "inline_primary_count_mismatch";
-      inputHints.push(
-        `Primary inline ingest skipped due to count mismatch (raw=${rawPathEntries.length}, inline=${primaryInlineEntries.length}).`
-      );
-    } else {
-      inlinePrimaryRejectReason = "inline_primary_no_live_paths";
-    }
+  let recoveryPathUsed = inlineBridgeIngestUsed
+    ? "inline_bridge"
+    : (rawPathEntries.length > 0 ? "direct_path" : "none");
+  let submissionSource = inlineBridgeIngestUsed
+    ? "inline_bridge"
+    : (rawPathEntries.length > 0 ? "direct_path" : "none");
+  const inlinePrimaryAttempted = submitMode;
+  const inlinePrimaryRecoveredCount = inlinePrimaryResult.entries.length;
+  const inlinePrimaryRejectReason = inlinePrimaryRecoveredCount > 0
+    ? null
+    : (submitMode ? "inline_primary_no_live_paths" : null);
+  if (inlineBridgeIngestUsed) {
+    rawPathEntries = inlinePrimaryResult.entries;
+    inputHints.push(
+      `Submitted from current selection (source=inline_bridge, submittedItemCount=${inlinePrimaryRecoveredCount}).`
+    );
   }
 
   const currentInvocationFingerprint = computeInvocationFingerprint(rawPathEntries);
@@ -2239,8 +2274,9 @@ async function main() {
     inlinePrimaryAttempted,
     inlinePrimaryRecoveredCount,
     inlinePrimaryRejectReason,
-    inlineBridgeAttempted: false,
-    inlineBridgeRecoveredCount: 0,
+    inlineBridgeAttempted: inlinePrimaryAttempted,
+    inlineBridgeRecoveredCount: inlinePrimaryRecoveredCount,
+    inlineBridgeDiagnostics: inlinePrimaryResult.diagnostics,
     bridgeReportAttempted: false,
     bridgeReportRecoveredCount: 0,
     bridgeReportRejectReason: null,
@@ -2257,16 +2293,15 @@ async function main() {
   fallbackRecoveryDebug.deadOutgoingTempOnly = deadOutgoingTempOnly;
 
   if (deadOutgoingTempOnly) {
-    fallbackRecoveryDebug.inlineBridgeAttempted = true;
-    const inlineBridgeEntries = ingestInlineBridgeStyleFromArgs();
-    fallbackRecoveryDebug.inlineBridgeRecoveredCount = inlineBridgeEntries.length;
-    if (inlineBridgeEntries.length > 0) {
-      rawPathEntries = inlineBridgeEntries;
+    fallbackRecoveryDebug.inlineBridgeAttempted = inlinePrimaryAttempted;
+    fallbackRecoveryDebug.inlineBridgeRecoveredCount = inlinePrimaryRecoveredCount;
+    if (inlinePrimaryRecoveredCount > 0) {
+      rawPathEntries = inlinePrimaryResult.entries;
       deadOutgoingTempOnly = false;
       inlineBridgeIngestUsed = true;
       submissionSource = "inline_bridge";
       inputHints.push(
-        `Incoming share paths were dead OutgoingTemp entries; recovered by inline bridge-style durable ingest in this invocation (${inlineBridgeEntries.length} staged).`
+        `Incoming share paths were dead OutgoingTemp entries; recovered by inline bridge-style durable ingest in this invocation (${inlinePrimaryRecoveredCount} staged).`
       );
     } else {
       if (submitMode) {
@@ -2424,7 +2459,7 @@ async function main() {
   state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
   state.meta.submissionSource = submissionSource;
-  state.meta.submittedItemCount = 0;
+  state.meta.submittedItemCount = submissionSource === "inline_bridge" ? rawPathEntries.length : 0;
   saveRun(state);
   let liveWv = null;
   if (submitMode) {
@@ -2527,9 +2562,10 @@ async function main() {
   state.meta.recoveryPathUsed = state.meta.recoveryPathUsed || fallbackRecoveryDebug.recoveryPathUsed || "none";
   state.meta.invocationMode = submitMode ? "submit" : "inspect";
   state.meta.submissionSource = state.meta.submissionSource || submissionSource || "none";
-  state.meta.submittedItemCount = state.items.filter(item => (
+  const acceptedOrUploadedCount = state.items.filter(item => (
     item.status === "accepted" || item.status === "done" || item.status === "uploading"
   )).length;
+  state.meta.submittedItemCount = Math.max(Number(state.meta.submittedItemCount || 0), acceptedOrUploadedCount);
   saveRun(state);
   if (!submitMode) {
     const wv = new WebView();

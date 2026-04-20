@@ -1,3 +1,12 @@
+## 2026-04-20 — Fresh submit inline-bridge authority + lane diagnostics (active)
+- [x] Promoted same-invocation inline bridge ingest to first-class submit source-of-truth: fresh submit now runs inline ingest before relying on direct-path staging.
+- [x] Updated inline ingest to preserve/share raw lane coverage (`fileURLs`, `shortcutParameter`, `shortcutInput`, `urls`) while attempting durable writes via ordered fallback (`copy` → `read/write` → `Data.fromFile`).
+- [x] Added detailed inline ingest diagnostics (`rawEntriesSeen`, `localPathCount`, method success counts, per-lane counts, `firstSuccessLane`) and persisted them under `fallbackRecoveryDebug.inlineBridgeDiagnostics`.
+- [x] Submit metadata/hints now explicitly surface current-selection submission provenance when inline ingest succeeds (`Submitted from current selection`, `source=inline_bridge`, `submittedItemCount=N`).
+- [x] Kept stale bridge-report auto-submit disabled for fresh submit mode; dead current-invocation selection still fails safely with `share_input_current_invocation_unrecoverable` when inline ingest yields zero files.
+- [x] Re-synced alias dashboards from canonical inline-bridge authority patch.
+- [ ] Next verification step on iPhone: re-share 2 clips from Photos and confirm run debug shows non-zero `inlineBridgeDiagnostics.*` recovery counts, `submissionSource=inline_bridge`, and `submittedItemCount=2`.
+
 ## 2026-04-20 — Safe current-selection submit source (bridge auto-submit disabled) (active)
 - [x] Disabled automatic bridge-report recovery for fresh share-sheet submit mode to prevent stale prior-selection artifacts from being submitted.
 - [x] Fresh submit mode now allows automatic submission only from `direct_path` or `inline_bridge` current-invocation durable ingest lanes.
