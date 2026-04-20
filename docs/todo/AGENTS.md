@@ -1,3 +1,9 @@
+## 2026-04-20 — Compose upload inspect bridge script for shortcut contract parity (active)
+- [x] Added `scriptable/ComposeUploadInspectBridge.js` to mirror old working `ComposeUpload` staging behavior with minimal diagnostics (raw path family + exists-at-collect + immediate staging outcome).
+- [x] Bridge script now writes JSON evidence to `documents/share-debug/compose-upload-inspect-latest.json` (plus timestamped copy) for side-by-side comparison against dashboard runs.
+- [x] Added lightweight on-device summary alert (family counts, all-dead-OutgoingTemp detection, staged/failure counts, report path) and Shortcuts-safe JSON output.
+- [ ] Next verification step on iPhone: run `ComposeUploadInspectBridge` from the same shortcut/share entrypoint that fails dashboard and compare its report with the known-good inspect flow to isolate invocation contract drift.
+
 ## 2026-04-20 — Fresh-run import reset to old ComposeUpload behavior (active)
 - [x] Refactored fresh-run import path to mirror old working `ComposeUpload.js`: collect raw share paths directly from Shortcuts args and stage immediately into Scriptable-owned run storage before presenting the dashboard.
 - [x] Added immediate raw-path staging helper (`copy` -> `read/write` -> `Data.fromFile`) so fresh runs no longer depend on path-family substitution before durable import.
