@@ -92,8 +92,11 @@ function countByFamily(entries) {
 function buildReportPath(fm) {
   const dir = fm.joinPath(fm.documentsDirectory(), "share-debug");
   if (!fm.fileExists(dir)) fm.createDirectory(dir, true);
+  const stagedRoot = fm.joinPath(dir, "bridge-staged");
+  if (!fm.fileExists(stagedRoot)) fm.createDirectory(stagedRoot, true);
   return {
     dir,
+    stagedRoot,
     latest: fm.joinPath(dir, "compose-upload-inspect-latest.json"),
     stamped: fm.joinPath(dir, `compose-upload-inspect-${Date.now()}.json`),
   };
@@ -206,7 +209,7 @@ async function main() {
   const reportPaths = buildReportPath(fm);
   const rawEntries = collectRawSharePaths();
 
-  const stageDir = fm.joinPath(fm.temporaryDirectory(), `compose_bridge_${Date.now()}`);
+  const stageDir = fm.joinPath(reportPaths.stagedRoot, `compose_bridge_${Date.now()}`);
   if (!fm.fileExists(stageDir)) fm.createDirectory(stageDir, true);
 
   const stageResult = await stageImmediately(fm, rawEntries, stageDir);

@@ -38,6 +38,8 @@ const ENABLE_FATAL_ALERT = true;
 const _fmRun = FileManager.local();
 const RUNS_DIR = _fmRun.joinPath(_fmRun.documentsDirectory(), "compose-runs");
 const LAST_RUN_PATH = _fmRun.joinPath(RUNS_DIR, "last_run.json");
+const SHARE_DEBUG_DIR = _fmRun.joinPath(_fmRun.documentsDirectory(), "share-debug");
+const BRIDGE_LATEST_REPORT_PATH = _fmRun.joinPath(SHARE_DEBUG_DIR, "compose-upload-inspect-latest.json");
 if (!_fmRun.fileExists(RUNS_DIR)) _fmRun.createDirectory(RUNS_DIR, true);
 
 function nowIso() {
@@ -112,6 +114,29 @@ function loadLatestRecoverableRun() {
   const runs = ids.map(id => loadRunPersistent(id)).filter(Boolean);
   runs.sort((a, b) => String(b.meta?.updatedAt || 0).localeCompare(String(a.meta?.updatedAt || 0)));
   return runs.length > 0 ? runs[0] : null;
+}
+
+function loadBridgeFallbackEntries() {
+  if (!_fmRun.fileExists(BRIDGE_LATEST_REPORT_PATH)) return [];
+  const report = safeJsonParse(_fmRun.readString(BRIDGE_LATEST_REPORT_PATH), null);
+  const staged = Array.isArray(report?.staged) ? report.staged : [];
+  const out = [];
+  for (let i = 0; i < staged.length; i++) {
+    const row = staged[i];
+    const path = row?.stagedPath ? String(row.stagedPath) : null;
+    if (!path) continue;
+    if (!_fmRun.fileExists(path) || _fmRun.isDirectory(path)) continue;
+    out.push({
+      sourceChannel: "bridge_report",
+      sourceIndex: i,
+      sourceValue: path,
+      rawPath: path,
+      family: classifyPathFamily(path),
+      existsAtCollect: true,
+      fromBridgeReport: true,
+    });
+  }
+  return out;
 }
 
 function clearLastRunPointer() {
@@ -1724,13 +1749,23 @@ async function sendOneClip({ filePath, fileIndex1, totalCount, runId, url }) {
 async function main() {
   const incomingDebug = inspectIncomingArgs();
   const incomingItems = collectIncomingItems();
-  const rawPathEntries = collectRawSharePaths();
+  let rawPathEntries = collectRawSharePaths();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
-  const rawPaths = rawPathEntries.map(x => x.rawPath);
-  const inputFamilySummary = summarizeRawPathEntries(rawPathEntries);
-  const deadOutgoingTempOnly =
+  let deadOutgoingTempOnly =
     rawPathEntries.length > 0 &&
     rawPathEntries.every(entry => entry.family?.isOutgoingTemp && !entry.existsAtCollect);
+  if (deadOutgoingTempOnly) {
+    const bridgeFallbackEntries = loadBridgeFallbackEntries();
+    if (bridgeFallbackEntries.length > 0) {
+      rawPathEntries = bridgeFallbackEntries;
+      deadOutgoingTempOnly = false;
+      inputHints.push(
+        "Incoming share paths were dead OutgoingTemp entries; using live staged files from compose-upload-inspect bridge report."
+      );
+    }
+  }
+  const rawPaths = rawPathEntries.map(x => x.rawPath);
+  const inputFamilySummary = summarizeRawPathEntries(rawPathEntries);
   if (deadOutgoingTempOnly) {
     inputHints.push(
       "Share input only provided dead Photos compatibility-export paths. Re-run using Files-only shortcut wiring so Scriptable receives live fileURLs or RunScriptIntent temp paths."
@@ -1769,6 +1804,7 @@ async function main() {
       incomingDebug,
       inputHints,
       inputFamilySummary,
+      bridgeFallbackUsed: !!state.meta.bridgeFallbackUsed,
       totalCount: state.items.length,
       completedCount,
       failedCount,
@@ -1797,6 +1833,7 @@ async function main() {
   state.meta.incomingDebug = incomingDebug;
   state.meta.inputHints = inputHints;
   state.meta.inputFamilySummary = inputFamilySummary;
+  state.meta.bridgeFallbackUsed = rawPathEntries.some(entry => !!entry.fromBridgeReport);
   saveRun(state);
 
   if (deadOutgoingTempOnly) {
@@ -1839,6 +1876,7 @@ async function main() {
       incomingDebug,
       inputHints,
       inputFamilySummary,
+      bridgeFallbackUsed: false,
       totalCount: state.items.length,
       completedCount: 0,
       failedCount: state.items.length,
@@ -1870,6 +1908,7 @@ async function main() {
     incomingDebug,
     inputHints,
     inputFamilySummary,
+    bridgeFallbackUsed: !!state.meta.bridgeFallbackUsed,
     totalCount: state.items.length,
     completedCount: completedCountNew,
     failedCount: failedCountNew,

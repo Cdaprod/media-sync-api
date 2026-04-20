@@ -1,3 +1,9 @@
+## 2026-04-20 — Dashboard bridge-ingest fallback for dead OutgoingTemp runs (active)
+- [x] Added dashboard-side fallback loader for `share-debug/compose-upload-inspect-latest.json` so compose can ingest live staged files from the bridge report when incoming share paths are dead OutgoingTemp-only.
+- [x] Fresh-run startup now attempts bridge fallback before hard-failing `share_input_only_dead_outgoingtemp_paths`; when used, metadata marks `bridgeFallbackUsed=true` and hint text explains the fallback source.
+- [x] Updated bridge script staging target from temporary directory to persistent `documents/share-debug/bridge-staged/...` so fallback files remain available across script handoff.
+- [ ] Next verification step on iPhone: run `ComposeUploadInspectBridge`, then run `ComposeJobDashboard-2` from the same failing share entry and confirm the dashboard imports from bridge-staged paths (`bridgeFallbackUsed=true`) and progresses past staging.
+
 ## 2026-04-20 — Compose upload inspect bridge script for shortcut contract parity (active)
 - [x] Added `scriptable/ComposeUploadInspectBridge.js` to mirror old working `ComposeUpload` staging behavior with minimal diagnostics (raw path family + exists-at-collect + immediate staging outcome).
 - [x] Bridge script now writes JSON evidence to `documents/share-debug/compose-upload-inspect-latest.json` (plus timestamped copy) for side-by-side comparison against dashboard runs.
