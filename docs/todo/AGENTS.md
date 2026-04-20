@@ -1,3 +1,12 @@
+## 2026-04-20 — Submit-mode bridge-inline authority refactor (active)
+- [x] Refactored fresh submit ingestion authority so dashboard submit mode now uses bridge-inline durable ingest as source-of-truth (`submissionSource=bridge_inline`) and no longer submits from raw direct-path Photos payloads.
+- [x] Added submit metadata field `importSourceUsed` (`bridge_inline` | `none`) and threaded it into run metadata/output for compact provenance checks.
+- [x] Added explicit submit failure contract for bridge-inline ingest failure (`share_input_bridge_ingest_failed`) with durable-import guidance while retaining safe non-retryable behavior.
+- [x] Added compact `Invocation diagnostics` details panel near `Run debug details` showing input kind, submission/import source, submitted count, and per-lane presence/family/existence summary.
+- [x] Kept manual inspect/reopen flow behavior unchanged (persisted run resume + polling + final media render paths).
+- [x] Re-synced alias dashboards from canonical submit-authority patch.
+- [ ] Next verification step on iPhone: run Photos share directly into `ComposeJobDashboard 2` and verify successful submits show `importSourceUsed=bridge_inline`; failed submits must report `share_input_bridge_ingest_failed` with `importSourceUsed=none`.
+
 ## 2026-04-20 — Current invocation contract diagnostics tightening (active)
 - [x] Added compact lane-level startup diagnostics for current invocation inputs (`fileURLs`, `shortcutParameter`, `shortcutInput`, `urls`) including lane presence, raw counts, sample values, path-family flags, and collect-time existence indicators.
 - [x] Updated inline bridge diagnostics to count dead local-path candidates as failed ingest attempts (`failedCount`) so dead OutgoingTemp scenarios no longer look like no-op attempts.

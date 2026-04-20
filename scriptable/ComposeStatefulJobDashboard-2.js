@@ -1828,6 +1828,10 @@ function buildHTML() {
       </div>
     </div>
     <div id="action-root" class="action-root"></div>
+    <details id="invocation-debug-details" class="run-debug-details">
+      <summary>Invocation diagnostics</summary>
+      <div id="invocation-debug-body" class="run-debug-body">No invocation diagnostics.</div>
+    </details>
     <details id="run-debug-details" class="run-debug-details">
       <summary>Run debug details</summary>
       <div id="run-debug-body" class="run-debug-body">No debug data.</div>
@@ -1926,11 +1930,40 @@ function buildHTML() {
       fallbackCurrentCount: meta.fallbackCurrentCount ?? 0,
       fallbackBridgeCount: meta.fallbackBridgeCount ?? 0,
       retryableFailure: meta.retryableFailure == null ? null : !!meta.retryableFailure,
+      importSourceUsed: meta.importSourceUsed || "none",
       submissionSource: meta.submissionSource || "none",
       submittedItemCount: meta.submittedItemCount ?? 0,
       fallbackRecoveryDebug: meta.fallbackRecoveryDebug || null,
     };
     body.textContent = JSON.stringify(debug, null, 2);
+    details.open = false;
+  }
+
+  function renderInvocationDebug(meta) {
+    const details = document.getElementById("invocation-debug-details");
+    const body = document.getElementById("invocation-debug-body");
+    const laneDebug = meta?.fallbackRecoveryDebug?.currentInvocationLaneDiagnostics || {};
+    const compactLane = {};
+    const laneKeys = ["fileURLs", "shortcutParameter", "shortcutInput", "urls"];
+    for (const key of laneKeys) {
+      const lane = laneDebug[key] || {};
+      compactLane[key] = {
+        present: !!lane.lanePresent,
+        rawCount: Number(lane.rawEntryCount || 0),
+        sawPluginKit: !!lane.sawPluginKitPath,
+        sawRunScriptIntent: !!lane.sawRunScriptIntentPath,
+        sawOutgoingTemp: !!lane.sawOutgoingTempPath,
+        existsAtCollectAny: !!lane.anyPathExistedAtCollect,
+      };
+    }
+    const compact = {
+      currentInvocationInputKind: meta.currentInvocationInputKind || "unknown",
+      importSourceUsed: meta.importSourceUsed || "none",
+      submissionSource: meta.submissionSource || "none",
+      submittedItemCount: Number(meta.submittedItemCount || 0),
+      lanes: compactLane,
+    };
+    body.textContent = JSON.stringify(compact, null, 2);
     details.open = false;
   }
 
@@ -1958,6 +1991,7 @@ function buildHTML() {
 
     renderResult(meta);
     renderAction(meta, items);
+    renderInvocationDebug(meta);
     renderRunDebug(meta);
 
     const list = document.getElementById("list");
@@ -2272,29 +2306,31 @@ async function main() {
   const submitMode = (asArray(args.fileURLs).length + asArray(args.shortcutInput).length + asArray(args.shortcutParameter).length + asArray(args.urls).length) > 0;
   const incomingDebug = inspectIncomingArgs();
   const incomingItems = collectIncomingItems();
-  const inlinePrimaryResult = submitMode
+  const bridgeInlineResult = submitMode
     ? ingestInlineBridgeStyleFromArgs()
     : { entries: [], diagnostics: null };
   let rawPathEntries = collectRawSharePaths();
   const currentInvocationLaneDiagnostics = collectCurrentInvocationLaneDiagnostics();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
-  let inlineBridgeIngestUsed = inlinePrimaryResult.entries.length > 0;
+  let inlineBridgeIngestUsed = bridgeInlineResult.entries.length > 0;
   let reportBridgeFallbackUsed = false;
+  let bridgeIngestFailed = false;
+  let importSourceUsed = inlineBridgeIngestUsed ? "bridge_inline" : "none";
   let recoveryPathUsed = inlineBridgeIngestUsed
-    ? "inline_bridge"
-    : (rawPathEntries.length > 0 ? "direct_path" : "none");
+    ? "bridge_inline"
+    : (submitMode ? "none" : (rawPathEntries.length > 0 ? "direct_path" : "none"));
   let submissionSource = inlineBridgeIngestUsed
-    ? "inline_bridge"
-    : (rawPathEntries.length > 0 ? "direct_path" : "none");
+    ? "bridge_inline"
+    : "none";
   const inlinePrimaryAttempted = submitMode;
-  const inlinePrimaryRecoveredCount = inlinePrimaryResult.entries.length;
+  const inlinePrimaryRecoveredCount = bridgeInlineResult.entries.length;
   const inlinePrimaryRejectReason = inlinePrimaryRecoveredCount > 0
     ? null
     : (submitMode ? "inline_primary_no_live_paths" : null);
   if (inlineBridgeIngestUsed) {
-    rawPathEntries = inlinePrimaryResult.entries;
+    rawPathEntries = bridgeInlineResult.entries;
     inputHints.push(
-      `Submitted from current selection (source=inline_bridge, submittedItemCount=${inlinePrimaryRecoveredCount}).`
+      "Imported from current selection and submitted."
     );
   }
 
@@ -2306,7 +2342,7 @@ async function main() {
     inlinePrimaryRejectReason,
     inlineBridgeAttempted: inlinePrimaryAttempted,
     inlineBridgeRecoveredCount: inlinePrimaryRecoveredCount,
-    inlineBridgeDiagnostics: inlinePrimaryResult.diagnostics,
+    inlineBridgeDiagnostics: bridgeInlineResult.diagnostics,
     bridgeReportAttempted: false,
     bridgeReportRecoveredCount: 0,
     bridgeReportRejectReason: null,
@@ -2317,6 +2353,7 @@ async function main() {
     recoveryPathUsed,
     currentInvocationLaneDiagnostics,
     currentInvocationInputKind: "unknown",
+    importSourceUsed,
   };
 
   let deadOutgoingTempOnly =
@@ -2326,21 +2363,32 @@ async function main() {
   fallbackRecoveryDebug.currentInvocationInputKind = deadOutgoingTempOnly
     ? "outgoingtemp_only_dead"
     : (rawPathEntries.length > 0 ? "mixed_or_live_paths" : "no_paths");
+  if (submitMode && !inlineBridgeIngestUsed) {
+    bridgeIngestFailed = true;
+    deadOutgoingTempOnly = true;
+    fallbackRecoveryDebug.deadOutgoingTempOnly = true;
+    fallbackRecoveryDebug.recoveryPathUsed = "none";
+    fallbackRecoveryDebug.importSourceUsed = "none";
+    inputHints.push("Current selection could not be durably imported.");
+  }
 
   if (deadOutgoingTempOnly) {
     fallbackRecoveryDebug.inlineBridgeAttempted = inlinePrimaryAttempted;
     fallbackRecoveryDebug.inlineBridgeRecoveredCount = inlinePrimaryRecoveredCount;
     if (inlinePrimaryRecoveredCount > 0) {
-      rawPathEntries = inlinePrimaryResult.entries;
+      rawPathEntries = bridgeInlineResult.entries;
       deadOutgoingTempOnly = false;
       inlineBridgeIngestUsed = true;
-      submissionSource = "inline_bridge";
+      submissionSource = "bridge_inline";
+      importSourceUsed = "bridge_inline";
       inputHints.push(
         `Incoming share paths were dead OutgoingTemp entries; recovered by inline bridge-style durable ingest in this invocation (${inlinePrimaryRecoveredCount} staged).`
       );
     } else {
       if (submitMode) {
         fallbackRecoveryDebug.recoveryPathUsed = "none";
+        fallbackRecoveryDebug.importSourceUsed = "none";
+        bridgeIngestFailed = true;
         inputHints.push(
           "Current share selection could not be durably imported in this invocation."
         );
@@ -2376,9 +2424,13 @@ async function main() {
     }
   }
   const rawPaths = rawPathEntries.map(x => x.rawPath);
-  if (!deadOutgoingTempOnly && !reportBridgeFallbackUsed && !inlineBridgeIngestUsed && rawPathEntries.length > 0) {
+  if (!submitMode && !deadOutgoingTempOnly && !reportBridgeFallbackUsed && !inlineBridgeIngestUsed && rawPathEntries.length > 0) {
     fallbackRecoveryDebug.recoveryPathUsed = "direct_path";
     submissionSource = "direct_path";
+  } else if (inlineBridgeIngestUsed && submitMode) {
+    fallbackRecoveryDebug.recoveryPathUsed = "bridge_inline";
+    fallbackRecoveryDebug.importSourceUsed = "bridge_inline";
+    submissionSource = "bridge_inline";
   } else if (inlineBridgeIngestUsed) {
     fallbackRecoveryDebug.recoveryPathUsed = "inline_bridge";
     submissionSource = "inline_bridge";
@@ -2414,6 +2466,7 @@ async function main() {
     state.meta.invocationMode = "inspect";
     state.meta.submissionSource = state.meta.submissionSource || "none";
     state.meta.submittedItemCount = Number(state.meta.submittedItemCount || 0);
+    state.meta.importSourceUsed = state.meta.importSourceUsed || "none";
     saveRun(state);
     const wv = new WebView();
     await presentDashboardWebView(wv, state);
@@ -2446,6 +2499,7 @@ async function main() {
       currentInvocationInputKind: state.meta.currentInvocationInputKind || "unknown",
       retryableFailure: state.meta.retryableFailure == null ? null : !!state.meta.retryableFailure,
       recoveryPathUsed: state.meta.recoveryPathUsed || "none",
+      importSourceUsed: state.meta.importSourceUsed || "none",
       submissionSucceeded: !!state.meta.submissionSucceeded,
       submissionPendingInspect: !!state.meta.submissionPendingInspect,
       lastKnownJobUrl: state.meta.lastKnownJobUrl || null,
@@ -2497,9 +2551,10 @@ async function main() {
   state.meta.fallbackBridgeCount = fallbackRecoveryDebug.bridgeCount;
   state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
   state.meta.currentInvocationInputKind = fallbackRecoveryDebug.currentInvocationInputKind || "unknown";
+  state.meta.importSourceUsed = fallbackRecoveryDebug.importSourceUsed || importSourceUsed || "none";
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
   state.meta.submissionSource = submissionSource;
-  state.meta.submittedItemCount = submissionSource === "inline_bridge" ? rawPathEntries.length : 0;
+  state.meta.submittedItemCount = submissionSource === "bridge_inline" ? rawPathEntries.length : 0;
   if (state.meta.submittedItemCount === 0) {
     state.meta.submissionSource = "none";
   }
@@ -2516,8 +2571,12 @@ async function main() {
       const item = state.items[i];
       const rawEntry = rawPathEntries[i];
       item.status = "failed";
-      item.note = "Current share selection could not be durably imported in this invocation.";
-      item.error = "share_input_current_invocation_unrecoverable";
+      item.note = submitMode
+        ? "Current selection could not be durably imported."
+        : "Current share selection could not be durably imported in this invocation.";
+      item.error = submitMode
+        ? "share_input_bridge_ingest_failed"
+        : "share_input_current_invocation_unrecoverable";
       item.stagingDebug = {
         sourceType: "path",
         hasPath: true,
@@ -2549,7 +2608,7 @@ async function main() {
     return {
       ok: false,
       reason: "Current share selection could not be durably imported in this invocation.",
-      error: "share_input_current_invocation_unrecoverable",
+      error: submitMode ? "share_input_bridge_ingest_failed" : "share_input_current_invocation_unrecoverable",
       runId: state.meta.runId,
       invocationMode: submitMode ? "submit" : "inspect",
       requestUrl: state.meta.requestUrl,
@@ -2572,6 +2631,7 @@ async function main() {
       fallbackCurrentCount: fallbackRecoveryDebug.currentCount,
       fallbackBridgeCount: fallbackRecoveryDebug.bridgeCount,
       currentInvocationInputKind: fallbackRecoveryDebug.currentInvocationInputKind || "unknown",
+      importSourceUsed: fallbackRecoveryDebug.importSourceUsed || "none",
       retryableFailure: false,
       recoveryPathUsed: fallbackRecoveryDebug.recoveryPathUsed || "none",
       submissionSucceeded: false,
@@ -2646,6 +2706,7 @@ async function main() {
     fallbackBridgeCount: Number(state.meta.fallbackBridgeCount || 0),
     retryableFailure: state.meta.retryableFailure == null ? null : !!state.meta.retryableFailure,
     recoveryPathUsed: state.meta.recoveryPathUsed || "none",
+    importSourceUsed: state.meta.importSourceUsed || "none",
     submissionSucceeded: !!state.meta.submissionSucceeded,
     submissionPendingInspect: !!state.meta.submissionPendingInspect,
     lastKnownJobUrl: state.meta.lastKnownJobUrl || null,
