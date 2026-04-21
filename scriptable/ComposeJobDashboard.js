@@ -312,7 +312,7 @@ function ingestInlineBridgeStyleFromArgs() {
       diagnostics.laneStats[lane.key].recoveredCount += 1;
       if (!diagnostics.firstSuccessLane) diagnostics.firstSuccessLane = lane.key;
       out.push({
-        sourceChannel: "inline_bridge",
+        sourceChannel: "bridge_inline",
         sourceIndex: index,
         sourceValue: String(raw),
         rawPath: dstPath,
@@ -2654,7 +2654,7 @@ async function main() {
         submissionSource = "bridge_report";
         inputHints.push("Recovered using bridge-staged files.");
       } else {
-        fallbackRecoveryDebug.recoveryPathUsed = inlineBridgeIngestUsed ? "inline_bridge" : "none";
+        fallbackRecoveryDebug.recoveryPathUsed = inlineBridgeIngestUsed ? "bridge_inline" : "none";
         inputHints.push(
           "Dead OutgoingTemp recovery failed: no usable inline or bridge-staged files."
         );
@@ -2671,8 +2671,9 @@ async function main() {
     fallbackRecoveryDebug.importSourceUsed = "bridge_inline";
     submissionSource = "bridge_inline";
   } else if (inlineBridgeIngestUsed) {
-    fallbackRecoveryDebug.recoveryPathUsed = "inline_bridge";
-    submissionSource = "inline_bridge";
+    fallbackRecoveryDebug.recoveryPathUsed = "bridge_inline";
+    fallbackRecoveryDebug.importSourceUsed = "bridge_inline";
+    submissionSource = "bridge_inline";
   }
   const inputFamilySummary = summarizeRawPathEntries(rawPathEntries);
   if (deadOutgoingTempOnly) {

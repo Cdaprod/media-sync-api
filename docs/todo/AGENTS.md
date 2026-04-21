@@ -1,3 +1,9 @@
+## 2026-04-21 — Bridge-inline token canonicalization + static guardrails (active)
+- [x] Normalized dashboard provenance tokens so submit/recovery channels use `bridge_inline` consistently (removed remaining `inline_bridge` drift in submission/recovery fields).
+- [x] Re-synced alias dashboards from canonical `ComposeStatefulJobDashboard-2.js` after token cleanup.
+- [x] Added static pytest guardrails to lock canonical bridge-inline source/provenance tokens across all three dashboard script entrypoints.
+- [ ] Next verification step on iPhone: run submit + inspect paths and confirm invocation diagnostics never emit `inline_bridge` in submission/recovery/import fields.
+
 ## 2026-04-21 — Bridge-inline authority restoration after probe confirmation (active)
 - [x] Promoted submit-mode bridge-inline staged entries to authoritative source when recovered (`submissionSource/importSourceUsed/recoveryPathUsed = bridge_inline`) and set `currentInvocationInputKind = bridge_inline_recovered_current_invocation`.
 - [x] Gated dead-OutgoingTemp classification/hints so they only apply when bridge-inline recovered zero staged entries.
