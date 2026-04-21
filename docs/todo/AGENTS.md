@@ -1,3 +1,11 @@
+## 2026-04-21 — Submit-path gate removal + probe-parity staging authority (active)
+- [x] Removed temporary submit debug gate that blocked bridge-report fallback (`DEBUG_REQUIRE_LIVE_CURRENT_SELECTION` path + related reject reason/hint).
+- [x] Added shared staging helper `tryStageReadablePathNow(srcPath, dstPath)` and switched bridge-inline ingest paths to use probe-parity read cascade (`read/write` -> `Data.fromFile`) without early `fileExists` hard bail.
+- [x] Kept successful bridge-inline staged entries authoritative for submit metadata/provenance and ensured submit-mode bridge-report fallback remains enabled when inline recovery is zero.
+- [x] Added compact runtime proof line in header (`Submit source: ...`) and renamed temporary alert flag to `ENABLE_SUBMIT_IMPORT_RESULT_ALERT`.
+- [x] Re-synced alias dashboards from canonical script and extended static tests to guard gate-removal + runtime proof markers.
+- [ ] Next verification step on iPhone: re-run the same share invocation and confirm dashboard submit path now lands on `submissionSource=bridge_inline` or `bridge_report` (never `none` when files stage).
+
 ## 2026-04-21 — Bridge-inline token canonicalization + static guardrails (active)
 - [x] Normalized dashboard provenance tokens so submit/recovery channels use `bridge_inline` consistently (removed remaining `inline_bridge` drift in submission/recovery fields).
 - [x] Re-synced alias dashboards from canonical `ComposeStatefulJobDashboard-2.js` after token cleanup.

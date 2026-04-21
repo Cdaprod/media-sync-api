@@ -22,3 +22,18 @@ def test_bridge_inline_source_channel_uses_canonical_name() -> None:
         content = path.read_text()
         assert 'sourceChannel: "inline_bridge"' not in content
         assert 'sourceChannel: "bridge_inline"' in content
+
+
+def test_bridge_report_fallback_debug_gate_is_removed() -> None:
+    forbidden = [
+        "DEBUG_REQUIRE_LIVE_CURRENT_SELECTION",
+        "bridge_fallback_disabled_require_live_current_selection",
+        "requireLiveCurrentSelection",
+        "Bridge report fallback is disabled while live current-selection contract debugging is active.",
+    ]
+    for path in SCRIPT_PATHS:
+        content = path.read_text()
+        for needle in forbidden:
+            assert needle not in content
+        assert "ENABLE_SUBMIT_IMPORT_RESULT_ALERT" in content
+        assert "Submit source:" in content

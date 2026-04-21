@@ -29,11 +29,7 @@ const MAX_TEXT = 220;
 // Keep ENABLE_STARTUP_ALERT=true while diagnosing launch issues.
 const ENABLE_STARTUP_ALERT = false;
 const ENABLE_FATAL_ALERT = true;
-const ENABLE_BRIDGE_INLINE_RESULT_ALERT = false;
-// Temporary contract-isolation switch:
-// when true, submit mode requires a live current-selection durable import
-// and refuses bridge_report submit fallback.
-const DEBUG_REQUIRE_LIVE_CURRENT_SELECTION = true;
+const ENABLE_SUBMIT_IMPORT_RESULT_ALERT = false;
 
 // -----------------------------
 // Persistent run management
@@ -269,43 +265,18 @@ function ingestInlineBridgeStyleFromArgs() {
       diagnostics.localPathCount += 1;
       diagnostics.laneStats[lane.key].localPathCount += 1;
       seen.add(srcPath);
-      if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
+      const ext = extname(srcPath) || ".mov";
+      const dstPath = _fmRun.joinPath(runDir, `clip_${String(index).padStart(4, "0")}${ext}`);
+      const stagedNow = tryStageReadablePathNow(srcPath, dstPath);
+      if (!stagedNow.ok) {
         diagnostics.failedCount += 1;
         diagnostics.laneStats[lane.key].failedCount += 1;
         continue;
       }
-      const ext = extname(srcPath) || ".mov";
-      const dstPath = _fmRun.joinPath(runDir, `clip_${String(index).padStart(4, "0")}${ext}`);
-      let stageMethod = null;
-      try {
-        _fmRun.copy(srcPath, dstPath);
-        stageMethod = "copy";
-      } catch (copyErr) {
-        try {
-          const data = _fmRun.read(srcPath);
-          if (!data) throw new Error("read returned null data");
-          _fmRun.write(dstPath, data);
-          stageMethod = "read_write";
-        } catch (readErr) {
-          try {
-            const data = Data.fromFile(srcPath);
-            if (!data) throw new Error("Data.fromFile returned null data");
-            _fmRun.write(dstPath, data);
-            stageMethod = "data_from_file";
-          } catch (_) {
-            diagnostics.failedCount += 1;
-            diagnostics.laneStats[lane.key].failedCount += 1;
-            continue;
-          }
-        }
-      }
-      if (stageMethod === "copy") {
-        diagnostics.copiedCount += 1;
-        diagnostics.laneStats[lane.key].copiedCount += 1;
-      } else if (stageMethod === "read_write") {
+      if (stagedNow.method === "read_write") {
         diagnostics.readWriteCount += 1;
         diagnostics.laneStats[lane.key].readWriteCount += 1;
-      } else if (stageMethod === "data_from_file") {
+      } else if (stagedNow.method === "data_from_file") {
         diagnostics.dataFromFileCount += 1;
         diagnostics.laneStats[lane.key].dataFromFileCount += 1;
       }
@@ -1010,6 +981,28 @@ function extname(path) {
   return m ? m[1].toLowerCase() : "";
 }
 
+function tryStageReadablePathNow(srcPath, dstPath) {
+  try {
+    const data = _fmRun.read(srcPath);
+    if (!data) throw new Error("read returned null data");
+    _fmRun.write(dstPath, data);
+    return { ok: true, method: "read_write", error: null };
+  } catch (readErr) {
+    try {
+      const data = Data.fromFile(srcPath);
+      if (!data) throw new Error("Data.fromFile returned null data");
+      _fmRun.write(dstPath, data);
+      return { ok: true, method: "data_from_file", error: null };
+    } catch (dataErr) {
+      return {
+        ok: false,
+        method: null,
+        error: `read_write=${String(readErr)} data_from_file=${String(dataErr)}`,
+      };
+    }
+  }
+}
+
 function guessKind(path) {
   const ext = extname(path);
   if ([".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"].includes(ext)) return "video";
@@ -1313,8 +1306,8 @@ async function runBridgeInlineImportFromArgs() {
     entry.pathFamily = classifyPathFamily(srcPath);
     const ext = extname(srcPath) || ".mov";
     const dstPath = _fmRun.joinPath(runDir, `clip_${String(i).padStart(4, "0")}${ext}`);
-    try {
-      _fmRun.copy(srcPath, dstPath);
+    const stagedNow = tryStageReadablePathNow(srcPath, dstPath);
+    if (stagedNow.ok) {
       staged.push({
         sourceChannel: "bridge_inline",
         sourceIndex: i,
@@ -1323,52 +1316,17 @@ async function runBridgeInlineImportFromArgs() {
         family: classifyPathFamily(dstPath),
         existsAtCollect: true,
         fromInlineBridge: true,
-        stageMethod: "copy",
+        stageMethod: stagedNow.method,
       });
       continue;
-    } catch (copyErr) {
-      try {
-        const data = _fmRun.read(srcPath);
-        if (!data) throw new Error("read returned null data");
-        _fmRun.write(dstPath, data);
-        staged.push({
-          sourceChannel: "bridge_inline",
-          sourceIndex: i,
-          sourceValue: entry.sourceValue,
-          rawPath: dstPath,
-          family: classifyPathFamily(dstPath),
-          existsAtCollect: true,
-          fromInlineBridge: true,
-          stageMethod: "read_write",
-        });
-        continue;
-      } catch (readErr) {
-        try {
-          const data = Data.fromFile(srcPath);
-          if (!data) throw new Error("Data.fromFile returned null data");
-          _fmRun.write(dstPath, data);
-          staged.push({
-            sourceChannel: "bridge_inline",
-            sourceIndex: i,
-            sourceValue: entry.sourceValue,
-            rawPath: dstPath,
-            family: classifyPathFamily(dstPath),
-            existsAtCollect: true,
-            fromInlineBridge: true,
-            stageMethod: "data_from_file",
-          });
-          continue;
-        } catch (dataErr) {
-          failures.push({
-            index1: i + 1,
-            sourcePath: srcPath,
-            sourceChannel: entry.sourceChannel,
-            pathFamily: entry.pathFamily,
-            error: `copy=${String(copyErr)} read_write=${String(readErr)} data_from_file=${String(dataErr)}`,
-          });
-        }
-      }
     }
+    failures.push({
+      index1: i + 1,
+      sourcePath: srcPath,
+      sourceChannel: entry.sourceChannel,
+      pathFamily: entry.pathFamily,
+      error: stagedNow.error || "bridge_inline_stage_failed",
+    });
   }
   return {
     rawEntries,
@@ -2142,10 +2100,11 @@ function buildHTML() {
       (meta.outputName || "--") + " · " +
       (meta.runId || "--");
     const warningLine = hints.length ? "⚠ " + hints.join(" | ") : "";
+    const submitSourceLine = "Submit source: " + (meta.submissionSource || "none");
     const modeLine = meta.invocationMode === "submit"
       ? "Submitted. Reopen dashboard to inspect progress."
       : "";
-    const metaLines = [headerText, warningLine, modeLine].filter(Boolean);
+    const metaLines = [headerText, warningLine, submitSourceLine, modeLine].filter(Boolean);
     document.getElementById("meta").textContent = metaLines.join("\\n");
 
     document.getElementById("sum-total").textContent = String(items.length);
@@ -2472,15 +2431,15 @@ async function main() {
   const bridgeInlineResult = submitMode
     ? await runBridgeInlineImportFromArgs()
     : { rawEntries: [], stagedEntries: [], failures: [], invocationFingerprint: null, startupDiagnostics: collectBridgeStartupDiagnostics() };
-  if (submitMode && ENABLE_BRIDGE_INLINE_RESULT_ALERT) {
-    const previewSubmissionSource = bridgeInlineResult.stagedEntries.length > 0 ? "bridge_inline" : "none";
+  if (submitMode && ENABLE_SUBMIT_IMPORT_RESULT_ALERT) {
+    const previewImportSource = bridgeInlineResult.stagedEntries.length > 0 ? "bridge_inline" : "none";
     const alert = new Alert();
-    alert.title = "Bridge inline result";
+    alert.title = "Submit import result";
     alert.message =
       `staged=${bridgeInlineResult.stagedEntries.length}\n` +
       `failures=${bridgeInlineResult.failures.length}\n` +
       `first=${bridgeInlineResult.stagedEntries[0]?.rawPath || "(none)"}\n` +
-      `submissionSource=${previewSubmissionSource}`;
+      `importSourceUsed=${previewImportSource}`;
     alert.addAction("OK");
     await alert.present();
   }
@@ -2551,7 +2510,6 @@ async function main() {
     importSourceUsed,
     bridgeStartupDiagnostics: bridgeInlineResult.startupDiagnostics || collectBridgeStartupDiagnostics(),
     bridgeReportWriteSummary,
-    requireLiveCurrentSelection: DEBUG_REQUIRE_LIVE_CURRENT_SELECTION,
   };
   if (submitMode && inlinePrimaryRecoveredCount > 0) {
     fallbackRecoveryDebug.recoveryPathUsed = "bridge_inline";
@@ -2592,47 +2550,34 @@ async function main() {
       );
     } else {
       if (submitMode) {
-        if (DEBUG_REQUIRE_LIVE_CURRENT_SELECTION) {
-          fallbackRecoveryDebug.bridgeReportAttempted = false;
-          fallbackRecoveryDebug.bridgeReportRecoveredCount = 0;
-          fallbackRecoveryDebug.bridgeReportRejectReason = "bridge_fallback_disabled_require_live_current_selection";
-          fallbackRecoveryDebug.bridgeFingerprint = null;
-          fallbackRecoveryDebug.bridgeCount = 0;
+        fallbackRecoveryDebug.bridgeReportAttempted = true;
+        const bridgeFallback = loadBridgeFallbackEntries({
+          expectedCount: rawPathEntries.length,
+          expectedFingerprint: currentInvocationFingerprint,
+          allowStaleWhenDeadOutgoingOnly: true,
+        });
+        fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
+        fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
+        fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
+        fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
+        if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
+          rawPathEntries = bridgeFallback.entries;
+          deadOutgoingTempOnly = false;
+          reportBridgeFallbackUsed = true;
+          fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
+          fallbackRecoveryDebug.importSourceUsed = "bridge_report";
+          submissionSource = "bridge_report";
+          inputHints.push("Recovered using bridge-staged files (submit mode fallback).");
+        } else {
           fallbackRecoveryDebug.recoveryPathUsed = "none";
           fallbackRecoveryDebug.importSourceUsed = "none";
           bridgeIngestFailed = true;
-          inputHints.push("Current share selection could not be durably imported in this invocation.");
-          inputHints.push("Bridge report fallback is disabled while live current-selection contract debugging is active.");
-        } else {
-          fallbackRecoveryDebug.bridgeReportAttempted = true;
-          const bridgeFallback = loadBridgeFallbackEntries({
-            expectedCount: rawPathEntries.length,
-            expectedFingerprint: currentInvocationFingerprint,
-            allowStaleWhenDeadOutgoingOnly: true,
-          });
-          fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
-          fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
-          fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
-          fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
-          if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
-            rawPathEntries = bridgeFallback.entries;
-            deadOutgoingTempOnly = false;
-            reportBridgeFallbackUsed = true;
-            fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
-            fallbackRecoveryDebug.importSourceUsed = "bridge_report";
-            submissionSource = "bridge_report";
-            inputHints.push("Recovered using bridge-staged files (submit mode fallback).");
-          } else {
-            fallbackRecoveryDebug.recoveryPathUsed = "none";
-            fallbackRecoveryDebug.importSourceUsed = "none";
-            bridgeIngestFailed = true;
-            inputHints.push(
-              "Current share selection could not be durably imported in this invocation."
-            );
-            inputHints.push(
-              "This invocation did not receive live PluginKit or RunScriptIntent temp files."
-            );
-          }
+          inputHints.push(
+            "Current share selection could not be durably imported in this invocation."
+          );
+          inputHints.push(
+            "This invocation did not receive live PluginKit or RunScriptIntent temp files."
+          );
         }
       } else {
       fallbackRecoveryDebug.bridgeReportAttempted = true;
@@ -2651,6 +2596,7 @@ async function main() {
         deadOutgoingTempOnly = false;
         reportBridgeFallbackUsed = true;
         fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
+        fallbackRecoveryDebug.importSourceUsed = "bridge_report";
         submissionSource = "bridge_report";
         inputHints.push("Recovered using bridge-staged files.");
       } else {
