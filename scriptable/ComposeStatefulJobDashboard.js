@@ -29,6 +29,10 @@ const MAX_TEXT = 220;
 // Keep ENABLE_STARTUP_ALERT=true while diagnosing launch issues.
 const ENABLE_STARTUP_ALERT = false;
 const ENABLE_FATAL_ALERT = true;
+// Temporary contract-isolation switch:
+// when true, submit mode requires a live current-selection durable import
+// and refuses bridge_report submit fallback.
+const DEBUG_REQUIRE_LIVE_CURRENT_SELECTION = true;
 
 // -----------------------------
 // Persistent run management
@@ -2530,6 +2534,7 @@ async function main() {
     importSourceUsed,
     bridgeStartupDiagnostics: bridgeInlineResult.startupDiagnostics || collectBridgeStartupDiagnostics(),
     bridgeReportWriteSummary,
+    requireLiveCurrentSelection: DEBUG_REQUIRE_LIVE_CURRENT_SELECTION,
   };
 
   let deadOutgoingTempOnly =
@@ -2560,34 +2565,47 @@ async function main() {
       );
     } else {
       if (submitMode) {
-        fallbackRecoveryDebug.bridgeReportAttempted = true;
-        const bridgeFallback = loadBridgeFallbackEntries({
-          expectedCount: rawPathEntries.length,
-          expectedFingerprint: currentInvocationFingerprint,
-          allowStaleWhenDeadOutgoingOnly: true,
-        });
-        fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
-        fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
-        fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
-        fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
-        if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
-          rawPathEntries = bridgeFallback.entries;
-          deadOutgoingTempOnly = false;
-          reportBridgeFallbackUsed = true;
-          fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
-          fallbackRecoveryDebug.importSourceUsed = "bridge_report";
-          submissionSource = "bridge_report";
-          inputHints.push("Recovered using bridge-staged files (submit mode fallback).");
-        } else {
+        if (DEBUG_REQUIRE_LIVE_CURRENT_SELECTION) {
+          fallbackRecoveryDebug.bridgeReportAttempted = false;
+          fallbackRecoveryDebug.bridgeReportRecoveredCount = 0;
+          fallbackRecoveryDebug.bridgeReportRejectReason = "bridge_fallback_disabled_require_live_current_selection";
+          fallbackRecoveryDebug.bridgeFingerprint = null;
+          fallbackRecoveryDebug.bridgeCount = 0;
           fallbackRecoveryDebug.recoveryPathUsed = "none";
           fallbackRecoveryDebug.importSourceUsed = "none";
           bridgeIngestFailed = true;
-          inputHints.push(
-            "Current share selection could not be durably imported in this invocation."
-          );
-          inputHints.push(
-            "This invocation did not receive live PluginKit or RunScriptIntent temp files."
-          );
+          inputHints.push("Current share selection could not be durably imported in this invocation.");
+          inputHints.push("Bridge report fallback is disabled while live current-selection contract debugging is active.");
+        } else {
+          fallbackRecoveryDebug.bridgeReportAttempted = true;
+          const bridgeFallback = loadBridgeFallbackEntries({
+            expectedCount: rawPathEntries.length,
+            expectedFingerprint: currentInvocationFingerprint,
+            allowStaleWhenDeadOutgoingOnly: true,
+          });
+          fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
+          fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
+          fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
+          fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
+          if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
+            rawPathEntries = bridgeFallback.entries;
+            deadOutgoingTempOnly = false;
+            reportBridgeFallbackUsed = true;
+            fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
+            fallbackRecoveryDebug.importSourceUsed = "bridge_report";
+            submissionSource = "bridge_report";
+            inputHints.push("Recovered using bridge-staged files (submit mode fallback).");
+          } else {
+            fallbackRecoveryDebug.recoveryPathUsed = "none";
+            fallbackRecoveryDebug.importSourceUsed = "none";
+            bridgeIngestFailed = true;
+            inputHints.push(
+              "Current share selection could not be durably imported in this invocation."
+            );
+            inputHints.push(
+              "This invocation did not receive live PluginKit or RunScriptIntent temp files."
+            );
+          }
         }
       } else {
       fallbackRecoveryDebug.bridgeReportAttempted = true;

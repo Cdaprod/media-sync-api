@@ -1,3 +1,10 @@
+## 2026-04-21 — Current phase: isolate share-sheet import contract (active)
+- [x] Added dedicated `scriptable/ShareContractProbe.js` to inspect lanes/raw samples/normalized paths/existence and attempt read cascade (`read`, `Data.fromFile`) with optional probe staging writes.
+- [x] Added temporary dashboard gate `DEBUG_REQUIRE_LIVE_CURRENT_SELECTION = true` so submit mode refuses `bridge_report` fallback while contract debugging is active.
+- [x] Kept existing invocation diagnostics and submit failure semantics; when no live current-selection files stage, `submissionSource` and `recoveryPathUsed` remain `none`.
+- [x] Re-synced alias dashboards from canonical contract-isolation patch.
+- [ ] Next verification step on iPhone: run `ShareContractProbe` across shortcut materialization variants and identify first variant where recoveredCount > 0 from current selection.
+
 ## 2026-04-20 — Bridge contract parity pass (active)
 - [x] Added bridge-compatible startup diagnostics in both dashboard + bridge scripts (argsKeys, per-lane counts, first raw samples, first normalized samples, existence samples).
 - [x] Added submit-mode bridge-inline import routine in dashboard that mirrors `ComposeUploadInspectBridge` raw iteration + durable stage order (`copy` → `read/write` → `Data.fromFile`) before any dashboard-specific failure path.
