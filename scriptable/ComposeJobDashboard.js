@@ -362,6 +362,7 @@ function isRetryableFailureItem(item) {
   const nonRetryableErrors = [
     "share_input_only_dead_outgoingtemp_paths",
     "share_input_current_invocation_unrecoverable",
+    "share_input_bridge_ingest_failed",
     "source_unreadable_or_transient:file_not_found",
     "source_missing_path_property",
     "source_missing_raw_entry",
@@ -1304,16 +1305,6 @@ async function runBridgeInlineImportFromArgs() {
     const exists = _fmRun.fileExists(srcPath) && !_fmRun.isDirectory(srcPath);
     entry.fileExistsAtCollect = exists;
     entry.pathFamily = classifyPathFamily(srcPath);
-    if (!exists) {
-      failures.push({
-        index1: i + 1,
-        sourcePath: srcPath,
-        sourceChannel: entry.sourceChannel,
-        pathFamily: entry.pathFamily,
-        error: "source_unreadable_or_transient:file_not_found",
-      });
-      continue;
-    }
     const ext = extname(srcPath) || ".mov";
     const dstPath = _fmRun.joinPath(runDir, `clip_${String(i).padStart(4, "0")}${ext}`);
     try {
@@ -1380,6 +1371,28 @@ async function runBridgeInlineImportFromArgs() {
     invocationFingerprint,
     startupDiagnostics,
   };
+}
+
+function writeBridgeReportFromInlineResult(inlineResult, runId) {
+  const report = {
+    invocationId: runId,
+    invocationFingerprint: inlineResult?.invocationFingerprint || null,
+    createdAt: new Date().toISOString(),
+    itemCount: Array.isArray(inlineResult?.stagedEntries) ? inlineResult.stagedEntries.length : 0,
+    rawEntries: (inlineResult?.rawEntries || []).map(e => ({
+      sourceChannel: e.sourceChannel,
+      sourceValue: e.sourceValue,
+      rawPath: e.rawPath,
+    })),
+    staged: (inlineResult?.stagedEntries || []).map(e => ({
+      sourceChannel: e.sourceChannel,
+      sourceIndex: e.sourceIndex,
+      sourceValue: e.sourceValue,
+      stagedPath: e.rawPath,
+      stageMethod: e.stageMethod || null,
+    })),
+  };
+  writeJsonAtomic(BRIDGE_LATEST_REPORT_PATH, report);
 }
 
 function collectCurrentInvocationLaneDiagnostics() {
@@ -1450,15 +1463,8 @@ async function stageRawSharePathsImmediatelyIntoRun(state, rawEntries) {
       sourceChannel: rawEntry.sourceChannel,
     };
 
-    if (!_fmRun.fileExists(srcPath) || _fmRun.isDirectory(srcPath)) {
-      item.status = "failed";
-      item.note = "Staging failed";
-      item.error = "source_unreadable_or_transient:file_not_found";
-      item.stagedBytes = null;
-      item.stageMethod = null;
-      item.stagedBytesHuman = humanBytes(item.stagedBytes);
-      continue;
-    }
+    // Intentionally no early fileExists guard here; some transient share paths
+    // can still be readable via read/Data.fromFile even when fileExists is false.
 
     try {
       _fmRun.copy(srcPath, item.stagedPath);
@@ -2452,6 +2458,10 @@ async function main() {
   const bridgeInlineResult = submitMode
     ? await runBridgeInlineImportFromArgs()
     : { rawEntries: [], stagedEntries: [], failures: [], invocationFingerprint: null, startupDiagnostics: collectBridgeStartupDiagnostics() };
+  if (submitMode) {
+    const reportRunId = `inline-bridge-${Date.now()}`;
+    writeBridgeReportFromInlineResult(bridgeInlineResult, reportRunId);
+  }
   let rawPathEntries = collectRawSharePaths();
   const currentInvocationLaneDiagnostics = collectCurrentInvocationLaneDiagnostics();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
@@ -2519,7 +2529,6 @@ async function main() {
     ? "outgoingtemp_only_dead"
     : (rawPathEntries.length > 0 ? "mixed_or_live_paths" : "no_paths");
   if (submitMode && !inlineBridgeIngestUsed) {
-    bridgeIngestFailed = true;
     deadOutgoingTempOnly = true;
     fallbackRecoveryDebug.deadOutgoingTempOnly = true;
     fallbackRecoveryDebug.recoveryPathUsed = "none";
@@ -2541,15 +2550,35 @@ async function main() {
       );
     } else {
       if (submitMode) {
-        fallbackRecoveryDebug.recoveryPathUsed = "none";
-        fallbackRecoveryDebug.importSourceUsed = "none";
-        bridgeIngestFailed = true;
-        inputHints.push(
-          "Current share selection could not be durably imported in this invocation."
-        );
-        inputHints.push(
-          "This invocation did not receive live PluginKit or RunScriptIntent temp files."
-        );
+        fallbackRecoveryDebug.bridgeReportAttempted = true;
+        const bridgeFallback = loadBridgeFallbackEntries({
+          expectedCount: rawPathEntries.length,
+          expectedFingerprint: currentInvocationFingerprint,
+          allowStaleWhenDeadOutgoingOnly: true,
+        });
+        fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
+        fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
+        fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
+        fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
+        if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
+          rawPathEntries = bridgeFallback.entries;
+          deadOutgoingTempOnly = false;
+          reportBridgeFallbackUsed = true;
+          fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
+          fallbackRecoveryDebug.importSourceUsed = "bridge_report";
+          submissionSource = "bridge_report";
+          inputHints.push("Recovered using bridge-staged files (submit mode fallback).");
+        } else {
+          fallbackRecoveryDebug.recoveryPathUsed = "none";
+          fallbackRecoveryDebug.importSourceUsed = "none";
+          bridgeIngestFailed = true;
+          inputHints.push(
+            "Current share selection could not be durably imported in this invocation."
+          );
+          inputHints.push(
+            "This invocation did not receive live PluginKit or RunScriptIntent temp files."
+          );
+        }
       } else {
       fallbackRecoveryDebug.bridgeReportAttempted = true;
       const bridgeFallback = loadBridgeFallbackEntries({
@@ -2709,7 +2738,10 @@ async function main() {
   state.meta.importSourceUsed = fallbackRecoveryDebug.importSourceUsed || importSourceUsed || "none";
   state.meta.retryableFailure = deriveRetryableFailure(state.items);
   state.meta.submissionSource = submissionSource;
-  state.meta.submittedItemCount = submissionSource === "bridge_inline" ? rawPathEntries.length : 0;
+  state.meta.submittedItemCount =
+    (submissionSource === "bridge_inline" || submissionSource === "bridge_report")
+      ? rawPathEntries.length
+      : 0;
   if (state.meta.submittedItemCount === 0) {
     state.meta.submissionSource = "none";
   }
