@@ -1,3 +1,78 @@
+## 2026-04-21 — Canonical current-selection importer authority unification (active)
+- [x] Added shared Scriptable module `scriptable/CurrentSelectionImporter.js` as canonical current-invocation staging authority (`stageCurrentSelectionFromArgs`).
+- [x] Added `scriptable/ComposeUpload.js` that uses the same shared importer so ComposeUpload and dashboard flows now reference one importer implementation in-repo.
+- [x] Refactored dashboard submit-mode import path to call shared importer and trust staged current-selection entries immediately (`submissionSource/importSourceUsed/recoveryPathUsed = current_selection`).
+- [x] Simplified submit current-invocation classification to `current_selection_staged` / `current_selection_unreadable` and retained dead OutgoingTemp as non-authoritative diagnostics.
+- [x] Kept bridge report fallback in inspect-oriented path; submit mode now fails current selection only when canonical importer stages zero entries.
+- [x] Re-synced alias dashboards and updated static tests to lock shared-importer references + current-selection authority tokens.
+- [ ] Next verification step on iPhone: run same share invocation in ComposeUpload and ComposeJobDashboard, confirm staged counts match and dashboard submit proceeds with `Submit source: current_selection`.
+
+## 2026-04-21 — Submit-path gate removal + probe-parity staging authority (active)
+- [x] Removed temporary submit debug gate that blocked bridge-report fallback (`DEBUG_REQUIRE_LIVE_CURRENT_SELECTION` path + related reject reason/hint).
+- [x] Added shared staging helper `tryStageReadablePathNow(srcPath, dstPath)` and switched bridge-inline ingest paths to use probe-parity read cascade (`read/write` -> `Data.fromFile`) without early `fileExists` hard bail.
+- [x] Kept successful bridge-inline staged entries authoritative for submit metadata/provenance and ensured submit-mode bridge-report fallback remains enabled when inline recovery is zero.
+- [x] Added compact runtime proof line in header (`Submit source: ...`) and renamed temporary alert flag to `ENABLE_SUBMIT_IMPORT_RESULT_ALERT`.
+- [x] Re-synced alias dashboards from canonical script and extended static tests to guard gate-removal + runtime proof markers.
+- [ ] Next verification step on iPhone: re-run the same share invocation and confirm dashboard submit path now lands on `submissionSource=bridge_inline` or `bridge_report` (never `none` when files stage).
+
+## 2026-04-21 — Bridge-inline token canonicalization + static guardrails (active)
+- [x] Normalized dashboard provenance tokens so submit/recovery channels use `bridge_inline` consistently (removed remaining `inline_bridge` drift in submission/recovery fields).
+- [x] Re-synced alias dashboards from canonical `ComposeStatefulJobDashboard-2.js` after token cleanup.
+- [x] Added static pytest guardrails to lock canonical bridge-inline source/provenance tokens across all three dashboard script entrypoints.
+- [ ] Next verification step on iPhone: run submit + inspect paths and confirm invocation diagnostics never emit `inline_bridge` in submission/recovery/import fields.
+
+## 2026-04-21 — Bridge-inline authority restoration after probe confirmation (active)
+- [x] Promoted submit-mode bridge-inline staged entries to authoritative source when recovered (`submissionSource/importSourceUsed/recoveryPathUsed = bridge_inline`) and set `currentInvocationInputKind = bridge_inline_recovered_current_invocation`.
+- [x] Gated dead-OutgoingTemp classification/hints so they only apply when bridge-inline recovered zero staged entries.
+- [x] Added optional submit startup confirmation alert (`ENABLE_BRIDGE_INLINE_RESULT_ALERT`) for one-pass on-device verification of bridge-inline staging counts/source.
+- [x] Kept raw lane diagnostics for operator visibility while preventing raw OutgoingTemp diagnostics from overriding successful bridge-inline authority.
+- [x] Re-synced dashboard aliases from canonical `ComposeStatefulJobDashboard-2.js`.
+- [ ] Next verification step on iPhone: confirm runs with `ShareContractProbe recoveredCount>0` now submit with `submissionSource=bridge_inline` and no `share_input_bridge_ingest_failed`.
+
+## 2026-04-21 — Current phase: isolate share-sheet import contract (active)
+- [x] Added dedicated `scriptable/ShareContractProbe.js` to inspect lanes/raw samples/normalized paths/existence and attempt read cascade (`read`, `Data.fromFile`) with optional probe staging writes.
+- [x] Added temporary dashboard gate `DEBUG_REQUIRE_LIVE_CURRENT_SELECTION = true` so submit mode refuses `bridge_report` fallback while contract debugging is active.
+- [x] Kept existing invocation diagnostics and submit failure semantics; when no live current-selection files stage, `submissionSource` and `recoveryPathUsed` remain `none`.
+- [x] Re-synced alias dashboards from canonical contract-isolation patch.
+- [ ] Next verification step on iPhone: run `ShareContractProbe` across shortcut materialization variants and identify first variant where recoveredCount > 0 from current selection.
+
+## 2026-04-20 — Bridge contract parity pass (active)
+- [x] Added bridge-compatible startup diagnostics in both dashboard + bridge scripts (argsKeys, per-lane counts, first raw samples, first normalized samples, existence samples).
+- [x] Added submit-mode bridge-inline import routine in dashboard that mirrors `ComposeUploadInspectBridge` raw iteration + durable stage order (`copy` → `read/write` → `Data.fromFile`) before any dashboard-specific failure path.
+- [x] Updated submit flow to consume only bridge-inline staged outputs as authoritative upload inputs and to defer dead/unrecoverable marking until after that routine executes.
+- [x] Kept stale bridge-report auto-submit disabled in submit mode.
+- [x] Removed early `fileExists` short-circuit guards in bridge/dashboard staging lanes so OutgoingTemp candidates now always run full `copy` → `read/write` → `Data.fromFile` cascade before failure.
+- [x] Prevented zero-staged submit attempts from overwriting `compose-upload-inspect-latest.json`; empty runs now write only `compose-inline-bridge-attempt-latest.json` while preserving last good staged bridge report for fallback.
+- [x] Re-synced alias dashboards from canonical bridge-parity patch.
+- [ ] Next verification step on iPhone: run the same 2 selected clips through `ComposeUploadInspectBridge` and `ComposeJobDashboard 2` and compare startup diagnostics blocks for lane raw/normalized/existence parity.
+
+## 2026-04-20 — Submit-mode bridge-inline authority refactor (active)
+- [x] Refactored fresh submit ingestion authority so dashboard submit mode now uses bridge-inline durable ingest as source-of-truth (`submissionSource=bridge_inline`) and no longer submits from raw direct-path Photos payloads.
+- [x] Added submit metadata field `importSourceUsed` (`bridge_inline` | `none`) and threaded it into run metadata/output for compact provenance checks.
+- [x] Added explicit submit failure contract for bridge-inline ingest failure (`share_input_bridge_ingest_failed`) with durable-import guidance while retaining safe non-retryable behavior.
+- [x] Added compact `Invocation diagnostics` details panel near `Run debug details` showing input kind, submission/import source, submitted count, and per-lane presence/family/existence summary.
+- [x] Kept manual inspect/reopen flow behavior unchanged (persisted run resume + polling + final media render paths).
+- [x] Re-synced alias dashboards from canonical submit-authority patch.
+- [ ] Next verification step on iPhone: run Photos share directly into `ComposeJobDashboard 2` and verify successful submits show `importSourceUsed=bridge_inline`; failed submits must report `share_input_bridge_ingest_failed` with `importSourceUsed=none`.
+
+## 2026-04-20 — Current invocation contract diagnostics tightening (active)
+- [x] Added compact lane-level startup diagnostics for current invocation inputs (`fileURLs`, `shortcutParameter`, `shortcutInput`, `urls`) including lane presence, raw counts, sample values, path-family flags, and collect-time existence indicators.
+- [x] Updated inline bridge diagnostics to count dead local-path candidates as failed ingest attempts (`failedCount`) so dead OutgoingTemp scenarios no longer look like no-op attempts.
+- [x] Added explicit top-level current invocation classification in run debug/output (`currentInvocationInputKind`) with `outgoingtemp_only_dead` classification when all current paths are dead OutgoingTemp.
+- [x] Added operator hint for dead-contract runs: `This invocation did not receive live PluginKit or RunScriptIntent temp files.`
+- [x] Normalized submit provenance so `submissionSource` is forced to `none` when `submittedItemCount` remains zero.
+- [x] Re-synced alias dashboards from canonical diagnostics patch.
+- [ ] Next verification step on iPhone: compare failing Photos share route vs known-good route and confirm lane diagnostics expose which invocation path yields live PluginKit/RunScriptIntent files.
+
+## 2026-04-20 — Fresh submit inline-bridge authority + lane diagnostics (active)
+- [x] Promoted same-invocation inline bridge ingest to first-class submit source-of-truth: fresh submit now runs inline ingest before relying on direct-path staging.
+- [x] Updated inline ingest to preserve/share raw lane coverage (`fileURLs`, `shortcutParameter`, `shortcutInput`, `urls`) while attempting durable writes via ordered fallback (`copy` → `read/write` → `Data.fromFile`).
+- [x] Added detailed inline ingest diagnostics (`rawEntriesSeen`, `localPathCount`, method success counts, per-lane counts, `firstSuccessLane`) and persisted them under `fallbackRecoveryDebug.inlineBridgeDiagnostics`.
+- [x] Submit metadata/hints now explicitly surface current-selection submission provenance when inline ingest succeeds (`Submitted from current selection`, `source=inline_bridge`, `submittedItemCount=N`).
+- [x] Kept stale bridge-report auto-submit disabled for fresh submit mode; dead current-invocation selection still fails safely with `share_input_current_invocation_unrecoverable` when inline ingest yields zero files.
+- [x] Re-synced alias dashboards from canonical inline-bridge authority patch.
+- [ ] Next verification step on iPhone: re-share 2 clips from Photos and confirm run debug shows non-zero `inlineBridgeDiagnostics.*` recovery counts, `submissionSource=inline_bridge`, and `submittedItemCount=2`.
+
 ## 2026-04-20 — Safe current-selection submit source (bridge auto-submit disabled) (active)
 - [x] Disabled automatic bridge-report recovery for fresh share-sheet submit mode to prevent stale prior-selection artifacts from being submitted.
 - [x] Fresh submit mode now allows automatic submission only from `direct_path` or `inline_bridge` current-invocation durable ingest lanes.
