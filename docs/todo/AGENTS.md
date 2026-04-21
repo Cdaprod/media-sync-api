@@ -4,6 +4,7 @@
 - [x] Updated submit flow to consume only bridge-inline staged outputs as authoritative upload inputs and to defer dead/unrecoverable marking until after that routine executes.
 - [x] Kept stale bridge-report auto-submit disabled in submit mode.
 - [x] Removed early `fileExists` short-circuit guards in bridge/dashboard staging lanes so OutgoingTemp candidates now always run full `copy` → `read/write` → `Data.fromFile` cascade before failure.
+- [x] Prevented zero-staged submit attempts from overwriting `compose-upload-inspect-latest.json`; empty runs now write only `compose-inline-bridge-attempt-latest.json` while preserving last good staged bridge report for fallback.
 - [x] Re-synced alias dashboards from canonical bridge-parity patch.
 - [ ] Next verification step on iPhone: run the same 2 selected clips through `ComposeUploadInspectBridge` and `ComposeJobDashboard 2` and compare startup diagnostics blocks for lane raw/normalized/existence parity.
 

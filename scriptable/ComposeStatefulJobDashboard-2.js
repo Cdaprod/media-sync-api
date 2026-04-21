@@ -40,6 +40,7 @@ const RUNS_DIR = _fmRun.joinPath(_fmRun.documentsDirectory(), "compose-runs");
 const LAST_RUN_PATH = _fmRun.joinPath(RUNS_DIR, "last_run.json");
 const SHARE_DEBUG_DIR = _fmRun.joinPath(_fmRun.documentsDirectory(), "share-debug");
 const BRIDGE_LATEST_REPORT_PATH = _fmRun.joinPath(SHARE_DEBUG_DIR, "compose-upload-inspect-latest.json");
+const BRIDGE_INLINE_ATTEMPT_PATH = _fmRun.joinPath(SHARE_DEBUG_DIR, "compose-inline-bridge-attempt-latest.json");
 const INLINE_BRIDGE_STAGE_ROOT = _fmRun.joinPath(SHARE_DEBUG_DIR, "inline-bridge-staged");
 if (!_fmRun.fileExists(RUNS_DIR)) _fmRun.createDirectory(RUNS_DIR, true);
 if (!_fmRun.fileExists(SHARE_DEBUG_DIR)) _fmRun.createDirectory(SHARE_DEBUG_DIR, true);
@@ -1392,7 +1393,15 @@ function writeBridgeReportFromInlineResult(inlineResult, runId) {
       stageMethod: e.stageMethod || null,
     })),
   };
-  writeJsonAtomic(BRIDGE_LATEST_REPORT_PATH, report);
+  report.hasStagedEntries = report.staged.length > 0;
+  writeJsonAtomic(BRIDGE_INLINE_ATTEMPT_PATH, report);
+  if (report.hasStagedEntries) {
+    writeJsonAtomic(BRIDGE_LATEST_REPORT_PATH, report);
+  }
+  return {
+    hasStagedEntries: report.hasStagedEntries,
+    stagedCount: report.staged.length,
+  };
 }
 
 function collectCurrentInvocationLaneDiagnostics() {
@@ -2458,9 +2467,10 @@ async function main() {
   const bridgeInlineResult = submitMode
     ? await runBridgeInlineImportFromArgs()
     : { rawEntries: [], stagedEntries: [], failures: [], invocationFingerprint: null, startupDiagnostics: collectBridgeStartupDiagnostics() };
+  let bridgeReportWriteSummary = { hasStagedEntries: false, stagedCount: 0 };
   if (submitMode) {
     const reportRunId = `inline-bridge-${Date.now()}`;
-    writeBridgeReportFromInlineResult(bridgeInlineResult, reportRunId);
+    bridgeReportWriteSummary = writeBridgeReportFromInlineResult(bridgeInlineResult, reportRunId);
   }
   let rawPathEntries = collectRawSharePaths();
   const currentInvocationLaneDiagnostics = collectCurrentInvocationLaneDiagnostics();
@@ -2519,6 +2529,7 @@ async function main() {
     currentInvocationInputKind: "unknown",
     importSourceUsed,
     bridgeStartupDiagnostics: bridgeInlineResult.startupDiagnostics || collectBridgeStartupDiagnostics(),
+    bridgeReportWriteSummary,
   };
 
   let deadOutgoingTempOnly =
@@ -2533,7 +2544,6 @@ async function main() {
     fallbackRecoveryDebug.deadOutgoingTempOnly = true;
     fallbackRecoveryDebug.recoveryPathUsed = "none";
     fallbackRecoveryDebug.importSourceUsed = "none";
-    inputHints.push("Current selection could not be durably imported.");
   }
 
   if (deadOutgoingTempOnly) {
