@@ -1,3 +1,12 @@
+## 2026-04-21 — Canonical current-selection importer authority unification (active)
+- [x] Added shared Scriptable module `scriptable/CurrentSelectionImporter.js` as canonical current-invocation staging authority (`stageCurrentSelectionFromArgs`).
+- [x] Added `scriptable/ComposeUpload.js` that uses the same shared importer so ComposeUpload and dashboard flows now reference one importer implementation in-repo.
+- [x] Refactored dashboard submit-mode import path to call shared importer and trust staged current-selection entries immediately (`submissionSource/importSourceUsed/recoveryPathUsed = current_selection`).
+- [x] Simplified submit current-invocation classification to `current_selection_staged` / `current_selection_unreadable` and retained dead OutgoingTemp as non-authoritative diagnostics.
+- [x] Kept bridge report fallback in inspect-oriented path; submit mode now fails current selection only when canonical importer stages zero entries.
+- [x] Re-synced alias dashboards and updated static tests to lock shared-importer references + current-selection authority tokens.
+- [ ] Next verification step on iPhone: run same share invocation in ComposeUpload and ComposeJobDashboard, confirm staged counts match and dashboard submit proceeds with `Submit source: current_selection`.
+
 ## 2026-04-21 — Submit-path gate removal + probe-parity staging authority (active)
 - [x] Removed temporary submit debug gate that blocked bridge-report fallback (`DEBUG_REQUIRE_LIVE_CURRENT_SELECTION` path + related reject reason/hint).
 - [x] Added shared staging helper `tryStageReadablePathNow(srcPath, dstPath)` and switched bridge-inline ingest paths to use probe-parity read cascade (`read/write` -> `Data.fromFile`) without early `fileExists` hard bail.

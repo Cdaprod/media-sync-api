@@ -9,19 +9,20 @@ SCRIPT_PATHS = [
 ]
 
 
-def test_bridge_inline_submission_tokens_are_canonical() -> None:
+def test_submit_mode_uses_current_selection_authority_tokens() -> None:
     for path in SCRIPT_PATHS:
         content = path.read_text()
-        assert 'submissionSource = "inline_bridge"' not in content
-        assert 'recoveryPathUsed = "inline_bridge"' not in content
-        assert 'importSourceUsed = "bridge_inline"' in content
+        assert 'submissionSource = "current_selection"' in content
+        assert 'recoveryPathUsed = "current_selection"' in content
+        assert 'importSourceUsed = "current_selection"' in content
 
 
-def test_bridge_inline_source_channel_uses_canonical_name() -> None:
+def test_dashboard_calls_shared_current_selection_importer() -> None:
     for path in SCRIPT_PATHS:
         content = path.read_text()
-        assert 'sourceChannel: "inline_bridge"' not in content
-        assert 'sourceChannel: "bridge_inline"' in content
+        assert 'loadCurrentSelectionImporter' in content
+        assert 'stageCurrentSelectionFromArgs' in content
+        assert 'CurrentSelectionImporter' in content
 
 
 def test_bridge_report_fallback_debug_gate_is_removed() -> None:
@@ -37,3 +38,5 @@ def test_bridge_report_fallback_debug_gate_is_removed() -> None:
             assert needle not in content
         assert "ENABLE_SUBMIT_IMPORT_RESULT_ALERT" in content
         assert "Submit source:" in content
+        assert '"current_selection_staged"' in content
+        assert '"current_selection_unreadable"' in content

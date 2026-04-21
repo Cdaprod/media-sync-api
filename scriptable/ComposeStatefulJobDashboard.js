@@ -47,6 +47,20 @@ if (!_fmRun.fileExists(RUNS_DIR)) _fmRun.createDirectory(RUNS_DIR, true);
 if (!_fmRun.fileExists(SHARE_DEBUG_DIR)) _fmRun.createDirectory(SHARE_DEBUG_DIR, true);
 if (!_fmRun.fileExists(INLINE_BRIDGE_STAGE_ROOT)) _fmRun.createDirectory(INLINE_BRIDGE_STAGE_ROOT, true);
 
+function loadCurrentSelectionImporter() {
+  try {
+    if (typeof importModule === "function") {
+      return importModule("CurrentSelectionImporter");
+    }
+  } catch (_) {}
+  try {
+    if (typeof require === "function") {
+      return require("./CurrentSelectionImporter");
+    }
+  } catch (_) {}
+  throw new Error("CurrentSelectionImporter module is unavailable");
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -1291,50 +1305,13 @@ function collectBridgeStartupDiagnostics() {
 }
 
 async function runBridgeInlineImportFromArgs() {
-  const rawEntries = collectBridgeCompatibleRawSharePaths();
-  const invocationFingerprint = computeInvocationFingerprint(rawEntries);
-  const startupDiagnostics = collectBridgeStartupDiagnostics();
-  const runDir = _fmRun.joinPath(INLINE_BRIDGE_STAGE_ROOT, `inline-bridge-${Date.now()}`);
-  if (!_fmRun.fileExists(runDir)) _fmRun.createDirectory(runDir, true);
-  const staged = [];
-  const failures = [];
-  for (let i = 0; i < rawEntries.length; i++) {
-    const entry = rawEntries[i];
-    const srcPath = entry.rawPath;
-    const exists = _fmRun.fileExists(srcPath) && !_fmRun.isDirectory(srcPath);
-    entry.fileExistsAtCollect = exists;
-    entry.pathFamily = classifyPathFamily(srcPath);
-    const ext = extname(srcPath) || ".mov";
-    const dstPath = _fmRun.joinPath(runDir, `clip_${String(i).padStart(4, "0")}${ext}`);
-    const stagedNow = tryStageReadablePathNow(srcPath, dstPath);
-    if (stagedNow.ok) {
-      staged.push({
-        sourceChannel: "bridge_inline",
-        sourceIndex: i,
-        sourceValue: entry.sourceValue,
-        rawPath: dstPath,
-        family: classifyPathFamily(dstPath),
-        existsAtCollect: true,
-        fromInlineBridge: true,
-        stageMethod: stagedNow.method,
-      });
-      continue;
-    }
-    failures.push({
-      index1: i + 1,
-      sourcePath: srcPath,
-      sourceChannel: entry.sourceChannel,
-      pathFamily: entry.pathFamily,
-      error: stagedNow.error || "bridge_inline_stage_failed",
-    });
-  }
-  return {
-    rawEntries,
-    stagedEntries: staged,
-    failures,
-    invocationFingerprint,
-    startupDiagnostics,
-  };
+  const importer = loadCurrentSelectionImporter();
+  return importer.stageCurrentSelectionFromArgs({
+    args,
+    fm: _fmRun,
+    stageRoot: INLINE_BRIDGE_STAGE_ROOT,
+    stagePrefix: "current-selection",
+  });
 }
 
 function writeBridgeReportFromInlineResult(inlineResult, runId) {
@@ -2432,7 +2409,7 @@ async function main() {
     ? await runBridgeInlineImportFromArgs()
     : { rawEntries: [], stagedEntries: [], failures: [], invocationFingerprint: null, startupDiagnostics: collectBridgeStartupDiagnostics() };
   if (submitMode && ENABLE_SUBMIT_IMPORT_RESULT_ALERT) {
-    const previewImportSource = bridgeInlineResult.stagedEntries.length > 0 ? "bridge_inline" : "none";
+    const previewImportSource = bridgeInlineResult.stagedEntries.length > 0 ? "current_selection" : "none";
     const alert = new Alert();
     alert.title = "Submit import result";
     alert.message =
@@ -2451,15 +2428,15 @@ async function main() {
   let rawPathEntries = collectRawSharePaths();
   const currentInvocationLaneDiagnostics = collectCurrentInvocationLaneDiagnostics();
   const inputHints = deriveInputContractHints(incomingDebug, incomingItems);
-  let inlineBridgeIngestUsed = bridgeInlineResult.stagedEntries.length > 0;
+  let inlineBridgeIngestUsed = submitMode && bridgeInlineResult.stagedEntries.length > 0;
   let reportBridgeFallbackUsed = false;
   let bridgeIngestFailed = false;
-  let importSourceUsed = inlineBridgeIngestUsed ? "bridge_inline" : "none";
+  let importSourceUsed = inlineBridgeIngestUsed ? "current_selection" : "none";
   let recoveryPathUsed = inlineBridgeIngestUsed
-    ? "bridge_inline"
+    ? "current_selection"
     : (submitMode ? "none" : (rawPathEntries.length > 0 ? "direct_path" : "none"));
   let submissionSource = inlineBridgeIngestUsed
-    ? "bridge_inline"
+    ? "current_selection"
     : "none";
   const inlinePrimaryAttempted = submitMode;
   const inlinePrimaryRecoveredCount = bridgeInlineResult.stagedEntries.length;
@@ -2469,11 +2446,11 @@ async function main() {
   if (inlineBridgeIngestUsed) {
     rawPathEntries = bridgeInlineResult.stagedEntries;
     bridgeIngestFailed = false;
-    recoveryPathUsed = "bridge_inline";
-    importSourceUsed = "bridge_inline";
-    submissionSource = "bridge_inline";
+    recoveryPathUsed = "current_selection";
+    importSourceUsed = "current_selection";
+    submissionSource = "current_selection";
     inputHints.push(
-      "Imported from current selection and submitted."
+      "Imported from current selection and submitting..."
     );
   }
 
@@ -2506,120 +2483,72 @@ async function main() {
     bridgeCount: 0,
     recoveryPathUsed,
     currentInvocationLaneDiagnostics,
-    currentInvocationInputKind: "unknown",
+    currentInvocationInputKind: submitMode ? "current_selection_unreadable" : "unknown",
     importSourceUsed,
     bridgeStartupDiagnostics: bridgeInlineResult.startupDiagnostics || collectBridgeStartupDiagnostics(),
     bridgeReportWriteSummary,
   };
-  if (submitMode && inlinePrimaryRecoveredCount > 0) {
-    fallbackRecoveryDebug.recoveryPathUsed = "bridge_inline";
-    fallbackRecoveryDebug.importSourceUsed = "bridge_inline";
-    fallbackRecoveryDebug.inlinePrimaryRecoveredCount = inlinePrimaryRecoveredCount;
-    fallbackRecoveryDebug.inlineBridgeRecoveredCount = inlinePrimaryRecoveredCount;
-    fallbackRecoveryDebug.currentInvocationInputKind = "bridge_inline_recovered_current_invocation";
-  }
-
   let deadOutgoingTempOnly =
-    inlinePrimaryRecoveredCount === 0 &&
     rawPathEntries.length > 0 &&
     rawPathEntries.every(entry => entry.family?.isOutgoingTemp && !entry.existsAtCollect);
-  fallbackRecoveryDebug.deadOutgoingTempOnly = deadOutgoingTempOnly;
-  fallbackRecoveryDebug.currentInvocationInputKind = inlinePrimaryRecoveredCount > 0
-    ? "bridge_inline_recovered_current_invocation"
-    : (deadOutgoingTempOnly
-      ? "outgoingtemp_only_dead"
-      : (rawPathEntries.length > 0 ? "mixed_or_live_paths" : "no_paths"));
-  if (submitMode && !inlineBridgeIngestUsed) {
-    deadOutgoingTempOnly = true;
-    fallbackRecoveryDebug.deadOutgoingTempOnly = true;
-    fallbackRecoveryDebug.recoveryPathUsed = "none";
-    fallbackRecoveryDebug.importSourceUsed = "none";
+
+  if (submitMode) {
+    if (inlineBridgeIngestUsed) {
+      deadOutgoingTempOnly = false;
+      fallbackRecoveryDebug.recoveryPathUsed = "current_selection";
+      fallbackRecoveryDebug.importSourceUsed = "current_selection";
+      fallbackRecoveryDebug.currentInvocationInputKind = "current_selection_staged";
+    } else {
+      bridgeIngestFailed = true;
+      fallbackRecoveryDebug.recoveryPathUsed = "none";
+      fallbackRecoveryDebug.importSourceUsed = "none";
+      fallbackRecoveryDebug.currentInvocationInputKind = "current_selection_unreadable";
+      inputHints.push("Current share selection could not be durably imported in this invocation.");
+    }
+  } else if (deadOutgoingTempOnly) {
+    fallbackRecoveryDebug.bridgeReportAttempted = true;
+    const bridgeFallback = loadBridgeFallbackEntries({
+      expectedCount: rawPathEntries.length,
+      expectedFingerprint: currentInvocationFingerprint,
+      allowStaleWhenDeadOutgoingOnly: true,
+    });
+    fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
+    fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
+    fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
+    fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
+    if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
+      rawPathEntries = bridgeFallback.entries;
+      deadOutgoingTempOnly = false;
+      reportBridgeFallbackUsed = true;
+      fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
+      fallbackRecoveryDebug.importSourceUsed = "bridge_report";
+      submissionSource = "bridge_report";
+      inputHints.push("Recovered using bridge-staged files.");
+    } else {
+      fallbackRecoveryDebug.recoveryPathUsed = "none";
+      fallbackRecoveryDebug.importSourceUsed = "none";
+      inputHints.push("Dead OutgoingTemp recovery failed: no usable inline or bridge-staged files.");
+    }
   }
 
-  if (deadOutgoingTempOnly) {
-    fallbackRecoveryDebug.inlineBridgeAttempted = inlinePrimaryAttempted;
-    fallbackRecoveryDebug.inlineBridgeRecoveredCount = inlinePrimaryRecoveredCount;
-    if (inlinePrimaryRecoveredCount > 0) {
-      rawPathEntries = bridgeInlineResult.stagedEntries;
-      deadOutgoingTempOnly = false;
-      inlineBridgeIngestUsed = true;
-      submissionSource = "bridge_inline";
-      importSourceUsed = "bridge_inline";
-      inputHints.push(
-        `Incoming share paths were dead OutgoingTemp entries; recovered by inline bridge-style durable ingest in this invocation (${inlinePrimaryRecoveredCount} staged).`
-      );
-    } else {
-      if (submitMode) {
-        fallbackRecoveryDebug.bridgeReportAttempted = true;
-        const bridgeFallback = loadBridgeFallbackEntries({
-          expectedCount: rawPathEntries.length,
-          expectedFingerprint: currentInvocationFingerprint,
-          allowStaleWhenDeadOutgoingOnly: true,
-        });
-        fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
-        fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
-        fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
-        fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
-        if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
-          rawPathEntries = bridgeFallback.entries;
-          deadOutgoingTempOnly = false;
-          reportBridgeFallbackUsed = true;
-          fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
-          fallbackRecoveryDebug.importSourceUsed = "bridge_report";
-          submissionSource = "bridge_report";
-          inputHints.push("Recovered using bridge-staged files (submit mode fallback).");
-        } else {
-          fallbackRecoveryDebug.recoveryPathUsed = "none";
-          fallbackRecoveryDebug.importSourceUsed = "none";
-          bridgeIngestFailed = true;
-          inputHints.push(
-            "Current share selection could not be durably imported in this invocation."
-          );
-          inputHints.push(
-            "This invocation did not receive live PluginKit or RunScriptIntent temp files."
-          );
-        }
-      } else {
-      fallbackRecoveryDebug.bridgeReportAttempted = true;
-      const bridgeFallback = loadBridgeFallbackEntries({
-        expectedCount: rawPathEntries.length,
-        expectedFingerprint: currentInvocationFingerprint,
-        allowStaleWhenDeadOutgoingOnly: true,
-      });
-      fallbackRecoveryDebug.bridgeReportRejectReason = bridgeFallback.ok ? null : bridgeFallback.reason || "bridge_fallback_unknown_reject";
-      fallbackRecoveryDebug.bridgeReportRecoveredCount = bridgeFallback.entries.length;
-      fallbackRecoveryDebug.bridgeFingerprint = bridgeFallback.bridgeFingerprint ?? null;
-      fallbackRecoveryDebug.bridgeCount = Number(bridgeFallback.bridgeCount || 0);
-
-      if (bridgeFallback.ok && bridgeFallback.entries.length > 0) {
-        rawPathEntries = bridgeFallback.entries;
-        deadOutgoingTempOnly = false;
-        reportBridgeFallbackUsed = true;
-        fallbackRecoveryDebug.recoveryPathUsed = "bridge_report";
-        fallbackRecoveryDebug.importSourceUsed = "bridge_report";
-        submissionSource = "bridge_report";
-        inputHints.push("Recovered using bridge-staged files.");
-      } else {
-        fallbackRecoveryDebug.recoveryPathUsed = inlineBridgeIngestUsed ? "bridge_inline" : "none";
-        inputHints.push(
-          "Dead OutgoingTemp recovery failed: no usable inline or bridge-staged files."
-        );
-      }
-      }
-    }
+  fallbackRecoveryDebug.deadOutgoingTempOnly = deadOutgoingTempOnly;
+  if (!submitMode && fallbackRecoveryDebug.currentInvocationInputKind === "unknown") {
+    fallbackRecoveryDebug.currentInvocationInputKind = deadOutgoingTempOnly
+      ? "outgoingtemp_only_dead"
+      : (rawPathEntries.length > 0 ? "mixed_or_live_paths" : "no_paths");
   }
   const rawPaths = rawPathEntries.map(x => x.rawPath);
   if (!submitMode && !deadOutgoingTempOnly && !reportBridgeFallbackUsed && !inlineBridgeIngestUsed && rawPathEntries.length > 0) {
     fallbackRecoveryDebug.recoveryPathUsed = "direct_path";
     submissionSource = "direct_path";
   } else if (inlineBridgeIngestUsed && submitMode) {
-    fallbackRecoveryDebug.recoveryPathUsed = "bridge_inline";
-    fallbackRecoveryDebug.importSourceUsed = "bridge_inline";
-    submissionSource = "bridge_inline";
+    fallbackRecoveryDebug.recoveryPathUsed = "current_selection";
+    fallbackRecoveryDebug.importSourceUsed = "current_selection";
+    submissionSource = "current_selection";
   } else if (inlineBridgeIngestUsed) {
-    fallbackRecoveryDebug.recoveryPathUsed = "bridge_inline";
-    fallbackRecoveryDebug.importSourceUsed = "bridge_inline";
-    submissionSource = "bridge_inline";
+    fallbackRecoveryDebug.recoveryPathUsed = "current_selection";
+    fallbackRecoveryDebug.importSourceUsed = "current_selection";
+    submissionSource = "current_selection";
   }
   const inputFamilySummary = summarizeRawPathEntries(rawPathEntries);
   if (deadOutgoingTempOnly) {
@@ -2741,7 +2670,7 @@ async function main() {
   state.meta.retryableFailure = inlinePrimaryRecoveredCount > 0 ? null : deriveRetryableFailure(state.items);
   state.meta.submissionSource = submissionSource;
   state.meta.submittedItemCount =
-    (submissionSource === "bridge_inline" || submissionSource === "bridge_report")
+    (submissionSource === "current_selection" || submissionSource === "bridge_report")
       ? rawPathEntries.length
       : 0;
   if (state.meta.submittedItemCount === 0) {
