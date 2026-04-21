@@ -29,6 +29,7 @@ const MAX_TEXT = 220;
 // Keep ENABLE_STARTUP_ALERT=true while diagnosing launch issues.
 const ENABLE_STARTUP_ALERT = false;
 const ENABLE_FATAL_ALERT = true;
+const ENABLE_BRIDGE_INLINE_RESULT_ALERT = false;
 // Temporary contract-isolation switch:
 // when true, submit mode requires a live current-selection durable import
 // and refuses bridge_report submit fallback.
@@ -2471,6 +2472,18 @@ async function main() {
   const bridgeInlineResult = submitMode
     ? await runBridgeInlineImportFromArgs()
     : { rawEntries: [], stagedEntries: [], failures: [], invocationFingerprint: null, startupDiagnostics: collectBridgeStartupDiagnostics() };
+  if (submitMode && ENABLE_BRIDGE_INLINE_RESULT_ALERT) {
+    const previewSubmissionSource = bridgeInlineResult.stagedEntries.length > 0 ? "bridge_inline" : "none";
+    const alert = new Alert();
+    alert.title = "Bridge inline result";
+    alert.message =
+      `staged=${bridgeInlineResult.stagedEntries.length}\n` +
+      `failures=${bridgeInlineResult.failures.length}\n` +
+      `first=${bridgeInlineResult.stagedEntries[0]?.rawPath || "(none)"}\n` +
+      `submissionSource=${previewSubmissionSource}`;
+    alert.addAction("OK");
+    await alert.present();
+  }
   let bridgeReportWriteSummary = { hasStagedEntries: false, stagedCount: 0 };
   if (submitMode) {
     const reportRunId = `inline-bridge-${Date.now()}`;
@@ -2496,6 +2509,10 @@ async function main() {
     : (submitMode ? "inline_primary_no_live_paths" : null);
   if (inlineBridgeIngestUsed) {
     rawPathEntries = bridgeInlineResult.stagedEntries;
+    bridgeIngestFailed = false;
+    recoveryPathUsed = "bridge_inline";
+    importSourceUsed = "bridge_inline";
+    submissionSource = "bridge_inline";
     inputHints.push(
       "Imported from current selection and submitted."
     );
@@ -2536,14 +2553,24 @@ async function main() {
     bridgeReportWriteSummary,
     requireLiveCurrentSelection: DEBUG_REQUIRE_LIVE_CURRENT_SELECTION,
   };
+  if (submitMode && inlinePrimaryRecoveredCount > 0) {
+    fallbackRecoveryDebug.recoveryPathUsed = "bridge_inline";
+    fallbackRecoveryDebug.importSourceUsed = "bridge_inline";
+    fallbackRecoveryDebug.inlinePrimaryRecoveredCount = inlinePrimaryRecoveredCount;
+    fallbackRecoveryDebug.inlineBridgeRecoveredCount = inlinePrimaryRecoveredCount;
+    fallbackRecoveryDebug.currentInvocationInputKind = "bridge_inline_recovered_current_invocation";
+  }
 
   let deadOutgoingTempOnly =
+    inlinePrimaryRecoveredCount === 0 &&
     rawPathEntries.length > 0 &&
     rawPathEntries.every(entry => entry.family?.isOutgoingTemp && !entry.existsAtCollect);
   fallbackRecoveryDebug.deadOutgoingTempOnly = deadOutgoingTempOnly;
-  fallbackRecoveryDebug.currentInvocationInputKind = deadOutgoingTempOnly
-    ? "outgoingtemp_only_dead"
-    : (rawPathEntries.length > 0 ? "mixed_or_live_paths" : "no_paths");
+  fallbackRecoveryDebug.currentInvocationInputKind = inlinePrimaryRecoveredCount > 0
+    ? "bridge_inline_recovered_current_invocation"
+    : (deadOutgoingTempOnly
+      ? "outgoingtemp_only_dead"
+      : (rawPathEntries.length > 0 ? "mixed_or_live_paths" : "no_paths"));
   if (submitMode && !inlineBridgeIngestUsed) {
     deadOutgoingTempOnly = true;
     fallbackRecoveryDebug.deadOutgoingTempOnly = true;
@@ -2764,7 +2791,7 @@ async function main() {
   state.meta.recoveryPathUsed = fallbackRecoveryDebug.recoveryPathUsed || "none";
   state.meta.currentInvocationInputKind = fallbackRecoveryDebug.currentInvocationInputKind || "unknown";
   state.meta.importSourceUsed = fallbackRecoveryDebug.importSourceUsed || importSourceUsed || "none";
-  state.meta.retryableFailure = deriveRetryableFailure(state.items);
+  state.meta.retryableFailure = inlinePrimaryRecoveredCount > 0 ? null : deriveRetryableFailure(state.items);
   state.meta.submissionSource = submissionSource;
   state.meta.submittedItemCount =
     (submissionSource === "bridge_inline" || submissionSource === "bridge_report")

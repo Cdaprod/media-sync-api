@@ -1,3 +1,11 @@
+## 2026-04-21 — Bridge-inline authority restoration after probe confirmation (active)
+- [x] Promoted submit-mode bridge-inline staged entries to authoritative source when recovered (`submissionSource/importSourceUsed/recoveryPathUsed = bridge_inline`) and set `currentInvocationInputKind = bridge_inline_recovered_current_invocation`.
+- [x] Gated dead-OutgoingTemp classification/hints so they only apply when bridge-inline recovered zero staged entries.
+- [x] Added optional submit startup confirmation alert (`ENABLE_BRIDGE_INLINE_RESULT_ALERT`) for one-pass on-device verification of bridge-inline staging counts/source.
+- [x] Kept raw lane diagnostics for operator visibility while preventing raw OutgoingTemp diagnostics from overriding successful bridge-inline authority.
+- [x] Re-synced dashboard aliases from canonical `ComposeStatefulJobDashboard-2.js`.
+- [ ] Next verification step on iPhone: confirm runs with `ShareContractProbe recoveredCount>0` now submit with `submissionSource=bridge_inline` and no `share_input_bridge_ingest_failed`.
+
 ## 2026-04-21 — Current phase: isolate share-sheet import contract (active)
 - [x] Added dedicated `scriptable/ShareContractProbe.js` to inspect lanes/raw samples/normalized paths/existence and attempt read cascade (`read`, `Data.fromFile`) with optional probe staging writes.
 - [x] Added temporary dashboard gate `DEBUG_REQUIRE_LIVE_CURRENT_SELECTION = true` so submit mode refuses `bridge_report` fallback while contract debugging is active.
