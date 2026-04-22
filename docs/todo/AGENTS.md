@@ -1,3 +1,12 @@
+## 2026-04-22 — App runtime boundary + node control-plane bootstrap (active)
+- [x] Added `app/runtime` composition package (`types`, `create_runtime`, `dependencies`) so FastAPI lifespan owns a single `AppRuntime` instance with async `start/stop` hooks.
+- [x] Wired `app/main.py` lifespan to initialize runtime once, run/stop runtime-owned auto reindexer, and expose runtime identity in `/health`.
+- [x] Added persisted runtime `NodeRegistry` + `/api/nodes` endpoints (register/list/get/claim/heartbeat) with early health/status/version/source-kind metadata fields.
+- [x] Shifted long-lived route dependencies toward runtime-owned services by migrating source routes and library snapshot route to consume runtime registries/services instead of ad-hoc construction.
+- [x] Added regression tests for node API behavior and runtime-enriched health payload.
+- [ ] Next: extend Explorer API seam (`docker/packages/Explorer/src/api.ts`) with node client methods and add a small read-only node panel in Explorer sidebar.
+- [ ] Next: design first typed `SourceRecord` abstraction for filesystem and capture-node sources while preserving current storage contract compatibility.
+
 ## 2026-04-18 — Thumbnail lifecycle completion pass (active)
 - [x] Confirmed post-throttle regression: fallback-first render + boot queue cap reduced startup storm but left stale placeholders after scroll/remount because queue behavior was effectively one-shot.
 - [x] Upgraded `useThumbnailQueue` from boot-only pass to lifecycle queue runner with requeue scheduling on viewport activity (scroll/resize), DOM mutation, and periodic idle passes.

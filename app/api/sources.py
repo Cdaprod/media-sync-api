@@ -12,10 +12,11 @@ import logging
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.config import get_settings
+from app.runtime import get_runtime
+from app.runtime.types import AppRuntime
 from app.storage.sources import SourceRegistry, validate_source_name
 
 
@@ -53,22 +54,24 @@ class SourceResponse(BaseModel):
         )
 
 
-def _registry() -> SourceRegistry:
-    settings = get_settings()
-    return SourceRegistry(settings.project_root)
+def _runtime_registry(runtime: AppRuntime) -> SourceRegistry:
+    registry = runtime.services.source_registry
+    if registry is None:
+        raise RuntimeError("Source registry is not configured")
+    return registry
 
 
 @router.get("", response_model=List[SourceResponse])
-async def list_sources() -> List[SourceResponse]:
-    registry = _registry()
+async def list_sources(runtime: AppRuntime = Depends(get_runtime)) -> List[SourceResponse]:
+    registry = _runtime_registry(runtime)
     sources = registry.list_all()
     logger.info("listed_sources", extra={"count": len(sources)})
     return [SourceResponse.from_registry(source) for source in sources]
 
 
 @router.post("", response_model=SourceResponse, status_code=201)
-async def register_source(payload: SourceCreateRequest) -> SourceResponse:
-    registry = _registry()
+async def register_source(payload: SourceCreateRequest, runtime: AppRuntime = Depends(get_runtime)) -> SourceResponse:
+    registry = _runtime_registry(runtime)
     try:
         validate_source_name(payload.name)
     except ValueError as exc:
@@ -87,8 +90,12 @@ async def register_source(payload: SourceCreateRequest) -> SourceResponse:
 
 
 @router.post("/{source_name}/toggle", response_model=SourceResponse)
-async def toggle_source(source_name: str, enabled: bool = True) -> SourceResponse:
-    registry = _registry()
+async def toggle_source(
+    source_name: str,
+    enabled: bool = True,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> SourceResponse:
+    registry = _runtime_registry(runtime)
     try:
         validate_source_name(source_name)
     except ValueError as exc:
@@ -105,4 +112,3 @@ async def toggle_source(source_name: str, enabled: bool = True) -> SourceRespons
     updated = registry.upsert(name=current.name, root=current.root, type=current.type, enabled=enabled)
     logger.info("source_toggled", extra={"source": updated.name, "enabled": updated.enabled})
     return SourceResponse.from_registry(updated)
-

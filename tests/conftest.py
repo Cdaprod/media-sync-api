@@ -32,7 +32,8 @@ def client(env_settings: Path) -> TestClient:
     module = importlib.import_module("app.main")
     importlib.reload(module)
     application = module.create_app()
-    return TestClient(application)
+    with TestClient(application) as test_client:
+        yield test_client
 
 
 @pytest.fixture()
@@ -48,4 +49,5 @@ def limited_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClien
     module = importlib.import_module("app.main")
     importlib.reload(module)
     application = module.create_app()
-    return TestClient(application)
+    with TestClient(application) as test_client:
+        yield test_client
