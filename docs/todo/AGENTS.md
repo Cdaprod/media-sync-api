@@ -1,3 +1,12 @@
+## 2026-04-22 — Ingest-claim contract boundary for PR #161 (active)
+- [x] Preserved landed runtime/node control-plane foundation and added first-class ingest-claim domain models (`AssetCandidate`, `IngestClaim`, `AcceptanceReport`).
+- [x] Added persisted authority ingest ledger (`IngestClaimRegistry`) under `_runtime/ingest_claims/<claim_id>.json`.
+- [x] Added authority intake service (`IngestClaimService`) and `/api/ingest/claims` submit/list/get routes.
+- [x] Wired ingest registry/service into `AppRuntime` composition so ingest contracts are runtime-owned rather than ad-hoc route state.
+- [x] Added ingest API tests covering submit success, list/get, invalid payload rejection, runtime wiring, and deferred (non-canonical) authority decisions.
+- [ ] Next: add runner-side local adapter path that emits real ingest claims from observed/staged media.
+- [ ] Next: add authority accept/reject transition endpoints + offline expiry policy for stale claims.
+
 ## 2026-04-22 — Runner-ready runtime follow-on (active)
 - [x] Added typed runtime-facing `SourceRecord` abstraction to distinguish canonical vs runner-local vs ephemeral source intent without breaking existing `SourceRegistry` storage shape.
 - [x] Added lightweight async control-plane client for node self-registration and heartbeat against authority `/api/nodes`.

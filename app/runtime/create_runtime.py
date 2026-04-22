@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 
 from app.config import get_settings
+from app.runtime.ingest_registry import IngestClaimRegistry
 from app.runtime.nodes import NodeRegistry
 from app.runtime.runner_control import RunnerControlPlane
 from app.runtime.source_records import build_primary_source_record
@@ -23,6 +24,7 @@ from app.runtime.types import (
     RuntimeServices,
 )
 from app.runtime.upstream import ControlPlaneClient
+from app.services.ingest_claim_service import IngestClaimService
 from app.services.library_service import LibraryService
 from app.storage.auto_reindex import AutoReindexer
 from app.storage.sources import SourceRegistry
@@ -39,6 +41,7 @@ def build_registries(data_root: Path) -> dict[str, object]:
     return {
         "source_registry": SourceRegistry(data_root),
         "node_registry": NodeRegistry(data_root),
+        "ingest_registry": IngestClaimRegistry(data_root),
     }
 
 
@@ -48,6 +51,7 @@ def build_services(
     data_root: Path,
     source_registry: SourceRegistry,
     node_registry: NodeRegistry,
+    ingest_registry: IngestClaimRegistry,
     role: str,
     node_id: str,
 ) -> tuple[RuntimeServices, list[object]]:
@@ -79,6 +83,8 @@ def build_services(
         node_registry=node_registry,
         source_adapters=None,
         library_service=LibraryService(source_registry=source_registry),
+        ingest_registry=ingest_registry,
+        ingest_claim_service=IngestClaimService(ingest_registry=ingest_registry, runtime_role=role),
         compose_service=None,
         upload_service=None,
         upstream_client=upstream_client,
@@ -107,14 +113,17 @@ def create_runtime() -> AppRuntime:
     registries = build_registries(data_root)
     source_registry = registries["source_registry"]
     node_registry = registries["node_registry"]
+    ingest_registry = registries["ingest_registry"]
     assert isinstance(source_registry, SourceRegistry)
     assert isinstance(node_registry, NodeRegistry)
+    assert isinstance(ingest_registry, IngestClaimRegistry)
 
     services, source_records = build_services(
         settings=settings,
         data_root=data_root,
         source_registry=source_registry,
         node_registry=node_registry,
+        ingest_registry=ingest_registry,
         role=role,
         node_id=node_id,
     )

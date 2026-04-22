@@ -60,6 +60,8 @@ class RuntimeServices:
     node_registry: Any | None = None
     source_adapters: Any | None = None
     library_service: Any | None = None
+    ingest_registry: Any | None = None
+    ingest_claim_service: Any | None = None
     compose_service: Any | None = None
     upload_service: Any | None = None
     upstream_client: Any | None = None
