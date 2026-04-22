@@ -146,6 +146,11 @@ Path alignment for Resolve:
 - Do **not** mount `/data/projects` into `resolve-postgres`; only the API uses the media mount. Resolve desktop accesses media through your SMB/NAS mapping.
 
 ## API overview
+- Control-plane vs ingest-plane boundary:
+  - `/api/nodes` is for runtime/node identity, capability, and liveness control-plane data.
+  - `/api/ingest/claims` is for asset ingest-plane candidate submission and authority intake decisions.
+  - Local observation on a runner is **not canonical by default**; canonical truth requires authority-side acceptance flow.
+
 - `GET /api/projects` – list projects (includes `upload_url` for browser uploads)
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index

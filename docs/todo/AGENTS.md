@@ -1,3 +1,9 @@
+## 2026-04-22 — PR #161 close-out pass (runtime composition proof + ingest readiness) (active)
+- [x] Added health/runtime ingest readiness markers (`ingest_claims_enabled`, `runtime_services.*`) so operations can verify ingest-plane wiring at runtime.
+- [x] Added explicit runtime composition assertion test for `node_registry`, `ingest_registry`, and `ingest_claim_service` on startup.
+- [x] Added permanent backend README note that `/api/nodes` is control-plane, `/api/ingest/claims` is ingest-plane, and local observation is not canonical by default.
+- [ ] Next: after PR #161 merge, implement runner-side claim submission from a real local adapter/spool path with retries.
+
 ## 2026-04-22 — Ingest-claim contract boundary for PR #161 (active)
 - [x] Preserved landed runtime/node control-plane foundation and added first-class ingest-claim domain models (`AssetCandidate`, `IngestClaim`, `AcceptanceReport`).
 - [x] Added persisted authority ingest ledger (`IngestClaimRegistry`) under `_runtime/ingest_claims/<claim_id>.json`.

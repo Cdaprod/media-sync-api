@@ -152,6 +152,8 @@ def create_app() -> FastAPI:
     @application.get("/health")
     async def healthcheck():
         runtime = application.state.runtime
+        ingest_registry_ready = runtime.services.ingest_registry is not None
+        ingest_claim_service_ready = runtime.services.ingest_claim_service is not None
         return {
             "ok": True,
             "service": "media-sync-api",
@@ -161,6 +163,12 @@ def create_app() -> FastAPI:
             "node_name": runtime.identity.node_name,
             "projects_root": str(runtime.paths.data_root),
             "started": runtime.started,
+            "ingest_claims_enabled": ingest_registry_ready and ingest_claim_service_ready,
+            "runtime_services": {
+                "node_registry": runtime.services.node_registry is not None,
+                "ingest_registry": ingest_registry_ready,
+                "ingest_claim_service": ingest_claim_service_ready,
+            },
             "instructions": "See /public/index.html for end-to-end adapter and shortcut guidance.",
         }
 

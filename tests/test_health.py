@@ -12,3 +12,8 @@ def test_health_endpoint(client):
     assert isinstance(payload.get("node_id"), str)
     assert payload.get("started") is True
     assert payload.get("projects_root")
+    assert payload.get("ingest_claims_enabled") is True
+    services = payload.get("runtime_services") or {}
+    assert services.get("node_registry") is True
+    assert services.get("ingest_registry") is True
+    assert services.get("ingest_claim_service") is True
