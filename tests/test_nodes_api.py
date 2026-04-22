@@ -51,3 +51,27 @@ def test_nodes_reject_invalid_id(client):
     )
     assert response.status_code == 400
     assert "Node id" in response.json()["detail"]
+
+
+def test_nodes_reject_invalid_claim_status_without_deleting_record(client):
+    create = client.post(
+        "/api/nodes",
+        json={"node_id": "runner-2", "label": "Runner 2", "base_url": "http://127.0.0.1:8788"},
+    )
+    assert create.status_code == 201
+
+    invalid_claim = client.post("/api/nodes/runner-2/claim", json={"status": "bad-status"})
+    assert invalid_claim.status_code == 422
+
+    still_exists = client.get("/api/nodes/runner-2")
+    assert still_exists.status_code == 200
+    assert still_exists.json()["node_id"] == "runner-2"
+
+
+def test_nodes_reject_empty_label_as_client_error(client):
+    response = client.post(
+        "/api/nodes",
+        json={"node_id": "runner-3", "label": "", "base_url": "http://127.0.0.1:8789"},
+    )
+    assert response.status_code == 400
+    assert "label" in response.json()["detail"]

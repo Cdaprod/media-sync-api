@@ -11,10 +11,10 @@ from __future__ import annotations
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.runtime import get_runtime
-from app.runtime.nodes import NodeRecord, validate_node_id
+from app.runtime.nodes import NodeRecord, NodeStatus, validate_node_id
 from app.runtime.types import AppRuntime
 
 router = APIRouter(prefix="/api/nodes", tags=["nodes"])
@@ -28,7 +28,7 @@ class NodeRegisterRequest(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     source_name: str | None = None
     enabled: bool = True
-    status: str = "unknown"
+    status: NodeStatus = "unknown"
     version: str | None = None
     advertised_source_kinds: list[str] = Field(default_factory=list)
     ephemeral: bool = False
@@ -39,7 +39,7 @@ class NodeClaimRequest(BaseModel):
     roles: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
     source_name: str | None = None
-    status: str | None = None
+    status: NodeStatus | None = None
     version: str | None = None
     advertised_source_kinds: list[str] = Field(default_factory=list)
     ephemeral: bool | None = None
@@ -77,20 +77,23 @@ async def register_node(payload: NodeRegisterRequest, runtime: AppRuntime = Depe
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    record = NodeRecord(
-        node_id=payload.node_id,
-        label=payload.label,
-        base_url=payload.base_url,
-        roles=payload.roles,
-        capabilities=payload.capabilities,
-        source_name=payload.source_name,
-        enabled=payload.enabled,
-        status=payload.status,
-        version=payload.version,
-        advertised_source_kinds=payload.advertised_source_kinds,
-        ephemeral=payload.ephemeral,
-        metadata=payload.metadata,
-    ).with_heartbeat()
+    try:
+        record = NodeRecord(
+            node_id=payload.node_id,
+            label=payload.label,
+            base_url=payload.base_url,
+            roles=payload.roles,
+            capabilities=payload.capabilities,
+            source_name=payload.source_name,
+            enabled=payload.enabled,
+            status=payload.status,
+            version=payload.version,
+            advertised_source_kinds=payload.advertised_source_kinds,
+            ephemeral=payload.ephemeral,
+            metadata=payload.metadata,
+        ).with_heartbeat()
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return registry.upsert(record)
 
 
@@ -131,4 +134,9 @@ async def claim_node(
         "ephemeral": payload.ephemeral if payload.ephemeral is not None else current.ephemeral,
         "metadata": {**current.metadata, **payload.metadata},
     }
-    return registry.upsert(current.model_copy(update=updates).with_heartbeat())
+    merged_payload = {**current.model_dump(mode="python"), **updates}
+    try:
+        validated_record = NodeRecord(**merged_payload).with_heartbeat()
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return registry.upsert(validated_record)

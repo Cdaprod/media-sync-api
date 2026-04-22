@@ -1,3 +1,10 @@
+## 2026-04-22 — Node API validation hardening follow-up (active)
+- [x] Addressed review bug: `claim` updates are now re-validated by constructing a new `NodeRecord` from merged payload before persistence, preventing invalid updates from silently poisoning registry rows.
+- [x] Addressed review bug: `register` now catches `NodeRecord` validation failures and returns explicit 400 client errors instead of surfacing 500s for malformed payloads.
+- [x] Tightened request schemas to use `NodeStatus` literals for register/claim status fields so invalid values fail fast at request validation.
+- [x] Added regression coverage for invalid claim status behavior and register validation error mapping.
+- [ ] Next: add a small endpoint-level error contract doc section for `/api/nodes` status codes in backend API docs/readme.
+
 ## 2026-04-22 — App runtime boundary + node control-plane bootstrap (active)
 - [x] Added `app/runtime` composition package (`types`, `create_runtime`, `dependencies`) so FastAPI lifespan owns a single `AppRuntime` instance with async `start/stop` hooks.
 - [x] Wired `app/main.py` lifespan to initialize runtime once, run/stop runtime-owned auto reindexer, and expose runtime identity in `/health`.
