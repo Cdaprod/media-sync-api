@@ -1,3 +1,12 @@
+## 2026-04-22 — Runner-ready runtime follow-on (active)
+- [x] Added typed runtime-facing `SourceRecord` abstraction to distinguish canonical vs runner-local vs ephemeral source intent without breaking existing `SourceRegistry` storage shape.
+- [x] Added lightweight async control-plane client for node self-registration and heartbeat against authority `/api/nodes`.
+- [x] Added background runner control loop so future runner deployments can self-register + maintain heartbeat without route-level glue.
+- [x] Wired runtime start/stop to own upstream client and runner control lifecycle.
+- [x] Added runtime-level tests for runner control registration/heartbeat behavior and health payload root assertion coverage.
+- [ ] Next: add first explicit runner upload/report path for local ingest observations that should not become canonical until accepted by authority.
+- [ ] Next: add authority-side node expiry/offline policy derived from `last_heartbeat_at`.
+
 ## 2026-04-22 — Node API validation hardening follow-up (active)
 - [x] Addressed review bug: `claim` updates are now re-validated by constructing a new `NodeRecord` from merged payload before persistence, preventing invalid updates from silently poisoning registry rows.
 - [x] Addressed review bug: `register` now catches `NodeRecord` validation failures and returns explicit 400 client errors instead of surfacing 500s for malformed payloads.

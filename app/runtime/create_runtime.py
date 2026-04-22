@@ -13,6 +13,8 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.runtime.nodes import NodeRegistry
+from app.runtime.runner_control import RunnerControlPlane
+from app.runtime.source_records import build_primary_source_record
 from app.runtime.types import (
     AppRuntime,
     RuntimeCapabilities,
@@ -20,6 +22,7 @@ from app.runtime.types import (
     RuntimePaths,
     RuntimeServices,
 )
+from app.runtime.upstream import ControlPlaneClient
 from app.services.library_service import LibraryService
 from app.storage.auto_reindex import AutoReindexer
 from app.storage.sources import SourceRegistry
@@ -39,7 +42,15 @@ def build_registries(data_root: Path) -> dict[str, object]:
     }
 
 
-def build_services(*, settings, data_root: Path, source_registry: SourceRegistry, node_registry: NodeRegistry) -> RuntimeServices:
+def build_services(
+    *,
+    settings,
+    data_root: Path,
+    source_registry: SourceRegistry,
+    node_registry: NodeRegistry,
+    role: str,
+    node_id: str,
+) -> tuple[RuntimeServices, list[object]]:
     """Create long-lived service objects for runtime composition."""
 
     reindexer = AutoReindexer(
@@ -47,16 +58,34 @@ def build_services(*, settings, data_root: Path, source_registry: SourceRegistry
         interval_seconds=settings.auto_reindex_interval_seconds,
         enabled=settings.auto_reindex_enabled,
     )
-    return RuntimeServices(
+
+    upstream_client = None
+    if role == "runner" and settings.control_plane_url and settings.runner_register_enabled:
+        upstream_client = ControlPlaneClient(
+            base_url=settings.control_plane_url,
+            token=settings.upstream_token,
+        )
+
+    source_records = [
+        build_primary_source_record(
+            project_root=data_root,
+            owner_node_id=node_id,
+            runtime_role=role,
+        )
+    ]
+
+    services = RuntimeServices(
         source_registry=source_registry,
         node_registry=node_registry,
         source_adapters=None,
         library_service=LibraryService(source_registry=source_registry),
         compose_service=None,
         upload_service=None,
-        upstream_client=None,
+        upstream_client=upstream_client,
+        runner_control=None,
         auto_reindexer=reindexer,
     )
+    return services, source_records
 
 
 def create_runtime() -> AppRuntime:
@@ -81,11 +110,13 @@ def create_runtime() -> AppRuntime:
     assert isinstance(source_registry, SourceRegistry)
     assert isinstance(node_registry, NodeRegistry)
 
-    services = build_services(
+    services, source_records = build_services(
         settings=settings,
         data_root=data_root,
         source_registry=source_registry,
         node_registry=node_registry,
+        role=role,
+        node_id=node_id,
     )
 
     capabilities = RuntimeCapabilities(
@@ -100,7 +131,7 @@ def create_runtime() -> AppRuntime:
         can_serve_live_assets=(role == "runner"),
     )
 
-    return AppRuntime(
+    runtime = AppRuntime(
         identity=RuntimeIdentity(
             runtime_id=runtime_id,
             role=role,
@@ -124,5 +155,11 @@ def create_runtime() -> AppRuntime:
             "boot_role": role,
             "node_id": node_id,
             "node_name": node_name,
+            "source_records": source_records,
         },
     )
+
+    if role == "runner" and services.upstream_client is not None:
+        runtime.services.runner_control = RunnerControlPlane(runtime=runtime)
+
+    return runtime

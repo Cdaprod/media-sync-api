@@ -63,6 +63,7 @@ class RuntimeServices:
     compose_service: Any | None = None
     upload_service: Any | None = None
     upstream_client: Any | None = None
+    runner_control: Any | None = None
     auto_reindexer: Any | None = None
 
 
@@ -94,6 +95,14 @@ class AppRuntime:
         ):
             path.mkdir(parents=True, exist_ok=True)
 
+        upstream = self.services.upstream_client
+        if upstream is not None:
+            await upstream.start()
+
+        runner_control = self.services.runner_control
+        if runner_control is not None:
+            await runner_control.start()
+
         self.metadata.setdefault("boot_role", self.identity.role)
         self.metadata.setdefault("node_id", self.identity.node_id)
         self.metadata.setdefault("node_name", self.identity.node_name)
@@ -104,4 +113,12 @@ class AppRuntime:
 
         if not self.started:
             return
+
+        runner_control = self.services.runner_control
+        if runner_control is not None:
+            await runner_control.stop()
+
+        upstream = self.services.upstream_client
+        if upstream is not None:
+            await upstream.stop()
         self.started = False
