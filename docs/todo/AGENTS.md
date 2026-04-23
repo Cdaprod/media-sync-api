@@ -1,3 +1,9 @@
+## 2026-04-23 — iOS Safari capability inference correction (active)
+- [x] Updated register-modal camera/enumerate capability inference to include iOS Safari fallback support when APIs are permission/lifecycle-gated.
+- [x] Adjusted detected-context copy so iOS Safari reports `likely supported` semantics instead of false-negative `no` for camera/enumerate capability fields.
+- [x] Preserved passive detection behavior (no auto `getUserMedia` prompt on modal open) while keeping capture defaults derived from inferred capability + mobile context.
+- [ ] Next: add optional interactive `Probe camera now` action (user initiated) to validate runtime stream acquisition and show a post-click capability confirmation state.
+
 ## 2026-04-23 — Register modal detection hardening for iPhone/iPad sessions (active)
 - [x] Replaced naïve UA-only device classification in `RegisterNodeModal` with multi-signal browser context detection (UA + touch points + coarse pointer + iPadOS-as-Mac heuristic + media API capability probes).
 - [x] Added explicit capability diagnostics in detected-context panel (`hasCameraApi`, `hasEnumerateDevices`, `hasScreenCaptureApi`, likely mobile/safari/platform) while keeping detection passive (no `getUserMedia` prompt on open).

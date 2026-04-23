@@ -32,13 +32,16 @@ function detectBrowserSourceContext(): BrowserSourceContext {
     ? window.matchMedia?.('(pointer: coarse)')?.matches ?? false
     : false;
   const hasMediaDevices = typeof navigator !== 'undefined' && !!navigator.mediaDevices;
-  const hasCameraApi = !!navigator.mediaDevices?.getUserMedia;
-  const hasEnumerateDevices = !!navigator.mediaDevices?.enumerateDevices;
-  const hasScreenCaptureApi = !!navigator.mediaDevices?.getDisplayMedia;
   const isIPhone = /iPhone|iPod/i.test(ua);
   const isIPad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && maxTouchPoints > 1);
   const isAndroid = /Android/i.test(ua);
   const isLikelySafari = /Safari/i.test(ua) && !/Chrome|CriOS|EdgiOS|FxiOS|OPR\//i.test(ua);
+  const isLikelyIOS = isIPhone || isIPad;
+  const hasCameraApi = (hasMediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function')
+    || (isLikelyIOS && isLikelySafari);
+  const hasEnumerateDevices = (hasMediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function')
+    || (isLikelyIOS && isLikelySafari);
+  const hasScreenCaptureApi = hasMediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function';
   const isLikelyMobile = isIPhone || isIPad || isAndroid || (coarsePointer && maxTouchPoints > 0);
 
   let deviceClass: DeviceClass = 'desktop-browser';
@@ -148,6 +151,22 @@ export function RegisterNodeModal({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const cameraApiLabel = useMemo(() => {
+    if (!detectedContext) return 'unknown';
+    if (detectedContext.hasCameraApi && detectedContext.likelyPlatform === 'ios' && detectedContext.isLikelySafari) {
+      return 'likely supported (iOS Safari; requires user interaction)';
+    }
+    return detectedContext.hasCameraApi ? 'yes' : 'no';
+  }, [detectedContext]);
+
+  const enumerateApiLabel = useMemo(() => {
+    if (!detectedContext) return 'unknown';
+    if (detectedContext.hasEnumerateDevices && detectedContext.likelyPlatform === 'ios' && detectedContext.isLikelySafari) {
+      return 'likely supported (iOS Safari; permission-gated)';
+    }
+    return detectedContext.hasEnumerateDevices ? 'yes' : 'no';
+  }, [detectedContext]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -370,8 +389,8 @@ export function RegisterNodeModal({
             <div className="small">Likely platform: {detectedContext?.likelyPlatform || 'unknown'}</div>
             <div className="small">Likely mobile: {detectedContext?.isLikelyMobile ? 'yes' : 'no'}</div>
             <div className="small">Likely Safari: {detectedContext?.isLikelySafari ? 'yes' : 'no'}</div>
-            <div className="small">Camera API available: {detectedContext?.hasCameraApi ? 'yes' : 'no'}</div>
-            <div className="small">Enumerate devices API: {detectedContext?.hasEnumerateDevices ? 'yes' : 'no'}</div>
+            <div className="small">Camera API available: {cameraApiLabel}</div>
+            <div className="small">Enumerate devices API: {enumerateApiLabel}</div>
             <div className="small">Screen capture API available: {detectedContext?.hasScreenCaptureApi ? 'yes' : 'no'}</div>
             <div className="small">Camera: {hasCamera == null ? 'checking…' : hasCamera ? 'detected' : 'not detected'}</div>
             <div className="small">Camera permission: {cameraPermission ?? 'unknown'}</div>
