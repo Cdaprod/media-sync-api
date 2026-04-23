@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.runtime import get_runtime
+from app.runtime.source_records import SourceRecord
 from app.runtime.types import AppRuntime
 from app.storage.sources import SourceRegistry, validate_source_name
 
@@ -34,11 +35,21 @@ class SourceCreateRequest(BaseModel):
 
 class SourceResponse(BaseModel):
     name: str
-    root: str
+    root: str | None
     type: str
     enabled: bool
     accessible: bool
     instructions: str | None = None
+
+    # runtime-aware enrichments
+    kind: str | None = None
+    authority: str | None = None
+    owner_node_id: str | None = None
+    local_only: bool | None = None
+    can_index: bool | None = None
+    can_proxy: bool | None = None
+    can_record: bool | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
     def from_registry(cls, payload) -> "SourceResponse":
@@ -51,6 +62,36 @@ class SourceResponse(BaseModel):
             instructions="Use ?source={name} on project endpoints to target this root.".format(
                 name=payload.name
             ),
+            kind="filesystem",
+            authority="canonical" if payload.name == "primary" else "canonical",
+            owner_node_id=None,
+            local_only=False,
+            can_index=True,
+            can_proxy=False,
+            can_record=False,
+            metadata={},
+        )
+
+    @classmethod
+    def from_source_record(cls, payload: SourceRecord) -> "SourceResponse":
+        return cls(
+            name=payload.name,
+            root=str(payload.root) if payload.root is not None else None,
+            type=payload.kind,
+            enabled=payload.enabled,
+            accessible=payload.accessible,
+            instructions=(
+                "Remote source-bearing participant registered through /connect/register. "
+                "Use node/source metadata to drive later ingest and preview flows."
+            ),
+            kind=payload.kind,
+            authority=payload.authority,
+            owner_node_id=payload.owner_node_id,
+            local_only=payload.local_only,
+            can_index=payload.can_index,
+            can_proxy=payload.can_proxy,
+            can_record=payload.can_record,
+            metadata=dict(payload.metadata),
         )
 
 
@@ -61,12 +102,39 @@ def _runtime_registry(runtime: AppRuntime) -> SourceRegistry:
     return registry
 
 
+def _remote_source_records(runtime: AppRuntime) -> list[SourceRecord]:
+    records = runtime.metadata.get("remote_source_records", [])
+    return [record for record in records if isinstance(record, SourceRecord)]
+
+
+def _merge_source_rows(runtime: AppRuntime) -> list[SourceResponse]:
+    registry = _runtime_registry(runtime)
+    local_sources = [SourceResponse.from_registry(source) for source in registry.list_all()]
+    remote_sources = [SourceResponse.from_source_record(record) for record in _remote_source_records(runtime)]
+
+    merged: dict[tuple[str, str | None], SourceResponse] = {}
+
+    for source in local_sources:
+        merged[(source.name, source.owner_node_id)] = source
+
+    for source in remote_sources:
+        merged[(source.name, source.owner_node_id)] = source
+
+    return sorted(
+        merged.values(),
+        key=lambda item: (
+            item.authority or "",
+            item.owner_node_id or "",
+            item.name,
+        ),
+    )
+
+
 @router.get("", response_model=List[SourceResponse])
 async def list_sources(runtime: AppRuntime = Depends(get_runtime)) -> List[SourceResponse]:
-    registry = _runtime_registry(runtime)
-    sources = registry.list_all()
+    sources = _merge_source_rows(runtime)
     logger.info("listed_sources", extra={"count": len(sources)})
-    return [SourceResponse.from_registry(source) for source in sources]
+    return sources
 
 
 @router.post("", response_model=SourceResponse, status_code=201)

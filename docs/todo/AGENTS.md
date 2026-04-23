@@ -1,3 +1,10 @@
+## 2026-04-23 — Runtime-aware source inventory merge (active)
+- [x] Updated `/api/sources` to merge canonical authority-local sources from `SourceRegistry` with runtime-memory remote source-bearing participants registered through `/connect/register`.
+- [x] Added runtime-aware source response enrichments (`kind`, `authority`, `owner_node_id`, `local_only`, `can_index`, `can_proxy`, `can_record`, `metadata`) for local vs remote source surfaces.
+- [x] Added regression coverage proving `/connect/register` remote participants appear in `/api/sources` alongside canonical local sources.
+- [ ] Next: extend Explorer API seam and Sources & Nodes modal to consume merged runtime-aware source inventory.
+- [ ] Next: validate ingest claims against registered remote source ownership (`node_id` + `source_name`) before later acceptance phases.
+
 ## 2026-04-23 — Connect-plane onboarding bridge (active)
 - [x] Added `/connect` discovery manifest covering runtime identity, capabilities, source records, and operational endpoints.
 - [x] Added `/connect/register` onboarding so remote non-authority runtimes can register as source-bearing participants without mutating canonical `SourceRegistry` shape.
