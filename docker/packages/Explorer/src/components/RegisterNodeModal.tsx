@@ -288,11 +288,13 @@ export function RegisterNodeModal({
       ephemeral,
       metadata: {
         ...metadata,
-        detected_device: detectedContext?.deviceClass || 'desktop-browser',
-        detected_platform: detectedContext?.likelyPlatform || 'unknown',
-        detected_mobile: detectedContext?.isLikelyMobile ?? false,
-        detected_safari: detectedContext?.isLikelySafari ?? false,
-        authority_origin: authorityBaseUrl,
+        likely_mobile: String(detectedContext?.isLikelyMobile ?? false),
+        likely_safari: String(detectedContext?.isLikelySafari ?? false),
+        detected_device: String(detectedContext?.deviceClass || 'desktop-browser'),
+        detected_platform: String(detectedContext?.likelyPlatform || 'unknown'),
+        detected_mobile: String(detectedContext?.isLikelyMobile ?? false),
+        detected_safari: String(detectedContext?.isLikelySafari ?? false),
+        authority_origin: String(authorityBaseUrl || ''),
       },
     };
   }, [

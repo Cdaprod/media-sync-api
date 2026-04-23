@@ -1,3 +1,8 @@
+## 2026-04-23 — Register metadata string-contract hotfix (active)
+- [x] Fixed frontend register payload serialization mismatch for backend `metadata: Dict[str, str]` contract by stringifying boolean telemetry fields (`likely_mobile`, `likely_safari`, `detected_mobile`, `detected_safari`) in `RegisterNodeModal` payload construction.
+- [x] Normalized related detected/authority metadata fields to explicit string values during payload assembly to keep connect-plane metadata transport-safe and schema-consistent.
+- [ ] Next: add a small shared frontend `serializeMetadata(...)` helper to centralize string normalization for future metadata fields and avoid drift.
+
 ## 2026-04-23 — Live session closure seam + low-fi preview follow-up (active)
 - [x] Attempted requested `.25` manual chain validation (`ssh`, spool/log checks, direct endpoint curls) from container; blocked by network reachability (`port 22 unreachable`) so validation must run on reachable host context.
 - [x] Confirmed live ingest path remains integrated via `LiveSessionService.end_session()` using existing `IngestClaimService.submit_claim(...)` contract (no ad-hoc stub payload path).
