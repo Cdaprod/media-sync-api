@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from app.api.media import _build_download_url, _build_stream_url, _is_thumbable_media, _validate_relative_media_path
-from app.api.projects import _bootstrap_existing_projects
+from app.api.projects import _bootstrap_existing_projects, is_visible_project_dir
 from app.config import get_settings
 from app.storage.index import load_index
 from app.storage.paths import is_temporary_path, is_thumbnail_path
@@ -47,7 +47,7 @@ def _iter_project_rows(source) -> tuple[list[dict[str, Any]], list[dict[str, Any
         return project_rows, asset_rows
     _bootstrap_existing_projects(source.root)
     for project_dir in sorted(source.root.iterdir(), key=lambda item: item.name):
-        if not project_dir.is_dir() or project_dir.name.startswith("_"):
+        if not is_visible_project_dir(project_dir):
             continue
         index_exists = (project_dir / "index.json").exists()
         project_rows.append(

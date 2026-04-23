@@ -126,6 +126,8 @@ def test_lists_projects_from_multiple_sources(client, env_settings: Path, tmp_pa
 def test_internal_sources_folder_is_not_listed_as_project(client, env_settings: Path):
     internal = env_settings / "_sources"
     internal.mkdir(parents=True, exist_ok=True)
+    runtime_state = env_settings / ".runtime"
+    runtime_state.mkdir(parents=True, exist_ok=True)
     project_dir = env_settings / "P1-Visible"
     project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -133,4 +135,5 @@ def test_internal_sources_folder_is_not_listed_as_project(client, env_settings: 
     names = [project["name"] for project in response.json()]
 
     assert "_sources" not in names
+    assert ".runtime" not in names
     assert "P1-Visible" in names

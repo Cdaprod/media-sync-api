@@ -1,3 +1,10 @@
+## 2026-04-23 — Hidden runtime project filtering follow-up (active)
+- [x] Confirmed Explorer sidebar/runtime-aware source wiring is functioning and that observed `0 remote / 0 nodes` is expected when no remote participants are registered.
+- [x] Fixed backend project enumeration to exclude hidden dot-prefixed directories (for example `.runtime`) from user-visible project listings.
+- [x] Aligned library snapshot project enumeration with the same visibility guard so `/api/library` and `/api/projects` stay in sync.
+- [x] Added regression tests for hidden runtime directory exclusion in both projects and library snapshot API surfaces.
+- [ ] Next: add a lightweight operator note in README/API docs describing how to register a remote node and what sidebar counts should show before/after registration.
+
 ## 2026-04-23 — Runtime-aware source inventory merge (active)
 - [x] Updated `/api/sources` to merge canonical authority-local sources from `SourceRegistry` with runtime-memory remote source-bearing participants registered through `/connect/register`.
 - [x] Added runtime-aware source response enrichments (`kind`, `authority`, `owner_node_id`, `local_only`, `can_index`, `can_proxy`, `can_record`, `metadata`) for local vs remote source surfaces.

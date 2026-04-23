@@ -126,3 +126,16 @@ def test_library_snapshot_emits_thumbnail_urls_only_for_thumbable_assets(client:
     assert thumbable.get("thumbnail_url")
     assert "thumb_url" not in non_thumbable
     assert "thumbnail_url" not in non_thumbable
+
+
+def test_library_snapshot_scope_all_skips_hidden_runtime_directories(client: TestClient, env_settings: Path) -> None:
+    hidden_project = env_settings / ".runtime"
+    hidden_project.mkdir(parents=True, exist_ok=True)
+    visible_project = _create_project(client, "visible-project")
+
+    response = client.get("/api/library?scope=all")
+    assert response.status_code == 200
+    names = [project["name"] for project in response.json()["projects"]]
+
+    assert ".runtime" not in names
+    assert visible_project in names
