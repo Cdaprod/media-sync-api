@@ -1,3 +1,11 @@
+## 2026-04-23 — Explorer connect-plane register modal wiring (active)
+- [x] Added Sources/Libraries operator action pair (`+ Register`, `Refresh`) with Register positioned left of Refresh in the existing sidebar meta line.
+- [x] Added typed connect-plane registration request/response contracts for Explorer frontend (`types/registration.ts`).
+- [x] Added `RegisterNodeModal` with device/context prefill, editable advanced fields, generated payload/curl/fetch snippets, and direct `/connect/register` submit path.
+- [x] Extended Explorer API client with `registerNode(...)` to call `POST /connect/register` and provide status-aware error messages.
+- [x] Wired modal success path to refresh runtime source/node control data so sidebar truth updates immediately after registration.
+- [ ] Next: add a tiny inline success hint in Sources/Libraries summary when a registration was just accepted (node label + timestamp), then clear on next reload.
+
 ## 2026-04-23 — Hidden runtime project filtering follow-up (active)
 - [x] Confirmed Explorer sidebar/runtime-aware source wiring is functioning and that observed `0 remote / 0 nodes` is expected when no remote participants are registered.
 - [x] Fixed backend project enumeration to exclude hidden dot-prefixed directories (for example `.runtime`) from user-visible project listings.

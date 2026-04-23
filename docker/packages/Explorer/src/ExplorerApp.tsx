@@ -37,6 +37,7 @@ import {
 import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewPanel';
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
+import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { normalizePreviewAsset } from './previewAdapter';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
@@ -69,6 +70,7 @@ import { useLibrarySnapshot } from './hooks/useLibrarySnapshot';
 import { useExplorerCommands } from './hooks/useExplorerCommands';
 import { useExplorerUiState } from './hooks/useExplorerUiState';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
+import type { RegisterNodeResponse } from './types/registration';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 
 interface ExplorerAppProps {
@@ -616,6 +618,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [proxyPlaybackCurrentTime, setProxyPlaybackCurrentTime] = useState(0);
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [isRegisterNodeModalOpen, setIsRegisterNodeModalOpen] = useState(false);
 
   // ---------------------------------------------------------------------------
   // UI/runtime authority seam.
@@ -4792,14 +4795,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               <h2>Sources / Libraries</h2>
               <div className="meta-line">
                 <span className="kbd">/api/sources + /api/nodes</span>
-                <button
-                  className="btn"
-                  type="button"
-                  style={{ marginLeft: '8px' }}
-                  onClick={() => void reloadSourceControl()}
-                >
-                  Refresh
-                </button>
+                <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => setIsRegisterNodeModalOpen(true)}
+                  >
+                    + Register
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => void reloadSourceControl()}
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
             </div>
             <div className="sources">
@@ -5700,6 +5711,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </form>
         </div>
       ) : null}
+
+      <RegisterNodeModal
+        isOpen={isRegisterNodeModalOpen}
+        onClose={() => setIsRegisterNodeModalOpen(false)}
+        onSuccess={(_node, _response: RegisterNodeResponse) => {
+          void reloadSourceControl();
+        }}
+        registerNode={api.registerNode}
+        authorityBaseUrl={typeof window !== 'undefined' ? window.location.origin : ''}
+      />
 
       <div className="toasts">
         {toasts.map((toast) => (

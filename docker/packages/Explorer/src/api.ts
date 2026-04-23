@@ -1,6 +1,7 @@
 import type { LibrarySnapshot, MediaResponse, Project, ResolveOpenResponse } from './types';
 import type { ComposeJobEnvelope } from './composeJobs';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
+import type { RegisterNodeRequest, RegisterNodeResponse } from './types/registration';
 
 export interface ResolveRequest {
   project: string;
@@ -18,6 +19,7 @@ export interface AssetRef {
 export interface ApiClient {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
+  registerNode: (payload: RegisterNodeRequest) => Promise<RegisterNodeResponse>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
@@ -86,6 +88,24 @@ export function createApiClient(baseUrl: string): ApiClient {
       if (!response.ok) {
         throw new Error(`Failed to load nodes: ${response.status}`);
       }
+      return response.json();
+    },
+    async registerNode(payload: RegisterNodeRequest): Promise<RegisterNodeResponse> {
+      const response = await fetch(buildUrl('/connect/register'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(`Registration failed (${response.status})${detail ? `: ${detail}` : ''}`);
+      }
+
       return response.json();
     },
     async listProjects(): Promise<Project[]> {
