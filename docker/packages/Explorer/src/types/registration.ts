@@ -19,5 +19,6 @@ export interface RegisterNodeResponse {
   registered_node?: NodeControlRecord;
   source_record?: SourceControlRecord;
   authority?: Record<string, unknown>;
+  device_url?: string;
   message?: string;
 }

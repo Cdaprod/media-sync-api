@@ -62,6 +62,8 @@ class RuntimeServices:
     library_service: Any | None = None
     ingest_registry: Any | None = None
     ingest_claim_service: Any | None = None
+    live_session_registry: Any | None = None
+    live_session_service: Any | None = None
     compose_service: Any | None = None
     upload_service: Any | None = None
     upstream_client: Any | None = None

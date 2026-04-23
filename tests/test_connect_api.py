@@ -57,6 +57,7 @@ def test_connect_register_upserts_node_and_returns_source_bearing_participant(cl
     assert body["source_record"]["kind"] == "capture"
     assert body["source_record"]["authority"] == "runner-local"
     assert body["source_record"]["owner_node_id"] == "capture-rpi5-1"
+    assert body["device_url"] == "/connect/device?node_id=capture-rpi5-1"
     assert "Ingest claims are still separate" in body["message"]
 
     nodes = client.get("/api/nodes").json()

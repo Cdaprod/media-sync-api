@@ -1,3 +1,14 @@
+## 2026-04-23 — Live session intake + Explorer device capture bridge (active)
+- [x] Added runtime-owned live session domain/service/registry wiring (`LiveSession`, `LiveSessionRegistry`, `LiveSessionService`) with spool chunk persistence and authority ingest-claim handoff on session end.
+- [x] Added live session API surface (`/api/live_sessions` start/heartbeat/chunk/end/list) and wired router/runtime health flags so connect/ingest/live readiness are visible from `/health`.
+- [x] Extended connect registration response with `device_url` for browser-device continuation flows (`/connect/device?node_id=...`).
+- [x] Extended Explorer API/types with live-session contracts and request methods (`startLiveSession`, `heartbeatLiveSession`, `uploadLiveSessionChunk`, `endLiveSession`, `listLiveSessions`).
+- [x] Added Explorer live-session UX components/hooks (`useLiveSession`, `useLiveSessions`, `LiveSourceCard`) plus device capture route at `app/connect/device/page.tsx`.
+- [x] Integrated sidebar live-session cards and registration continuation into existing Explorer modal flow (persist capture node id, redirect to returned `device_url` when available).
+- [x] Added backend regression coverage for live sessions and runtime/health/connect shape updates.
+- [ ] Next: add authority-side validation that live-session `node_id/source_name` ownership matches current node/source registry state before claim submission.
+- [ ] Next: add Explorer inline toast/status when live chunk upload fails mid-session (show retry hint and degraded-recording indicator).
+
 ## 2026-04-23 — iOS Safari capability inference correction (active)
 - [x] Updated register-modal camera/enumerate capability inference to include iOS Safari fallback support when APIs are permission/lifecycle-gated.
 - [x] Adjusted detected-context copy so iOS Safari reports `likely supported` semantics instead of false-negative `no` for camera/enumerate capability fields.

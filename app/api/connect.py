@@ -52,6 +52,7 @@ class ConnectRegisterResponse(BaseModel):
     registered_node: dict[str, Any]
     source_record: dict[str, Any]
     authority: dict[str, Any]
+    device_url: str
     message: str
 
 
@@ -310,6 +311,7 @@ async def register_connected_source(
             "role": runtime.identity.role,
             "base_url": base_url,
         },
+        device_url=f"/connect/device?node_id={payload.node_id}",
         message=(
             "Node registered as a source-bearing participant. "
             "Authority now knows this runtime-backed node and its declared source surface. "

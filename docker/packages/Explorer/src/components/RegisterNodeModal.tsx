@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import type { RegisterNodeRequest, RegisterNodeResponse } from '../types/registration';
 import type { NodeControlRecord } from '../types/sourceControl';
@@ -133,6 +134,7 @@ export function RegisterNodeModal({
   registerNode,
   authorityBaseUrl,
 }: RegisterNodeModalProps) {
+  const router = useRouter();
   const [detectedContext, setDetectedContext] = useState<BrowserSourceContext | null>(null);
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const [cameraPermission, setCameraPermission] = useState<CameraPermissionState>(null);
@@ -151,6 +153,7 @@ export function RegisterNodeModal({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deviceUrl, setDeviceUrl] = useState<string | null>(null);
 
   const cameraApiLabel = useMemo(() => {
     if (!detectedContext) return 'unknown';
@@ -180,6 +183,7 @@ export function RegisterNodeModal({
     setBaseUrl('');
     setShowAdvanced(false);
     setError(null);
+    setDeviceUrl(null);
     setHasCamera(nextContext.hasCameraApi ? null : false);
 
     const likelyCapture = nextContext.isLikelyMobile && nextContext.hasCameraApi;
@@ -339,7 +343,12 @@ export function RegisterNodeModal({
     setError(null);
     try {
       const response = await registerNode(payload);
+      window.localStorage.setItem('explorer_capture_node_id', payload.node_id);
+      setDeviceUrl(response.device_url || null);
       onSuccess(response.registered_node ?? null, response);
+      if (response.device_url) {
+        router.push(response.device_url);
+      }
       onClose();
     }
     catch (err) {
@@ -349,7 +358,7 @@ export function RegisterNodeModal({
     finally {
       setSubmitting(false);
     }
-  }, [onClose, onSuccess, payload, registerNode]);
+  }, [onClose, onSuccess, payload, registerNode, router]);
 
   const handleConfigureAsCamera = useCallback(() => {
     applyCapturePreset({
@@ -544,6 +553,14 @@ export function RegisterNodeModal({
           {error ? (
             <div className="register-error">
               {error}
+            </div>
+          ) : null}
+
+          {deviceUrl ? (
+            <div className="register-device-url-row">
+              <a className="btn cold-mint-action" href={deviceUrl}>
+                Use this device →
+              </a>
             </div>
           ) : null}
 

@@ -23,6 +23,7 @@ from app.api.compose import shutdown_compose_jobs
 from app.api.connect import router as connect_router
 from app.api.library import router as library_router
 from app.api.ingest_claims import router as ingest_claims_router
+from app.api.live_sessions import router as live_sessions_router
 from app.api.media import bulk_router as assets_bulk_router
 from app.api.media import global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
 from app.api.nodes import router as nodes_router
@@ -124,6 +125,7 @@ def create_app() -> FastAPI:
     application.include_router(nodes_router)
     application.include_router(ingest_claims_router)
     application.include_router(connect_router)
+    application.include_router(live_sessions_router)
 
     application.mount(
         "/public",
@@ -156,6 +158,8 @@ def create_app() -> FastAPI:
         runtime = application.state.runtime
         ingest_registry_ready = runtime.services.ingest_registry is not None
         ingest_claim_service_ready = runtime.services.ingest_claim_service is not None
+        live_session_registry_ready = runtime.services.live_session_registry is not None
+        live_session_service_ready = runtime.services.live_session_service is not None
         return {
             "ok": True,
             "service": "media-sync-api",
@@ -167,10 +171,13 @@ def create_app() -> FastAPI:
             "started": runtime.started,
             "ingest_claims_enabled": ingest_registry_ready and ingest_claim_service_ready,
             "connect_enabled": True,
+            "live_sessions_enabled": live_session_service_ready,
             "runtime_services": {
                 "node_registry": runtime.services.node_registry is not None,
                 "ingest_registry": ingest_registry_ready,
                 "ingest_claim_service": ingest_claim_service_ready,
+                "live_session_registry": live_session_registry_ready,
+                "live_session_service": live_session_service_ready,
             },
             "remote_source_records": len(runtime.metadata.get("remote_source_records", [])),
             "instructions": "See /connect for authority discovery and /public/index.html for end-to-end adapter guidance.",

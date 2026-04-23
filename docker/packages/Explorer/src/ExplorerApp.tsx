@@ -37,6 +37,7 @@ import {
 import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewPanel';
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
+import { LiveSourceCard } from './components/LiveSourceCard';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { normalizePreviewAsset } from './previewAdapter';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
@@ -45,6 +46,7 @@ import { useAssetInteractions } from './hooks/useAssetInteractions';
 import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { useSourceControlData } from './hooks/useSourceControlData';
+import { useLiveSessions } from './hooks/useLiveSessions';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -570,6 +572,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     : inferApiBaseUrl(apiBaseUrl, window.location);
   const [resolvedApiBase, setResolvedApiBase] = useState(initialApiBase);
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
+  const {
+    sessions: liveSessions,
+  } = useLiveSessions({
+    listLiveSessions: api.listLiveSessions,
+  });
   const {
     snapshot: sourceControlSnapshot,
     sources: runtimeSources,
@@ -4795,26 +4802,37 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               )}
             </div>
 
+            {liveSessions.length > 0 ? (
+              <>
+                <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
+                  <h2>Live</h2>
+                  <div className="meta-line">
+                    <span className="kbd">/api/live_sessions</span>
+                  </div>
+                </div>
+                <div className="sources">
+                  {liveSessions.map((session) => (
+                    <LiveSourceCard
+                      key={session.session_id}
+                      session={session}
+                      nodeLabel={session.node_id}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
+
             <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
               <h2>Sources / Libraries</h2>
               <div className="meta-line">
                 <span className="kbd">/api/sources + /api/nodes</span>
-                <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => setIsRegisterNodeModalOpen(true)}
-                  >
-                    + Register
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => void reloadSourceControl()}
-                  >
-                    Refresh
-                  </button>
-                </div>
+                <div style={{ flex: 1 }} />
+                <button type="button" className="btn" onClick={() => setIsRegisterNodeModalOpen(true)}>
+                  + Register
+                </button>
+                <button type="button" className="btn" onClick={() => void reloadSourceControl()}>
+                  Refresh
+                </button>
               </div>
             </div>
             <div className="sources">

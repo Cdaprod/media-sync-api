@@ -2,6 +2,7 @@ import type { LibrarySnapshot, MediaResponse, Project, ResolveOpenResponse } fro
 import type { ComposeJobEnvelope } from './composeJobs';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 import type { RegisterNodeRequest, RegisterNodeResponse } from './types/registration';
+import type { LiveSessionRecord, LiveSourceKind } from './types/liveSession';
 
 export interface ResolveRequest {
   project: string;
@@ -20,6 +21,11 @@ export interface ApiClient {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
   registerNode: (payload: RegisterNodeRequest) => Promise<RegisterNodeResponse>;
+  startLiveSession: (nodeId: string, sourceKind: LiveSourceKind, metadata?: Record<string, unknown>) => Promise<LiveSessionRecord>;
+  heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
+  uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
+  endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
+  listLiveSessions: () => Promise<LiveSessionRecord[]>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
@@ -59,7 +65,7 @@ async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json().catch(() => ({}))) as T;
 }
 
-export function createApiClient(baseUrl: string): ApiClient {
+export function createApiClient(baseUrl = ''): ApiClient {
   const buildUrl = buildUrlFactory(baseUrl);
 
   return {
@@ -106,6 +112,67 @@ export function createApiClient(baseUrl: string): ApiClient {
         throw new Error(`Registration failed (${response.status})${detail ? `: ${detail}` : ''}`);
       }
 
+      return response.json();
+    },
+    async startLiveSession(nodeId: string, sourceKind: LiveSourceKind, metadata: Record<string, unknown> = {}): Promise<LiveSessionRecord> {
+      const response = await fetch(buildUrl('/api/live_sessions/start'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ node_id: nodeId, source_kind: sourceKind, metadata }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to start live session: ${response.status}`);
+      }
+      return response.json();
+    },
+    async heartbeatLiveSession(sessionId: string): Promise<LiveSessionRecord> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/heartbeat`), {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to heartbeat live session: ${response.status}`);
+      }
+      return response.json();
+    },
+    async uploadLiveSessionChunk(sessionId: string, blob: Blob): Promise<void> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/chunk`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': blob.type || 'application/octet-stream',
+          Accept: 'application/json',
+        },
+        body: blob,
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to upload live chunk: ${response.status}`);
+      }
+    },
+    async endLiveSession(sessionId: string): Promise<{ session: LiveSessionRecord; claim_id: string | null }> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/end`), {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to end live session: ${response.status}`);
+      }
+      return response.json();
+    },
+    async listLiveSessions(): Promise<LiveSessionRecord[]> {
+      const response = await fetch(buildUrl('/api/live_sessions'), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load live sessions: ${response.status}`);
+      }
       return response.json();
     },
     async listProjects(): Promise<Project[]> {
