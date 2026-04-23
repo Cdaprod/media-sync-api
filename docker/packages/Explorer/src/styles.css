@@ -2836,3 +2836,18 @@ body.confirm-open{
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
+
+.register-connect-link {
+  padding: 12px;
+}
+
+.register-connect-link code {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 170, 255, 0.22);
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--muted);
+  word-break: break-word;
+}

@@ -1,3 +1,9 @@
+## 2026-04-23 — Register modal authority-base correction + quick action follow-up (active)
+- [x] Fixed Explorer register modal authority URL to use API authority base (connect-plane base) instead of frontend origin, preventing `:3000` registration command drift when API runs on `:8787`.
+- [x] Added a quick `Register This Device` action in detected-context card for one-click submission while keeping generated JSON/curl/fetch outputs visible.
+- [x] Added a `Register from another device` connect-link block with copy action to support LAN onboarding workflows.
+- [ ] Next: add an optional post-register toast that includes accepted `node_id` and resolved authority host for operator confirmation.
+
 ## 2026-04-23 — Explorer connect-plane register modal wiring (active)
 - [x] Added Sources/Libraries operator action pair (`+ Register`, `Refresh`) with Register positioned left of Refresh in the existing sidebar meta line.
 - [x] Added typed connect-plane registration request/response contracts for Explorer frontend (`types/registration.ts`).

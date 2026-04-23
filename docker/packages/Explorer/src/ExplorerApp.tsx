@@ -4754,6 +4754,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setProxyPlaybackCurrentTime(next);
   }, [activeProxyCardEl, proxyPlaybackDuration]);
   const proxyPreviewPortalTarget = activeProxyUiSlotEl ?? activeProxyCardEl;
+  const authorityBaseUrl = useMemo(() => {
+    const connectUrl = api.buildUrl('/connect');
+    return connectUrl.replace(/\/connect\/?$/, '');
+  }, [api]);
 
   return (
     <div className={`app ${proxyTravelActive ? 'proxy-travel-active' : ''} ${gridCinematicMode}`}>
@@ -5719,7 +5723,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           void reloadSourceControl();
         }}
         registerNode={api.registerNode}
-        authorityBaseUrl={typeof window !== 'undefined' ? window.location.origin : ''}
+        authorityBaseUrl={authorityBaseUrl}
       />
 
       <div className="toasts">

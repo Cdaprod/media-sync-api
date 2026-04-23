@@ -219,6 +219,7 @@ export function RegisterNodeModal({
   body: JSON.stringify(${payloadJson}),
 });`;
   }, [authorityBaseUrl, payloadJson]);
+  const connectLink = useMemo(() => `${authorityBaseUrl}/connect`, [authorityBaseUrl]);
 
   const handleCopy = useCallback(async (text: string) => {
     try {
@@ -273,6 +274,11 @@ export function RegisterNodeModal({
             <div className="small">Camera: {hasCamera == null ? 'checking…' : hasCamera ? 'available' : 'not detected'}</div>
             <div className="small">Camera permission: {cameraPermission ?? 'unknown'}</div>
             <div className="small">Authority URL: {authorityBaseUrl}</div>
+            <div style={{ marginTop: 10 }}>
+              <button type="submit" className="btn" disabled={submitting}>
+                {submitting ? 'Registering…' : 'Register This Device'}
+              </button>
+            </div>
           </div>
 
           <div className="register-node-grid">
@@ -396,6 +402,19 @@ export function RegisterNodeModal({
               </button>
             </div>
             <pre className="register-pre">{fetchExample}</pre>
+          </div>
+
+          <div className="card register-connect-link">
+            <strong>Register from another device</strong>
+            <div className="small">
+              Open this URL on another LAN device to view connect discovery details.
+            </div>
+            <code>{connectLink}</code>
+            <div style={{ marginTop: 8 }}>
+              <button type="button" className="btn" onClick={() => void handleCopy(connectLink)}>
+                Copy connect URL
+              </button>
+            </div>
           </div>
 
           {error ? (
