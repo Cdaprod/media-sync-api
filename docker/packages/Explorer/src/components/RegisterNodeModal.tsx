@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 
 import type { RegisterNodeRequest, RegisterNodeResponse } from '../types/registration';
 import type { NodeControlRecord } from '../types/sourceControl';
+import { serializeMetadata } from '../utils/serializeMetadata';
 
 interface RegisterNodeModalProps {
   isOpen: boolean;
@@ -275,6 +276,16 @@ export function RegisterNodeModal({
 
   const payload = useMemo<RegisterNodeRequest>(() => {
     const metadata = safeParseMetadata(metadataText);
+    const rawMetadata = {
+      ...metadata,
+      likely_mobile: detectedContext?.isLikelyMobile ?? false,
+      likely_safari: detectedContext?.isLikelySafari ?? false,
+      detected_device: detectedContext?.deviceClass || 'desktop-browser',
+      detected_platform: detectedContext?.likelyPlatform || 'unknown',
+      detected_mobile: detectedContext?.isLikelyMobile ?? false,
+      detected_safari: detectedContext?.isLikelySafari ?? false,
+      authority_origin: authorityBaseUrl || '',
+    };
     return {
       node_id: nodeId.trim(),
       label: label.trim(),
@@ -286,16 +297,7 @@ export function RegisterNodeModal({
       source_authority: sourceAuthority.trim() || null,
       advertised_source_kinds: sourceKind.trim() ? [sourceKind.trim()] : [],
       ephemeral,
-      metadata: {
-        ...metadata,
-        likely_mobile: String(detectedContext?.isLikelyMobile ?? false),
-        likely_safari: String(detectedContext?.isLikelySafari ?? false),
-        detected_device: String(detectedContext?.deviceClass || 'desktop-browser'),
-        detected_platform: String(detectedContext?.likelyPlatform || 'unknown'),
-        detected_mobile: String(detectedContext?.isLikelyMobile ?? false),
-        detected_safari: String(detectedContext?.isLikelySafari ?? false),
-        authority_origin: String(authorityBaseUrl || ''),
-      },
+      metadata: serializeMetadata(rawMetadata),
     };
   }, [
     authorityBaseUrl,

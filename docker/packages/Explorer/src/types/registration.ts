@@ -11,7 +11,7 @@ export interface RegisterNodeRequest {
   source_authority?: string | null;
   advertised_source_kinds?: string[];
   ephemeral: boolean;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, string>;
 }
 
 export interface RegisterNodeResponse {

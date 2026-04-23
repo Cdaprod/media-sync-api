@@ -1,3 +1,9 @@
+## 2026-04-23 — Centralized connect metadata serialization helper (active)
+- [x] Added frontend utility `serializeMetadata(...)` to normalize `Record<string, unknown>` into `Record<string, string>` for `/connect/register` transport.
+- [x] Refactored `RegisterNodeModal` payload assembly to construct raw metadata once and run full normalization through `serializeMetadata(...)` (removed per-field ad-hoc `String(...)` calls).
+- [x] Tightened register request type to `metadata?: Record<string, string>` so call sites remain contract-aligned with backend `Dict[str, str]`.
+- [ ] Next: reuse `serializeMetadata(...)` in any future connect-plane metadata producers to keep frontend/backend contract drift-proof.
+
 ## 2026-04-23 — Register metadata string-contract hotfix (active)
 - [x] Fixed frontend register payload serialization mismatch for backend `metadata: Dict[str, str]` contract by stringifying boolean telemetry fields (`likely_mobile`, `likely_safari`, `detected_mobile`, `detected_safari`) in `RegisterNodeModal` payload construction.
 - [x] Normalized related detected/authority metadata fields to explicit string values during payload assembly to keep connect-plane metadata transport-safe and schema-consistent.
