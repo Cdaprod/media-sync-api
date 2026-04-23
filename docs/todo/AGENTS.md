@@ -1,3 +1,10 @@
+## 2026-04-23 — Register modal detection hardening for iPhone/iPad sessions (active)
+- [x] Replaced naïve UA-only device classification in `RegisterNodeModal` with multi-signal browser context detection (UA + touch points + coarse pointer + iPadOS-as-Mac heuristic + media API capability probes).
+- [x] Added explicit capability diagnostics in detected-context panel (`hasCameraApi`, `hasEnumerateDevices`, `hasScreenCaptureApi`, likely mobile/safari/platform) while keeping detection passive (no `getUserMedia` prompt on open).
+- [x] Updated default registration bias to derive from `isLikelyMobile && hasCameraApi`, so likely mobile camera-capable sessions start capture-oriented (`source_kind=capture`, `can_proxy_streams`, runner/capture roles).
+- [x] Added `Configure as camera device` action to apply capture defaults on demand without removing manual overrides.
+- [ ] Next: tune additional iOS webview heuristics (if available) for embedded-browser UA reduction edge cases and capture one on-device validation snapshot after deployment.
+
 ## 2026-04-23 — Register modal authority-base correction + quick action follow-up (active)
 - [x] Fixed Explorer register modal authority URL to use API authority base (connect-plane base) instead of frontend origin, preventing `:3000` registration command drift when API runs on `:8787`.
 - [x] Added a quick `Register This Device` action in detected-context card for one-click submission while keeping generated JSON/curl/fetch outputs visible.

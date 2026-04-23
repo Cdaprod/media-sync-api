@@ -12,14 +12,89 @@ interface RegisterNodeModalProps {
 }
 
 type CameraPermissionState = 'prompt' | 'granted' | 'denied' | null;
+type DeviceClass = 'iphone-browser' | 'ipad-browser' | 'android-browser' | 'desktop-browser';
 
-function guessDeviceClass(userAgent: string): string {
-  if (/iPhone|iPad|iPod/i.test(userAgent)) return 'iphone-browser';
-  if (/Android/i.test(userAgent)) return 'android-browser';
-  if (/Macintosh|Mac OS X/i.test(userAgent)) return 'desktop-browser';
-  if (/Windows/i.test(userAgent)) return 'desktop-browser';
-  if (/Linux/i.test(userAgent)) return 'desktop-browser';
-  return 'browser';
+interface BrowserSourceContext {
+  deviceClass: DeviceClass;
+  likelyPlatform: 'ios' | 'android' | 'desktop' | 'unknown';
+  isLikelyMobile: boolean;
+  isLikelySafari: boolean;
+  hasMediaDevices: boolean;
+  hasCameraApi: boolean;
+  hasEnumerateDevices: boolean;
+  hasScreenCaptureApi: boolean;
+}
+
+function detectBrowserSourceContext(): BrowserSourceContext {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints || 0 : 0;
+  const coarsePointer = typeof window !== 'undefined'
+    ? window.matchMedia?.('(pointer: coarse)')?.matches ?? false
+    : false;
+  const hasMediaDevices = typeof navigator !== 'undefined' && !!navigator.mediaDevices;
+  const hasCameraApi = !!navigator.mediaDevices?.getUserMedia;
+  const hasEnumerateDevices = !!navigator.mediaDevices?.enumerateDevices;
+  const hasScreenCaptureApi = !!navigator.mediaDevices?.getDisplayMedia;
+  const isIPhone = /iPhone|iPod/i.test(ua);
+  const isIPad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const isLikelySafari = /Safari/i.test(ua) && !/Chrome|CriOS|EdgiOS|FxiOS|OPR\//i.test(ua);
+  const isLikelyMobile = isIPhone || isIPad || isAndroid || (coarsePointer && maxTouchPoints > 0);
+
+  let deviceClass: DeviceClass = 'desktop-browser';
+  if (isIPhone) deviceClass = 'iphone-browser';
+  else if (isIPad) deviceClass = 'ipad-browser';
+  else if (isAndroid) deviceClass = 'android-browser';
+
+  const likelyPlatform: BrowserSourceContext['likelyPlatform'] = isIPhone || isIPad
+    ? 'ios'
+    : isAndroid
+      ? 'android'
+      : /Windows|Macintosh|Linux/i.test(ua)
+        ? 'desktop'
+        : 'unknown';
+
+  return {
+    deviceClass,
+    likelyPlatform,
+    isLikelyMobile,
+    isLikelySafari,
+    hasMediaDevices,
+    hasCameraApi,
+    hasEnumerateDevices,
+    hasScreenCaptureApi,
+  };
+}
+
+function applyCapturePreset({
+  setRoles,
+  setCapabilities,
+  setSourceName,
+  setSourceKind,
+  setSourceAuthority,
+  setEphemeral,
+  setLabel,
+}: {
+  setRoles: React.Dispatch<React.SetStateAction<string[]>>;
+  setCapabilities: React.Dispatch<React.SetStateAction<string[]>>;
+  setSourceName: React.Dispatch<React.SetStateAction<string>>;
+  setSourceKind: React.Dispatch<React.SetStateAction<string>>;
+  setSourceAuthority: React.Dispatch<React.SetStateAction<string>>;
+  setEphemeral: React.Dispatch<React.SetStateAction<boolean>>;
+  setLabel: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  setRoles((prev) => {
+    const next = new Set(prev);
+    next.add('runner');
+    next.add('capture');
+    return [...next];
+  });
+  setCapabilities((prev) => (prev.includes('can_proxy_streams') ? prev : [...prev, 'can_proxy_streams']));
+  setSourceName((prev) => prev.trim() ? prev : 'camera-primary');
+  setSourceKind('capture');
+  setSourceAuthority('runner-local');
+  setEphemeral(true);
+  setLabel((prev) => (prev.trim() === '' || prev === 'Browser Node' ? 'Mobile Capture Node' : prev));
 }
 
 function slugify(value: string): string {
@@ -55,7 +130,7 @@ export function RegisterNodeModal({
   registerNode,
   authorityBaseUrl,
 }: RegisterNodeModalProps) {
-  const [deviceClass, setDeviceClass] = useState<string>('browser');
+  const [detectedContext, setDetectedContext] = useState<BrowserSourceContext | null>(null);
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const [cameraPermission, setCameraPermission] = useState<CameraPermissionState>(null);
 
@@ -77,18 +152,18 @@ export function RegisterNodeModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    const ua = navigator.userAgent || '';
-    const nextDeviceClass = guessDeviceClass(ua);
-    const nextNodeId = buildDefaultNodeId(nextDeviceClass);
+    const nextContext = detectBrowserSourceContext();
+    const nextNodeId = buildDefaultNodeId(nextContext.deviceClass);
 
-    setDeviceClass(nextDeviceClass);
+    setDetectedContext(nextContext);
     setNodeId(nextNodeId);
-    setLabel(nextDeviceClass === 'iphone-browser' ? 'iPhone Capture Node' : 'Browser Node');
+    setLabel(nextContext.deviceClass === 'iphone-browser' ? 'iPhone Capture Node' : 'Browser Node');
     setBaseUrl('');
     setShowAdvanced(false);
     setError(null);
+    setHasCamera(nextContext.hasCameraApi ? null : false);
 
-    const likelyCapture = nextDeviceClass === 'iphone-browser' || nextDeviceClass === 'android-browser';
+    const likelyCapture = nextContext.isLikelyMobile && nextContext.hasCameraApi;
     if (likelyCapture) {
       setRoles(['runner', 'capture']);
       setCapabilities(['can_proxy_streams']);
@@ -97,7 +172,10 @@ export function RegisterNodeModal({
       setSourceAuthority('runner-local');
       setEphemeral(true);
       setMetadataText(JSON.stringify({
-        device_class: nextDeviceClass,
+        device_class: nextContext.deviceClass,
+        likely_platform: nextContext.likelyPlatform,
+        likely_mobile: nextContext.isLikelyMobile,
+        likely_safari: nextContext.isLikelySafari,
         transport_hint: 'session',
         origin: 'browser',
       }, null, 2));
@@ -110,7 +188,10 @@ export function RegisterNodeModal({
       setSourceAuthority('runner-local');
       setEphemeral(true);
       setMetadataText(JSON.stringify({
-        device_class: nextDeviceClass,
+        device_class: nextContext.deviceClass,
+        likely_platform: nextContext.likelyPlatform,
+        likely_mobile: nextContext.isLikelyMobile,
+        likely_safari: nextContext.isLikelySafari,
         transport_hint: 'browser',
         origin: 'browser',
       }, null, 2));
@@ -184,7 +265,10 @@ export function RegisterNodeModal({
       ephemeral,
       metadata: {
         ...metadata,
-        detected_device: deviceClass,
+        detected_device: detectedContext?.deviceClass || 'desktop-browser',
+        detected_platform: detectedContext?.likelyPlatform || 'unknown',
+        detected_mobile: detectedContext?.isLikelyMobile ?? false,
+        detected_safari: detectedContext?.isLikelySafari ?? false,
         authority_origin: authorityBaseUrl,
       },
     };
@@ -192,7 +276,7 @@ export function RegisterNodeModal({
     authorityBaseUrl,
     baseUrl,
     capabilities,
-    deviceClass,
+    detectedContext,
     ephemeral,
     label,
     metadataText,
@@ -248,6 +332,18 @@ export function RegisterNodeModal({
     }
   }, [onClose, onSuccess, payload, registerNode]);
 
+  const handleConfigureAsCamera = useCallback(() => {
+    applyCapturePreset({
+      setRoles,
+      setCapabilities,
+      setSourceName,
+      setSourceKind,
+      setSourceAuthority,
+      setEphemeral,
+      setLabel,
+    });
+  }, []);
+
   if (!isOpen) return null;
 
   return (
@@ -270,11 +366,20 @@ export function RegisterNodeModal({
         <form onSubmit={handleSubmit} className="register-node-form">
           <div className="register-node-detected card">
             <strong>Detected context</strong>
-            <div className="small">Device: {deviceClass}</div>
-            <div className="small">Camera: {hasCamera == null ? 'checking…' : hasCamera ? 'available' : 'not detected'}</div>
+            <div className="small">Device class: {detectedContext?.deviceClass || 'desktop-browser'}</div>
+            <div className="small">Likely platform: {detectedContext?.likelyPlatform || 'unknown'}</div>
+            <div className="small">Likely mobile: {detectedContext?.isLikelyMobile ? 'yes' : 'no'}</div>
+            <div className="small">Likely Safari: {detectedContext?.isLikelySafari ? 'yes' : 'no'}</div>
+            <div className="small">Camera API available: {detectedContext?.hasCameraApi ? 'yes' : 'no'}</div>
+            <div className="small">Enumerate devices API: {detectedContext?.hasEnumerateDevices ? 'yes' : 'no'}</div>
+            <div className="small">Screen capture API available: {detectedContext?.hasScreenCaptureApi ? 'yes' : 'no'}</div>
+            <div className="small">Camera: {hasCamera == null ? 'checking…' : hasCamera ? 'detected' : 'not detected'}</div>
             <div className="small">Camera permission: {cameraPermission ?? 'unknown'}</div>
             <div className="small">Authority URL: {authorityBaseUrl}</div>
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn" onClick={handleConfigureAsCamera}>
+                Configure as camera device
+              </button>
               <button type="submit" className="btn" disabled={submitting}>
                 {submitting ? 'Registering…' : 'Register This Device'}
               </button>
