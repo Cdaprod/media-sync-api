@@ -43,6 +43,7 @@ import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
 import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
+import { useSourceControlData } from './hooks/useSourceControlData';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -68,6 +69,7 @@ import { useLibrarySnapshot } from './hooks/useLibrarySnapshot';
 import { useExplorerCommands } from './hooks/useExplorerCommands';
 import { useExplorerUiState } from './hooks/useExplorerUiState';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
+import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -566,6 +568,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     : inferApiBaseUrl(apiBaseUrl, window.location);
   const [resolvedApiBase, setResolvedApiBase] = useState(initialApiBase);
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
+  const {
+    snapshot: sourceControlSnapshot,
+    sources: runtimeSources,
+    nodes: runtimeNodes,
+    canonicalSources,
+    remoteSources,
+    healthyNodes,
+    loading: sourceControlLoading,
+    error: sourceControlError,
+    reload: reloadSourceControl,
+  } = useSourceControlData({
+    listSources: api.listSources,
+    listNodes: api.listNodes,
+  });
   const {
     sources,
     projects,
@@ -4775,31 +4791,141 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
               <h2>Sources / Libraries</h2>
               <div className="meta-line">
-                <span className="kbd">/api/sources</span>
+                <span className="kbd">/api/sources + /api/nodes</span>
+                <button
+                  className="btn"
+                  type="button"
+                  style={{ marginLeft: '8px' }}
+                  onClick={() => void reloadSourceControl()}
+                >
+                  Refresh
+                </button>
               </div>
             </div>
             <div className="sources">
-              {sources.length === 0 ? (
+              {sourceControlLoading ? (
+                <div className="card">
+                  <strong>Loading sources…</strong>
+                  <div className="small">Fetching canonical and remote source-bearing participants.</div>
+                </div>
+              ) : sourceControlError ? (
+                <div className="card">
+                  <strong>Source control unavailable</strong>
+                  <div className="small">{sourceControlError}</div>
+                </div>
+              ) : runtimeSources.length === 0 ? (
                 <div className="card">
                   <strong>No sources</strong>
-                  <div className="small">Only the primary mount is available.</div>
+                  <div className="small">No canonical or remote source-bearing participants are currently visible.</div>
                 </div>
               ) : (
-                sources.map((source) => (
-                  <div className="card" key={source.name}>
-                    <strong>{source.name}</strong>
-                    <div className="small">{source.root}</div>
-                    <div className="tagrow">
-                      <span className={`tag ${source.enabled ? 'good' : ''}`}>
-                        {source.enabled ? 'enabled' : 'disabled'}
-                      </span>
-                      <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
-                        {source.accessible ? 'reachable' : 'unreachable'}
-                      </span>
-                      <span className="tag">{source.type || 'local'}</span>
+                <>
+                  <div className="card">
+                    <strong>Summary</strong>
+                    <div className="small">
+                      {canonicalSources.length} canonical · {remoteSources.length} remote · {runtimeNodes.length} nodes
+                    </div>
+                    <div className="small">
+                      {healthyNodes.length} healthy · {sourceControlSnapshot.sources.length} total sources
                     </div>
                   </div>
-                ))
+
+                  {canonicalSources.length > 0 ? (
+                    <div className="card">
+                      <strong>Canonical sources</strong>
+                      <div className="small">Authority-local sources visible through the canonical source registry.</div>
+                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
+                        {canonicalSources.map((source: SourceControlRecord, index: number) => {
+                          const authority = source.authority || 'canonical';
+                          return (
+                            <div className="card" key={`canonical-${source.name}-${index}`}>
+                              <strong>{source.name}</strong>
+                              <div className="small">{source.root || 'No root path'}</div>
+                              <div className="tagrow">
+                                <span className={`tag ${source.enabled ? 'good' : ''}`}>
+                                  {source.enabled ? 'enabled' : 'disabled'}
+                                </span>
+                                <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
+                                  {source.accessible ? 'reachable' : 'unreachable'}
+                                </span>
+                                <span className="tag">{source.kind || source.type || 'filesystem'}</span>
+                                <span className="tag">{authority}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {remoteSources.length > 0 ? (
+                    <div className="card">
+                      <strong>Remote source-bearing participants</strong>
+                      <div className="small">
+                        Runtime-backed nodes registered through connect/control-plane surfaces and exposed in source inventory.
+                      </div>
+                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
+                        {remoteSources.map((source: SourceControlRecord, index: number) => {
+                          const owner = runtimeNodes.find((node) => node.node_id === source.owner_node_id);
+                          const authority = source.authority || 'canonical';
+                          return (
+                            <div className="card" key={`remote-${source.owner_node_id || 'unknown'}-${source.name}-${index}`}>
+                              <strong>{source.name}</strong>
+                              <div className="small">owner: {source.owner_node_id || 'unknown'}</div>
+                              {owner?.label ? (
+                                <div className="small">{owner.label}</div>
+                              ) : null}
+                              {owner?.base_url ? (
+                                <div className="small">{owner.base_url}</div>
+                              ) : null}
+                              <div className="tagrow">
+                                <span className={`tag ${source.enabled ? 'good' : ''}`}>
+                                  {source.enabled ? 'enabled' : 'disabled'}
+                                </span>
+                                <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
+                                  {source.accessible ? 'reachable' : 'unreachable'}
+                                </span>
+                                <span className="tag">{source.kind || source.type || 'remote'}</span>
+                                <span className="tag">{authority}</span>
+                                {source.local_only ? <span className="tag">local-only</span> : null}
+                                {source.can_index ? <span className="tag">index</span> : null}
+                                {source.can_proxy ? <span className="tag">proxy</span> : null}
+                                {source.can_record ? <span className="tag">record</span> : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {runtimeNodes.length > 0 ? (
+                    <div className="card">
+                      <strong>Nodes</strong>
+                      <div className="small">Control-plane view of registered runtimes.</div>
+                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
+                        {runtimeNodes.map((node: NodeControlRecord) => (
+                          <div className="card" key={node.node_id}>
+                            <strong>{node.label}</strong>
+                            <div className="small">{node.node_id}</div>
+                            <div className="small">{node.base_url}</div>
+                            <div className="tagrow">
+                              <span className={`tag ${node.status === 'healthy' ? 'good' : node.status === 'degraded' ? 'bad' : ''}`}>
+                                {node.status}
+                              </span>
+                              {node.roles.map((role) => (
+                                <span className="tag" key={`${node.node_id}-role-${role}`}>{role}</span>
+                              ))}
+                              {node.advertised_source_kinds.map((kind) => (
+                                <span className="tag" key={`${node.node_id}-kind-${kind}`}>{kind}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
 

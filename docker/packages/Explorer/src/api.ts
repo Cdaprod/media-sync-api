@@ -1,5 +1,6 @@
-import type { LibrarySnapshot, MediaResponse, Project, ResolveOpenResponse, Source } from './types';
+import type { LibrarySnapshot, MediaResponse, Project, ResolveOpenResponse } from './types';
 import type { ComposeJobEnvelope } from './composeJobs';
+import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 
 export interface ResolveRequest {
   project: string;
@@ -15,7 +16,8 @@ export interface AssetRef {
 }
 
 export interface ApiClient {
-  listSources: () => Promise<Source[]>;
+  listSources: () => Promise<SourceControlRecord[]>;
+  listNodes: () => Promise<NodeControlRecord[]>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
@@ -60,10 +62,29 @@ export function createApiClient(baseUrl: string): ApiClient {
 
   return {
     buildUrl,
-    async listSources(): Promise<Source[]> {
-      const response = await fetch(buildUrl('/api/sources'));
+    async listSources(): Promise<SourceControlRecord[]> {
+      const response = await fetch(buildUrl('/api/sources'), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+      });
       if (!response.ok) {
-        throw new Error('Failed to list sources');
+        throw new Error(`Failed to load sources: ${response.status}`);
+      }
+      return response.json();
+    },
+    async listNodes(): Promise<NodeControlRecord[]> {
+      const response = await fetch(buildUrl('/api/nodes'), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load nodes: ${response.status}`);
       }
       return response.json();
     },
