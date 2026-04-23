@@ -154,7 +154,6 @@ export function RegisterNodeModal({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deviceUrl, setDeviceUrl] = useState<string | null>(null);
 
   const cameraApiLabel = useMemo(() => {
     if (!detectedContext) return 'unknown';
@@ -184,7 +183,6 @@ export function RegisterNodeModal({
     setBaseUrl('');
     setShowAdvanced(false);
     setError(null);
-    setDeviceUrl(null);
     setHasCamera(nextContext.hasCameraApi ? null : false);
 
     const likelyCapture = nextContext.isLikelyMobile && nextContext.hasCameraApi;
@@ -201,6 +199,8 @@ export function RegisterNodeModal({
         likely_mobile: nextContext.isLikelyMobile,
         likely_safari: nextContext.isLikelySafari,
         transport_hint: 'session',
+        session_node: 'true',
+        browser_push: 'true',
         origin: 'browser',
       }, null, 2));
     }
@@ -216,7 +216,9 @@ export function RegisterNodeModal({
         likely_platform: nextContext.likelyPlatform,
         likely_mobile: nextContext.isLikelyMobile,
         likely_safari: nextContext.isLikelySafari,
-        transport_hint: 'browser',
+        transport_hint: 'session',
+        session_node: 'true',
+        browser_push: 'true',
         origin: 'browser',
       }, null, 2));
     }
@@ -278,18 +280,21 @@ export function RegisterNodeModal({
     const metadata = safeParseMetadata(metadataText);
     const rawMetadata = {
       ...metadata,
-      likely_mobile: detectedContext?.isLikelyMobile ?? false,
-      likely_safari: detectedContext?.isLikelySafari ?? false,
+      transport_hint: 'session',
+      session_node: 'true',
+      browser_push: 'true',
+      likely_mobile: String(detectedContext?.isLikelyMobile ?? false),
+      likely_safari: String(detectedContext?.isLikelySafari ?? false),
       detected_device: detectedContext?.deviceClass || 'desktop-browser',
       detected_platform: detectedContext?.likelyPlatform || 'unknown',
-      detected_mobile: detectedContext?.isLikelyMobile ?? false,
-      detected_safari: detectedContext?.isLikelySafari ?? false,
+      detected_mobile: String(detectedContext?.isLikelyMobile ?? false),
+      detected_safari: String(detectedContext?.isLikelySafari ?? false),
       authority_origin: authorityBaseUrl || '',
     };
     return {
       node_id: nodeId.trim(),
       label: label.trim(),
-      base_url: baseUrl.trim(),
+      base_url: null,
       roles,
       capabilities,
       source_name: sourceName.trim() || null,
@@ -348,10 +353,15 @@ export function RegisterNodeModal({
     try {
       const response = await registerNode(payload);
       window.localStorage.setItem('explorer_capture_node_id', payload.node_id);
-      setDeviceUrl(response.device_url || null);
       onSuccess(response.registered_node ?? null, response);
       if (response.device_url) {
-        router.push(response.device_url);
+        try {
+          router.push(response.device_url);
+        }
+        catch {
+          window.location.href = response.device_url;
+        }
+        return;
       }
       onClose();
     }
@@ -557,14 +567,6 @@ export function RegisterNodeModal({
           {error ? (
             <div className="register-error">
               {error}
-            </div>
-          ) : null}
-
-          {deviceUrl ? (
-            <div className="register-device-url-row">
-              <a className="btn cold-mint-action" href={deviceUrl}>
-                Use this device →
-              </a>
             </div>
           ) : null}
 

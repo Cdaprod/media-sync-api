@@ -1,3 +1,11 @@
+## 2026-04-23 — Register-to-device same-tab redirect hardening pass (active)
+- [x] Updated `RegisterNodeModal` success flow to persist `explorer_capture_node_id` and immediately navigate in the same tab when `device_url` is returned (`router.push` with `window.location.href` fallback).
+- [x] Removed intermediate in-modal post-register continuation affordance so successful current-device registration no longer requires additional taps.
+- [x] Locked browser/session register payload defaults to `base_url: null` and explicit session transport metadata markers (`transport_hint=session`, `session_node=true`, `browser_push=true`) with string-safe metadata serialization.
+- [x] Kept camera permission authority on `/connect/device` only (no `getUserMedia` request on modal open or register submit).
+- [x] Added static Explorer contract assertions for direct redirect, payload markers, and absence of in-modal camera prompt calls.
+- [ ] Next: run iPhone/iPad manual validation to confirm same-tab redirect + Enable Camera permission prompt timing on physical Safari.
+
 ## 2026-04-23 — Live session remote control micro-pass (active)
 - [x] Added backend control plane endpoint `POST /api/live_sessions/{session_id}/control` to persist desired session action (`start_recording` / `stop_recording`) with control timestamp.
 - [x] Added backend session read endpoint `GET /api/live_sessions/{session_id}` and expanded live-session response fields (`desired_action`, `last_control_at`) for device-side command polling.

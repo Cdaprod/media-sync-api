@@ -220,6 +220,21 @@ test('api base inference keeps LAN host reachable', () => {
   assert.ok(content.includes("currentPort !== '8787'"));
 });
 
+test('register modal redirects directly to device activation and keeps session-node payload contract', () => {
+  const modalPath = path.join(packageRoot, 'src', 'components', 'RegisterNodeModal.tsx');
+  const content = fs.readFileSync(modalPath, 'utf8');
+  assert.ok(content.includes("window.localStorage.setItem('explorer_capture_node_id', payload.node_id);"));
+  assert.ok(content.includes('router.push(response.device_url);'));
+  assert.ok(content.includes('window.location.href = response.device_url;'));
+  assert.ok(content.includes('if (response.device_url) {'));
+  assert.ok(content.includes("base_url: null,"));
+  assert.ok(content.includes("transport_hint: 'session'"));
+  assert.ok(content.includes("session_node: 'true'"));
+  assert.ok(content.includes("browser_push: 'true'"));
+  assert.ok(!content.includes('Use this device →'));
+  assert.ok(!content.includes('getUserMedia('));
+});
+
 test('clipboard helper includes fallback copy behavior', () => {
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
   const content = fs.readFileSync(utilsPath, 'utf8');
