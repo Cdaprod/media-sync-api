@@ -1,3 +1,11 @@
+## 2026-04-23 — LiveSourceCard preview polling stabilization pass (active)
+- [x] Updated live preview endpoint to return `FileResponse` with explicit no-cache headers for polling-safe latest-frame retrieval (`Cache-Control`, `Pragma`).
+- [x] Replaced `LiveSourceCard` preview logic with 1s polling + cache-busting URL tick and flicker-safe image swap (`new Image()` preload before visible `img` src update).
+- [x] Added recording overlay marker (`REC {chunk_count}`) to live card preview surface and wired open-device action callback from Explorer sidebar.
+- [x] Added `@keyframes pulse` style used by recording-dot overlay animation.
+- [x] Extended live-session preview API test to assert no-cache response headers.
+- [ ] Next: consider serving lightweight image snapshots from preview endpoint for stronger cross-browser `<img>` compatibility when chunk MIME is video.
+
 ## 2026-04-23 — Centralized connect metadata serialization helper (active)
 - [x] Added frontend utility `serializeMetadata(...)` to normalize `Record<string, unknown>` into `Record<string, string>` for `/connect/register` transport.
 - [x] Refactored `RegisterNodeModal` payload assembly to construct raw metadata once and run full normalization through `serializeMetadata(...)` (removed per-field ad-hoc `String(...)` calls).

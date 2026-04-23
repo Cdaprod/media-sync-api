@@ -99,6 +99,8 @@ def test_live_session_preview_endpoint_returns_latest_chunk(client):
     preview = client.get(f"/api/live_sessions/{session_id}/preview/latest")
     assert preview.status_code == 200
     assert preview.headers["content-type"].startswith("video/webm")
+    assert preview.headers["cache-control"] == "no-store, no-cache, must-revalidate"
+    assert preview.headers["pragma"] == "no-cache"
     assert preview.content == b"preview-webm"
 
 

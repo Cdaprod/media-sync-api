@@ -4840,14 +4840,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   </div>
                 </div>
                 <div className="sources">
-                  {liveSessions.map((session) => (
-                    <LiveSourceCard
-                      key={session.session_id}
-                      session={session}
-                      nodeLabel={session.node_id}
-                    />
-                  ))}
-                </div>
+                    {liveSessions.map((session) => (
+                      <LiveSourceCard
+                        key={session.session_id}
+                        session={session}
+                        apiBase={resolvedApiBase}
+                        onOpen={(entry) => {
+                          window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
+                        }}
+                      />
+                    ))}
+                  </div>
               </>
             ) : null}
 

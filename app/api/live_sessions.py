@@ -9,10 +9,11 @@ Example:
 from __future__ import annotations
 
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from app.domain.live_sessions.models import LiveSourceKind
@@ -148,12 +149,29 @@ async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> list
 async def preview_latest_chunk(
     session_id: str,
     runtime: AppRuntime = Depends(get_runtime),
-) -> Response:
+) -> FileResponse:
+    """Return latest chunk bytes for low-fi live preview polling.
+
+    Example:
+        curl -v http://localhost:8787/api/live_sessions/sess-123/preview/latest
+    """
+
+    registry = runtime.services.live_session_registry
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Live session registry is unavailable")
     try:
-        payload = _session_service(runtime).get_latest_chunk_payload(session_id)
+        session = registry.require(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if payload is None:
-        raise HTTPException(status_code=404, detail="No chunk available for this session")
-    body, content_type = payload
-    return Response(content=body, media_type=content_type)
+    chunk_path = session.latest_chunk_path
+    if not chunk_path or not Path(chunk_path).exists():
+        raise HTTPException(status_code=404, detail="No preview available")
+
+    return FileResponse(
+        chunk_path,
+        media_type="video/webm",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
