@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from app.domain.ingest.contracts import SubmitAssetClaimRequest
-from app.domain.live_sessions.models import LiveSession, LiveSourceKind
+from app.domain.live_sessions.models import LiveSession, LiveSessionControlAction, LiveSourceKind
 from app.runtime.live_sessions import LiveSessionRegistry
 
 
@@ -58,6 +58,8 @@ class LiveSessionService:
             chunk_count=0,
             claim_id=None,
             latest_chunk_path=None,
+            desired_action=None,
+            last_control_at=None,
             metadata=dict(metadata or {}),
         )
         return self.session_registry.upsert(session)
@@ -74,6 +76,8 @@ class LiveSessionService:
             chunk_count=session.chunk_count,
             claim_id=session.claim_id,
             latest_chunk_path=session.latest_chunk_path,
+            desired_action=session.desired_action,
+            last_control_at=session.last_control_at,
             metadata=dict(session.metadata),
         )
         return self.session_registry.upsert(updated)
@@ -109,10 +113,30 @@ class LiveSessionService:
             chunk_count=next_index,
             claim_id=session.claim_id,
             latest_chunk_path=str(chunk_path),
+            desired_action=session.desired_action,
+            last_control_at=session.last_control_at,
             metadata=dict(session.metadata),
         )
         self.session_registry.upsert(updated)
         return chunk_path
+
+    def control_session(self, session_id: str, action: LiveSessionControlAction) -> LiveSession:
+        session = self.session_registry.require(session_id)
+        updated = LiveSession(
+            session_id=session.session_id,
+            node_id=session.node_id,
+            source_kind=session.source_kind,
+            status=session.status,
+            started_at=session.started_at,
+            last_heartbeat_at=session.last_heartbeat_at,
+            chunk_count=session.chunk_count,
+            claim_id=session.claim_id,
+            latest_chunk_path=session.latest_chunk_path,
+            desired_action=action,
+            last_control_at=_utc_now_iso(),
+            metadata=dict(session.metadata),
+        )
+        return self.session_registry.upsert(updated)
 
     def get_latest_chunk(self, session_id: str) -> bytes | None:
         session = self.session_registry.require(session_id)
@@ -170,6 +194,8 @@ class LiveSessionService:
             chunk_count=session.chunk_count,
             claim_id=claim_id,
             latest_chunk_path=session.latest_chunk_path,
+            desired_action=session.desired_action,
+            last_control_at=session.last_control_at,
             metadata=dict(session.metadata),
         )
         return self.session_registry.upsert(ended)

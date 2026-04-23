@@ -124,3 +124,39 @@ def test_live_session_list_drops_stale_active_sessions(client):
     assert listed.status_code == 200
     assert listed.json() == []
     assert registry.get("sess-stale") is None
+
+
+def test_live_session_control_updates_desired_action(client):
+    register = client.post(
+        "/api/nodes",
+        json={
+            "node_id": "runner-live-3",
+            "label": "Runner Live 3",
+            "base_url": "http://127.0.0.1:9003",
+            "roles": ["runner"],
+            "advertised_source_kinds": ["capture"],
+            "status": "healthy",
+        },
+    )
+    assert register.status_code == 201
+
+    started = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": "runner-live-3", "source_kind": "camera"},
+    )
+    assert started.status_code == 200
+    session_id = started.json()["session_id"]
+
+    control = client.post(
+        f"/api/live_sessions/{session_id}/control",
+        json={"action": "start_recording"},
+    )
+    assert control.status_code == 200
+    assert control.json()["ok"] is True
+    assert control.json()["action"] == "start_recording"
+
+    fetched = client.get(f"/api/live_sessions/{session_id}")
+    assert fetched.status_code == 200
+    payload = fetched.json()
+    assert payload["desired_action"] == "start_recording"
+    assert isinstance(payload["last_control_at"], str)

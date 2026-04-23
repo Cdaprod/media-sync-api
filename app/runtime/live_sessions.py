@@ -77,6 +77,8 @@ class LiveSessionRegistry:
                 chunk_count=session.chunk_count,
                 claim_id=session.claim_id,
                 latest_chunk_path=session.latest_chunk_path,
+                desired_action=session.desired_action,
+                last_control_at=session.last_control_at,
                 metadata=dict(session.metadata),
             )
             self.upsert(session)

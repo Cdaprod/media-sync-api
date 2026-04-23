@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { LiveSessionRecord, LiveSourceKind } from '../types/liveSession';
+import type { LiveSessionControlAction, LiveSessionRecord, LiveSourceKind } from '../types/liveSession';
 
 type LiveSessionUiState =
   | 'idle'
@@ -16,6 +16,8 @@ type LiveSessionUiState =
 
 interface ApiShape {
   startLiveSession: (nodeId: string, sourceKind: LiveSourceKind, metadata?: Record<string, unknown>) => Promise<LiveSessionRecord>;
+  getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
+  controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
@@ -31,6 +33,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const heartbeatTimerRef = useRef<number | null>(null);
+  const controlPollBusyRef = useRef(false);
 
   const clearHeartbeat = useCallback(() => {
     if (heartbeatTimerRef.current != null) {
@@ -180,6 +183,29 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
   useEffect(() => {
     return () => cleanup();
   }, [cleanup]);
+
+  useEffect(() => {
+    if (!session?.session_id) return undefined;
+    const interval = window.setInterval(() => {
+      if (controlPollBusyRef.current) return;
+      controlPollBusyRef.current = true;
+      void api.getLiveSession(session.session_id)
+        .then((latest) => {
+          setSession(latest);
+          if (latest.desired_action === 'start_recording' && state !== 'recording' && state !== 'ending') {
+            void startRecording();
+          }
+          if (latest.desired_action === 'stop_recording' && state === 'recording') {
+            void stopRecording();
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          controlPollBusyRef.current = false;
+        });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [api, session?.session_id, startRecording, state, stopRecording]);
 
   return {
     state,

@@ -32,9 +32,17 @@ interface LiveSourceCardProps {
   session: LiveSessionRecord;
   apiBase?: string;
   onOpen?: (session: LiveSessionRecord) => void;
+  onStartRecording?: (session: LiveSessionRecord) => void;
+  onStopRecording?: (session: LiveSessionRecord) => void;
 }
 
-export function LiveSourceCard({ session, apiBase = '', onOpen }: LiveSourceCardProps) {
+export function LiveSourceCard({
+  session,
+  apiBase = '',
+  onOpen,
+  onStartRecording,
+  onStopRecording,
+}: LiveSourceCardProps) {
   const isActive = session.status === 'previewing' || session.status === 'recording';
   const previewUrl = usePreviewUrl(apiBase, session.session_id, isActive);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -115,6 +123,30 @@ export function LiveSourceCard({ session, apiBase = '', onOpen }: LiveSourceCard
           <span className="tag">{session.source_kind}</span>
           <span className="tag">{session.status}</span>
         </div>
+        {onStartRecording || onStopRecording ? (
+          <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+            {onStartRecording ? (
+              <button
+                className="btn"
+                type="button"
+                style={{ flex: 1, fontSize: 11 }}
+                onClick={() => onStartRecording(session)}
+              >
+                Record
+              </button>
+            ) : null}
+            {onStopRecording ? (
+              <button
+                className="btn"
+                type="button"
+                style={{ flex: 1, fontSize: 11 }}
+                onClick={() => onStopRecording(session)}
+              >
+                Stop
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {onOpen ? (
           <button
             className="btn"

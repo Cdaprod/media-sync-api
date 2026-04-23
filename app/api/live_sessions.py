@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from app.domain.live_sessions.models import LiveSourceKind
+from app.domain.live_sessions.models import LiveSessionControlAction, LiveSourceKind
 from app.runtime import get_runtime
 from app.runtime.types import AppRuntime
 
@@ -39,12 +39,18 @@ class LiveSessionResponse(BaseModel):
     chunk_count: int
     claim_id: str | None = None
     latest_chunk_path: str | None = None
+    desired_action: LiveSessionControlAction | None = None
+    last_control_at: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class EndLiveSessionResponse(BaseModel):
     session: LiveSessionResponse
     claim_id: str | None = None
+
+
+class LiveSessionControlRequest(BaseModel):
+    action: LiveSessionControlAction
 
 
 def _session_service(runtime: AppRuntime):
@@ -143,6 +149,34 @@ async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> list
     if registry is None:
         return []
     return [LiveSessionResponse(**asdict(session)) for session in registry.list_active()]
+
+
+@router.get("/{session_id}", response_model=LiveSessionResponse)
+async def get_live_session(
+    session_id: str,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> LiveSessionResponse:
+    registry = runtime.services.live_session_registry
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Live session registry is unavailable")
+    try:
+        session = registry.require(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return LiveSessionResponse(**asdict(session))
+
+
+@router.post("/{session_id}/control")
+async def control_live_session(
+    session_id: str,
+    payload: LiveSessionControlRequest,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> JSONResponse:
+    try:
+        session = _session_service(runtime).control_session(session_id, payload.action)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return JSONResponse({"ok": True, "action": payload.action, "session_id": session.session_id})
 
 
 @router.get("/{session_id}/preview/latest")

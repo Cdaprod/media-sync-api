@@ -2,7 +2,7 @@ import type { LibrarySnapshot, MediaResponse, Project, ResolveOpenResponse } fro
 import type { ComposeJobEnvelope } from './composeJobs';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 import type { RegisterNodeRequest, RegisterNodeResponse } from './types/registration';
-import type { LiveSessionRecord, LiveSourceKind } from './types/liveSession';
+import type { LiveSessionControlAction, LiveSessionRecord, LiveSourceKind } from './types/liveSession';
 
 export interface ResolveRequest {
   project: string;
@@ -22,6 +22,8 @@ export interface ApiClient {
   listNodes: () => Promise<NodeControlRecord[]>;
   registerNode: (payload: RegisterNodeRequest) => Promise<RegisterNodeResponse>;
   startLiveSession: (nodeId: string, sourceKind: LiveSourceKind, metadata?: Record<string, unknown>) => Promise<LiveSessionRecord>;
+  getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
+  controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
@@ -126,6 +128,32 @@ export function createApiClient(baseUrl = ''): ApiClient {
       });
       if (!response.ok) {
         throw new Error(`Failed to start live session: ${response.status}`);
+      }
+      return response.json();
+    },
+    async getLiveSession(sessionId: string): Promise<LiveSessionRecord> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}`), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to get live session: ${response.status}`);
+      }
+      return response.json();
+    },
+    async controlLiveSession(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction }> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ action }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to control live session: ${response.status}`);
       }
       return response.json();
     },

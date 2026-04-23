@@ -4845,6 +4845,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                         key={session.session_id}
                         session={session}
                         apiBase={resolvedApiBase}
+                        onStartRecording={(entry) => {
+                          void api.controlLiveSession(entry.session_id, 'start_recording')
+                            .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))
+                            .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                        }}
+                        onStopRecording={(entry) => {
+                          void api.controlLiveSession(entry.session_id, 'stop_recording')
+                            .then(() => addToast('good', 'Live control', `Stop requested for ${entry.node_id}`))
+                            .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                        }}
                         onOpen={(entry) => {
                           window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
                         }}

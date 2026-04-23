@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 LiveSourceKind = Literal["camera", "screen"]
 LiveSessionStatus = Literal["idle", "previewing", "recording", "ended"]
+LiveSessionControlAction = Literal["start_recording", "stop_recording"]
 
 
 @dataclass(slots=True)
@@ -33,6 +34,8 @@ class LiveSession:
     chunk_count: int = 0
     claim_id: str | None = None
     latest_chunk_path: str | None = None
+    desired_action: LiveSessionControlAction | None = None
+    last_control_at: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property

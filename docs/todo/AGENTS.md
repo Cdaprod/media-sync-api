@@ -1,3 +1,12 @@
+## 2026-04-23 — Live session remote control micro-pass (active)
+- [x] Added backend control plane endpoint `POST /api/live_sessions/{session_id}/control` to persist desired session action (`start_recording` / `stop_recording`) with control timestamp.
+- [x] Added backend session read endpoint `GET /api/live_sessions/{session_id}` and expanded live-session response fields (`desired_action`, `last_control_at`) for device-side command polling.
+- [x] Extended live session service/domain/runtime models to carry desired-action control state through heartbeat/chunk/end transitions.
+- [x] Added Explorer live card control buttons (Record/Stop) that call new control endpoint and emit operator toasts.
+- [x] Added device-side control polling in `useLiveSession` to fetch latest session state every second and execute local recording actions when desired action changes.
+- [x] Added backend regression test coverage for control endpoint and per-session control state retrieval.
+- [ ] Next: clear/ack desired_action after successful device action execution to avoid redundant command replays across reconnects.
+
 ## 2026-04-23 — LiveSourceCard preview polling stabilization pass (active)
 - [x] Updated live preview endpoint to return `FileResponse` with explicit no-cache headers for polling-safe latest-frame retrieval (`Cache-Control`, `Pragma`).
 - [x] Replaced `LiveSourceCard` preview logic with 1s polling + cache-busting URL tick and flicker-safe image swap (`new Image()` preload before visible `img` src update).
