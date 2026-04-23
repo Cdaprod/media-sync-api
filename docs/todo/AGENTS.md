@@ -1,3 +1,13 @@
+## 2026-04-23 — Live session closure seam + low-fi preview follow-up (active)
+- [x] Attempted requested `.25` manual chain validation (`ssh`, spool/log checks, direct endpoint curls) from container; blocked by network reachability (`port 22 unreachable`) so validation must run on reachable host context.
+- [x] Confirmed live ingest path remains integrated via `LiveSessionService.end_session()` using existing `IngestClaimService.submit_claim(...)` contract (no ad-hoc stub payload path).
+- [x] Added stale live-session expiry in runtime registry active-list path (drop active sessions older than 60s heartbeat) to prevent orphan accumulation when clients disconnect without `/end`.
+- [x] Added low-fi live preview endpoint `GET /api/live_sessions/{id}/preview/latest` returning latest chunk bytes with appropriate media content-type.
+- [x] Added Explorer `LiveSourceCard` preview polling (`<video>` src refresh every 2s) against latest-chunk preview endpoint.
+- [x] Tightened end-to-asset seam in frontend: `useLiveSession` persists claim event on end, Explorer listens and auto-refreshes media scope after short delay, and device ended state links back into Explorer with claim context.
+- [x] Added backend test coverage for preview endpoint and stale-session expiry behavior.
+- [ ] Next: on reachable `.25` host, run requested manual iPhone walkthrough with live logs and spool checks, then capture exact failure/success evidence for any remaining chain gaps.
+
 ## 2026-04-23 — Live session intake + Explorer device capture bridge (active)
 - [x] Added runtime-owned live session domain/service/registry wiring (`LiveSession`, `LiveSessionRegistry`, `LiveSessionService`) with spool chunk persistence and authority ingest-claim handoff on session end.
 - [x] Added live session API surface (`/api/live_sessions` start/heartbeat/chunk/end/list) and wired router/runtime health flags so connect/ingest/live readiness are visible from `/health`.

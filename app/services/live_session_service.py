@@ -123,6 +123,16 @@ class LiveSessionService:
             return None
         return path.read_bytes()
 
+    def get_latest_chunk_payload(self, session_id: str) -> tuple[bytes, str] | None:
+        session = self.session_registry.require(session_id)
+        if not session.latest_chunk_path:
+            return None
+        path = Path(session.latest_chunk_path)
+        if not path.exists():
+            return None
+        content_type = "video/webm" if path.suffix.lower() == ".webm" else "video/mp4"
+        return path.read_bytes(), content_type
+
     def end_session(self, session_id: str) -> LiveSession:
         session = self.session_registry.require(session_id)
 

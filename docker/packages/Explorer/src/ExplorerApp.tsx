@@ -626,6 +626,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [isRegisterNodeModalOpen, setIsRegisterNodeModalOpen] = useState(false);
+  const liveClaimRefreshRef = useRef<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // UI/runtime authority seam.
@@ -1775,6 +1776,34 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setPendingDataLoadOverlay(false);
     }
   }, [clearActiveAsset, clearSelectionState, refreshLibrarySnapshot]);
+
+  useEffect(() => {
+    const handleClaimEvent = () => {
+      try {
+        const raw = window.localStorage.getItem('explorer_live_claim_event');
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as { claim_id?: string; at?: number };
+        const claimId = String(parsed?.claim_id || '').trim();
+        const at = Number(parsed?.at || 0);
+        if (!claimId || !Number.isFinite(at) || Date.now() - at > 120000) return;
+        if (liveClaimRefreshRef.current === claimId) return;
+        liveClaimRefreshRef.current = claimId;
+        window.setTimeout(() => {
+          if (activeProject && mediaScope === 'project') {
+            void loadMedia(activeProject);
+          } else {
+            void loadAllMedia();
+          }
+          addToast('good', 'Live capture', `New claim submitted: ${claimId}`);
+        }, 1200);
+      } catch {
+        // ignore malformed storage value
+      }
+    };
+    handleClaimEvent();
+    const timer = window.setInterval(handleClaimEvent, 2500);
+    return () => window.clearInterval(timer);
+  }, [activeProject, addToast, loadAllMedia, loadMedia, mediaScope]);
 
   const refreshMediaForScope = useCallback(async (
     refreshScope: {

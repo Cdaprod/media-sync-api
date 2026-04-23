@@ -25,6 +25,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
   const [state, setState] = useState<LiveSessionUiState>('idle');
   const [session, setSession] = useState<LiveSessionRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastClaimId, setLastClaimId] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -149,6 +150,16 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
 
       const ended = await api.endLiveSession(session.session_id);
       setSession(ended.session);
+      setLastClaimId(ended.claim_id);
+      if (ended.claim_id) {
+        window.localStorage.setItem(
+          'explorer_live_claim_event',
+          JSON.stringify({
+            claim_id: ended.claim_id,
+            at: Date.now(),
+          }),
+        );
+      }
       setState('ended');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to stop recording');
@@ -180,5 +191,6 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     stopPreview,
     cleanup,
     error,
+    lastClaimId,
   };
 }

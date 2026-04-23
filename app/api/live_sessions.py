@@ -12,7 +12,7 @@ from dataclasses import asdict
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from app.domain.live_sessions.models import LiveSourceKind
@@ -142,3 +142,18 @@ async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> list
     if registry is None:
         return []
     return [LiveSessionResponse(**asdict(session)) for session in registry.list_active()]
+
+
+@router.get("/{session_id}/preview/latest")
+async def preview_latest_chunk(
+    session_id: str,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> Response:
+    try:
+        payload = _session_service(runtime).get_latest_chunk_payload(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if payload is None:
+        raise HTTPException(status_code=404, detail="No chunk available for this session")
+    body, content_type = payload
+    return Response(content=body, media_type=content_type)

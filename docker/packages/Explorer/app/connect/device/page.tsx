@@ -24,6 +24,7 @@ export default function ConnectDevicePage() {
     stopRecording,
     stopPreview,
     error,
+    lastClaimId,
   } = useLiveSession(api, nodeId);
 
   const heading = useMemo(() => {
@@ -64,6 +65,13 @@ export default function ConnectDevicePage() {
                 {state === 'ended' && session?.claim_id ? (
                   <div className="small" style={{ marginTop: 12 }}>
                     Clip submitted. claim_id={session.claim_id}
+                  </div>
+                ) : null}
+                {state === 'ended' && (lastClaimId || session?.claim_id) ? (
+                  <div style={{ marginTop: 12 }}>
+                    <a className="btn cold-mint-action" href={`/?claim_id=${encodeURIComponent(lastClaimId || session?.claim_id || '')}`}>
+                      Open new asset in Explorer
+                    </a>
                   </div>
                 ) : null}
                 {error ? <div className="small" style={{ marginTop: 12, color: '#ff9a90' }}>{error}</div> : null}

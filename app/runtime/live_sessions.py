@@ -7,7 +7,22 @@ Example:
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from app.domain.live_sessions.models import LiveSession
+
+LIVE_SESSION_EXPIRY_SECONDS = 60
+
+
+def _parse_utc_iso(raw: str) -> datetime | None:
+    try:
+        normalized = raw.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 class LiveSessionRegistry:
@@ -20,7 +35,21 @@ class LiveSessionRegistry:
         return list(self._sessions.values())
 
     def list_active(self) -> list[LiveSession]:
-        return [session for session in self._sessions.values() if session.is_active]
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=LIVE_SESSION_EXPIRY_SECONDS)
+        next_sessions: dict[str, LiveSession] = {}
+        active: list[LiveSession] = []
+        for session_id, session in self._sessions.items():
+            if not session.is_active:
+                next_sessions[session_id] = session
+                continue
+            last_heartbeat = _parse_utc_iso(session.last_heartbeat_at)
+            if last_heartbeat is None or last_heartbeat < cutoff:
+                continue
+            next_sessions[session_id] = session
+            active.append(session)
+        self._sessions = next_sessions
+        return active
 
     def get(self, session_id: str) -> LiveSession | None:
         return self._sessions.get(session_id)

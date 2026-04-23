@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { LiveSessionRecord } from '../types/liveSession';
 
 interface LiveSourceCardProps {
@@ -9,6 +9,18 @@ interface LiveSourceCardProps {
 }
 
 export function LiveSourceCard({ session, nodeLabel }: LiveSourceCardProps) {
+  const [previewTick, setPreviewTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setPreviewTick((prev) => prev + 1);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const previewUrl = useMemo(
+    () => `/api/live_sessions/${encodeURIComponent(session.session_id)}/preview/latest?t=${previewTick}`,
+    [previewTick, session.session_id],
+  );
+
   const dotClass =
     session.status === 'recording'
       ? 'live-dot live-dot-recording'
@@ -23,6 +35,14 @@ export function LiveSourceCard({ session, nodeLabel }: LiveSourceCardProps) {
         <strong>{nodeLabel || session.node_id}</strong>
       </div>
       <div className="small">{session.node_id}</div>
+      <video
+        className="connect-device-video"
+        style={{ marginTop: 10 }}
+        src={previewUrl}
+        muted
+        playsInline
+        autoPlay
+      />
       <div className="tagrow" style={{ marginTop: 8 }}>
         <span className="tag">{session.source_kind}</span>
         <span className="tag">{session.status}</span>
