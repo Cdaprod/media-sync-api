@@ -1,3 +1,12 @@
+## 2026-04-23 — Connect-plane onboarding bridge (active)
+- [x] Added `/connect` discovery manifest covering runtime identity, capabilities, source records, and operational endpoints.
+- [x] Added `/connect/register` onboarding so remote non-authority runtimes can register as source-bearing participants without mutating canonical `SourceRegistry` shape.
+- [x] Kept connect-plane separate from ingest-plane; registration persists node + runtime-memory source-bearing representation only.
+- [x] Added `remote_source_records` metadata lane and health exposure for connect readiness + remote source count.
+- [x] Added `/connect` API regression tests for text/json/html discovery and registration path behavior.
+- [ ] Next: add runtime-aware source inventory endpoint that merges canonical local sources with connect-registered remote source participants.
+- [ ] Next: surface connect participants in Explorer sources/nodes views.
+
 ## 2026-04-22 — PR #161 close-out pass (runtime composition proof + ingest readiness) (active)
 - [x] Added health/runtime ingest readiness markers (`ingest_claims_enabled`, `runtime_services.*`) so operations can verify ingest-plane wiring at runtime.
 - [x] Added explicit runtime composition assertion test for `node_registry`, `ingest_registry`, and `ingest_claim_service` on startup.

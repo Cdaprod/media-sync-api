@@ -13,7 +13,9 @@ def test_health_endpoint(client):
     assert payload.get("started") is True
     assert payload.get("projects_root")
     assert payload.get("ingest_claims_enabled") is True
-    services = payload.get("runtime_services") or {}
-    assert services.get("node_registry") is True
-    assert services.get("ingest_registry") is True
-    assert services.get("ingest_claim_service") is True
+    assert payload.get("connect_enabled") is True
+    runtime_services = payload.get("runtime_services", {})
+    assert runtime_services.get("node_registry") is True
+    assert runtime_services.get("ingest_registry") is True
+    assert runtime_services.get("ingest_claim_service") is True
+    assert isinstance(payload.get("remote_source_records"), int)

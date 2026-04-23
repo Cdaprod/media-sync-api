@@ -148,6 +148,7 @@ Path alignment for Resolve:
 ## API overview
 - Control-plane vs ingest-plane boundary:
   - `/api/nodes` is for runtime/node identity, capability, and liveness control-plane data.
+  - `/connect` and `/connect/register` are for discovery/onboarding of source-bearing participants.
   - `/api/ingest/claims` is for asset ingest-plane candidate submission and authority intake decisions.
   - Local observation on a runner is **not canonical by default**; canonical truth requires authority-side acceptance flow.
 

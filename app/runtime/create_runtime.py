@@ -165,6 +165,7 @@ def create_runtime() -> AppRuntime:
             "node_id": node_id,
             "node_name": node_name,
             "source_records": source_records,
+            "remote_source_records": [],
         },
     )
 

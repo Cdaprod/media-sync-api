@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from app.runtime.types import AppRuntime
+
 SourceKind = Literal["filesystem", "capture", "proxy", "virtual"]
 SourceAuthority = Literal["canonical", "runner-local", "ephemeral"]
 
@@ -67,3 +69,28 @@ def build_primary_source_record(*, project_root: Path, owner_node_id: str, runti
         can_record=(runtime_role == "runner"),
         metadata={"runtime_role": runtime_role},
     )
+
+
+def merge_remote_source_record(runtime: AppRuntime, source_record: SourceRecord) -> None:
+    """Upsert a remote source-bearing participant into runtime metadata.
+
+    Remote source records are currently runtime-memory-only. This keeps
+    /connect onboarding incremental without mutating canonical SourceRegistry.
+    """
+
+    existing = runtime.metadata.get("remote_source_records", [])
+    remote_records = [record for record in existing if isinstance(record, SourceRecord)]
+
+    next_records: list[SourceRecord] = []
+    replaced = False
+    for current in remote_records:
+        if current.name == source_record.name and current.owner_node_id == source_record.owner_node_id:
+            next_records.append(source_record)
+            replaced = True
+        else:
+            next_records.append(current)
+
+    if not replaced:
+        next_records.append(source_record)
+
+    runtime.metadata["remote_source_records"] = next_records

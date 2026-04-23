@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.compose import router as compose_router
 from app.api.compose import shutdown_compose_jobs
+from app.api.connect import router as connect_router
 from app.api.library import router as library_router
 from app.api.ingest_claims import router as ingest_claims_router
 from app.api.media import bulk_router as assets_bulk_router
@@ -122,6 +123,7 @@ def create_app() -> FastAPI:
     application.include_router(resolve_router)
     application.include_router(nodes_router)
     application.include_router(ingest_claims_router)
+    application.include_router(connect_router)
 
     application.mount(
         "/public",
@@ -164,12 +166,14 @@ def create_app() -> FastAPI:
             "projects_root": str(runtime.paths.data_root),
             "started": runtime.started,
             "ingest_claims_enabled": ingest_registry_ready and ingest_claim_service_ready,
+            "connect_enabled": True,
             "runtime_services": {
                 "node_registry": runtime.services.node_registry is not None,
                 "ingest_registry": ingest_registry_ready,
                 "ingest_claim_service": ingest_claim_service_ready,
             },
-            "instructions": "See /public/index.html for end-to-end adapter and shortcut guidance.",
+            "remote_source_records": len(runtime.metadata.get("remote_source_records", [])),
+            "instructions": "See /connect for authority discovery and /public/index.html for end-to-end adapter guidance.",
         }
 
     @application.get("/healthz")
