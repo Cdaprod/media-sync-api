@@ -18,6 +18,7 @@ interface ApiShape {
   startLiveSession: (nodeId: string, sourceKind: LiveSourceKind, metadata?: Record<string, unknown>) => Promise<LiveSessionRecord>;
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
+  acknowledgeLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
@@ -106,12 +107,12 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     }
   }, [api, clearHeartbeat, nodeId]);
 
-  const startRecording = useCallback(async () => {
-    if (!session || !streamRef.current) return;
+  const startRecording = useCallback(async (): Promise<boolean> => {
+    if (!session || !streamRef.current) return false;
     if (typeof MediaRecorder === 'undefined') {
       setError('MediaRecorder is unavailable in this browser');
       setState('error');
-      return;
+      return false;
     }
 
     try {
@@ -128,9 +129,11 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       });
 
       recorder.start(2000);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to start recording');
       setState('error');
+      return false;
     }
   }, [api, session]);
 
@@ -193,7 +196,12 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
         .then((latest) => {
           setSession(latest);
           if (latest.desired_action === 'start_recording' && state !== 'recording' && state !== 'ending') {
-            void startRecording();
+            void startRecording().then((started) => {
+              if (!started) return;
+              return api.acknowledgeLiveSessionControl(latest.session_id, 'start_recording')
+                .then(setSession)
+                .catch(() => undefined);
+            });
           }
           if (latest.desired_action === 'stop_recording' && state === 'recording') {
             void stopRecording();

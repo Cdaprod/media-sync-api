@@ -160,3 +160,15 @@ def test_live_session_control_updates_desired_action(client):
     payload = fetched.json()
     assert payload["desired_action"] == "start_recording"
     assert isinstance(payload["last_control_at"], str)
+
+    ack = client.post(
+        f"/api/live_sessions/{session_id}/control/ack",
+        json={"action": "start_recording"},
+    )
+    assert ack.status_code == 200
+    assert ack.json()["ok"] is True
+    assert ack.json()["action"] == "start_recording"
+
+    fetched_after_ack = client.get(f"/api/live_sessions/{session_id}")
+    assert fetched_after_ack.status_code == 200
+    assert fetched_after_ack.json()["desired_action"] is None

@@ -138,6 +138,26 @@ class LiveSessionService:
         )
         return self.session_registry.upsert(updated)
 
+    def acknowledge_control_action(self, session_id: str, action: LiveSessionControlAction) -> LiveSession:
+        session = self.session_registry.require(session_id)
+        if session.desired_action != action:
+            return session
+        updated = LiveSession(
+            session_id=session.session_id,
+            node_id=session.node_id,
+            source_kind=session.source_kind,
+            status=session.status,
+            started_at=session.started_at,
+            last_heartbeat_at=session.last_heartbeat_at,
+            chunk_count=session.chunk_count,
+            claim_id=session.claim_id,
+            latest_chunk_path=session.latest_chunk_path,
+            desired_action=None,
+            last_control_at=session.last_control_at,
+            metadata=dict(session.metadata),
+        )
+        return self.session_registry.upsert(updated)
+
     def get_latest_chunk(self, session_id: str) -> bytes | None:
         session = self.session_registry.require(session_id)
         if not session.latest_chunk_path:
@@ -194,7 +214,7 @@ class LiveSessionService:
             chunk_count=session.chunk_count,
             claim_id=claim_id,
             latest_chunk_path=session.latest_chunk_path,
-            desired_action=session.desired_action,
+            desired_action=None,
             last_control_at=session.last_control_at,
             metadata=dict(session.metadata),
         )

@@ -53,6 +53,10 @@ class LiveSessionControlRequest(BaseModel):
     action: LiveSessionControlAction
 
 
+class LiveSessionControlAckRequest(BaseModel):
+    action: LiveSessionControlAction
+
+
 def _session_service(runtime: AppRuntime):
     service = runtime.services.live_session_service
     if service is None:
@@ -174,6 +178,19 @@ async def control_live_session(
 ) -> JSONResponse:
     try:
         session = _session_service(runtime).control_session(session_id, payload.action)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return JSONResponse({"ok": True, "action": payload.action, "session_id": session.session_id})
+
+
+@router.post("/{session_id}/control/ack")
+async def acknowledge_live_session_control(
+    session_id: str,
+    payload: LiveSessionControlAckRequest,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> JSONResponse:
+    try:
+        session = _session_service(runtime).acknowledge_control_action(session_id, payload.action)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return JSONResponse({"ok": True, "action": payload.action, "session_id": session.session_id})

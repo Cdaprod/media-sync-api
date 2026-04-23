@@ -24,6 +24,7 @@ export interface ApiClient {
   startLiveSession: (nodeId: string, sourceKind: LiveSourceKind, metadata?: Record<string, unknown>) => Promise<LiveSessionRecord>;
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
+  acknowledgeLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
@@ -154,6 +155,21 @@ export function createApiClient(baseUrl = ''): ApiClient {
       });
       if (!response.ok) {
         throw new Error(`Failed to control live session: ${response.status}`);
+      }
+      return response.json();
+    },
+    async acknowledgeLiveSessionControl(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction }> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control/ack`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ action }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to acknowledge live session control: ${response.status}`);
       }
       return response.json();
     },
