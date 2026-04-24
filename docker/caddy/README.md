@@ -12,6 +12,16 @@ Use:
 
 Set these for backend connect/authority URL generation and Caddy host binding:
 
+## Repo root `.env` bootstrap
+
+From the repository root:
+
+```bash
+cp .env.example .env
+```
+
+Then adjust values for your LAN hostname/IP before running compose.
+
 ```bash
 # Full URLs (backend/frontend authority contracts)
 MEDIA_SYNC_PUBLIC_ORIGIN=https://cda-DESKTOP.local

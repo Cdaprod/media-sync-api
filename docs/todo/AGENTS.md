@@ -1,3 +1,8 @@
+## 2026-04-24 — Root .env example for Caddy/authority bootstrap (active)
+- [x] Added repo-root `.env.example` with copy-paste baseline values for authority/public origin, Caddy hostname binding, runtime role, and API host/port.
+- [x] Updated `docker/caddy/README.md` with an explicit `cp .env.example .env` bootstrap step before compose usage.
+- [ ] Next: align top-level README quickstart with the same `.env` bootstrap flow to remove onboarding drift.
+
 ## 2026-04-24 — Root compose include for Caddy scaffold (active)
 - [x] Added `docker/docker-compose.caddy.yaml` to root `docker-compose.yaml` includes so LAN HTTPS gateway can be composed with core/api + Explorer stacks.
 - [x] Kept include-only change narrowly scoped (no backend/frontend runtime logic touched).
