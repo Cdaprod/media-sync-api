@@ -5160,21 +5160,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <h2>Ingest Claims</h2>
                 <div className="meta-line">
                   <span className="kbd">/api/ingest/claims</span>
-                  <span>Showing latest {latestIngestClaims.length} of {ingestClaims.length} claims</span>
+                  <span className="small">Showing latest {latestIngestClaims.length} of {ingestClaims.length}</span>
                 </div>
-                <div style={{ padding: '12px', paddingTop: 10 }}>
-                  <div style={{ maxHeight: 260, overflowY: 'auto', display: 'grid', gap: 10 }}>
+
+                <div className="ingest-claims-panel">
+                  <div className="ingest-claims-list">
                     {latestIngestClaims.map((claim) => (
                       <div
-                        className="card"
+                        className="ingest-claim-card card"
                         key={claim.claim_id}
                         onContextMenu={(event) => openIngestClaimContextMenu(event, claim)}
                       >
-                        <strong title={claim.claim_id} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {claim.claim_id}
-                        </strong>
-                        <div className="small">{claim.node_id}</div>
-                        <div className="small">{claim.source_name}</div>
+                        <strong className="claim-row" title={claim.claim_id}>{claim.claim_id}</strong>
+                        <div className="small claim-row">{claim.node_id}</div>
+                        <div className="small claim-row">{claim.source_name}</div>
                         <div className="tagrow">
                           <span className="tag">{claim.status}</span>
                           {claim.materialization_mode ? <span className="tag">{claim.materialization_mode}</span> : null}
@@ -5184,7 +5183,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           className="btn"
                           type="button"
                           onClick={(event) => openIngestClaimContextMenu(event, claim)}
-                          style={{ marginTop: 8 }}
                         >
                           ⋯
                         </button>

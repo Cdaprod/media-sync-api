@@ -1,3 +1,9 @@
+## 2026-04-24 — Ingest-claims sidebar containment follow-up (active)
+- [x] Replaced ingest-claims generic wrapper usage with dedicated panel/list classes to keep claim cards width-constrained to sidebar flow.
+- [x] Added strict claim-card overflow/shrink-safe text and inline-safe overflow-menu button styling to prevent right-side bleed over grid/tags sections.
+- [x] Kept claim context-menu behavior unchanged (menu only opens from card contextmenu/⋯ action; cards remain in normal sidebar DOM flow).
+- [ ] Next: capture a post-fix iPhone Safari screenshot proving claim cards no longer overlap Tags/AI Tags/Bridge while sidebar scrolling remains normal.
+
 ## 2026-04-24 — Connect-device hook + ingest-claim sidebar regression fixes (active)
 - [x] Removed stray module-scope hook calls in `app/connect/device/page.tsx` so all hooks run only inside `ConnectDevicePage` component scope.
 - [x] Preserved existing connect-device camera/session behaviors (`Enable Camera`, preview, recording, peer signaling) while fixing invalid-hook-call startup crash.
