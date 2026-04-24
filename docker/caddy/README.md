@@ -48,8 +48,15 @@ Caddy uses `tls internal` (local CA). iPhone/iPad must trust the Caddy internal 
 
 ```bash
 curl -k https://cda-DESKTOP.local/health
+curl -k "https://cda-DESKTOP.local/api/library?scope=all"
+curl -k "https://cda-DESKTOP.local/thumbnails/<project>/<sha256>.jpg" -I
+curl -k "https://cda-DESKTOP.local/media/<project>/exports/<video>.mp4" -I
 curl -k https://192.168.0.25/health
 ```
+
+Expected behavior:
+- `/api/*`, `/media/*`, `/download/*`, `/thumbnails/*`, `/player.html`, and `/public/*` are served by `media-sync-api:8787`.
+- all other paths (including Next.js app routes and static chunks) fall back to Explorer on `:3000`.
 
 ## Browser test
 

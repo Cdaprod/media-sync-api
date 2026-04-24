@@ -1,3 +1,9 @@
+## 2026-04-24 — Caddy backend asset-route parity for HTTPS thumbnails (active)
+- [x] Expanded Caddy backend matcher in both `docker/caddy/Caddyfile` and `docker/caddy/Caddyfile.docker` to proxy backend-owned asset routes (`/api/*`, `/media/*`, `/download/*`, `/thumbnails/*`, `/player.html`, `/public/*`) before Explorer fallback.
+- [x] Added regression coverage in `tests/test_caddy_gateway_config.py` to lock required backend-route presence and enforce backend-proxy ordering ahead of Explorer fallback.
+- [x] Updated `docker/caddy/README.md` quick-test commands to include HTTPS checks for `/api/library`, `/thumbnails/...`, and `/media/...` through Caddy.
+- [ ] Next: run on-device acceptance pass confirming `/thumbnails/<project>/<sha>.jpg` serves an image payload over `https://cda-desktop.local` and cards render without placeholder icons.
+
 ## 2026-04-24 — Root .env example for Caddy/authority bootstrap (active)
 - [x] Added repo-root `.env.example` with copy-paste baseline values for authority/public origin, Caddy hostname binding, runtime role, and API host/port.
 - [x] Updated `docker/caddy/README.md` with an explicit `cp .env.example .env` bootstrap step before compose usage.
