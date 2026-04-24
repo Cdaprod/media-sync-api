@@ -6,6 +6,8 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 ![Python](https://img.shields.io/badge/python-3.8+-green.svg)
 ![DaVinci Resolve](https://img.shields.io/badge/DaVinci%20Resolve-18%2B-red.svg)
 
+A distributed node-based ingest system where agents (“runners”) observe local sources (filesystems/devices), produce asset candidates, and submit claims to a central authority for canonical acceptance and reconciliation mirrored in an explorer web application.
+
 ## What it does
 - Creates and lists projects stored on the host filesystem (auto-prefixed as `P{n}-<label>`)
 - Streams uploads into project folders with sha256 de-duplication backed by sqlite
