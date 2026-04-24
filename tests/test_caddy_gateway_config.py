@@ -37,3 +37,12 @@ def test_caddy_gateway_routes_backend_asset_paths_before_explorer_fallback():
         backend_idx = content.index(f"reverse_proxy @backend {backend_host}")
         explorer_idx = content.index(f"reverse_proxy {explorer_host}")
         assert backend_idx < explorer_idx
+
+
+def test_caddy_docker_forwards_public_origin_proxy_headers():
+    content = _read("docker/caddy/Caddyfile.docker")
+    assert "header_up Host {host}" in content
+    assert "header_up X-Forwarded-Host {host}" in content
+    assert "header_up X-Forwarded-Proto {scheme}" in content
+    assert "header_up X-Forwarded-For {remote_host}" in content
+    assert "/_next/*" not in content

@@ -58,6 +58,19 @@ Expected behavior:
 - `/api/*`, `/connect/*`, `/media/*`, `/thumbnails/*`, `/public/*`, `/player.html`, `/favicon*`, and `/static/*` are served by `media-sync-api:8787`.
 - all other paths (including Next.js app routes and `/_next/*` chunks) fall back to Explorer on `:3000`.
 
+## Troubleshooting Next static asset origins
+
+- Expected Next script URLs under Caddy are `/_next/static/...` or `https://<authority>/_next/static/...`.
+- Seeing `http://<lan-ip>:3000/_next/static/...` usually means stale browser cache, direct dev-server access, or missing proxy header/origin config.
+
+```bash
+curl -k https://<authority>/ -o cda-home.html
+```
+
+```powershell
+Select-String -Path .\cda-home.html -Pattern "192.168.0.25:3000|http://|_next/static"
+```
+
 ## Browser test
 
 Visit:

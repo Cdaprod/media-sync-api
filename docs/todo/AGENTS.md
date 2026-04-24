@@ -1,3 +1,10 @@
+## 2026-04-24 — Caddy forwarded public-origin header hardening (active)
+- [x] Added explicit `header_up` forwarding (`Host`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-For`) to both backend and Explorer reverse-proxy blocks in host + docker Caddyfiles.
+- [x] Preserved backend route matcher boundaries (`/_next/*` remains Explorer-owned fallback, not API-matched).
+- [x] Expanded Caddy README troubleshooting with expected Next static URL shapes and curl/Select-String commands for stale-origin detection.
+- [x] Added docker Caddy config regression assertions for forwarded headers and no-`/_next/*` API routing.
+- [ ] Next: confirm cookie/session flows remain authority-stable on iPhone Safari after Caddy restart (no host/proto drift in request headers).
+
 ## 2026-04-24 — Video thumbnail candidate priority restore for HTTPS authority (active)
 - [x] Replaced single-value thumbnail selection with explicit candidate planning in `ExplorerApp` so video cards prefer `thumbnail_url`, then `thumb_url`, then generated `/thumbnails/{project}/{sha}.jpg|webp|png` routes before generic fallback.
 - [x] Preserved stream-vs-thumbnail separation in view-model wiring (`streamUrl` playback lane independent from `thumbUrl` poster lane) and added secondary thumbnail fallback URL handoff into card image error flow.
