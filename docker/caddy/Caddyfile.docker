@@ -8,7 +8,7 @@
 
   encode gzip zstd
 
-  @backend path /api/* /connect/* /media/* /download/* /thumbnails/* /player.html /public/* /health /healthz /docs /openapi.json /favicon.ico
+  @backend path /api/* /connect/* /media/* /thumbnails/* /public/* /player.html /health /healthz /docs /openapi.json /favicon.ico /favicon/* /static/*
   reverse_proxy @backend host.docker.internal:8787
 
   reverse_proxy host.docker.internal:3000

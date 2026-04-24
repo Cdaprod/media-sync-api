@@ -577,8 +577,19 @@ function AssetGridComponent({
                     native.stopImmediatePropagation?.();
                     native.stopPropagation?.();
                     const node = event.currentTarget;
-                    node.onerror = null;
+                    const failedUrl = node.currentSrc || node.src || node.dataset.thumbUrl || '';
                     const fallback = node.dataset.thumbFallback || '';
+                    if (process.env.NODE_ENV !== 'production') {
+                      console.warn('[Explorer] thumbnail failed', {
+                        failedUrl,
+                        thumbUrl: node.dataset.thumbUrl || '',
+                        fallback,
+                        relative: node.closest('[data-relative]')?.getAttribute('data-relative') || '',
+                      });
+                    }
+                    node.title = `Thumbnail failed: ${failedUrl}`;
+                    node.setAttribute('aria-label', `Thumbnail failed: ${failedUrl}`);
+                    node.onerror = null;
                     if (fallback && node.src !== fallback) node.src = fallback;
                   }}
                   data-thumb-url={viewModel.thumbUrl}

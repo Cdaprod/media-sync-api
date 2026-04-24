@@ -1,3 +1,10 @@
+## 2026-04-24 — HTTPS authority media URL/render parity follow-up (active)
+- [x] Added `src/utils/mediaUrls.ts` with browser-safe `normalizeAssetUrl(...)` plus best-url selectors (`getBestThumbnailUrl`, `getBestStreamUrl`, `getBestDownloadUrl`) and absolute clipboard helper.
+- [x] Rewired Explorer media URL usage to prefer normalized best-url selectors for card thumbs, video preview, focused preview metadata/actions, and stream URL copy paths without mutating API payloads.
+- [x] Hardened card/list thumbnail `onError` handling to surface failed URL details (`title`/`aria-label`) and emit dev-only warning context for Safari triage.
+- [x] Expanded Caddy backend matcher coverage in host + docker configs (`/thumbnails/*`, `/public/*`, `/player.html`, `/favicon/*`, `/static/*`) while keeping Explorer/Next fallback for non-backend routes (no `/_next/*` API proxying).
+- [ ] Next: run physical iPhone Safari verification that visible card thumbs/preview video now resolve as same-origin HTTPS `/thumbnails/...` and `/media/...` under `https://cda-desktop.local`.
+
 ## 2026-04-24 — Caddy backend asset-route parity for HTTPS thumbnails (active)
 - [x] Expanded Caddy backend matcher in both `docker/caddy/Caddyfile` and `docker/caddy/Caddyfile.docker` to proxy backend-owned asset routes (`/api/*`, `/media/*`, `/download/*`, `/thumbnails/*`, `/player.html`, `/public/*`) before Explorer fallback.
 - [x] Added regression coverage in `tests/test_caddy_gateway_config.py` to lock required backend-route presence and enforce backend-proxy ordering ahead of Explorer fallback.

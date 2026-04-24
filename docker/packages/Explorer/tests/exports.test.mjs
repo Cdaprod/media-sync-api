@@ -516,7 +516,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const isSecondTapReinforced = reinforcedActiveKey === selectionKey;'));
   assert.ok(explorer.includes('const isHoldEmphasis = holdEmphasisKey === selectionKey;'));
   assert.ok(explorer.includes('const isActivated = previewActivationKey === selectionKey;'));
-  assert.ok(explorer.includes("const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');"));
+  assert.ok(explorer.includes("const streamUrl = resolveAssetUrl(getBestStreamUrl(item) || getBestDownloadUrl(item));"));
   assert.ok(explorer.includes("const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';"));
   assert.ok(explorer.includes('? streamUrl'));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
@@ -1398,7 +1398,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('const parseStoredJsonObject = (raw: string | null): Record<string, unknown> | null => {'));
   assert.ok(content.includes('const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {'));
   assert.ok(content.includes('if (!isThumbableRelativePath(item.relative_path)) {'));
-  assert.ok(content.includes("return kind === 'image' ? normalizeThumbUrl(item.stream_url || '') : undefined;"));
+  assert.ok(content.includes("return kind === 'image' ? normalizeThumbUrl(getBestStreamUrl(item)) : undefined;"));
   assert.ok(content.includes('const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);'));
   assert.ok(content.includes('window.localStorage.getItem(RETAINED_UI_PREFS_KEY)'));
   assert.ok(content.includes('setRetainedPrefsHydrated(false);'));
@@ -1429,7 +1429,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('overlayEnabled,'));
   assert.ok(content.includes('retainedPrefsHydrated,'));
   assert.ok(content.includes('if (kind === \'video\') {'));
-  assert.ok(content.includes('return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || \'\');'));
+  assert.ok(content.includes('return normalizeThumbUrl(getBestThumbnailUrl(item));'));
   assert.ok(content.includes('const legacyFilterParsed = parseStoredJsonObject(window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY));'));
   assert.ok(content.includes('window.localStorage.getItem(LEGACY_OVERLAY_VIS_PREFS_KEY)'));
   assert.ok(content.includes('Overlays: {overlayEnabled ? \'On\' : \'Off\'}'));
@@ -3031,12 +3031,26 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes('className="search-input"'));
 });
 
+test('media URL helpers keep relative URLs and rewrite insecure absolute URLs on HTTPS', () => {
+  const mediaUrlsPath = path.join(packageRoot, 'src', 'utils', 'mediaUrls.ts');
+  const mediaUrls = fs.readFileSync(mediaUrlsPath, 'utf8');
+
+  assert.ok(mediaUrls.includes("if (raw.startsWith('/')) return raw;"));
+  assert.ok(mediaUrls.includes("return `${window.location.protocol}${raw}`;"));
+  assert.ok(mediaUrls.includes("window.location.protocol === 'https:'"));
+  assert.ok(mediaUrls.includes("parsed.protocol === 'http:'"));
+  assert.ok(mediaUrls.includes("const rewritten = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;"));
+  assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.thumbnail_url || item.thumb_url || '');"));
+  assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.stream_url || item.url || '');"));
+  assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.download_url || item.stream_url || '');"));
+});
+
 test('thumbnail normalization preserves API port when remapping localhost urls', () => {
   const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
   const loader = fs.readFileSync(loaderPath, 'utf8');
 
-  assert.ok(loader.includes('normalizeMediaUrlForOrigin(rawUrl, window.location)'));
-  assert.ok(loader.includes('const resolvedPort = parsed.port || \'\';'));
-  assert.ok(loader.includes('return `${protocol}//${host}${resolvedPort ? `:${resolvedPort}` : \'\'}${parsed.pathname}${parsed.search}`;'));
-  assert.ok(!loader.includes('`${window.location.origin}${parsed.pathname}${parsed.search}`'));
+  assert.ok(loader.includes('normalizeAssetUrl(rawUrl)'));
+  assert.ok(!loader.includes('const resolvedPort = parsed.port || \'\';'));
+  assert.ok(loader.includes('return normalized || undefined;'));
+  assert.ok(loader.includes("import { normalizeAssetUrl } from './utils/mediaUrls';"));
 });

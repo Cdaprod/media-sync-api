@@ -55,8 +55,8 @@ curl -k https://192.168.0.25/health
 ```
 
 Expected behavior:
-- `/api/*`, `/media/*`, `/download/*`, `/thumbnails/*`, `/player.html`, and `/public/*` are served by `media-sync-api:8787`.
-- all other paths (including Next.js app routes and static chunks) fall back to Explorer on `:3000`.
+- `/api/*`, `/connect/*`, `/media/*`, `/thumbnails/*`, `/public/*`, `/player.html`, `/favicon*`, and `/static/*` are served by `media-sync-api:8787`.
+- all other paths (including Next.js app routes and `/_next/*` chunks) fall back to Explorer on `:3000`.
 
 ## Browser test
 

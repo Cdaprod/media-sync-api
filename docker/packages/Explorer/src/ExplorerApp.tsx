@@ -32,8 +32,6 @@ import {
   isInteractiveTarget,
   isTopbarOwnedTarget,
   kindBadgeClass,
-  normalizeMediaUrlForOrigin,
-  toAbsoluteUrl,
 } from './utils';
 import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewPanel';
 import { AssetGrid } from './components/AssetGrid';
@@ -42,6 +40,7 @@ import { LiveSourceCard } from './components/LiveSourceCard';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
+import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl, getBestThumbnailUrl, normalizeAssetUrl } from './utils/mediaUrls';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
@@ -1480,13 +1479,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const resolveAssetUrl = useCallback(
     (path?: string) => {
-      if (!path) return '';
-      if (path.startsWith('data:')) return path;
-      if (typeof window !== 'undefined') {
-        const normalized = normalizeMediaUrlForOrigin(path, window.location);
-        if (normalized) return normalized;
-      }
-      return api.buildUrl(path);
+      const normalized = normalizeAssetUrl(path);
+      if (!normalized) return '';
+      if (normalized.startsWith('data:')) return normalized;
+      return api.buildUrl(normalized);
     },
     [api],
   );
@@ -1506,13 +1502,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [resolvedApiBase]);
   const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {
     if (!isThumbableRelativePath(item.relative_path)) {
-      return kind === 'image' ? normalizeThumbUrl(item.stream_url || '') : undefined;
+      return kind === 'image' ? normalizeThumbUrl(getBestStreamUrl(item)) : undefined;
     }
     if (kind === 'image') {
-      return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || item.stream_url || '');
+      return normalizeThumbUrl(getBestThumbnailUrl(item) || getBestStreamUrl(item));
     }
     if (kind === 'video') {
-      return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || '');
+      return normalizeThumbUrl(getBestThumbnailUrl(item));
     }
     return undefined;
   }, []);
@@ -1524,8 +1520,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const targetItem = itemsBySelectionKey.get(proxyPrewarmSelectionKey);
     if (!targetItem) return '';
     if (guessKind(targetItem) !== 'video') return '';
-    return absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(targetItem.stream_url || targetItem.download_url || '')) || '');
-  }, [absolutizeMediaUrl, itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
+    return resolveAssetUrl(getBestStreamUrl(targetItem) || getBestDownloadUrl(targetItem));
+  }, [itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
 
   const thumbDatasetSignature = useMemo(() => {
     const dataset = filteredMedia.map((item) => {
@@ -1581,7 +1577,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const rows = [
       ['Kind', kind],
       ['Size', formatBytes(focused.size)],
-      ['Stream', resolveAssetUrl(focused.stream_url) || '(none)'],
+      ['Stream', resolveAssetUrl(getBestStreamUrl(focused)) || '(none)'],
       ['Source', projectSource],
       ['Project', projectName],
       ['Relative', focused.relative_path || '(none)'],
@@ -2986,7 +2982,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const absoluteStream = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
+    const absoluteStream = absoluteAssetUrl(resolveAssetUrl(getBestStreamUrl(focused)));
     const monitorUrl = new URL('/program-monitor/index.html', origin).toString();
     await sendToProgramMonitorCommand({
       streamUrl: absoluteStream,
@@ -3001,8 +2997,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'OBS', 'Open a preview first');
       return;
     }
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const assetUrl = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
+    const assetUrl = absoluteAssetUrl(resolveAssetUrl(getBestStreamUrl(focused)));
     const fit = previewObsMode === 'fit' ? 'contain' : (previewObsMode === 'fill' ? 'fill' : 'cover');
     await pushToObsCommand({
       assetUrl,
@@ -3014,9 +3009,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [addToast, focused, previewObsExclusive, previewObsMode, previewObsSlot, pushToObsCommand, resolveAssetUrl]);
 
   const handleCopyStream = useCallback(async (item: MediaItem) => {
-    if (!item.stream_url) return;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = toAbsoluteUrl(resolveAssetUrl(item.stream_url), origin);
+    const url = absoluteAssetUrl(resolveAssetUrl(getBestStreamUrl(item)));
+    if (!url) return;
     const ok = await copyTextWithFallback(url);
     if (ok) {
       addToast('good', 'Copied', 'Stream URL copied to clipboard');
@@ -3027,9 +3021,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const handleCopySelectedUrls = useCallback(async (items: MediaItem[]) => {
     if (!items.length) return;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const urls = items
-      .map((item) => toAbsoluteUrl(resolveAssetUrl(item.stream_url), origin))
+      .map((item) => absoluteAssetUrl(resolveAssetUrl(getBestStreamUrl(item))))
       .filter(Boolean);
     if (!urls.length) return;
     const ok = await copyTextWithFallback(urls.join('\n'));
@@ -3161,7 +3154,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         id: 'download',
         label: 'Download',
         handler: () => {
-          const url = resolveAssetUrl(item.download_url || item.stream_url);
+          const url = resolveAssetUrl(getBestDownloadUrl(item));
           if (url) window.open(url, '_blank');
         },
       });
@@ -4565,7 +4558,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
     const fallbackThumb = buildThumbFallback(kind);
     const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;
-    const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
+    const streamUrl = resolveAssetUrl(getBestStreamUrl(item) || getBestDownloadUrl(item));
     const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
