@@ -77,7 +77,7 @@ import type { RegisterNodeResponse } from './types/registration';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 import type { LiveSession } from './types/liveSession';
 import type { IngestClaimRecord } from './types/ingestClaim';
-import { getDeviceUrl, getRuntimeCapabilityTags, getRuntimeKinds, isSessionNode, isTestPayloadNode } from './utils/runtimeLabels';
+import { getDeviceUrl, getRuntimeCapabilityTags, getRuntimeKinds, isSessionNode, isTestPayloadClaim, isTestPayloadNode } from './utils/runtimeLabels';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -3089,6 +3089,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setContextMenu(null);
   }, [setContextMenu]);
 
+  const runContextAction = useCallback((action: () => void | Promise<void>) => {
+    setContextMenu(null);
+    void action();
+  }, [setContextMenu]);
+
   const getContextActions = useCallback((items: MediaItem[]) => {
     const count = items.length;
     if (!count) return [];
@@ -4420,6 +4425,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [contextMenu, getContextActions],
   );
 
+
+  const latestIngestClaims = useMemo(() => {
+    const byRecent = [...ingestClaims].sort((a, b) => {
+      const left = Date.parse(a.updated_at || a.created_at || '') || 0;
+      const right = Date.parse(b.updated_at || b.created_at || '') || 0;
+      return right - left;
+    });
+    return byRecent.slice(0, 5);
+  }, [ingestClaims]);
+
   useEffect(() => {
     const body = document.body;
     if (composeModalOpen || deleteModalOpen) body.classList.add('confirm-open');
@@ -5145,32 +5160,37 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <h2>Ingest Claims</h2>
                 <div className="meta-line">
                   <span className="kbd">/api/ingest/claims</span>
+                  <span>Showing latest {latestIngestClaims.length} of {ingestClaims.length} claims</span>
                 </div>
-                <div className="sources">
-                  {ingestClaims.map((claim) => (
-                    <div
-                      className="card"
-                      key={claim.claim_id}
-                      onContextMenu={(event) => openIngestClaimContextMenu(event, claim)}
-                    >
-                      <strong>{claim.claim_id}</strong>
-                      <div className="small">{claim.node_id}</div>
-                      <div className="small">{claim.source_name}</div>
-                      <div className="tagrow">
-                        <span className="tag">{claim.kind}</span>
-                        <span className="tag">{claim.status}</span>
-                        {claim.materialization_mode ? <span className="tag">{claim.materialization_mode}</span> : null}
-                      </div>
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={(event) => openIngestClaimContextMenu(event, claim)}
-                        style={{ marginTop: 8 }}
+                <div style={{ padding: '12px', paddingTop: 10 }}>
+                  <div style={{ maxHeight: 260, overflowY: 'auto', display: 'grid', gap: 10 }}>
+                    {latestIngestClaims.map((claim) => (
+                      <div
+                        className="card"
+                        key={claim.claim_id}
+                        onContextMenu={(event) => openIngestClaimContextMenu(event, claim)}
                       >
-                        ⋯
-                      </button>
-                    </div>
-                  ))}
+                        <strong title={claim.claim_id} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {claim.claim_id}
+                        </strong>
+                        <div className="small">{claim.node_id}</div>
+                        <div className="small">{claim.source_name}</div>
+                        <div className="tagrow">
+                          <span className="tag">{claim.status}</span>
+                          {claim.materialization_mode ? <span className="tag">{claim.materialization_mode}</span> : null}
+                          {isTestPayloadClaim(claim) ? <span className="tag bad">test payload</span> : null}
+                        </div>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={(event) => openIngestClaimContextMenu(event, claim)}
+                          style={{ marginTop: 8 }}
+                        >
+                          ⋯
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -5858,25 +5878,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           className="context-menu open custom-ui-surface"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button type="button" onClick={() => { setContextMenu(null); }}>
+          <button type="button" onClick={() => runContextAction(() => undefined)}>
             Open in Explorer
           </button>
           <button
             type="button"
-            onClick={() => openPayloadDetails('Source details', contextMenu.source.name, contextMenu.source)}
+            onClick={() => runContextAction(() => openPayloadDetails('Source details', contextMenu.source.name, contextMenu.source))}
           >
             Details
           </button>
           <button
             type="button"
-            onClick={() => void copyText(JSON.stringify(contextMenu.source, null, 2))}
+            onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.source, null, 2)))}
           >
             Copy Source JSON
           </button>
           {contextMenu.source.owner_node_id ? (
             <button
               type="button"
-              onClick={() => void copyText(contextMenu.source.owner_node_id ?? '')}
+              onClick={() => runContextAction(() => copyText(contextMenu.source.owner_node_id ?? ''))}
             >
               Copy Owner Node ID
             </button>
@@ -5884,7 +5904,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           {contextMenu.source.owner_node_id ? (
             <button
               type="button"
-              onClick={() => openDevice(contextMenu.source.owner_node_id ?? '')}
+              onClick={() => runContextAction(() => openDevice(contextMenu.source.owner_node_id ?? ''))}
             >
               Open Device
             </button>
@@ -5898,25 +5918,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           className="context-menu open custom-ui-surface"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button type="button" onClick={() => openDevice(contextMenu.node.node_id)}>
+          <button type="button" onClick={() => runContextAction(() => openDevice(contextMenu.node.node_id))}>
             Open Device
           </button>
-          <button type="button" onClick={() => void heartbeatNodeNow(contextMenu.node.node_id)}>
+          <button type="button" onClick={() => runContextAction(() => heartbeatNodeNow(contextMenu.node.node_id))}>
             Heartbeat now
           </button>
           <button
             type="button"
-            onClick={() => openPayloadDetails('Runtime details', contextMenu.node.node_id, contextMenu.node)}
+            onClick={() => runContextAction(() => openPayloadDetails('Runtime details', contextMenu.node.node_id, contextMenu.node))}
           >
             Details
           </button>
-          <button type="button" onClick={() => void copyText(contextMenu.node.node_id)}>
+          <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.node.node_id))}>
             Copy Node ID
           </button>
-          <button type="button" onClick={() => void copyText(getDeviceUrl(contextMenu.node.node_id))}>
+          <button type="button" onClick={() => runContextAction(() => copyText(getDeviceUrl(contextMenu.node.node_id)))}>
             Copy Device URL
           </button>
-          <button type="button" onClick={() => void copyText(JSON.stringify(contextMenu.node, null, 2))}>
+          <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.node, null, 2)))}>
             Copy Node JSON
           </button>
         </div>
@@ -5928,13 +5948,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           className="context-menu open custom-ui-surface"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button type="button" onClick={() => openPayloadDetails('Live session details', contextMenu.session.session_id, contextMenu.session)}>
+          <button type="button" onClick={() => runContextAction(() => openPayloadDetails('Live session details', contextMenu.session.session_id, contextMenu.session))}>
             Details
           </button>
-          <button type="button" onClick={() => void copyText(contextMenu.session.session_id)}>
+          <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.session.session_id))}>
             Copy Session ID
           </button>
-          <button type="button" onClick={() => void copyText(JSON.stringify(contextMenu.session, null, 2))}>
+          <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.session, null, 2)))}>
             Copy Session JSON
           </button>
         </div>
@@ -5948,14 +5968,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         >
           <button
             type="button"
-            onClick={() => openPayloadDetails('Ingest claim details', contextMenu.claim.claim_id, contextMenu.claim)}
+            onClick={() => runContextAction(() => openPayloadDetails('Ingest claim details', contextMenu.claim.claim_id, contextMenu.claim))}
           >
             Details
           </button>
-          <button type="button" onClick={() => void copyText(contextMenu.claim.claim_id)}>
+          <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.claim.claim_id))}>
             Copy Claim ID
           </button>
-          <button type="button" onClick={() => void copyText(JSON.stringify(contextMenu.claim, null, 2))}>
+          <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.claim, null, 2)))}>
             Copy Claim JSON
           </button>
         </div>

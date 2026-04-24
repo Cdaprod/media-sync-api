@@ -306,8 +306,3 @@ export default function ConnectDevicePage() {
     </main>
   );
 }
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const peerSessionIdRef = useRef<string | null>(null);
-  const viewerIceSeenRef = useRef<Set<string>>(new Set());
-  const signalPollTimerRef = useRef<number | null>(null);
-  const [peerStatus, setPeerStatus] = useState<'idle' | 'connecting' | 'published' | 'error'>('idle');

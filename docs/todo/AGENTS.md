@@ -1,3 +1,11 @@
+## 2026-04-24 — Connect-device hook + ingest-claim sidebar regression fixes (active)
+- [x] Removed stray module-scope hook calls in `app/connect/device/page.tsx` so all hooks run only inside `ConnectDevicePage` component scope.
+- [x] Preserved existing connect-device camera/session behaviors (`Enable Camera`, preview, recording, peer signaling) while fixing invalid-hook-call startup crash.
+- [x] Reworked ingest-claim sidebar rendering to be constrained in-flow (max-height scroll container), newest-first, latest 5 cards, and compact card content.
+- [x] Added claim test-payload detection (`isTestPayloadClaim`) and surfaced compact `test payload` tag in ingest cards.
+- [x] Ensured runtime/sidebar context-menu actions close menu on selection and raised menu stacking above sidebar cards while remaining below modal overlays.
+- [ ] Next: capture a fresh iPhone Safari verification screenshot proving ingest claims remain confined and `/connect/device` loads without hook errors.
+
 ## 2026-04-24 — Explorer unified sidebar/runtime context menus (active)
 - [x] Extended Explorer UI context-menu state to a typed union (`media_asset`, `source`, `runtime`, `live_session`, `ingest_claim`) so sidebar surfaces reuse the existing context-menu authority lane.
 - [x] Added runtime sidebar context actions (details, copy identifiers/json, open device, heartbeat now) and wired card right-click + overflow-button entrypoints for sources/runtimes/live sessions.

@@ -2479,7 +2479,7 @@ select.control{
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
-  z-index: 90;
+  z-index: 118;
   display: none;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   font-size: 17px;

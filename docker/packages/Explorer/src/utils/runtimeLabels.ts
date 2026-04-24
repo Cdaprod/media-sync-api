@@ -1,4 +1,5 @@
 import type { NodeControlRecord } from '../types/sourceControl';
+import type { IngestClaimRecord } from '../types/ingestClaim';
 
 function allRuntimeTokens(node: NodeControlRecord): string[] {
   return [
@@ -60,4 +61,9 @@ export function getRuntimeCapabilityTags(node: NodeControlRecord): string[] {
 
 export function getDeviceUrl(nodeId: string): string {
   return `/connect/device?node_id=${encodeURIComponent(nodeId)}`;
+}
+
+export function isTestPayloadClaim(claim: IngestClaimRecord): boolean {
+  const fields = [claim.node_id, claim.source_name, claim.local_ref, claim.fingerprint, claim.content_type];
+  return fields.some((value) => (value ?? '').toLowerCase() === 'string');
 }
