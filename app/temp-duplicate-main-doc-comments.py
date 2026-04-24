@@ -123,7 +123,7 @@ Typical LAN Flow (iPhone example)
     → POST /connect/register
 
 3. Auto-redirect:
-    → /connect/device?node_id=...
+    → /connect/device?node_id=... 
 
 4. Activate camera:
     → POST /api/live_sessions/start
