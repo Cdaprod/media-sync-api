@@ -1,3 +1,11 @@
+## 2026-04-24 — /connect/device capability hardening for iPhone Safari (active)
+- [x] Guarded `useLiveSession.startPreview(...)` against missing `mediaDevices/getUserMedia/getDisplayMedia` and replaced raw TypeError leakage with operator-readable capability errors.
+- [x] Added connect-device runtime capability diagnostics (`secure context`, `camera API`, `screen capture API`, `iOS likely`) with explicit HTTPS guidance for iOS Safari LAN activation.
+- [x] Updated `/connect/device` action availability: camera button disables when `getUserMedia` is unavailable; screen-share action is withheld on iOS/unavailable browsers.
+- [x] Clarified Sources/Libraries sidebar copy to distinguish remote source surfaces vs registered runtime nodes without backend behavior changes.
+- [x] Expanded Explorer static contracts to lock media-capability guard markers and updated sidebar copy labels.
+- [ ] Next: validate physical iPhone Safari over HTTP vs HTTPS and capture expected diagnostic/activation behavior snapshots.
+
 ## 2026-04-24 — iOS device-class naming precision pass (active)
 - [x] Refined `RegisterNodeModal` browser-context detection to prioritize iPhone identity first and avoid iPhone sessions being mislabeled as `ipad-browser`.
 - [x] Tightened iPad classification to explicit `iPad` UA or `MacIntel + touch` heuristic only when iPhone detection is false.

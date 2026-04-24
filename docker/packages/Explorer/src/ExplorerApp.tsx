@@ -4935,9 +4935,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
                   {remoteSources.length > 0 ? (
                     <div className="card">
-                      <strong>Remote source-bearing participants</strong>
+                      <strong>Remote source surfaces</strong>
                       <div className="small">
-                        Runtime-backed nodes registered through connect/control-plane surfaces and exposed in source inventory.
+                        Source surfaces published through connect/control-plane registration and merged into source inventory.
                       </div>
                       <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
                         {remoteSources.map((source: SourceControlRecord, index: number) => {
@@ -4976,8 +4976,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
                   {runtimeNodes.length > 0 ? (
                     <div className="card">
-                      <strong>Nodes</strong>
-                      <div className="small">Control-plane view of registered runtimes.</div>
+                      <strong>Registered runtimes</strong>
+                      <div className="small">Control-plane view of registered runtime nodes.</div>
                       <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
                         {runtimeNodes.map((node: NodeControlRecord) => (
                           <div className="card" key={node.node_id}>

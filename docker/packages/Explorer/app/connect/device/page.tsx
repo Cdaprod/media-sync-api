@@ -32,6 +32,34 @@ export default function ConnectDevicePage() {
     return 'Connect device';
   }, [nodeId]);
 
+  const capability = useMemo(() => {
+    if (typeof navigator === 'undefined' || typeof window === 'undefined') {
+      return {
+        isSecureContext: false,
+        hasMediaDevices: false,
+        hasGetUserMedia: false,
+        hasGetDisplayMedia: false,
+        isLikelyIOS: false,
+      };
+    }
+    const mediaDevices = navigator.mediaDevices;
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    const maxTouchPoints = navigator.maxTouchPoints || 0;
+    const isIPhone = /iPhone|iPod/i.test(ua) || (/iPhone/i.test(platform) && maxTouchPoints > 0);
+    const isIPad = !isIPhone && (/iPad/i.test(ua) || (/MacIntel/i.test(platform) && maxTouchPoints > 1));
+    const isLikelyIOS = isIPhone || isIPad || (/AppleWebKit/i.test(ua) && /Safari/i.test(ua) && !/Android/i.test(ua));
+    return {
+      isSecureContext: window.isSecureContext,
+      hasMediaDevices: !!mediaDevices,
+      hasGetUserMedia: !!mediaDevices && typeof mediaDevices.getUserMedia === 'function',
+      hasGetDisplayMedia: !!mediaDevices && typeof (mediaDevices as MediaDevices & { getDisplayMedia?: unknown }).getDisplayMedia === 'function',
+      isLikelyIOS,
+    };
+  }, []);
+
+  const shouldShowScreenAction = capability.hasGetDisplayMedia && !capability.isLikelyIOS;
+
   return (
     <main className="connect-device-page">
       <section className="connect-device-card">
@@ -46,6 +74,21 @@ export default function ConnectDevicePage() {
 
         {nodeId ? (
           <>
+            {!capability.hasGetUserMedia ? (
+              <div className="card">
+                <strong>Camera activation unavailable in this browser context</strong>
+                <div className="small" style={{ marginTop: 8 }}>Secure context: {capability.isSecureContext ? 'yes' : 'no'}</div>
+                <div className="small">Camera API: {capability.hasGetUserMedia ? 'available' : 'unavailable'}</div>
+                <div className="small">Screen capture API: {capability.hasGetDisplayMedia ? 'available' : 'unavailable'}</div>
+                <div className="small" style={{ marginTop: 8 }}>
+                  iOS Safari requires HTTPS for camera access on LAN IP addresses.
+                </div>
+                <div className="small">
+                  Serve Explorer/API over HTTPS for device camera activation.
+                </div>
+              </div>
+            ) : null}
+
             <div className="card">
               <div className="small mono">node_id: {nodeId}</div>
               {session?.session_id ? <div className="small mono">session_id: {session.session_id}</div> : null}
@@ -55,12 +98,29 @@ export default function ConnectDevicePage() {
             {state === 'idle' || state === 'error' || state === 'ended' ? (
               <div className="card">
                 <div className="connect-device-actions">
-                  <button className="btn" type="button" onClick={() => void startPreview('camera')}>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => void startPreview('camera')}
+                    disabled={!capability.hasGetUserMedia}
+                    title={!capability.hasGetUserMedia ? 'Camera API unavailable in this browser context.' : ''}
+                  >
                     Enable Camera
                   </button>
-                  <button className="btn" type="button" onClick={() => void startPreview('screen')}>
-                    Share Screen
-                  </button>
+                  {shouldShowScreenAction ? (
+                    <button className="btn" type="button" onClick={() => void startPreview('screen')}>
+                      Share Screen
+                    </button>
+                  ) : (
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled
+                      title="Screen capture is unavailable on this device/browser."
+                    >
+                      Share Screen unavailable
+                    </button>
+                  )}
                 </div>
                 {state === 'ended' && session?.claim_id ? (
                   <div className="small" style={{ marginTop: 12 }}>

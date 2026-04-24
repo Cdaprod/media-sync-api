@@ -242,6 +242,33 @@ test('register modal redirects directly to device activation and keeps session-n
   assert.ok(!content.includes('getUserMedia('));
 });
 
+test('connect device page and live-session hook guard media APIs for insecure iOS contexts', () => {
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const app = fs.readFileSync(appPath, 'utf8');
+
+  assert.ok(hook.includes('const mediaDevices = typeof navigator !== \'undefined\' ? navigator.mediaDevices : undefined;'));
+  assert.ok(hook.includes('Camera API is unavailable in this browser context. Use HTTPS or open this device page from a secure origin.'));
+  assert.ok(hook.includes('Screen capture is unavailable on this device/browser.'));
+  assert.ok(hook.includes('if (sourceKind === \'screen\' && !hasGetDisplayMedia) {'));
+  assert.ok(hook.includes('await mediaDevices.getUserMedia({ video: true, audio: true })'));
+  assert.ok(!hook.includes('await navigator.mediaDevices.getUserMedia'));
+
+  assert.ok(page.includes('const capability = useMemo(() => {'));
+  assert.ok(page.includes('isSecureContext: window.isSecureContext,'));
+  assert.ok(page.includes('iOS Safari requires HTTPS for camera access on LAN IP addresses.'));
+  assert.ok(page.includes('Serve Explorer/API over HTTPS for device camera activation.'));
+  assert.ok(page.includes('disabled={!capability.hasGetUserMedia}'));
+  assert.ok(page.includes('const shouldShowScreenAction = capability.hasGetDisplayMedia && !capability.isLikelyIOS;'));
+  assert.ok(page.includes('Share Screen unavailable'));
+
+  assert.ok(app.includes('Remote source surfaces'));
+  assert.ok(app.includes('Registered runtimes'));
+});
+
 test('clipboard helper includes fallback copy behavior', () => {
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
   const content = fs.readFileSync(utilsPath, 'utf8');

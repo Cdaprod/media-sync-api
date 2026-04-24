@@ -70,11 +70,28 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     setError(null);
     setState('requesting-permission');
 
+    const mediaDevices = typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+    const hasGetUserMedia = !!mediaDevices && typeof mediaDevices.getUserMedia === 'function';
+    const hasGetDisplayMedia = !!mediaDevices && typeof (mediaDevices as MediaDevices & {
+      getDisplayMedia?: (constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>;
+    }).getDisplayMedia === 'function';
+
+    if (!hasGetUserMedia) {
+      setError('Camera API is unavailable in this browser context. Use HTTPS or open this device page from a secure origin.');
+      setState('error');
+      return;
+    }
+    if (sourceKind === 'screen' && !hasGetDisplayMedia) {
+      setError('Screen capture is unavailable on this device/browser.');
+      setState('error');
+      return;
+    }
+
     try {
       const stream =
         sourceKind === 'camera'
-          ? await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-          : await (navigator.mediaDevices as MediaDevices & {
+          ? await mediaDevices.getUserMedia({ video: true, audio: true })
+          : await (mediaDevices as MediaDevices & {
             getDisplayMedia?: (constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>;
           }).getDisplayMedia?.({ video: true, audio: true });
 
@@ -102,7 +119,11 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
           .catch(() => undefined);
       }, 10000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Unable to start ${sourceKind}`);
+      if (sourceKind === 'screen') {
+        setError('Screen capture is unavailable on this device/browser.');
+      } else {
+        setError('Unable to start camera preview. Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.');
+      }
       setState('error');
     }
   }, [api, clearHeartbeat, nodeId]);
