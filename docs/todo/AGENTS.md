@@ -1,3 +1,10 @@
+## 2026-04-24 — Env-parameterized Docker Caddy host binding (active)
+- [x] Added `docker/caddy/Caddyfile.docker` with env-driven site labels (`{$MEDIA_SYNC_AUTHORITY_HOST}`) and Docker Desktop upstreams via `host.docker.internal`.
+- [x] Refactored `docker/caddy/Caddyfile` to remove hardcoded hostname and mirror env-driven Docker-ready proxy behavior.
+- [x] Added `docker/docker-compose.caddy.yaml` with `.env` passthrough (`MEDIA_SYNC_AUTHORITY_HOST`, `MEDIA_SYNC_PUBLIC_ORIGIN`) and host-gateway mapping.
+- [x] Updated Caddy README and helper scripts to document hostname-only env usage and run against `Caddyfile.docker` without embedded hostnames.
+- [ ] Next: add optional compose profile docs showing combined startup for API + Explorer + Caddy in one command.
+
 ## 2026-04-24 — LAN HTTPS Caddy gateway scaffold (active)
 - [x] Added `docker/caddy/Caddyfile` host-installed authority gateway scaffold routing API/connect/media/health/docs paths to `127.0.0.1:8787` and Explorer to `127.0.0.1:3000`.
 - [x] Added `docker/caddy/README.md` with authority-origin env contract, host service expectations, iPhone CA trust requirement, and curl/browser validation steps.

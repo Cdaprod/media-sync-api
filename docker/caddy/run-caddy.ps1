@@ -13,28 +13,15 @@ $DataDir = Join-Path $CaddyDir 'data'
 $ConfigDir = Join-Path $CaddyDir 'config'
 $DockerCaddyfile = Join-Path $CaddyDir 'Caddyfile.docker'
 
+if (-not (Test-Path $DockerCaddyfile)) {
+  Write-Error "Missing Caddyfile: $DockerCaddyfile"
+  exit 1
+}
+
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 
-@"
-{
-  admin off
-  local_certs
-}
-
-cda-DESKTOP.local, 192.168.0.25 {
-  tls internal
-
-  encode gzip zstd
-
-  @api path /api/* /connect/* /media/* /health /healthz /docs /openapi.json /thumbnails/*
-  reverse_proxy @api host.docker.internal:8787
-
-  reverse_proxy host.docker.internal:3000
-}
-"@ | Set-Content -Path $DockerCaddyfile -Encoding UTF8
-
-Write-Host 'Starting Caddy container on ports 80/443 using docker-compatible upstreams...'
+Write-Host 'Starting Caddy container on ports 80/443 using Caddyfile.docker...'
 
 docker run --rm -d `
   --name media-sync-caddy `
@@ -43,6 +30,9 @@ docker run --rm -d `
   -v "${DockerCaddyfile}:/etc/caddy/Caddyfile:ro" `
   -v "${DataDir}:/data" `
   -v "${ConfigDir}:/config" `
+  --add-host host.docker.internal:host-gateway `
+  --env MEDIA_SYNC_AUTHORITY_HOST `
+  --env MEDIA_SYNC_PUBLIC_ORIGIN `
   caddy:2 | Out-Null
 
 if ($LASTEXITCODE -ne 0) {

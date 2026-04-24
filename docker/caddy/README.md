@@ -10,17 +10,25 @@ Use:
 
 ## Required app environment
 
-Set these for backend connect/authority URL generation:
+Set these for backend connect/authority URL generation and Caddy host binding:
 
 ```bash
+# Full URLs (backend/frontend authority contracts)
 MEDIA_SYNC_PUBLIC_ORIGIN=https://cda-DESKTOP.local
 MEDIA_SYNC_AUTHORITY_ORIGIN=https://cda-DESKTOP.local
+
+# Hostname only (Caddy site label)
+MEDIA_SYNC_AUTHORITY_HOST=cda-DESKTOP.local
 ```
+
+> Caddy site labels require hostnames, not full URLs.
 
 ## Expected host services
 
 - `media-sync-api` on `127.0.0.1:8787`
 - Explorer dev server on `127.0.0.1:3000`
+
+The Docker Caddy config proxies to those host services using `host.docker.internal`.
 
 ## Trust requirement for iPhone/iPad Safari
 
