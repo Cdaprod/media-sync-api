@@ -1,3 +1,8 @@
+## 2026-04-24 — Root compose include for Caddy scaffold (active)
+- [x] Added `docker/docker-compose.caddy.yaml` to root `docker-compose.yaml` includes so LAN HTTPS gateway can be composed with core/api + Explorer stacks.
+- [x] Kept include-only change narrowly scoped (no backend/frontend runtime logic touched).
+- [ ] Next: document one-shot compose startup/teardown commands for combined API + Explorer + Caddy workflow in top-level ops docs.
+
 ## 2026-04-24 — Env-parameterized Docker Caddy host binding (active)
 - [x] Added `docker/caddy/Caddyfile.docker` with env-driven site labels (`{$MEDIA_SYNC_AUTHORITY_HOST}`) and Docker Desktop upstreams via `host.docker.internal`.
 - [x] Refactored `docker/caddy/Caddyfile` to remove hardcoded hostname and mirror env-driven Docker-ready proxy behavior.
