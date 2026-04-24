@@ -32,6 +32,7 @@ import {
   isInteractiveTarget,
   isTopbarOwnedTarget,
   kindBadgeClass,
+  normalizeMediaUrlForOrigin,
   toAbsoluteUrl,
 } from './utils';
 import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewPanel';
@@ -1481,6 +1482,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     (path?: string) => {
       if (!path) return '';
       if (path.startsWith('data:')) return path;
+      if (typeof window !== 'undefined') {
+        const normalized = normalizeMediaUrlForOrigin(path, window.location);
+        if (normalized) return normalized;
+      }
       return api.buildUrl(path);
     },
     [api],

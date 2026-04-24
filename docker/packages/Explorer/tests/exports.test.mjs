@@ -223,6 +223,9 @@ test('api base inference keeps LAN host reachable', () => {
   assert.ok(content.includes(':8787'));
   assert.ok(content.includes("if (!trimmed) {"));
   assert.ok(content.includes("currentPort !== '8787'"));
+  assert.ok(content.includes("if (location.protocol === 'https:') {"));
+  assert.ok(content.includes("if (location.protocol === 'https:' && parsed.protocol === 'http:') {"));
+  assert.ok(content.includes('normalizeMediaUrlForOrigin'));
 });
 
 test('register modal redirects directly to device activation and keeps session-node payload contract', () => {
@@ -3032,6 +3035,7 @@ test('thumbnail normalization preserves API port when remapping localhost urls',
   const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
   const loader = fs.readFileSync(loaderPath, 'utf8');
 
+  assert.ok(loader.includes('normalizeMediaUrlForOrigin(rawUrl, window.location)'));
   assert.ok(loader.includes('const resolvedPort = parsed.port || \'\';'));
   assert.ok(loader.includes('return `${protocol}//${host}${resolvedPort ? `:${resolvedPort}` : \'\'}${parsed.pathname}${parsed.search}`;'));
   assert.ok(!loader.includes('`${window.location.origin}${parsed.pathname}${parsed.search}`'));

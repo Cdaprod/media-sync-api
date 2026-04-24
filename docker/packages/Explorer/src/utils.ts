@@ -24,7 +24,17 @@ export function toAbsoluteUrl(path: string | undefined, origin: string): string 
 export interface LocationLike {
   protocol: string;
   hostname: string;
+  host?: string;
   port?: string;
+}
+
+const PRIVATE_IPV4_RE = /^(10|127|172\.(1[6-9]|2\d|3[0-1])|192\.168)\.\d{1,3}\.\d{1,3}$/;
+
+function isLikelyPrivateHost(hostname: string): boolean {
+  const normalized = (hostname || '').toLowerCase();
+  if (!normalized) return false;
+  if (normalized === 'localhost' || normalized === '127.0.0.1') return true;
+  return PRIVATE_IPV4_RE.test(normalized);
 }
 
 export function inferApiBaseUrl(baseUrl: string | undefined, location?: LocationLike): string {
@@ -32,6 +42,10 @@ export function inferApiBaseUrl(baseUrl: string | undefined, location?: Location
   if (!location) return trimmed;
   const fallback = `${location.protocol}//${location.hostname}:8787`;
   if (!trimmed) {
+    if (location.protocol === 'https:') {
+      // HTTPS gateway deployments should prefer same-origin API routing.
+      return '';
+    }
     const currentPort = (location.port || '').trim();
     if (currentPort && currentPort !== '8787') {
       return fallback;
@@ -43,6 +57,10 @@ export function inferApiBaseUrl(baseUrl: string | undefined, location?: Location
   }
   try {
     const parsed = new URL(trimmed);
+    if (location.protocol === 'https:' && parsed.protocol === 'http:') {
+      // Avoid mixed-content API calls when Explorer is loaded over HTTPS.
+      return '';
+    }
     if (['media-sync-api', 'localhost', '127.0.0.1'].includes(parsed.hostname)) {
       return fallback;
     }
@@ -50,6 +68,25 @@ export function inferApiBaseUrl(baseUrl: string | undefined, location?: Location
     return fallback;
   }
   return trimmed;
+}
+
+export function normalizeMediaUrlForOrigin(path: string | undefined, location?: LocationLike): string {
+  if (!path) return '';
+  if (!path.startsWith('http://') && !path.startsWith('https://')) return path;
+  if (!location) return path;
+
+  try {
+    const parsed = new URL(path);
+    if (location.protocol === 'https:' && parsed.protocol === 'http:') {
+      if (parsed.hostname === location.hostname || isLikelyPrivateHost(parsed.hostname)) {
+        const host = location.host || location.hostname;
+        return `${location.protocol}//${host}${parsed.pathname}${parsed.search}`;
+      }
+    }
+    return parsed.toString();
+  } catch {
+    return path;
+  }
 }
 
 export function guessKind(item: MediaItem): string {

@@ -1,5 +1,6 @@
 import { canonicalAssetSource } from './state';
 import type { MediaItem } from './types';
+import { normalizeMediaUrlForOrigin } from './utils';
 
 export const THUMB_LOAD_TIMEOUT_MS = 8000;
 const THUMB_MAX_WORKERS = 3;
@@ -18,6 +19,10 @@ export const getThumbLoadState = (jobKey: string): ThumbLoadState | undefined =>
 export const normalizeThumbUrl = (rawUrl?: string): string | undefined => {
   if (!rawUrl) return undefined;
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    if (typeof window !== 'undefined') {
+      const normalizedForOrigin = normalizeMediaUrlForOrigin(rawUrl, window.location);
+      if (normalizedForOrigin) return normalizedForOrigin;
+    }
     try {
       const parsed = new URL(rawUrl);
       if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
