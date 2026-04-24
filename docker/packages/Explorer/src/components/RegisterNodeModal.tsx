@@ -14,7 +14,7 @@ interface RegisterNodeModalProps {
 }
 
 type CameraPermissionState = 'prompt' | 'granted' | 'denied' | null;
-type DeviceClass = 'iphone-browser' | 'ipad-browser' | 'android-browser' | 'desktop-browser';
+type DeviceClass = 'iphone-browser' | 'ipad-browser' | 'ios-browser' | 'android-browser' | 'desktop-browser';
 
 interface BrowserSourceContext {
   deviceClass: DeviceClass;
@@ -29,16 +29,20 @@ interface BrowserSourceContext {
 
 function detectBrowserSourceContext(): BrowserSourceContext {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const platform = typeof navigator !== 'undefined' ? navigator.platform || '' : '';
   const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints || 0 : 0;
   const coarsePointer = typeof window !== 'undefined'
     ? window.matchMedia?.('(pointer: coarse)')?.matches ?? false
     : false;
   const hasMediaDevices = typeof navigator !== 'undefined' && !!navigator.mediaDevices;
-  const isIPhone = /iPhone|iPod/i.test(ua);
-  const isIPad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && maxTouchPoints > 1);
+  const isIPhoneUa = /iPhone|iPod/i.test(ua);
+  const isIPhone = isIPhoneUa || (/iPhone/i.test(platform) && maxTouchPoints > 0);
+  const isIPadUa = /iPad/i.test(ua);
+  const isIPadMacTouch = /MacIntel/i.test(platform) && maxTouchPoints > 1;
+  const isIPad = !isIPhone && (isIPadUa || isIPadMacTouch);
   const isAndroid = /Android/i.test(ua);
   const isLikelySafari = /Safari/i.test(ua) && !/Chrome|CriOS|EdgiOS|FxiOS|OPR\//i.test(ua);
-  const isLikelyIOS = isIPhone || isIPad;
+  const isLikelyIOS = isIPhone || isIPad || (/AppleWebKit/i.test(ua) && isLikelySafari && maxTouchPoints > 0 && !isAndroid);
   const hasCameraApi = (hasMediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function')
     || (isLikelyIOS && isLikelySafari);
   const hasEnumerateDevices = (hasMediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function')
@@ -49,9 +53,10 @@ function detectBrowserSourceContext(): BrowserSourceContext {
   let deviceClass: DeviceClass = 'desktop-browser';
   if (isIPhone) deviceClass = 'iphone-browser';
   else if (isIPad) deviceClass = 'ipad-browser';
+  else if (isLikelyIOS) deviceClass = 'ios-browser';
   else if (isAndroid) deviceClass = 'android-browser';
 
-  const likelyPlatform: BrowserSourceContext['likelyPlatform'] = isIPhone || isIPad
+  const likelyPlatform: BrowserSourceContext['likelyPlatform'] = isLikelyIOS
     ? 'ios'
     : isAndroid
       ? 'android'

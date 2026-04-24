@@ -231,6 +231,13 @@ test('register modal redirects directly to device activation and keeps session-n
   assert.ok(content.includes("transport_hint: 'session'"));
   assert.ok(content.includes("session_node: 'true'"));
   assert.ok(content.includes("browser_push: 'true'"));
+  assert.ok(content.includes("type DeviceClass = 'iphone-browser' | 'ipad-browser' | 'ios-browser' | 'android-browser' | 'desktop-browser';"));
+  assert.ok(content.includes("const isIPhoneUa = /iPhone|iPod/i.test(ua);"));
+  assert.ok(content.includes("const isIPadMacTouch = /MacIntel/i.test(platform) && maxTouchPoints > 1;"));
+  assert.ok(content.includes("const isIPad = !isIPhone && (isIPadUa || isIPadMacTouch);"));
+  assert.ok(content.includes("if (isIPhone) deviceClass = 'iphone-browser';"));
+  assert.ok(content.includes("else if (isIPad) deviceClass = 'ipad-browser';"));
+  assert.ok(content.includes("else if (isLikelyIOS) deviceClass = 'ios-browser';"));
   assert.ok(!content.includes('Use this device →'));
   assert.ok(!content.includes('getUserMedia('));
 });

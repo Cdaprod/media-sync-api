@@ -1,3 +1,11 @@
+## 2026-04-24 — iOS device-class naming precision pass (active)
+- [x] Refined `RegisterNodeModal` browser-context detection to prioritize iPhone identity first and avoid iPhone sessions being mislabeled as `ipad-browser`.
+- [x] Tightened iPad classification to explicit `iPad` UA or `MacIntel + touch` heuristic only when iPhone detection is false.
+- [x] Added fallback `ios-browser` device class for likely iOS Safari sessions that are neither confidently iPhone nor iPad.
+- [x] Preserved existing capture defaults for iOS mobile registrations (`runner + capture`, `source_kind=capture`, `source_name=camera-primary`, session transport metadata, nullable `base_url`).
+- [x] Expanded Explorer static contracts to lock the updated iOS device-class detection markers.
+- [ ] Next: capture one physical iPhone + iPad register screenshot/log pair confirming `iphone-browser` vs `ipad-browser` labeling while keeping identical capture registration behavior.
+
 ## 2026-04-24 — Nullable session-node base_url registration fix (active)
 - [x] Updated connect/node request DTOs to accept nullable `base_url` so browser/session registrations are not rejected at request-schema validation.
 - [x] Added explicit base-url normalization (`"" -> None`) in `/connect/register` and `/api/nodes` handlers before `NodeRecord` construction.
