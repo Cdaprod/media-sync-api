@@ -5156,11 +5156,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             </div>
 
             {ingestClaims.length > 0 ? (
-              <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
-                <h2>Ingest Claims</h2>
-                <div className="meta-line">
-                  <span className="kbd">/api/ingest/claims</span>
-                  <span className="small">Showing latest {latestIngestClaims.length} of {ingestClaims.length}</span>
+              <>
+                <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
+                  <h2>Ingest Claims</h2>
+                  <div className="meta-line">
+                    <span className="kbd">/api/ingest/claims</span>
+                    <span className="small">Showing latest {latestIngestClaims.length} of {ingestClaims.length}</span>
+                  </div>
                 </div>
 
                 <div className="ingest-claims-panel">
@@ -5190,7 +5192,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     ))}
                   </div>
                 </div>
-              </div>
+              </>
             ) : null}
 
             <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>

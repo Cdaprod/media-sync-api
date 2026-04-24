@@ -1,3 +1,9 @@
+## 2026-04-24 — Ingest-claims header/list DOM split fix (active)
+- [x] Moved `.ingest-claims-panel` out of the Ingest Claims `.section-h` block so header contains only title + meta-line.
+- [x] Kept claim list rendering/behavior intact while restoring source-like sidebar structural parity (`section-h` sibling followed by list container).
+- [x] Tightened ingest-claim CSS alignment (`.ingest-claim-card.card`, `.claim-row`, panel padding) to keep card width/ellipsis behavior consistent with sidebar cards.
+- [ ] Next: verify DOM inspector on iPhone Safari confirms `.ingest-claims-panel` is a sibling after `.section-h` and no right-side card bleed remains.
+
 ## 2026-04-24 — Ingest-claims sidebar containment follow-up (active)
 - [x] Replaced ingest-claims generic wrapper usage with dedicated panel/list classes to keep claim cards width-constrained to sidebar flow.
 - [x] Added strict claim-card overflow/shrink-safe text and inline-safe overflow-menu button styling to prevent right-side bleed over grid/tags sections.
