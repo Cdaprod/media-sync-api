@@ -1,3 +1,9 @@
+## 2026-04-24 — LAN HTTPS Caddy gateway scaffold (active)
+- [x] Added `docker/caddy/Caddyfile` host-installed authority gateway scaffold routing API/connect/media/health/docs paths to `127.0.0.1:8787` and Explorer to `127.0.0.1:3000`.
+- [x] Added `docker/caddy/README.md` with authority-origin env contract, host service expectations, iPhone CA trust requirement, and curl/browser validation steps.
+- [x] Added cross-platform helpers: `run-caddy.sh` (Linux/macOS) and `run-caddy.ps1` (Windows Docker Desktop) with generated `Caddyfile.docker` using `host.docker.internal` upstreams.
+- [ ] Next: add optional compose profile to launch Caddy + Explorer + API together for one-command LAN HTTPS startup.
+
 ## 2026-04-24 — Authority-origin contract + ingest-claim hide controls (active)
 - [x] Added runtime settings for `MEDIA_SYNC_PUBLIC_ORIGIN` and `MEDIA_SYNC_AUTHORITY_ORIGIN` and wired connect manifest/register responses to prefer authority origin, then public origin, then request origin fallback.
 - [x] Updated `/connect/register` `device_url` generation to emit configured-origin absolute URLs when origin env vars are set while preserving relative fallback behavior when unset.

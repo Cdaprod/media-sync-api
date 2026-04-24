@@ -1,0 +1,15 @@
+{
+  admin off
+  local_certs
+}
+
+cda-DESKTOP.local, 192.168.0.25 {
+  tls internal
+
+  encode gzip zstd
+
+  @api path /api/* /connect/* /media/* /health /healthz /docs /openapi.json /thumbnails/*
+  reverse_proxy @api 127.0.0.1:8787
+
+  reverse_proxy 127.0.0.1:3000
+}
