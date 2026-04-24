@@ -2,6 +2,7 @@ import type { LibrarySnapshot, MediaResponse, Project, ResolveOpenResponse } fro
 import type { ComposeJobEnvelope } from './composeJobs';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 import type { RegisterNodeRequest, RegisterNodeResponse } from './types/registration';
+import type { IngestClaimRecord } from './types/ingestClaim';
 import type {
   LiveSessionControlAction,
   LiveSessionRecord,
@@ -28,7 +29,10 @@ export interface AssetRef {
 export interface ApiClient {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
+  heartbeatNode: (nodeId: string) => Promise<NodeControlRecord>;
   registerNode: (payload: RegisterNodeRequest) => Promise<RegisterNodeResponse>;
+  listIngestClaims: () => Promise<IngestClaimRecord[]>;
+  getIngestClaim: (claimId: string) => Promise<IngestClaimRecord>;
   startLiveSession: (nodeId: string, sourceKind: LiveSourceKind, metadata?: Record<string, unknown>) => Promise<LiveSessionRecord>;
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
@@ -109,6 +113,51 @@ export function createApiClient(baseUrl = ''): ApiClient {
       if (!response.ok) {
         throw new Error(`Failed to load nodes: ${response.status}`);
       }
+      return response.json();
+    },
+    async heartbeatNode(nodeId: string): Promise<NodeControlRecord> {
+      const response = await fetch(buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}/heartbeat`), {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to heartbeat node ${nodeId}: ${response.status}`);
+      }
+
+      return response.json();
+    },
+    async listIngestClaims(): Promise<IngestClaimRecord[]> {
+      const response = await fetch(buildUrl('/api/ingest/claims'), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load ingest claims: ${response.status}`);
+      }
+
+      return response.json();
+    },
+    async getIngestClaim(claimId: string): Promise<IngestClaimRecord> {
+      const response = await fetch(buildUrl(`/api/ingest/claims/${encodeURIComponent(claimId)}`), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load ingest claim ${claimId}: ${response.status}`);
+      }
+
       return response.json();
     },
     async registerNode(payload: RegisterNodeRequest): Promise<RegisterNodeResponse> {

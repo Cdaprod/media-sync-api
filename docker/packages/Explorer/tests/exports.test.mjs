@@ -208,6 +208,11 @@ test('explorer api client includes bulk media action endpoints', () => {
   assert.ok(content.includes("/api/assets/bulk/tags"));
   assert.ok(content.includes('bulkComposeMedia'));
   assert.ok(content.includes("/api/assets/bulk/compose"));
+  assert.ok(content.includes('heartbeatNode'));
+  assert.ok(content.includes('/api/nodes/${encodeURIComponent(nodeId)}/heartbeat'));
+  assert.ok(content.includes('listIngestClaims'));
+  assert.ok(content.includes('/api/ingest/claims'));
+  assert.ok(content.includes('getIngestClaim'));
 });
 
 test('api base inference keeps LAN host reachable', () => {
@@ -429,7 +434,13 @@ test('explorer ui-state seam owns root-local modal/surface/runtime state cluster
   assert.ok(content.includes('const [previewObsExclusive, setPreviewObsExclusive] = useState(false);'));
   assert.ok(content.includes('const [inspectorOpen, setInspectorOpen] = useState(false);'));
   assert.ok(content.includes('const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);'));
-  assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);'));
+  assert.ok(content.includes('export type ExplorerContextMenu ='));
+  assert.ok(content.includes("kind: 'media_asset';"));
+  assert.ok(content.includes("kind: 'source';"));
+  assert.ok(content.includes("kind: 'runtime';"));
+  assert.ok(content.includes("kind: 'live_session';"));
+  assert.ok(content.includes("kind: 'ingest_claim';"));
+  assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<ExplorerContextMenu | null>(null);'));
   assert.ok(content.includes('const [composeModalOpen, setComposeModalOpen] = useState(false);'));
   assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
   assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
@@ -1981,7 +1992,7 @@ test('local density/context/preview interactions stay network-quiet and do not i
 
   const contextStart = content.indexOf('const openContextMenu = useCallback((x: number, y: number, items: MediaItem[]) => {');
   const contextBlock = contextStart >= 0 ? content.slice(contextStart, contextStart + 220) : '';
-  assert.ok(contextBlock.includes('setContextMenu({ x, y, items });'));
+  assert.ok(contextBlock.includes("setContextMenu({ kind: 'media_asset', x, y, items });"));
   assert.ok(!contextBlock.includes('loadSources('));
   assert.ok(!contextBlock.includes('loadProjects('));
   assert.ok(!contextBlock.includes('loadMedia('));
@@ -2162,7 +2173,7 @@ test('density-related local interactions remain layout-only and do not trigger b
 
   const contextStart = explorer.indexOf('const openContextMenu = useCallback');
   const contextBlock = contextStart >= 0 ? explorer.slice(contextStart, contextStart + 280) : '';
-  assert.ok(contextBlock.includes('setContextMenu({ x, y, items });'));
+  assert.ok(contextBlock.includes("setContextMenu({ kind: 'media_asset', x, y, items });"));
   assert.ok(!contextBlock.includes('loadSources('));
   assert.ok(!contextBlock.includes('loadProjects('));
 

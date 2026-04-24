@@ -2,6 +2,43 @@ import { useState } from 'react';
 
 import type { MediaTypeFilter, SortKey } from '../state';
 import type { ExplorerView, MediaItem } from '../types';
+import type { SourceControlRecord, NodeControlRecord } from '../types/sourceControl';
+import type { LiveSession } from '../types/liveSession';
+import type { IngestClaimRecord } from '../types/ingestClaim';
+
+
+
+export type ExplorerContextMenu =
+  | {
+      kind: 'media_asset';
+      x: number;
+      y: number;
+      items: MediaItem[];
+    }
+  | {
+      kind: 'source';
+      x: number;
+      y: number;
+      source: SourceControlRecord;
+    }
+  | {
+      kind: 'runtime';
+      x: number;
+      y: number;
+      node: NodeControlRecord;
+    }
+  | {
+      kind: 'live_session';
+      x: number;
+      y: number;
+      session: LiveSession;
+    }
+  | {
+      kind: 'ingest_claim';
+      x: number;
+      y: number;
+      claim: IngestClaimRecord;
+    };
 
 interface UseExplorerUiStateOptions {
   defaultView?: ExplorerView;
@@ -47,7 +84,7 @@ export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {
   const [previewObsExclusive, setPreviewObsExclusive] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);
+  const [contextMenu, setContextMenu] = useState<ExplorerContextMenu | null>(null);
   const [composeModalOpen, setComposeModalOpen] = useState(false);
   const [composeModalRendered, setComposeModalRendered] = useState(false);
   const [composeSubmitting, setComposeSubmitting] = useState(false);

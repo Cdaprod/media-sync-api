@@ -41,3 +41,5 @@ export interface LiveSessionRecord {
   last_control_at?: string | null;
   metadata?: Record<string, unknown>;
 }
+
+export type LiveSession = LiveSessionRecord;

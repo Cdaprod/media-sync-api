@@ -1,3 +1,10 @@
+## 2026-04-24 — Explorer unified sidebar/runtime context menus (active)
+- [x] Extended Explorer UI context-menu state to a typed union (`media_asset`, `source`, `runtime`, `live_session`, `ingest_claim`) so sidebar surfaces reuse the existing context-menu authority lane.
+- [x] Added runtime sidebar context actions (details, copy identifiers/json, open device, heartbeat now) and wired card right-click + overflow-button entrypoints for sources/runtimes/live sessions.
+- [x] Added ingest-claim sidebar polling (`/api/ingest/claims`) with card rendering + context actions and a shared runtime details modal for payload inspection/copy.
+- [x] Added runtime label helpers (`runtimeLabels`) and ingest-claim type contract for consistent sidebar tagging and diagnostics affordances.
+- [ ] Next: add static contract assertions in Explorer export tests for the new sidebar context-menu branches and ingest-claim API methods.
+
 ## 2026-04-24 — WebRTC signaling hardening pass (active)
 - [x] Scoped signaling answers by `viewer_id` so concurrent Explorer viewers do not overwrite each other.
 - [x] Scoped ICE publication by `role + viewer_id` and surfaced viewer-specific candidate lanes in signaling state reads.

@@ -39,6 +39,7 @@ import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { LiveSourceCard } from './components/LiveSourceCard';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
+import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
@@ -74,6 +75,9 @@ import { useExplorerUiState } from './hooks/useExplorerUiState';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
 import type { RegisterNodeResponse } from './types/registration';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
+import type { LiveSession } from './types/liveSession';
+import type { IngestClaimRecord } from './types/ingestClaim';
+import { getDeviceUrl, getRuntimeCapabilityTags, getRuntimeKinds, isSessionNode, isTestPayloadNode } from './utils/runtimeLabels';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -601,6 +605,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   } = useLibrarySnapshot(api);
   const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
 
+
   // ---------------------------------------------------------------------------
   // Local composition shell state that intentionally remains root-owned.
   // (selection identity, focused media identity, focus/cinematic ownership lanes)
@@ -626,6 +631,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [isRegisterNodeModalOpen, setIsRegisterNodeModalOpen] = useState(false);
+  const [detailsModal, setDetailsModal] = useState<{
+    title: string;
+    subtitle?: string;
+    payload: unknown;
+  } | null>(null);
+  const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
   const liveClaimRefreshRef = useRef<string | null>(null);
 
   // ---------------------------------------------------------------------------
@@ -708,6 +719,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     defaultView: DEFAULT_VIEW,
     defaultGridColumns: DEFAULT_COLUMNS_MOBILE,
   });
+
+
+  const reloadIngestClaims = useCallback(async () => {
+    try {
+      const claims = await api.listIngestClaims();
+      setIngestClaims(Array.isArray(claims) ? claims : []);
+    } catch {
+      // Keep sidebar non-fatal.
+    }
+  }, [api]);
+
+  useEffect(() => {
+    void reloadIngestClaims();
+    const interval = window.setInterval(() => void reloadIngestClaims(), 5000);
+    return () => window.clearInterval(interval);
+  }, [reloadIngestClaims]);
 
   // ---------------------------------------------------------------------------
   // Runtime refs + controllers.
@@ -2990,12 +3017,77 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [addToast, resolveAssetUrl]);
 
+  const copyText = useCallback(async (value: string) => {
+    try {
+      await navigator.clipboard?.writeText(value);
+      addToast('good', 'Copied', 'Copied');
+    } catch {
+      addToast('warn', 'Clipboard', 'Copy unavailable');
+    }
+  }, [addToast]);
+
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const openContextMenu = useCallback((x: number, y: number, items: MediaItem[]) => {
     if (!items.length) return;
-    setContextMenu({ x, y, items });
+    setContextMenu({ kind: 'media_asset', x, y, items });
   }, []);
+
+  const getMenuPoint = (event: React.MouseEvent) => {
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    return {
+      x: event.clientX || rect.right,
+      y: event.clientY || rect.top,
+    };
+  };
+
+  const openSourceContextMenu = useCallback((event: React.MouseEvent, source: SourceControlRecord) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const { x, y } = getMenuPoint(event);
+    setContextMenu({ kind: 'source', x, y, source });
+  }, [setContextMenu]);
+
+  const openRuntimeContextMenu = useCallback((event: React.MouseEvent, node: NodeControlRecord) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const { x, y } = getMenuPoint(event);
+    setContextMenu({ kind: 'runtime', x, y, node });
+  }, [setContextMenu]);
+
+  const openLiveSessionContextMenu = useCallback((event: React.MouseEvent, session: LiveSession) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const { x, y } = getMenuPoint(event);
+    setContextMenu({ kind: 'live_session', x, y, session });
+  }, [setContextMenu]);
+
+  const openIngestClaimContextMenu = useCallback((event: React.MouseEvent, claim: IngestClaimRecord) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const { x, y } = getMenuPoint(event);
+    setContextMenu({ kind: 'ingest_claim', x, y, claim });
+  }, [setContextMenu]);
+
+  const openDevice = useCallback((nodeId: string) => {
+    window.location.href = getDeviceUrl(nodeId);
+  }, []);
+
+  const heartbeatNodeNow = useCallback(async (nodeId: string) => {
+    try {
+      await api.heartbeatNode(nodeId);
+      addToast('good', 'Runtime', 'Heartbeat sent');
+      await reloadSourceControl();
+    } catch (error) {
+      addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Heartbeat failed');
+    }
+  }, [api, addToast, reloadSourceControl]);
+
+  const openPayloadDetails = useCallback((title: string, subtitle: string | undefined, payload: unknown) => {
+    setDetailsModal({ title, subtitle, payload });
+    setContextMenu(null);
+  }, [setContextMenu]);
 
   const getContextActions = useCallback((items: MediaItem[]) => {
     const count = items.length;
@@ -4324,7 +4416,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const selectedCount = selected.size;
   const selectedOrderMap = useMemo(() => selectionOrderIndexMap(selected, selectedOrder), [selected, selectedOrder]);
   const contextActions = useMemo(
-    () => (contextMenu ? getContextActions(contextMenu.items) : []),
+    () => (contextMenu?.kind === 'media_asset' ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
   );
 
@@ -4841,24 +4933,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 </div>
                 <div className="sources">
                     {liveSessions.map((session) => (
-                      <LiveSourceCard
-                        key={session.session_id}
-                        session={session}
-                        apiBase={resolvedApiBase}
-                        onStartRecording={(entry) => {
-                          void api.controlLiveSession(entry.session_id, 'start_recording')
-                            .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))
-                            .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
-                        }}
-                        onStopRecording={(entry) => {
-                          void api.controlLiveSession(entry.session_id, 'stop_recording')
-                            .then(() => addToast('good', 'Live control', `Stop requested for ${entry.node_id}`))
-                            .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
-                        }}
-                        onOpen={(entry) => {
-                          window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
-                        }}
-                      />
+                      <div key={session.session_id} onContextMenu={(event) => openLiveSessionContextMenu(event, session)}>
+                        <LiveSourceCard
+                          session={session}
+                          apiBase={resolvedApiBase}
+                          onStartRecording={(entry) => {
+                            void api.controlLiveSession(entry.session_id, 'start_recording')
+                              .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))
+                              .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                          }}
+                          onStopRecording={(entry) => {
+                            void api.controlLiveSession(entry.session_id, 'stop_recording')
+                              .then(() => addToast('good', 'Live control', `Stop requested for ${entry.node_id}`))
+                              .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                          }}
+                          onOpen={(entry) => {
+                            window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
+                          }}
+                        />
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={(event) => openLiveSessionContextMenu(event, session)}
+                          style={{ marginTop: 8 }}
+                        >
+                          ⋯
+                        </button>
+                      </div>
                     ))}
                   </div>
               </>
@@ -4913,7 +5014,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                         {canonicalSources.map((source: SourceControlRecord, index: number) => {
                           const authority = source.authority || 'canonical';
                           return (
-                            <div className="card" key={`canonical-${source.name}-${index}`}>
+                            <div className="card" key={`canonical-${source.name}-${index}`} onContextMenu={(event) => openSourceContextMenu(event, source)}>
                               <strong>{source.name}</strong>
                               <div className="small">{source.root || 'No root path'}</div>
                               <div className="tagrow">
@@ -4926,6 +5027,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                                 <span className="tag">{source.kind || source.type || 'filesystem'}</span>
                                 <span className="tag">{authority}</span>
                               </div>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={(event) => openSourceContextMenu(event, source)}
+                                style={{ marginTop: 8 }}
+                              >
+                                ⋯
+                              </button>
                             </div>
                           );
                         })}
@@ -4944,7 +5053,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           const owner = runtimeNodes.find((node) => node.node_id === source.owner_node_id);
                           const authority = source.authority || 'canonical';
                           return (
-                            <div className="card" key={`remote-${source.owner_node_id || 'unknown'}-${source.name}-${index}`}>
+                            <div className="card" key={`remote-${source.owner_node_id || 'unknown'}-${source.name}-${index}`} onContextMenu={(event) => openSourceContextMenu(event, source)}>
                               <strong>{source.name}</strong>
                               <div className="small">owner: {source.owner_node_id || 'unknown'}</div>
                               {owner?.label ? (
@@ -4967,6 +5076,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                                 {source.can_proxy ? <span className="tag">proxy</span> : null}
                                 {source.can_record ? <span className="tag">record</span> : null}
                               </div>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={(event) => openSourceContextMenu(event, source)}
+                                style={{ marginTop: 8 }}
+                              >
+                                ⋯
+                              </button>
                             </div>
                           );
                         })}
@@ -4980,21 +5097,40 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       <div className="small">Control-plane view of registered runtime nodes.</div>
                       <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
                         {runtimeNodes.map((node: NodeControlRecord) => (
-                          <div className="card" key={node.node_id}>
+                          <div className="card" key={node.node_id} onContextMenu={(event) => openRuntimeContextMenu(event, node)}>
                             <strong>{node.label}</strong>
                             <div className="small">{node.node_id}</div>
                             <div className="small">{node.base_url}</div>
                             <div className="tagrow">
-                              <span className={`tag ${node.status === 'healthy' ? 'good' : node.status === 'degraded' ? 'bad' : ''}`}>
-                                {node.status}
-                              </span>
-                              {node.roles.map((role) => (
-                                <span className="tag" key={`${node.node_id}-role-${role}`}>{role}</span>
-                              ))}
-                              {node.advertised_source_kinds.map((kind) => (
+                              <span className={`tag ${node.status === 'healthy' ? 'good' : ''}`}>{node.status}</span>
+                              {getRuntimeKinds(node).map((kind) => (
                                 <span className="tag" key={`${node.node_id}-kind-${kind}`}>{kind}</span>
                               ))}
+                              {getRuntimeCapabilityTags(node).map((tag) => (
+                                <span className="tag" key={`${node.node_id}-cap-${tag}`}>{tag}</span>
+                              ))}
+                              {isSessionNode(node) ? <span className="tag">session-node</span> : null}
+                              {isTestPayloadNode(node) ? <span className="tag bad">test payload</span> : null}
                             </div>
+
+                            {node.last_heartbeat_at ? (
+                              <div className="small">heartbeat: {node.last_heartbeat_at}</div>
+                            ) : null}
+
+                            {isTestPayloadNode(node) ? (
+                              <div className="small">
+                                This node appears modified by Swagger example data. Re-register from Explorer.
+                              </div>
+                            ) : null}
+
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={(event) => openRuntimeContextMenu(event, node)}
+                              style={{ marginTop: 8 }}
+                            >
+                              ⋯
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -5003,6 +5139,41 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 </>
               )}
             </div>
+
+            {ingestClaims.length > 0 ? (
+              <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
+                <h2>Ingest Claims</h2>
+                <div className="meta-line">
+                  <span className="kbd">/api/ingest/claims</span>
+                </div>
+                <div className="sources">
+                  {ingestClaims.map((claim) => (
+                    <div
+                      className="card"
+                      key={claim.claim_id}
+                      onContextMenu={(event) => openIngestClaimContextMenu(event, claim)}
+                    >
+                      <strong>{claim.claim_id}</strong>
+                      <div className="small">{claim.node_id}</div>
+                      <div className="small">{claim.source_name}</div>
+                      <div className="tagrow">
+                        <span className="tag">{claim.kind}</span>
+                        <span className="tag">{claim.status}</span>
+                        {claim.materialization_mode ? <span className="tag">{claim.materialization_mode}</span> : null}
+                      </div>
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={(event) => openIngestClaimContextMenu(event, claim)}
+                        style={{ marginTop: 8 }}
+                      >
+                        ⋯
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
               <h2>Tags</h2>
@@ -5659,7 +5830,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </div>
       </aside>
 
-      {contextMenu ? (
+      {contextMenu?.kind === 'media_asset' ? (
         <div
           className="context-menu open custom-ui-surface"
           ref={contextMenuRef}
@@ -5680,6 +5851,123 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ))}
         </div>
       ) : null}
+
+      {contextMenu?.kind === 'source' ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu open custom-ui-surface"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button type="button" onClick={() => { setContextMenu(null); }}>
+            Open in Explorer
+          </button>
+          <button
+            type="button"
+            onClick={() => openPayloadDetails('Source details', contextMenu.source.name, contextMenu.source)}
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyText(JSON.stringify(contextMenu.source, null, 2))}
+          >
+            Copy Source JSON
+          </button>
+          {contextMenu.source.owner_node_id ? (
+            <button
+              type="button"
+              onClick={() => void copyText(contextMenu.source.owner_node_id ?? '')}
+            >
+              Copy Owner Node ID
+            </button>
+          ) : null}
+          {contextMenu.source.owner_node_id ? (
+            <button
+              type="button"
+              onClick={() => openDevice(contextMenu.source.owner_node_id ?? '')}
+            >
+              Open Device
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {contextMenu?.kind === 'runtime' ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu open custom-ui-surface"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button type="button" onClick={() => openDevice(contextMenu.node.node_id)}>
+            Open Device
+          </button>
+          <button type="button" onClick={() => void heartbeatNodeNow(contextMenu.node.node_id)}>
+            Heartbeat now
+          </button>
+          <button
+            type="button"
+            onClick={() => openPayloadDetails('Runtime details', contextMenu.node.node_id, contextMenu.node)}
+          >
+            Details
+          </button>
+          <button type="button" onClick={() => void copyText(contextMenu.node.node_id)}>
+            Copy Node ID
+          </button>
+          <button type="button" onClick={() => void copyText(getDeviceUrl(contextMenu.node.node_id))}>
+            Copy Device URL
+          </button>
+          <button type="button" onClick={() => void copyText(JSON.stringify(contextMenu.node, null, 2))}>
+            Copy Node JSON
+          </button>
+        </div>
+      ) : null}
+
+      {contextMenu?.kind === 'live_session' ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu open custom-ui-surface"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button type="button" onClick={() => openPayloadDetails('Live session details', contextMenu.session.session_id, contextMenu.session)}>
+            Details
+          </button>
+          <button type="button" onClick={() => void copyText(contextMenu.session.session_id)}>
+            Copy Session ID
+          </button>
+          <button type="button" onClick={() => void copyText(JSON.stringify(contextMenu.session, null, 2))}>
+            Copy Session JSON
+          </button>
+        </div>
+      ) : null}
+
+      {contextMenu?.kind === 'ingest_claim' ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu open custom-ui-surface"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            type="button"
+            onClick={() => openPayloadDetails('Ingest claim details', contextMenu.claim.claim_id, contextMenu.claim)}
+          >
+            Details
+          </button>
+          <button type="button" onClick={() => void copyText(contextMenu.claim.claim_id)}>
+            Copy Claim ID
+          </button>
+          <button type="button" onClick={() => void copyText(JSON.stringify(contextMenu.claim, null, 2))}>
+            Copy Claim JSON
+          </button>
+        </div>
+      ) : null}
+
+      <RuntimeDetailsModal
+        isOpen={detailsModal !== null}
+        title={detailsModal?.title ?? ''}
+        subtitle={detailsModal?.subtitle}
+        payload={detailsModal?.payload}
+        onClose={() => setDetailsModal(null)}
+      />
 
       {deleteModalRendered ? (
         <div
