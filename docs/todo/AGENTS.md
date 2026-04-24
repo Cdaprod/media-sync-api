@@ -1,3 +1,203 @@
+## 2026-04-20 — Safe current-selection submit source (bridge auto-submit disabled) (active)
+- [x] Disabled automatic bridge-report recovery for fresh share-sheet submit mode to prevent stale prior-selection artifacts from being submitted.
+- [x] Fresh submit mode now allows automatic submission only from `direct_path` or `inline_bridge` current-invocation durable ingest lanes.
+- [x] Added explicit unrecoverable current-selection failure code/message when submit-mode direct + inline recovery both fail: `share_input_current_invocation_unrecoverable`.
+- [x] Added submission provenance fields to state/output/debug: `submissionSource` (`direct_path`/`inline_bridge`/`bridge_report`/`none`) and `submittedItemCount`.
+- [x] Kept bridge-report recovery available for inspect/manual workflows; submit-mode safety now blocks bridge replay from becoming automatic source-of-truth.
+- [x] Re-synced alias dashboards from canonical safety patch.
+- [ ] Next verification step on iPhone: share exactly 2 clips, run submit mode, verify `submissionSource` is `direct_path` or `inline_bridge` (never `bridge_report`), and verify final composed output matches current 2-clip selection.
+
+## 2026-04-20 — Live shell-first submit loop (non-blocking spinner mitigation) (active)
+- [x] Reintroduced early live dashboard bootstrap for submit mode: load HTML + push initial state + non-awaited `wv.present(...)` before long staging/upload orchestration.
+- [x] Fresh-run submit flow now drives staging/upload with live `pushUI(...)` updates and cooperative yields, so operator sees transitions while requests run.
+- [x] `drainRunPersistent(...)` now yields briefly after each stepped transition to improve Scriptable responsiveness and paint cadence.
+- [x] Submit-mode dead-input failure path now updates already-present live WebView state instead of relying on post-run presentation only.
+- [x] Kept inspect/reopen mode awaited and resumable for detailed polling/final player rendering.
+- [x] Re-synced alias dashboards from canonical live-submit implementation.
+- [ ] Next verification step on iPhone: share from Photos and confirm dashboard appears quickly with live per-item status transitions (stage/upload/fail/blocked) without waiting for end-of-run presentation.
+
+## 2026-04-20 — Submit-vs-inspect split to stop share-sheet spinner blocking (active)
+- [x] Added explicit invocation split in dashboard flow: fresh share input runs now execute in `submit` mode; reopen/no-input runs execute in `inspect` mode.
+- [x] Submit mode no longer polls compose `job_url` to completion after final clip acceptance; it persists queued job state and exits quickly with submission metadata (`runId`, `job_url`, `job_status`, `started_at`).
+- [x] Inspect mode now performs bounded job refresh (`refreshPendingComposeJobForInspect`) and updates final media when available, otherwise keeps a concise “still running” note.
+- [x] Final-clip queued responses now persist submission fields (`submissionSucceeded`, `submissionPendingInspect`, `lastKnownJobUrl`, `lastKnownJobStatus`, `lastKnownJobStartedAt`).
+- [x] Dead-input hard-fail path no longer forces WebView presentation in submit mode, reducing foreground spinner dwell.
+- [x] Header copy now surfaces submit-mode status line (“Submitted. Reopen dashboard to inspect progress.”) while keeping compact layout.
+- [x] Re-synced alias dashboard scripts from canonical submit/inspect split.
+- [ ] Next verification step on iPhone: share 3 clips and confirm Scriptable exits soon after submission (no long queued-job wait), then reopen dashboard manually to refresh queued job and show final player when completed.
+
+## 2026-04-20 — Bridge recovery permissive restore + compact operator-first UI (active)
+- [x] Restored permissive dead-OutgoingTemp bridge recovery behavior by removing fingerprint/count mismatch from mandatory rejection gates in main fallback path.
+- [x] Kept recovery order stable: inline durable ingest first, bridge fallback second, hard-fail only when both yield zero usable staged files.
+- [x] Simplified header to compact operator view (title + one metadata line + concise warning line) and moved verbose fallback diagnostics into collapsed run debug details.
+- [x] Collapsed per-card staging debug behind `Staging debug` details so cards default to filename/status/bytes/method/note/path.
+- [x] Compacted retry/re-share action row to a small inline control and note (removed oversized full-width failure banner block).
+- [x] Reduced final result panel media height from `62vh` to `38vh` for balanced mobile layout while preserving top-of-list visibility.
+- [x] Re-synced alias dashboard scripts from canonical compact/permissive regression fix.
+- [ ] Next verification step on iPhone: confirm dead OutgoingTemp run can recover from latest live bridge-staged files even when fingerprint/count differ, and confirm header remains compact with verbose diagnostics only in collapsed details.
+
+## 2026-04-20 — Inline durable ingest promoted + retryability UX split (active)
+- [x] Promoted inline durable ingest to primary lane for fresh share runs: dashboard now attempts inline staging from current args first and only keeps direct-path lane when inline import cannot fully match item count.
+- [x] Dead-OutgoingTemp failure remains terminal only after inline primary and bridge secondary/manual lanes both yield zero usable staged files for the current invocation.
+- [x] Added persisted failure semantics in run metadata/output: `retryableFailure` and `recoveryPathUsed` (`inline_bridge`, `bridge_report`, `direct_path`, `none`).
+- [x] Added action UX split in dashboard header: retryable failures show `Retry upload`; non-retryable dead-input failures show `Re-share from Photos`.
+- [x] Extended compact fallback header diagnostics with `path=<recoveryPathUsed>` so operator can quickly verify which lane was used.
+- [x] Re-synced alias dashboard scripts from canonical implementation after retryability/recovery-path updates.
+- [ ] Next verification step on iPhone: confirm dead OutgoingTemp-only run shows `Re-share from Photos` and `retryableFailure=false`, while a simulated network/poll failure shows `Retry upload` with `retryableFailure=true`.
+
+## 2026-04-20 — Invocation fingerprint-gated bridge fallback (active)
+- [x] Added deterministic share-invocation fingerprinting in dashboard + bridge scripts (`fp-<hash>`) based on item count + normalized raw source payloads so fallback can verify invocation identity, not just count.
+- [x] Updated dead-OutgoingTemp recovery to keep inline ingest as primary path and treat persisted bridge reports as strictly secondary/manual recovery with exact fingerprint match required.
+- [x] Added explicit stale-bridge reject reason names (`stale_bridge_report_fingerprint_mismatch`, `stale_bridge_report_count_mismatch`) while preserving count protection and existing reject taxonomy.
+- [x] Extended dashboard header diagnostics with compact fallback match line (`currentFingerprint`, `bridgeFingerprint`, `currentCount`, `bridgeCount`) for on-device triage.
+- [x] Persisted fingerprint and count diagnostics into run metadata + shortcut output payloads for both fresh and resumed flows.
+- [x] Updated `ComposeUploadInspectBridge` reports/staged rows to carry `invocationFingerprint` and `itemCount` so dashboard fallback can enforce deterministic report matching.
+- [ ] Next verification step on iPhone: run bridge + dashboard from the same share invocation and confirm fingerprint match enables report recovery; rerun dashboard from a different invocation and confirm explicit `stale_bridge_report_fingerprint_mismatch` reject.
+
+## 2026-04-20 — Dead OutgoingTemp fallback diagnostics + relaxed bridge recovery (active)
+- [x] Instrumented dead-OutgoingTemp-only startup recovery with explicit counters/flags (`deadOutgoingTempOnly`, `inlineBridgeAttempted`, `inlineBridgeRecoveredCount`, `bridgeReportAttempted`, `bridgeReportRecoveredCount`, `bridgeReportRejectReason`) persisted in run metadata and shortcut output.
+- [x] Hardened bridge report reject taxonomy with explicit reasons (`missing_report`, `malformed_report`, `zero_staged_rows`, `no_live_staged_paths`, `count_mismatch`, `invocation_mismatch`, `report_too_old`) so failures are no longer collapsed into a generic dead-path error.
+- [x] Relaxed bridge report age checks only for dead-OutgoingTemp-only recovery attempts while retaining strict count-match protection against stale wrong-sized imports.
+- [x] Added compact header diagnostics line in dashboard UI: `fallback inline=<count> · report=<count> · reject=<reason>`.
+- [x] Re-synced alias dashboard scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical fallback diagnostics/behavior updates.
+- [ ] Next verification step on iPhone: rerun dead-OutgoingTemp share flow and confirm either recovery succeeds with `report=2` or reject reason is explicit (`count_mismatch`, `no_live_staged_paths`, etc.).
+
+## 2026-04-20 — Async compose job polling for final player panel (active)
+- [x] Added `pollComposeJobUntilComplete(...)` to the dashboard script so final upload responses with `job_url` are polled until final media (`served.stream_url`/`download_url`) is available or terminal failure/timeout occurs.
+- [x] Updated final-step state handling in `runOneStateStepPersistent(...)` to keep non-terminal job responses in polling state (`item.note = Polling compose job...`) and only mark `done` after poll success with final media payload.
+- [x] Expanded `buildFinalMediaDescriptor(...)` to accept both nested `served.*` and top-level `stream_url/download_url` response shapes.
+- [x] Increased top result player viewport sizing (`iframe.result-frame` and `video.result-video` to 62vh) so final media panel is prominent on iPhone.
+- [ ] Next verification step on iPhone: run a compose that returns `status=accepted` + `job_url`, confirm dashboard transitions through polling and then shows top iframe player (`/player.html?src=...`) without reopening script.
+
+## 2026-04-20 — Inline bridge-style ingest in main dashboard (active)
+- [x] Added inline bridge-style durable ingest helper inside `ComposeStatefulJobDashboard-2.js` so dead OutgoingTemp-only fresh runs can recover within the same invocation (no prior bridge report required).
+- [x] Recovery order is now: (1) inline bridge ingest, (2) report-based bridge fallback from `compose-upload-inspect-latest.json`, (3) explicit hard-fail if neither yields live files.
+- [x] Added metadata flags `inlineBridgeIngestUsed` and `reportBridgeFallbackUsed` in script outputs/state to distinguish recovery path used at runtime.
+- [x] Kept report-based fallback as compatibility shim only (last resort) while preserving existing dashboard cards/debug fields.
+- [ ] Next verification step on iPhone: run dead-OutgoingTemp share flow without running bridge first and confirm dashboard reports `inlineBridgeIngestUsed=true` and proceeds through staging/upload.
+
+## 2026-04-20 — Final-report awaited WebView presentation mode (active)
+- [x] Switched compose dashboard presentation model from non-awaited live-progress present to final-report present after drain completion for both fresh and resumed runs.
+- [x] Updated `presentDashboardWebView(...)` to `await wv.present(...)` (with awaited fallback) and added explicit comment documenting Scriptable paint reliability rationale.
+- [x] Added `pushUI(...)` null-guard so drain/update code paths can run without an attached WebView while work completes in background.
+- [x] Increased header top padding to `68px` to clear Scriptable native chrome more reliably on iPhone.
+- [ ] Next verification step on iPhone: run compose from share sheet and confirm first-open dashboard paints immediately (no blank gray page) while still showing final completed run state.
+
+## 2026-04-20 — Dashboard bridge-ingest fallback for dead OutgoingTemp runs (active)
+- [x] Added dashboard-side fallback loader for `share-debug/compose-upload-inspect-latest.json` so compose can ingest live staged files from the bridge report when incoming share paths are dead OutgoingTemp-only.
+- [x] Fresh-run startup now attempts bridge fallback before hard-failing `share_input_only_dead_outgoingtemp_paths`; when used, metadata marks `bridgeFallbackUsed=true` and hint text explains the fallback source.
+- [x] Updated bridge script staging target from temporary directory to persistent `documents/share-debug/bridge-staged/...` so fallback files remain available across script handoff.
+- [ ] Next verification step on iPhone: run `ComposeUploadInspectBridge`, then run `ComposeJobDashboard-2` from the same failing share entry and confirm the dashboard imports from bridge-staged paths (`bridgeFallbackUsed=true`) and progresses past staging.
+
+## 2026-04-20 — Compose upload inspect bridge script for shortcut contract parity (active)
+- [x] Added `scriptable/ComposeUploadInspectBridge.js` to mirror old working `ComposeUpload` staging behavior with minimal diagnostics (raw path family + exists-at-collect + immediate staging outcome).
+- [x] Bridge script now writes JSON evidence to `documents/share-debug/compose-upload-inspect-latest.json` (plus timestamped copy) for side-by-side comparison against dashboard runs.
+- [x] Added lightweight on-device summary alert (family counts, all-dead-OutgoingTemp detection, staged/failure counts, report path) and Shortcuts-safe JSON output.
+- [ ] Next verification step on iPhone: run `ComposeUploadInspectBridge` from the same shortcut/share entrypoint that fails dashboard and compare its report with the known-good inspect flow to isolate invocation contract drift.
+
+## 2026-04-20 — Fresh-run import reset to old ComposeUpload behavior (active)
+- [x] Refactored fresh-run import path to mirror old working `ComposeUpload.js`: collect raw share paths directly from Shortcuts args and stage immediately into Scriptable-owned run storage before presenting the dashboard.
+- [x] Added immediate raw-path staging helper (`copy` -> `read/write` -> `Data.fromFile`) so fresh runs no longer depend on path-family substitution before durable import.
+- [x] Added startup input-family summary persisted in run metadata (`sourceChannel`, raw path, family, `existsAtCollect`) for direct compare against inspect-script evidence.
+- [x] Added explicit dead OutgoingTemp-only guard: if all incoming raw paths are OutgoingTemp and already missing at collect time, run fails fast with `share_input_only_dead_outgoingtemp_paths` and user-visible guidance.
+- [x] Kept path-family diagnostics for visibility only; import logic now prioritizes raw shared paths for fresh runs.
+- [x] Re-synced alias entrypoints (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical script after fresh-run import reset.
+- [ ] Next verification step on iPhone: run the same shortcut that previously worked in old `ComposeUpload` flow and confirm dashboard fresh run stages non-zero bytes before WebView upload starts; then run known-bad lane and confirm fast-fail `share_input_only_dead_outgoingtemp_paths` with explicit guidance.
+
+## 2026-04-20 — Scriptable share path-family selection hardening (active)
+- [x] Confirmed compose staging failures were resolving to unstable Photos compatibility export paths (`/var/mobile/Media/PhotoData/OutgoingTemp/.../Compatible/...`) while inspect runs proved container temp paths are valid/copyable.
+- [x] Added explicit path-family classification/scoring and incoming path selection (`choosePreferredPath`) so container temp families are preferred (`PluginKitPlugin` > `RunScriptIntent` > other > `OutgoingTemp`).
+- [x] Updated collector/source shaping to preserve raw path, preferred path, candidate paths, and path-family diagnostics without rewriting valid incoming fileURLs to alternate path families.
+- [x] Updated staging resolution to use `preferredPath/rawPath/path/originalPath` fallback order and return detailed debug payload for selected path family + candidate count.
+- [x] Added temporary per-item path debug rendering (raw source value, normalized path, PluginKit/RunScriptIntent/OutgoingTemp flags, resolved family, candidate count, resolved path).
+- [x] Re-synced alias entrypoints (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical script after path-family hardening.
+- [ ] Next verification step on iPhone: share 2 clips, confirm dashboard debug resolves to PluginKitPlugin or RunScriptIntent families (not OutgoingTemp) and staged bytes are non-zero before upload begins.
+
+## 2026-04-20 — Share import staging parity fix: Data.fromFile-first + source-shape hardening (active)
+- [x] Patched `stagePersistentSource(...)` to resolve source path defensively via `source.path ?? source.originalPath ?? null` and return explicit `source_missing_path_property` when neither field exists.
+- [x] Reordered path staging fallback for provider-backed share files to `Data.fromFile(...)` first, then `_fmRun.read(...)`, then `_fmRun.copy(...)`, with `data_from_file` bytes measured from the Data payload.
+- [x] Added temporary per-item staging debug payload (`sourceType`, `hasPath`, `hasOriginalPath`, `resolvedPath`, `existedBeforeStage`) and rendered it compactly in dashboard cards for on-device shape mismatch triage.
+- [x] Increased dashboard header top padding to avoid title overlap with Scriptable’s native Close button.
+- [x] Re-synced alias entrypoints (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical script after staging hardening.
+- [ ] Next verification step on iPhone: run the same Photos/Shortcuts share flow and confirm `stageMethod=data_from_file`, full staged byte sizes (not tiny provider `fileSize` values), and debug rows show expected `path/originalPath` presence with `exists=yes`.
+
+## 2026-04-20 — Stage-before-present startup reorder for transient share paths (active)
+- [x] Reordered fresh-run startup to import/stage incoming share items immediately (`stageRunInputsPersistentFast`) before any WebView presentation delay.
+- [x] Kept existing presentation helper for staged state display + upload drain, but removed pre-stage timing gap that could let temporary share paths expire.
+- [x] Fixed `deriveInputContractHints(...)` count source to use explicit `...Count` fields from `inspectIncomingArgs()` instead of truncated sample-array lengths.
+- [x] Re-synced alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical dashboard after startup reorder.
+- [ ] Next verification step on iPhone: run share-sheet upload and verify staged items no longer flip from readable-at-collect-time to `file_not_found` before staging.
+
+## 2026-04-20 — Non-blocking dashboard presentation + hint noise reduction (active)
+- [x] Updated `presentDashboardWebView(...)` to launch WebView non-blocking (`wv.present(...)` without await) so staging/upload progress continues while dashboard is visible.
+- [x] Kept delayed first-present timing hardening (`sleep(150)`) but removed await-block behavior that left rows stuck at `queued`.
+- [x] Reduced header warning noise by suppressing the generic parameter/url hint when `fileURLs` already exists (retain targeted mixed-lane warning only).
+- [x] Re-synced alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical dashboard after non-blocking present changes.
+- [ ] Next verification step on iPhone: run with current mixed shortcut and confirm rows progress past `queued` while dashboard stays open; then remove top parameter lane and confirm warning banner disappears fully.
+
+## 2026-04-20 — Scriptable Timer-based sleep runtime compatibility fix (active)
+- [x] Replaced browser-only `setTimeout` sleep helper with Scriptable-compatible `Timer.schedule(ms, false, resolve)` promise wrapper.
+- [x] Re-synced alias dashboard scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical implementation so all entrypoints avoid `setTimeout`.
+- [x] Kept launch timing hardening intact (`presentDashboardWebView(...)` still uses delayed present flow) while removing JSCore runtime crash source.
+- [ ] Next verification step on iPhone: rerun share-sheet launch and confirm no `ReferenceError: Can't find variable: setTimeout` fatal alert appears.
+
+## 2026-04-19 — Share-sheet launch timing hardening + startup alert defaults (active)
+- [x] Disabled startup smoke alert by default (`ENABLE_STARTUP_ALERT = false`) now that execution is proven, while keeping fatal alerts enabled for actionable crash visibility.
+- [x] Added `sleep(ms)` helper and centralized first-open presentation path (`presentDashboardWebView(...)`) to add a short post-load delay before present.
+- [x] Added present fallback (`present(false)` then `present(true)` on failure) to improve first-launch reliability from Photos → Shortcuts → Scriptable foreground handoff.
+- [x] Re-synced alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical dashboard after launch-timing hardening changes.
+- [ ] Next verification step on iPhone: run from share sheet with the top `with Shortcut Input` parameter removed (Files lane only) and confirm first-open no longer lands on blank WebView.
+
+## 2026-04-19 — Dashboard card preview lane + compact diagnostics UX (active)
+- [x] Added a thumbnail/preview lane to compose dashboard cards with a new item preview model (`previewKind`, `previewUrl`, `previewLabel`, `previewIndexLabel`).
+- [x] Implemented resilient phase-1 placeholder previews (kind/clip index) with status-aware tinting (`accepted/done`, `failed`, `blocked`) and layout split (`card-main`, `card-body`).
+- [x] Updated server diagnostics presentation to collapsed-by-default `<details>` blocks so rows remain scannable during larger runs.
+- [x] Re-synced alias scripts from canonical dashboard after preview-lane and diagnostics UI updates.
+- [ ] Next verification step on iPhone: confirm each row shows the new preview tile and that server JSON is collapsed by default while status/progress remain readable on 10+ clip runs.
+
+## 2026-04-19 — Fresh-run cleanup + client-side finalization guard (active)
+- [x] Added fresh-run reset behavior for new incoming share runs: clear `last_run.json` pointer and remove prior run directories before creating a new run skeleton.
+- [x] Added client-side blocking guard in `runOneStateStepPersistent(...)` so uploads are blocked when earlier indices already failed, preventing misleading final-clip 409 finalize attempts.
+- [x] Added helper routines `hasBlockingFailuresBeforeIndex(...)` and `markRemainingItemsBlocked(...)` to keep state coherent once a run is no longer safely completable.
+- [x] Updated dashboard summary semantics from `Completed` to `Progress` (`accepted + done`) and included `blocked` in failed count with dedicated badge styling.
+- [x] Re-synced alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) after cleanup/finalization guard updates.
+- [ ] Next verification step on iPhone: start a fresh share-sheet run after prior failures and confirm stale rows do not carry into the new run; then force one early failure and verify later clips are marked `blocked` (no server 409 finalization attempt).
+
+## 2026-04-19 — Scriptable blank-WebView mitigation for mixed shortcut channels (active)
+- [x] Tightened ingestion channel selection in `collectIncomingItems()` to consume only the first non-empty canonical channel (`fileURLs` → `shortcutInput` → `shortcutParameter` → `urls`) instead of merging all channels, preventing duplicate/mixed payload fan-in.
+- [x] Added explicit mixed-lane warning hint when both `fileURLs` and `shortcutParameter` are present so shortcut pollution is visible in-dashboard.
+- [x] Reduced debug payload pressure by truncating `inspectIncomingArgs()` sample values and exposing bounded entry samples + channel counts.
+- [x] Hardened `pushUI(...)` with a compact-state fallback retry path if full-state WebView bridge injection fails.
+- [x] Re-synced alias dashboard scripts from canonical implementation after mixed-channel and UI-bridge hardening.
+- [ ] Next verification step on iPhone: run with existing shortcut (expect warning about parameter lane), then clear parameter/images lanes and confirm dashboard no longer lands on blank WebView.
+
+## 2026-04-19 — Scriptable shortcut contract hinting + startup probe defaults (active)
+- [x] Enabled startup smoke alert by default (`ENABLE_STARTUP_ALERT = true`) while keeping fatal alert enabled so launch-path failures surface immediately during on-device triage.
+- [x] Added `deriveInputContractHints(...)` and threaded `inputHints` into run metadata/output to explicitly flag non-files-only Shortcuts mapping issues (`Images/URLs/Texts` lanes populated).
+- [x] Updated dashboard header rendering to include inline warning hints when shortcut input contract looks inconsistent for compose flows.
+- [x] Re-synced compatibility alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) from canonical script after contract-hint additions.
+- [ ] Next verification step on iPhone: run with current shortcut, confirm startup alert appears, then clear Images lane and verify dashboard header warning disappears.
+
+## 2026-04-19 — Scriptable launch-path hardening + alias compatibility restore (active)
+- [x] Refactored compose run bootstrap to present WebView before expensive staging work by splitting run creation into `createRunSkeletonPersistent(...)` + `stageRunInputsPersistent(...)`.
+- [x] Added optional startup smoke alert (`ENABLE_STARTUP_ALERT`) and fatal alert (`ENABLE_FATAL_ALERT`) so on-device script execution failures can be surfaced immediately when Scriptable opens without dashboard.
+- [x] Restored compatibility alias scripts (`ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) by mirroring the canonical dashboard script body so older Shortcuts bindings continue to execute.
+- [ ] Next verification step on iPhone: bind Shortcuts action with only `Files = Shortcut Input`, run each alias script once, and confirm WebView opens before staging rows transition.
+
+## 2026-04-19 — Scriptable share-input diagnostics + non-path ingestion hardening (active)
+- [x] Added explicit share-argument diagnostics (`inspectIncomingArgs`) capturing channel types and stringified entries for `fileURLs`, `shortcutInput`, `shortcutParameter`, and `urls` to expose real Shortcuts→Scriptable payload shape on-device.
+- [x] Replaced path-only collection with `collectIncomingItems()` so Scriptable can ingest both local path entries and Data-like share payloads from all incoming channels.
+- [x] Extended persistent staging to accept `sourceType: data` items (`incoming_data` stage method) and write those directly into `compose-runs/.../staged` before upload.
+- [x] Threaded `incomingDebug` into run metadata + final shortcut output for quick transport-layer triage when staging fails before upload.
+- [ ] Next verification step on iPhone: run the same 8-video share flow and confirm whether `incomingDebug` reports `dataLike: true` payloads and whether rows progress with `method: incoming_data`.
+
+## 2026-04-19 — Scriptable compose dashboard consolidation + iOS staging hardening (active)
+- [x] Consolidated `/scriptable` to a single canonical Scriptable entrypoint (`ComposeStatefulJobDashboard-2.js`) by removing legacy duplicate variants (`ComposeUpload.js`, `ComposeJobDashboard.js`, `ComposeStatefulJobDashboard.js`) to prevent drift and mismatched behavior.
+- [x] Hardened persistent run import in `createRunFromIncomingPathsPersistent(...)` with explicit source readability checks and ordered staging fallbacks (`copy` → `FileManager.read/write` → `Data.fromFile/write`) so transient provider paths fail with clear `source_unreadable_or_transient` diagnostics instead of ambiguous staging state.
+- [x] Corrected run-item lifecycle truth: items now initialize as `queued` and only transition to `staged` after successful import into Scriptable-owned storage.
+- [x] Added multipart upload attachment fallback in `sendOneClip(...)` (`addFileToMultipart` → `addFileDataToMultipart`) with MIME inference so staged uploads remain resilient when path-based multipart attachment fails.
+- [ ] Next verification step on device: run the Shortcuts share-sheet flow with 10+ clips and confirm dashboard rows move past staging into `accepted`/`done` without `Data null` staging errors.
+
 ## 2026-04-18 — Thumbnail lifecycle completion pass (active)
 - [x] Confirmed post-throttle regression: fallback-first render + boot queue cap reduced startup storm but left stale placeholders after scroll/remount because queue behavior was effectively one-shot.
 - [x] Upgraded `useThumbnailQueue` from boot-only pass to lifecycle queue runner with requeue scheduling on viewport activity (scroll/resize), DOM mutation, and periodic idle passes.
