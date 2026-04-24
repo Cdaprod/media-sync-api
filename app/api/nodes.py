@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/nodes", tags=["nodes"])
 class NodeRegisterRequest(BaseModel):
     node_id: str
     label: str
-    base_url: str
+    base_url: str | None = None
     roles: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
     source_name: str | None = None
@@ -78,10 +78,13 @@ async def register_node(payload: NodeRegisterRequest, runtime: AppRuntime = Depe
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
+        normalized_base_url = payload.base_url.strip() if isinstance(payload.base_url, str) else None
+        if normalized_base_url == "":
+            normalized_base_url = None
         record = NodeRecord(
             node_id=payload.node_id,
             label=payload.label,
-            base_url=payload.base_url,
+            base_url=normalized_base_url,
             roles=payload.roles,
             capabilities=payload.capabilities,
             source_name=payload.source_name,

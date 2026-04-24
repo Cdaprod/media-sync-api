@@ -75,3 +75,40 @@ def test_nodes_reject_empty_label_as_client_error(client):
     )
     assert response.status_code == 400
     assert "label" in response.json()["detail"]
+
+
+def test_nodes_accept_session_node_with_null_base_url_and_preserve_null_in_list(client):
+    payload = {
+        "node_id": "browser-session-1",
+        "label": "Browser Session",
+        "base_url": None,
+        "roles": ["runner", "capture"],
+        "metadata": {
+            "transport_hint": "session",
+            "session_node": "true",
+            "browser_push": "true",
+        },
+    }
+    response = client.post("/api/nodes", json=payload)
+    assert response.status_code == 201
+    body = response.json()
+    assert body["base_url"] is None
+
+    listed = client.get("/api/nodes")
+    assert listed.status_code == 200
+    nodes = listed.json()
+    target = next(node for node in nodes if node["node_id"] == "browser-session-1")
+    assert target["base_url"] is None
+
+
+def test_nodes_reject_missing_base_url_for_non_session_node(client):
+    payload = {
+        "node_id": "runner-no-base",
+        "label": "Runner No Base",
+        "base_url": "",
+        "roles": ["runner"],
+        "metadata": {},
+    }
+    response = client.post("/api/nodes", json=payload)
+    assert response.status_code == 400
+    assert "base_url" in response.json()["detail"]

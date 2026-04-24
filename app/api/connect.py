@@ -31,7 +31,7 @@ class ConnectRegisterRequest(BaseModel):
 
     node_id: str
     label: str
-    base_url: str
+    base_url: str | None = None
     roles: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
 
@@ -260,10 +260,13 @@ async def register_connected_source(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
+        normalized_base_url = payload.base_url.strip() if isinstance(payload.base_url, str) else None
+        if normalized_base_url == "":
+            normalized_base_url = None
         record = NodeRecord(
             node_id=payload.node_id,
             label=payload.label,
-            base_url=payload.base_url,
+            base_url=normalized_base_url,
             roles=payload.roles,
             capabilities=payload.capabilities,
             source_name=payload.source_name,
@@ -294,7 +297,7 @@ async def register_connected_source(
         metadata={
             "registered_via": "/connect/register",
             "node_label": payload.label,
-            "node_base_url": payload.base_url,
+            "node_base_url": normalized_base_url or "",
             **payload.metadata,
         },
     )

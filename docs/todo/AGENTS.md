@@ -1,3 +1,10 @@
+## 2026-04-24 — Nullable session-node base_url registration fix (active)
+- [x] Updated connect/node request DTOs to accept nullable `base_url` so browser/session registrations are not rejected at request-schema validation.
+- [x] Added explicit base-url normalization (`"" -> None`) in `/connect/register` and `/api/nodes` handlers before `NodeRecord` construction.
+- [x] Extended `NodeRecord` validation policy: session/browser-marked nodes may omit `base_url`, while non-session daemon nodes still require a non-empty base URL.
+- [x] Added regression tests for null/empty session-node registration acceptance and non-session missing-base rejection in both connect-plane and node API surfaces.
+- [ ] Next: run physical iPad/iPhone register flow to confirm `base_url: null` submit succeeds and same-tab device redirect occurs end-to-end.
+
 ## 2026-04-23 — Register-to-device same-tab redirect hardening pass (active)
 - [x] Updated `RegisterNodeModal` success flow to persist `explorer_capture_node_id` and immediately navigate in the same tab when `device_url` is returned (`router.push` with `window.location.href` fallback).
 - [x] Removed intermediate in-modal post-register continuation affordance so successful current-device registration no longer requires additional taps.

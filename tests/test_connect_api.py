@@ -81,3 +81,58 @@ def test_connect_register_rejects_invalid_node_id(client):
     response = client.post("/connect/register", json=payload)
     assert response.status_code == 400
     assert "Node id" in response.json()["detail"]
+
+
+def test_connect_register_accepts_session_node_with_null_base_url(client):
+    payload = {
+        "node_id": "ipad-session-node",
+        "label": "iPad Session Node",
+        "base_url": None,
+        "roles": ["runner", "capture"],
+        "source_name": "camera-primary",
+        "source_kind": "capture",
+        "metadata": {
+            "transport_hint": "session",
+            "session_node": "true",
+            "browser_push": "true",
+        },
+    }
+    response = client.post("/connect/register", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["registered_node"]["base_url"] is None
+
+
+def test_connect_register_normalizes_empty_base_url_to_null_for_session_node(client):
+    payload = {
+        "node_id": "iphone-session-node",
+        "label": "iPhone Session Node",
+        "base_url": "",
+        "roles": ["runner", "capture"],
+        "source_name": "camera-primary",
+        "source_kind": "capture",
+        "metadata": {
+            "transport_hint": "session",
+            "session_node": "true",
+            "browser_push": "true",
+        },
+    }
+    response = client.post("/connect/register", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["registered_node"]["base_url"] is None
+
+
+def test_connect_register_rejects_missing_base_url_for_non_session_node(client):
+    payload = {
+        "node_id": "runner-non-session",
+        "label": "Runner Non Session",
+        "base_url": "",
+        "roles": ["runner"],
+        "source_name": "primary",
+        "source_kind": "filesystem",
+        "metadata": {},
+    }
+    response = client.post("/connect/register", json=payload)
+    assert response.status_code == 400
+    assert "base_url" in response.json()["detail"]

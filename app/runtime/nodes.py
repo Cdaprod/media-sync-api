@@ -40,7 +40,7 @@ class NodeRecord(BaseModel):
 
     node_id: str
     label: str
-    base_url: str
+    base_url: str | None = None
     roles: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
     source_name: str | None = None
@@ -57,8 +57,17 @@ class NodeRecord(BaseModel):
         validate_node_id(self.node_id)
         if not self.label.strip():
             raise ValueError("label cannot be empty")
-        if not self.base_url.strip():
-            raise ValueError("base_url cannot be empty")
+        normalized_base_url = (self.base_url or "").strip()
+        metadata = self.metadata or {}
+        transport_hint = str(metadata.get("transport_hint", "")).strip().lower()
+        session_node = str(metadata.get("session_node", "")).strip().lower() == "true"
+        browser_push = str(metadata.get("browser_push", "")).strip().lower() == "true"
+        allows_missing_base = transport_hint in {"session", "browser", "webrtc"} or session_node or browser_push
+
+        if normalized_base_url:
+            return self
+        if not allows_missing_base:
+            raise ValueError("base_url cannot be empty for non-session nodes")
         return self
 
     def with_heartbeat(self) -> "NodeRecord":
