@@ -276,6 +276,7 @@ const RETAINED_UI_PREFS_KEY = 'media-sync-explorer-ui-prefs-v1';
 const LEGACY_FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const LEGACY_OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
+const HIDDEN_INGEST_CLAIMS_KEY = 'explorer_hidden_ingest_claim_ids';
 const clampLayoutColumns = (value: number) => (
   Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
 );
@@ -637,6 +638,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     payload: unknown;
   } | null>(null);
   const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
+  const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
 
   // ---------------------------------------------------------------------------
@@ -735,6 +737,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const interval = window.setInterval(() => void reloadIngestClaims(), 5000);
     return () => window.clearInterval(interval);
   }, [reloadIngestClaims]);
+
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(HIDDEN_INGEST_CLAIMS_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const normalized = parsed.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+      if (!normalized.length) return;
+      setHiddenIngestClaimIds(new Set(normalized));
+    } catch {
+      // ignore parse failures and continue with empty hidden set.
+    }
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Runtime refs + controllers.
@@ -3094,6 +3112,36 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     void action();
   }, [setContextMenu]);
 
+
+  const persistHiddenIngestClaimIds = useCallback((next: Set<string>) => {
+    setHiddenIngestClaimIds(new Set(next));
+    if (typeof window === 'undefined') return;
+    if (!next.size) {
+      window.localStorage.removeItem(HIDDEN_INGEST_CLAIMS_KEY);
+      return;
+    }
+    window.localStorage.setItem(HIDDEN_INGEST_CLAIMS_KEY, JSON.stringify(Array.from(next)));
+  }, []);
+
+  const hideIngestClaim = useCallback((claimId: string) => {
+    const next = new Set(hiddenIngestClaimIds);
+    next.add(claimId);
+    persistHiddenIngestClaimIds(next);
+  }, [hiddenIngestClaimIds, persistHiddenIngestClaimIds]);
+
+  const hideAllTestPayloadClaims = useCallback(() => {
+    const next = new Set(hiddenIngestClaimIds);
+    for (const claim of ingestClaims) {
+      if (!isTestPayloadClaim(claim)) continue;
+      next.add(claim.claim_id);
+    }
+    persistHiddenIngestClaimIds(next);
+  }, [hiddenIngestClaimIds, ingestClaims, persistHiddenIngestClaimIds]);
+
+  const resetHiddenIngestClaims = useCallback(() => {
+    persistHiddenIngestClaimIds(new Set());
+  }, [persistHiddenIngestClaimIds]);
+
   const getContextActions = useCallback((items: MediaItem[]) => {
     const count = items.length;
     if (!count) return [];
@@ -4426,14 +4474,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   );
 
 
-  const latestIngestClaims = useMemo(() => {
-    const byRecent = [...ingestClaims].sort((a, b) => {
+  const sortedIngestClaims = useMemo(() => {
+    return [...ingestClaims].sort((a, b) => {
       const left = Date.parse(a.updated_at || a.created_at || '') || 0;
       const right = Date.parse(b.updated_at || b.created_at || '') || 0;
       return right - left;
     });
-    return byRecent.slice(0, 5);
   }, [ingestClaims]);
+
+  const visibleIngestClaims = useMemo(() => {
+    return sortedIngestClaims.filter((claim) => !hiddenIngestClaimIds.has(claim.claim_id));
+  }, [hiddenIngestClaimIds, sortedIngestClaims]);
+
+  const latestIngestClaims = useMemo(() => visibleIngestClaims.slice(0, 5), [visibleIngestClaims]);
+  const hiddenIngestClaimsCount = useMemo(
+    () => ingestClaims.filter((claim) => hiddenIngestClaimIds.has(claim.claim_id)).length,
+    [hiddenIngestClaimIds, ingestClaims],
+  );
 
   useEffect(() => {
     const body = document.body;
@@ -5161,8 +5218,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   <h2>Ingest Claims</h2>
                   <div className="meta-line">
                     <span className="kbd">/api/ingest/claims</span>
-                    <span className="small">Showing latest {latestIngestClaims.length} of {ingestClaims.length}</span>
+                    <span className="small">Showing latest {latestIngestClaims.length} of {ingestClaims.length} claims · {hiddenIngestClaimsCount} hidden</span>
                   </div>
+                  {hiddenIngestClaimsCount > 0 ? (
+                    <div className="meta-line">
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => resetHiddenIngestClaims()}
+                      >
+                        Show hidden / Reset hidden claims
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="ingest-claims-panel">
@@ -5968,7 +6036,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         >
           <button
             type="button"
-            onClick={() => runContextAction(() => openPayloadDetails('Ingest claim details', contextMenu.claim.claim_id, contextMenu.claim))}
+            onClick={() => runContextAction(() => hideIngestClaim(contextMenu.claim.claim_id))}
+          >
+            Hide claim from sidebar
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => hideAllTestPayloadClaims())}
+          >
+            Hide all test payload claims
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => openPayloadDetails('Ingest claim details', `${contextMenu.claim.claim_id}${isTestPayloadClaim(contextMenu.claim) ? ' · test payload' : ''}`, contextMenu.claim))}
           >
             Details
           </button>

@@ -83,6 +83,9 @@ class Settings(BaseModel):
         in {"1", "true", "yes", "on"}
     )
 
+    public_origin: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_PUBLIC_ORIGIN"))
+    authority_origin: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_AUTHORITY_ORIGIN"))
+
 def ensure_project_root(path: Path) -> None:
     """Ensure the configured project root exists and is a directory."""
 

@@ -351,6 +351,18 @@ export function RegisterNodeModal({
     }
   }, []);
 
+  const resolveResponseUrl = useCallback((url: string | undefined, preferredOrigin?: string | null) => {
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    const base = (preferredOrigin || authorityBaseUrl || '').trim();
+    if (!base) return url;
+    try {
+      return new URL(url, base.endsWith('/') ? base : `${base}/`).toString();
+    } catch {
+      return url;
+    }
+  }, [authorityBaseUrl]);
+
   const handleSubmit = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -360,11 +372,17 @@ export function RegisterNodeModal({
       window.localStorage.setItem('explorer_capture_node_id', payload.node_id);
       onSuccess(response.registered_node ?? null, response);
       if (response.device_url) {
+        const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;
+        const nextDeviceUrl = resolveResponseUrl(response.device_url, responseAuthority);
+        if (/^https?:\/\//i.test(nextDeviceUrl)) {
+          window.location.href = nextDeviceUrl;
+          return;
+        }
         try {
-          router.push(response.device_url);
+          router.push(nextDeviceUrl);
         }
         catch {
-          window.location.href = response.device_url;
+          window.location.href = nextDeviceUrl;
         }
         return;
       }
@@ -377,7 +395,7 @@ export function RegisterNodeModal({
     finally {
       setSubmitting(false);
     }
-  }, [onClose, onSuccess, payload, registerNode, router]);
+  }, [onClose, onSuccess, payload, registerNode, resolveResponseUrl, router]);
 
   const handleConfigureAsCamera = useCallback(() => {
     applyCapturePreset({

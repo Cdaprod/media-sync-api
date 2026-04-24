@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, ValidationError
 
+from app.config import get_settings
 from app.runtime import get_runtime
 from app.runtime.nodes import NodeRecord, NodeStatus, validate_node_id
 from app.runtime.source_records import SourceRecord, merge_remote_source_record
@@ -104,9 +105,33 @@ def _source_record_to_dict(record: SourceRecord) -> dict[str, Any]:
     }
 
 
+
+
+def _normalize_origin(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip().rstrip('/')
+    return stripped or None
+
+
+def _preferred_authority_base_url(request: Request) -> str:
+    settings = get_settings()
+    configured_authority = _normalize_origin(settings.authority_origin)
+    configured_public = _normalize_origin(settings.public_origin)
+    request_base = _normalize_origin(str(request.base_url))
+    return configured_authority or configured_public or request_base or ''
+
+
+def _connect_device_url(request: Request, node_id: str) -> str:
+    configured_origin = _normalize_origin(get_settings().authority_origin) or _normalize_origin(get_settings().public_origin)
+    relative = f"/connect/device?node_id={node_id}"
+    if configured_origin:
+        return f"{configured_origin}{relative}"
+    return relative
+
 def _connect_manifest(request: Request, runtime: AppRuntime) -> dict[str, Any]:
     source_records = [_source_record_to_dict(record) for record in _all_source_records(runtime)]
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _preferred_authority_base_url(request)
     return {
         "service": "media-sync-api",
         "connect_version": "1",
@@ -302,7 +327,7 @@ async def register_connected_source(
         },
     )
     merge_remote_source_record(runtime, source_record)
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _preferred_authority_base_url(request)
 
     return ConnectRegisterResponse(
         ok=True,
@@ -314,7 +339,7 @@ async def register_connected_source(
             "role": runtime.identity.role,
             "base_url": base_url,
         },
-        device_url=f"/connect/device?node_id={payload.node_id}",
+        device_url=_connect_device_url(request, payload.node_id),
         message=(
             "Node registered as a source-bearing participant. "
             "Authority now knows this runtime-backed node and its declared source surface. "

@@ -1,3 +1,11 @@
+## 2026-04-24 — Authority-origin contract + ingest-claim hide controls (active)
+- [x] Added runtime settings for `MEDIA_SYNC_PUBLIC_ORIGIN` and `MEDIA_SYNC_AUTHORITY_ORIGIN` and wired connect manifest/register responses to prefer authority origin, then public origin, then request origin fallback.
+- [x] Updated `/connect/register` `device_url` generation to emit configured-origin absolute URLs when origin env vars are set while preserving relative fallback behavior when unset.
+- [x] Added backend tests to lock configured-origin behavior for `/connect` manifest and `/connect/register` device URL outputs.
+- [x] Extended Explorer ingest-claim UI with local hide state (`explorer_hidden_ingest_claim_ids`), claim/test-claim hide actions in context menu, and reset-hidden control in header metadata.
+- [x] Kept hide/dismiss behavior frontend-only (no backend delete/cancel endpoint changes).
+- [ ] Next: add optional backend non-destructive dismiss endpoint contract (`POST /api/ingest/claims/{claim_id}/dismiss`) once operator workflow is finalized.
+
 ## 2026-04-24 — Ingest-claims header/list DOM split fix (active)
 - [x] Moved `.ingest-claims-panel` out of the Ingest Claims `.section-h` block so header contains only title + meta-line.
 - [x] Kept claim list rendering/behavior intact while restoring source-like sidebar structural parity (`section-h` sibling followed by list container).

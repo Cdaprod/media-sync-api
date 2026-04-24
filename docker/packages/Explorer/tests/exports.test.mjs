@@ -229,8 +229,11 @@ test('register modal redirects directly to device activation and keeps session-n
   const modalPath = path.join(packageRoot, 'src', 'components', 'RegisterNodeModal.tsx');
   const content = fs.readFileSync(modalPath, 'utf8');
   assert.ok(content.includes("window.localStorage.setItem('explorer_capture_node_id', payload.node_id);"));
-  assert.ok(content.includes('router.push(response.device_url);'));
-  assert.ok(content.includes('window.location.href = response.device_url;'));
+  assert.ok(content.includes('const resolveResponseUrl = useCallback((url: string | undefined, preferredOrigin?: string | null) => {'));
+  assert.ok(content.includes("const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;"));
+  assert.ok(content.includes('const nextDeviceUrl = resolveResponseUrl(response.device_url, responseAuthority);'));
+  assert.ok(content.includes('router.push(nextDeviceUrl);'));
+  assert.ok(content.includes('window.location.href = nextDeviceUrl;'));
   assert.ok(content.includes('if (response.device_url) {'));
   assert.ok(content.includes("base_url: null,"));
   assert.ok(content.includes("transport_hint: 'session'"));
