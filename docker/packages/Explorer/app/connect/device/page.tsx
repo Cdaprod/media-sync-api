@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { createApiClient } from '../../../src/api';
@@ -60,6 +60,108 @@ export default function ConnectDevicePage() {
 
   const shouldShowScreenAction = capability.hasGetDisplayMedia && !capability.isLikelyIOS;
 
+  useEffect(() => {
+    return () => {
+      if (signalPollTimerRef.current != null) {
+        window.clearInterval(signalPollTimerRef.current);
+        signalPollTimerRef.current = null;
+      }
+      peerConnectionRef.current?.close();
+      peerConnectionRef.current = null;
+      peerSessionIdRef.current = null;
+      viewerIceSeenRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const sessionId = session?.session_id || null;
+    const shouldPublishPeer = !!sessionId && (state === 'previewing' || state === 'recording') && session?.source_kind === 'camera';
+    if (!shouldPublishPeer) {
+      if (signalPollTimerRef.current != null) {
+        window.clearInterval(signalPollTimerRef.current);
+        signalPollTimerRef.current = null;
+      }
+      peerConnectionRef.current?.close();
+      peerConnectionRef.current = null;
+      peerSessionIdRef.current = null;
+      viewerIceSeenRef.current.clear();
+      setPeerStatus('idle');
+      return;
+    }
+    if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
+      setPeerStatus('error');
+      return;
+    }
+    if (peerSessionIdRef.current === sessionId && peerConnectionRef.current) return;
+
+    let cancelled = false;
+    setPeerStatus('connecting');
+
+    const maybeStartPeerPublish = async () => {
+      if (cancelled || !sessionId) return;
+      const stream = videoRef.current?.srcObject instanceof MediaStream ? videoRef.current.srcObject : null;
+      if (!stream) {
+        window.setTimeout(() => {
+          void maybeStartPeerPublish();
+        }, 300);
+        return;
+      }
+      peerConnectionRef.current?.close();
+      const peer = new RTCPeerConnection();
+      peerConnectionRef.current = peer;
+      peerSessionIdRef.current = sessionId;
+      viewerIceSeenRef.current.clear();
+
+      stream.getTracks().forEach((track) => {
+        peer.addTrack(track, stream);
+      });
+      peer.onicecandidate = (event) => {
+        if (!event.candidate || !sessionId) return;
+        void api.publishLiveSignalIce(sessionId, 'device', event.candidate.toJSON()).catch(() => undefined);
+      };
+      try {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        await api.publishLiveSignalOffer(sessionId, {
+          type: 'offer',
+          sdp: offer.sdp || '',
+        });
+        setPeerStatus('published');
+      } catch {
+        setPeerStatus('error');
+        return;
+      }
+
+      if (signalPollTimerRef.current != null) {
+        window.clearInterval(signalPollTimerRef.current);
+      }
+      signalPollTimerRef.current = window.setInterval(() => {
+        if (!sessionId || !peerConnectionRef.current) return;
+        void api.getLiveSignalState(sessionId)
+          .then(async (signal) => {
+            const activePeer = peerConnectionRef.current;
+            if (!activePeer) return;
+            if (signal.answer?.sdp && !activePeer.currentRemoteDescription) {
+              await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
+            }
+            for (const candidate of signal.ice_from_viewer || []) {
+              const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
+              if (viewerIceSeenRef.current.has(key)) continue;
+              viewerIceSeenRef.current.add(key);
+              await activePeer.addIceCandidate(candidate);
+            }
+          })
+          .catch(() => undefined);
+      }, 1000);
+    };
+
+    void maybeStartPeerPublish();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, session?.session_id, session?.source_kind, state, videoRef]);
+
   return (
     <main className="connect-device-page">
       <section className="connect-device-card">
@@ -93,6 +195,7 @@ export default function ConnectDevicePage() {
               <div className="small mono">node_id: {nodeId}</div>
               {session?.session_id ? <div className="small mono">session_id: {session.session_id}</div> : null}
               {session?.claim_id ? <div className="small mono">claim_id: {session.claim_id}</div> : null}
+              {session?.session_id ? <div className="small mono">webrtc: {peerStatus}</div> : null}
             </div>
 
             {state === 'idle' || state === 'error' || state === 'ended' ? (
@@ -187,3 +290,8 @@ export default function ConnectDevicePage() {
     </main>
   );
 }
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const peerSessionIdRef = useRef<string | null>(null);
+  const viewerIceSeenRef = useRef<Set<string>>(new Set());
+  const signalPollTimerRef = useRef<number | null>(null);
+  const [peerStatus, setPeerStatus] = useState<'idle' | 'connecting' | 'published' | 'error'>('idle');

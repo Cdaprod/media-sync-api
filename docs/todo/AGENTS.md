@@ -1,3 +1,13 @@
+## 2026-04-24 — Live-session WebRTC signaling plane (active)
+- [x] Added backend signaling endpoints for live sessions (`/signal/offer`, `/signal/answer`, `/signal/ice`, `/signal`) with runtime-owned per-session offer/answer/ICE state.
+- [x] Extended live-session service with idempotent signaling state publication/read helpers and candidate de-duplication.
+- [x] Added API regression coverage for offer/answer/ICE round-trip behavior on active live sessions.
+- [x] Extended Explorer API/types with signaling contracts and endpoint methods.
+- [x] Added device-side peer publish path (`/connect/device`) that emits WebRTC offer/ICE from local camera preview stream once a live camera session is active.
+- [x] Added LiveSourceCard peer viewer path that consumes signaling state, answers offer, exchanges ICE, and renders peer stream when opened.
+- [x] Added static Explorer contract checks for signaling API presence and peer publish/viewer markers.
+- [ ] Next: add explicit signaling role/session auth guardrails and a short-lived prune policy for stale ICE candidates.
+
 ## 2026-04-24 — /connect/device capability hardening for iPhone Safari (active)
 - [x] Guarded `useLiveSession.startPreview(...)` against missing `mediaDevices/getUserMedia/getDisplayMedia` and replaced raw TypeError leakage with operator-readable capability errors.
 - [x] Added connect-device runtime capability diagnostics (`secure context`, `camera API`, `screen capture API`, `iOS likely`) with explicit HTTPS guidance for iOS Safari LAN activation.

@@ -46,6 +46,11 @@ export function LiveSourceCard({
   const isActive = session.status === 'previewing' || session.status === 'recording';
   const previewUrl = usePreviewUrl(apiBase, session.session_id, isActive);
   const imgRef = useRef<HTMLImageElement>(null);
+  const peerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const peerConnRef = useRef<RTCPeerConnection | null>(null);
+  const deviceIceSeenRef = useRef<Set<string>>(new Set());
+  const [peerEnabled, setPeerEnabled] = useState(false);
+  const [peerError, setPeerError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!imgRef.current || !previewUrl) return;
@@ -55,6 +60,81 @@ export function LiveSourceCard({
     };
     img.src = previewUrl;
   }, [previewUrl]);
+
+  useEffect(() => {
+    if (!peerEnabled || !isActive) return undefined;
+    if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
+      setPeerError('WebRTC peer viewing is unavailable in this browser.');
+      return undefined;
+    }
+    let disposed = false;
+    const peer = new RTCPeerConnection();
+    peerConnRef.current = peer;
+    deviceIceSeenRef.current.clear();
+    setPeerError(null);
+
+    peer.ontrack = (event) => {
+      const stream = event.streams?.[0];
+      if (!stream || !peerVideoRef.current) return;
+      peerVideoRef.current.srcObject = stream;
+    };
+    peer.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      void fetch(`${apiBase}/api/live_sessions/${encodeURIComponent(session.session_id)}/signal/ice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ role: 'viewer', candidate: event.candidate.toJSON() }),
+      }).catch(() => undefined);
+    };
+    peer.addTransceiver('video', { direction: 'recvonly' });
+    peer.addTransceiver('audio', { direction: 'recvonly' });
+
+    const poll = window.setInterval(() => {
+      void fetch(`${apiBase}/api/live_sessions/${encodeURIComponent(session.session_id)}/signal`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      })
+        .then((response) => response.ok ? response.json() : null)
+        .then(async (signal) => {
+          if (disposed || !signal || !peerConnRef.current) return;
+          if (signal.offer?.sdp && !peerConnRef.current.currentRemoteDescription) {
+            await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
+            const answer = await peerConnRef.current.createAnswer();
+            await peerConnRef.current.setLocalDescription(answer);
+            await fetch(`${apiBase}/api/live_sessions/${encodeURIComponent(session.session_id)}/signal/answer`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              },
+              cache: 'no-store',
+              body: JSON.stringify({ answer: { type: 'answer', sdp: answer.sdp || '' } }),
+            });
+          }
+          for (const candidate of signal.ice_from_device || []) {
+            const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
+            if (deviceIceSeenRef.current.has(key)) continue;
+            deviceIceSeenRef.current.add(key);
+            await peerConnRef.current.addIceCandidate(candidate);
+          }
+        })
+        .catch(() => undefined);
+    }, 1000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(poll);
+      peerConnRef.current?.close();
+      peerConnRef.current = null;
+      deviceIceSeenRef.current.clear();
+      if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+    };
+  }, [apiBase, isActive, peerEnabled, session.session_id]);
 
   const statusColor =
     session.status === 'recording' ? 'var(--red, #ff4444)'
@@ -145,6 +225,22 @@ export function LiveSourceCard({
                 Stop
               </button>
             ) : null}
+          </div>
+        ) : null}
+        {isActive ? (
+          <button
+            className="btn"
+            type="button"
+            style={{ marginTop: 8, width: '100%', fontSize: 11 }}
+            onClick={() => setPeerEnabled((prev) => !prev)}
+          >
+            {peerEnabled ? 'Hide peer view' : 'Open peer view'}
+          </button>
+        ) : null}
+        {peerEnabled ? (
+          <div style={{ marginTop: 8 }}>
+            <video ref={peerVideoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 8, background: '#000' }} />
+            {peerError ? <div className="small" style={{ marginTop: 6, color: '#ff9a90' }}>{peerError}</div> : null}
           </div>
         ) : null}
         {onOpen ? (

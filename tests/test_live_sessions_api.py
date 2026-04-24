@@ -172,3 +172,67 @@ def test_live_session_control_updates_desired_action(client):
     fetched_after_ack = client.get(f"/api/live_sessions/{session_id}")
     assert fetched_after_ack.status_code == 200
     assert fetched_after_ack.json()["desired_action"] is None
+
+
+def test_live_session_signal_offer_answer_ice_round_trip(client):
+    register = client.post(
+        "/api/nodes",
+        json={
+            "node_id": "runner-live-signal",
+            "label": "Runner Live Signal",
+            "base_url": "http://127.0.0.1:9010",
+            "roles": ["runner"],
+            "advertised_source_kinds": ["capture"],
+            "status": "healthy",
+        },
+    )
+    assert register.status_code == 201
+
+    started = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": "runner-live-signal", "source_kind": "camera"},
+    )
+    assert started.status_code == 200
+    session_id = started.json()["session_id"]
+
+    offer = client.post(
+        f"/api/live_sessions/{session_id}/signal/offer",
+        json={"offer": {"type": "offer", "sdp": "v=0\r\no=device-offer"}},
+    )
+    assert offer.status_code == 200
+    assert offer.json()["offer"]["type"] == "offer"
+
+    answer = client.post(
+        f"/api/live_sessions/{session_id}/signal/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=viewer-answer"}},
+    )
+    assert answer.status_code == 200
+    assert answer.json()["answer"]["type"] == "answer"
+
+    device_ice = client.post(
+        f"/api/live_sessions/{session_id}/signal/ice",
+        json={
+            "role": "device",
+            "candidate": {"candidate": "candidate-device-1", "sdpMid": "0", "sdpMLineIndex": 0},
+        },
+    )
+    assert device_ice.status_code == 200
+    assert len(device_ice.json()["ice_from_device"]) == 1
+
+    viewer_ice = client.post(
+        f"/api/live_sessions/{session_id}/signal/ice",
+        json={
+            "role": "viewer",
+            "candidate": {"candidate": "candidate-viewer-1", "sdpMid": "0", "sdpMLineIndex": 0},
+        },
+    )
+    assert viewer_ice.status_code == 200
+    assert len(viewer_ice.json()["ice_from_viewer"]) == 1
+
+    state = client.get(f"/api/live_sessions/{session_id}/signal")
+    assert state.status_code == 200
+    payload = state.json()
+    assert payload["offer"]["sdp"] == "v=0\r\no=device-offer"
+    assert payload["answer"]["sdp"] == "v=0\r\no=viewer-answer"
+    assert len(payload["ice_from_device"]) == 1
+    assert len(payload["ice_from_viewer"]) == 1

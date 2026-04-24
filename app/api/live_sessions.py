@@ -57,6 +57,40 @@ class LiveSessionControlAckRequest(BaseModel):
     action: LiveSessionControlAction
 
 
+class LiveSignalDescription(BaseModel):
+    sdp: str
+    type: Literal["offer", "answer"]
+
+
+class LiveSignalIceCandidate(BaseModel):
+    candidate: str
+    sdpMid: str | None = None
+    sdpMLineIndex: int | None = None
+    usernameFragment: str | None = None
+
+
+class LiveSignalOfferRequest(BaseModel):
+    offer: LiveSignalDescription
+
+
+class LiveSignalAnswerRequest(BaseModel):
+    answer: LiveSignalDescription
+
+
+class LiveSignalIceRequest(BaseModel):
+    role: Literal["device", "viewer"]
+    candidate: LiveSignalIceCandidate
+
+
+class LiveSignalStateResponse(BaseModel):
+    session_id: str
+    offer: LiveSignalDescription | None = None
+    answer: LiveSignalDescription | None = None
+    ice_from_device: list[LiveSignalIceCandidate] = Field(default_factory=list)
+    ice_from_viewer: list[LiveSignalIceCandidate] = Field(default_factory=list)
+    updated_at: str | None = None
+
+
 def _session_service(runtime: AppRuntime):
     service = runtime.services.live_session_service
     if service is None:
@@ -194,6 +228,61 @@ async def acknowledge_live_session_control(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return JSONResponse({"ok": True, "action": payload.action, "session_id": session.session_id})
+
+
+@router.post("/{session_id}/signal/offer", response_model=LiveSignalStateResponse)
+async def publish_live_signal_offer(
+    session_id: str,
+    payload: LiveSignalOfferRequest,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> LiveSignalStateResponse:
+    try:
+        state = _session_service(runtime).publish_signal_offer(session_id, payload.offer.model_dump(mode="python"))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return LiveSignalStateResponse(session_id=session_id, **state)
+
+
+@router.post("/{session_id}/signal/answer", response_model=LiveSignalStateResponse)
+async def publish_live_signal_answer(
+    session_id: str,
+    payload: LiveSignalAnswerRequest,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> LiveSignalStateResponse:
+    try:
+        state = _session_service(runtime).publish_signal_answer(session_id, payload.answer.model_dump(mode="python"))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return LiveSignalStateResponse(session_id=session_id, **state)
+
+
+@router.post("/{session_id}/signal/ice", response_model=LiveSignalStateResponse)
+async def publish_live_signal_ice(
+    session_id: str,
+    payload: LiveSignalIceRequest,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> LiveSignalStateResponse:
+    try:
+        state = _session_service(runtime).publish_signal_ice(
+            session_id,
+            payload.role,
+            payload.candidate.model_dump(mode="python"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return LiveSignalStateResponse(session_id=session_id, **state)
+
+
+@router.get("/{session_id}/signal", response_model=LiveSignalStateResponse)
+async def get_live_signal_state(
+    session_id: str,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> LiveSignalStateResponse:
+    try:
+        state = _session_service(runtime).get_signal_state(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return LiveSignalStateResponse(session_id=session_id, **state)
 
 
 @router.get("/{session_id}/preview/latest")

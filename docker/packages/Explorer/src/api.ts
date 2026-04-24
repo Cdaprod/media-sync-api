@@ -2,7 +2,15 @@ import type { LibrarySnapshot, MediaResponse, Project, ResolveOpenResponse } fro
 import type { ComposeJobEnvelope } from './composeJobs';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 import type { RegisterNodeRequest, RegisterNodeResponse } from './types/registration';
-import type { LiveSessionControlAction, LiveSessionRecord, LiveSourceKind } from './types/liveSession';
+import type {
+  LiveSessionControlAction,
+  LiveSessionRecord,
+  LiveSignalDescription,
+  LiveSignalIceCandidate,
+  LiveSignalRole,
+  LiveSignalState,
+  LiveSourceKind,
+} from './types/liveSession';
 
 export interface ResolveRequest {
   project: string;
@@ -25,6 +33,10 @@ export interface ApiClient {
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   acknowledgeLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
+  getLiveSignalState: (sessionId: string) => Promise<LiveSignalState>;
+  publishLiveSignalOffer: (sessionId: string, offer: LiveSignalDescription) => Promise<LiveSignalState>;
+  publishLiveSignalAnswer: (sessionId: string, answer: LiveSignalDescription) => Promise<LiveSignalState>;
+  publishLiveSignalIce: (sessionId: string, role: LiveSignalRole, candidate: LiveSignalIceCandidate) => Promise<LiveSignalState>;
   heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
@@ -170,6 +182,62 @@ export function createApiClient(baseUrl = ''): ApiClient {
       });
       if (!response.ok) {
         throw new Error(`Failed to acknowledge live session control: ${response.status}`);
+      }
+      return response.json();
+    },
+    async getLiveSignalState(sessionId: string): Promise<LiveSignalState> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal`), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to get live signal state: ${response.status}`);
+      }
+      return response.json();
+    },
+    async publishLiveSignalOffer(sessionId: string, offer: LiveSignalDescription): Promise<LiveSignalState> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/offer`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ offer }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to publish signal offer: ${response.status}`);
+      }
+      return response.json();
+    },
+    async publishLiveSignalAnswer(sessionId: string, answer: LiveSignalDescription): Promise<LiveSignalState> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/answer`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ answer }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to publish signal answer: ${response.status}`);
+      }
+      return response.json();
+    },
+    async publishLiveSignalIce(sessionId: string, role: LiveSignalRole, candidate: LiveSignalIceCandidate): Promise<LiveSignalState> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/ice`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ role, candidate }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to publish signal ICE: ${response.status}`);
       }
       return response.json();
     },

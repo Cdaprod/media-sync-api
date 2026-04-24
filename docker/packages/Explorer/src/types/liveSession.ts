@@ -1,6 +1,28 @@
 export type LiveSourceKind = 'camera' | 'screen';
 export type LiveSessionStatus = 'idle' | 'previewing' | 'recording' | 'ended';
 export type LiveSessionControlAction = 'start_recording' | 'stop_recording';
+export type LiveSignalRole = 'device' | 'viewer';
+
+export interface LiveSignalDescription {
+  type: 'offer' | 'answer';
+  sdp: string;
+}
+
+export interface LiveSignalIceCandidate {
+  candidate: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+  usernameFragment?: string | null;
+}
+
+export interface LiveSignalState {
+  session_id: string;
+  offer?: LiveSignalDescription | null;
+  answer?: LiveSignalDescription | null;
+  ice_from_device: LiveSignalIceCandidate[];
+  ice_from_viewer: LiveSignalIceCandidate[];
+  updated_at?: string | null;
+}
 
 export interface LiveSessionRecord {
   session_id: string;

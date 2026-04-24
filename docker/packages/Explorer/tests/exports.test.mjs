@@ -269,6 +269,34 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   assert.ok(app.includes('Registered runtimes'));
 });
 
+test('live session signaling API and peer-viewer hooks are wired', () => {
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const liveCardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const api = fs.readFileSync(apiPath, 'utf8');
+  const device = fs.readFileSync(devicePath, 'utf8');
+  const card = fs.readFileSync(liveCardPath, 'utf8');
+
+  assert.ok(api.includes('getLiveSignalState'));
+  assert.ok(api.includes('publishLiveSignalOffer'));
+  assert.ok(api.includes('publishLiveSignalAnswer'));
+  assert.ok(api.includes('publishLiveSignalIce'));
+  assert.ok(api.includes('/signal/offer'));
+  assert.ok(api.includes('/signal/answer'));
+  assert.ok(api.includes('/signal/ice'));
+
+  assert.ok(device.includes('webrtc: {peerStatus}'));
+  assert.ok(device.includes('new RTCPeerConnection()'));
+  assert.ok(device.includes("api.publishLiveSignalOffer(sessionId"));
+  assert.ok(device.includes("api.publishLiveSignalIce(sessionId, 'device'"));
+
+  assert.ok(card.includes('Open peer view'));
+  assert.ok(card.includes('Hide peer view'));
+  assert.ok(card.includes("role: 'viewer'"));
+  assert.ok(card.includes('/signal/answer'));
+  assert.ok(card.includes('peerVideoRef'));
+});
+
 test('clipboard helper includes fallback copy behavior', () => {
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
   const content = fs.readFileSync(utilsPath, 'utf8');
