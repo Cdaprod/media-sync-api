@@ -33,10 +33,10 @@ export interface ApiClient {
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   acknowledgeLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
-  getLiveSignalState: (sessionId: string) => Promise<LiveSignalState>;
+  getLiveSignalState: (sessionId: string, viewerId?: string | null) => Promise<LiveSignalState>;
   publishLiveSignalOffer: (sessionId: string, offer: LiveSignalDescription) => Promise<LiveSignalState>;
-  publishLiveSignalAnswer: (sessionId: string, answer: LiveSignalDescription) => Promise<LiveSignalState>;
-  publishLiveSignalIce: (sessionId: string, role: LiveSignalRole, candidate: LiveSignalIceCandidate) => Promise<LiveSignalState>;
+  publishLiveSignalAnswer: (sessionId: string, viewerId: string, answer: LiveSignalDescription) => Promise<LiveSignalState>;
+  publishLiveSignalIce: (sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate) => Promise<LiveSignalState>;
   heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
@@ -185,8 +185,9 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async getLiveSignalState(sessionId: string): Promise<LiveSignalState> {
-      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal`), {
+    async getLiveSignalState(sessionId: string, viewerId: string | null = null): Promise<LiveSignalState> {
+      const query = viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : '';
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal${query}`), {
         method: 'GET',
         headers: { Accept: 'application/json' },
         cache: 'no-store',
@@ -211,7 +212,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async publishLiveSignalAnswer(sessionId: string, answer: LiveSignalDescription): Promise<LiveSignalState> {
+    async publishLiveSignalAnswer(sessionId: string, viewerId: string, answer: LiveSignalDescription): Promise<LiveSignalState> {
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/answer`), {
         method: 'POST',
         headers: {
@@ -219,14 +220,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
           Accept: 'application/json',
         },
         cache: 'no-store',
-        body: JSON.stringify({ answer }),
+        body: JSON.stringify({ viewer_id: viewerId, answer }),
       });
       if (!response.ok) {
         throw new Error(`Failed to publish signal answer: ${response.status}`);
       }
       return response.json();
     },
-    async publishLiveSignalIce(sessionId: string, role: LiveSignalRole, candidate: LiveSignalIceCandidate): Promise<LiveSignalState> {
+    async publishLiveSignalIce(sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate): Promise<LiveSignalState> {
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/ice`), {
         method: 'POST',
         headers: {
@@ -234,7 +235,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
           Accept: 'application/json',
         },
         cache: 'no-store',
-        body: JSON.stringify({ role, candidate }),
+        body: JSON.stringify({ role, viewer_id: viewerId, candidate }),
       });
       if (!response.ok) {
         throw new Error(`Failed to publish signal ICE: ${response.status}`);

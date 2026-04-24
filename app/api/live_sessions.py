@@ -74,16 +74,21 @@ class LiveSignalOfferRequest(BaseModel):
 
 
 class LiveSignalAnswerRequest(BaseModel):
+    viewer_id: str
     answer: LiveSignalDescription
 
 
 class LiveSignalIceRequest(BaseModel):
     role: Literal["device", "viewer"]
+    viewer_id: str
     candidate: LiveSignalIceCandidate
 
 
 class LiveSignalStateResponse(BaseModel):
     session_id: str
+    viewer_id: str | None = None
+    viewer_ids: list[str] = Field(default_factory=list)
+    primary_viewer_id: str | None = None
     offer: LiveSignalDescription | None = None
     answer: LiveSignalDescription | None = None
     ice_from_device: list[LiveSignalIceCandidate] = Field(default_factory=list)
@@ -240,7 +245,7 @@ async def publish_live_signal_offer(
         state = _session_service(runtime).publish_signal_offer(session_id, payload.offer.model_dump(mode="python"))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return LiveSignalStateResponse(session_id=session_id, **state)
+    return LiveSignalStateResponse(**state)
 
 
 @router.post("/{session_id}/signal/answer", response_model=LiveSignalStateResponse)
@@ -250,10 +255,14 @@ async def publish_live_signal_answer(
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
     try:
-        state = _session_service(runtime).publish_signal_answer(session_id, payload.answer.model_dump(mode="python"))
+        state = _session_service(runtime).publish_signal_answer(
+            session_id,
+            payload.viewer_id,
+            payload.answer.model_dump(mode="python"),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return LiveSignalStateResponse(session_id=session_id, **state)
+    return LiveSignalStateResponse(**state)
 
 
 @router.post("/{session_id}/signal/ice", response_model=LiveSignalStateResponse)
@@ -266,23 +275,25 @@ async def publish_live_signal_ice(
         state = _session_service(runtime).publish_signal_ice(
             session_id,
             payload.role,
+            payload.viewer_id,
             payload.candidate.model_dump(mode="python"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return LiveSignalStateResponse(session_id=session_id, **state)
+    return LiveSignalStateResponse(**state)
 
 
 @router.get("/{session_id}/signal", response_model=LiveSignalStateResponse)
 async def get_live_signal_state(
     session_id: str,
+    viewer_id: str | None = None,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
     try:
-        state = _session_service(runtime).get_signal_state(session_id)
+        state = _session_service(runtime).get_signal_state(session_id, viewer_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return LiveSignalStateResponse(session_id=session_id, **state)
+    return LiveSignalStateResponse(**state)
 
 
 @router.get("/{session_id}/preview/latest")

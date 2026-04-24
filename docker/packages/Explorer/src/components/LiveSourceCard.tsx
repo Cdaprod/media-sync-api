@@ -49,8 +49,11 @@ export function LiveSourceCard({
   const peerVideoRef = useRef<HTMLVideoElement | null>(null);
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
   const deviceIceSeenRef = useRef<Set<string>>(new Set());
+  const viewerIdRef = useRef(`viewer-${Math.random().toString(36).slice(2, 10)}`);
   const [peerEnabled, setPeerEnabled] = useState(false);
   const [peerError, setPeerError] = useState<string | null>(null);
+  const [peerStatus, setPeerStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');
+  const [peerRetryToken, setPeerRetryToken] = useState(0);
 
   useEffect(() => {
     if (!imgRef.current || !previewUrl) return;
@@ -65,6 +68,7 @@ export function LiveSourceCard({
     if (!peerEnabled || !isActive) return undefined;
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
       setPeerError('WebRTC peer viewing is unavailable in this browser.');
+      setPeerStatus('failed');
       return undefined;
     }
     let disposed = false;
@@ -72,11 +76,17 @@ export function LiveSourceCard({
     peerConnRef.current = peer;
     deviceIceSeenRef.current.clear();
     setPeerError(null);
+    setPeerStatus('connecting');
+    const viewerId = viewerIdRef.current;
 
     peer.ontrack = (event) => {
       const stream = event.streams?.[0];
       if (!stream || !peerVideoRef.current) return;
       peerVideoRef.current.srcObject = stream;
+    };
+    peer.onconnectionstatechange = () => {
+      if (peer.connectionState === 'connected') setPeerStatus('connected');
+      if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') setPeerStatus('failed');
     };
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
@@ -87,14 +97,14 @@ export function LiveSourceCard({
           Accept: 'application/json',
         },
         cache: 'no-store',
-        body: JSON.stringify({ role: 'viewer', candidate: event.candidate.toJSON() }),
+        body: JSON.stringify({ role: 'viewer', viewer_id: viewerId, candidate: event.candidate.toJSON() }),
       }).catch(() => undefined);
     };
     peer.addTransceiver('video', { direction: 'recvonly' });
     peer.addTransceiver('audio', { direction: 'recvonly' });
 
     const poll = window.setInterval(() => {
-      void fetch(`${apiBase}/api/live_sessions/${encodeURIComponent(session.session_id)}/signal`, {
+      void fetch(`${apiBase}/api/live_sessions/${encodeURIComponent(session.session_id)}/signal?viewer_id=${encodeURIComponent(viewerId)}`, {
         method: 'GET',
         headers: { Accept: 'application/json' },
         cache: 'no-store',
@@ -113,7 +123,7 @@ export function LiveSourceCard({
                 Accept: 'application/json',
               },
               cache: 'no-store',
-              body: JSON.stringify({ answer: { type: 'answer', sdp: answer.sdp || '' } }),
+              body: JSON.stringify({ viewer_id: viewerId, answer: { type: 'answer', sdp: answer.sdp || '' } }),
             });
           }
           for (const candidate of signal.ice_from_device || []) {
@@ -123,7 +133,9 @@ export function LiveSourceCard({
             await peerConnRef.current.addIceCandidate(candidate);
           }
         })
-        .catch(() => undefined);
+        .catch(() => {
+          setPeerStatus('failed');
+        });
     }, 1000);
 
     return () => {
@@ -133,8 +145,9 @@ export function LiveSourceCard({
       peerConnRef.current = null;
       deviceIceSeenRef.current.clear();
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+      setPeerStatus('idle');
     };
-  }, [apiBase, isActive, peerEnabled, session.session_id]);
+  }, [apiBase, isActive, peerEnabled, peerRetryToken, session.session_id]);
 
   const statusColor =
     session.status === 'recording' ? 'var(--red, #ff4444)'
@@ -240,6 +253,15 @@ export function LiveSourceCard({
         {peerEnabled ? (
           <div style={{ marginTop: 8 }}>
             <video ref={peerVideoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 8, background: '#000' }} />
+            <div className="small" style={{ marginTop: 6 }}>viewer: {peerStatus}</div>
+            <button
+              className="btn"
+              type="button"
+              style={{ marginTop: 6, width: '100%', fontSize: 11 }}
+              onClick={() => setPeerRetryToken((prev) => prev + 1)}
+            >
+              Reconnect peer view
+            </button>
             {peerError ? <div className="small" style={{ marginTop: 6, color: '#ff9a90' }}>{peerError}</div> : null}
           </div>
         ) : null}

@@ -158,8 +158,8 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     }
   }, [api, session]);
 
-  const stopRecording = useCallback(async () => {
-    if (!session) return;
+  const stopRecording = useCallback(async (): Promise<boolean> => {
+    if (!session) return false;
     setState('ending');
 
     try {
@@ -188,9 +188,11 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
         );
       }
       setState('ended');
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to stop recording');
       setState('error');
+      return false;
     } finally {
       recorderRef.current = null;
       clearHeartbeat();
@@ -225,7 +227,12 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
             });
           }
           if (latest.desired_action === 'stop_recording' && state === 'recording') {
-            void stopRecording();
+            void stopRecording().then((stopped) => {
+              if (!stopped) return;
+              return api.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')
+                .then(setSession)
+                .catch(() => undefined);
+            });
           }
         })
         .catch(() => undefined)

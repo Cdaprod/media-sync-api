@@ -17,6 +17,9 @@ export interface LiveSignalIceCandidate {
 
 export interface LiveSignalState {
   session_id: string;
+  viewer_id?: string | null;
+  viewer_ids: string[];
+  primary_viewer_id?: string | null;
   offer?: LiveSignalDescription | null;
   answer?: LiveSignalDescription | null;
   ice_from_device: LiveSignalIceCandidate[];

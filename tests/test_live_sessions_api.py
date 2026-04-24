@@ -204,7 +204,7 @@ def test_live_session_signal_offer_answer_ice_round_trip(client):
 
     answer = client.post(
         f"/api/live_sessions/{session_id}/signal/answer",
-        json={"answer": {"type": "answer", "sdp": "v=0\r\no=viewer-answer"}},
+        json={"viewer_id": "viewer-a", "answer": {"type": "answer", "sdp": "v=0\r\no=viewer-answer"}},
     )
     assert answer.status_code == 200
     assert answer.json()["answer"]["type"] == "answer"
@@ -213,6 +213,7 @@ def test_live_session_signal_offer_answer_ice_round_trip(client):
         f"/api/live_sessions/{session_id}/signal/ice",
         json={
             "role": "device",
+            "viewer_id": "viewer-a",
             "candidate": {"candidate": "candidate-device-1", "sdpMid": "0", "sdpMLineIndex": 0},
         },
     )
@@ -223,16 +224,72 @@ def test_live_session_signal_offer_answer_ice_round_trip(client):
         f"/api/live_sessions/{session_id}/signal/ice",
         json={
             "role": "viewer",
+            "viewer_id": "viewer-a",
             "candidate": {"candidate": "candidate-viewer-1", "sdpMid": "0", "sdpMLineIndex": 0},
         },
     )
     assert viewer_ice.status_code == 200
     assert len(viewer_ice.json()["ice_from_viewer"]) == 1
 
-    state = client.get(f"/api/live_sessions/{session_id}/signal")
+    state = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-a"})
     assert state.status_code == 200
     payload = state.json()
     assert payload["offer"]["sdp"] == "v=0\r\no=device-offer"
     assert payload["answer"]["sdp"] == "v=0\r\no=viewer-answer"
+    assert payload["viewer_id"] == "viewer-a"
+    assert payload["primary_viewer_id"] == "viewer-a"
     assert len(payload["ice_from_device"]) == 1
     assert len(payload["ice_from_viewer"]) == 1
+
+
+def test_live_session_signal_isolates_multiple_viewers(client):
+    register = client.post(
+        "/api/nodes",
+        json={
+            "node_id": "runner-live-signal-multi",
+            "label": "Runner Live Signal Multi",
+            "base_url": "http://127.0.0.1:9011",
+            "roles": ["runner"],
+            "advertised_source_kinds": ["capture"],
+            "status": "healthy",
+        },
+    )
+    assert register.status_code == 201
+    started = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": "runner-live-signal-multi", "source_kind": "camera"},
+    )
+    session_id = started.json()["session_id"]
+    client.post(
+        f"/api/live_sessions/{session_id}/signal/offer",
+        json={"offer": {"type": "offer", "sdp": "v=0\r\no=shared"}},
+    )
+    client.post(
+        f"/api/live_sessions/{session_id}/signal/answer",
+        json={"viewer_id": "viewer-a", "answer": {"type": "answer", "sdp": "v=0\r\no=answer-a"}},
+    )
+    client.post(
+        f"/api/live_sessions/{session_id}/signal/answer",
+        json={"viewer_id": "viewer-b", "answer": {"type": "answer", "sdp": "v=0\r\no=answer-b"}},
+    )
+    client.post(
+        f"/api/live_sessions/{session_id}/signal/ice",
+        json={"role": "viewer", "viewer_id": "viewer-a", "candidate": {"candidate": "viewer-a-ice"}},
+    )
+    client.post(
+        f"/api/live_sessions/{session_id}/signal/ice",
+        json={"role": "viewer", "viewer_id": "viewer-b", "candidate": {"candidate": "viewer-b-ice"}},
+    )
+    state_a = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-a"})
+    state_b = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-b"})
+    assert state_a.status_code == 200
+    assert state_b.status_code == 200
+    assert state_a.json()["answer"]["sdp"] == "v=0\r\no=answer-a"
+    assert state_b.json()["answer"]["sdp"] == "v=0\r\no=answer-b"
+    assert state_a.json()["ice_from_viewer"][0]["candidate"] == "viewer-a-ice"
+    assert state_b.json()["ice_from_viewer"][0]["candidate"] == "viewer-b-ice"
+
+    end = client.post(f"/api/live_sessions/{session_id}/end")
+    assert end.status_code == 200
+    after_end_signal = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-a"})
+    assert after_end_signal.status_code == 404

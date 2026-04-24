@@ -26,6 +26,12 @@ export default function ConnectDevicePage() {
     error,
     lastClaimId,
   } = useLiveSession(api, nodeId);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const peerSessionIdRef = useRef<string | null>(null);
+  const viewerIceSeenRef = useRef<Set<string>>(new Set());
+  const activeViewerIdRef = useRef<string>('viewer-broadcast');
+  const signalPollTimerRef = useRef<number | null>(null);
+  const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
 
   const heading = useMemo(() => {
     if (!nodeId) return 'Device activation unavailable';
@@ -70,6 +76,7 @@ export default function ConnectDevicePage() {
       peerConnectionRef.current = null;
       peerSessionIdRef.current = null;
       viewerIceSeenRef.current.clear();
+      activeViewerIdRef.current = 'viewer-broadcast';
     };
   }, []);
 
@@ -85,17 +92,18 @@ export default function ConnectDevicePage() {
       peerConnectionRef.current = null;
       peerSessionIdRef.current = null;
       viewerIceSeenRef.current.clear();
+      activeViewerIdRef.current = 'viewer-broadcast';
       setPeerStatus('idle');
       return;
     }
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
-      setPeerStatus('error');
+      setPeerStatus('failed');
       return;
     }
     if (peerSessionIdRef.current === sessionId && peerConnectionRef.current) return;
 
     let cancelled = false;
-    setPeerStatus('connecting');
+    setPeerStatus('idle');
 
     const maybeStartPeerPublish = async () => {
       if (cancelled || !sessionId) return;
@@ -111,13 +119,18 @@ export default function ConnectDevicePage() {
       peerConnectionRef.current = peer;
       peerSessionIdRef.current = sessionId;
       viewerIceSeenRef.current.clear();
+      activeViewerIdRef.current = 'viewer-broadcast';
+      peer.onconnectionstatechange = () => {
+        if (peer.connectionState === 'connected') setPeerStatus('connected');
+        if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') setPeerStatus('failed');
+      };
 
       stream.getTracks().forEach((track) => {
         peer.addTrack(track, stream);
       });
       peer.onicecandidate = (event) => {
         if (!event.candidate || !sessionId) return;
-        void api.publishLiveSignalIce(sessionId, 'device', event.candidate.toJSON()).catch(() => undefined);
+        void api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current, event.candidate.toJSON()).catch(() => undefined);
       };
       try {
         const offer = await peer.createOffer();
@@ -126,9 +139,9 @@ export default function ConnectDevicePage() {
           type: 'offer',
           sdp: offer.sdp || '',
         });
-        setPeerStatus('published');
+        setPeerStatus('offer-published');
       } catch {
-        setPeerStatus('error');
+        setPeerStatus('failed');
         return;
       }
 
@@ -141,6 +154,9 @@ export default function ConnectDevicePage() {
           .then(async (signal) => {
             const activePeer = peerConnectionRef.current;
             if (!activePeer) return;
+            if (signal.primary_viewer_id) {
+              activeViewerIdRef.current = signal.primary_viewer_id;
+            }
             if (signal.answer?.sdp && !activePeer.currentRemoteDescription) {
               await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
             }

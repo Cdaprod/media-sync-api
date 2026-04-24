@@ -256,6 +256,7 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   assert.ok(hook.includes('if (sourceKind === \'screen\' && !hasGetDisplayMedia) {'));
   assert.ok(hook.includes('await mediaDevices.getUserMedia({ video: true, audio: true })'));
   assert.ok(!hook.includes('await navigator.mediaDevices.getUserMedia'));
+  assert.ok(hook.includes("api.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')"));
 
   assert.ok(page.includes('const capability = useMemo(() => {'));
   assert.ok(page.includes('isSecureContext: window.isSecureContext,'));
@@ -288,11 +289,16 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(device.includes('webrtc: {peerStatus}'));
   assert.ok(device.includes('new RTCPeerConnection()'));
   assert.ok(device.includes("api.publishLiveSignalOffer(sessionId"));
-  assert.ok(device.includes("api.publishLiveSignalIce(sessionId, 'device'"));
+  assert.ok(device.includes("api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current"));
+  assert.ok(device.includes("setPeerStatus('offer-published')"));
+  assert.ok(device.includes("setPeerStatus('connected')"));
+  assert.ok(device.includes("setPeerStatus('failed')"));
 
   assert.ok(card.includes('Open peer view'));
   assert.ok(card.includes('Hide peer view'));
+  assert.ok(card.includes('Reconnect peer view'));
   assert.ok(card.includes("role: 'viewer'"));
+  assert.ok(card.includes('viewer_id: viewerId'));
   assert.ok(card.includes('/signal/answer'));
   assert.ok(card.includes('peerVideoRef'));
 });

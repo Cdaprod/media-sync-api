@@ -1,3 +1,14 @@
+## 2026-04-24 — WebRTC signaling hardening pass (active)
+- [x] Scoped signaling answers by `viewer_id` so concurrent Explorer viewers do not overwrite each other.
+- [x] Scoped ICE publication by `role + viewer_id` and surfaced viewer-specific candidate lanes in signaling state reads.
+- [x] Added stale signaling-viewer pruning window to prevent indefinite growth from abandoned viewer sessions.
+- [x] Blocked signaling reads/writes for ended sessions and confirmed signaling state is cleared when session ends.
+- [x] Device capture page now reports WebRTC status (`idle`, `offer-published`, `connected`, `failed`) from peer lifecycle events.
+- [x] LiveSourceCard peer viewer now reports connection status and includes an explicit reconnect action.
+- [x] Device control polling now acknowledges both `start_recording` and `stop_recording` after local execution.
+- [x] Added backend tests for multi-viewer signaling isolation and end-of-session signaling cleanup.
+- [ ] Next: add auth/ownership checks so only authorized node/viewer identities can publish signaling payloads per session.
+
 ## 2026-04-24 — Live-session WebRTC signaling plane (active)
 - [x] Added backend signaling endpoints for live sessions (`/signal/offer`, `/signal/answer`, `/signal/ice`, `/signal`) with runtime-owned per-session offer/answer/ICE state.
 - [x] Extended live-session service with idempotent signaling state publication/read helpers and candidate de-duplication.
