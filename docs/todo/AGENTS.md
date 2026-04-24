@@ -1,3 +1,10 @@
+## 2026-04-24 — Video thumbnail candidate priority restore for HTTPS authority (active)
+- [x] Replaced single-value thumbnail selection with explicit candidate planning in `ExplorerApp` so video cards prefer `thumbnail_url`, then `thumb_url`, then generated `/thumbnails/{project}/{sha}.jpg|webp|png` routes before generic fallback.
+- [x] Preserved stream-vs-thumbnail separation in view-model wiring (`streamUrl` playback lane independent from `thumbUrl` poster lane) and added secondary thumbnail fallback URL handoff into card image error flow.
+- [x] Added dev-only diagnostics: sampled `/api/library` thumbnail field trace logging on first populated dataset and one-time warnings for video assets missing thumbnail candidates.
+- [x] Added single-item context action `Copy Asset Debug JSON` capturing raw thumbnail fields, normalized candidates, stream URL, and fallback reason for on-device triage.
+- [ ] Next: validate on iPhone Safari that previously generic VIDEO cards now render extracted thumbs when either `thumbnail_url` or `thumb_url` exists.
+
 ## 2026-04-24 — HTTPS authority media URL/render parity follow-up (active)
 - [x] Added `src/utils/mediaUrls.ts` with browser-safe `normalizeAssetUrl(...)` plus best-url selectors (`getBestThumbnailUrl`, `getBestStreamUrl`, `getBestDownloadUrl`) and absolute clipboard helper.
 - [x] Rewired Explorer media URL usage to prefer normalized best-url selectors for card thumbs, video preview, focused preview metadata/actions, and stream URL copy paths without mutating API payloads.

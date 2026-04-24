@@ -40,7 +40,7 @@ import { LiveSourceCard } from './components/LiveSourceCard';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
-import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl, getBestThumbnailUrl, normalizeAssetUrl } from './utils/mediaUrls';
+import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl, normalizeAssetUrl } from './utils/mediaUrls';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
@@ -87,6 +87,11 @@ type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
 type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
 type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
 type PinchOverlayPoint = { x: number; y: number } | null;
+type ThumbnailCandidatePlan = {
+  primary?: string;
+  secondary?: string;
+  fallbackReason: 'thumbnail-url' | 'thumb-url' | 'generated-sha' | 'image-stream' | 'missing';
+};
 type FocusPresentationState =
   | { mode: 'idle' }
   | { mode: 'world-focus'; key: string; overlayReady: boolean }
@@ -1369,6 +1374,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       : filtered;
     return sortMedia(selectedFiltered, sortKey, mediaMeta);
   }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const devAssetTraceLoggedRef = useRef(false);
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (devAssetTraceLoggedRef.current) return;
+    if (!filteredMedia.length) return;
+    devAssetTraceLoggedRef.current = true;
+    const sample = filteredMedia.slice(0, 24).map((item) => ({
+      project_name: item.project_name || item.project || '',
+      relative_path: item.relative_path || '',
+      sha256: item.sha256 || item.hash || '',
+      orientation: item.width && item.height ? `${item.width}x${item.height}` : '',
+      thumbnail_url: item.thumbnail_url || '',
+      thumb_url: item.thumb_url || '',
+      stream_url: item.stream_url || '',
+    }));
+    console.info('[Explorer] /api/library asset thumbnail fields (sample)', sample);
+  }, [filteredMedia]);
   const itemsBySelectionKey = useMemo(() => {
     const map = new Map<string, MediaItem>();
     media.forEach((item) => {
@@ -1500,17 +1522,46 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return path;
     }
   }, [resolvedApiBase]);
-  const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {
+  const resolveThumbCandidatePlan = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>): ThumbnailCandidatePlan => {
+    const rawPrimaryThumb = normalizeThumbUrl(item.thumbnail_url || '');
+    const rawSecondaryThumb = normalizeThumbUrl(item.thumb_url || '');
+    const hasDistinctSecondary = Boolean(rawSecondaryThumb && rawSecondaryThumb !== rawPrimaryThumb);
+
+    if (kind === 'video') {
+      if (rawPrimaryThumb) {
+        return { primary: rawPrimaryThumb, secondary: hasDistinctSecondary ? rawSecondaryThumb : undefined, fallbackReason: 'thumbnail-url' };
+      }
+      if (rawSecondaryThumb) {
+        return { primary: rawSecondaryThumb, fallbackReason: 'thumb-url' };
+      }
+      const projectName = (item.project_name || item.project || '').trim();
+      const assetHash = (item.sha256 || item.hash || '').trim();
+      if (projectName && assetHash) {
+        const encodedProject = encodeURIComponent(projectName);
+        const encodedHash = encodeURIComponent(assetHash);
+        return {
+          primary: normalizeThumbUrl(`/thumbnails/${encodedProject}/${encodedHash}.jpg`),
+          secondary: normalizeThumbUrl(`/thumbnails/${encodedProject}/${encodedHash}.webp`) || normalizeThumbUrl(`/thumbnails/${encodedProject}/${encodedHash}.png`),
+          fallbackReason: 'generated-sha',
+        };
+      }
+      return { fallbackReason: 'missing' };
+    }
+
     if (!isThumbableRelativePath(item.relative_path)) {
-      return kind === 'image' ? normalizeThumbUrl(getBestStreamUrl(item)) : undefined;
+      if (kind === 'image') {
+        return { primary: normalizeThumbUrl(getBestStreamUrl(item)), fallbackReason: 'image-stream' };
+      }
+      return { fallbackReason: 'missing' };
     }
     if (kind === 'image') {
-      return normalizeThumbUrl(getBestThumbnailUrl(item) || getBestStreamUrl(item));
+      return {
+        primary: rawPrimaryThumb || rawSecondaryThumb || normalizeThumbUrl(getBestStreamUrl(item)),
+        secondary: rawPrimaryThumb ? (hasDistinctSecondary ? rawSecondaryThumb : undefined) : undefined,
+        fallbackReason: rawPrimaryThumb ? 'thumbnail-url' : (rawSecondaryThumb ? 'thumb-url' : 'image-stream'),
+      };
     }
-    if (kind === 'video') {
-      return normalizeThumbUrl(getBestThumbnailUrl(item));
-    }
-    return undefined;
+    return { fallbackReason: 'missing' };
   }, []);
   const proxyPrewarmSelectionKey = useMemo(() => (
     reinforcedActiveKey || previewActivationKey || activeAssetKey || ''
@@ -1527,12 +1578,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const dataset = filteredMedia.map((item) => {
       const kind = guessKind(item);
       const thumbKey = getThumbCacheKey(item) || assetRenderKey(item, activeProject);
-      const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
-      const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';
-      return buildThumbJobKey(thumbKey, thumbUrl);
+      const thumbPlan = resolveThumbCandidatePlan(item, kind);
+      const thumbUrl = thumbPlan.primary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.primary) || '') : '';
+      const thumbFallbackUrl = thumbPlan.secondary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.secondary) || '') : '';
+      const jobUrl = thumbUrl || thumbFallbackUrl;
+      return buildThumbJobKey(thumbKey, jobUrl);
     });
     return `${view}:${view === 'grid' ? gridColumnCount : 'list'}:${dataset.join('\n')}`;
-  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, resolveThumbCandidateUrl, view]);
+  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, resolveThumbCandidatePlan, view]);
 
   useThumbnailQueue({
     beginContentLoading,
@@ -3033,6 +3086,29 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [addToast, resolveAssetUrl]);
 
+  const handleCopyAssetDebugJson = useCallback(async (item: MediaItem) => {
+    const kind = guessKind(item);
+    const thumbPlan = resolveThumbCandidatePlan(item, kind);
+    const payload = {
+      relative_path: item.relative_path || '',
+      project_name: item.project_name || item.project || '',
+      sha256: item.sha256 || item.hash || '',
+      orientation: item.width && item.height ? `${item.width}x${item.height}` : '',
+      raw_thumbnail_url: item.thumbnail_url || '',
+      raw_thumb_url: item.thumb_url || '',
+      normalized_thumbnail_url: resolveAssetUrl(thumbPlan.primary || ''),
+      normalized_thumbnail_fallback_url: resolveAssetUrl(thumbPlan.secondary || ''),
+      stream_url: resolveAssetUrl(getBestStreamUrl(item)),
+      fallback_reason: thumbPlan.fallbackReason,
+    };
+    const ok = await copyTextWithFallback(JSON.stringify(payload, null, 2));
+    if (ok) {
+      addToast('good', 'Copied', 'Asset debug JSON copied to clipboard');
+    } else {
+      addToast('warn', 'Clipboard', 'Copy failed — please copy manually.');
+    }
+  }, [addToast, resolveAssetUrl, resolveThumbCandidatePlan]);
+
   const copyText = useCallback(async (value: string) => {
     try {
       await navigator.clipboard?.writeText(value);
@@ -3150,6 +3226,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (single) {
       actions.push({ id: 'preview', label: 'Open preview', handler: () => openPreview(item) });
       actions.push({ id: 'copy-stream', label: 'Copy stream URL', handler: () => void handleCopyStream(item) });
+      actions.push({ id: 'copy-debug-json', label: 'Copy Asset Debug JSON', handler: () => void handleCopyAssetDebugJson(item) });
       actions.push({
         id: 'download',
         label: 'Download',
@@ -3179,7 +3256,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       handler: () => deleteMediaSelection(resolveSelectionKeysForItems(items)),
     });
     return actions;
-  }, [deleteMediaSelection, handleCopySelectedUrls, handleCopyStream, openPreview, resolveAssetUrl, resolveSelectionKeysForItems]);
+  }, [deleteMediaSelection, handleCopyAssetDebugJson, handleCopySelectedUrls, handleCopyStream, openPreview, resolveAssetUrl, resolveSelectionKeysForItems]);
 
   const {
     assetDragActive,
@@ -4539,6 +4616,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
   }, []);
+  const missingVideoThumbWarnedRef = useRef<Set<string>>(new Set());
 
   const buildAssetViewModel = useCallback((item: MediaItem) => {
     const kind = guessKind(item);
@@ -4555,11 +4633,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const cachedOrient = getCachedOrientation(orientationKey);
     const orient = resolveItemOrientation(item, orientationKey);
     const orientLocked = Boolean(itemOrient || dynamicOrient || cachedOrient);
-    const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
+    const thumbPlan = resolveThumbCandidatePlan(item, kind);
     const fallbackThumb = buildThumbFallback(kind);
-    const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;
+    const thumbUrl = thumbPlan.primary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.primary) || '') : undefined;
+    const thumbFallbackUrl = thumbPlan.secondary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.secondary) || '') : undefined;
     const streamUrl = resolveAssetUrl(getBestStreamUrl(item) || getBestDownloadUrl(item));
-    const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
+    const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl || thumbFallbackUrl);
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
@@ -4573,6 +4652,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         : undefined
     );
     const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';
+    if (process.env.NODE_ENV !== 'production' && kind === 'video' && !thumbUrl) {
+      if (!missingVideoThumbWarnedRef.current.has(selectionKey)) {
+        missingVideoThumbWarnedRef.current.add(selectionKey);
+        console.warn('[Explorer] video asset missing thumbnail candidate', {
+          thumbnail_url: item.thumbnail_url || '',
+          thumb_url: item.thumb_url || '',
+          stream_url: item.stream_url || '',
+          relative_path: item.relative_path || '',
+          sha256: item.sha256 || item.hash || '',
+          orientation: item.width && item.height ? `${item.width}x${item.height}` : '',
+          project_name: item.project_name || item.project || '',
+          fallbackReason: thumbPlan.fallbackReason,
+        });
+      }
+    }
 
     return {
       activeVideoPreviewUrl,
@@ -4597,6 +4691,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       thumbJobKey,
       thumbKey,
       thumbUrl,
+      thumbFallbackUrl,
+      thumbnailFallbackReason: thumbPlan.fallbackReason,
       title,
     };
   }, [
@@ -4614,7 +4710,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     previewPlaybackToken,
     reinforcedActiveKey,
     resolveAssetUrl,
-    resolveThumbCandidateUrl,
+    resolveThumbCandidatePlan,
     resolveItemOrientation,
     selected,
     selectedOrderMap,

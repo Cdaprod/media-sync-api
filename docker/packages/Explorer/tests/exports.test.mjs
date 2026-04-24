@@ -1076,8 +1076,9 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('isThumbableRelativePath(item.relative_path)'));
   assert.ok(content.includes('thumbDatasetSignature'));
   assert.ok(content.includes('buildThumbJobKey('));
-  assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';"));
-  assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;"));
+  assert.ok(content.includes('const thumbPlan = resolveThumbCandidatePlan(item, kind);'));
+  assert.ok(content.includes("const thumbUrl = thumbPlan.primary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.primary) || '') : '';"));
+  assert.ok(content.includes("const thumbUrl = thumbPlan.primary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.primary) || '') : undefined;"));
   assert.ok(gridContent.includes('data-thumb-url'));
   assert.ok(gridContent.includes('src={viewModel.fallbackThumb}'));
   assert.ok(list.includes('src={viewModel.fallbackThumb}'));
@@ -1396,9 +1397,9 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('id="asset-density-slider"'));
   assert.ok(content.includes('const RETAINED_UI_PREFS_KEY = \'media-sync-explorer-ui-prefs-v1\';'));
   assert.ok(content.includes('const parseStoredJsonObject = (raw: string | null): Record<string, unknown> | null => {'));
-  assert.ok(content.includes('const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {'));
+  assert.ok(content.includes('const resolveThumbCandidatePlan = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>): ThumbnailCandidatePlan => {'));
   assert.ok(content.includes('if (!isThumbableRelativePath(item.relative_path)) {'));
-  assert.ok(content.includes("return kind === 'image' ? normalizeThumbUrl(getBestStreamUrl(item)) : undefined;"));
+  assert.ok(content.includes("return { primary: normalizeThumbUrl(getBestStreamUrl(item)), fallbackReason: 'image-stream' };"));
   assert.ok(content.includes('const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);'));
   assert.ok(content.includes('window.localStorage.getItem(RETAINED_UI_PREFS_KEY)'));
   assert.ok(content.includes('setRetainedPrefsHydrated(false);'));
@@ -1429,7 +1430,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('overlayEnabled,'));
   assert.ok(content.includes('retainedPrefsHydrated,'));
   assert.ok(content.includes('if (kind === \'video\') {'));
-  assert.ok(content.includes('return normalizeThumbUrl(getBestThumbnailUrl(item));'));
+  assert.ok(content.includes("fallbackReason: 'generated-sha',"));
   assert.ok(content.includes('const legacyFilterParsed = parseStoredJsonObject(window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY));'));
   assert.ok(content.includes('window.localStorage.getItem(LEGACY_OVERLAY_VIS_PREFS_KEY)'));
   assert.ok(content.includes('Overlays: {overlayEnabled ? \'On\' : \'Off\'}'));
