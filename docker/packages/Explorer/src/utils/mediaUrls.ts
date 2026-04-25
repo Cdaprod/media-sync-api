@@ -14,16 +14,36 @@ export function normalizeAssetUrl(url: string | null | undefined): string {
   try {
     const parsed = new URL(raw);
 
-    if (
-      typeof window !== 'undefined'
-      && window.location.protocol === 'https:'
-      && parsed.protocol === 'http:'
-    ) {
-      const rewritten = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('[Explorer] Rewrote insecure asset URL', raw, rewritten);
+    if (typeof window !== 'undefined') {
+      const loc = window.location;
+
+      const isAssetPath =
+        parsed.pathname.startsWith('/media/') ||
+        parsed.pathname.startsWith('/thumbnails/');
+
+      const sameHost =
+        parsed.hostname.toLowerCase() === loc.hostname.toLowerCase();
+
+      const isWrongPort =
+        parsed.port === '8787';
+
+      const isHttp =
+        parsed.protocol === 'http:';
+
+      if (
+        loc.protocol === 'https:' &&
+        isAssetPath &&
+        sameHost &&
+        (isHttp || isWrongPort)
+      ) {
+        const rewritten = `${loc.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[Explorer] Rewrote asset URL', raw, rewritten);
+        }
+
+        return rewritten;
       }
-      return rewritten;
     }
 
     return parsed.toString();
