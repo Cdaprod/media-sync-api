@@ -77,12 +77,23 @@ export function normalizeMediaUrlForOrigin(path: string | undefined, location?: 
 
   try {
     const parsed = new URL(path);
-    if (location.protocol === 'https:' && parsed.protocol === 'http:') {
-      if (parsed.hostname === location.hostname || isLikelyPrivateHost(parsed.hostname)) {
-        const host = location.host || location.hostname;
-        return `${location.protocol}//${host}${parsed.pathname}${parsed.search}`;
-      }
+    const isAssetPath =
+      parsed.pathname.startsWith('/media/') ||
+      parsed.pathname.startsWith('/thumbnails/');
+
+    if (!isAssetPath) {
+      return parsed.toString();
     }
+
+    const sameHost = parsed.hostname.toLowerCase() === location.hostname.toLowerCase();
+    const privateHost = isLikelyPrivateHost(parsed.hostname);
+    const apiPort = parsed.protocol === 'http';
+
+    if (location.protocol === 'https:' && (sameHost || privateHost) && (apiPort || parsed.protocol === 'http:')) {
+      const host = location.host || location.hostname;
+      return `${location.protocol}//${host}${parsed.pathname}${parsed.search}`;
+    }
+
     return parsed.toString();
   } catch {
     return path;
