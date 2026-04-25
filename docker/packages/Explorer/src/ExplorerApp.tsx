@@ -1504,10 +1504,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       const normalized = normalizeAssetUrl(path);
       if (!normalized) return '';
       if (normalized.startsWith('data:')) return normalized;
+  
+      // Do NOT send browser-rendered asset paths through api.buildUrl.
+      // Let Caddy serve them from the current origin.
+      if (
+        normalized.startsWith('/media/') ||
+        normalized.startsWith('/thumbnails/')
+      ) {
+        return normalized;
+      }
+  
       return api.buildUrl(normalized);
     },
     [api],
   );
+  
   const absolutizeMediaUrl = useCallback((path?: string) => {
     if (!path) return '';
     if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) {
