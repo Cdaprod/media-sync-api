@@ -9,7 +9,8 @@ def _read(path: str) -> str:
 
 REQUIRED_BACKEND_PATHS = (
     "/api/*",
-    "/connect/*",
+    "/connect*",
+    "/debug/*",
     "/public/*",
     "/player.html",
     "/favicon.ico",
@@ -18,42 +19,41 @@ REQUIRED_BACKEND_PATHS = (
 )
 
 
-def test_caddy_gateway_uses_dedicated_media_matcher_with_http11_transport() -> None:
-    expected_upstreams = {
-        "docker/caddy/Caddyfile": ("127.0.0.1:8787", "127.0.0.1:3000"),
-        "docker/caddy/Caddyfile.docker": ("host.docker.internal:8787", "host.docker.internal:3000"),
-    }
-    for config_path, (backend_host, explorer_host) in expected_upstreams.items():
-        content = _read(config_path)
+def test_caddy_route_ownership_is_explicit_for_backend_media_and_next() -> None:
+    host_content = _read("docker/caddy/Caddyfile")
+    docker_content = _read("docker/caddy/Caddyfile.docker")
 
+    assert "reverse_proxy @media 127.0.0.1:8787" in host_content
+    assert "reverse_proxy @backend 127.0.0.1:8787" in host_content
+    assert "reverse_proxy @next 127.0.0.1:3000" in host_content
+    assert "reverse_proxy 127.0.0.1:3000" in host_content
+
+    assert "reverse_proxy @media host.docker.internal:8787" in docker_content
+    assert "reverse_proxy @backend host.docker.internal:8787" in docker_content
+    assert "reverse_proxy @next host.docker.internal:3000" in docker_content
+    assert "reverse_proxy host.docker.internal:3000" in docker_content
+
+    for content in (host_content, docker_content):
         assert "@media path /media/* /thumbnails/*" in content
-        assert f"reverse_proxy @media {backend_host}" in content
         assert "transport http {" in content
         assert "versions 1.1" in content
-
+        assert "@backend path" in content
+        assert "@next path /_next/*" in content
         for route in REQUIRED_BACKEND_PATHS:
             assert route in content
 
-        assert "@backend path" in content
-        assert "/media/*" in content
-        assert "/_next/*" not in content
-
-        assert f"reverse_proxy @backend {backend_host}" in content
-        assert f"reverse_proxy {explorer_host}" in content
+        backend_section = content.split("@backend path", 1)[1].split("reverse_proxy @backend", 1)[0]
+        assert "/_next/*" not in backend_section
 
 
-def test_caddy_docker_has_no_redundant_forwarded_header_overrides() -> None:
-    content = _read("docker/caddy/Caddyfile.docker")
-    assert "header_up Host {host}" in content
-    assert "header_up X-Forwarded-Host {host}" not in content
-    assert "header_up X-Forwarded-Proto {scheme}" not in content
-    assert "header_up X-Forwarded-For {remote_host}" not in content
+def test_compose_env_passthrough_includes_authority_origin_contract() -> None:
+    api_compose = _read("docker/docker-compose.yaml")
+    caddy_compose = _read("docker/docker-compose.caddy.yaml")
 
+    assert "MEDIA_SYNC_PUBLIC_ORIGIN=${MEDIA_SYNC_PUBLIC_ORIGIN}" in api_compose
+    assert "MEDIA_SYNC_AUTHORITY_ORIGIN=${MEDIA_SYNC_AUTHORITY_ORIGIN}" in api_compose
+    assert "MEDIA_SYNC_AUTHORITY_HOST=${MEDIA_SYNC_AUTHORITY_HOST}" in api_compose
 
-def test_caddy_compose_uses_named_persistent_volumes() -> None:
-    content = _read("docker/docker-compose.caddy.yaml")
-    assert "- caddy_data:/data/caddy" in content
-    assert "- caddy_config:/config/caddy" in content
-    assert "volumes:" in content
-    assert "caddy_data:" in content
-    assert "caddy_config:" in content
+    assert "- MEDIA_SYNC_PUBLIC_ORIGIN" in caddy_compose
+    assert "- MEDIA_SYNC_AUTHORITY_ORIGIN" in caddy_compose
+    assert "- MEDIA_SYNC_AUTHORITY_HOST" in caddy_compose

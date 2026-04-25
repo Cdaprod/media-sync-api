@@ -18,7 +18,8 @@
 
   @backend path \
     /api/* \
-    /connect/* \
+    /connect* \
+    /debug/* \
     /public/* \
     /player.html \
     /health \
@@ -30,6 +31,11 @@
     /static/*
 
   reverse_proxy @backend 127.0.0.1:8787 {
+    header_up Host {host}
+  }
+
+  @next path /_next/*
+  reverse_proxy @next 127.0.0.1:3000 {
     header_up Host {host}
   }
 

@@ -1,3 +1,17 @@
+## 2026-04-25 — LAN authority env passthrough + Caddy route ownership contract fix (active)
+- [x] Wired authority/public env passthrough into `docker/docker-compose.yaml` for `media-sync-api` (`MEDIA_SYNC_PUBLIC_ORIGIN`, `MEDIA_SYNC_AUTHORITY_ORIGIN`, `MEDIA_SYNC_AUTHORITY_HOST`).
+- [x] Updated `docker/docker-compose.caddy.yaml` env passthrough to include all three authority/public vars while keeping `.env` loading.
+- [x] Expanded Caddy route ownership contract in host + docker Caddyfiles: dedicated `@media` matcher, explicit `@backend` matcher including `/connect*` + `/debug/*`, explicit `@next` matcher for `/_next/*`, and Explorer fallback.
+- [x] Added manual verification commands:
+  - `docker compose -f docker/docker-compose.yaml -f docker/docker-compose.explorer.yaml -f docker/docker-compose.caddy.yaml --profile dev up -d --build --force-recreate`
+  - `docker exec media-sync-api env | findstr MEDIA_SYNC_AUTHORITY`
+  - `docker exec media-sync-api env | findstr MEDIA_SYNC_PUBLIC`
+  - `docker exec media-sync-caddy env | findstr MEDIA_SYNC`
+  - `curl.exe -k https://cda-desktop.local/health`
+  - `curl.exe -k https://cda-desktop.local/`
+  - `curl.exe -k -I https://cda-desktop.local/_next/static/chunks/main-app.js`
+- [ ] Next: verify `media-sync-api` container runtime env now consistently exposes lowercase authority/public values and that `/connect/register` URLs stay on `https://cda-desktop.local`.
+
 ## 2026-04-25 — Caddy LAN HTTPS media-route stability hardening (active)
 - [x] Split Caddy routing into dedicated `@media` matcher (`/media/*`, `/thumbnails/*`) with HTTP/1.1 upstream transport to reduce iPhone Range-request churn and stream cancellations.
 - [x] Kept non-media backend routes in `@backend` and preserved Explorer fallback ownership for all other paths (`/_next/*` remains non-backend).
