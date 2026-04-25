@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from app.api.media import _build_download_url, _build_stream_url, _is_thumbable_media, _validate_relative_media_path
-from app.api.projects import _bootstrap_existing_projects
+from app.api.projects import _bootstrap_existing_projects, is_visible_project_dir
 from app.config import get_settings
 from app.storage.index import load_index
 from app.storage.paths import is_temporary_path, is_thumbnail_path
@@ -47,7 +47,7 @@ def _iter_project_rows(source) -> tuple[list[dict[str, Any]], list[dict[str, Any
         return project_rows, asset_rows
     _bootstrap_existing_projects(source.root)
     for project_dir in sorted(source.root.iterdir(), key=lambda item: item.name):
-        if not project_dir.is_dir() or project_dir.name.startswith("_"):
+        if not is_visible_project_dir(project_dir):
             continue
         index_exists = (project_dir / "index.json").exists()
         project_rows.append(
@@ -90,15 +90,15 @@ def _iter_project_rows(source) -> tuple[list[dict[str, Any]], list[dict[str, Any
     return project_rows, asset_rows
 
 
-def build_library_snapshot(
+def _build_snapshot_from_registry(
+    registry: SourceRegistry,
+    *,
     source_name: str | None = None,
     scope: str = "all",
     project_name: str | None = None,
 ) -> dict[str, Any]:
     """Assemble a full Explorer snapshot from sources/projects/index files."""
 
-    settings = get_settings()
-    registry = SourceRegistry(settings.project_root)
     if scope not in {"all", "project"}:
         raise ValueError("scope must be 'all' or 'project'")
 
@@ -168,3 +168,41 @@ def build_library_snapshot(
         "assets": sorted(asset_rows, key=lambda item: (str(item.get("project_name", "")), str(item.get("relative_path", "")))),
         "jobs": [],
     }
+
+
+class LibraryService:
+    """Runtime-owned library snapshot service.
+
+    Example:
+        service = LibraryService(source_registry=registry)
+        snapshot = service.get_snapshot(scope="all")
+    """
+
+    def __init__(self, *, source_registry: SourceRegistry):
+        self.source_registry = source_registry
+
+    def get_snapshot(
+        self,
+        *,
+        source_name: str | None = None,
+        scope: str = "all",
+        project_name: str | None = None,
+    ) -> dict[str, Any]:
+        return _build_snapshot_from_registry(
+            self.source_registry,
+            source_name=source_name,
+            scope=scope,
+            project_name=project_name,
+        )
+
+
+def build_library_snapshot(
+    source_name: str | None = None,
+    scope: str = "all",
+    project_name: str | None = None,
+) -> dict[str, Any]:
+    """Backward-compatible helper that builds snapshot from process settings."""
+
+    settings = get_settings()
+    service = LibraryService(source_registry=SourceRegistry(settings.project_root))
+    return service.get_snapshot(source_name=source_name, scope=scope, project_name=project_name)

@@ -32,17 +32,22 @@ import {
   isInteractiveTarget,
   isTopbarOwnedTarget,
   kindBadgeClass,
-  toAbsoluteUrl,
 } from './utils';
 import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewPanel';
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
+import { LiveSourceCard } from './components/LiveSourceCard';
+import { RegisterNodeModal } from './components/RegisterNodeModal';
+import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
+import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl, normalizeAssetUrl } from './utils/mediaUrls';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
 import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
+import { useSourceControlData } from './hooks/useSourceControlData';
+import { useLiveSessions } from './hooks/useLiveSessions';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -68,6 +73,11 @@ import { useLibrarySnapshot } from './hooks/useLibrarySnapshot';
 import { useExplorerCommands } from './hooks/useExplorerCommands';
 import { useExplorerUiState } from './hooks/useExplorerUiState';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
+import type { RegisterNodeResponse } from './types/registration';
+import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
+import type { LiveSession } from './types/liveSession';
+import type { IngestClaimRecord } from './types/ingestClaim';
+import { getDeviceUrl, getRuntimeCapabilityTags, getRuntimeKinds, isSessionNode, isTestPayloadClaim, isTestPayloadNode } from './utils/runtimeLabels';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -77,6 +87,11 @@ type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
 type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
 type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
 type PinchOverlayPoint = { x: number; y: number } | null;
+type ThumbnailCandidatePlan = {
+  primary?: string;
+  secondary?: string;
+  fallbackReason: 'thumbnail-url' | 'thumb-url' | 'generated-sha' | 'image-stream' | 'missing';
+};
 type FocusPresentationState =
   | { mode: 'idle' }
   | { mode: 'world-focus'; key: string; overlayReady: boolean }
@@ -266,6 +281,7 @@ const RETAINED_UI_PREFS_KEY = 'media-sync-explorer-ui-prefs-v1';
 const LEGACY_FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const LEGACY_OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
+const HIDDEN_INGEST_CLAIMS_KEY = 'explorer_hidden_ingest_claim_ids';
 const clampLayoutColumns = (value: number) => (
   Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
 );
@@ -567,6 +583,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [resolvedApiBase, setResolvedApiBase] = useState(initialApiBase);
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
   const {
+    sessions: liveSessions,
+  } = useLiveSessions({
+    listLiveSessions: api.listLiveSessions,
+  });
+  const {
+    snapshot: sourceControlSnapshot,
+    sources: runtimeSources,
+    nodes: runtimeNodes,
+    canonicalSources,
+    remoteSources,
+    healthyNodes,
+    loading: sourceControlLoading,
+    error: sourceControlError,
+    reload: reloadSourceControl,
+  } = useSourceControlData({
+    listSources: api.listSources,
+    listNodes: api.listNodes,
+  });
+  const {
     sources,
     projects,
     assets: libraryAssets,
@@ -575,6 +610,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearSnapshotError,
   } = useLibrarySnapshot(api);
   const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
+
 
   // ---------------------------------------------------------------------------
   // Local composition shell state that intentionally remains root-owned.
@@ -600,6 +636,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [proxyPlaybackCurrentTime, setProxyPlaybackCurrentTime] = useState(0);
   const [proxyPlaybackDuration, setProxyPlaybackDuration] = useState(0);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [isRegisterNodeModalOpen, setIsRegisterNodeModalOpen] = useState(false);
+  const [detailsModal, setDetailsModal] = useState<{
+    title: string;
+    subtitle?: string;
+    payload: unknown;
+  } | null>(null);
+  const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
+  const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
+  const liveClaimRefreshRef = useRef<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // UI/runtime authority seam.
@@ -681,6 +726,38 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     defaultView: DEFAULT_VIEW,
     defaultGridColumns: DEFAULT_COLUMNS_MOBILE,
   });
+
+
+  const reloadIngestClaims = useCallback(async () => {
+    try {
+      const claims = await api.listIngestClaims();
+      setIngestClaims(Array.isArray(claims) ? claims : []);
+    } catch {
+      // Keep sidebar non-fatal.
+    }
+  }, [api]);
+
+  useEffect(() => {
+    void reloadIngestClaims();
+    const interval = window.setInterval(() => void reloadIngestClaims(), 5000);
+    return () => window.clearInterval(interval);
+  }, [reloadIngestClaims]);
+
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(HIDDEN_INGEST_CLAIMS_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const normalized = parsed.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+      if (!normalized.length) return;
+      setHiddenIngestClaimIds(new Set(normalized));
+    } catch {
+      // ignore parse failures and continue with empty hidden set.
+    }
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Runtime refs + controllers.
@@ -1297,6 +1374,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       : filtered;
     return sortMedia(selectedFiltered, sortKey, mediaMeta);
   }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const devAssetTraceLoggedRef = useRef(false);
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (devAssetTraceLoggedRef.current) return;
+    if (!filteredMedia.length) return;
+    devAssetTraceLoggedRef.current = true;
+    const sample = filteredMedia.slice(0, 24).map((item) => ({
+      project_name: item.project_name || item.project || '',
+      relative_path: item.relative_path || '',
+      sha256: item.sha256 || item.hash || '',
+      orientation: item.width && item.height ? `${item.width}x${item.height}` : '',
+      thumbnail_url: item.thumbnail_url || '',
+      thumb_url: item.thumb_url || '',
+      stream_url: item.stream_url || '',
+    }));
+    console.info('[Explorer] /api/library asset thumbnail fields (sample)', sample);
+  }, [filteredMedia]);
   const itemsBySelectionKey = useMemo(() => {
     const map = new Map<string, MediaItem>();
     media.forEach((item) => {
@@ -1407,9 +1501,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const resolveAssetUrl = useCallback(
     (path?: string) => {
-      if (!path) return '';
-      if (path.startsWith('data:')) return path;
-      return api.buildUrl(path);
+      const normalized = normalizeAssetUrl(path);
+      if (!normalized) return '';
+      if (normalized.startsWith('data:')) return normalized;
+      return api.buildUrl(normalized);
     },
     [api],
   );
@@ -1427,17 +1522,46 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return path;
     }
   }, [resolvedApiBase]);
-  const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {
+  const resolveThumbCandidatePlan = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>): ThumbnailCandidatePlan => {
+    const rawPrimaryThumb = normalizeThumbUrl(item.thumbnail_url || '');
+    const rawSecondaryThumb = normalizeThumbUrl(item.thumb_url || '');
+    const hasDistinctSecondary = Boolean(rawSecondaryThumb && rawSecondaryThumb !== rawPrimaryThumb);
+
+    if (kind === 'video') {
+      if (rawPrimaryThumb) {
+        return { primary: rawPrimaryThumb, secondary: hasDistinctSecondary ? rawSecondaryThumb : undefined, fallbackReason: 'thumbnail-url' };
+      }
+      if (rawSecondaryThumb) {
+        return { primary: rawSecondaryThumb, fallbackReason: 'thumb-url' };
+      }
+      const projectName = (item.project_name || item.project || '').trim();
+      const assetHash = (item.sha256 || item.hash || '').trim();
+      if (projectName && assetHash) {
+        const encodedProject = encodeURIComponent(projectName);
+        const encodedHash = encodeURIComponent(assetHash);
+        return {
+          primary: normalizeThumbUrl(`/thumbnails/${encodedProject}/${encodedHash}.jpg`),
+          secondary: normalizeThumbUrl(`/thumbnails/${encodedProject}/${encodedHash}.webp`) || normalizeThumbUrl(`/thumbnails/${encodedProject}/${encodedHash}.png`),
+          fallbackReason: 'generated-sha',
+        };
+      }
+      return { fallbackReason: 'missing' };
+    }
+
     if (!isThumbableRelativePath(item.relative_path)) {
-      return kind === 'image' ? normalizeThumbUrl(item.stream_url || '') : undefined;
+      if (kind === 'image') {
+        return { primary: normalizeThumbUrl(getBestStreamUrl(item)), fallbackReason: 'image-stream' };
+      }
+      return { fallbackReason: 'missing' };
     }
     if (kind === 'image') {
-      return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || item.stream_url || '');
+      return {
+        primary: rawPrimaryThumb || rawSecondaryThumb || normalizeThumbUrl(getBestStreamUrl(item)),
+        secondary: rawPrimaryThumb ? (hasDistinctSecondary ? rawSecondaryThumb : undefined) : undefined,
+        fallbackReason: rawPrimaryThumb ? 'thumbnail-url' : (rawSecondaryThumb ? 'thumb-url' : 'image-stream'),
+      };
     }
-    if (kind === 'video') {
-      return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || '');
-    }
-    return undefined;
+    return { fallbackReason: 'missing' };
   }, []);
   const proxyPrewarmSelectionKey = useMemo(() => (
     reinforcedActiveKey || previewActivationKey || activeAssetKey || ''
@@ -1447,19 +1571,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const targetItem = itemsBySelectionKey.get(proxyPrewarmSelectionKey);
     if (!targetItem) return '';
     if (guessKind(targetItem) !== 'video') return '';
-    return absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(targetItem.stream_url || targetItem.download_url || '')) || '');
-  }, [absolutizeMediaUrl, itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
+    return resolveAssetUrl(getBestStreamUrl(targetItem) || getBestDownloadUrl(targetItem));
+  }, [itemsBySelectionKey, proxyPrewarmSelectionKey, resolveAssetUrl]);
 
   const thumbDatasetSignature = useMemo(() => {
     const dataset = filteredMedia.map((item) => {
       const kind = guessKind(item);
       const thumbKey = getThumbCacheKey(item) || assetRenderKey(item, activeProject);
-      const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
-      const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';
-      return buildThumbJobKey(thumbKey, thumbUrl);
+      const thumbPlan = resolveThumbCandidatePlan(item, kind);
+      const thumbUrl = thumbPlan.primary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.primary) || '') : '';
+      const thumbFallbackUrl = thumbPlan.secondary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.secondary) || '') : '';
+      const jobUrl = thumbUrl || thumbFallbackUrl;
+      return buildThumbJobKey(thumbKey, jobUrl);
     });
     return `${view}:${view === 'grid' ? gridColumnCount : 'list'}:${dataset.join('\n')}`;
-  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, resolveThumbCandidateUrl, view]);
+  }, [absolutizeMediaUrl, activeProject, assetRenderKey, filteredMedia, gridColumnCount, resolveAssetUrl, resolveThumbCandidatePlan, view]);
 
   useThumbnailQueue({
     beginContentLoading,
@@ -1504,7 +1630,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const rows = [
       ['Kind', kind],
       ['Size', formatBytes(focused.size)],
-      ['Stream', resolveAssetUrl(focused.stream_url) || '(none)'],
+      ['Stream', resolveAssetUrl(getBestStreamUrl(focused)) || '(none)'],
       ['Source', projectSource],
       ['Project', projectName],
       ['Relative', focused.relative_path || '(none)'],
@@ -1749,6 +1875,34 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setPendingDataLoadOverlay(false);
     }
   }, [clearActiveAsset, clearSelectionState, refreshLibrarySnapshot]);
+
+  useEffect(() => {
+    const handleClaimEvent = () => {
+      try {
+        const raw = window.localStorage.getItem('explorer_live_claim_event');
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as { claim_id?: string; at?: number };
+        const claimId = String(parsed?.claim_id || '').trim();
+        const at = Number(parsed?.at || 0);
+        if (!claimId || !Number.isFinite(at) || Date.now() - at > 120000) return;
+        if (liveClaimRefreshRef.current === claimId) return;
+        liveClaimRefreshRef.current = claimId;
+        window.setTimeout(() => {
+          if (activeProject && mediaScope === 'project') {
+            void loadMedia(activeProject);
+          } else {
+            void loadAllMedia();
+          }
+          addToast('good', 'Live capture', `New claim submitted: ${claimId}`);
+        }, 1200);
+      } catch {
+        // ignore malformed storage value
+      }
+    };
+    handleClaimEvent();
+    const timer = window.setInterval(handleClaimEvent, 2500);
+    return () => window.clearInterval(timer);
+  }, [activeProject, addToast, loadAllMedia, loadMedia, mediaScope]);
 
   const refreshMediaForScope = useCallback(async (
     refreshScope: {
@@ -2881,7 +3035,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       return;
     }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const absoluteStream = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
+    const absoluteStream = absoluteAssetUrl(resolveAssetUrl(getBestStreamUrl(focused)));
     const monitorUrl = new URL('/program-monitor/index.html', origin).toString();
     await sendToProgramMonitorCommand({
       streamUrl: absoluteStream,
@@ -2896,8 +3050,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('warn', 'OBS', 'Open a preview first');
       return;
     }
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const assetUrl = toAbsoluteUrl(resolveAssetUrl(focused.stream_url), origin);
+    const assetUrl = absoluteAssetUrl(resolveAssetUrl(getBestStreamUrl(focused)));
     const fit = previewObsMode === 'fit' ? 'contain' : (previewObsMode === 'fill' ? 'fill' : 'cover');
     await pushToObsCommand({
       assetUrl,
@@ -2909,9 +3062,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [addToast, focused, previewObsExclusive, previewObsMode, previewObsSlot, pushToObsCommand, resolveAssetUrl]);
 
   const handleCopyStream = useCallback(async (item: MediaItem) => {
-    if (!item.stream_url) return;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = toAbsoluteUrl(resolveAssetUrl(item.stream_url), origin);
+    const url = absoluteAssetUrl(resolveAssetUrl(getBestStreamUrl(item)));
+    if (!url) return;
     const ok = await copyTextWithFallback(url);
     if (ok) {
       addToast('good', 'Copied', 'Stream URL copied to clipboard');
@@ -2922,9 +3074,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const handleCopySelectedUrls = useCallback(async (items: MediaItem[]) => {
     if (!items.length) return;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const urls = items
-      .map((item) => toAbsoluteUrl(resolveAssetUrl(item.stream_url), origin))
+      .map((item) => absoluteAssetUrl(resolveAssetUrl(getBestStreamUrl(item))))
       .filter(Boolean);
     if (!urls.length) return;
     const ok = await copyTextWithFallback(urls.join('\n'));
@@ -2935,12 +3086,135 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [addToast, resolveAssetUrl]);
 
+  const handleCopyAssetDebugJson = useCallback(async (item: MediaItem) => {
+    const kind = guessKind(item);
+    const thumbPlan = resolveThumbCandidatePlan(item, kind);
+    const payload = {
+      relative_path: item.relative_path || '',
+      project_name: item.project_name || item.project || '',
+      sha256: item.sha256 || item.hash || '',
+      orientation: item.width && item.height ? `${item.width}x${item.height}` : '',
+      raw_thumbnail_url: item.thumbnail_url || '',
+      raw_thumb_url: item.thumb_url || '',
+      normalized_thumbnail_url: resolveAssetUrl(thumbPlan.primary || ''),
+      normalized_thumbnail_fallback_url: resolveAssetUrl(thumbPlan.secondary || ''),
+      stream_url: resolveAssetUrl(getBestStreamUrl(item)),
+      fallback_reason: thumbPlan.fallbackReason,
+    };
+    const ok = await copyTextWithFallback(JSON.stringify(payload, null, 2));
+    if (ok) {
+      addToast('good', 'Copied', 'Asset debug JSON copied to clipboard');
+    } else {
+      addToast('warn', 'Clipboard', 'Copy failed — please copy manually.');
+    }
+  }, [addToast, resolveAssetUrl, resolveThumbCandidatePlan]);
+
+  const copyText = useCallback(async (value: string) => {
+    try {
+      await navigator.clipboard?.writeText(value);
+      addToast('good', 'Copied', 'Copied');
+    } catch {
+      addToast('warn', 'Clipboard', 'Copy unavailable');
+    }
+  }, [addToast]);
+
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const openContextMenu = useCallback((x: number, y: number, items: MediaItem[]) => {
     if (!items.length) return;
-    setContextMenu({ x, y, items });
+    setContextMenu({ kind: 'media_asset', x, y, items });
   }, []);
+
+  const getMenuPoint = (event: React.MouseEvent) => {
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    return {
+      x: event.clientX || rect.right,
+      y: event.clientY || rect.top,
+    };
+  };
+
+  const openSourceContextMenu = useCallback((event: React.MouseEvent, source: SourceControlRecord) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const { x, y } = getMenuPoint(event);
+    setContextMenu({ kind: 'source', x, y, source });
+  }, [setContextMenu]);
+
+  const openRuntimeContextMenu = useCallback((event: React.MouseEvent, node: NodeControlRecord) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const { x, y } = getMenuPoint(event);
+    setContextMenu({ kind: 'runtime', x, y, node });
+  }, [setContextMenu]);
+
+  const openLiveSessionContextMenu = useCallback((event: React.MouseEvent, session: LiveSession) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const { x, y } = getMenuPoint(event);
+    setContextMenu({ kind: 'live_session', x, y, session });
+  }, [setContextMenu]);
+
+  const openIngestClaimContextMenu = useCallback((event: React.MouseEvent, claim: IngestClaimRecord) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const { x, y } = getMenuPoint(event);
+    setContextMenu({ kind: 'ingest_claim', x, y, claim });
+  }, [setContextMenu]);
+
+  const openDevice = useCallback((nodeId: string) => {
+    window.location.href = getDeviceUrl(nodeId);
+  }, []);
+
+  const heartbeatNodeNow = useCallback(async (nodeId: string) => {
+    try {
+      await api.heartbeatNode(nodeId);
+      addToast('good', 'Runtime', 'Heartbeat sent');
+      await reloadSourceControl();
+    } catch (error) {
+      addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Heartbeat failed');
+    }
+  }, [api, addToast, reloadSourceControl]);
+
+  const openPayloadDetails = useCallback((title: string, subtitle: string | undefined, payload: unknown) => {
+    setDetailsModal({ title, subtitle, payload });
+    setContextMenu(null);
+  }, [setContextMenu]);
+
+  const runContextAction = useCallback((action: () => void | Promise<void>) => {
+    setContextMenu(null);
+    void action();
+  }, [setContextMenu]);
+
+
+  const persistHiddenIngestClaimIds = useCallback((next: Set<string>) => {
+    setHiddenIngestClaimIds(new Set(next));
+    if (typeof window === 'undefined') return;
+    if (!next.size) {
+      window.localStorage.removeItem(HIDDEN_INGEST_CLAIMS_KEY);
+      return;
+    }
+    window.localStorage.setItem(HIDDEN_INGEST_CLAIMS_KEY, JSON.stringify(Array.from(next)));
+  }, []);
+
+  const hideIngestClaim = useCallback((claimId: string) => {
+    const next = new Set(hiddenIngestClaimIds);
+    next.add(claimId);
+    persistHiddenIngestClaimIds(next);
+  }, [hiddenIngestClaimIds, persistHiddenIngestClaimIds]);
+
+  const hideAllTestPayloadClaims = useCallback(() => {
+    const next = new Set(hiddenIngestClaimIds);
+    for (const claim of ingestClaims) {
+      if (!isTestPayloadClaim(claim)) continue;
+      next.add(claim.claim_id);
+    }
+    persistHiddenIngestClaimIds(next);
+  }, [hiddenIngestClaimIds, ingestClaims, persistHiddenIngestClaimIds]);
+
+  const resetHiddenIngestClaims = useCallback(() => {
+    persistHiddenIngestClaimIds(new Set());
+  }, [persistHiddenIngestClaimIds]);
 
   const getContextActions = useCallback((items: MediaItem[]) => {
     const count = items.length;
@@ -2952,11 +3226,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (single) {
       actions.push({ id: 'preview', label: 'Open preview', handler: () => openPreview(item) });
       actions.push({ id: 'copy-stream', label: 'Copy stream URL', handler: () => void handleCopyStream(item) });
+      actions.push({ id: 'copy-debug-json', label: 'Copy Asset Debug JSON', handler: () => void handleCopyAssetDebugJson(item) });
       actions.push({
         id: 'download',
         label: 'Download',
         handler: () => {
-          const url = resolveAssetUrl(item.download_url || item.stream_url);
+          const url = resolveAssetUrl(getBestDownloadUrl(item));
           if (url) window.open(url, '_blank');
         },
       });
@@ -2981,7 +3256,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       handler: () => deleteMediaSelection(resolveSelectionKeysForItems(items)),
     });
     return actions;
-  }, [deleteMediaSelection, handleCopySelectedUrls, handleCopyStream, openPreview, resolveAssetUrl, resolveSelectionKeysForItems]);
+  }, [deleteMediaSelection, handleCopyAssetDebugJson, handleCopySelectedUrls, handleCopyStream, openPreview, resolveAssetUrl, resolveSelectionKeysForItems]);
 
   const {
     assetDragActive,
@@ -4269,8 +4544,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const selectedCount = selected.size;
   const selectedOrderMap = useMemo(() => selectionOrderIndexMap(selected, selectedOrder), [selected, selectedOrder]);
   const contextActions = useMemo(
-    () => (contextMenu ? getContextActions(contextMenu.items) : []),
+    () => (contextMenu?.kind === 'media_asset' ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
+  );
+
+
+  const sortedIngestClaims = useMemo(() => {
+    return [...ingestClaims].sort((a, b) => {
+      const left = Date.parse(a.updated_at || a.created_at || '') || 0;
+      const right = Date.parse(b.updated_at || b.created_at || '') || 0;
+      return right - left;
+    });
+  }, [ingestClaims]);
+
+  const visibleIngestClaims = useMemo(() => {
+    return sortedIngestClaims.filter((claim) => !hiddenIngestClaimIds.has(claim.claim_id));
+  }, [hiddenIngestClaimIds, sortedIngestClaims]);
+
+  const latestIngestClaims = useMemo(() => visibleIngestClaims.slice(0, 5), [visibleIngestClaims]);
+  const hiddenIngestClaimsCount = useMemo(
+    () => ingestClaims.filter((claim) => hiddenIngestClaimIds.has(claim.claim_id)).length,
+    [hiddenIngestClaimIds, ingestClaims],
   );
 
   useEffect(() => {
@@ -4322,6 +4616,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (!item.project_name) return '';
     return item.project_source ? `${item.project_name} (${item.project_source})` : item.project_name;
   }, []);
+  const missingVideoThumbWarnedRef = useRef<Set<string>>(new Set());
 
   const buildAssetViewModel = useCallback((item: MediaItem) => {
     const kind = guessKind(item);
@@ -4338,11 +4633,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const cachedOrient = getCachedOrientation(orientationKey);
     const orient = resolveItemOrientation(item, orientationKey);
     const orientLocked = Boolean(itemOrient || dynamicOrient || cachedOrient);
-    const rawThumbUrl = resolveThumbCandidateUrl(item, kind);
+    const thumbPlan = resolveThumbCandidatePlan(item, kind);
     const fallbackThumb = buildThumbFallback(kind);
-    const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;
-    const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');
-    const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl);
+    const thumbUrl = thumbPlan.primary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.primary) || '') : undefined;
+    const thumbFallbackUrl = thumbPlan.secondary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.secondary) || '') : undefined;
+    const streamUrl = resolveAssetUrl(getBestStreamUrl(item) || getBestDownloadUrl(item));
+    const thumbJobKey = buildThumbJobKey(thumbKey, thumbUrl || thumbFallbackUrl);
     const selectionKey = renderKey;
     const isSelected = selected.has(selectionKey);
     const isActive = activeAssetKey === selectionKey;
@@ -4356,6 +4652,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         : undefined
     );
     const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';
+    if (process.env.NODE_ENV !== 'production' && kind === 'video' && !thumbUrl) {
+      if (!missingVideoThumbWarnedRef.current.has(selectionKey)) {
+        missingVideoThumbWarnedRef.current.add(selectionKey);
+        console.warn('[Explorer] video asset missing thumbnail candidate', {
+          thumbnail_url: item.thumbnail_url || '',
+          thumb_url: item.thumb_url || '',
+          stream_url: item.stream_url || '',
+          relative_path: item.relative_path || '',
+          sha256: item.sha256 || item.hash || '',
+          orientation: item.width && item.height ? `${item.width}x${item.height}` : '',
+          project_name: item.project_name || item.project || '',
+          fallbackReason: thumbPlan.fallbackReason,
+        });
+      }
+    }
 
     return {
       activeVideoPreviewUrl,
@@ -4380,6 +4691,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       thumbJobKey,
       thumbKey,
       thumbUrl,
+      thumbFallbackUrl,
+      thumbnailFallbackReason: thumbPlan.fallbackReason,
       title,
     };
   }, [
@@ -4397,7 +4710,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     previewPlaybackToken,
     reinforcedActiveKey,
     resolveAssetUrl,
-    resolveThumbCandidateUrl,
+    resolveThumbCandidatePlan,
     resolveItemOrientation,
     selected,
     selectedOrderMap,
@@ -4735,6 +5048,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setProxyPlaybackCurrentTime(next);
   }, [activeProxyCardEl, proxyPlaybackDuration]);
   const proxyPreviewPortalTarget = activeProxyUiSlotEl ?? activeProxyCardEl;
+  const authorityBaseUrl = useMemo(() => {
+    const connectUrl = api.buildUrl('/connect');
+    return connectUrl.replace(/\/connect\/?$/, '');
+  }, [api]);
 
   return (
     <div className={`app ${proxyTravelActive ? 'proxy-travel-active' : ''} ${gridCinematicMode}`}>
@@ -4772,36 +5089,273 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               )}
             </div>
 
+            {liveSessions.length > 0 ? (
+              <>
+                <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
+                  <h2>Live</h2>
+                  <div className="meta-line">
+                    <span className="kbd">/api/live_sessions</span>
+                  </div>
+                </div>
+                <div className="sources">
+                    {liveSessions.map((session) => (
+                      <div key={session.session_id} onContextMenu={(event) => openLiveSessionContextMenu(event, session)}>
+                        <LiveSourceCard
+                          session={session}
+                          apiBase={resolvedApiBase}
+                          onStartRecording={(entry) => {
+                            void api.controlLiveSession(entry.session_id, 'start_recording')
+                              .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))
+                              .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                          }}
+                          onStopRecording={(entry) => {
+                            void api.controlLiveSession(entry.session_id, 'stop_recording')
+                              .then(() => addToast('good', 'Live control', `Stop requested for ${entry.node_id}`))
+                              .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                          }}
+                          onOpen={(entry) => {
+                            window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
+                          }}
+                        />
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={(event) => openLiveSessionContextMenu(event, session)}
+                          style={{ marginTop: 8 }}
+                        >
+                          ⋯
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+              </>
+            ) : null}
+
             <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
               <h2>Sources / Libraries</h2>
               <div className="meta-line">
-                <span className="kbd">/api/sources</span>
+                <span className="kbd">/api/sources + /api/nodes</span>
+                <div style={{ flex: 1 }} />
+                <button type="button" className="btn" onClick={() => setIsRegisterNodeModalOpen(true)}>
+                  + Register
+                </button>
+                <button type="button" className="btn" onClick={() => void reloadSourceControl()}>
+                  Refresh
+                </button>
               </div>
             </div>
             <div className="sources">
-              {sources.length === 0 ? (
+              {sourceControlLoading ? (
+                <div className="card">
+                  <strong>Loading sources…</strong>
+                  <div className="small">Fetching canonical and remote source-bearing participants.</div>
+                </div>
+              ) : sourceControlError ? (
+                <div className="card">
+                  <strong>Source control unavailable</strong>
+                  <div className="small">{sourceControlError}</div>
+                </div>
+              ) : runtimeSources.length === 0 ? (
                 <div className="card">
                   <strong>No sources</strong>
-                  <div className="small">Only the primary mount is available.</div>
+                  <div className="small">No canonical or remote source-bearing participants are currently visible.</div>
                 </div>
               ) : (
-                sources.map((source) => (
-                  <div className="card" key={source.name}>
-                    <strong>{source.name}</strong>
-                    <div className="small">{source.root}</div>
-                    <div className="tagrow">
-                      <span className={`tag ${source.enabled ? 'good' : ''}`}>
-                        {source.enabled ? 'enabled' : 'disabled'}
-                      </span>
-                      <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
-                        {source.accessible ? 'reachable' : 'unreachable'}
-                      </span>
-                      <span className="tag">{source.type || 'local'}</span>
+                <>
+                  <div className="card">
+                    <strong>Summary</strong>
+                    <div className="small">
+                      {canonicalSources.length} canonical · {remoteSources.length} remote · {runtimeNodes.length} nodes
+                    </div>
+                    <div className="small">
+                      {healthyNodes.length} healthy · {sourceControlSnapshot.sources.length} total sources
                     </div>
                   </div>
-                ))
+
+                  {canonicalSources.length > 0 ? (
+                    <div className="card">
+                      <strong>Canonical sources</strong>
+                      <div className="small">Authority-local sources visible through the canonical source registry.</div>
+                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
+                        {canonicalSources.map((source: SourceControlRecord, index: number) => {
+                          const authority = source.authority || 'canonical';
+                          return (
+                            <div className="card" key={`canonical-${source.name}-${index}`} onContextMenu={(event) => openSourceContextMenu(event, source)}>
+                              <strong>{source.name}</strong>
+                              <div className="small">{source.root || 'No root path'}</div>
+                              <div className="tagrow">
+                                <span className={`tag ${source.enabled ? 'good' : ''}`}>
+                                  {source.enabled ? 'enabled' : 'disabled'}
+                                </span>
+                                <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
+                                  {source.accessible ? 'reachable' : 'unreachable'}
+                                </span>
+                                <span className="tag">{source.kind || source.type || 'filesystem'}</span>
+                                <span className="tag">{authority}</span>
+                              </div>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={(event) => openSourceContextMenu(event, source)}
+                                style={{ marginTop: 8 }}
+                              >
+                                ⋯
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {remoteSources.length > 0 ? (
+                    <div className="card">
+                      <strong>Remote source surfaces</strong>
+                      <div className="small">
+                        Source surfaces published through connect/control-plane registration and merged into source inventory.
+                      </div>
+                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
+                        {remoteSources.map((source: SourceControlRecord, index: number) => {
+                          const owner = runtimeNodes.find((node) => node.node_id === source.owner_node_id);
+                          const authority = source.authority || 'canonical';
+                          return (
+                            <div className="card" key={`remote-${source.owner_node_id || 'unknown'}-${source.name}-${index}`} onContextMenu={(event) => openSourceContextMenu(event, source)}>
+                              <strong>{source.name}</strong>
+                              <div className="small">owner: {source.owner_node_id || 'unknown'}</div>
+                              {owner?.label ? (
+                                <div className="small">{owner.label}</div>
+                              ) : null}
+                              {owner?.base_url ? (
+                                <div className="small">{owner.base_url}</div>
+                              ) : null}
+                              <div className="tagrow">
+                                <span className={`tag ${source.enabled ? 'good' : ''}`}>
+                                  {source.enabled ? 'enabled' : 'disabled'}
+                                </span>
+                                <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
+                                  {source.accessible ? 'reachable' : 'unreachable'}
+                                </span>
+                                <span className="tag">{source.kind || source.type || 'remote'}</span>
+                                <span className="tag">{authority}</span>
+                                {source.local_only ? <span className="tag">local-only</span> : null}
+                                {source.can_index ? <span className="tag">index</span> : null}
+                                {source.can_proxy ? <span className="tag">proxy</span> : null}
+                                {source.can_record ? <span className="tag">record</span> : null}
+                              </div>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={(event) => openSourceContextMenu(event, source)}
+                                style={{ marginTop: 8 }}
+                              >
+                                ⋯
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {runtimeNodes.length > 0 ? (
+                    <div className="card">
+                      <strong>Registered runtimes</strong>
+                      <div className="small">Control-plane view of registered runtime nodes.</div>
+                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
+                        {runtimeNodes.map((node: NodeControlRecord) => (
+                          <div className="card" key={node.node_id} onContextMenu={(event) => openRuntimeContextMenu(event, node)}>
+                            <strong>{node.label}</strong>
+                            <div className="small">{node.node_id}</div>
+                            <div className="small">{node.base_url}</div>
+                            <div className="tagrow">
+                              <span className={`tag ${node.status === 'healthy' ? 'good' : ''}`}>{node.status}</span>
+                              {getRuntimeKinds(node).map((kind) => (
+                                <span className="tag" key={`${node.node_id}-kind-${kind}`}>{kind}</span>
+                              ))}
+                              {getRuntimeCapabilityTags(node).map((tag) => (
+                                <span className="tag" key={`${node.node_id}-cap-${tag}`}>{tag}</span>
+                              ))}
+                              {isSessionNode(node) ? <span className="tag">session-node</span> : null}
+                              {isTestPayloadNode(node) ? <span className="tag bad">test payload</span> : null}
+                            </div>
+
+                            {node.last_heartbeat_at ? (
+                              <div className="small">heartbeat: {node.last_heartbeat_at}</div>
+                            ) : null}
+
+                            {isTestPayloadNode(node) ? (
+                              <div className="small">
+                                This node appears modified by Swagger example data. Re-register from Explorer.
+                              </div>
+                            ) : null}
+
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={(event) => openRuntimeContextMenu(event, node)}
+                              style={{ marginTop: 8 }}
+                            >
+                              ⋯
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
+
+            {ingestClaims.length > 0 ? (
+              <>
+                <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
+                  <h2>Ingest Claims</h2>
+                  <div className="meta-line">
+                    <span className="kbd">/api/ingest/claims</span>
+                    <span className="small">Showing latest {latestIngestClaims.length} of {ingestClaims.length} claims · {hiddenIngestClaimsCount} hidden</span>
+                  </div>
+                  {hiddenIngestClaimsCount > 0 ? (
+                    <div className="meta-line">
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => resetHiddenIngestClaims()}
+                      >
+                        Show hidden / Reset hidden claims
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="ingest-claims-panel">
+                  <div className="ingest-claims-list">
+                    {latestIngestClaims.map((claim) => (
+                      <div
+                        className="ingest-claim-card card"
+                        key={claim.claim_id}
+                        onContextMenu={(event) => openIngestClaimContextMenu(event, claim)}
+                      >
+                        <strong className="claim-row" title={claim.claim_id}>{claim.claim_id}</strong>
+                        <div className="small claim-row">{claim.node_id}</div>
+                        <div className="small claim-row">{claim.source_name}</div>
+                        <div className="tagrow">
+                          <span className="tag">{claim.status}</span>
+                          {claim.materialization_mode ? <span className="tag">{claim.materialization_mode}</span> : null}
+                          {isTestPayloadClaim(claim) ? <span className="tag bad">test payload</span> : null}
+                        </div>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={(event) => openIngestClaimContextMenu(event, claim)}
+                        >
+                          ⋯
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
 
             <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
               <h2>Tags</h2>
@@ -5458,7 +6012,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         </div>
       </aside>
 
-      {contextMenu ? (
+      {contextMenu?.kind === 'media_asset' ? (
         <div
           className="context-menu open custom-ui-surface"
           ref={contextMenuRef}
@@ -5479,6 +6033,135 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           ))}
         </div>
       ) : null}
+
+      {contextMenu?.kind === 'source' ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu open custom-ui-surface"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button type="button" onClick={() => runContextAction(() => undefined)}>
+            Open in Explorer
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => openPayloadDetails('Source details', contextMenu.source.name, contextMenu.source))}
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.source, null, 2)))}
+          >
+            Copy Source JSON
+          </button>
+          {contextMenu.source.owner_node_id ? (
+            <button
+              type="button"
+              onClick={() => runContextAction(() => copyText(contextMenu.source.owner_node_id ?? ''))}
+            >
+              Copy Owner Node ID
+            </button>
+          ) : null}
+          {contextMenu.source.owner_node_id ? (
+            <button
+              type="button"
+              onClick={() => runContextAction(() => openDevice(contextMenu.source.owner_node_id ?? ''))}
+            >
+              Open Device
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {contextMenu?.kind === 'runtime' ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu open custom-ui-surface"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button type="button" onClick={() => runContextAction(() => openDevice(contextMenu.node.node_id))}>
+            Open Device
+          </button>
+          <button type="button" onClick={() => runContextAction(() => heartbeatNodeNow(contextMenu.node.node_id))}>
+            Heartbeat now
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => openPayloadDetails('Runtime details', contextMenu.node.node_id, contextMenu.node))}
+          >
+            Details
+          </button>
+          <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.node.node_id))}>
+            Copy Node ID
+          </button>
+          <button type="button" onClick={() => runContextAction(() => copyText(getDeviceUrl(contextMenu.node.node_id)))}>
+            Copy Device URL
+          </button>
+          <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.node, null, 2)))}>
+            Copy Node JSON
+          </button>
+        </div>
+      ) : null}
+
+      {contextMenu?.kind === 'live_session' ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu open custom-ui-surface"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button type="button" onClick={() => runContextAction(() => openPayloadDetails('Live session details', contextMenu.session.session_id, contextMenu.session))}>
+            Details
+          </button>
+          <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.session.session_id))}>
+            Copy Session ID
+          </button>
+          <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.session, null, 2)))}>
+            Copy Session JSON
+          </button>
+        </div>
+      ) : null}
+
+      {contextMenu?.kind === 'ingest_claim' ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu open custom-ui-surface"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            type="button"
+            onClick={() => runContextAction(() => hideIngestClaim(contextMenu.claim.claim_id))}
+          >
+            Hide claim from sidebar
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => hideAllTestPayloadClaims())}
+          >
+            Hide all test payload claims
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => openPayloadDetails('Ingest claim details', `${contextMenu.claim.claim_id}${isTestPayloadClaim(contextMenu.claim) ? ' · test payload' : ''}`, contextMenu.claim))}
+          >
+            Details
+          </button>
+          <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.claim.claim_id))}>
+            Copy Claim ID
+          </button>
+          <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.claim, null, 2)))}>
+            Copy Claim JSON
+          </button>
+        </div>
+      ) : null}
+
+      <RuntimeDetailsModal
+        isOpen={detailsModal !== null}
+        title={detailsModal?.title ?? ''}
+        subtitle={detailsModal?.subtitle}
+        payload={detailsModal?.payload}
+        onClose={() => setDetailsModal(null)}
+      />
 
       {deleteModalRendered ? (
         <div
@@ -5574,6 +6257,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </form>
         </div>
       ) : null}
+
+      <RegisterNodeModal
+        isOpen={isRegisterNodeModalOpen}
+        onClose={() => setIsRegisterNodeModalOpen(false)}
+        onSuccess={(_node, _response: RegisterNodeResponse) => {
+          void reloadSourceControl();
+        }}
+        registerNode={api.registerNode}
+        authorityBaseUrl={authorityBaseUrl}
+      />
 
       <div className="toasts">
         {toasts.map((toast) => (

@@ -1,5 +1,6 @@
 import type { MediaItem } from './types';
 import { guessKind } from './utils';
+import { getBestStreamUrl, getBestThumbnailUrl } from './utils/mediaUrls';
 
 export type PreviewObsState = {
   cover: string;
@@ -28,7 +29,7 @@ export const normalizePreviewAsset = (
   const kind: PreviewAsset['kind'] = rawKind === 'video' || rawKind === 'image' || rawKind === 'audio' ? rawKind : 'other';
   const path = item.relative_path || '';
   const name = path.split('/').pop() || path || 'untitled';
-  const srcCandidate = item.stream_url || item.thumb_url || item.thumbnail_url || '';
+  const srcCandidate = getBestStreamUrl(item) || getBestThumbnailUrl(item) || '';
   const src = resolveAssetUrl(srcCandidate);
 
   const quick: Array<[string, string]> = [];

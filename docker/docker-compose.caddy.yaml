@@ -1,0 +1,24 @@
+services:
+  caddy:
+    image: caddy:2
+    container_name: media-sync-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data/caddy
+      - caddy_config:/config/caddy
+      - ./caddy/Caddyfile.docker:/etc/caddy/Caddyfile:ro
+    env_file:
+      - ../.env
+    environment:
+      - MEDIA_SYNC_PUBLIC_ORIGIN
+      - MEDIA_SYNC_AUTHORITY_ORIGIN
+      - MEDIA_SYNC_AUTHORITY_HOST
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  caddy_data:
+  caddy_config:

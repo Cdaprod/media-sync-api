@@ -21,6 +21,8 @@ export interface ExplorerAssetViewModel {
   thumbJobKey: string;
   thumbKey: string;
   thumbUrl?: string;
+  thumbFallbackUrl?: string;
+  thumbnailFallbackReason?: string;
   title: string;
   fallbackThumb: string;
   activeVideoPreviewUrl?: string;
@@ -577,11 +579,30 @@ function AssetGridComponent({
                     native.stopImmediatePropagation?.();
                     native.stopPropagation?.();
                     const node = event.currentTarget;
-                    node.onerror = null;
+                    const failedUrl = node.currentSrc || node.src || node.dataset.thumbUrl || '';
+                    const nextThumb = node.dataset.thumbFallbackUrl || '';
                     const fallback = node.dataset.thumbFallback || '';
+                    if (process.env.NODE_ENV !== 'production') {
+                      console.warn('[Explorer] thumbnail failed', {
+                        failedUrl,
+                        thumbUrl: node.dataset.thumbUrl || '',
+                        nextThumb,
+                        fallback,
+                        relative: node.closest('[data-relative]')?.getAttribute('data-relative') || '',
+                      });
+                    }
+                    node.title = `Thumbnail failed: ${failedUrl}`;
+                    node.setAttribute('aria-label', `Thumbnail failed: ${failedUrl}`);
+                    node.onerror = null;
+                    if (nextThumb && node.src !== nextThumb && failedUrl !== nextThumb) {
+                      node.dataset.thumbFallbackUrl = '';
+                      node.src = nextThumb;
+                      return;
+                    }
                     if (fallback && node.src !== fallback) node.src = fallback;
                   }}
                   data-thumb-url={viewModel.thumbUrl}
+                  data-thumb-fallback-url={viewModel.thumbFallbackUrl || ''}
                   data-thumb-fallback={viewModel.fallbackThumb}
                   data-thumb-job-key={viewModel.thumbJobKey}
                 />

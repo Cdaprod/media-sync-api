@@ -208,6 +208,11 @@ test('explorer api client includes bulk media action endpoints', () => {
   assert.ok(content.includes("/api/assets/bulk/tags"));
   assert.ok(content.includes('bulkComposeMedia'));
   assert.ok(content.includes("/api/assets/bulk/compose"));
+  assert.ok(content.includes('heartbeatNode'));
+  assert.ok(content.includes('/api/nodes/${encodeURIComponent(nodeId)}/heartbeat'));
+  assert.ok(content.includes('listIngestClaims'));
+  assert.ok(content.includes('/api/ingest/claims'));
+  assert.ok(content.includes('getIngestClaim'));
 });
 
 test('api base inference keeps LAN host reachable', () => {
@@ -218,6 +223,95 @@ test('api base inference keeps LAN host reachable', () => {
   assert.ok(content.includes(':8787'));
   assert.ok(content.includes("if (!trimmed) {"));
   assert.ok(content.includes("currentPort !== '8787'"));
+  assert.ok(content.includes("if (location.protocol === 'https:') {"));
+  assert.ok(content.includes("if (location.protocol === 'https:' && parsed.protocol === 'http:') {"));
+  assert.ok(content.includes('normalizeMediaUrlForOrigin'));
+});
+
+test('register modal redirects directly to device activation and keeps session-node payload contract', () => {
+  const modalPath = path.join(packageRoot, 'src', 'components', 'RegisterNodeModal.tsx');
+  const content = fs.readFileSync(modalPath, 'utf8');
+  assert.ok(content.includes("window.localStorage.setItem('explorer_capture_node_id', payload.node_id);"));
+  assert.ok(content.includes('const resolveResponseUrl = useCallback((url: string | undefined, preferredOrigin?: string | null) => {'));
+  assert.ok(content.includes("const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;"));
+  assert.ok(content.includes('const nextDeviceUrl = resolveResponseUrl(response.device_url, responseAuthority);'));
+  assert.ok(content.includes('router.push(nextDeviceUrl);'));
+  assert.ok(content.includes('window.location.href = nextDeviceUrl;'));
+  assert.ok(content.includes('if (response.device_url) {'));
+  assert.ok(content.includes("base_url: null,"));
+  assert.ok(content.includes("transport_hint: 'session'"));
+  assert.ok(content.includes("session_node: 'true'"));
+  assert.ok(content.includes("browser_push: 'true'"));
+  assert.ok(content.includes("type DeviceClass = 'iphone-browser' | 'ipad-browser' | 'ios-browser' | 'android-browser' | 'desktop-browser';"));
+  assert.ok(content.includes("const isIPhoneUa = /iPhone|iPod/i.test(ua);"));
+  assert.ok(content.includes("const isIPadMacTouch = /MacIntel/i.test(platform) && maxTouchPoints > 1;"));
+  assert.ok(content.includes("const isIPad = !isIPhone && (isIPadUa || isIPadMacTouch);"));
+  assert.ok(content.includes("if (isIPhone) deviceClass = 'iphone-browser';"));
+  assert.ok(content.includes("else if (isIPad) deviceClass = 'ipad-browser';"));
+  assert.ok(content.includes("else if (isLikelyIOS) deviceClass = 'ios-browser';"));
+  assert.ok(!content.includes('Use this device →'));
+  assert.ok(!content.includes('getUserMedia('));
+});
+
+test('connect device page and live-session hook guard media APIs for insecure iOS contexts', () => {
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const app = fs.readFileSync(appPath, 'utf8');
+
+  assert.ok(hook.includes('const mediaDevices = typeof navigator !== \'undefined\' ? navigator.mediaDevices : undefined;'));
+  assert.ok(hook.includes('Camera API is unavailable in this browser context. Use HTTPS or open this device page from a secure origin.'));
+  assert.ok(hook.includes('Screen capture is unavailable on this device/browser.'));
+  assert.ok(hook.includes('if (sourceKind === \'screen\' && !hasGetDisplayMedia) {'));
+  assert.ok(hook.includes('await mediaDevices.getUserMedia({ video: true, audio: true })'));
+  assert.ok(!hook.includes('await navigator.mediaDevices.getUserMedia'));
+  assert.ok(hook.includes("api.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')"));
+
+  assert.ok(page.includes('const capability = useMemo(() => {'));
+  assert.ok(page.includes('isSecureContext: window.isSecureContext,'));
+  assert.ok(page.includes('iOS Safari requires HTTPS for camera access on LAN IP addresses.'));
+  assert.ok(page.includes('Serve Explorer/API over HTTPS for device camera activation.'));
+  assert.ok(page.includes('disabled={!capability.hasGetUserMedia}'));
+  assert.ok(page.includes('const shouldShowScreenAction = capability.hasGetDisplayMedia && !capability.isLikelyIOS;'));
+  assert.ok(page.includes('Share Screen unavailable'));
+
+  assert.ok(app.includes('Remote source surfaces'));
+  assert.ok(app.includes('Registered runtimes'));
+});
+
+test('live session signaling API and peer-viewer hooks are wired', () => {
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const liveCardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const api = fs.readFileSync(apiPath, 'utf8');
+  const device = fs.readFileSync(devicePath, 'utf8');
+  const card = fs.readFileSync(liveCardPath, 'utf8');
+
+  assert.ok(api.includes('getLiveSignalState'));
+  assert.ok(api.includes('publishLiveSignalOffer'));
+  assert.ok(api.includes('publishLiveSignalAnswer'));
+  assert.ok(api.includes('publishLiveSignalIce'));
+  assert.ok(api.includes('/signal/offer'));
+  assert.ok(api.includes('/signal/answer'));
+  assert.ok(api.includes('/signal/ice'));
+
+  assert.ok(device.includes('webrtc: {peerStatus}'));
+  assert.ok(device.includes('new RTCPeerConnection()'));
+  assert.ok(device.includes("api.publishLiveSignalOffer(sessionId"));
+  assert.ok(device.includes("api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current"));
+  assert.ok(device.includes("setPeerStatus('offer-published')"));
+  assert.ok(device.includes("setPeerStatus('connected')"));
+  assert.ok(device.includes("setPeerStatus('failed')"));
+
+  assert.ok(card.includes('Open peer view'));
+  assert.ok(card.includes('Hide peer view'));
+  assert.ok(card.includes('Reconnect peer view'));
+  assert.ok(card.includes("role: 'viewer'"));
+  assert.ok(card.includes('viewer_id: viewerId'));
+  assert.ok(card.includes('/signal/answer'));
+  assert.ok(card.includes('peerVideoRef'));
 });
 
 test('clipboard helper includes fallback copy behavior', () => {
@@ -346,7 +440,13 @@ test('explorer ui-state seam owns root-local modal/surface/runtime state cluster
   assert.ok(content.includes('const [previewObsExclusive, setPreviewObsExclusive] = useState(false);'));
   assert.ok(content.includes('const [inspectorOpen, setInspectorOpen] = useState(false);'));
   assert.ok(content.includes('const [previewDetailsOpen, setPreviewDetailsOpen] = useState(false);'));
-  assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MediaItem[] } | null>(null);'));
+  assert.ok(content.includes('export type ExplorerContextMenu ='));
+  assert.ok(content.includes("kind: 'media_asset';"));
+  assert.ok(content.includes("kind: 'source';"));
+  assert.ok(content.includes("kind: 'runtime';"));
+  assert.ok(content.includes("kind: 'live_session';"));
+  assert.ok(content.includes("kind: 'ingest_claim';"));
+  assert.ok(content.includes('const [contextMenu, setContextMenu] = useState<ExplorerContextMenu | null>(null);'));
   assert.ok(content.includes('const [composeModalOpen, setComposeModalOpen] = useState(false);'));
   assert.ok(content.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
   assert.ok(content.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
@@ -416,7 +516,7 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(explorer.includes('const isSecondTapReinforced = reinforcedActiveKey === selectionKey;'));
   assert.ok(explorer.includes('const isHoldEmphasis = holdEmphasisKey === selectionKey;'));
   assert.ok(explorer.includes('const isActivated = previewActivationKey === selectionKey;'));
-  assert.ok(explorer.includes("const streamUrl = absolutizeMediaUrl(resolveAssetUrl(normalizeThumbUrl(item.stream_url || item.download_url || '')) || '');"));
+  assert.ok(explorer.includes("const streamUrl = resolveAssetUrl(getBestStreamUrl(item) || getBestDownloadUrl(item));"));
   assert.ok(explorer.includes("const previewPlaybackKey = isActivated ? `${selectionKey}:${previewPlaybackToken}` : '';"));
   assert.ok(explorer.includes('? streamUrl'));
   assert.ok(explorer.includes('const selectionOrderIndex = selectedOrderMap.get(selectionKey) ?? 0;'));
@@ -976,8 +1076,9 @@ test('explorer queues thumbnail loads from server urls', () => {
   assert.ok(content.includes('isThumbableRelativePath(item.relative_path)'));
   assert.ok(content.includes('thumbDatasetSignature'));
   assert.ok(content.includes('buildThumbJobKey('));
-  assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : '';"));
-  assert.ok(content.includes("const thumbUrl = rawThumbUrl ? absolutizeMediaUrl(resolveAssetUrl(rawThumbUrl) || '') : undefined;"));
+  assert.ok(content.includes('const thumbPlan = resolveThumbCandidatePlan(item, kind);'));
+  assert.ok(content.includes("const thumbUrl = thumbPlan.primary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.primary) || '') : '';"));
+  assert.ok(content.includes("const thumbUrl = thumbPlan.primary ? absolutizeMediaUrl(resolveAssetUrl(thumbPlan.primary) || '') : undefined;"));
   assert.ok(gridContent.includes('data-thumb-url'));
   assert.ok(gridContent.includes('src={viewModel.fallbackThumb}'));
   assert.ok(list.includes('src={viewModel.fallbackThumb}'));
@@ -1296,9 +1397,9 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('id="asset-density-slider"'));
   assert.ok(content.includes('const RETAINED_UI_PREFS_KEY = \'media-sync-explorer-ui-prefs-v1\';'));
   assert.ok(content.includes('const parseStoredJsonObject = (raw: string | null): Record<string, unknown> | null => {'));
-  assert.ok(content.includes('const resolveThumbCandidateUrl = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>) => {'));
+  assert.ok(content.includes('const resolveThumbCandidatePlan = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>): ThumbnailCandidatePlan => {'));
   assert.ok(content.includes('if (!isThumbableRelativePath(item.relative_path)) {'));
-  assert.ok(content.includes("return kind === 'image' ? normalizeThumbUrl(item.stream_url || '') : undefined;"));
+  assert.ok(content.includes("return { primary: normalizeThumbUrl(getBestStreamUrl(item)), fallbackReason: 'image-stream' };"));
   assert.ok(content.includes('const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);'));
   assert.ok(content.includes('window.localStorage.getItem(RETAINED_UI_PREFS_KEY)'));
   assert.ok(content.includes('setRetainedPrefsHydrated(false);'));
@@ -1329,7 +1430,7 @@ test('package explorer topbar layout follows static two-row structure', () => {
   assert.ok(content.includes('overlayEnabled,'));
   assert.ok(content.includes('retainedPrefsHydrated,'));
   assert.ok(content.includes('if (kind === \'video\') {'));
-  assert.ok(content.includes('return normalizeThumbUrl(item.thumb_url || item.thumbnail_url || \'\');'));
+  assert.ok(content.includes("fallbackReason: 'generated-sha',"));
   assert.ok(content.includes('const legacyFilterParsed = parseStoredJsonObject(window.localStorage.getItem(LEGACY_FILTER_PREFS_KEY));'));
   assert.ok(content.includes('window.localStorage.getItem(LEGACY_OVERLAY_VIS_PREFS_KEY)'));
   assert.ok(content.includes('Overlays: {overlayEnabled ? \'On\' : \'Off\'}'));
@@ -1898,7 +1999,7 @@ test('local density/context/preview interactions stay network-quiet and do not i
 
   const contextStart = content.indexOf('const openContextMenu = useCallback((x: number, y: number, items: MediaItem[]) => {');
   const contextBlock = contextStart >= 0 ? content.slice(contextStart, contextStart + 220) : '';
-  assert.ok(contextBlock.includes('setContextMenu({ x, y, items });'));
+  assert.ok(contextBlock.includes("setContextMenu({ kind: 'media_asset', x, y, items });"));
   assert.ok(!contextBlock.includes('loadSources('));
   assert.ok(!contextBlock.includes('loadProjects('));
   assert.ok(!contextBlock.includes('loadMedia('));
@@ -2079,7 +2180,7 @@ test('density-related local interactions remain layout-only and do not trigger b
 
   const contextStart = explorer.indexOf('const openContextMenu = useCallback');
   const contextBlock = contextStart >= 0 ? explorer.slice(contextStart, contextStart + 280) : '';
-  assert.ok(contextBlock.includes('setContextMenu({ x, y, items });'));
+  assert.ok(contextBlock.includes("setContextMenu({ kind: 'media_asset', x, y, items });"));
   assert.ok(!contextBlock.includes('loadSources('));
   assert.ok(!contextBlock.includes('loadProjects('));
 
@@ -2931,11 +3032,26 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes('className="search-input"'));
 });
 
+test('media URL helpers keep relative URLs and rewrite insecure absolute URLs on HTTPS', () => {
+  const mediaUrlsPath = path.join(packageRoot, 'src', 'utils', 'mediaUrls.ts');
+  const mediaUrls = fs.readFileSync(mediaUrlsPath, 'utf8');
+
+  assert.ok(mediaUrls.includes("if (raw.startsWith('/')) return raw;"));
+  assert.ok(mediaUrls.includes("return `${window.location.protocol}${raw}`;"));
+  assert.ok(mediaUrls.includes("window.location.protocol === 'https:'"));
+  assert.ok(mediaUrls.includes("parsed.protocol === 'http:'"));
+  assert.ok(mediaUrls.includes("const rewritten = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;"));
+  assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.thumbnail_url || item.thumb_url || '');"));
+  assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.stream_url || item.url || '');"));
+  assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.download_url || item.stream_url || '');"));
+});
+
 test('thumbnail normalization preserves API port when remapping localhost urls', () => {
   const loaderPath = path.join(packageRoot, 'src', 'thumbnailLoader.ts');
   const loader = fs.readFileSync(loaderPath, 'utf8');
 
-  assert.ok(loader.includes('const resolvedPort = parsed.port || \'\';'));
-  assert.ok(loader.includes('return `${protocol}//${host}${resolvedPort ? `:${resolvedPort}` : \'\'}${parsed.pathname}${parsed.search}`;'));
-  assert.ok(!loader.includes('`${window.location.origin}${parsed.pathname}${parsed.search}`'));
+  assert.ok(loader.includes('normalizeAssetUrl(rawUrl)'));
+  assert.ok(!loader.includes('const resolvedPort = parsed.port || \'\';'));
+  assert.ok(loader.includes('return normalized || undefined;'));
+  assert.ok(loader.includes("import { normalizeAssetUrl } from './utils/mediaUrls';"));
 });

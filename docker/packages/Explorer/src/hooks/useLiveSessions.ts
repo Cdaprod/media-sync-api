@@ -1,0 +1,38 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+
+import type { LiveSessionRecord } from '../types/liveSession';
+
+interface UseLiveSessionsOptions {
+  listLiveSessions: () => Promise<LiveSessionRecord[]>;
+}
+
+export function useLiveSessions({ listLiveSessions }: UseLiveSessionsOptions) {
+  const [sessions, setSessions] = useState<LiveSessionRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await listLiveSessions();
+      setSessions(Array.isArray(next) ? next : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load live sessions');
+    } finally {
+      setLoading(false);
+    }
+  }, [listLiveSessions]);
+
+  useEffect(() => {
+    void reload();
+    const timer = window.setInterval(() => {
+      void reload();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [reload]);
+
+  return { sessions, loading, error, reload };
+}

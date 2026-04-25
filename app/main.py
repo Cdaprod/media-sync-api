@@ -20,9 +20,13 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.compose import router as compose_router
 from app.api.compose import shutdown_compose_jobs
+from app.api.connect import router as connect_router
 from app.api.library import router as library_router
+from app.api.ingest_claims import router as ingest_claims_router
+from app.api.live_sessions import router as live_sessions_router
 from app.api.media import bulk_router as assets_bulk_router
-from app.api.media import global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
+from app.api.media import debug_router, global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
+from app.api.nodes import router as nodes_router
 from app.api.projects import router as projects_router
 from app.api.sources import router as sources_router
 from app.api.upload import router as upload_router
@@ -30,7 +34,7 @@ from app.api.reindex import all_router as reindex_all_router
 from app.api.reindex import router as reindex_router
 from app.api.resolve_actions import router as resolve_router
 from app.config import get_settings
-from app.storage.auto_reindex import AutoReindexer
+from app.runtime import create_runtime
 
 
 BASE_PATH = Path(__file__).resolve().parent.parent
@@ -53,17 +57,20 @@ def _configure_logging() -> None:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    settings = get_settings()
-    reindexer = AutoReindexer(
-        settings.project_root,
-        interval_seconds=settings.auto_reindex_interval_seconds,
-        enabled=settings.auto_reindex_enabled,
-    )
-    reindexer.start()
-    yield
-    reindexer.stop()
-    shutdown_compose_jobs()
+async def lifespan(app: FastAPI):
+    runtime = create_runtime()
+    app.state.runtime = runtime
+    await runtime.start()
+    reindexer = runtime.services.auto_reindexer
+    if reindexer is not None:
+        reindexer.start()
+    try:
+        yield
+    finally:
+        if reindexer is not None:
+            reindexer.stop()
+        await runtime.stop()
+        shutdown_compose_jobs()
 
 
 def _resolve_cors_settings() -> tuple[list[str], bool]:
@@ -114,7 +121,12 @@ def create_app() -> FastAPI:
     application.include_router(library_router)
     application.include_router(media_router)
     application.include_router(thumbnail_router)
+    application.include_router(debug_router)
     application.include_router(resolve_router)
+    application.include_router(nodes_router)
+    application.include_router(ingest_claims_router)
+    application.include_router(connect_router)
+    application.include_router(live_sessions_router)
 
     application.mount(
         "/public",
@@ -144,12 +156,32 @@ def create_app() -> FastAPI:
 
     @application.get("/health")
     async def healthcheck():
-        settings = get_settings()
+        runtime = application.state.runtime
+        ingest_registry_ready = runtime.services.ingest_registry is not None
+        ingest_claim_service_ready = runtime.services.ingest_claim_service is not None
+        live_session_registry_ready = runtime.services.live_session_registry is not None
+        live_session_service_ready = runtime.services.live_session_service is not None
         return {
             "ok": True,
             "service": "media-sync-api",
-            "projects_root": str(settings.project_root),
-            "instructions": "See /public/index.html for end-to-end adapter and shortcut guidance.",
+            "role": runtime.identity.role,
+            "runtime_id": runtime.identity.runtime_id,
+            "node_id": runtime.identity.node_id,
+            "node_name": runtime.identity.node_name,
+            "projects_root": str(runtime.paths.data_root),
+            "started": runtime.started,
+            "ingest_claims_enabled": ingest_registry_ready and ingest_claim_service_ready,
+            "connect_enabled": True,
+            "live_sessions_enabled": live_session_service_ready,
+            "runtime_services": {
+                "node_registry": runtime.services.node_registry is not None,
+                "ingest_registry": ingest_registry_ready,
+                "ingest_claim_service": ingest_claim_service_ready,
+                "live_session_registry": live_session_registry_ready,
+                "live_session_service": live_session_service_ready,
+            },
+            "remote_source_records": len(runtime.metadata.get("remote_source_records", [])),
+            "instructions": "See /connect for authority discovery and /public/index.html for end-to-end adapter guidance.",
         }
 
     @application.get("/healthz")

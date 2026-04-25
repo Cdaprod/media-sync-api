@@ -147,7 +147,34 @@ Path alignment for Resolve:
 - Configure Resolve "Mapped Mounts" to translate the Windows root to the macOS root so shared Postgres libraries can relink automatically
 - Do **not** mount `/data/projects` into `resolve-postgres`; only the API uses the media mount. Resolve desktop accesses media through your SMB/NAS mapping.
 
+## Runtime control-plane, connect-plane, ingest-plane, and source inventory
+
+The backend separates four related but distinct concerns:
+
+### `/api/nodes` — control-plane
+Use this for node identity, role, capabilities, liveness, heartbeat, and node metadata claims.
+
+### `/connect` and `/connect/register` — connect-plane
+Use this for authority discovery and onboarding of source-bearing participants. A remote runtime may register itself as a node that owns a local source surface without directly becoming canonical library truth.
+
+### `/api/ingest/claims` — ingest-plane
+Use this for asset observation and authority-reviewed ingest claims. Local runner observations are not canonical by default; they must be submitted and later accepted through the ingest claim flow.
+
+### `/api/sources` — runtime-aware source inventory
+Use this for the merged source view consumed by Explorer and operational tooling. This response may include:
+- canonical/local authority-backed sources from `SourceRegistry`
+- runtime-memory remote source-bearing participants registered through `/connect/register`
+
+This separation is intentional:
+
+- node identity/capability/liveness stays in the control-plane
+- onboarding/discovery stays in the connect-plane
+- observed assets and intake decisions stay in the ingest-plane
+- canonical and remote-visible source inventory stays in the source plane
+- canonical truth continues to flow into the library plane
+
 ## API overview
+
 - `GET /api/projects` – list projects (includes `upload_url` for browser uploads)
 - `POST /api/projects` – create project `{ "name": "Label", "notes": "optional" }` (auto-prefixes to `P{n}-Label`)
 - `GET /api/projects/{project}` – fetch project index

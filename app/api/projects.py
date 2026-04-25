@@ -32,6 +32,12 @@ logger = logging.getLogger("media_sync_api.projects")
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
+def is_visible_project_dir(path: Path) -> bool:
+    """Return True when the directory should appear as a user-facing project."""
+
+    return path.is_dir() and not path.name.startswith(("_", "."))
+
+
 class ProjectCreateRequest(BaseModel):
     name: str | None = Field(None, description="Optional project label; auto-prefixed with P{n}-")
     notes: str | None = Field(None, description="Optional notes to include in the index")
@@ -64,9 +70,7 @@ async def list_projects(source: str | None = None) -> List[ProjectResponse]:
             continue
         _bootstrap_existing_projects(src.root)
         for path in src.root.iterdir():
-            if not path.is_dir():
-                continue
-            if path.name.startswith("_"):
+            if not is_visible_project_dir(path):
                 continue
             index_exists = (path / "index.json").exists()
             projects.append(
@@ -145,9 +149,7 @@ async def get_project(project_name: str, source: str | None = None):
 
 def _bootstrap_existing_projects(root: Path) -> None:
     for path in root.iterdir() if root.exists() else []:
-        if not path.is_dir():
-            continue
-        if path.name.startswith("_"):
+        if not is_visible_project_dir(path):
             continue
         ensure_subdirs(path, ["ingest/originals", "ingest/_metadata", "ingest/thumbnails", "_manifest"])
         index_path = path / "index.json"

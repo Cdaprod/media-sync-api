@@ -19,13 +19,13 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
-from urllib.parse import quote
+from typing import Any, Dict, Iterator, List
+from urllib.parse import parse_qs, quote
 from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from PIL import Image, ImageOps
 
 from app.config import get_settings
@@ -64,6 +64,7 @@ global_media_router = APIRouter(prefix="/api/media", tags=["media"])
 registry_router = APIRouter(prefix="/api/registry", tags=["registry"])
 media_router = APIRouter(prefix="/media", tags=["media"])
 thumbnail_router = APIRouter(prefix="/thumbnails", tags=["media"])
+debug_router = APIRouter(prefix="/debug", tags=["debug"])
 
 ORPHAN_PROJECT_NAME = "Unsorted-Loose"
 MANIFEST_DB = "_manifest/manifest.db"
@@ -89,6 +90,7 @@ THUMB_TIMEOUT_FALLBACK_S = int(os.getenv("MEDIA_SYNC_THUMB_TIMEOUT_FALLBACK_S", 
 THUMB_TIMEOUT_SLOW_S = int(os.getenv("MEDIA_SYNC_THUMB_TIMEOUT_SLOW_S", "90"))
 THUMB_SEEK_S = os.getenv("MEDIA_SYNC_THUMB_SEEK_S", "1.0")
 THUMB_LOCK_TTL_S = int(os.getenv("MEDIA_SYNC_THUMB_LOCK_TTL_S", "120"))
+STREAM_CHUNK_SIZE = 1024 * 256
 
 
 class _ResolvedProject:
@@ -168,6 +170,158 @@ class ReconcileMediaRequest(BaseModel):
 class RegistryResolveRequest(BaseModel):
     asset_ids: List[str] = Field(default_factory=list)
     fallback_paths: Dict[str, str] = Field(default_factory=dict)
+
+
+def _iter_file_range(path: Path, start: int, length: int) -> Iterator[bytes]:
+    """Yield bytes from a file for an inclusive byte range.
+
+    Example:
+        # Stream 100 bytes starting at byte 0.
+        chunks = _iter_file_range(Path("/tmp/a.mp4"), 0, 100)
+    """
+
+    remaining = length
+    with path.open("rb") as handle:
+        handle.seek(start)
+        while remaining > 0:
+            chunk = handle.read(min(STREAM_CHUNK_SIZE, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
+def _resolve_range(range_header: str, file_size: int) -> tuple[int, int]:
+    """Parse a single HTTP byte range and return inclusive start/end bytes.
+
+    Example:
+        start, end = _resolve_range("bytes=0-1", 1024)
+    """
+
+    value = range_header.strip()
+    if not value.startswith("bytes="):
+        raise ValueError("Range header must start with bytes=")
+    spec = value[6:].strip()
+    if "," in spec:
+        raise ValueError("Multiple ranges are not supported")
+    if "-" not in spec:
+        raise ValueError("Range missing dash separator")
+    start_raw, end_raw = spec.split("-", 1)
+    start_raw = start_raw.strip()
+    end_raw = end_raw.strip()
+    if not start_raw and not end_raw:
+        raise ValueError("Range bounds missing")
+
+    if start_raw:
+        if not start_raw.isdigit():
+            raise ValueError("Range start is not numeric")
+        start = int(start_raw)
+        if start >= file_size:
+            raise ValueError("Range start out of bounds")
+        if end_raw:
+            if not end_raw.isdigit():
+                raise ValueError("Range end is not numeric")
+            end = int(end_raw)
+            if end < start:
+                raise ValueError("Range end must be >= start")
+            end = min(end, file_size - 1)
+        else:
+            end = file_size - 1
+        return start, end
+
+    if not end_raw.isdigit():
+        raise ValueError("Range suffix length is not numeric")
+    suffix_len = int(end_raw)
+    if suffix_len <= 0:
+        raise ValueError("Range suffix length must be positive")
+    if suffix_len >= file_size:
+        return 0, file_size - 1
+    return file_size - suffix_len, file_size - 1
+
+
+def _resolve_debug_media_target(media_path: str, source: str | None) -> dict[str, Any]:
+    """Resolve a /media/* or /thumbnails/* URL path against configured source roots.
+
+    Example:
+        _resolve_debug_media_target("/media/demo/ingest/originals/clip.mp4", None)
+    """
+
+    parsed = urlparse(media_path)
+    decoded_path = unquote(parsed.path or "")
+    if not decoded_path.startswith("/"):
+        decoded_path = f"/{decoded_path}"
+    query = parsed.query
+    source_name = source
+    if source_name is None and query:
+        source_values = parse_qs(query).get("source", [])
+        source_name = source_values[0] if source_values else None
+
+    if not decoded_path.startswith("/media/") and not decoded_path.startswith("/thumbnails/"):
+        raise HTTPException(status_code=400, detail="Path must start with /media/ or /thumbnails/")
+
+    settings = get_settings()
+    registry = SourceRegistry(settings.project_root)
+    candidate_sources = [registry.require(source_name)] if source_name else registry.list_enabled()
+    if not candidate_sources:
+        raise HTTPException(status_code=404, detail="No enabled sources")
+
+    mode = "media" if decoded_path.startswith("/media/") else "thumbnails"
+    remainder = decoded_path[len("/media/") :] if mode == "media" else decoded_path[len("/thumbnails/") :]
+    parts = [part for part in remainder.split("/") if part]
+    if len(parts) < 2:
+        raise HTTPException(status_code=400, detail="Path must include project and relative target")
+    project_name = parts[0]
+    relative_parts = parts[1:]
+    try:
+        validate_project_name(project_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if mode == "media" and relative_parts and relative_parts[0] == "download":
+        relative_parts = relative_parts[1:]
+    relative_joined = "/".join(relative_parts)
+    if mode == "thumbnails":
+        if len(relative_parts) != 1:
+            raise HTTPException(status_code=400, detail="Thumbnail path must include a single filename")
+        relative_joined = f"ingest/thumbnails/{relative_parts[0]}"
+
+    try:
+        safe_relative = _validate_relative_media_path(relative_joined)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    for candidate in candidate_sources:
+        project_root = project_path(candidate.root, project_name).resolve()
+        target = (project_root / safe_relative).resolve()
+        safe = project_root in target.parents or target == project_root
+        if not safe:
+            raise HTTPException(status_code=400, detail="Requested path is outside the project")
+        if target.exists():
+            content_type, _ = mimetypes.guess_type(target.name)
+            return {
+                "exists": True,
+                "is_file": target.is_file(),
+                "size": target.stat().st_size if target.is_file() else None,
+                "content_type_guess": content_type or "application/octet-stream",
+                "resolved_path": str(target),
+                "source_root": str(candidate.root.resolve()),
+                "safe": True,
+            }
+
+    fallback_source = candidate_sources[0]
+    fallback_project_root = project_path(fallback_source.root, project_name).resolve()
+    fallback_target = (fallback_project_root / safe_relative).resolve()
+    safe = fallback_project_root in fallback_target.parents or fallback_target == fallback_project_root
+    content_type, _ = mimetypes.guess_type(fallback_target.name)
+    return {
+        "exists": False,
+        "is_file": False,
+        "size": None,
+        "content_type_guess": content_type or "application/octet-stream",
+        "resolved_path": str(fallback_target),
+        "source_root": str(fallback_source.root.resolve()),
+        "safe": safe,
+    }
 
 
 def _parse_iso8601(value: str, field: str) -> datetime:
@@ -620,7 +774,12 @@ async def download_media(project_name: str, relative_path: str, source: str | No
 
 
 @media_router.get("/{project_name}/{relative_path:path}")
-async def stream_media(project_name: str, relative_path: str, source: str | None = None):
+async def stream_media(
+    project_name: str,
+    relative_path: str,
+    request: Request,
+    source: str | None = None,
+):
     """Stream a media file within a project using HTTP range support."""
 
     resolved = _require_source_and_project(project_name, source)
@@ -637,11 +796,41 @@ async def stream_media(project_name: str, relative_path: str, source: str | None
         raise HTTPException(status_code=404, detail="Media not found")
 
     media_type, _ = mimetypes.guess_type(target.name)
+    file_size = target.stat().st_size
+    headers = {"Accept-Ranges": "bytes"}
+    range_header = request.headers.get("range")
     logger.info(
         "stream_media",
         extra={"project": resolved.name, "source": resolved.source_name, "path": safe_relative},
     )
-    return FileResponse(target, media_type=media_type)
+    if range_header:
+        try:
+            start, end = _resolve_range(range_header, file_size)
+        except ValueError:
+            headers["Content-Range"] = f"bytes */{file_size}"
+            return Response(status_code=416, headers=headers)
+        length = (end - start) + 1
+        headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+        headers["Content-Length"] = str(length)
+        return StreamingResponse(
+            _iter_file_range(target, start, length),
+            status_code=206,
+            media_type=media_type,
+            headers=headers,
+        )
+
+    return FileResponse(target, media_type=media_type, headers=headers)
+
+
+@debug_router.get("/resolve-path")
+async def debug_resolve_path(path: str = Query(...), source: str | None = Query(default=None)):
+    """Resolve media-oriented paths against registered source roots.
+
+    Example:
+        curl "http://localhost:8787/debug/resolve-path?path=/media/demo/ingest/originals/clip.mp4"
+    """
+
+    return _resolve_debug_media_target(path, source)
 
 
 

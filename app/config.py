@@ -43,6 +43,48 @@ class Settings(BaseModel):
         default_factory=lambda: int(os.getenv("MEDIA_SYNC_AUTO_REINDEX_INTERVAL_SECONDS", "60"))
     )
     temp_root: Path = Field(default_factory=lambda: Path(os.getenv("MEDIA_SYNC_TEMP_ROOT", "/tmp/media-sync-api")))
+    cache_root: Path = Field(
+        default_factory=lambda: Path(
+            os.getenv(
+                "MEDIA_SYNC_CACHE_ROOT",
+                str((Path(os.getenv("MEDIA_SYNC_PROJECTS_ROOT", "/data/projects")) / ".runtime" / "cache")),
+            )
+        )
+    )
+    spool_root: Path = Field(
+        default_factory=lambda: Path(
+            os.getenv(
+                "MEDIA_SYNC_SPOOL_ROOT",
+                str((Path(os.getenv("MEDIA_SYNC_PROJECTS_ROOT", "/data/projects")) / ".runtime" / "spool")),
+            )
+        )
+    )
+    logs_root: Path = Field(
+        default_factory=lambda: Path(
+            os.getenv(
+                "MEDIA_SYNC_LOGS_ROOT",
+                str((Path(os.getenv("MEDIA_SYNC_PROJECTS_ROOT", "/data/projects")) / ".runtime" / "logs")),
+            )
+        )
+    )
+    runtime_role: str = Field(default_factory=lambda: os.getenv("APP_RUNTIME_ROLE", "authority"))
+    instance_name: str | None = Field(default_factory=lambda: os.getenv("APP_INSTANCE_NAME"))
+    node_id: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_NODE_ID"))
+    node_label: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_NODE_LABEL"))
+    node_base_url: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_NODE_BASE_URL"))
+    control_plane_url: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_CONTROL_PLANE_URL"))
+    upstream_token: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_UPSTREAM_TOKEN"))
+    runner_register_enabled: bool = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_RUNNER_REGISTER_ENABLED", "0").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    local_watch_enabled: bool = Field(
+        default_factory=lambda: os.getenv("MEDIA_SYNC_LOCAL_WATCH_ENABLED", "0").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+
+    public_origin: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_PUBLIC_ORIGIN"))
+    authority_origin: str | None = Field(default_factory=lambda: os.getenv("MEDIA_SYNC_AUTHORITY_ORIGIN"))
 
 def ensure_project_root(path: Path) -> None:
     """Ensure the configured project root exists and is a directory."""
@@ -56,6 +98,13 @@ def ensure_temp_root(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def ensure_runtime_roots(*paths: Path) -> None:
+    """Ensure runtime-owned directories exist for cache/spool/logs."""
+
+    for path in paths:
+        path.mkdir(parents=True, exist_ok=True)
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Return cached settings loaded from environment variables."""
@@ -63,6 +112,7 @@ def get_settings() -> Settings:
     settings = Settings()
     ensure_project_root(settings.project_root)
     ensure_temp_root(settings.temp_root)
+    ensure_runtime_roots(settings.cache_root, settings.spool_root, settings.logs_root)
     return settings
 
 

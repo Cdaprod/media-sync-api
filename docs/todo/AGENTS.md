@@ -1,3 +1,314 @@
+## 2026-04-25 — Media byte-range compliance + debug path diagnostics (active)
+- [x] Implemented explicit HTTP byte-range handling for `GET /media/{project}/{relative_path}`:
+  - `bytes=0-1` returns `206` with `Content-Length: 2`.
+  - Open-ended (`bytes=100-`) and suffix (`bytes=-500`) ranges return `206`.
+  - Invalid/unsatisfiable ranges return `416` with `Content-Range: bytes */<total>`.
+  - Missing `Range` keeps existing `200` full-stream behavior.
+  - Added `Accept-Ranges: bytes` to media stream responses.
+- [x] Added `GET /debug/resolve-path` for safe media path diagnostics across source roots with traversal rejection and payload keys:
+  - `exists`, `is_file`, `size`, `content_type_guess`, `resolved_path`, `source_root`, `safe`.
+- [x] Wired `/debug/*` backend ownership continuity through FastAPI router registration (Caddy matcher already includes `/debug/*`).
+- [x] Added backend tests for media byte-range success/failure cases and debug resolve-path behavior (media + thumbnails + traversal rejection).
+- [ ] Next: run an iOS Safari probe validation against Caddy (`Range: bytes=0-1`) to confirm end-to-end `206` passthrough on physical device.
+
+## 2026-04-25 — LAN authority env passthrough + Caddy route ownership contract fix (active)
+- [x] Wired authority/public env passthrough into `docker/docker-compose.yaml` for `media-sync-api` (`MEDIA_SYNC_PUBLIC_ORIGIN`, `MEDIA_SYNC_AUTHORITY_ORIGIN`, `MEDIA_SYNC_AUTHORITY_HOST`).
+- [x] Updated `docker/docker-compose.caddy.yaml` env passthrough to include all three authority/public vars while keeping `.env` loading.
+- [x] Expanded Caddy route ownership contract in host + docker Caddyfiles: dedicated `@media` matcher, explicit `@backend` matcher including `/connect*` + `/debug/*`, explicit `@next` matcher for `/_next/*`, and Explorer fallback.
+- [x] Added manual verification commands:
+  - `docker compose -f docker/docker-compose.yaml -f docker/docker-compose.explorer.yaml -f docker/docker-compose.caddy.yaml --profile dev up -d --build --force-recreate`
+  - `docker exec media-sync-api env | findstr MEDIA_SYNC_AUTHORITY`
+  - `docker exec media-sync-api env | findstr MEDIA_SYNC_PUBLIC`
+  - `docker exec media-sync-caddy env | findstr MEDIA_SYNC`
+  - `curl.exe -k https://cda-desktop.local/health`
+  - `curl.exe -k https://cda-desktop.local/`
+  - `curl.exe -k -I https://cda-desktop.local/_next/static/chunks/main-app.js`
+- [ ] Next: verify `media-sync-api` container runtime env now consistently exposes lowercase authority/public values and that `/connect/register` URLs stay on `https://cda-desktop.local`.
+
+## 2026-04-25 — Caddy LAN HTTPS media-route stability hardening (active)
+- [x] Split Caddy routing into dedicated `@media` matcher (`/media/*`, `/thumbnails/*`) with HTTP/1.1 upstream transport to reduce iPhone Range-request churn and stream cancellations.
+- [x] Kept non-media backend routes in `@backend` and preserved Explorer fallback ownership for all other paths (`/_next/*` remains non-backend).
+- [x] Removed redundant forwarded-header overrides (`X-Forwarded-*`) from Caddy proxy blocks while retaining `Host` pass-through.
+- [x] Updated compose Caddy storage to persistent named volumes (`caddy_data`, `caddy_config`) and kept Caddyfile bind mount read-only.
+- [x] Normalized documented authority env examples to lowercase `cda-desktop.local` and added direct curl.exe checks for health/home/media/thumbnails.
+- [ ] Next: run a real iPhone Safari playback pass and verify reduced `context canceled` churn under repeated `/media/*.mp4` Range probes.
+
+## 2026-04-24 — Caddy forwarded public-origin header hardening (active)
+- [x] Added explicit `header_up` forwarding (`Host`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-For`) to both backend and Explorer reverse-proxy blocks in host + docker Caddyfiles.
+- [x] Preserved backend route matcher boundaries (`/_next/*` remains Explorer-owned fallback, not API-matched).
+- [x] Expanded Caddy README troubleshooting with expected Next static URL shapes and curl/Select-String commands for stale-origin detection.
+- [x] Added docker Caddy config regression assertions for forwarded headers and no-`/_next/*` API routing.
+- [ ] Next: confirm cookie/session flows remain authority-stable on iPhone Safari after Caddy restart (no host/proto drift in request headers).
+
+## 2026-04-24 — Video thumbnail candidate priority restore for HTTPS authority (active)
+- [x] Replaced single-value thumbnail selection with explicit candidate planning in `ExplorerApp` so video cards prefer `thumbnail_url`, then `thumb_url`, then generated `/thumbnails/{project}/{sha}.jpg|webp|png` routes before generic fallback.
+- [x] Preserved stream-vs-thumbnail separation in view-model wiring (`streamUrl` playback lane independent from `thumbUrl` poster lane) and added secondary thumbnail fallback URL handoff into card image error flow.
+- [x] Added dev-only diagnostics: sampled `/api/library` thumbnail field trace logging on first populated dataset and one-time warnings for video assets missing thumbnail candidates.
+- [x] Added single-item context action `Copy Asset Debug JSON` capturing raw thumbnail fields, normalized candidates, stream URL, and fallback reason for on-device triage.
+- [ ] Next: validate on iPhone Safari that previously generic VIDEO cards now render extracted thumbs when either `thumbnail_url` or `thumb_url` exists.
+
+## 2026-04-24 — HTTPS authority media URL/render parity follow-up (active)
+- [x] Added `src/utils/mediaUrls.ts` with browser-safe `normalizeAssetUrl(...)` plus best-url selectors (`getBestThumbnailUrl`, `getBestStreamUrl`, `getBestDownloadUrl`) and absolute clipboard helper.
+- [x] Rewired Explorer media URL usage to prefer normalized best-url selectors for card thumbs, video preview, focused preview metadata/actions, and stream URL copy paths without mutating API payloads.
+- [x] Hardened card/list thumbnail `onError` handling to surface failed URL details (`title`/`aria-label`) and emit dev-only warning context for Safari triage.
+- [x] Expanded Caddy backend matcher coverage in host + docker configs (`/thumbnails/*`, `/public/*`, `/player.html`, `/favicon/*`, `/static/*`) while keeping Explorer/Next fallback for non-backend routes (no `/_next/*` API proxying).
+- [ ] Next: run physical iPhone Safari verification that visible card thumbs/preview video now resolve as same-origin HTTPS `/thumbnails/...` and `/media/...` under `https://cda-desktop.local`.
+
+## 2026-04-24 — Caddy backend asset-route parity for HTTPS thumbnails (active)
+- [x] Expanded Caddy backend matcher in both `docker/caddy/Caddyfile` and `docker/caddy/Caddyfile.docker` to proxy backend-owned asset routes (`/api/*`, `/media/*`, `/download/*`, `/thumbnails/*`, `/player.html`, `/public/*`) before Explorer fallback.
+- [x] Added regression coverage in `tests/test_caddy_gateway_config.py` to lock required backend-route presence and enforce backend-proxy ordering ahead of Explorer fallback.
+- [x] Updated `docker/caddy/README.md` quick-test commands to include HTTPS checks for `/api/library`, `/thumbnails/...`, and `/media/...` through Caddy.
+- [ ] Next: run on-device acceptance pass confirming `/thumbnails/<project>/<sha>.jpg` serves an image payload over `https://cda-desktop.local` and cards render without placeholder icons.
+
+## 2026-04-24 — Root .env example for Caddy/authority bootstrap (active)
+- [x] Added repo-root `.env.example` with copy-paste baseline values for authority/public origin, Caddy hostname binding, runtime role, and API host/port.
+- [x] Updated `docker/caddy/README.md` with an explicit `cp .env.example .env` bootstrap step before compose usage.
+- [ ] Next: align top-level README quickstart with the same `.env` bootstrap flow to remove onboarding drift.
+
+## 2026-04-24 — Root compose include for Caddy scaffold (active)
+- [x] Added `docker/docker-compose.caddy.yaml` to root `docker-compose.yaml` includes so LAN HTTPS gateway can be composed with core/api + Explorer stacks.
+- [x] Kept include-only change narrowly scoped (no backend/frontend runtime logic touched).
+- [ ] Next: document one-shot compose startup/teardown commands for combined API + Explorer + Caddy workflow in top-level ops docs.
+
+## 2026-04-24 — Env-parameterized Docker Caddy host binding (active)
+- [x] Added `docker/caddy/Caddyfile.docker` with env-driven site labels (`{$MEDIA_SYNC_AUTHORITY_HOST}`) and Docker Desktop upstreams via `host.docker.internal`.
+- [x] Refactored `docker/caddy/Caddyfile` to remove hardcoded hostname and mirror env-driven Docker-ready proxy behavior.
+- [x] Added `docker/docker-compose.caddy.yaml` with `.env` passthrough (`MEDIA_SYNC_AUTHORITY_HOST`, `MEDIA_SYNC_PUBLIC_ORIGIN`) and host-gateway mapping.
+- [x] Updated Caddy README and helper scripts to document hostname-only env usage and run against `Caddyfile.docker` without embedded hostnames.
+- [ ] Next: add optional compose profile docs showing combined startup for API + Explorer + Caddy in one command.
+
+## 2026-04-24 — LAN HTTPS Caddy gateway scaffold (active)
+- [x] Added `docker/caddy/Caddyfile` host-installed authority gateway scaffold routing API/connect/media/health/docs paths to `127.0.0.1:8787` and Explorer to `127.0.0.1:3000`.
+- [x] Added `docker/caddy/README.md` with authority-origin env contract, host service expectations, iPhone CA trust requirement, and curl/browser validation steps.
+- [x] Added cross-platform helpers: `run-caddy.sh` (Linux/macOS) and `run-caddy.ps1` (Windows Docker Desktop) with generated `Caddyfile.docker` using `host.docker.internal` upstreams.
+- [ ] Next: add optional compose profile to launch Caddy + Explorer + API together for one-command LAN HTTPS startup.
+
+## 2026-04-24 — Authority-origin contract + ingest-claim hide controls (active)
+- [x] Added runtime settings for `MEDIA_SYNC_PUBLIC_ORIGIN` and `MEDIA_SYNC_AUTHORITY_ORIGIN` and wired connect manifest/register responses to prefer authority origin, then public origin, then request origin fallback.
+- [x] Updated `/connect/register` `device_url` generation to emit configured-origin absolute URLs when origin env vars are set while preserving relative fallback behavior when unset.
+- [x] Added backend tests to lock configured-origin behavior for `/connect` manifest and `/connect/register` device URL outputs.
+- [x] Extended Explorer ingest-claim UI with local hide state (`explorer_hidden_ingest_claim_ids`), claim/test-claim hide actions in context menu, and reset-hidden control in header metadata.
+- [x] Kept hide/dismiss behavior frontend-only (no backend delete/cancel endpoint changes).
+- [ ] Next: add optional backend non-destructive dismiss endpoint contract (`POST /api/ingest/claims/{claim_id}/dismiss`) once operator workflow is finalized.
+
+## 2026-04-24 — Ingest-claims header/list DOM split fix (active)
+- [x] Moved `.ingest-claims-panel` out of the Ingest Claims `.section-h` block so header contains only title + meta-line.
+- [x] Kept claim list rendering/behavior intact while restoring source-like sidebar structural parity (`section-h` sibling followed by list container).
+- [x] Tightened ingest-claim CSS alignment (`.ingest-claim-card.card`, `.claim-row`, panel padding) to keep card width/ellipsis behavior consistent with sidebar cards.
+- [ ] Next: verify DOM inspector on iPhone Safari confirms `.ingest-claims-panel` is a sibling after `.section-h` and no right-side card bleed remains.
+
+## 2026-04-24 — Ingest-claims sidebar containment follow-up (active)
+- [x] Replaced ingest-claims generic wrapper usage with dedicated panel/list classes to keep claim cards width-constrained to sidebar flow.
+- [x] Added strict claim-card overflow/shrink-safe text and inline-safe overflow-menu button styling to prevent right-side bleed over grid/tags sections.
+- [x] Kept claim context-menu behavior unchanged (menu only opens from card contextmenu/⋯ action; cards remain in normal sidebar DOM flow).
+- [ ] Next: capture a post-fix iPhone Safari screenshot proving claim cards no longer overlap Tags/AI Tags/Bridge while sidebar scrolling remains normal.
+
+## 2026-04-24 — Connect-device hook + ingest-claim sidebar regression fixes (active)
+- [x] Removed stray module-scope hook calls in `app/connect/device/page.tsx` so all hooks run only inside `ConnectDevicePage` component scope.
+- [x] Preserved existing connect-device camera/session behaviors (`Enable Camera`, preview, recording, peer signaling) while fixing invalid-hook-call startup crash.
+- [x] Reworked ingest-claim sidebar rendering to be constrained in-flow (max-height scroll container), newest-first, latest 5 cards, and compact card content.
+- [x] Added claim test-payload detection (`isTestPayloadClaim`) and surfaced compact `test payload` tag in ingest cards.
+- [x] Ensured runtime/sidebar context-menu actions close menu on selection and raised menu stacking above sidebar cards while remaining below modal overlays.
+- [ ] Next: capture a fresh iPhone Safari verification screenshot proving ingest claims remain confined and `/connect/device` loads without hook errors.
+
+## 2026-04-24 — Explorer unified sidebar/runtime context menus (active)
+- [x] Extended Explorer UI context-menu state to a typed union (`media_asset`, `source`, `runtime`, `live_session`, `ingest_claim`) so sidebar surfaces reuse the existing context-menu authority lane.
+- [x] Added runtime sidebar context actions (details, copy identifiers/json, open device, heartbeat now) and wired card right-click + overflow-button entrypoints for sources/runtimes/live sessions.
+- [x] Added ingest-claim sidebar polling (`/api/ingest/claims`) with card rendering + context actions and a shared runtime details modal for payload inspection/copy.
+- [x] Added runtime label helpers (`runtimeLabels`) and ingest-claim type contract for consistent sidebar tagging and diagnostics affordances.
+- [ ] Next: add static contract assertions in Explorer export tests for the new sidebar context-menu branches and ingest-claim API methods.
+
+## 2026-04-24 — WebRTC signaling hardening pass (active)
+- [x] Scoped signaling answers by `viewer_id` so concurrent Explorer viewers do not overwrite each other.
+- [x] Scoped ICE publication by `role + viewer_id` and surfaced viewer-specific candidate lanes in signaling state reads.
+- [x] Added stale signaling-viewer pruning window to prevent indefinite growth from abandoned viewer sessions.
+- [x] Blocked signaling reads/writes for ended sessions and confirmed signaling state is cleared when session ends.
+- [x] Device capture page now reports WebRTC status (`idle`, `offer-published`, `connected`, `failed`) from peer lifecycle events.
+- [x] LiveSourceCard peer viewer now reports connection status and includes an explicit reconnect action.
+- [x] Device control polling now acknowledges both `start_recording` and `stop_recording` after local execution.
+- [x] Added backend tests for multi-viewer signaling isolation and end-of-session signaling cleanup.
+- [ ] Next: add auth/ownership checks so only authorized node/viewer identities can publish signaling payloads per session.
+
+## 2026-04-24 — Live-session WebRTC signaling plane (active)
+- [x] Added backend signaling endpoints for live sessions (`/signal/offer`, `/signal/answer`, `/signal/ice`, `/signal`) with runtime-owned per-session offer/answer/ICE state.
+- [x] Extended live-session service with idempotent signaling state publication/read helpers and candidate de-duplication.
+- [x] Added API regression coverage for offer/answer/ICE round-trip behavior on active live sessions.
+- [x] Extended Explorer API/types with signaling contracts and endpoint methods.
+- [x] Added device-side peer publish path (`/connect/device`) that emits WebRTC offer/ICE from local camera preview stream once a live camera session is active.
+- [x] Added LiveSourceCard peer viewer path that consumes signaling state, answers offer, exchanges ICE, and renders peer stream when opened.
+- [x] Added static Explorer contract checks for signaling API presence and peer publish/viewer markers.
+- [ ] Next: add explicit signaling role/session auth guardrails and a short-lived prune policy for stale ICE candidates.
+
+## 2026-04-24 — /connect/device capability hardening for iPhone Safari (active)
+- [x] Guarded `useLiveSession.startPreview(...)` against missing `mediaDevices/getUserMedia/getDisplayMedia` and replaced raw TypeError leakage with operator-readable capability errors.
+- [x] Added connect-device runtime capability diagnostics (`secure context`, `camera API`, `screen capture API`, `iOS likely`) with explicit HTTPS guidance for iOS Safari LAN activation.
+- [x] Updated `/connect/device` action availability: camera button disables when `getUserMedia` is unavailable; screen-share action is withheld on iOS/unavailable browsers.
+- [x] Clarified Sources/Libraries sidebar copy to distinguish remote source surfaces vs registered runtime nodes without backend behavior changes.
+- [x] Expanded Explorer static contracts to lock media-capability guard markers and updated sidebar copy labels.
+- [ ] Next: validate physical iPhone Safari over HTTP vs HTTPS and capture expected diagnostic/activation behavior snapshots.
+
+## 2026-04-24 — iOS device-class naming precision pass (active)
+- [x] Refined `RegisterNodeModal` browser-context detection to prioritize iPhone identity first and avoid iPhone sessions being mislabeled as `ipad-browser`.
+- [x] Tightened iPad classification to explicit `iPad` UA or `MacIntel + touch` heuristic only when iPhone detection is false.
+- [x] Added fallback `ios-browser` device class for likely iOS Safari sessions that are neither confidently iPhone nor iPad.
+- [x] Preserved existing capture defaults for iOS mobile registrations (`runner + capture`, `source_kind=capture`, `source_name=camera-primary`, session transport metadata, nullable `base_url`).
+- [x] Expanded Explorer static contracts to lock the updated iOS device-class detection markers.
+- [ ] Next: capture one physical iPhone + iPad register screenshot/log pair confirming `iphone-browser` vs `ipad-browser` labeling while keeping identical capture registration behavior.
+
+## 2026-04-24 — Nullable session-node base_url registration fix (active)
+- [x] Updated connect/node request DTOs to accept nullable `base_url` so browser/session registrations are not rejected at request-schema validation.
+- [x] Added explicit base-url normalization (`"" -> None`) in `/connect/register` and `/api/nodes` handlers before `NodeRecord` construction.
+- [x] Extended `NodeRecord` validation policy: session/browser-marked nodes may omit `base_url`, while non-session daemon nodes still require a non-empty base URL.
+- [x] Added regression tests for null/empty session-node registration acceptance and non-session missing-base rejection in both connect-plane and node API surfaces.
+- [ ] Next: run physical iPad/iPhone register flow to confirm `base_url: null` submit succeeds and same-tab device redirect occurs end-to-end.
+
+## 2026-04-23 — Register-to-device same-tab redirect hardening pass (active)
+- [x] Updated `RegisterNodeModal` success flow to persist `explorer_capture_node_id` and immediately navigate in the same tab when `device_url` is returned (`router.push` with `window.location.href` fallback).
+- [x] Removed intermediate in-modal post-register continuation affordance so successful current-device registration no longer requires additional taps.
+- [x] Locked browser/session register payload defaults to `base_url: null` and explicit session transport metadata markers (`transport_hint=session`, `session_node=true`, `browser_push=true`) with string-safe metadata serialization.
+- [x] Kept camera permission authority on `/connect/device` only (no `getUserMedia` request on modal open or register submit).
+- [x] Added static Explorer contract assertions for direct redirect, payload markers, and absence of in-modal camera prompt calls.
+- [ ] Next: run iPhone/iPad manual validation to confirm same-tab redirect + Enable Camera permission prompt timing on physical Safari.
+
+## 2026-04-23 — Live session remote control micro-pass (active)
+- [x] Added backend control plane endpoint `POST /api/live_sessions/{session_id}/control` to persist desired session action (`start_recording` / `stop_recording`) with control timestamp.
+- [x] Added backend session read endpoint `GET /api/live_sessions/{session_id}` and expanded live-session response fields (`desired_action`, `last_control_at`) for device-side command polling.
+- [x] Extended live session service/domain/runtime models to carry desired-action control state through heartbeat/chunk/end transitions.
+- [x] Added Explorer live card control buttons (Record/Stop) that call new control endpoint and emit operator toasts.
+- [x] Added device-side control polling in `useLiveSession` to fetch latest session state every second and execute local recording actions when desired action changes.
+- [x] Added backend regression test coverage for control endpoint and per-session control state retrieval.
+- [ ] Next: clear/ack desired_action after successful device action execution to avoid redundant command replays across reconnects.
+
+## 2026-04-23 — LiveSourceCard preview polling stabilization pass (active)
+- [x] Updated live preview endpoint to return `FileResponse` with explicit no-cache headers for polling-safe latest-frame retrieval (`Cache-Control`, `Pragma`).
+- [x] Replaced `LiveSourceCard` preview logic with 1s polling + cache-busting URL tick and flicker-safe image swap (`new Image()` preload before visible `img` src update).
+- [x] Added recording overlay marker (`REC {chunk_count}`) to live card preview surface and wired open-device action callback from Explorer sidebar.
+- [x] Added `@keyframes pulse` style used by recording-dot overlay animation.
+- [x] Extended live-session preview API test to assert no-cache response headers.
+- [ ] Next: consider serving lightweight image snapshots from preview endpoint for stronger cross-browser `<img>` compatibility when chunk MIME is video.
+
+## 2026-04-23 — Centralized connect metadata serialization helper (active)
+- [x] Added frontend utility `serializeMetadata(...)` to normalize `Record<string, unknown>` into `Record<string, string>` for `/connect/register` transport.
+- [x] Refactored `RegisterNodeModal` payload assembly to construct raw metadata once and run full normalization through `serializeMetadata(...)` (removed per-field ad-hoc `String(...)` calls).
+- [x] Tightened register request type to `metadata?: Record<string, string>` so call sites remain contract-aligned with backend `Dict[str, str]`.
+- [ ] Next: reuse `serializeMetadata(...)` in any future connect-plane metadata producers to keep frontend/backend contract drift-proof.
+
+## 2026-04-23 — Register metadata string-contract hotfix (active)
+- [x] Fixed frontend register payload serialization mismatch for backend `metadata: Dict[str, str]` contract by stringifying boolean telemetry fields (`likely_mobile`, `likely_safari`, `detected_mobile`, `detected_safari`) in `RegisterNodeModal` payload construction.
+- [x] Normalized related detected/authority metadata fields to explicit string values during payload assembly to keep connect-plane metadata transport-safe and schema-consistent.
+- [ ] Next: add a small shared frontend `serializeMetadata(...)` helper to centralize string normalization for future metadata fields and avoid drift.
+
+## 2026-04-23 — Live session closure seam + low-fi preview follow-up (active)
+- [x] Attempted requested `.25` manual chain validation (`ssh`, spool/log checks, direct endpoint curls) from container; blocked by network reachability (`port 22 unreachable`) so validation must run on reachable host context.
+- [x] Confirmed live ingest path remains integrated via `LiveSessionService.end_session()` using existing `IngestClaimService.submit_claim(...)` contract (no ad-hoc stub payload path).
+- [x] Added stale live-session expiry in runtime registry active-list path (drop active sessions older than 60s heartbeat) to prevent orphan accumulation when clients disconnect without `/end`.
+- [x] Added low-fi live preview endpoint `GET /api/live_sessions/{id}/preview/latest` returning latest chunk bytes with appropriate media content-type.
+- [x] Added Explorer `LiveSourceCard` preview polling (`<video>` src refresh every 2s) against latest-chunk preview endpoint.
+- [x] Tightened end-to-asset seam in frontend: `useLiveSession` persists claim event on end, Explorer listens and auto-refreshes media scope after short delay, and device ended state links back into Explorer with claim context.
+- [x] Added backend test coverage for preview endpoint and stale-session expiry behavior.
+- [ ] Next: on reachable `.25` host, run requested manual iPhone walkthrough with live logs and spool checks, then capture exact failure/success evidence for any remaining chain gaps.
+
+## 2026-04-23 — Live session intake + Explorer device capture bridge (active)
+- [x] Added runtime-owned live session domain/service/registry wiring (`LiveSession`, `LiveSessionRegistry`, `LiveSessionService`) with spool chunk persistence and authority ingest-claim handoff on session end.
+- [x] Added live session API surface (`/api/live_sessions` start/heartbeat/chunk/end/list) and wired router/runtime health flags so connect/ingest/live readiness are visible from `/health`.
+- [x] Extended connect registration response with `device_url` for browser-device continuation flows (`/connect/device?node_id=...`).
+- [x] Extended Explorer API/types with live-session contracts and request methods (`startLiveSession`, `heartbeatLiveSession`, `uploadLiveSessionChunk`, `endLiveSession`, `listLiveSessions`).
+- [x] Added Explorer live-session UX components/hooks (`useLiveSession`, `useLiveSessions`, `LiveSourceCard`) plus device capture route at `app/connect/device/page.tsx`.
+- [x] Integrated sidebar live-session cards and registration continuation into existing Explorer modal flow (persist capture node id, redirect to returned `device_url` when available).
+- [x] Added backend regression coverage for live sessions and runtime/health/connect shape updates.
+- [ ] Next: add authority-side validation that live-session `node_id/source_name` ownership matches current node/source registry state before claim submission.
+- [ ] Next: add Explorer inline toast/status when live chunk upload fails mid-session (show retry hint and degraded-recording indicator).
+
+## 2026-04-23 — iOS Safari capability inference correction (active)
+- [x] Updated register-modal camera/enumerate capability inference to include iOS Safari fallback support when APIs are permission/lifecycle-gated.
+- [x] Adjusted detected-context copy so iOS Safari reports `likely supported` semantics instead of false-negative `no` for camera/enumerate capability fields.
+- [x] Preserved passive detection behavior (no auto `getUserMedia` prompt on modal open) while keeping capture defaults derived from inferred capability + mobile context.
+- [ ] Next: add optional interactive `Probe camera now` action (user initiated) to validate runtime stream acquisition and show a post-click capability confirmation state.
+
+## 2026-04-23 — Register modal detection hardening for iPhone/iPad sessions (active)
+- [x] Replaced naïve UA-only device classification in `RegisterNodeModal` with multi-signal browser context detection (UA + touch points + coarse pointer + iPadOS-as-Mac heuristic + media API capability probes).
+- [x] Added explicit capability diagnostics in detected-context panel (`hasCameraApi`, `hasEnumerateDevices`, `hasScreenCaptureApi`, likely mobile/safari/platform) while keeping detection passive (no `getUserMedia` prompt on open).
+- [x] Updated default registration bias to derive from `isLikelyMobile && hasCameraApi`, so likely mobile camera-capable sessions start capture-oriented (`source_kind=capture`, `can_proxy_streams`, runner/capture roles).
+- [x] Added `Configure as camera device` action to apply capture defaults on demand without removing manual overrides.
+- [ ] Next: tune additional iOS webview heuristics (if available) for embedded-browser UA reduction edge cases and capture one on-device validation snapshot after deployment.
+
+## 2026-04-23 — Register modal authority-base correction + quick action follow-up (active)
+- [x] Fixed Explorer register modal authority URL to use API authority base (connect-plane base) instead of frontend origin, preventing `:3000` registration command drift when API runs on `:8787`.
+- [x] Added a quick `Register This Device` action in detected-context card for one-click submission while keeping generated JSON/curl/fetch outputs visible.
+- [x] Added a `Register from another device` connect-link block with copy action to support LAN onboarding workflows.
+- [ ] Next: add an optional post-register toast that includes accepted `node_id` and resolved authority host for operator confirmation.
+
+## 2026-04-23 — Explorer connect-plane register modal wiring (active)
+- [x] Added Sources/Libraries operator action pair (`+ Register`, `Refresh`) with Register positioned left of Refresh in the existing sidebar meta line.
+- [x] Added typed connect-plane registration request/response contracts for Explorer frontend (`types/registration.ts`).
+- [x] Added `RegisterNodeModal` with device/context prefill, editable advanced fields, generated payload/curl/fetch snippets, and direct `/connect/register` submit path.
+- [x] Extended Explorer API client with `registerNode(...)` to call `POST /connect/register` and provide status-aware error messages.
+- [x] Wired modal success path to refresh runtime source/node control data so sidebar truth updates immediately after registration.
+- [ ] Next: add a tiny inline success hint in Sources/Libraries summary when a registration was just accepted (node label + timestamp), then clear on next reload.
+
+## 2026-04-23 — Hidden runtime project filtering follow-up (active)
+- [x] Confirmed Explorer sidebar/runtime-aware source wiring is functioning and that observed `0 remote / 0 nodes` is expected when no remote participants are registered.
+- [x] Fixed backend project enumeration to exclude hidden dot-prefixed directories (for example `.runtime`) from user-visible project listings.
+- [x] Aligned library snapshot project enumeration with the same visibility guard so `/api/library` and `/api/projects` stay in sync.
+- [x] Added regression tests for hidden runtime directory exclusion in both projects and library snapshot API surfaces.
+- [ ] Next: add a lightweight operator note in README/API docs describing how to register a remote node and what sidebar counts should show before/after registration.
+
+## 2026-04-23 — Runtime-aware source inventory merge (active)
+- [x] Updated `/api/sources` to merge canonical authority-local sources from `SourceRegistry` with runtime-memory remote source-bearing participants registered through `/connect/register`.
+- [x] Added runtime-aware source response enrichments (`kind`, `authority`, `owner_node_id`, `local_only`, `can_index`, `can_proxy`, `can_record`, `metadata`) for local vs remote source surfaces.
+- [x] Added regression coverage proving `/connect/register` remote participants appear in `/api/sources` alongside canonical local sources.
+- [ ] Next: extend Explorer API seam and Sources & Nodes modal to consume merged runtime-aware source inventory.
+- [ ] Next: validate ingest claims against registered remote source ownership (`node_id` + `source_name`) before later acceptance phases.
+
+## 2026-04-23 — Connect-plane onboarding bridge (active)
+- [x] Added `/connect` discovery manifest covering runtime identity, capabilities, source records, and operational endpoints.
+- [x] Added `/connect/register` onboarding so remote non-authority runtimes can register as source-bearing participants without mutating canonical `SourceRegistry` shape.
+- [x] Kept connect-plane separate from ingest-plane; registration persists node + runtime-memory source-bearing representation only.
+- [x] Added `remote_source_records` metadata lane and health exposure for connect readiness + remote source count.
+- [x] Added `/connect` API regression tests for text/json/html discovery and registration path behavior.
+- [ ] Next: add runtime-aware source inventory endpoint that merges canonical local sources with connect-registered remote source participants.
+- [ ] Next: surface connect participants in Explorer sources/nodes views.
+
+## 2026-04-22 — PR #161 close-out pass (runtime composition proof + ingest readiness) (active)
+- [x] Added health/runtime ingest readiness markers (`ingest_claims_enabled`, `runtime_services.*`) so operations can verify ingest-plane wiring at runtime.
+- [x] Added explicit runtime composition assertion test for `node_registry`, `ingest_registry`, and `ingest_claim_service` on startup.
+- [x] Added permanent backend README note that `/api/nodes` is control-plane, `/api/ingest/claims` is ingest-plane, and local observation is not canonical by default.
+- [ ] Next: after PR #161 merge, implement runner-side claim submission from a real local adapter/spool path with retries.
+
+## 2026-04-22 — Ingest-claim contract boundary for PR #161 (active)
+- [x] Preserved landed runtime/node control-plane foundation and added first-class ingest-claim domain models (`AssetCandidate`, `IngestClaim`, `AcceptanceReport`).
+- [x] Added persisted authority ingest ledger (`IngestClaimRegistry`) under `_runtime/ingest_claims/<claim_id>.json`.
+- [x] Added authority intake service (`IngestClaimService`) and `/api/ingest/claims` submit/list/get routes.
+- [x] Wired ingest registry/service into `AppRuntime` composition so ingest contracts are runtime-owned rather than ad-hoc route state.
+- [x] Added ingest API tests covering submit success, list/get, invalid payload rejection, runtime wiring, and deferred (non-canonical) authority decisions.
+- [ ] Next: add runner-side local adapter path that emits real ingest claims from observed/staged media.
+- [ ] Next: add authority accept/reject transition endpoints + offline expiry policy for stale claims.
+
+## 2026-04-22 — Runner-ready runtime follow-on (active)
+- [x] Added typed runtime-facing `SourceRecord` abstraction to distinguish canonical vs runner-local vs ephemeral source intent without breaking existing `SourceRegistry` storage shape.
+- [x] Added lightweight async control-plane client for node self-registration and heartbeat against authority `/api/nodes`.
+- [x] Added background runner control loop so future runner deployments can self-register + maintain heartbeat without route-level glue.
+- [x] Wired runtime start/stop to own upstream client and runner control lifecycle.
+- [x] Added runtime-level tests for runner control registration/heartbeat behavior and health payload root assertion coverage.
+- [ ] Next: add first explicit runner upload/report path for local ingest observations that should not become canonical until accepted by authority.
+- [ ] Next: add authority-side node expiry/offline policy derived from `last_heartbeat_at`.
+
+## 2026-04-22 — Node API validation hardening follow-up (active)
+- [x] Addressed review bug: `claim` updates are now re-validated by constructing a new `NodeRecord` from merged payload before persistence, preventing invalid updates from silently poisoning registry rows.
+- [x] Addressed review bug: `register` now catches `NodeRecord` validation failures and returns explicit 400 client errors instead of surfacing 500s for malformed payloads.
+- [x] Tightened request schemas to use `NodeStatus` literals for register/claim status fields so invalid values fail fast at request validation.
+- [x] Added regression coverage for invalid claim status behavior and register validation error mapping.
+- [ ] Next: add a small endpoint-level error contract doc section for `/api/nodes` status codes in backend API docs/readme.
+
+## 2026-04-22 — App runtime boundary + node control-plane bootstrap (active)
+- [x] Added `app/runtime` composition package (`types`, `create_runtime`, `dependencies`) so FastAPI lifespan owns a single `AppRuntime` instance with async `start/stop` hooks.
+- [x] Wired `app/main.py` lifespan to initialize runtime once, run/stop runtime-owned auto reindexer, and expose runtime identity in `/health`.
+- [x] Added persisted runtime `NodeRegistry` + `/api/nodes` endpoints (register/list/get/claim/heartbeat) with early health/status/version/source-kind metadata fields.
+- [x] Shifted long-lived route dependencies toward runtime-owned services by migrating source routes and library snapshot route to consume runtime registries/services instead of ad-hoc construction.
+- [x] Added regression tests for node API behavior and runtime-enriched health payload.
+- [ ] Next: extend Explorer API seam (`docker/packages/Explorer/src/api.ts`) with node client methods and add a small read-only node panel in Explorer sidebar.
+- [ ] Next: design first typed `SourceRecord` abstraction for filesystem and capture-node sources while preserving current storage contract compatibility.
+
 ## 2026-04-18 — Thumbnail lifecycle completion pass (active)
 - [x] Confirmed post-throttle regression: fallback-first render + boot queue cap reduced startup storm but left stale placeholders after scroll/remount because queue behavior was effectively one-shot.
 - [x] Upgraded `useThumbnailQueue` from boot-only pass to lifecycle queue runner with requeue scheduling on viewport activity (scroll/resize), DOM mutation, and periodic idle passes.
