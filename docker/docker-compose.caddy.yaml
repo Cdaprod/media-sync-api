@@ -7,9 +7,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
+      - caddy_data:/data/caddy
+      - caddy_config:/config/caddy
       - ./caddy/Caddyfile.docker:/etc/caddy/Caddyfile:ro
-      - ./caddy/data:/data
-      - ./caddy/config:/config
     env_file:
       - ../.env
     environment:
@@ -17,3 +17,7 @@ services:
       - MEDIA_SYNC_AUTHORITY_HOST
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+volumes:
+  caddy_data:
+  caddy_config:

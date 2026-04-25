@@ -1,3 +1,11 @@
+## 2026-04-25 — Caddy LAN HTTPS media-route stability hardening (active)
+- [x] Split Caddy routing into dedicated `@media` matcher (`/media/*`, `/thumbnails/*`) with HTTP/1.1 upstream transport to reduce iPhone Range-request churn and stream cancellations.
+- [x] Kept non-media backend routes in `@backend` and preserved Explorer fallback ownership for all other paths (`/_next/*` remains non-backend).
+- [x] Removed redundant forwarded-header overrides (`X-Forwarded-*`) from Caddy proxy blocks while retaining `Host` pass-through.
+- [x] Updated compose Caddy storage to persistent named volumes (`caddy_data`, `caddy_config`) and kept Caddyfile bind mount read-only.
+- [x] Normalized documented authority env examples to lowercase `cda-desktop.local` and added direct curl.exe checks for health/home/media/thumbnails.
+- [ ] Next: run a real iPhone Safari playback pass and verify reduced `context canceled` churn under repeated `/media/*.mp4` Range probes.
+
 ## 2026-04-24 — Caddy forwarded public-origin header hardening (active)
 - [x] Added explicit `header_up` forwarding (`Host`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-For`) to both backend and Explorer reverse-proxy blocks in host + docker Caddyfiles.
 - [x] Preserved backend route matcher boundaries (`/_next/*` remains Explorer-owned fallback, not API-matched).

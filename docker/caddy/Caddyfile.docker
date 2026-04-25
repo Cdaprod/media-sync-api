@@ -8,18 +8,32 @@
 
   encode gzip zstd
 
-  @backend path /api/* /connect/* /media/* /thumbnails/* /public/* /player.html /health /healthz /docs /openapi.json /favicon.ico /favicon/* /static/*
+  @media path /media/* /thumbnails/*
+  reverse_proxy @media host.docker.internal:8787 {
+    header_up Host {host}
+    transport http {
+      versions 1.1
+    }
+  }
+
+  @backend path \
+    /api/* \
+    /connect/* \
+    /public/* \
+    /player.html \
+    /health \
+    /healthz \
+    /docs \
+    /openapi.json \
+    /favicon.ico \
+    /favicon/* \
+    /static/*
+
   reverse_proxy @backend host.docker.internal:8787 {
     header_up Host {host}
-    header_up X-Forwarded-Host {host}
-    header_up X-Forwarded-Proto {scheme}
-    header_up X-Forwarded-For {remote_host}
   }
 
   reverse_proxy host.docker.internal:3000 {
     header_up Host {host}
-    header_up X-Forwarded-Host {host}
-    header_up X-Forwarded-Proto {scheme}
-    header_up X-Forwarded-For {remote_host}
   }
 }

@@ -6,7 +6,7 @@ Purpose: provide a single HTTPS LAN authority origin for Explorer + `media-sync-
 
 Use:
 
-- `https://cda-DESKTOP.local`
+- `https://cda-desktop.local`
 
 ## Required app environment
 
@@ -24,14 +24,15 @@ Then adjust values for your LAN hostname/IP before running compose.
 
 ```bash
 # Full URLs (backend/frontend authority contracts)
-MEDIA_SYNC_PUBLIC_ORIGIN=https://cda-DESKTOP.local
-MEDIA_SYNC_AUTHORITY_ORIGIN=https://cda-DESKTOP.local
+MEDIA_SYNC_PUBLIC_ORIGIN=https://cda-desktop.local
+MEDIA_SYNC_AUTHORITY_ORIGIN=https://cda-desktop.local
 
 # Hostname only (Caddy site label)
-MEDIA_SYNC_AUTHORITY_HOST=cda-DESKTOP.local
+MEDIA_SYNC_AUTHORITY_HOST=cda-desktop.local
 ```
 
 > Caddy site labels require hostnames, not full URLs.
+> Keep authority host/origin values lowercase for consistent LAN HTTPS behavior.
 
 ## Expected host services
 
@@ -46,12 +47,12 @@ Caddy uses `tls internal` (local CA). iPhone/iPad must trust the Caddy internal 
 
 ## Quick test
 
-```bash
-curl -k https://cda-DESKTOP.local/health
-curl -k "https://cda-DESKTOP.local/api/library?scope=all"
-curl -k "https://cda-DESKTOP.local/thumbnails/<project>/<sha256>.jpg" -I
-curl -k "https://cda-DESKTOP.local/media/<project>/exports/<video>.mp4" -I
-curl -k https://192.168.0.25/health
+```powershell
+curl.exe -k https://cda-desktop.local/health
+curl.exe -k https://cda-desktop.local/
+curl.exe -k -I "https://cda-desktop.local/media/<project>/<relative>.mp4?source=primary"
+curl.exe -k -I "https://cda-desktop.local/thumbnails/<project>/<thumb>.jpg"
+curl.exe -k https://192.168.0.25/health
 ```
 
 Expected behavior:
@@ -75,7 +76,7 @@ Select-String -Path .\cda-home.html -Pattern "192.168.0.25:3000|http://|_next/st
 
 Visit:
 
-`https://cda-DESKTOP.local/connect/device?node_id=<node_id>`
+`https://cda-desktop.local/connect/device?node_id=<node_id>`
 
 Confirm diagnostics show:
 
