@@ -25,7 +25,7 @@ from app.api.library import router as library_router
 from app.api.ingest_claims import router as ingest_claims_router
 from app.api.live_sessions import router as live_sessions_router
 from app.api.media import bulk_router as assets_bulk_router
-from app.api.media import global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
+from app.api.media import debug_router, global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
 from app.api.nodes import router as nodes_router
 from app.api.projects import router as projects_router
 from app.api.sources import router as sources_router
@@ -121,6 +121,7 @@ def create_app() -> FastAPI:
     application.include_router(library_router)
     application.include_router(media_router)
     application.include_router(thumbnail_router)
+    application.include_router(debug_router)
     application.include_router(resolve_router)
     application.include_router(nodes_router)
     application.include_router(ingest_claims_router)

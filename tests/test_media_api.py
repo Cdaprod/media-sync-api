@@ -63,6 +63,106 @@ def test_download_media_and_link_in_listing(client: TestClient, env_settings: Pa
     assert download.content == payload
 
 
+def test_stream_media_supports_byte_ranges(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "range.mp4"
+    payload = b"0123456789abcdefghijklmnopqrstuvwxyz"
+    media_path.write_bytes(payload)
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    stream_url = f"/media/{project_name}/ingest/originals/range.mp4"
+
+    full = client.get(stream_url)
+    assert full.status_code == 200
+    assert full.content == payload
+    assert full.headers.get("accept-ranges") == "bytes"
+
+    first_two = client.get(stream_url, headers={"Range": "bytes=0-1"})
+    assert first_two.status_code == 206
+    assert first_two.content == payload[0:2]
+    assert first_two.headers.get("content-length") == "2"
+    assert first_two.headers.get("content-range") == f"bytes 0-1/{len(payload)}"
+    assert first_two.headers.get("accept-ranges") == "bytes"
+
+    start_only = client.get(stream_url, headers={"Range": "bytes=10-"})
+    assert start_only.status_code == 206
+    assert start_only.content == payload[10:]
+    assert start_only.headers.get("content-range") == f"bytes 10-{len(payload) - 1}/{len(payload)}"
+    assert start_only.headers.get("accept-ranges") == "bytes"
+
+    suffix = client.get(stream_url, headers={"Range": "bytes=-5"})
+    assert suffix.status_code == 206
+    assert suffix.content == payload[-5:]
+    assert suffix.headers.get("content-range") == f"bytes {len(payload) - 5}-{len(payload) - 1}/{len(payload)}"
+    assert suffix.headers.get("accept-ranges") == "bytes"
+
+
+def test_stream_media_invalid_range_returns_416(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "range-invalid.mp4"
+    payload = b"0123456789"
+    media_path.write_bytes(payload)
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    stream_url = f"/media/{project_name}/ingest/originals/range-invalid.mp4"
+    invalid = client.get(stream_url, headers={"Range": "bytes=100-200"})
+    assert invalid.status_code == 416
+    assert invalid.headers.get("content-range") == f"bytes */{len(payload)}"
+    assert invalid.headers.get("accept-ranges") == "bytes"
+
+
+def test_debug_resolve_path_for_media_and_thumbnails(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    thumbs = env_settings / project_name / "ingest" / "thumbnails"
+    ingest.mkdir(parents=True, exist_ok=True)
+    thumbs.mkdir(parents=True, exist_ok=True)
+    media_path = ingest / "debug.mp4"
+    thumb_path = thumbs / "debug.jpg"
+    media_path.write_bytes(b"video")
+    thumb_path.write_bytes(b"jpeg")
+
+    media_res = client.get(
+        "/debug/resolve-path",
+        params={"path": f"/media/{project_name}/ingest/originals/debug.mp4"},
+    )
+    assert media_res.status_code == 200
+    media_payload = media_res.json()
+    assert media_payload["exists"] is True
+    assert media_payload["is_file"] is True
+    assert media_payload["size"] == len(b"video")
+    assert media_payload["safe"] is True
+    assert media_payload["resolved_path"].endswith(f"{project_name}/ingest/originals/debug.mp4")
+
+    thumb_res = client.get(
+        "/debug/resolve-path",
+        params={"path": f"/thumbnails/{project_name}/debug.jpg"},
+    )
+    assert thumb_res.status_code == 200
+    thumb_payload = thumb_res.json()
+    assert thumb_payload["exists"] is True
+    assert thumb_payload["is_file"] is True
+    assert thumb_payload["size"] == len(b"jpeg")
+    assert thumb_payload["safe"] is True
+    assert thumb_payload["resolved_path"].endswith(f"{project_name}/ingest/thumbnails/debug.jpg")
+
+
+def test_debug_resolve_path_rejects_traversal(client: TestClient) -> None:
+    response = client.get(
+        "/debug/resolve-path",
+        params={"path": "/media/demo/../../etc/passwd"},
+    )
+    assert response.status_code == 400
+
+
 def test_thumbnail_endpoint_serves_cached_file(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     ingest = env_settings / project_name / "ingest" / "originals"

@@ -1,3 +1,16 @@
+## 2026-04-25 — Media byte-range compliance + debug path diagnostics (active)
+- [x] Implemented explicit HTTP byte-range handling for `GET /media/{project}/{relative_path}`:
+  - `bytes=0-1` returns `206` with `Content-Length: 2`.
+  - Open-ended (`bytes=100-`) and suffix (`bytes=-500`) ranges return `206`.
+  - Invalid/unsatisfiable ranges return `416` with `Content-Range: bytes */<total>`.
+  - Missing `Range` keeps existing `200` full-stream behavior.
+  - Added `Accept-Ranges: bytes` to media stream responses.
+- [x] Added `GET /debug/resolve-path` for safe media path diagnostics across source roots with traversal rejection and payload keys:
+  - `exists`, `is_file`, `size`, `content_type_guess`, `resolved_path`, `source_root`, `safe`.
+- [x] Wired `/debug/*` backend ownership continuity through FastAPI router registration (Caddy matcher already includes `/debug/*`).
+- [x] Added backend tests for media byte-range success/failure cases and debug resolve-path behavior (media + thumbnails + traversal rejection).
+- [ ] Next: run an iOS Safari probe validation against Caddy (`Range: bytes=0-1`) to confirm end-to-end `206` passthrough on physical device.
+
 ## 2026-04-25 — LAN authority env passthrough + Caddy route ownership contract fix (active)
 - [x] Wired authority/public env passthrough into `docker/docker-compose.yaml` for `media-sync-api` (`MEDIA_SYNC_PUBLIC_ORIGIN`, `MEDIA_SYNC_AUTHORITY_ORIGIN`, `MEDIA_SYNC_AUTHORITY_HOST`).
 - [x] Updated `docker/docker-compose.caddy.yaml` env passthrough to include all three authority/public vars while keeping `.env` loading.
