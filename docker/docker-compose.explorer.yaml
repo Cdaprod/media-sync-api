@@ -39,7 +39,6 @@ services:
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_MEDIA_SYNC_API_BASE: ${NEXT_PUBLIC_MEDIA_SYNC_API_BASE:-http://192.168.0.25:8787}
-
+      NEXT_PUBLIC_MEDIA_SYNC_API_BASE: ${NEXT_PUBLIC_MEDIA_SYNC_API_BASE:-}
 volumes:
   explorer_node_modules:

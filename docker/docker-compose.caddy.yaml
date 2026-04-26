@@ -16,6 +16,10 @@ services:
       - MEDIA_SYNC_PUBLIC_ORIGIN
       - MEDIA_SYNC_AUTHORITY_ORIGIN
       - MEDIA_SYNC_AUTHORITY_HOST
+      - MEDIA_SYNC_CADDY_SITE_LABEL
+      - MEDIA_SYNC_CADDY_PROTOCOLS
+      - MEDIA_SYNC_API_UPSTREAM
+      - MEDIA_SYNC_EXPLORER_UPSTREAM
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
