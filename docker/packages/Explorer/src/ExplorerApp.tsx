@@ -1521,12 +1521,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   
   const absolutizeMediaUrl = useCallback((path?: string) => {
     if (!path) return '';
-    if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) {
+    if (
+      path.startsWith('data:') ||
+      path.startsWith('http://') ||
+      path.startsWith('https://')
+    ) {
+      return path;
+    }
+    // Critical: under Caddy/HTTPS, browser-rendered media assets must stay same-origin.
+    if (path.startsWith('/media/') || path.startsWith('/thumbnails/')) {
       return path;
     }
     if (typeof window === 'undefined') return path;
-    const fallbackBase = `${window.location.protocol}//${window.location.hostname}:8787`;
-    const base = resolvedApiBase || fallbackBase;
+    const base = resolvedApiBase || window.location.origin;
     try {
       return new URL(path, base).toString();
     } catch {

@@ -15,7 +15,12 @@ export function formatBytes(bytes?: number): string {
 
 export function toAbsoluteUrl(path: string | undefined, origin: string): string {
   if (!path) return '';
+
   if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  // 🚨 CRITICAL: preserve relative asset paths for same-origin routing
+  if (path.startsWith('/media/') || path.startsWith('/thumbnails/')) {
     return path;
   }
   return new URL(path, origin).toString();
@@ -37,7 +42,6 @@ function isLikelyPrivateHost(hostname: string): boolean {
   return PRIVATE_IPV4_RE.test(normalized);
 }
 
-// docker/packages/Explorer/src/utils.ts
 export function inferApiBaseUrl(baseUrl: string | undefined, location?: LocationLike): string {
   const trimmed = (baseUrl || '').trim();
   if (!location) return trimmed;
