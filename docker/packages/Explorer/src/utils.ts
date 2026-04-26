@@ -37,36 +37,39 @@ function isLikelyPrivateHost(hostname: string): boolean {
   return PRIVATE_IPV4_RE.test(normalized);
 }
 
+// docker/packages/Explorer/src/utils.ts
 export function inferApiBaseUrl(baseUrl: string | undefined, location?: LocationLike): string {
   const trimmed = (baseUrl || '').trim();
   if (!location) return trimmed;
+
+  // HTTPS/Caddy mode must be same-origin. Never construct/use :8787.
+  if (location.protocol === 'https:') {
+    return '';
+  }
+
   const fallback = `${location.protocol}//${location.hostname}:8787`;
+
   if (!trimmed) {
-    if (location.protocol === 'https:') {
-      // HTTPS gateway deployments should prefer same-origin API routing.
-      return '';
-    }
     const currentPort = (location.port || '').trim();
     if (currentPort && currentPort !== '8787') {
       return fallback;
     }
     return '';
   }
+
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
     return trimmed;
   }
+
   try {
     const parsed = new URL(trimmed);
-    if (location.protocol === 'https:' && parsed.protocol === 'http:') {
-      // Avoid mixed-content API calls when Explorer is loaded over HTTPS.
-      return '';
-    }
     if (['media-sync-api', 'localhost', '127.0.0.1'].includes(parsed.hostname)) {
       return fallback;
     }
   } catch {
     return fallback;
   }
+
   return trimmed;
 }
 
@@ -87,7 +90,7 @@ export function normalizeMediaUrlForOrigin(path: string | undefined, location?: 
 
     const sameHost = parsed.hostname.toLowerCase() === location.hostname.toLowerCase();
     const privateHost = isLikelyPrivateHost(parsed.hostname);
-    const apiPort = parsed.protocol === 'http';
+    const apiPort = parsed.port === '8787';
 
     if (location.protocol === 'https:' && (sameHost || privateHost) && (apiPort || parsed.protocol === 'http:')) {
       const host = location.host || location.hostname;
