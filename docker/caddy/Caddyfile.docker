@@ -1,6 +1,10 @@
 {
   admin off
   local_certs
+  
+  servers {
+    protocols h1 h2
+  }
 }
 
 {$MEDIA_SYNC_AUTHORITY_HOST}, 192.168.0.25 {
