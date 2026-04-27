@@ -63,6 +63,26 @@ export function getDeviceUrl(nodeId: string): string {
   return `/connect/device?node_id=${encodeURIComponent(nodeId)}`;
 }
 
+function normalizeHttpUrl(value: string | null | undefined): string | null {
+  const candidate = (value || '').trim();
+  if (!candidate) return null;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.toString();
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function getRegisteredNodeDeviceUrl(node: NodeControlRecord): string | null {
+  return normalizeHttpUrl(node.base_url);
+}
+
+export function hasRegisteredNodeDeviceUrl(node: NodeControlRecord): boolean {
+  return Boolean(getRegisteredNodeDeviceUrl(node));
+}
+
 export function isTestPayloadClaim(claim: IngestClaimRecord): boolean {
   const fields = [claim.node_id, claim.source_name, claim.local_ref, claim.fingerprint, claim.content_type];
   return fields.some((value) => (value ?? '').toLowerCase() === 'string');

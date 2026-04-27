@@ -210,9 +210,13 @@ test('explorer api client includes bulk media action endpoints', () => {
   assert.ok(content.includes("/api/assets/bulk/compose"));
   assert.ok(content.includes('heartbeatNode'));
   assert.ok(content.includes('/api/nodes/${encodeURIComponent(nodeId)}/heartbeat'));
+  assert.ok(content.includes('deleteNode'));
+  assert.ok(content.includes("buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}`)"));
   assert.ok(content.includes('listIngestClaims'));
   assert.ok(content.includes('/api/ingest/claims'));
   assert.ok(content.includes('getIngestClaim'));
+  assert.ok(content.includes('deleteIngestClaim'));
+  assert.ok(content.includes("buildUrl(`/api/ingest/claims/${encodeURIComponent(claimId)}`)"));
 });
 
 test('api base inference uses centralized Explorer URL policy', () => {
@@ -960,12 +964,12 @@ test('package explorer delete actions route through custom confirmation modal', 
   assert.ok(content.includes("onDelete={() => { if (focused) void deleteMediaSelection([assetSelectionKey(focused, activeProject)]); }}"));
   assert.ok(content.includes('if (deleteSubmitting) return;'));
   assert.ok(content.includes("{deleteSubmitting ? 'Deleting...' : 'Delete'}"));
-  assert.ok(!content.includes('window.confirm'));
   const deleteStart = content.indexOf('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {');
   const confirmStart = content.indexOf('const handleDeleteConfirm = useCallback(async () => {', deleteStart);
   assert.ok(deleteStart >= 0);
   assert.ok(confirmStart > deleteStart);
   const deleteBlock = content.slice(deleteStart, confirmStart);
+  assert.ok(!deleteBlock.includes('window.confirm'));
   assert.ok(!deleteBlock.includes('await api.bulkDeleteMedia(refs);'));
   const confirmEnd = content.indexOf('const handleDeleteCancel = useCallback(() => {', confirmStart);
   const confirmBlock = content.slice(confirmStart, confirmEnd);
@@ -1288,6 +1292,27 @@ test('package explorer context menu styles are explicit and stable', () => {
   assert.ok(styles.includes('text-size-adjust: 100%;'));
   assert.ok(styles.includes('width: min(320px, calc(100vw - 24px));'));
   assert.ok(styles.includes('.context-menu button:focus-visible'));
+  assert.ok(styles.includes('.context-menu button:disabled'));
+  assert.ok(styles.includes('.context-menu button.danger'));
+});
+
+test('runtime and ingest context menus expose operator delete actions with safe URL guards', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const labelsPath = path.join(packageRoot, 'src', 'utils', 'runtimeLabels.ts');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const labels = fs.readFileSync(labelsPath, 'utf8');
+  assert.ok(content.includes('const deleteNodeFromSidebar = useCallback(async (nodeId: string) => {'));
+  assert.ok(content.includes('await api.deleteNode(nodeId);'));
+  assert.ok(content.includes('await reloadSourceControl();'));
+  assert.ok(content.includes('Delete node'));
+  assert.ok(content.includes('disabled={!hasRegisteredNodeDeviceUrl(contextMenu.node)}'));
+  assert.ok(content.includes("title={hasRegisteredNodeDeviceUrl(contextMenu.node) ? 'Open device URL' : 'No device URL registered'}"));
+  assert.ok(content.includes('const deleteIngestClaimFromSidebar = useCallback(async (claimId: string) => {'));
+  assert.ok(content.includes('await api.deleteIngestClaim(claimId);'));
+  assert.ok(content.includes('await reloadIngestClaims();'));
+  assert.ok(content.includes('Delete claim'));
+  assert.ok(labels.includes('export function getRegisteredNodeDeviceUrl(node: NodeControlRecord): string | null {'));
+  assert.ok(labels.includes('export function hasRegisteredNodeDeviceUrl(node: NodeControlRecord): boolean {'));
 });
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {

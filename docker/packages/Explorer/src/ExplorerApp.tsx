@@ -81,7 +81,16 @@ import type { RegisterNodeResponse } from './types/registration';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 import type { LiveSession } from './types/liveSession';
 import type { IngestClaimRecord } from './types/ingestClaim';
-import { getDeviceUrl, getRuntimeCapabilityTags, getRuntimeKinds, isSessionNode, isTestPayloadClaim, isTestPayloadNode } from './utils/runtimeLabels';
+import {
+  getDeviceUrl,
+  getRegisteredNodeDeviceUrl,
+  getRuntimeCapabilityTags,
+  getRuntimeKinds,
+  hasRegisteredNodeDeviceUrl,
+  isSessionNode,
+  isTestPayloadClaim,
+  isTestPayloadNode,
+} from './utils/runtimeLabels';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -3158,9 +3167,40 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setContextMenu({ kind: 'ingest_claim', x, y, claim });
   }, [setContextMenu]);
 
+  const resolveNodeRecord = useCallback((nodeId: string): NodeControlRecord | null => {
+    if (!nodeId) return null;
+    return runtimeNodes.find((entry) => entry.node_id === nodeId) ?? null;
+  }, [runtimeNodes]);
+
+  const openDeviceForNode = useCallback((node: NodeControlRecord) => {
+    const baseUrl = getRegisteredNodeDeviceUrl(node);
+    if (baseUrl) {
+      window.location.href = baseUrl;
+      return;
+    }
+    if (isSessionNode(node)) {
+      openPayloadDetails(
+        'Runtime details',
+        `${node.node_id} · browser/session node`,
+        {
+          ...node,
+          open_device_hint: `/connect?node_id=${encodeURIComponent(node.node_id)}`,
+        },
+      );
+      addToast('warn', 'Runtime', 'No device URL registered; browser/session node details opened.');
+      return;
+    }
+    addToast('warn', 'Runtime', 'No device URL registered');
+  }, [addToast, openPayloadDetails]);
+
   const openDevice = useCallback((nodeId: string) => {
+    const node = resolveNodeRecord(nodeId);
+    if (node) {
+      openDeviceForNode(node);
+      return;
+    }
     window.location.href = getDeviceUrl(nodeId);
-  }, []);
+  }, [openDeviceForNode, resolveNodeRecord]);
 
   const heartbeatNodeNow = useCallback(async (nodeId: string) => {
     try {
@@ -3171,6 +3211,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Heartbeat failed');
     }
   }, [api, addToast, reloadSourceControl]);
+
+  const deleteNodeFromSidebar = useCallback(async (nodeId: string) => {
+    if (!nodeId) return;
+    const ok = window.confirm(`Delete stale node "${nodeId}"?`);
+    if (!ok) return;
+
+    try {
+      await api.deleteNode(nodeId);
+      addToast('good', 'Runtime', `Deleted node ${nodeId}`);
+      await reloadSourceControl();
+    } catch (error) {
+      addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Delete node failed');
+    }
+  }, [addToast, api, reloadSourceControl]);
 
   const openPayloadDetails = useCallback((title: string, subtitle: string | undefined, payload: unknown) => {
     setDetailsModal({ title, subtitle, payload });
@@ -3199,14 +3253,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     persistHiddenIngestClaimIds(next);
   }, [hiddenIngestClaimIds, persistHiddenIngestClaimIds]);
 
-  const hideAllTestPayloadClaims = useCallback(() => {
-    const next = new Set(hiddenIngestClaimIds);
-    for (const claim of ingestClaims) {
-      if (!isTestPayloadClaim(claim)) continue;
-      next.add(claim.claim_id);
+  const deleteIngestClaimFromSidebar = useCallback(async (claimId: string) => {
+    if (!claimId) return;
+    const ok = window.confirm(`Delete ingest claim "${claimId}"?`);
+    if (!ok) return;
+
+    try {
+      await api.deleteIngestClaim(claimId);
+      setIngestClaims((prev) => prev.filter((claim) => claim.claim_id !== claimId));
+      if (hiddenIngestClaimIds.has(claimId)) {
+        const next = new Set(hiddenIngestClaimIds);
+        next.delete(claimId);
+        persistHiddenIngestClaimIds(next);
+      }
+      addToast('good', 'Runtime', `Deleted claim ${claimId}`);
+      await reloadIngestClaims();
+    } catch (error) {
+      addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Delete claim failed');
     }
-    persistHiddenIngestClaimIds(next);
-  }, [hiddenIngestClaimIds, ingestClaims, persistHiddenIngestClaimIds]);
+  }, [addToast, api, hiddenIngestClaimIds, persistHiddenIngestClaimIds, reloadIngestClaims]);
 
   const resetHiddenIngestClaims = useCallback(() => {
     persistHiddenIngestClaimIds(new Set());
@@ -6076,11 +6141,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           className="context-menu open custom-ui-surface"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button type="button" onClick={() => runContextAction(() => openDevice(contextMenu.node.node_id))}>
+          <button
+            type="button"
+            disabled={!hasRegisteredNodeDeviceUrl(contextMenu.node)}
+            title={hasRegisteredNodeDeviceUrl(contextMenu.node) ? 'Open device URL' : 'No device URL registered'}
+            onClick={() => runContextAction(() => openDevice(contextMenu.node.node_id))}
+          >
             Open Device
-          </button>
-          <button type="button" onClick={() => runContextAction(() => heartbeatNodeNow(contextMenu.node.node_id))}>
-            Heartbeat now
           </button>
           <button
             type="button"
@@ -6091,11 +6158,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.node.node_id))}>
             Copy Node ID
           </button>
-          <button type="button" onClick={() => runContextAction(() => copyText(getDeviceUrl(contextMenu.node.node_id)))}>
+          <button
+            type="button"
+            disabled={!hasRegisteredNodeDeviceUrl(contextMenu.node)}
+            title={hasRegisteredNodeDeviceUrl(contextMenu.node) ? 'Copy registered device URL' : 'No device URL registered'}
+            onClick={() => runContextAction(() => copyText(getRegisteredNodeDeviceUrl(contextMenu.node) || ''))}
+          >
             Copy Device URL
           </button>
           <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.node, null, 2)))}>
             Copy Node JSON
+          </button>
+          <button type="button" onClick={() => runContextAction(() => heartbeatNodeNow(contextMenu.node.node_id))}>
+            Heartbeat now
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => runContextAction(() => deleteNodeFromSidebar(contextMenu.node.node_id))}
+          >
+            Delete node
           </button>
         </div>
       ) : null}
@@ -6126,18 +6208,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         >
           <button
             type="button"
-            onClick={() => runContextAction(() => hideIngestClaim(contextMenu.claim.claim_id))}
-          >
-            Hide claim from sidebar
-          </button>
-          <button
-            type="button"
-            onClick={() => runContextAction(() => hideAllTestPayloadClaims())}
-          >
-            Hide all test payload claims
-          </button>
-          <button
-            type="button"
             onClick={() => runContextAction(() => openPayloadDetails('Ingest claim details', `${contextMenu.claim.claim_id}${isTestPayloadClaim(contextMenu.claim) ? ' · test payload' : ''}`, contextMenu.claim))}
           >
             Details
@@ -6147,6 +6217,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </button>
           <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.claim, null, 2)))}>
             Copy Claim JSON
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => hideIngestClaim(contextMenu.claim.claim_id))}
+          >
+            Hide claim from sidebar
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => runContextAction(() => deleteIngestClaimFromSidebar(contextMenu.claim.claim_id))}
+          >
+            Delete claim
           </button>
         </div>
       ) : null}

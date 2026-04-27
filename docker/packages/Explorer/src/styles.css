@@ -2561,6 +2561,18 @@ select.control{
 }
 .context-menu button:hover,
 .context-menu button:focus-visible{ background: rgba(118, 172, 255, 0.16); }
+.context-menu button:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: transparent;
+}
+.context-menu button.danger{
+  color: #ff9aac;
+}
+.context-menu button.danger:hover,
+.context-menu button.danger:focus-visible{
+  background: rgba(255, 120, 142, 0.18);
+}
 
 body.confirm-open{
   overflow: hidden;

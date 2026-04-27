@@ -1,3 +1,12 @@
+## 2026-04-27 — Explorer sidebar destructive runtime/claim actions (active)
+- [x] Added Explorer API client methods for `DELETE /api/nodes/{node_id}` and `DELETE /api/ingest/claims/{claim_id}` with structured error propagation.
+- [x] Added runtime context-menu destructive action (`Delete node`) with confirm → delete → refresh (`reloadSourceControl`) → toast flow.
+- [x] Added ingest-claim context-menu destructive action (`Delete claim`) with confirm → delete → refresh (`reloadIngestClaims`) → toast flow.
+- [x] Updated runtime context menu ordering to match operator minimum set (`Details`, `Heartbeat now`, `Copy Node ID`, `Copy Node JSON`, `Delete node`) while keeping `Open Device` and `Copy Device URL` guarded by registered `base_url`.
+- [x] Hardened runtime open/copy URL behavior to avoid blind device navigation when nodes do not have a registered `base_url`; browser/session nodes now surface details fallback and non-session nodes show explicit warning toast.
+- [x] Added Explorer static contract assertions for new API methods, destructive menu actions, and guarded runtime URL helpers/styles.
+- [ ] Next: replace `window.confirm` with shared Explorer confirm modal for runtime/ingest destructive context actions to align with non-blocking UI conventions.
+
 ## 2026-04-27 — Runtime bearer enforcement for node-owned mutations (active)
 - [x] Added runtime-backed device auth dependency (`runtime_device_auth`) that verifies bearer token + node ID against runtime node registry token hashes.
 - [x] Enforced bearer scope checks on ingest-claim creation and bound `node_id` to authenticated node identity.

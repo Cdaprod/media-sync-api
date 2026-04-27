@@ -30,9 +30,11 @@ export interface ApiClient {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
   heartbeatNode: (nodeId: string) => Promise<NodeControlRecord>;
+  deleteNode: (nodeId: string) => Promise<{ ok: boolean; deleted: boolean; node_id: string }>;
   registerNode: (payload: RegisterNodeRequest) => Promise<RegisterNodeResponse>;
   listIngestClaims: () => Promise<IngestClaimRecord[]>;
   getIngestClaim: (claimId: string) => Promise<IngestClaimRecord>;
+  deleteIngestClaim: (claimId: string) => Promise<{ ok: boolean; deleted: boolean; claim_id: string }>;
   startLiveSession: (nodeId: string, sourceKind: LiveSourceKind, metadata?: Record<string, unknown>) => Promise<LiveSessionRecord>;
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
@@ -130,6 +132,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
 
       return response.json();
     },
+    async deleteNode(nodeId: string): Promise<{ ok: boolean; deleted: boolean; node_id: string }> {
+      const response = await fetch(buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}`), {
+        method: 'DELETE',
+      });
+      const payload = await parseJson<{ ok: boolean; deleted: boolean; node_id: string; detail?: string }>(response);
+      if (!response.ok) throw new Error(String(payload?.detail || 'Delete node failed'));
+      return payload;
+    },
     async listIngestClaims(): Promise<IngestClaimRecord[]> {
       const response = await fetch(buildUrl('/api/ingest/claims'), {
         method: 'GET',
@@ -159,6 +169,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
 
       return response.json();
+    },
+    async deleteIngestClaim(claimId: string): Promise<{ ok: boolean; deleted: boolean; claim_id: string }> {
+      const response = await fetch(buildUrl(`/api/ingest/claims/${encodeURIComponent(claimId)}`), {
+        method: 'DELETE',
+      });
+      const payload = await parseJson<{ ok: boolean; deleted: boolean; claim_id: string; detail?: string }>(response);
+      if (!response.ok) throw new Error(String(payload?.detail || 'Delete ingest claim failed'));
+      return payload;
     },
     async registerNode(payload: RegisterNodeRequest): Promise<RegisterNodeResponse> {
       const response = await fetch(buildUrl('/connect/register'), {
