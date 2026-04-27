@@ -36,3 +36,9 @@
 - [x] Preserved compose and recording pending UI behavior.
 - [ ] Follow-up: extract asset grid orchestration.
 - [ ] Follow-up: convert pending artifact lifecycle to behavior tests.
+
+## Phase 4D: Asset render orchestration extraction
+- [x] Extracted render entry model.
+- [x] Extracted render controller.
+- [x] Preserved grid/list behavior.
+- [ ] Follow-up: extract selection/focus/preview controller.

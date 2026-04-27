@@ -1,3 +1,11 @@
+## 2026-04-27 — Asset render orchestration extraction
+- [x] Extracted rendered entry model.
+- [x] Extracted Explorer render controller.
+- [x] Preserved AssetGrid and AssetList behavior.
+- [x] Preserved pending artifact render lane.
+- [ ] Follow-up: extract selection/focus/preview controller.
+- [ ] Follow-up: add render ordering behavior tests.
+
 ## 2026-04-27 — Pending artifact controller extraction
 - [x] Extracted pending artifact controller from ExplorerApp.
 - [x] Preserved pending compose behavior.

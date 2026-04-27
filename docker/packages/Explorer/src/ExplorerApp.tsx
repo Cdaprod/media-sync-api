@@ -5,10 +5,9 @@ import { createPortal } from 'react-dom';
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
-import type { ComposeJobEnvelope, PendingComposeItem } from './composeJobs';
+import type { ComposeJobEnvelope } from './composeJobs';
 import {
   pendingRecordingMatchesMediaItem,
-  type PendingRecordingAsset,
 } from './liveRecordings';
 import {
   buildMediaIdentityKey,
@@ -57,6 +56,8 @@ import { useRuntimeController } from './runtime/useRuntimeController';
 import { useLivePreviewState } from './runtime/useLivePreviewState';
 import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
 import { usePendingArtifactController } from './pending/usePendingArtifactController';
+import type { PendingComposeRenderedEntry, PendingRecordingRenderedEntry } from './render/renderedEntries';
+import { useExplorerRenderController } from './render/useExplorerRenderController';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -97,10 +98,6 @@ interface ExplorerAppProps {
   apiBaseUrl?: string;
 }
 
-type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
-type PendingComposeRenderedEntry = { kind: 'pending-compose'; pendingItem: PendingComposeItem };
-type PendingRecordingRenderedEntry = { kind: 'pending-recording'; recordingItem: PendingRecordingAsset };
-type RenderedMediaEntry = AssetRenderedEntry | PendingComposeRenderedEntry | PendingRecordingRenderedEntry;
 type PinchOverlayPoint = { x: number; y: number } | null;
 type ThumbnailCandidatePlan = {
   primary?: string;
@@ -2765,16 +2762,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     recordPeerSession,
   } = pending;
 
-  const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
-      kind: 'asset' as const,
-      item,
-    })), [filteredMedia]);
-
-  const renderedMediaEntries = useMemo<RenderedMediaEntry[]>(() => ([
-    ...pendingRecordingEntries,
-    ...pendingComposeEntries,
-    ...assetEntries,
-  ]), [assetEntries, pendingComposeEntries, pendingRecordingEntries]);
+  const renderController = useExplorerRenderController({
+    filteredMedia,
+    pendingComposeEntries,
+    pendingRecordingEntries,
+  });
+  const renderedMediaEntries = renderController.renderedEntries;
 
   useEffect(() => {
     if (!pendingRecordingAssets.length) return;

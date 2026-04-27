@@ -51,6 +51,8 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeEventReactions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'pendingArtifacts.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'renderedEntries.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
@@ -859,10 +861,12 @@ test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const commandsHookPath = path.join(packageRoot, 'src', 'hooks', 'useExplorerCommands.ts');
   const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const renderControllerPath = path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
   const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
+  const renderController = fs.readFileSync(renderControllerPath, 'utf8');
   const uiState = fs.readFileSync(uiStatePath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
   assert.ok(content.includes('Select one or more video clips'));
@@ -894,9 +898,10 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('handleComposeCompletion,'));
   assert.ok(pendingController.includes('registerAcceptedJob: ({ envelope }: { envelope: ComposeJobEnvelope }) => registerAcceptedJob({ envelope }),'));
   assert.ok(content.includes('const {\n    pendingComposeEntries,'));
-  assert.ok(content.includes("...pendingComposeEntries,"));
-  assert.ok(content.includes("...pendingRecordingEntries,"));
-  assert.ok(content.includes("...assetEntries,"));
+  assert.ok(renderController.includes('...pendingRecordingEntries,'));
+  assert.ok(renderController.includes('...pendingComposeEntries,'));
+  assert.ok(content.includes('const renderController = useExplorerRenderController({'));
+  assert.ok(content.includes('const renderedMediaEntries = renderController.renderedEntries;'));
   assert.ok(content.includes("const pending = usePendingArtifactController({"));
   assert.ok(content.includes('onDismissPendingJob={removePendingJob}'));
   const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
@@ -3226,12 +3231,32 @@ test('pending artifact controller extraction wiring remains intact', () => {
   const pendingArtifacts = fs.readFileSync(pendingArtifactsPath, 'utf8');
 
   assert.ok(explorer.includes('usePendingArtifactController'));
-  assert.ok(explorer.includes('pending-recording'));
+  assert.ok(pendingController.includes("kind: 'pending-recording'"));
   assert.ok(pendingController.includes('pendingArtifactFromCompose'));
   assert.ok(pendingController.includes('pendingArtifactFromRecording'));
   assert.ok(pendingController.includes('usePendingComposeJobs'));
   assert.ok(pendingController.includes('useRecordingSessions'));
   assert.ok(pendingArtifacts.includes('sortPendingArtifactsForDisplay'));
+});
+
+test('asset render orchestration extraction wiring remains intact', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const renderedEntriesPath = path.join(packageRoot, 'src', 'render', 'renderedEntries.ts');
+  const renderControllerPath = path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const renderedEntries = fs.readFileSync(renderedEntriesPath, 'utf8');
+  const renderController = fs.readFileSync(renderControllerPath, 'utf8');
+
+  assert.ok(explorer.includes('useExplorerRenderController'));
+  assert.ok(explorer.includes('usePendingArtifactController'));
+  assert.ok(explorer.includes("import { AssetGrid } from './components/AssetGrid';"));
+  assert.ok(explorer.includes("import { AssetList } from './components/AssetList';"));
+  assert.ok(renderedEntries.includes('export function buildRenderedMediaEntries'));
+  assert.ok(renderedEntries.includes('pending-artifact marker'));
+  assert.ok(renderController.includes('buildRenderedMediaEntries'));
+  assert.ok(renderController.includes('pendingComposeEntries'));
+  assert.ok(renderController.includes('pendingRecordingEntries'));
 });
 
 test('live recorder pipeline wiring captures peer stream and records durable assets', () => {

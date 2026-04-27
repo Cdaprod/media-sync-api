@@ -74,3 +74,12 @@ This document maps the current Explorer package feature architecture under `dock
 - [x] ExplorerApp remains the composition surface.
 - [ ] Follow-up: split asset grid/render orchestration.
 - [ ] Follow-up: add behavior tests for pending artifact reconciliation timing.
+
+## Phase 4D: Asset render orchestration extraction
+
+- [x] Rendered media entry assembly moved out of ExplorerApp.
+- [x] Grid/list render inputs centralized.
+- [x] Pending artifact rendering behavior preserved.
+- [x] AssetGrid and AssetList remain unchanged.
+- [ ] Follow-up: split selection/preview orchestration.
+- [ ] Follow-up: add behavior tests for render entry ordering.
