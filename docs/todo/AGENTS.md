@@ -1,3 +1,10 @@
+## 2026-04-27 — Selection and preview controller extraction
+- [x] Extracted selection/preview controller.
+- [x] Preserved selected asset behavior.
+- [x] Preserved preview activation behavior.
+- [x] Preserved completed-recording highlight behavior.
+- [ ] Follow-up: extract bulk/action menu controller.
+
 ## 2026-04-27 — Asset render orchestration extraction
 - [x] Extracted rendered entry model.
 - [x] Extracted Explorer render controller.

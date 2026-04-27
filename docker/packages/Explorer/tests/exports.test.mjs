@@ -53,6 +53,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'renderedEntries.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
@@ -565,9 +566,10 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
   assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
   assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
-  assert.ok(explorer.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
-  assert.ok(explorer.includes("const [previewActivationKey, setPreviewActivationKey] = useState('');"));
-  assert.ok(explorer.includes('const commitPreviewActivationKey = useCallback((nextKey: string) => {'));
+  assert.ok(explorer.includes('useSelectionPreviewController({'));
+  assert.ok(explorer.includes('activeAssetKey,'));
+  assert.ok(explorer.includes('previewActivationKey,'));
+  assert.ok(explorer.includes('commitPreviewActivationKey,'));
   assert.ok(explorer.includes('setTapOverlayTrigger((prev) => prev + 1);'));
   assert.ok(explorer.includes('const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {'));
   assert.ok(explorer.includes('setActiveAssetKey(nextKey);'));
@@ -1411,9 +1413,11 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const selectionControllerPath = path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const gridContent = fs.readFileSync(gridPath, 'utf8');
+  const selectionController = fs.readFileSync(selectionControllerPath, 'utf8');
   assert.ok(gridContent.includes('data-no-preview="1"'));
   assert.ok(hookContent.includes('if (inNoPreviewZone(event.target)) {'));
   assert.ok(hookContent.includes('if (inspectorOpen) {'));
@@ -1422,7 +1426,7 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
   assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
   assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
-  assert.ok(content.includes('toggleSelectionWithOrder'));
+  assert.ok(selectionController.includes('toggleSelectionWithOrder'));
   assert.ok(content.includes('selectionOrderIndexMap'));
   assert.ok(content.includes('selectedOrderMap.get(selectionKey)'));
 });
@@ -3259,6 +3263,29 @@ test('asset render orchestration extraction wiring remains intact', () => {
   assert.ok(renderController.includes('pendingRecordingEntries'));
 });
 
+test('selection and preview controller extraction wiring remains intact', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const selectionControllerPath = path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const selectionController = fs.readFileSync(selectionControllerPath, 'utf8');
+
+  assert.ok(explorer.includes('useSelectionPreviewController'));
+  assert.ok(explorer.includes('selected,'));
+  assert.ok(explorer.includes('activeAssetKey,'));
+  assert.ok(explorer.includes('previewActivationKey,'));
+  assert.ok(explorer.includes('reinforcedActiveKey,'));
+  assert.ok(explorer.includes('selectAndActivateAssetKey(matchedKey);'));
+  assert.ok(explorer.includes('Recording reconciled'));
+  assert.ok(explorer.includes('onToggleSelected={toggleSelected}'));
+  assert.ok(selectionController.includes('const [selected, setSelected] = useState<Set<string>>(new Set());'));
+  assert.ok(selectionController.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
+  assert.ok(selectionController.includes("const [previewActivationKey, setPreviewActivationKey] = useState('');"));
+  assert.ok(selectionController.includes("const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');"));
+  assert.ok(selectionController.includes('toggleSelectedByKey'));
+  assert.ok(selectionController.includes('commitPreviewActivationKey'));
+  assert.ok(selectionController.includes('selectAndActivateAssetKey'));
+});
+
 test('live recorder pipeline wiring captures peer stream and records durable assets', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
   const recorderPath = path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx');
@@ -3307,7 +3334,7 @@ test('live recording provisional asset grid contract exists', () => {
   assert.match(explorerApp, /pendingRecordingMatchesMediaItem/);
   assert.match(explorerApp, /Recording reconciled/);
   assert.match(explorerApp, /dismissPendingRecording/);
-  assert.match(explorerApp, /setPreviewActivationKey\(matchedKey\)/);
+  assert.match(explorerApp, /selectAndActivateAssetKey\(matchedKey\)/);
   assert.match(liveSourceCard, /onRecordPeerSession/);
   assert.match(liveSourceCard, /setPeerStream/);
   assert.match(liveSourceCard, /Record as asset/);

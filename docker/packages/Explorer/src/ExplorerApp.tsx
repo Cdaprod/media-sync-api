@@ -20,7 +20,6 @@ import {
   selectionOrderIndexMap,
   sortMedia,
   sortMediaByRecent,
-  toggleSelectionWithOrder,
 } from './state';
 import type { MediaMeta, MediaTypeFilter, SortKey } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
@@ -58,6 +57,7 @@ import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
 import { usePendingArtifactController } from './pending/usePendingArtifactController';
 import type { PendingComposeRenderedEntry, PendingRecordingRenderedEntry } from './render/renderedEntries';
 import { useExplorerRenderController } from './render/useExplorerRenderController';
+import { useSelectionPreviewController } from './selection/useSelectionPreviewController';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -632,11 +632,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaScope, setMediaScope] = useState<'project' | 'all'>('project');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
-  const [activeAssetKey, setActiveAssetKey] = useState('');
-  const [previewActivationKey, setPreviewActivationKey] = useState('');
   const [previewPlaybackToken, setPreviewPlaybackToken] = useState(0);
+  const selectionPreview = useSelectionPreviewController({
+    onPreviewActivationChanged: () => setPreviewPlaybackToken((token) => token + 1),
+  });
+  const {
+    selected,
+    setSelected,
+    selectedOrder,
+    setSelectedOrder,
+    clearSelectionState,
+    toggleSelectedByKey,
+    activeAssetKey,
+    setActiveAssetKey,
+    previewActivationKey,
+    setPreviewActivationKey,
+    commitPreviewActivationKey,
+    reinforcedActiveKey,
+    setReinforcedActiveKey,
+    selectAndActivateAssetKey,
+  } = selectionPreview;
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);
@@ -821,7 +836,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);
   const lastCommittedColumnsRef = useRef(DEFAULT_COLUMNS_MOBILE);
-  const selectedOrderRef = useRef<string[]>([]);
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const topbarIntentRef = useRef<IntentController | null>(null);
   const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);
@@ -853,7 +867,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [holdOverlayProgress, setHoldOverlayProgress] = useState(0);
   const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
-  const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
 
   // ---------------------------------------------------------------------------
   // Deferred preview/focus coupled domain (intentionally root-owned for now).
@@ -1455,11 +1468,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `${selected.size} item(s) queued.`
     : 'Select clips to enable.';
 
-  const clearSelectionState = useCallback(() => {
-    setSelected(new Set());
-    setSelectedOrder([]);
-  }, []);
-
   const clearActiveAsset = useCallback(() => {
     focusOrchestratorRef.current?.clearRetainedProxyOnDeselect();
     setActiveAssetKey('');
@@ -1480,10 +1488,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     orientationCacheRef.current = readOrientationCache();
   }, []);
-
-  useEffect(() => {
-    selectedOrderRef.current = selectedOrder;
-  }, [selectedOrder]);
 
   const getCachedOrientation = useCallback((key: string) => {
     return orientationCacheRef.current.get(key) ?? null;
@@ -2047,14 +2051,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     (item: MediaItem) => {
       const key = assetSelectionKey(item, activeProject);
       if (!key) return;
-      setSelected((current) => {
-        const { selected: nextSelected, order } = toggleSelectionWithOrder(current, selectedOrderRef.current, key);
-        selectedOrderRef.current = order;
-        setSelectedOrder(order);
-        return nextSelected;
-      });
+      toggleSelectedByKey(key);
     },
-    [activeProject, assetSelectionKey],
+    [activeProject, assetSelectionKey, toggleSelectedByKey],
   );
 
   const clearSelection = useCallback(() => {
@@ -2374,15 +2373,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => () => {
     clearCloseSettleTimeout();
   }, [clearCloseSettleTimeout]);
-
-  const commitPreviewActivationKey = useCallback((nextKey: string) => {
-    setPreviewActivationKey((prev) => {
-      if (prev !== nextKey) {
-        setPreviewPlaybackToken((token) => token + 1);
-      }
-      return nextKey;
-    });
-  }, []);
 
   const focusRelative = useCallback((offset: number) => {
     if (!focused || !filteredMedia.length) return;
@@ -2780,18 +2770,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (!matchedKey) continue;
 
       reconciledRecordingIdsRef.current.add(recording.recordingId);
-      setSelected((current) => {
-        if (current.has(matchedKey)) return current;
-        const next = new Set(current);
-        next.add(matchedKey);
-        const nextOrder = [...selectedOrderRef.current.filter((value) => next.has(value)), matchedKey];
-        selectedOrderRef.current = nextOrder;
-        setSelectedOrder(nextOrder);
-        return next;
-      });
-      setActiveAssetKey(matchedKey);
-      setPreviewActivationKey(matchedKey);
-      setReinforcedActiveKey(matchedKey);
+      selectAndActivateAssetKey(matchedKey);
       addToast(
         'good',
         'Recording reconciled',
@@ -2807,7 +2786,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     media,
     dismissPendingRecording,
     pendingRecordingAssets,
-    setPreviewActivationKey,
+    selectAndActivateAssetKey,
   ]);
 
   useEffect(() => {

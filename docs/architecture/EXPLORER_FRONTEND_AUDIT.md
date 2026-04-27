@@ -83,3 +83,12 @@ This document maps the current Explorer package feature architecture under `dock
 - [x] AssetGrid and AssetList remain unchanged.
 - [ ] Follow-up: split selection/preview orchestration.
 - [ ] Follow-up: add behavior tests for render entry ordering.
+
+## Phase 4E: Selection and preview controller extraction
+
+- [x] Selection state moved out of ExplorerApp.
+- [x] Active asset/focus state moved out of ExplorerApp.
+- [x] Preview activation and reinforced highlight state centralized.
+- [x] Recording reconciliation highlight behavior preserved.
+- [ ] Follow-up: extract bulk action orchestration.
+- [ ] Follow-up: add behavior tests for selection/focus transitions.

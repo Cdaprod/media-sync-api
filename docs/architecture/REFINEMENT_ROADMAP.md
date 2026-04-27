@@ -42,3 +42,8 @@
 - [x] Extracted render controller.
 - [x] Preserved grid/list behavior.
 - [ ] Follow-up: extract selection/focus/preview controller.
+
+## Phase 4E: Selection and preview controller extraction
+- [x] Extracted selection/preview controller.
+- [x] Preserved active asset and preview behavior.
+- [ ] Follow-up: bulk action controller extraction.
