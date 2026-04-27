@@ -1,3 +1,10 @@
+## 2026-04-27 — Completed-recording reconciliation + saved asset feedback pass (active)
+- [x] Added Explorer reconciliation lane for completed/saved runtime recording sessions that detects indexed media matches via `pendingRecordingMatchesMediaItem(...)`.
+- [x] On successful match, Explorer now auto-selects/highlights the indexed asset (`setSelected`, `setActiveAssetKey`, `setPreviewActivationKey`, `setReinforcedActiveKey`) and emits an explicit `Recording reconciled` toast.
+- [x] Reconciliation now dismisses the matched runtime recording session (`dismissLiveRecordingAsset(recordingId)`) to remove duplicate pending-recording card noise once the real media asset is present.
+- [x] Updated Explorer static contracts to lock reconciliation markers (`Recording reconciled`, `dismissLiveRecordingAsset`, preview activation write-through).
+- [ ] Next: add focused runtime UI test coverage for reconciliation timing where media indexing lands several polling ticks after recording session completion.
+
 ## 2026-04-27 — Runtime-backed recording session lifecycle + StreamHub ownership pass (active)
 - [x] Added runtime-backed `RecordingSession` model (`app/models/recording_session.py`) and in-memory runtime registry (`app/runtime/recording_sessions.py`) with create/get/list/update/delete semantics.
 - [x] Wired runtime recording session ownership (`runtime.recording_sessions`) during runtime assembly and mounted dedicated `/api/recordings` routes for start/list/complete/fail/delete lifecycle transitions.

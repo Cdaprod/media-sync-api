@@ -808,6 +808,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
+  const reconciledRecordingIdsRef = useRef<Set<string>>(new Set());
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -2853,6 +2854,47 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ...pendingComposeEntries,
     ...assetEntries,
   ]), [assetEntries, pendingComposeEntries, pendingRecordingEntries]);
+
+  useEffect(() => {
+    if (!pendingRecordingAssets.length) return;
+    for (const recording of pendingRecordingAssets) {
+      if (recording.status !== 'completed' && recording.status !== 'saved') continue;
+      if (reconciledRecordingIdsRef.current.has(recording.recordingId)) continue;
+      const matchedMedia = media.find((item) => pendingRecordingMatchesMediaItem(recording, item));
+      if (!matchedMedia) continue;
+      const matchedKey = assetSelectionKey(matchedMedia, activeProject);
+      if (!matchedKey) continue;
+
+      reconciledRecordingIdsRef.current.add(recording.recordingId);
+      setSelected((current) => {
+        if (current.has(matchedKey)) return current;
+        const next = new Set(current);
+        next.add(matchedKey);
+        const nextOrder = [...selectedOrderRef.current.filter((value) => next.has(value)), matchedKey];
+        selectedOrderRef.current = nextOrder;
+        setSelectedOrder(nextOrder);
+        return next;
+      });
+      setActiveAssetKey(matchedKey);
+      setPreviewActivationKey(matchedKey);
+      setReinforcedActiveKey(matchedKey);
+      addToast(
+        'good',
+        'Recording reconciled',
+        `Saved recording indexed: ${matchedMedia.relative_path || recording.outputName || 'asset ready'}.`,
+        `live-recording-reconciled-${recording.recordingId}`,
+      );
+      void dismissLiveRecordingAsset(recording.recordingId);
+    }
+  }, [
+    activeProject,
+    addToast,
+    assetSelectionKey,
+    dismissLiveRecordingAsset,
+    media,
+    pendingRecordingAssets,
+    setPreviewActivationKey,
+  ]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;

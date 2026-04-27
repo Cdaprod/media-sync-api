@@ -3168,6 +3168,9 @@ test('live recording provisional asset grid contract exists', () => {
   assert.match(explorerApp, /handleRecordPeerSession/);
   assert.doesNotMatch(explorerApp, /onRecordPeerStream/);
   assert.match(explorerApp, /pendingRecordingMatchesMediaItem/);
+  assert.match(explorerApp, /Recording reconciled/);
+  assert.match(explorerApp, /dismissLiveRecordingAsset/);
+  assert.match(explorerApp, /setPreviewActivationKey\(matchedKey\)/);
   assert.match(liveSourceCard, /onRecordPeerSession/);
   assert.match(liveSourceCard, /setPeerStream/);
   assert.match(liveSourceCard, /Record as asset/);
