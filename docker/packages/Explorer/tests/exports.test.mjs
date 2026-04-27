@@ -18,10 +18,12 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useLiveRecordingAssets.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingRecordingAssetCard.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'composeJobs.ts')));
@@ -38,6 +40,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'awaitVisibleVideoPaint.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -411,12 +414,12 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));
   const pendingComposeHookIndex = explorer.indexOf('} = usePendingComposeJobs({');
   const visiblePendingComposeIndex = explorer.indexOf('const visiblePendingComposeItems = useMemo(() => {');
-  const pendingEntriesMemoIndex = explorer.indexOf('const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({');
-  const pendingEntriesDependencyIndex = explorer.indexOf('pendingEntries.length');
+  const pendingComposeEntriesMemoIndex = explorer.indexOf('const pendingComposeEntries = useMemo<PendingComposeRenderedEntry[]>(() => visiblePendingComposeItems');
+  const pendingComposeEntriesDependencyIndex = explorer.indexOf('pendingComposeEntries.length');
   assert.ok(pendingComposeHookIndex >= 0);
   assert.ok(visiblePendingComposeIndex > pendingComposeHookIndex);
-  assert.ok(pendingEntriesMemoIndex > visiblePendingComposeIndex);
-  assert.ok(pendingEntriesDependencyIndex > pendingEntriesMemoIndex);
+  assert.ok(pendingComposeEntriesMemoIndex > visiblePendingComposeIndex);
+  assert.ok(pendingComposeEntriesDependencyIndex > pendingComposeEntriesMemoIndex);
 });
 
 test('explorer ui-state seam owns root-local modal/surface/runtime state cluster', () => {
@@ -836,8 +839,9 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes("pollIntervalMs: 2000,"));
   assert.ok(content.includes("const visiblePendingComposeItems = useMemo(() => {"));
   assert.ok(content.includes("return sortPendingComposeItemsForDisplay(relevant);"));
-  assert.ok(content.includes("const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({"));
-  assert.ok(content.includes("...pendingEntries,"));
+  assert.ok(content.includes("const pendingComposeEntries = useMemo<PendingComposeRenderedEntry[]>(() => visiblePendingComposeItems"));
+  assert.ok(content.includes("...pendingComposeEntries,"));
+  assert.ok(content.includes("...pendingRecordingEntries,"));
   assert.ok(content.includes("...assetEntries,"));
   assert.ok(content.includes("if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {"));
   assert.ok(content.includes("if (item.status !== 'finalizing') return;"));
@@ -887,9 +891,10 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(explorer.includes('const fallbackThumb = buildThumbFallback(kind);'));
   assert.ok(!explorer.includes("const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'"));
   assert.ok(grid.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
-  assert.ok(grid.includes("if (entry.kind === 'pending') {"));
+  assert.ok(grid.includes("if (entry.kind === 'pending-compose') {"));
+  assert.ok(grid.includes("if (entry.kind === 'pending-recording') {"));
   assert.ok(list.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
-  assert.ok(list.includes("if (entry.kind === 'pending') {"));
+  assert.ok(list.includes("if (entry.kind === 'pending-compose') {"));
   assert.ok(card.includes('data-pending-compose-card="true"'));
   assert.ok(card.includes('function PendingComposeWaterSvg({'));
   assert.ok(card.includes('data-water-svg="true"'));
@@ -3115,7 +3120,7 @@ test('explorer runtime panel wires live WebRTC session hooks and chip normalizat
   assert.ok(chips.includes("addChip('live', 'capability')"));
 });
 
-test('live recorder wiring captures peer stream and uploads durable recording assets', () => {
+test('live recorder pipeline wiring captures peer stream and records durable assets', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
   const recorderPath = path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx');
   const cardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
@@ -3129,6 +3134,31 @@ test('live recorder wiring captures peer stream and uploads durable recording as
   assert.ok(api.includes('sendLiveSessionControl'));
   assert.ok(recorder.includes('MediaRecorder'));
   assert.ok(recorder.includes('uploadLiveSessionRecording'));
-  assert.ok(card.includes('LiveRecorder'));
+  assert.ok(card.includes('onRecordPeerStream'));
+  assert.ok(card.includes('Record as asset'));
   assert.ok(card.includes('setPeerStream'));
+});
+
+test('live recording provisional asset grid contract exists', () => {
+  const liveRecordings = fs.readFileSync(path.join(packageRoot, 'src', 'liveRecordings.ts'), 'utf8');
+  const pendingRecordingCard = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'PendingRecordingAssetCard.tsx'), 'utf8');
+  const assetGrid = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx'), 'utf8');
+  const explorerApp = fs.readFileSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx'), 'utf8');
+  const liveSourceCard = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx'), 'utf8');
+
+  assert.match(liveRecordings, /PendingRecordingAsset/);
+  assert.match(liveRecordings, /pendingRecordingMatchesMediaItem/);
+  assert.match(liveRecordings, /sortPendingRecordingAssetsForDisplay/);
+  assert.match(pendingRecordingCard, /data-pending-recording-card/);
+  assert.match(pendingRecordingCard, /RECORDING/);
+  assert.match(pendingRecordingCard, /Open/);
+  assert.match(assetGrid, /pending-recording/);
+  assert.match(assetGrid, /PendingRecordingAssetCard/);
+  assert.match(assetGrid, /onStopPendingRecording/);
+  assert.match(explorerApp, /useLiveRecordingAssets/);
+  assert.match(explorerApp, /handleRecordPeerStream/);
+  assert.match(explorerApp, /pendingRecordingMatchesMediaItem/);
+  assert.match(liveSourceCard, /onRecordPeerStream/);
+  assert.match(liveSourceCard, /setPeerStream/);
+  assert.match(liveSourceCard, /Record as asset/);
 });

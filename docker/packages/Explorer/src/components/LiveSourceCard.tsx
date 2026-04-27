@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import type { LiveSessionRecord } from '../types/liveSession';
-import { LiveRecorder } from './LiveRecorder';
 
 function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
   const [url, setUrl] = useState('');
@@ -32,25 +31,21 @@ function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
 interface LiveSourceCardProps {
   session: LiveSessionRecord;
   apiBase?: string;
-  recordingProject: string;
-  recordingSource?: string;
-  recordingTargetDir?: string;
-  onRecordingSaved?: () => void;
   onOpen?: (session: LiveSessionRecord) => void;
   onStartRecording?: (session: LiveSessionRecord) => void;
   onStopRecording?: (session: LiveSessionRecord) => void;
+  onRemoteStream?: (session: LiveSessionRecord, stream: MediaStream) => void;
+  onRecordPeerStream?: (session: LiveSessionRecord, stream: MediaStream) => void;
 }
 
 export function LiveSourceCard({
   session,
   apiBase = '',
-  recordingProject,
-  recordingSource = 'primary',
-  recordingTargetDir = 'ingest/live',
-  onRecordingSaved,
   onOpen,
   onStartRecording,
   onStopRecording,
+  onRemoteStream,
+  onRecordPeerStream,
 }: LiveSourceCardProps) {
   const isActive = session.status === 'previewing' || session.status === 'recording';
   const previewUrl = usePreviewUrl(apiBase, session.session_id, isActive);
@@ -94,6 +89,7 @@ export function LiveSourceCard({
       if (!stream || !peerVideoRef.current) return;
       peerVideoRef.current.srcObject = stream;
       setPeerStream(stream);
+      onRemoteStream?.(session, stream);
     };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === 'connected') setPeerStatus('connected');
@@ -159,7 +155,7 @@ export function LiveSourceCard({
       setPeerStream(null);
       setPeerStatus('idle');
     };
-  }, [apiBase, isActive, peerEnabled, peerRetryToken, session.session_id]);
+  }, [apiBase, isActive, onRemoteStream, peerEnabled, peerRetryToken, session, session.session_id]);
 
   const statusColor =
     session.status === 'recording' ? 'var(--red, #ff4444)'
@@ -266,6 +262,19 @@ export function LiveSourceCard({
           <div style={{ marginTop: 8 }}>
             <video ref={peerVideoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 8, background: '#000' }} />
             <div className="small" style={{ marginTop: 6 }}>viewer: {peerStatus}</div>
+            {onRecordPeerStream ? (
+              <button
+                className="btn"
+                type="button"
+                disabled={!peerStream}
+                style={{ marginTop: 6, width: '100%', fontSize: 11 }}
+                onClick={() => {
+                  if (peerStream) onRecordPeerStream(session, peerStream);
+                }}
+              >
+                Record as asset
+              </button>
+            ) : null}
             <button
               className="btn"
               type="button"
@@ -275,16 +284,6 @@ export function LiveSourceCard({
               Reconnect peer view
             </button>
             {peerError ? <div className="small" style={{ marginTop: 6, color: '#ff9a90' }}>{peerError}</div> : null}
-            <LiveRecorder
-              stream={peerStream}
-              apiBase={apiBase}
-              sessionId={session.session_id}
-              nodeId={session.node_id}
-              project={recordingProject}
-              source={recordingSource}
-              targetDir={recordingTargetDir}
-              onRecordingSaved={() => onRecordingSaved?.()}
-            />
           </div>
         ) : null}
         {onOpen ? (

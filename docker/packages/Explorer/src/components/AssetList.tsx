@@ -2,6 +2,8 @@ import React, { memo } from 'react';
 
 import type { MediaItem } from '../types';
 import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';
+import PendingRecordingAssetCard from './PendingRecordingAssetCard';
+import type { PendingRecordingAsset } from '../liveRecordings';
 import type { ExplorerAssetViewModel } from './AssetGrid';
 
 interface AssetListProps {
@@ -9,7 +11,8 @@ interface AssetListProps {
   canSelect: boolean;
   items: Array<
     | { kind: 'asset'; item: MediaItem }
-    | { kind: 'pending'; pendingItem: PendingComposeAsset }
+    | { kind: 'pending-compose'; pendingItem: PendingComposeAsset }
+    | { kind: 'pending-recording'; recordingItem: PendingRecordingAsset }
   >;
   onOpenPreview: (item: MediaItem) => void;
   onToggleSelected: (item: MediaItem) => void;
@@ -33,12 +36,20 @@ function AssetListComponent({
   return (
     <>
       {items.map((entry) => {
-        if (entry.kind === 'pending') {
+        if (entry.kind === 'pending-compose') {
           return (
             <PendingComposeAssetCard
               key={`pending-row-${entry.pendingItem.jobId}`}
               item={entry.pendingItem}
               onDismiss={entry.pendingItem.status === 'failed' ? () => onDismissPendingJob(entry.pendingItem.jobId) : undefined}
+            />
+          );
+        }
+        if (entry.kind === 'pending-recording') {
+          return (
+            <PendingRecordingAssetCard
+              key={`pending-recording-row-${entry.recordingItem.recordingId}`}
+              item={entry.recordingItem}
             />
           );
         }

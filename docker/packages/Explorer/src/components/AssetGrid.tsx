@@ -1,8 +1,10 @@
 import React, { memo, useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react';
 
 import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';
+import PendingRecordingAssetCard from './PendingRecordingAssetCard';
 import type { AssetPointerHandlers } from '../hooks/useAssetInteractions';
 import type { MediaItem } from '../types';
+import type { PendingRecordingAsset } from '../liveRecordings';
 import { computeMasonryLayout } from '../explorer/masonry/computeMasonryLayout';
 
 export interface ExplorerAssetViewModel {
@@ -35,7 +37,8 @@ export interface ExplorerAssetViewModel {
 
 type GridEntry =
   | { kind: 'asset'; item: MediaItem }
-  | { kind: 'pending'; pendingItem: PendingComposeAsset };
+  | { kind: 'pending-compose'; pendingItem: PendingComposeAsset }
+  | { kind: 'pending-recording'; recordingItem: PendingRecordingAsset };
 
 interface AssetGridProps {
   buildAssetViewModel: (item: MediaItem) => ExplorerAssetViewModel;
@@ -45,10 +48,14 @@ interface AssetGridProps {
   entries: GridEntry[];
   onToggleSelected: (item: MediaItem) => void;
   onDismissPendingJob: (jobId: string) => void;
+  onStopPendingRecording?: (recordingId: string) => void;
+  onDismissPendingRecording?: (recordingId: string) => void;
+  onOpenPendingRecordingAsset?: (assetUrl: string) => void;
 }
 
 function heightRatioForEntry(entry: GridEntry, viewModel?: ExplorerAssetViewModel): number {
-  if (entry.kind === 'pending') return 1;
+  if (entry.kind === 'pending-compose') return 1;
+  if (entry.kind === 'pending-recording') return 0.84;
   const width = Number(entry.item.width) || 0;
   const height = Number(entry.item.height) || 0;
   if (width > 0 && height > 0) {
@@ -68,6 +75,9 @@ function AssetGridComponent({
   entries,
   onToggleSelected,
   onDismissPendingJob,
+  onStopPendingRecording,
+  onDismissPendingRecording,
+  onOpenPendingRecordingAsset,
 }: AssetGridProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const layoutCommitCountRef = useRef(0);
@@ -215,7 +225,7 @@ function AssetGridComponent({
   }, [measureRenderWindow]);
 
   const gridItems = useMemo(() => entries.map((entry) => {
-    if (entry.kind === 'pending') {
+    if (entry.kind === 'pending-compose' || entry.kind === 'pending-recording') {
       return { entry } as const;
     }
     const viewModel = buildAssetViewModel(entry.item);
@@ -513,13 +523,13 @@ function AssetGridComponent({
             '--card-index': String(index),
           };
 
-          if (entry.kind === 'pending') {
-            return (
-              <div
-                key={`pending-${entry.pendingItem.jobId}`}
-                className="masonry-card"
-                style={positionedStyle}
-                data-pending-job={entry.pendingItem.jobId}
+                if (entry.kind === 'pending-compose') {
+                  return (
+                    <div
+                      key={`pending-compose-${entry.pendingItem.jobId}`}
+                      className="masonry-card"
+                      style={positionedStyle}
+                      data-pending-job={entry.pendingItem.jobId}
                 data-layout-top={layoutTop}
                 data-layout-bottom={layoutBottom}
               >
@@ -527,9 +537,29 @@ function AssetGridComponent({
                   item={entry.pendingItem}
                   onDismiss={entry.pendingItem.status === 'failed' ? () => onDismissPendingJob(entry.pendingItem.jobId) : undefined}
                 />
-              </div>
-            );
-          }
+                    </div>
+                  );
+                }
+
+                if (entry.kind === 'pending-recording') {
+                  return (
+                    <div
+                      key={`pending-recording-${entry.recordingItem.recordingId}`}
+                      className="masonry-card"
+                      style={positionedStyle}
+                      data-pending-recording={entry.recordingItem.recordingId}
+                      data-layout-top={layoutTop}
+                      data-layout-bottom={layoutBottom}
+                    >
+                      <PendingRecordingAssetCard
+                        item={entry.recordingItem}
+                        onStop={onStopPendingRecording}
+                        onDismiss={onDismissPendingRecording}
+                        onOpenSavedAsset={onOpenPendingRecordingAsset}
+                      />
+                    </div>
+                  );
+                }
 
           const viewModel = item.viewModel;
           if (!viewModel) return null;
