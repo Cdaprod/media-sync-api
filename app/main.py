@@ -36,6 +36,7 @@ from app.api.upload import router as upload_router
 from app.api.reindex import all_router as reindex_all_router
 from app.api.reindex import router as reindex_router
 from app.api.resolve_actions import router as resolve_router
+from app.api.events import router as events_router
 from app.config import get_settings
 from app.runtime import create_runtime
 
@@ -133,6 +134,7 @@ def create_app() -> FastAPI:
     application.include_router(live_sessions_router)
     application.include_router(live_webrtc_router)
     application.include_router(recordings_router)
+    application.include_router(events_router)
 
     application.mount(
         "/public",

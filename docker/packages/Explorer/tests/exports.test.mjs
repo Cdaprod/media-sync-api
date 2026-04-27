@@ -21,6 +21,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useLiveRecordingAssets.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useRecordingSessions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'live.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'liveSessions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'recordings.ts')));
@@ -356,6 +357,16 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('viewer_id: viewerId'));
   assert.ok(card.includes('/signal/answer'));
   assert.ok(card.includes('peerVideoRef'));
+});
+
+test('runtime SSE hook exists and uses EventSource /api/events', () => {
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts');
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.ok(hook.includes("new EventSource('/api/events')"));
+  assert.ok(hook.includes("new CustomEvent('runtime:event'"));
+  assert.ok(app.includes('useRuntimeEvents({ enabled: true })'));
 });
 
 test('clipboard helper includes fallback copy behavior', () => {

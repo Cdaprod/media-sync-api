@@ -59,6 +59,13 @@ def _require_registry(runtime: AppRuntime):
     return registry
 
 
+def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
+    bus = getattr(runtime, "events", None)
+    if bus is None or not hasattr(bus, "emit"):
+        return
+    bus.emit(event_type, payload)
+
+
 @router.get("", response_model=RecordingSessionListResponse)
 async def list_recording_sessions(runtime: AppRuntime = Depends(get_runtime)) -> RecordingSessionListResponse:
     registry = _require_registry(runtime)
@@ -81,7 +88,13 @@ async def start_recording_session(
         target_dir=(payload.target_dir or "ingest/live").strip() or "ingest/live",
         state="recording",
     )
-    return RecordingSessionResponse(recording=registry.create(session))
+    created = registry.create(session)
+    _emit_event(
+        runtime,
+        "recording.start",
+        {"recording_id": created.recording_id, "session_id": created.session_id, "state": created.state},
+    )
+    return RecordingSessionResponse(recording=created)
 
 
 @router.post("/{recording_id}/complete", response_model=RecordingSessionResponse)
@@ -101,6 +114,11 @@ async def complete_recording_session(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Recording session not found: {recording_id}") from exc
+    _emit_event(
+        runtime,
+        "recording.complete",
+        {"recording_id": updated.recording_id, "session_id": updated.session_id, "state": updated.state},
+    )
     return RecordingSessionResponse(recording=updated)
 
 
@@ -119,6 +137,11 @@ async def fail_recording_session(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Recording session not found: {recording_id}") from exc
+    _emit_event(
+        runtime,
+        "recording.fail",
+        {"recording_id": updated.recording_id, "session_id": updated.session_id, "state": updated.state},
+    )
     return RecordingSessionResponse(recording=updated)
 
 

@@ -93,6 +93,13 @@ def _registry(runtime: AppRuntime) -> WebRtcLiveSessionRegistry:
     return registry
 
 
+def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
+    bus = getattr(runtime, "events", None)
+    if bus is None or not hasattr(bus, "emit"):
+        return
+    bus.emit(event_type, payload)
+
+
 @router.post("/{session_id}/offer")
 async def publish_offer(
     session_id: str,
@@ -106,6 +113,7 @@ async def publish_offer(
     elif session.node_id != payload.node_id:
         raise HTTPException(status_code=409, detail="session_node_mismatch")
     registry.set_offer(session_id, payload.offer)
+    _emit_event(runtime, "live.offer", {"session_id": session_id, "node_id": session.node_id})
     return {"ok": True, "session_id": session_id, "node_id": session.node_id}
 
 
@@ -140,6 +148,7 @@ async def publish_viewer_answer(
         raise HTTPException(status_code=404, detail="session_not_found")
     normalized_viewer_id = (viewer_id or "default").strip() or "default"
     registry.set_answer(session_id, payload.answer, normalized_viewer_id)
+    _emit_event(runtime, "live.answer", {"session_id": session_id, "viewer_id": normalized_viewer_id})
     return {"ok": True, "session_id": session_id, "viewer_id": normalized_viewer_id}
 
 

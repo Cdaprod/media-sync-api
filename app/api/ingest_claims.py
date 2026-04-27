@@ -26,6 +26,13 @@ router = APIRouter(prefix="/api/ingest/claims", tags=["ingest"])
 """
 
 
+def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
+    bus = getattr(runtime, "events", None)
+    if bus is None or not hasattr(bus, "emit"):
+        return
+    bus.emit(event_type, payload)
+
+
 @router.post("", response_model=SubmitAssetClaimResponse, status_code=201)
 async def submit_ingest_claim(
     payload: SubmitAssetClaimRequest,
@@ -55,7 +62,13 @@ async def submit_ingest_claim(
     payload = payload.model_copy(update=updates)
 
     try:
-        return service.submit_claim(payload)
+        response = service.submit_claim(payload)
+        _emit_event(
+            runtime,
+            "ingest.claim",
+            {"action": "created", "claim_id": response.claim_id, "node_id": response.node_id},
+        )
+        return response
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -91,6 +104,7 @@ async def delete_ingest_claim(claim_id: str, runtime: AppRuntime = Depends(get_r
     if not deleted:
         raise HTTPException(status_code=404, detail="ingest_claim_not_found")
 
+    _emit_event(runtime, "ingest.claim", {"action": "deleted", "claim_id": claim_id})
     return {
         "ok": True,
         "deleted": True,

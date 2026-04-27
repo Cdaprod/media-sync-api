@@ -1,3 +1,10 @@
+## 2026-04-27 — SSE runtime events
+- [x] Runtime event bus added
+- [x] SSE endpoint added
+- [x] Explorer receives runtime events
+- [ ] Replace polling progressively
+- [ ] Add event persistence/replay
+
 ## 2026-04-27 — CAS metadata in indexed media
 - [x] Added optional sha256/content_address fields to indexed media records.
 - [x] Preserved legacy media compatibility for entries without sha256.

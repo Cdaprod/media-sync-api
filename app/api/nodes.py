@@ -65,6 +65,13 @@ def _to_public_node(record: NodeRecord) -> NodeRecordPublic:
     return NodeRecordPublic(**public_node_record_dict(record))
 
 
+def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
+    bus = getattr(runtime, "events", None)
+    if bus is None or not hasattr(bus, "emit"):
+        return
+    bus.emit(event_type, payload)
+
+
 class NodeClaimRequest(BaseModel):
     roles: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
@@ -145,7 +152,13 @@ async def heartbeat_node(
     try:
         current = registry.require(node_id)
         updated = current.with_heartbeat().model_copy(update={"status": "online"})
-        return _to_public_node(registry.upsert(updated))
+        persisted = _to_public_node(registry.upsert(updated))
+        _emit_event(
+            runtime,
+            "node.heartbeat",
+            {"node_id": node_id, "status": persisted.status},
+        )
+        return persisted
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

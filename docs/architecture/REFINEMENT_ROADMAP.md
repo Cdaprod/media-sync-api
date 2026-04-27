@@ -23,3 +23,10 @@
 - [x] Added duplicate-content deterministic hash tests.
 - [ ] Follow-up: promote content_address to primary asset identity where safe.
 - [ ] Follow-up: add duplicate detection UX in Explorer.
+
+## Phase 3: Event-driven runtime state
+- [x] Added SSE event stream
+- [x] Added runtime event bus
+- [x] Explorer receives real-time hints
+- [ ] Replace polling with event-driven updates
+- [ ] Add event replay/backfill

@@ -85,6 +85,7 @@ class AppRuntime:
     lifecycle: Any | None = None
     live_sessions: Any | None = None
     recording_sessions: Any | None = None
+    events: Any | None = None
     started: bool = False
 
     async def start(self) -> None:

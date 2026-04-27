@@ -61,6 +61,7 @@ import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
 import { useWebRtcLiveSessions } from './hooks/useWebRtcLiveSessions';
 import { useRecordingSessions } from './hooks/useRecordingSessions';
+import { useRuntimeEvents } from './hooks/useRuntimeEvents';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -604,6 +605,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
   const {
     sessions: liveSessions,
+    reload: reloadLiveSessions,
   } = useLiveSessions({
     listLiveSessions: api.listLiveSessions,
   });
@@ -761,6 +763,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     enabled: true,
     poll: sidebarOpen || detailsModal !== null,
   });
+  useRuntimeEvents({ enabled: true });
+
+  useEffect(() => {
+    const onEvt = (event: Event) => {
+      const customEvent = event as CustomEvent<{ type?: string }>;
+      const evt = customEvent.detail;
+      if (!evt || typeof evt !== 'object') return;
+
+      if (evt.type === 'recording.complete') {
+        void refreshLibrarySnapshot();
+      }
+
+      if (evt.type === 'live.offer') {
+        void reloadLiveSessions();
+        void reloadWebRtcLiveSessions();
+      }
+    };
+
+    window.addEventListener('runtime:event', onEvt as EventListener);
+    return () => window.removeEventListener('runtime:event', onEvt as EventListener);
+  }, [refreshLibrarySnapshot, reloadLiveSessions, reloadWebRtcLiveSessions]);
 
 
   const reloadIngestClaims = useCallback(async () => {

@@ -13,6 +13,7 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.runtime.ingest_registry import IngestClaimRegistry
+from app.runtime.events import RuntimeEventBus
 from app.runtime.lifecycle import RuntimeLifecycleController, RuntimeLifecycleSettings
 from app.runtime.live_sessions import LiveSessionRegistry, WebRtcLiveSessionRegistry
 from app.runtime.nodes import NodeRegistry
@@ -190,6 +191,7 @@ def create_runtime() -> AppRuntime:
     )
     runtime.live_sessions = WebRtcLiveSessionRegistry()
     runtime.recording_sessions = RecordingSessionRegistry()
+    runtime.events = RuntimeEventBus()
     runtime.lifecycle = RuntimeLifecycleController(runtime=runtime, settings=RuntimeLifecycleSettings())
 
     if role == "runner" and services.upstream_client is not None:
