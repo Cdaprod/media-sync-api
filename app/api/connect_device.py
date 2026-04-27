@@ -63,6 +63,10 @@ async def connect_device(node_id: str, runtime: AppRuntime = Depends(get_runtime
       statusEl.textContent = text;
     }}
 
+    function candidateKey(candidate) {{
+      return `${{candidate?.candidate || ''}}|${{candidate?.sdpMid || ''}}|${{candidate?.sdpMLineIndex ?? ''}}`;
+    }}
+
     function pollDelayMs(attempt) {{
       if (attempt > 30) return 5000;
       if (attempt > 10) return 2000;
@@ -98,7 +102,7 @@ async def connect_device(node_id: str, runtime: AppRuntime = Depends(get_runtime
         if (response.ok) {{
           const payload = await response.json();
           await pc.setRemoteDescription(payload.answer);
-          setStatus('Explorer answered. Live connection established.');
+          setStatus('Answer received. Waiting for ICE connectivity…');
           return;
         }}
 
@@ -111,6 +115,30 @@ async def connect_device(node_id: str, runtime: AppRuntime = Depends(get_runtime
       }}
     }}
 
+    async function pollViewerIce(pc, sessionId, seenIce) {{
+      let attempts = 0;
+      while (pc.connectionState !== 'closed') {{
+        await waitForVisibleDocument();
+        try {{
+          const response = await fetch(`/api/live/${{encodeURIComponent(sessionId)}}/viewers/default/ice`, {{ cache: 'no-store' }});
+          if (response.ok) {{
+            const payload = await response.json();
+            const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+            for (const candidate of candidates) {{
+              const key = candidateKey(candidate);
+              if (!key || seenIce.has(key)) continue;
+              seenIce.add(key);
+              await pc.addIceCandidate(candidate);
+            }}
+          }}
+        }} catch {{
+          // keep polling; transient network failures are expected in LAN test loops
+        }}
+        attempts += 1;
+        await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs(attempts)));
+      }}
+    }}
+
     async function start() {{
       try {{
         const stream = await navigator.mediaDevices.getUserMedia({{ video: true, audio: true }});
@@ -118,7 +146,26 @@ async def connect_device(node_id: str, runtime: AppRuntime = Depends(get_runtime
 
         const sessionId = (globalThis.crypto?.randomUUID?.() || `${{Date.now()}}-${{Math.random().toString(16).slice(2)}}`);
         const pc = new RTCPeerConnection();
+        const seenViewerIce = new Set();
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+        pc.onicegatheringstatechange = () => {{
+          if (pc.iceGatheringState === 'gathering') setStatus('ICE gathering…');
+        }};
+        pc.onicecandidate = async (event) => {{
+          if (!event.candidate) return;
+          await fetch(`/api/live/${{encodeURIComponent(sessionId)}}/ice/device`, {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            body: JSON.stringify({{ candidate: event.candidate.toJSON() }}),
+          }}).catch(() => undefined);
+        }};
+        pc.onconnectionstatechange = () => {{
+          if (pc.connectionState === 'connected') setStatus('Connected');
+          else if (pc.connectionState === 'disconnected') setStatus('Disconnected');
+          else if (pc.connectionState === 'failed') setStatus('Connection failed');
+          else if (pc.connectionState === 'connecting') setStatus('Connecting…');
+        }};
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -130,6 +177,7 @@ async def connect_device(node_id: str, runtime: AppRuntime = Depends(get_runtime
         }});
 
         setStatus(`Published offer for session ${{sessionId}}. Waiting for Explorer answer…`);
+        void pollViewerIce(pc, sessionId, seenViewerIce);
         await pollForAnswer(pc, sessionId);
 
         // TODO(recording): fork recording from MediaStreamTrack / MediaStream via MediaRecorder.

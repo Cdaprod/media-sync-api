@@ -38,6 +38,103 @@ def test_post_answer_stores_and_get_answer_returns_answer(client):
     assert fetched.json()["answer"]["type"] == "answer"
 
 
+def test_multiple_viewers_can_post_distinct_answers_and_list_viewers(client):
+    session_id = "sess-live-multi-viewers"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-multi", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+
+    first = client.post(
+        f"/api/live/{session_id}/viewers/viewer-a/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer-a"}},
+    )
+    assert first.status_code == 200
+    second = client.post(
+        f"/api/live/{session_id}/viewers/viewer-b/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer-b"}},
+    )
+    assert second.status_code == 200
+
+    listed = client.get("/api/live")
+    assert listed.status_code == 200
+    session = next((entry for entry in listed.json()["sessions"] if entry["session_id"] == session_id), None)
+    assert session is not None
+    assert session["viewer_count"] == 2
+    assert set(session["viewer_ids"]) == {"viewer-a", "viewer-b"}
+    assert session["state"] == "connected"
+
+
+def test_legacy_default_answer_compatibility_returns_default_or_first(client):
+    session_id = "sess-live-default-compat"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-default", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+
+    viewer_only = client.post(
+        f"/api/live/{session_id}/viewers/viewer-z/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=viewer-z"}},
+    )
+    assert viewer_only.status_code == 200
+
+    legacy_fetch = client.get(f"/api/live/{session_id}/answer")
+    assert legacy_fetch.status_code == 200
+    assert legacy_fetch.json()["answer"]["sdp"] == "v=0\r\no=viewer-z"
+
+    default_post = client.post(
+        f"/api/live/{session_id}/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=default-answer"}},
+    )
+    assert default_post.status_code == 200
+
+    default_fetch = client.get(f"/api/live/{session_id}/answer")
+    assert default_fetch.status_code == 200
+    assert default_fetch.json()["answer"]["sdp"] == "v=0\r\no=default-answer"
+
+
+def test_device_and_viewer_ice_exchange_and_viewer_state_updates(client):
+    session_id = "sess-live-ice-state"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-ice", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-ice/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer"}},
+    )
+
+    device_ice = client.post(
+        f"/api/live/{session_id}/ice/device",
+        json={"candidate": {"candidate": "candidate-device", "sdpMid": "0", "sdpMLineIndex": 0}},
+    )
+    assert device_ice.status_code == 200
+    device_ice_list = client.get(f"/api/live/{session_id}/ice/device")
+    assert device_ice_list.status_code == 200
+    assert len(device_ice_list.json()["candidates"]) == 1
+
+    viewer_ice = client.post(
+        f"/api/live/{session_id}/viewers/viewer-ice/ice",
+        json={"candidate": {"candidate": "candidate-viewer", "sdpMid": "0", "sdpMLineIndex": 0}},
+    )
+    assert viewer_ice.status_code == 200
+    viewer_ice_list = client.get(f"/api/live/{session_id}/viewers/viewer-ice/ice")
+    assert viewer_ice_list.status_code == 200
+    assert len(viewer_ice_list.json()["candidates"]) == 1
+
+    state = client.post(
+        f"/api/live/{session_id}/viewers/viewer-ice/state",
+        json={"state": "checking"},
+    )
+    assert state.status_code == 200
+
+    listed = client.get("/api/live")
+    assert listed.status_code == 200
+    session = next((entry for entry in listed.json()["sessions"] if entry["session_id"] == session_id), None)
+    assert session is not None
+    assert session["connection_states"]["viewer-ice"] == "checking"
+
+
 def test_list_live_sessions_returns_sessions_object_shape(client):
     session_id = "sess-live-list-1"
     client.post(
@@ -101,3 +198,5 @@ def test_connect_device_renders_camera_shell_for_registered_node(client):
     assert response.status_code == 200
     assert "navigator.mediaDevices.getUserMedia" in response.text
     assert "/api/live/" in response.text
+    assert "/ice/device" in response.text
+    assert "viewers/default/ice" in response.text

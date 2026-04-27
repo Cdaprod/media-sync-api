@@ -3109,16 +3109,30 @@ test('thumbnail normalization preserves API port when remapping localhost urls',
 test('explorer runtime panel wires live WebRTC session hooks and chip normalization', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const chipsPath = path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts');
+  const livePreviewPath = path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx');
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const chips = fs.readFileSync(chipsPath, 'utf8');
+  const livePreview = fs.readFileSync(livePreviewPath, 'utf8');
+  const api = fs.readFileSync(apiPath, 'utf8');
 
   assert.ok(explorer.includes('useWebRtcLiveSessions'));
   assert.ok(explorer.includes('LivePreview'));
   assert.ok(explorer.includes('/connect/device?node_id='));
   assert.ok(explorer.includes('buildRuntimeChips(node, liveSession)'));
+  assert.ok(api.includes('viewers/${encodeURIComponent(viewerId)}/answer'));
+  assert.ok(api.includes('/ice/device'));
+  assert.ok(api.includes('postLiveViewerState'));
+  assert.ok(livePreview.includes('randomUUID'));
+  assert.ok(livePreview.includes('postLiveViewerAnswer'));
+  assert.ok(livePreview.includes('postLiveViewerIce'));
+  assert.ok(livePreview.includes('listLiveDeviceIce'));
+  assert.ok(livePreview.includes('onicecandidate'));
   assert.ok(chips.includes('can_proxy_streams'));
   assert.ok(chips.includes("tokens.includes('session-node')"));
   assert.ok(chips.includes("tokens.includes('session')"));
+  assert.ok(chips.includes('viewer_count'));
+  assert.ok(chips.includes('connection_states'));
   assert.ok(chips.includes("addChip('live', 'capability')"));
 });
 

@@ -1,3 +1,12 @@
+## 2026-04-27 — Multi-viewer ICE reliability for live sessions pass (active)
+- [x] Extended runtime WebRTC session model to support multi-viewer answers, viewer-scoped ICE lanes, device ICE lane, connection-state map, and updated-at continuity while preserving legacy default-answer compatibility.
+- [x] Added viewer-aware signaling routes under `/api/live` for per-viewer answer/ICE/state plus device ICE publish/list and legacy `/answer` compatibility behavior.
+- [x] Updated `/connect/device` browser shell to publish device ICE, poll viewer ICE (`viewers/default/ice`), and expose richer connection-state text (`ICE gathering`, `connected`, `disconnected`, etc.) without changing baseline offer flow.
+- [x] Extended Explorer API client + live preview answer flow for stable explicit viewer IDs, viewer answer posting, viewer ICE publishing, device ICE polling, candidate dedupe, and viewer-state publication on connect/cleanup.
+- [x] Updated runtime chip normalization to surface viewer count and connection-state chips (`connected/checking/disconnected/failed`) in runtime side panel.
+- [x] Added/updated backend and frontend static contract tests for multi-viewer answers, ICE exchange routes, viewer state updates, viewer_count serialization, and client wiring markers.
+- [ ] Next: add an end-to-end browser automation scenario proving two simultaneous Explorer viewers can answer one live session and both maintain ICE connectivity across one reconnect cycle.
+
 ## 2026-04-27 — Completed-recording reconciliation + saved asset feedback pass (active)
 - [x] Added Explorer reconciliation lane for completed/saved runtime recording sessions that detects indexed media matches via `pendingRecordingMatchesMediaItem(...)`.
 - [x] On successful match, Explorer now auto-selects/highlights the indexed asset (`setSelected`, `setActiveAssetKey`, `setPreviewActivationKey`, `setReinforcedActiveKey`) and emits an explicit `Recording reconciled` toast.

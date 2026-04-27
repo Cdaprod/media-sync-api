@@ -93,9 +93,20 @@ class WebRtcLiveSession:
     session_id: str
     node_id: str
     offer: dict | None = None
-    answer: dict | None = None
+    answers: dict[str, dict] = field(default_factory=dict)
+    viewer_ice: dict[str, list[dict]] = field(default_factory=dict)
+    device_ice: list[dict] = field(default_factory=list)
+    connection_states: dict[str, str] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    @property
+    def answer(self) -> dict | None:
+        if "default" in self.answers:
+            return self.answers["default"]
+        for value in self.answers.values():
+            return value
+        return None
 
 
 class WebRtcLiveSessionRegistry:
@@ -124,9 +135,47 @@ class WebRtcLiveSessionRegistry:
         session.updated_at = datetime.now(timezone.utc).isoformat()
         return session
 
-    def set_answer(self, session_id: str, answer: dict) -> WebRtcLiveSession:
+    def set_answer(self, session_id: str, answer: dict, viewer_id: str = "default") -> WebRtcLiveSession:
         session = self.require(session_id)
-        session.answer = answer
+        viewer_key = (viewer_id or "default").strip() or "default"
+        session.answers[viewer_key] = answer
+        session.connection_states.setdefault(viewer_key, "answer-posted")
+        session.updated_at = datetime.now(timezone.utc).isoformat()
+        return session
+
+    def get_answer(self, session_id: str, viewer_id: str = "default") -> dict | None:
+        session = self.require(session_id)
+        viewer_key = (viewer_id or "default").strip() or "default"
+        if viewer_key in session.answers:
+            return session.answers[viewer_key]
+        return session.answer
+
+    def add_device_ice(self, session_id: str, candidate: dict) -> WebRtcLiveSession:
+        session = self.require(session_id)
+        session.device_ice.append(candidate)
+        session.updated_at = datetime.now(timezone.utc).isoformat()
+        return session
+
+    def add_viewer_ice(self, session_id: str, viewer_id: str, candidate: dict) -> WebRtcLiveSession:
+        session = self.require(session_id)
+        viewer_key = (viewer_id or "default").strip() or "default"
+        session.viewer_ice.setdefault(viewer_key, []).append(candidate)
+        session.updated_at = datetime.now(timezone.utc).isoformat()
+        return session
+
+    def list_device_ice(self, session_id: str) -> list[dict]:
+        session = self.require(session_id)
+        return list(session.device_ice)
+
+    def list_viewer_ice(self, session_id: str, viewer_id: str = "default") -> list[dict]:
+        session = self.require(session_id)
+        viewer_key = (viewer_id or "default").strip() or "default"
+        return list(session.viewer_ice.get(viewer_key, []))
+
+    def set_connection_state(self, session_id: str, viewer_id: str, state: str) -> WebRtcLiveSession:
+        session = self.require(session_id)
+        viewer_key = (viewer_id or "default").strip() or "default"
+        session.connection_states[viewer_key] = (state or "unknown").strip() or "unknown"
         session.updated_at = datetime.now(timezone.utc).isoformat()
         return session
 

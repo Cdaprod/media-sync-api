@@ -26,6 +26,9 @@ export type WebRtcLiveSession = {
   node_id: string;
   has_offer?: boolean;
   has_answer?: boolean;
+  viewer_count?: number;
+  viewer_ids?: string[];
+  connection_states?: Record<string, string>;
   state?: 'waiting_for_answer' | 'connected' | 'inactive' | string;
   created_at?: string;
   updated_at?: string;
@@ -113,6 +116,10 @@ export interface ApiClient {
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
   listLiveSessions: () => Promise<LiveSessionRecord[]>;
   listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
+  postLiveViewerAnswer: (sessionId: string, viewerId: string, answer: RTCSessionDescriptionInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
+  postLiveViewerIce: (sessionId: string, viewerId: string, candidate: RTCIceCandidateInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
+  listLiveDeviceIce: (sessionId: string) => Promise<RTCIceCandidateInit[]>;
+  postLiveViewerState: (sessionId: string, viewerId: string, state: string) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
@@ -555,6 +562,78 @@ export function createApiClient(baseUrl = ''): ApiClient {
       const payload = await parseJson<any>(response);
       const sessions = Array.isArray(payload) ? payload : payload?.sessions;
       return Array.isArray(sessions) ? sessions : [];
+    },
+    async postLiveViewerAnswer(
+      sessionId: string,
+      viewerId: string,
+      answer: RTCSessionDescriptionInit,
+    ): Promise<{ ok: boolean; session_id: string; viewer_id: string }> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/viewers/${encodeURIComponent(viewerId)}/answer`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ answer }),
+      });
+      const payload = await parseJson<{ ok: boolean; session_id: string; viewer_id: string; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to post viewer answer: ${response.status}`));
+      }
+      return payload;
+    },
+    async postLiveViewerIce(
+      sessionId: string,
+      viewerId: string,
+      candidate: RTCIceCandidateInit,
+    ): Promise<{ ok: boolean; session_id: string; viewer_id: string }> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/viewers/${encodeURIComponent(viewerId)}/ice`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ candidate }),
+      });
+      const payload = await parseJson<{ ok: boolean; session_id: string; viewer_id: string; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to post viewer ICE candidate: ${response.status}`));
+      }
+      return payload;
+    },
+    async listLiveDeviceIce(sessionId: string): Promise<RTCIceCandidateInit[]> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/ice/device`), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const payload = await parseJson<{ candidates?: RTCIceCandidateInit[]; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to load device ICE candidates: ${response.status}`));
+      }
+      return Array.isArray(payload.candidates) ? payload.candidates : [];
+    },
+    async postLiveViewerState(
+      sessionId: string,
+      viewerId: string,
+      state: string,
+    ): Promise<{ ok: boolean; session_id: string; viewer_id: string }> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/viewers/${encodeURIComponent(viewerId)}/state`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ state }),
+      });
+      const payload = await parseJson<{ ok: boolean; session_id: string; viewer_id: string; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to post viewer state: ${response.status}`));
+      }
+      return payload;
     },
     async listProjects(): Promise<Project[]> {
       const response = await fetch(buildUrl('/api/projects'));

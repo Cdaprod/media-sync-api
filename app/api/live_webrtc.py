@@ -29,14 +29,24 @@ class LiveAnswerPayload(BaseModel):
     answer: dict[str, Any]
 
 
+class LiveIcePayload(BaseModel):
+    candidate: dict[str, Any]
+
+
+class LiveViewerStatePayload(BaseModel):
+    state: str
+
+
 
 
 def _serialize_live_session(session: WebRtcLiveSession) -> dict[str, Any]:
     has_offer = session.offer is not None
-    has_answer = session.answer is not None
-    if has_offer and not has_answer:
+    has_answer = bool(session.answers)
+    viewer_ids = sorted(session.answers.keys())
+    viewer_count = len(viewer_ids)
+    if has_offer and viewer_count == 0:
         state = "waiting_for_answer"
-    elif has_offer and has_answer:
+    elif has_offer and viewer_count > 0:
         state = "connected"
     else:
         state = "inactive"
@@ -45,7 +55,10 @@ def _serialize_live_session(session: WebRtcLiveSession) -> dict[str, Any]:
         "node_id": session.node_id,
         "has_offer": has_offer,
         "has_answer": has_answer,
+        "viewer_count": viewer_count,
+        "viewer_ids": viewer_ids,
         "state": state,
+        "connection_states": dict(session.connection_states),
         "created_at": session.created_at,
         "updated_at": session.updated_at,
     }
@@ -88,21 +101,108 @@ async def publish_answer(
     payload: LiveAnswerPayload,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> dict[str, object]:
+    return await publish_viewer_answer(session_id, "default", payload, runtime)
+
+
+@router.post("/{session_id}/viewers/{viewer_id}/answer")
+async def publish_viewer_answer(
+    session_id: str,
+    viewer_id: str,
+    payload: LiveAnswerPayload,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, object]:
     registry = _registry(runtime)
     session = registry.get(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="session_not_found")
-    registry.set_answer(session_id, payload.answer)
-    return {"ok": True, "session_id": session_id}
+    normalized_viewer_id = (viewer_id or "default").strip() or "default"
+    registry.set_answer(session_id, payload.answer, normalized_viewer_id)
+    return {"ok": True, "session_id": session_id, "viewer_id": normalized_viewer_id}
 
 
 @router.get("/{session_id}/answer")
 async def fetch_answer(session_id: str, runtime: AppRuntime = Depends(get_runtime)) -> dict[str, Any]:
+    return await fetch_viewer_answer(session_id, "default", runtime)
+
+
+@router.get("/{session_id}/viewers/{viewer_id}/answer")
+async def fetch_viewer_answer(
+    session_id: str,
+    viewer_id: str,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, Any]:
     registry = _registry(runtime)
     session = registry.get(session_id)
-    if session is None or session.answer is None:
+    if session is None:
         raise HTTPException(status_code=404, detail="answer_not_found")
-    return {"answer": session.answer}
+    answer = registry.get_answer(session_id, viewer_id)
+    if answer is None:
+        raise HTTPException(status_code=404, detail="answer_not_found")
+    return {"answer": answer}
+
+
+@router.post("/{session_id}/ice/device")
+async def publish_device_ice(
+    session_id: str,
+    payload: LiveIcePayload,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, object]:
+    registry = _registry(runtime)
+    if registry.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    registry.add_device_ice(session_id, payload.candidate)
+    return {"ok": True, "session_id": session_id}
+
+
+@router.get("/{session_id}/ice/device")
+async def fetch_device_ice(session_id: str, runtime: AppRuntime = Depends(get_runtime)) -> dict[str, Any]:
+    registry = _registry(runtime)
+    if registry.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    return {"candidates": registry.list_device_ice(session_id)}
+
+
+@router.post("/{session_id}/viewers/{viewer_id}/ice")
+async def publish_viewer_ice(
+    session_id: str,
+    viewer_id: str,
+    payload: LiveIcePayload,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, object]:
+    registry = _registry(runtime)
+    if registry.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    normalized_viewer_id = (viewer_id or "default").strip() or "default"
+    registry.add_viewer_ice(session_id, normalized_viewer_id, payload.candidate)
+    return {"ok": True, "session_id": session_id, "viewer_id": normalized_viewer_id}
+
+
+@router.get("/{session_id}/viewers/{viewer_id}/ice")
+async def fetch_viewer_ice(
+    session_id: str,
+    viewer_id: str,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, Any]:
+    registry = _registry(runtime)
+    if registry.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    normalized_viewer_id = (viewer_id or "default").strip() or "default"
+    return {"viewer_id": normalized_viewer_id, "candidates": registry.list_viewer_ice(session_id, normalized_viewer_id)}
+
+
+@router.post("/{session_id}/viewers/{viewer_id}/state")
+async def publish_viewer_state(
+    session_id: str,
+    viewer_id: str,
+    payload: LiveViewerStatePayload,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, object]:
+    registry = _registry(runtime)
+    if registry.get(session_id) is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    normalized_viewer_id = (viewer_id or "default").strip() or "default"
+    registry.set_connection_state(session_id, normalized_viewer_id, payload.state)
+    return {"ok": True, "session_id": session_id, "viewer_id": normalized_viewer_id}
 
 
 @router.get("")

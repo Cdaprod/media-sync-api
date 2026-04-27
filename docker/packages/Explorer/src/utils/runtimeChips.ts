@@ -39,6 +39,16 @@ export function buildRuntimeChips(node: NodeControlRecord, liveSession?: WebRtcL
 
   if (liveSession?.state === 'waiting_for_answer') addChip('waiting answer', 'status-waiting');
   if (liveSession?.state === 'connected') addChip('connected', 'status-connected');
+  const viewerCount = Number(liveSession?.viewer_count || 0);
+  if (viewerCount > 0) {
+    addChip(`viewers: ${viewerCount}`, 'status-connected');
+  }
+  const connectionStates = liveSession?.connection_states || {};
+  const connectionValues = Object.values(connectionStates).map((value) => String(value).toLowerCase());
+  if (connectionValues.some((value) => value === 'connected')) addChip('webrtc connected', 'status-connected');
+  else if (connectionValues.some((value) => value === 'checking' || value === 'connecting')) addChip('webrtc checking', 'status-waiting');
+  else if (connectionValues.some((value) => value === 'disconnected')) addChip('webrtc disconnected', 'muted');
+  else if (connectionValues.some((value) => value === 'failed')) addChip('webrtc failed', 'danger');
 
   const tokens = [
     ...(node.roles ?? []),
