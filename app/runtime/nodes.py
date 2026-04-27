@@ -51,6 +51,10 @@ class NodeRecord(BaseModel):
     ephemeral: bool = False
     last_heartbeat_at: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
+    token_hash: str | None = None
+    token_preview: str | None = None
+    auth_type: str | None = None
+    auth_scopes: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate(self) -> "NodeRecord":
@@ -72,6 +76,14 @@ class NodeRecord(BaseModel):
 
     def with_heartbeat(self) -> "NodeRecord":
         return self.model_copy(update={"last_heartbeat_at": datetime.now(timezone.utc).isoformat()})
+
+
+def public_node_record_dict(record: "NodeRecord") -> dict[str, object]:
+    """Serialize a node record for API/UI surfaces without secret token material."""
+
+    payload = record.model_dump(mode="json")
+    payload.pop("token_hash", None)
+    return payload
 
 
 class NodeRegistry:

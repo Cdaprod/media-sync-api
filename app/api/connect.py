@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.config import get_settings
 from app.runtime import get_runtime
-from app.runtime.nodes import NodeRecord, NodeStatus, validate_node_id
+from app.auth.node_tokens import issue_node_token
+from app.runtime.nodes import NodeRecord, NodeStatus, public_node_record_dict, validate_node_id
 from app.runtime.source_records import SourceRecord, merge_remote_source_record
 from app.runtime.types import AppRuntime
 
@@ -48,6 +49,16 @@ class ConnectRegisterRequest(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
+class ConnectRegisterAuthResponse(BaseModel):
+    type: str
+    token: str
+    token_preview: str
+    scopes: list[str] = Field(default_factory=list)
+    header: str
+    node_id_header: str
+    shown_once: bool = True
+
+
 class ConnectRegisterResponse(BaseModel):
     ok: bool
     registered_node: dict[str, Any]
@@ -55,6 +66,7 @@ class ConnectRegisterResponse(BaseModel):
     authority: dict[str, Any]
     device_url: str
     message: str
+    auth: ConnectRegisterAuthResponse
 
 
 def _preferred_response_kind(accept: str | None) -> ConnectResponseKind:
@@ -249,6 +261,25 @@ def _manifest_as_html(manifest: dict[str, Any]) -> str:
 </html>"""
 
 
+def derive_node_auth_scopes(roles: list[str], capabilities: list[str]) -> list[str]:
+    scopes: set[str] = {"node:heartbeat"}
+
+    if "capture" in roles or "runner" in roles:
+        scopes.add("ingest:write")
+        scopes.add("live:write")
+
+    if "indexer" in roles or "can_index" in capabilities:
+        scopes.add("index:write")
+
+    if "can_proxy_streams" in capabilities:
+        scopes.add("stream:proxy")
+
+    if "can_record" in capabilities or "can_record_local_media" in capabilities:
+        scopes.add("record:write")
+
+    return sorted(scopes)
+
+
 @router.get("")
 async def get_connect(
     request: Request,
@@ -305,6 +336,14 @@ async def register_connected_source(
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    issued = issue_node_token()
+    auth_scopes = derive_node_auth_scopes(payload.roles, payload.capabilities)
+    record = record.model_copy(update={
+        "token_hash": issued.token_hash,
+        "token_preview": issued.token_preview,
+        "auth_type": "bearer",
+        "auth_scopes": auth_scopes,
+    })
     registered = registry.upsert(record)
 
     source_record = SourceRecord(
@@ -331,7 +370,7 @@ async def register_connected_source(
 
     return ConnectRegisterResponse(
         ok=True,
-        registered_node=registered.model_dump(mode="json"),
+        registered_node=public_node_record_dict(registered),
         source_record=_source_record_to_dict(source_record),
         authority={
             "node_id": runtime.identity.node_id,
@@ -344,5 +383,14 @@ async def register_connected_source(
             "Node registered as a source-bearing participant. "
             "Authority now knows this runtime-backed node and its declared source surface. "
             "Ingest claims are still separate and must be submitted later via /api/ingest/claims."
+        ),
+        auth=ConnectRegisterAuthResponse(
+            type="bearer",
+            token=issued.token,
+            token_preview=issued.token_preview,
+            scopes=auth_scopes,
+            header="Authorization: Bearer <token>",
+            node_id_header=f"X-Media-Sync-Node-Id: {registered.node_id}",
+            shown_once=True,
         ),
     )

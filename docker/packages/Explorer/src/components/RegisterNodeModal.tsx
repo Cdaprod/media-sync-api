@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import type { RegisterNodeRequest, RegisterNodeResponse } from '../types/registration';
+import type { RegisterNodeAuth, RegisterNodeRequest, RegisterNodeResponse } from '../types/registration';
 import type { NodeControlRecord } from '../types/sourceControl';
 import { serializeMetadata } from '../utils/serializeMetadata';
+import { buildAuthorityUrl, resolveAuthorityOrigin } from '../config/authority';
 
 interface RegisterNodeModalProps {
   isOpen: boolean;
@@ -159,6 +160,7 @@ export function RegisterNodeModal({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [issuedAuth, setIssuedAuth] = useState<RegisterNodeAuth | null>(null);
 
   const cameraApiLabel = useMemo(() => {
     if (!detectedContext) return 'unknown';
@@ -188,6 +190,7 @@ export function RegisterNodeModal({
     setBaseUrl('');
     setShowAdvanced(false);
     setError(null);
+    setIssuedAuth(null);
     setHasCamera(nextContext.hasCameraApi ? null : false);
 
     const likelyCapture = nextContext.isLikelyMobile && nextContext.hasCameraApi;
@@ -281,6 +284,17 @@ export function RegisterNodeModal({
     setList([...list, value]);
   }, []);
 
+  const configuredAuthorityOrigin = process.env.NEXT_PUBLIC_MEDIA_SYNC_AUTHORITY_ORIGIN || authorityBaseUrl || '';
+  const authorityOrigin = useMemo(
+    () => resolveAuthorityOrigin(
+      configuredAuthorityOrigin,
+      typeof window === 'undefined' ? undefined : window.location,
+    ),
+    [configuredAuthorityOrigin],
+  );
+  const connectUrl = useMemo(() => buildAuthorityUrl('/connect', authorityOrigin), [authorityOrigin]);
+  const registerUrl = useMemo(() => buildAuthorityUrl('/connect/register', authorityOrigin), [authorityOrigin]);
+
   const payload = useMemo<RegisterNodeRequest>(() => {
     const metadata = safeParseMetadata(metadataText);
     const rawMetadata = {
@@ -294,7 +308,7 @@ export function RegisterNodeModal({
       detected_platform: detectedContext?.likelyPlatform || 'unknown',
       detected_mobile: String(detectedContext?.isLikelyMobile ?? false),
       detected_safari: String(detectedContext?.isLikelySafari ?? false),
-      authority_origin: authorityBaseUrl || '',
+      authority_origin: authorityOrigin || '',
     };
     return {
       node_id: nodeId.trim(),
@@ -310,7 +324,7 @@ export function RegisterNodeModal({
       metadata: serializeMetadata(rawMetadata),
     };
   }, [
-    authorityBaseUrl,
+    authorityOrigin,
     baseUrl,
     capabilities,
     detectedContext,
@@ -327,20 +341,29 @@ export function RegisterNodeModal({
   const payloadJson = useMemo(() => JSON.stringify(payload, null, 2), [payload]);
 
   const curlCommand = useMemo(() => {
-    const escaped = JSON.stringify(payload).replace(/'/g, `'\\''`);
-    return `curl -X POST ${authorityBaseUrl}/connect/register \\
-  -H "Content-Type: application/json" \\
+    const escaped = JSON.stringify(payload).replace(/'/g, `'\''`);
+    const authHeaders = issuedAuth
+      ? ` \
+  -H "Authorization: Bearer ${issuedAuth.token}" \
+  -H "X-Media-Sync-Node-Id: ${payload.node_id}"`
+      : '';
+    return `curl -X POST ${registerUrl} \
+  -H "Content-Type: application/json"${authHeaders} \
   -d '${escaped}'`;
-  }, [authorityBaseUrl, payload]);
+  }, [issuedAuth, payload, registerUrl]);
 
   const fetchExample = useMemo(() => {
-    return `await fetch("${authorityBaseUrl}/connect/register", {
+    const extraHeaders = issuedAuth
+      ? `,
+    "Authorization": "Bearer ${issuedAuth.token}",
+    "X-Media-Sync-Node-Id": "${payload.node_id}"`
+      : '';
+    return `await fetch("${registerUrl}", {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json"${extraHeaders} },
   body: JSON.stringify(${payloadJson}),
 });`;
-  }, [authorityBaseUrl, payloadJson]);
-  const connectLink = useMemo(() => `${authorityBaseUrl}/connect`, [authorityBaseUrl]);
+  }, [issuedAuth, payload.node_id, payloadJson, registerUrl]);
 
   const handleCopy = useCallback(async (text: string) => {
     try {
@@ -354,14 +377,14 @@ export function RegisterNodeModal({
   const resolveResponseUrl = useCallback((url: string | undefined, preferredOrigin?: string | null) => {
     if (!url) return '';
     if (/^https?:\/\//i.test(url)) return url;
-    const base = (preferredOrigin || authorityBaseUrl || '').trim();
+    const base = (preferredOrigin || authorityOrigin || '').trim();
     if (!base) return url;
     try {
       return new URL(url, base.endsWith('/') ? base : `${base}/`).toString();
     } catch {
       return url;
     }
-  }, [authorityBaseUrl]);
+  }, [authorityOrigin]);
 
   const handleSubmit = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -369,6 +392,7 @@ export function RegisterNodeModal({
     setError(null);
     try {
       const response = await registerNode(payload);
+      setIssuedAuth(response.auth ?? null);
       window.localStorage.setItem('explorer_capture_node_id', payload.node_id);
       onSuccess(response.registered_node ?? null, response);
       if (response.device_url) {
@@ -440,7 +464,7 @@ export function RegisterNodeModal({
             <div className="small">Screen capture API available: {detectedContext?.hasScreenCaptureApi ? 'yes' : 'no'}</div>
             <div className="small">Camera: {hasCamera == null ? 'checking…' : hasCamera ? 'detected' : 'not detected'}</div>
             <div className="small">Camera permission: {cameraPermission ?? 'unknown'}</div>
-            <div className="small">Authority URL: {authorityBaseUrl}</div>
+            <div className="small">Authority URL: {authorityOrigin}</div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button type="button" className="btn" onClick={handleConfigureAsCamera}>
                 Configure as camera device
@@ -579,13 +603,34 @@ export function RegisterNodeModal({
             <div className="small">
               Open this URL on another LAN device to view connect discovery details.
             </div>
-            <code>{connectLink}</code>
+            <a href={connectUrl} target="_blank" rel="noreferrer">{connectUrl}</a>
             <div style={{ marginTop: 8 }}>
-              <button type="button" className="btn" onClick={() => void handleCopy(connectLink)}>
+              <button type="button" className="btn" onClick={() => void handleCopy(connectUrl)}>
                 Copy connect URL
               </button>
             </div>
           </div>
+
+
+
+          {issuedAuth ? (
+            <div className="card" role="status" aria-live="polite">
+              <strong>Device credential issued</strong>
+              <p className="small" style={{ marginTop: 8 }}>
+                Save this token now. It is shown once and should be used only by this node.
+              </p>
+              <label className="register-label" style={{ marginTop: 8, display: 'block' }}>Bearer token</label>
+              <textarea className="input register-textarea" rows={3} readOnly value={issuedAuth.token} />
+              <div className="register-chip-row" style={{ marginTop: 8 }}>
+                <span className="register-chip">preview: {issuedAuth.token_preview}</span>
+                {issuedAuth.scopes.map((scope) => (
+                  <span key={scope} className="register-chip">{scope}</span>
+                ))}
+              </div>
+              <pre className="register-pre" style={{ marginTop: 8 }}>{`Authorization: Bearer ${issuedAuth.token}
+X-Media-Sync-Node-Id: ${payload.node_id}`}</pre>
+            </div>
+          ) : null}
 
           {error ? (
             <div className="register-error">

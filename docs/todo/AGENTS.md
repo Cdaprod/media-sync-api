@@ -1,3 +1,12 @@
+## 2026-04-27 — Register authority origin + node bearer credential issuance (active)
+- [x] Added Explorer authority-origin helper (`resolveAuthorityOrigin` + `buildAuthorityUrl`) for register/connect URL generation.
+- [x] Updated `RegisterNodeModal` to resolve HTTPS gateway authority as same-origin and `:3000` dev authority as `:8787`.
+- [x] Added node-token helper module (`issue`, `hash`, `preview`, `verify`) and expanded device-auth helper scaffolding without route enforcement.
+- [x] Updated `/connect/register` to issue bearer credential once, persist only token hash/preview/auth metadata, and return one-time auth instructions.
+- [x] Updated node API/connect serialization so public node payloads omit `token_hash` and raw token while exposing `auth_type`, `token_preview`, and `auth_scopes`.
+- [x] Added auth helper test coverage (`test_node_tokens.py`, `test_device_auth.py`) and updated connect/auth scaffolding tests.
+- [ ] Next: wire optional verification endpoint to registry lookup once node-registry auth-read path is finalized (without enabling ingest/live enforcement yet).
+
 ## 2026-04-27 — Explorer URL policy + auth-layering PR tasks (active)
 - [x] Add a centralized Explorer URL policy module for browser-renderable media/API normalization and HTTPS same-origin routing behavior.
 - [x] Route Explorer media URL resolution through the shared policy layer (`utils.ts`, `utils/mediaUrls.ts`, `ExplorerApp.tsx`) to remove scattered URL guessing.
