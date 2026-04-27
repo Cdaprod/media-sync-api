@@ -30,3 +30,9 @@
 - [x] Explorer receives real-time hints
 - [ ] Replace polling with event-driven updates
 - [ ] Add event replay/backfill
+
+## Phase 4C: Pending artifact controller extraction
+- [x] Extracted pending artifact controller.
+- [x] Preserved compose and recording pending UI behavior.
+- [ ] Follow-up: extract asset grid orchestration.
+- [ ] Follow-up: convert pending artifact lifecycle to behavior tests.

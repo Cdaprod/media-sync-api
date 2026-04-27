@@ -1,3 +1,11 @@
+## 2026-04-27 — Pending artifact controller extraction
+- [x] Extracted pending artifact controller from ExplorerApp.
+- [x] Preserved pending compose behavior.
+- [x] Preserved pending recording behavior.
+- [x] Kept recording reconciliation behavior intact.
+- [ ] Follow-up: split asset grid orchestration.
+- [ ] Follow-up: add runtime event-driven pending artifact refresh.
+
 ## 2026-04-27 — Explorer runtime extraction
 - [x] Runtime controller extracted.
 - [x] Live preview state extracted.

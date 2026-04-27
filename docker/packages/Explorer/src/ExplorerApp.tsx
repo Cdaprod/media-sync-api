@@ -5,14 +5,9 @@ import { createPortal } from 'react-dom';
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
-import {
-  pendingComposeMatchesMediaItem,
-  sortPendingComposeItemsForDisplay,
-} from './composeJobs';
 import type { ComposeJobEnvelope, PendingComposeItem } from './composeJobs';
 import {
   pendingRecordingMatchesMediaItem,
-  sortPendingRecordingAssetsForDisplay,
   type PendingRecordingAsset,
 } from './liveRecordings';
 import {
@@ -53,16 +48,15 @@ import {
   resolveBrowserRenderableUrl,
 } from './config/urlPolicy';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
-import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
 import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
-import { useRecordingSessions } from './hooks/useRecordingSessions';
 import { useRuntimeController } from './runtime/useRuntimeController';
 import { useLivePreviewState } from './runtime/useLivePreviewState';
 import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
+import { usePendingArtifactController } from './pending/usePendingArtifactController';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -90,7 +84,6 @@ import { useExplorerUiState } from './hooks/useExplorerUiState';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
 import type { RegisterNodeResponse } from './types/registration';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
-import type { LiveSession } from './types/liveSession';
 import type { IngestClaimRecord } from './types/ingestClaim';
 import {
   getDeviceUrl,
@@ -817,7 +810,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   // ---------------------------------------------------------------------------
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
-  const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
   const reconciledRecordingIdsRef = useRef<Set<string>>(new Set());
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -2751,109 +2743,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   // ---------------------------------------------------------------------------
   // Pending compose integration lane.
   // ---------------------------------------------------------------------------
+  const pending = usePendingArtifactController({
+    resolvedApiBase,
+    activeProject,
+    projects,
+    media,
+    mediaScope,
+    addToast,
+    refreshLibrarySnapshot: () => refreshLibrarySnapshot(),
+    fetchComposeJobJson,
+    handleComposeCompletion,
+  });
   const {
-    pendingComposeItems,
+    pendingComposeEntries,
+    pendingRecordingEntries,
+    pendingRecordingAssets,
     registerAcceptedJob,
     removePendingJob,
-  } = usePendingComposeJobs({
-    pollIntervalMs: 2000,
-    fetchJson: fetchComposeJobJson,
-    mediaItems: media,
-    onCompletedRefreshScope: handleComposeCompletion,
-  });
-  const {
-    recordings: pendingRecordingAssets,
-    startRecording: startLiveRecordingAsset,
-    stopRecording: stopLiveRecordingAsset,
-    dismissRecording: dismissLiveRecordingAsset,
-  } = useRecordingSessions({
-    apiBase: resolvedApiBase,
-    onSaved: () => {
-      addToast('good', 'Recording saved', 'Live recording was saved as a media asset.', 'live-recording-saved');
-      void refreshLibrarySnapshot();
-    },
-    onError: (message) => {
-      addToast('bad', 'Recording failed', message, 'live-recording-failed');
-    },
-  });
-
-  useEffect(() => {
-    const previous = pendingStatusSnapshotRef.current;
-    const next = new Map<string, PendingComposeItem['status']>();
-    pendingComposeItems.forEach((item) => {
-      next.set(item.jobId, item.status);
-      const previousStatus = previous.get(item.jobId);
-      if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {
-        addToast('good', 'Compose', 'Compose completed');
-      }
-      if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
-        addToast('bad', 'Compose', 'Compose failed');
-      }
-    });
-    pendingStatusSnapshotRef.current = next;
-  }, [addToast, pendingComposeItems]);
-
-  const visiblePendingComposeItems = useMemo(() => {
-    const relevant = pendingComposeItems.filter((item) => {
-      if (mediaScope === 'all') return true;
-      if (!activeProject) return false;
-      return item.project === activeProject.name
-        && (item.source || 'primary') === (activeProject.source || 'primary');
-    });
-    return sortPendingComposeItemsForDisplay(relevant);
-  }, [activeProject, mediaScope, pendingComposeItems]);
-
-  const handleRecordPeerSession = useCallback(async (session: LiveSession, sessionId: string) => {
-    const project = activeProject?.name || projects[0]?.name || 'P3-SHARED-iOS-Exports';
-    const source = activeProject?.source || 'primary';
-
-    try {
-      await startLiveRecordingAsset({
-        sessionId,
-        nodeId: session.node_id,
-        project,
-        source,
-        targetDir: 'ingest/live',
-      });
-
-      addToast(
-        'warn',
-        'Recording started',
-        `Recording ${session.node_id} into ${project}.`,
-        `live-recording-started-${session.session_id}`,
-      );
-    } catch (error) {
-      addToast(
-        'bad',
-        'Recording could not start',
-        error instanceof Error ? error.message : 'Unable to start live recording.',
-        `live-recording-start-failed-${session.session_id}`,
-      );
-    }
-  }, [activeProject, addToast, projects, startLiveRecordingAsset]);
-
-  const visiblePendingRecordingAssets = useMemo(() => (
-    sortPendingRecordingAssetsForDisplay(pendingRecordingAssets)
-      .filter((recording) => !media.some((item) => pendingRecordingMatchesMediaItem(recording, item)))
-      .filter((recording) => {
-        if (activeProject?.name && recording.project !== activeProject.name) return mediaScope === 'all';
-        return true;
-      })
-  ), [activeProject?.name, media, mediaScope, pendingRecordingAssets]);
-
-  const pendingComposeEntries = useMemo<PendingComposeRenderedEntry[]>(() => visiblePendingComposeItems
-    .filter((pendingItem) => !media.some((item) => pendingComposeMatchesMediaItem(pendingItem, item)))
-    .map((pendingItem) => ({
-      kind: 'pending-compose' as const,
-      pendingItem,
-    })), [media, visiblePendingComposeItems]);
-
-  const pendingRecordingEntries = useMemo<PendingRecordingRenderedEntry[]>(() => (
-    visiblePendingRecordingAssets.map((recordingItem) => ({
-      kind: 'pending-recording' as const,
-      recordingItem,
-    }))
-  ), [visiblePendingRecordingAssets]);
+    stopPendingRecording,
+    dismissPendingRecording,
+    recordPeerSession,
+  } = pending;
 
   const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
       kind: 'asset' as const,
@@ -2895,14 +2805,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         `Saved recording indexed: ${matchedMedia.relative_path || recording.outputName || 'asset ready'}.`,
         `live-recording-reconciled-${recording.recordingId}`,
       );
-      void dismissLiveRecordingAsset(recording.recordingId);
+      void dismissPendingRecording(recording.recordingId);
     }
   }, [
     activeProject,
     addToast,
     assetSelectionKey,
-    dismissLiveRecordingAsset,
     media,
+    dismissPendingRecording,
     pendingRecordingAssets,
     setPreviewActivationKey,
   ]);
@@ -2924,24 +2834,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     });
     return () => cancelExplorerRaf(rafId);
   }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingComposeEntries.length, pendingRecordingEntries.length, recordPreviewDebug, view]);
-
-  useEffect(() => {
-    if (!pendingComposeItems.length) return;
-    pendingComposeItems.forEach((item) => {
-      if (item.status !== 'finalizing') return;
-      if (!item.completedPath) return;
-      const visible = media.some((mediaItem) => {
-        const relativePath = String(mediaItem.relative_path || '').trim();
-        if (relativePath !== item.completedPath) return false;
-        const mediaProject = String(mediaItem.project_name || mediaItem.project || activeProject?.name || '').trim();
-        const mediaSource = String(mediaItem.project_source || mediaItem.source || activeProject?.source || '').trim() || 'primary';
-        return mediaProject === item.project && mediaSource === (item.source || 'primary');
-      });
-      if (visible) {
-        removePendingJob(item.jobId);
-      }
-    });
-  }, [activeProject, media, pendingComposeItems, removePendingJob]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;
@@ -5318,7 +5210,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                             session={session}
                             apiBase={resolvedApiBase}
                             onRecordPeerSession={(recordingSessionId) => {
-                              void handleRecordPeerSession(session, recordingSessionId);
+                              void recordPeerSession(session, recordingSessionId);
                             }}
                             onStartRecording={(entry) => {
                               void api.sendLiveSessionControl(entry.session_id, 'start_recording')
@@ -6016,8 +5908,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       entries={renderedMediaEntries}
                       onToggleSelected={toggleSelected}
                       onDismissPendingJob={removePendingJob}
-                      onStopPendingRecording={stopLiveRecordingAsset}
-                      onDismissPendingRecording={dismissLiveRecordingAsset}
+                      onStopPendingRecording={stopPendingRecording}
+                      onDismissPendingRecording={dismissPendingRecording}
                       onOpenPendingRecordingAsset={(assetUrl) => {
                         window.open(assetUrl, '_blank', 'noopener,noreferrer');
                       }}

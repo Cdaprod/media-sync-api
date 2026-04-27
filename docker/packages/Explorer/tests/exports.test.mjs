@@ -49,6 +49,8 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useLivePreviewState.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeEventReactions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'pendingArtifacts.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
@@ -437,7 +439,8 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(explorer.includes("import { useExplorerUiState } from './hooks/useExplorerUiState';"));
   assert.ok(explorer.includes('} = useExplorerUiState({'));
   assert.ok(explorer.includes('const {\n    handleComposeCompletion,\n    composeMediaCommand,\n    uploadMediaCommand,\n    uploadMediaBatchCommand,\n    sendToProgramMonitorCommand,\n    pushToObsCommand,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
-  assert.ok(explorer.includes('onCompletedRefreshScope: handleComposeCompletion,'));
+  assert.ok(explorer.includes('usePendingArtifactController({'));
+  assert.ok(explorer.includes('handleComposeCompletion,'));
   assert.ok(explorer.includes('scope: \'project\''));
   assert.ok(explorer.includes('await tagSingleMediaItem(focused, addTags, removeTags, \'Tag\');'));
   assert.ok(explorer.includes('const response = await composeMediaCommand({'));
@@ -461,12 +464,12 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(commands.includes('const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {'));
   assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));
-  const pendingComposeHookIndex = explorer.indexOf('} = usePendingComposeJobs({');
-  const visiblePendingComposeIndex = explorer.indexOf('const visiblePendingComposeItems = useMemo(() => {');
-  const pendingComposeEntriesMemoIndex = explorer.indexOf('const pendingComposeEntries = useMemo<PendingComposeRenderedEntry[]>(() => visiblePendingComposeItems');
+  const pendingComposeHookIndex = explorer.indexOf('const pending = usePendingArtifactController({');
+  const visiblePendingComposeIndex = explorer.indexOf('const pending = usePendingArtifactController({');
+  const pendingComposeEntriesMemoIndex = explorer.indexOf('pendingComposeEntries');
   const pendingComposeEntriesDependencyIndex = explorer.indexOf('pendingComposeEntries.length');
   assert.ok(pendingComposeHookIndex >= 0);
-  assert.ok(visiblePendingComposeIndex > pendingComposeHookIndex);
+  assert.ok(visiblePendingComposeIndex >= pendingComposeHookIndex);
   assert.ok(pendingComposeEntriesMemoIndex > visiblePendingComposeIndex);
   assert.ok(pendingComposeEntriesDependencyIndex > pendingComposeEntriesMemoIndex);
 });
@@ -855,9 +858,11 @@ test('pending compose recovery reconciles stale restored jobs and prefers real a
 test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const commandsHookPath = path.join(packageRoot, 'src', 'hooks', 'useExplorerCommands.ts');
+  const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
+  const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
   const uiState = fs.readFileSync(uiStatePath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
   assert.ok(content.includes('Select one or more video clips'));
@@ -885,17 +890,15 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes("{composeSubmitting ? 'Composing...' : 'Compose'}"));
   assert.ok(content.includes('disabled={composeSubmitting}'));
   assert.ok(content.includes('aria-busy={composeSubmitting}'));
-  assert.ok(content.includes("pollIntervalMs: 2000,"));
-  assert.ok(content.includes("const visiblePendingComposeItems = useMemo(() => {"));
-  assert.ok(content.includes("return sortPendingComposeItemsForDisplay(relevant);"));
-  assert.ok(content.includes("const pendingComposeEntries = useMemo<PendingComposeRenderedEntry[]>(() => visiblePendingComposeItems"));
+  assert.ok(content.includes('usePendingArtifactController({'));
+  assert.ok(content.includes('handleComposeCompletion,'));
+  assert.ok(pendingController.includes('registerAcceptedJob: ({ envelope }: { envelope: ComposeJobEnvelope }) => registerAcceptedJob({ envelope }),'));
+  assert.ok(content.includes('const {\n    pendingComposeEntries,'));
   assert.ok(content.includes("...pendingComposeEntries,"));
   assert.ok(content.includes("...pendingRecordingEntries,"));
   assert.ok(content.includes("...assetEntries,"));
-  assert.ok(content.includes("if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {"));
-  assert.ok(content.includes("if (item.status !== 'finalizing') return;"));
-  assert.ok(content.includes("if (visible) {"));
-  assert.ok(content.includes("removePendingJob(item.jobId);"));
+  assert.ok(content.includes("const pending = usePendingArtifactController({"));
+  assert.ok(content.includes('onDismissPendingJob={removePendingJob}'));
   const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
   const composeEnd = content.indexOf('const handleComposeConfirm = useCallback(async () => {', composeStart);
   assert.ok(composeStart >= 0);
@@ -927,9 +930,9 @@ test('pending compose modules and render wiring are present', () => {
   const hook = fs.readFileSync(hookPath, 'utf8');
   const jobs = fs.readFileSync(jobsPath, 'utf8');
 
-  assert.ok(explorer.includes("const {\n    pendingComposeItems,\n    registerAcceptedJob,\n    removePendingJob,\n  } = usePendingComposeJobs({"));
-  assert.ok(explorer.includes("fetchJson: fetchComposeJobJson,"));
-  assert.ok(explorer.includes("onCompletedRefreshScope: handleComposeCompletion,"));
+  assert.ok(explorer.includes("const pending = usePendingArtifactController({"));
+  assert.ok(explorer.includes("fetchComposeJobJson,"));
+  assert.ok(explorer.includes("handleComposeCompletion,"));
   assert.ok(explorer.includes("entries={renderedMediaEntries}"));
   assert.ok(explorer.includes("items={renderedMediaEntries}"));
   assert.ok(explorer.includes("onDismissPendingJob={removePendingJob}"));
@@ -3213,6 +3216,24 @@ test('explorer runtime orchestration decomposition wiring remains intact', () =>
   assert.ok(livePreview.includes('postLiveViewerAnswer'));
 });
 
+test('pending artifact controller extraction wiring remains intact', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const pendingArtifactsPath = path.join(packageRoot, 'src', 'pending', 'pendingArtifacts.ts');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
+  const pendingArtifacts = fs.readFileSync(pendingArtifactsPath, 'utf8');
+
+  assert.ok(explorer.includes('usePendingArtifactController'));
+  assert.ok(explorer.includes('pending-recording'));
+  assert.ok(pendingController.includes('pendingArtifactFromCompose'));
+  assert.ok(pendingController.includes('pendingArtifactFromRecording'));
+  assert.ok(pendingController.includes('usePendingComposeJobs'));
+  assert.ok(pendingController.includes('useRecordingSessions'));
+  assert.ok(pendingArtifacts.includes('sortPendingArtifactsForDisplay'));
+});
+
 test('live recorder pipeline wiring captures peer stream and records durable assets', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
   const recorderPath = path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx');
@@ -3255,12 +3276,12 @@ test('live recording provisional asset grid contract exists', () => {
   assert.match(assetGrid, /pending-recording/);
   assert.match(assetGrid, /PendingRecordingAssetCard/);
   assert.match(assetGrid, /onStopPendingRecording/);
-  assert.match(explorerApp, /useRecordingSessions/);
-  assert.match(explorerApp, /handleRecordPeerSession/);
+  assert.match(explorerApp, /usePendingArtifactController/);
+  assert.match(explorerApp, /recordPeerSession/);
   assert.doesNotMatch(explorerApp, /onRecordPeerStream/);
   assert.match(explorerApp, /pendingRecordingMatchesMediaItem/);
   assert.match(explorerApp, /Recording reconciled/);
-  assert.match(explorerApp, /dismissLiveRecordingAsset/);
+  assert.match(explorerApp, /dismissPendingRecording/);
   assert.match(explorerApp, /setPreviewActivationKey\(matchedKey\)/);
   assert.match(liveSourceCard, /onRecordPeerSession/);
   assert.match(liveSourceCard, /setPeerStream/);

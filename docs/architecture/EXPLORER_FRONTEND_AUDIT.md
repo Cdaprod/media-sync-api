@@ -65,3 +65,12 @@ This document maps the current Explorer package feature architecture under `dock
 - [x] Extracted runtime event reaction layer.
 - [ ] Follow-up: extract pending artifact controller.
 - [ ] Follow-up: split asset grid orchestration.
+
+## Phase 4C: Pending artifact controller extraction
+
+- [x] Pending compose orchestration moved out of ExplorerApp.
+- [x] Pending recording orchestration moved out of ExplorerApp.
+- [x] Pending artifact list assembly centralized.
+- [x] ExplorerApp remains the composition surface.
+- [ ] Follow-up: split asset grid/render orchestration.
+- [ ] Follow-up: add behavior tests for pending artifact reconciliation timing.
