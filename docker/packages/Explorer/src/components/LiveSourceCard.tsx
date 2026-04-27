@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import type { LiveSessionRecord } from '../types/liveSession';
+import { StreamHub } from '../runtime/StreamHub';
 
 function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
   const [url, setUrl] = useState('');
@@ -35,7 +36,7 @@ interface LiveSourceCardProps {
   onStartRecording?: (session: LiveSessionRecord) => void;
   onStopRecording?: (session: LiveSessionRecord) => void;
   onRemoteStream?: (session: LiveSessionRecord, stream: MediaStream) => void;
-  onRecordPeerStream?: (session: LiveSessionRecord, stream: MediaStream) => void;
+  onRecordPeerSession?: (sessionId: string) => void;
 }
 
 export function LiveSourceCard({
@@ -45,7 +46,7 @@ export function LiveSourceCard({
   onStartRecording,
   onStopRecording,
   onRemoteStream,
-  onRecordPeerStream,
+  onRecordPeerSession,
 }: LiveSourceCardProps) {
   const isActive = session.status === 'previewing' || session.status === 'recording';
   const previewUrl = usePreviewUrl(apiBase, session.session_id, isActive);
@@ -86,8 +87,11 @@ export function LiveSourceCard({
 
     peer.ontrack = (event) => {
       const stream = event.streams?.[0];
-      if (!stream || !peerVideoRef.current) return;
-      peerVideoRef.current.srcObject = stream;
+      if (!stream) return;
+      StreamHub.set(session.session_id, stream);
+      if (peerVideoRef.current) {
+        peerVideoRef.current.srcObject = stream;
+      }
       setPeerStream(stream);
       onRemoteStream?.(session, stream);
     };
@@ -152,6 +156,7 @@ export function LiveSourceCard({
       peerConnRef.current = null;
       deviceIceSeenRef.current.clear();
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+      StreamHub.delete(session.session_id);
       setPeerStream(null);
       setPeerStatus('idle');
     };
@@ -262,14 +267,14 @@ export function LiveSourceCard({
           <div style={{ marginTop: 8 }}>
             <video ref={peerVideoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 8, background: '#000' }} />
             <div className="small" style={{ marginTop: 6 }}>viewer: {peerStatus}</div>
-            {onRecordPeerStream ? (
+            {onRecordPeerSession ? (
               <button
                 className="btn"
                 type="button"
                 disabled={!peerStream}
                 style={{ marginTop: 6, width: '100%', fontSize: 11 }}
                 onClick={() => {
-                  if (peerStream) onRecordPeerStream(session, peerStream);
+                  if (peerStream) onRecordPeerSession(session.session_id);
                 }}
               >
                 Record as asset

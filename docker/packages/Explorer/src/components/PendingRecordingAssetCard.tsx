@@ -182,6 +182,7 @@ function statusLabel(status: PendingRecordingAsset['status']): string {
     case 'finalizing':
       return 'FINALIZING';
     case 'saved':
+    case 'completed':
       return 'SAVED';
     case 'failed':
       return 'FAILED';
@@ -201,6 +202,7 @@ function footerLabel(status: PendingRecordingAsset['status']): string {
     case 'finalizing':
       return 'refreshing asset index';
     case 'saved':
+    case 'completed':
       return 'recording saved';
     case 'failed':
       return 'recording failed';
@@ -329,7 +331,7 @@ export default function PendingRecordingAssetCard({
               </button>
             ) : null}
 
-            {(item.status === 'failed' || item.status === 'saved') && onDismiss ? (
+            {(item.status === 'failed' || item.status === 'saved' || item.status === 'completed') && onDismiss ? (
               <button
                 type="button"
                 className="pending-recording-action"

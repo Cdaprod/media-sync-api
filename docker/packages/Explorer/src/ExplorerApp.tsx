@@ -60,7 +60,7 @@ import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
 import { useWebRtcLiveSessions } from './hooks/useWebRtcLiveSessions';
-import { useLiveRecordingAssets } from './hooks/useLiveRecordingAssets';
+import { useRecordingSessions } from './hooks/useRecordingSessions';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -2754,7 +2754,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     startRecording: startLiveRecordingAsset,
     stopRecording: stopLiveRecordingAsset,
     dismissRecording: dismissLiveRecordingAsset,
-  } = useLiveRecordingAssets({
+  } = useRecordingSessions({
+    apiBase: resolvedApiBase,
     onSaved: () => {
       addToast('good', 'Recording saved', 'Live recording was saved as a media asset.', 'live-recording-saved');
       void refreshLibrarySnapshot();
@@ -2790,16 +2791,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return sortPendingComposeItemsForDisplay(relevant);
   }, [activeProject, mediaScope, pendingComposeItems]);
 
-  const handleRecordPeerStream = useCallback(async (session: LiveSession, stream: MediaStream) => {
+  const handleRecordPeerSession = useCallback(async (session: LiveSession, sessionId: string) => {
     const project = activeProject?.name || projects[0]?.name || 'P3-SHARED-iOS-Exports';
     const source = activeProject?.source || 'primary';
 
     try {
       await startLiveRecordingAsset({
-        apiBase: resolvedApiBase,
-        sessionId: session.session_id,
+        sessionId,
         nodeId: session.node_id,
-        stream,
         project,
         source,
         targetDir: 'ingest/live',
@@ -2819,7 +2818,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         `live-recording-start-failed-${session.session_id}`,
       );
     }
-  }, [activeProject, addToast, projects, resolvedApiBase, startLiveRecordingAsset]);
+  }, [activeProject, addToast, projects, startLiveRecordingAsset]);
 
   const visiblePendingRecordingAssets = useMemo(() => (
     sortPendingRecordingAssetsForDisplay(pendingRecordingAssets)
@@ -5265,7 +5264,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           <LiveSourceCard
                             session={session}
                             apiBase={resolvedApiBase}
-                            onRecordPeerStream={handleRecordPeerStream}
+                            onRecordPeerSession={(recordingSessionId) => {
+                              void handleRecordPeerSession(session, recordingSessionId);
+                            }}
                             onStartRecording={(entry) => {
                               void api.sendLiveSessionControl(entry.session_id, 'start_recording')
                                 .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))

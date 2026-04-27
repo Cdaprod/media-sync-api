@@ -84,6 +84,7 @@ class AppRuntime:
     metadata: dict[str, Any] = field(default_factory=dict)
     lifecycle: Any | None = None
     live_sessions: Any | None = None
+    recording_sessions: Any | None = None
     started: bool = False
 
     async def start(self) -> None:

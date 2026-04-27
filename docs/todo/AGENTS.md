@@ -1,3 +1,14 @@
+## 2026-04-27 — Runtime-backed recording session lifecycle + StreamHub ownership pass (active)
+- [x] Added runtime-backed `RecordingSession` model (`app/models/recording_session.py`) and in-memory runtime registry (`app/runtime/recording_sessions.py`) with create/get/list/update/delete semantics.
+- [x] Wired runtime recording session ownership (`runtime.recording_sessions`) during runtime assembly and mounted dedicated `/api/recordings` routes for start/list/complete/fail/delete lifecycle transitions.
+- [x] Added backend API coverage (`tests/test_recordings_api.py`) validating start/list/complete/fail/delete behavior for recording sessions.
+- [x] Added Explorer `StreamHub` (`src/runtime/StreamHub.ts`) keyed by live `session_id` to avoid passing raw `MediaStream` objects through component boundaries.
+- [x] Added Explorer runtime-backed recording hook (`useRecordingSessions`) and refactored `ExplorerApp` to use session-owned recording start flow (`onRecordPeerSession`) instead of raw stream callback handoff.
+- [x] Updated `LiveSourceCard` peer-track lifecycle to `StreamHub.set(...)` on track receipt and `StreamHub.delete(...)` on teardown, plus record action callback by `session_id`.
+- [x] Preserved browser-side `MediaRecorder` ownership and existing upload endpoint (`/api/live_sessions/{session_id}/recording/upload`) while posting recording lifecycle state transitions to `/api/recordings`.
+- [x] Updated Explorer static contracts to assert StreamHub presence/usage, recording API client `/api/recordings` references, and session-based recording callback wiring.
+- [ ] Next: add reconciliation coverage for runtime recording sessions when Explorer reconnects mid-recording (local recorder runtime unavailable but runtime session still present).
+
 ## 2026-04-27 — Durable browser-side WebRTC recording upload pass (active)
 - [x] Added `/api/live_sessions/{session_id}/recording/upload` multipart endpoint to persist browser-captured `.webm` recordings into source/project storage roots.
 - [x] Added upload validation for live-session existence, non-empty payloads, content type constraints (`video/webm` or `application/octet-stream`), target-dir safety, and `.webm` filename sanitization.

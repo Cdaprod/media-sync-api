@@ -19,6 +19,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useLiveRecordingAssets.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useRecordingSessions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
@@ -39,6 +40,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'awaitVisibleVideoPaint.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
@@ -3124,9 +3126,11 @@ test('live recorder pipeline wiring captures peer stream and records durable ass
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
   const recorderPath = path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx');
   const cardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const streamHubPath = path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts');
   const api = fs.readFileSync(apiPath, 'utf8');
   const recorder = fs.readFileSync(recorderPath, 'utf8');
   const card = fs.readFileSync(cardPath, 'utf8');
+  const streamHub = fs.readFileSync(streamHubPath, 'utf8');
 
   assert.ok(api.includes('uploadLiveSessionRecording'));
   assert.ok(api.includes('/api/live_sessions/'));
@@ -3134,9 +3138,14 @@ test('live recorder pipeline wiring captures peer stream and records durable ass
   assert.ok(api.includes('sendLiveSessionControl'));
   assert.ok(recorder.includes('MediaRecorder'));
   assert.ok(recorder.includes('uploadLiveSessionRecording'));
-  assert.ok(card.includes('onRecordPeerStream'));
+  assert.ok(api.includes('/api/recordings'));
+  assert.ok(card.includes('onRecordPeerSession'));
   assert.ok(card.includes('Record as asset'));
   assert.ok(card.includes('setPeerStream'));
+  assert.ok(card.includes('StreamHub.set'));
+  assert.ok(card.includes('StreamHub.delete'));
+  assert.ok(streamHub.includes('const streams = new Map<string, MediaStream>()'));
+  assert.ok(streamHub.includes('listSessionIds()'));
 });
 
 test('live recording provisional asset grid contract exists', () => {
@@ -3155,10 +3164,11 @@ test('live recording provisional asset grid contract exists', () => {
   assert.match(assetGrid, /pending-recording/);
   assert.match(assetGrid, /PendingRecordingAssetCard/);
   assert.match(assetGrid, /onStopPendingRecording/);
-  assert.match(explorerApp, /useLiveRecordingAssets/);
-  assert.match(explorerApp, /handleRecordPeerStream/);
+  assert.match(explorerApp, /useRecordingSessions/);
+  assert.match(explorerApp, /handleRecordPeerSession/);
+  assert.doesNotMatch(explorerApp, /onRecordPeerStream/);
   assert.match(explorerApp, /pendingRecordingMatchesMediaItem/);
-  assert.match(liveSourceCard, /onRecordPeerStream/);
+  assert.match(liveSourceCard, /onRecordPeerSession/);
   assert.match(liveSourceCard, /setPeerStream/);
   assert.match(liveSourceCard, /Record as asset/);
 });

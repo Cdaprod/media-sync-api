@@ -4,6 +4,7 @@ export type PendingRecordingStatus =
   | 'recording'
   | 'stopping'
   | 'uploading'
+  | 'completed'
   | 'finalizing'
   | 'saved'
   | 'failed';
@@ -15,7 +16,7 @@ export interface PendingRecordingAsset {
   project: string;
   source: string;
   targetDir: string;
-  outputName: string;
+  outputName: string | null;
   createdAt: string;
   startedAt: string;
   status: PendingRecordingStatus;

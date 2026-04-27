@@ -30,6 +30,7 @@ from app.api.media import bulk_router as assets_bulk_router
 from app.api.media import debug_router, global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
 from app.api.nodes import router as nodes_router
 from app.api.projects import router as projects_router
+from app.api.recordings import router as recordings_router
 from app.api.sources import router as sources_router
 from app.api.upload import router as upload_router
 from app.api.reindex import all_router as reindex_all_router
@@ -131,6 +132,7 @@ def create_app() -> FastAPI:
     application.include_router(connect_device_router)
     application.include_router(live_sessions_router)
     application.include_router(live_webrtc_router)
+    application.include_router(recordings_router)
 
     application.mount(
         "/public",
