@@ -1,3 +1,11 @@
+## 2026-04-27 — CAS metadata in indexed media
+- [x] Added optional sha256/content_address fields to indexed media records.
+- [x] Preserved legacy media compatibility for entries without sha256.
+- [x] Added duplicate-content deterministic hash tests.
+- [x] Kept temp/partial files excluded from indexing.
+- [ ] Follow-up: promote content_address to primary asset identity where safe.
+- [ ] Follow-up: add duplicate detection UX in Explorer.
+
 ## 2026-04-27 — Atomic CAS write hardening
 - [x] Added storage atomic write helpers.
 - [x] Hardened recording upload persistence.

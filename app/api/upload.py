@@ -184,6 +184,7 @@ async def _handle_single_upload(
             "status": "duplicate",
             "path": existing_path,
             "sha256": sha,
+            "content_address": f"sha256:{sha}",
             "size": written,
             "served": {
                 "stream_url": _build_absolute_media_url(
@@ -214,12 +215,19 @@ async def _handle_single_upload(
     relative_dest = f"ingest/originals/{dest_path.name}"
     sha = str(write_result["sha256"])
     record_file_hash(manifest_db, sha, relative_dest)
+    destination_stat = dest_path.stat()
+    indexed_at = _now_iso()
+    content_mtime = datetime.fromtimestamp(destination_stat.st_mtime, timezone.utc).isoformat()
 
     entry = {
         "relative_path": str(dest_path.relative_to(project)),
         "sha256": sha,
         "size": int(write_result["size_bytes"]),
-        "uploaded_at": _now_iso(),
+        "size_bytes": int(write_result["size_bytes"]),
+        "content_mtime": content_mtime,
+        "indexed_at": indexed_at,
+        "content_address": f"sha256:{sha}",
+        "uploaded_at": indexed_at,
     }
     ensure_metadata(
         project,
@@ -245,6 +253,7 @@ async def _handle_single_upload(
         "status": "stored",
         "path": entry["relative_path"],
         "sha256": sha,
+        "content_address": entry["content_address"],
         "size": entry["size"],
         "uploaded_at": entry["uploaded_at"],
         "served": {

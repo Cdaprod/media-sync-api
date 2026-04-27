@@ -28,6 +28,8 @@ export interface MediaItem {
   mime?: string;
   content_type?: string;
   sha256?: string;
+  content_address?: string;
+  content_mtime?: string;
   hash?: string;
   created_at?: string;
   createdAt?: string;

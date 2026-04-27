@@ -78,6 +78,7 @@ def reindex_project(project_path: Path, *, normalize_videos: bool = True) -> Dic
         rel_path = relpath_posix(file_path, project_path)
         seen_paths.add(rel_path)
         sha = compute_sha256_from_path(file_path)
+        cas_fields = _build_cas_fields(file_path, sha)
         duplicate = record_file_hash(db_path, sha, rel_path)
         existing_entry = existing_entries.get(rel_path)
         previous_sha = existing_entry.get("sha256") if existing_entry else None
@@ -99,9 +100,8 @@ def reindex_project(project_path: Path, *, normalize_videos: bool = True) -> Dic
                     project_path,
                     rel_path,
                     {
-                        "sha256": sha,
+                        **cas_fields,
                         "size": file_path.stat().st_size,
-                        "indexed_at": datetime.now(timezone.utc).isoformat(),
                     },
                 )
                 if previous_sha and not _decrement_sha_refcount(sha_ref_counts, previous_sha):
@@ -109,9 +109,8 @@ def reindex_project(project_path: Path, *, normalize_videos: bool = True) -> Dic
             continue
         entry = {
             "relative_path": rel_path,
-            "sha256": sha,
+            **cas_fields,
             "size": file_path.stat().st_size,
-            "indexed_at": datetime.now(timezone.utc).isoformat(),
         }
         append_file_entry(project_path, entry)
         new_entries.append(entry)
@@ -151,6 +150,21 @@ def _decrement_sha_refcount(sha_ref_counts: dict[str, int], sha: str | None) -> 
     updated = max(sha_ref_counts.get(sha, 0) - 1, 0)
     sha_ref_counts[sha] = updated
     return updated > 0
+
+
+def _build_cas_fields(file_path: Path, sha: str) -> Dict[str, Any]:
+    """Build optional CAS metadata fields for an indexed file."""
+
+    stat = file_path.stat()
+    content_mtime = datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat()
+    indexed_at = datetime.now(timezone.utc).isoformat()
+    return {
+        "sha256": sha,
+        "size_bytes": stat.st_size,
+        "content_mtime": content_mtime,
+        "indexed_at": indexed_at,
+        "content_address": f"sha256:{sha}",
+    }
 def _is_video_media(path: Path) -> bool:
     return path.suffix.lower() in VIDEO_EXTENSIONS
 

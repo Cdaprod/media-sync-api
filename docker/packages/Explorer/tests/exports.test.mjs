@@ -114,6 +114,7 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('handleComposeSelected'));
   assert.ok(content.includes('AssetPreviewPanel'));
   assert.ok(content.includes('normalizePreviewAsset'));
+  assert.ok(content.includes("['Content Address', focused.content_address || '']"));
 });
 
 test('explorer exposes per-lane raf debug breakdown and idle blockers', () => {
@@ -260,6 +261,15 @@ test('api base inference uses centralized Explorer URL policy', () => {
   assert.ok(policy.includes("currentPort !== '8787'"));
   assert.ok(policy.includes('isBrowserAssetPath'));
   assert.ok(policy.includes('resolveBrowserRenderableUrl'));
+});
+
+test('media item type supports optional CAS metadata fields', () => {
+  const typesPath = path.join(packageRoot, 'src', 'types.ts');
+  const content = fs.readFileSync(typesPath, 'utf8');
+  assert.ok(content.includes('sha256?: string;'));
+  assert.ok(content.includes('content_address?: string;'));
+  assert.ok(content.includes('content_mtime?: string;'));
+  assert.ok(content.includes('indexed_at?: string;'));
 });
 
 test('register modal redirects directly to device activation and keeps session-node payload contract', () => {

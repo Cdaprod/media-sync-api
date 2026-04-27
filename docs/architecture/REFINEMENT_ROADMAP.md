@@ -16,3 +16,10 @@
 - [x] sha256 fingerprints are computed after durable writes.
 - [ ] Follow-up: move all compose/export generation to temp-output then atomic rename if any path remains direct-write.
 - [ ] Follow-up: persist CAS metadata in index schema.
+
+## Phase 2B: CAS metadata in indexed media
+- [x] Added optional sha256/content_address fields.
+- [x] Preserved legacy media compatibility.
+- [x] Added duplicate-content deterministic hash tests.
+- [ ] Follow-up: promote content_address to primary asset identity where safe.
+- [ ] Follow-up: add duplicate detection UX in Explorer.

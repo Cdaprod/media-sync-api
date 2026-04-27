@@ -197,6 +197,20 @@ def _iter_file_range(path: Path, start: int, length: int) -> Iterator[bytes]:
             yield chunk
 
 
+def _build_cas_metadata(path: Path, sha256: str, *, indexed_at: str | None = None) -> dict[str, object]:
+    """Build optional CAS metadata fields for index records."""
+
+    stat = path.stat()
+    indexed_value = indexed_at or datetime.now(timezone.utc).isoformat()
+    return {
+        "sha256": sha256,
+        "size_bytes": stat.st_size,
+        "content_mtime": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        "indexed_at": indexed_value,
+        "content_address": f"sha256:{sha256}",
+    }
+
+
 def _resolve_range(range_header: str, file_size: int) -> tuple[int, int]:
     """Parse a single HTTP byte range and return inclusive start/end bytes.
 
@@ -1219,11 +1233,11 @@ async def move_media(project_name: str, payload: MoveMediaRequest, source: str |
             destination.unlink(missing_ok=True)
             duplicates.append(safe_relative)
         else:
+            cas_metadata = _build_cas_metadata(destination, sha)
             entry = {
                 "relative_path": new_relative,
-                "sha256": sha,
+                **cas_metadata,
                 "size": destination.stat().st_size,
-                "indexed_at": datetime.now(timezone.utc).isoformat(),
             }
             ensure_metadata(
                 target_root,
@@ -1435,7 +1449,7 @@ def _normalize_orientation_for_project(
                 resolved.root,
                 relative_path,
                 {
-                    "sha256": new_sha,
+                    **_build_cas_metadata(target, new_sha),
                     "size": target.stat().st_size,
                     "normalized_at": datetime.now(timezone.utc).isoformat(),
                 },
@@ -1463,7 +1477,7 @@ def _normalize_orientation_for_project(
                     resolved.root,
                     relative_path,
                     {
-                        "sha256": fallback_sha,
+                        **_build_cas_metadata(target, fallback_sha),
                         "size": target.stat().st_size,
                     },
                 )

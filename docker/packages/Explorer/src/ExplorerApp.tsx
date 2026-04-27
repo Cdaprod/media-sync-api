@@ -1672,6 +1672,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ['Relative', focused.relative_path || '(none)'],
       ['MIME', focused.mime || focused.content_type || ''],
       ['Hash', focused.sha256 || focused.hash || ''],
+      ['Content Address', focused.content_address || ''],
       ['Created', focused.created_at || focused.createdAt || ''],
       ['Modified', focused.updated_at || focused.updatedAt || ''],
       ['Duration', focused.duration ? `${focused.duration}s` : ''],
