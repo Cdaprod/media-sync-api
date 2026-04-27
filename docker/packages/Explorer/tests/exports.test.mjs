@@ -1311,6 +1311,18 @@ test('runtime and ingest context menus expose operator delete actions with safe 
   assert.ok(content.includes('await api.deleteIngestClaim(claimId);'));
   assert.ok(content.includes('await reloadIngestClaims();'));
   assert.ok(content.includes('Delete claim'));
+  const openPayloadDetailsIndex = content.indexOf('const openPayloadDetails = useCallback');
+  const openDeviceForNodeIndex = content.indexOf('const openDeviceForNode = useCallback');
+  assert.ok(openPayloadDetailsIndex >= 0);
+  assert.ok(openDeviceForNodeIndex > openPayloadDetailsIndex);
+  const deleteNodeIndex = content.indexOf('const deleteNodeFromSidebar = useCallback');
+  const runtimeMenuIndex = content.indexOf("{contextMenu?.kind === 'runtime' ? (");
+  assert.ok(deleteNodeIndex >= 0);
+  assert.ok(runtimeMenuIndex > deleteNodeIndex);
+  const deleteClaimIndex = content.indexOf('const deleteIngestClaimFromSidebar = useCallback');
+  const claimMenuIndex = content.indexOf("{contextMenu?.kind === 'ingest_claim' ? (");
+  assert.ok(deleteClaimIndex >= 0);
+  assert.ok(claimMenuIndex > deleteClaimIndex);
   assert.ok(labels.includes('export function getRegisteredNodeDeviceUrl(node: NodeControlRecord): string | null {'));
   assert.ok(labels.includes('export function hasRegisteredNodeDeviceUrl(node: NodeControlRecord): boolean {'));
 });

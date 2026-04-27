@@ -3167,6 +3167,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setContextMenu({ kind: 'ingest_claim', x, y, claim });
   }, [setContextMenu]);
 
+  const openPayloadDetails = useCallback((title: string, subtitle: string | undefined, payload: unknown) => {
+    setDetailsModal({ title, subtitle, payload });
+    setContextMenu(null);
+  }, [setContextMenu]);
+
   const resolveNodeRecord = useCallback((nodeId: string): NodeControlRecord | null => {
     if (!nodeId) return null;
     return runtimeNodes.find((entry) => entry.node_id === nodeId) ?? null;
@@ -3225,11 +3230,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Delete node failed');
     }
   }, [addToast, api, reloadSourceControl]);
-
-  const openPayloadDetails = useCallback((title: string, subtitle: string | undefined, payload: unknown) => {
-    setDetailsModal({ title, subtitle, payload });
-    setContextMenu(null);
-  }, [setContextMenu]);
 
   const runContextAction = useCallback((action: () => void | Promise<void>) => {
     setContextMenu(null);

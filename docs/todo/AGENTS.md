@@ -1,3 +1,9 @@
+## 2026-04-27 — Explorer sidebar delete TDZ hydration fix (active)
+- [x] Fixed `ExplorerApp` callback declaration order so `openPayloadDetails` initializes before callbacks that depend on it (`openDeviceForNode`), eliminating hydration-time TDZ `ReferenceError`.
+- [x] Preserved runtime/ingest destructive context actions (`Delete node`, `Delete claim`) and guarded device URL menu behavior.
+- [x] Added static contract assertions that enforce ordering invariants for `openPayloadDetails`, delete callbacks, and runtime/ingest context-menu render blocks.
+- [ ] Next: replace sidebar `window.confirm` prompts with shared confirm modal surface to keep all destructive flows non-blocking and style-consistent.
+
 ## 2026-04-27 — Explorer sidebar destructive runtime/claim actions (active)
 - [x] Added Explorer API client methods for `DELETE /api/nodes/{node_id}` and `DELETE /api/ingest/claims/{claim_id}` with structured error propagation.
 - [x] Added runtime context-menu destructive action (`Delete node`) with confirm → delete → refresh (`reloadSourceControl`) → toast flow.
