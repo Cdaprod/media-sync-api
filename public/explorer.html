@@ -3868,6 +3868,26 @@
       });
     }
 
+    async function drawerSendOBS(assetUrl, opts = {}){
+      if (!assetUrl) throw new Error('No stream URL available for this asset.');
+      const {
+        fit = 'cover',
+        slot = 1,
+        ensureExclusiveScene = false,
+      } = opts || {};
+      return obsReplaceAssetMediaUrl({
+        obsHost: '192.168.0.187',
+        obsPort: 4455,
+        sceneName: 'AssetSlots',
+        inputName: 'PlaySlot',
+        obsPassword: '123456',
+        assetUrl,
+        fit,
+        slot,
+        ensureExclusiveScene,
+      });
+    }
+
     function buildThumbFallback(label){
       const safeLabel = String(label || 'MEDIA').replace(/[^a-z0-9 ]/gi, '').slice(0, 12) || 'MEDIA';
       const svg = `
@@ -6195,15 +6215,10 @@
             const fit = el('obsFitMode')?.value || 'cover';
             const slot = parseInt(el('obsSlotSelect')?.value || '1', 10) || 1;
             const ensureExclusiveScene = !!el('obsExclusiveToggle')?.checked;
-            await obsReplaceAssetMediaUrl({
-              obsHost: '192.168.0.187',
-              sceneName: 'ASSET_MEDIA',
-              inputName: 'ASSET_MEDIA',
+            await drawerSendOBS(assetUrl, {
               fit,
-              ensureExclusiveScene,
-              muted: false,
               slot,
-              assetUrl,
+              ensureExclusiveScene,
             });
             toast('good','OBS', 'Browser source updated.');
           }catch(e){
