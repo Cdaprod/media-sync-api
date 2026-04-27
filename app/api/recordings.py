@@ -18,6 +18,12 @@ from app.runtime import get_runtime
 from app.runtime.types import AppRuntime
 
 router = APIRouter(prefix="/api/recordings", tags=["recordings"])
+"""Route ownership:
+- Audience: operator/read + browser/runtime recording lifecycle updates.
+- Auth boundary: Caddy/operator boundary (no dedicated node-bearer lane on this family today).
+- State owner: runtime.recording_sessions.
+- Naming policy: /api/recordings tracks lifecycle state only; persistence stays on /api/live_sessions/{session_id}/recording/upload.
+"""
 
 
 class RecordingSessionResponse(BaseModel):
@@ -124,4 +130,3 @@ async def delete_recording_session(
     registry = _require_registry(runtime)
     deleted = registry.delete(recording_id)
     return {"ok": True, "recording_id": recording_id, "deleted": deleted}
-

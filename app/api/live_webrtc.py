@@ -11,13 +11,19 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.runtime import get_runtime
 from app.runtime.live_sessions import WebRtcLiveSession, WebRtcLiveSessionRegistry
 from app.runtime.types import AppRuntime
 
 router = APIRouter(prefix="/api/live", tags=["live-webrtc"])
+"""Route ownership:
+- Audience: Explorer/operator read + browser WebRTC signaling.
+- Auth boundary: browser same-origin gateway/Caddy operator boundary; viewer reads stay non-node-bearer.
+- State owner: runtime.live_sessions / WebRtcLiveSessionRegistry.
+- Naming policy: /api/live is browser WebRTC signaling transport, not durable capture lifecycle.
+"""
 
 
 class LiveOfferPayload(BaseModel):
@@ -35,6 +41,23 @@ class LiveIcePayload(BaseModel):
 
 class LiveViewerStatePayload(BaseModel):
     state: str
+
+
+class LiveWebRtcSessionResponse(BaseModel):
+    session_id: str
+    node_id: str
+    has_offer: bool = False
+    has_answer: bool = False
+    viewer_count: int = 0
+    viewer_ids: list[str] = Field(default_factory=list)
+    state: str
+    connection_states: dict[str, str] = Field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class LiveWebRtcSessionListResponse(BaseModel):
+    sessions: list[LiveWebRtcSessionResponse] = Field(default_factory=list)
 
 
 
@@ -205,11 +228,11 @@ async def publish_viewer_state(
     return {"ok": True, "session_id": session_id, "viewer_id": normalized_viewer_id}
 
 
-@router.get("")
-async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> dict[str, list[dict[str, Any]]]:
+@router.get("", response_model=LiveWebRtcSessionListResponse)
+async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> LiveWebRtcSessionListResponse:
     registry = _registry(runtime)
-    sessions = [_serialize_live_session(session) for session in registry.list()]
-    return {"sessions": sessions}
+    sessions = [LiveWebRtcSessionResponse(**_serialize_live_session(session)) for session in registry.list()]
+    return LiveWebRtcSessionListResponse(sessions=sessions)
 
 
 @router.delete("/{session_id}")

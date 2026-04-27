@@ -23,6 +23,12 @@ from app.runtime import get_runtime
 from app.runtime.types import AppRuntime
 
 router = APIRouter(prefix="/api/live_sessions", tags=["live_sessions"])
+"""Route ownership:
+- Audience: operator/read + registered node mutation for durable capture lifecycle.
+- Auth boundary: Caddy/operator boundary for reads; node bearer token for node-owned writes.
+- State owner: runtime.services.live_session_registry (durable lifecycle lane).
+- Naming policy: /api/live_sessions owns durable live capture lifecycle; keep browser signaling on /api/live.
+"""
 
 
 class StartLiveSessionRequest(BaseModel):
@@ -49,6 +55,20 @@ class LiveSessionResponse(BaseModel):
 class EndLiveSessionResponse(BaseModel):
     session: LiveSessionResponse
     claim_id: str | None = None
+
+
+class LiveSessionRecordingUploadResponse(BaseModel):
+    recording_id: str
+    session_id: str
+    state: str
+    project: str
+    source: str
+    target_dir: str
+    filename: str
+    output_path: str
+    asset_url: str
+    size_bytes: int
+    content_type: str
 
 
 class LiveSessionControlRequest(BaseModel):
@@ -267,7 +287,7 @@ async def end_live_session(
     return EndLiveSessionResponse(session=payload, claim_id=session.claim_id)
 
 
-@router.post("/{session_id}/recording/upload")
+@router.post("/{session_id}/recording/upload", response_model=LiveSessionRecordingUploadResponse)
 async def upload_live_session_recording(
     session_id: str,
     file: UploadFile = File(...),
@@ -277,7 +297,14 @@ async def upload_live_session_recording(
     recording_id: str | None = Form(default=None),
     filename: str | None = Form(default=None),
     runtime: AppRuntime = Depends(get_runtime),
-) -> JSONResponse:
+) -> LiveSessionRecordingUploadResponse:
+    """Recording persistence/upload endpoint for durable asset writes.
+
+    Route ownership:
+    - Audience: browser recording upload lifecycle.
+    - Auth boundary: browser same-origin gateway/Caddy operator boundary.
+    - State owner: source registry/filesystem/index write path.
+    """
     registry = runtime.services.live_session_registry
     if registry is None:
         raise HTTPException(status_code=503, detail="Live session registry is unavailable")
@@ -325,7 +352,7 @@ async def upload_live_session_recording(
         "size_bytes": len(payload),
         "content_type": content_type or "application/octet-stream",
     }
-    return JSONResponse(response_payload)
+    return LiveSessionRecordingUploadResponse(**response_payload)
 
 
 @router.get("", response_model=list[LiveSessionResponse])

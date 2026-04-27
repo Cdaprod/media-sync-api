@@ -3,6 +3,17 @@ import type { ComposeJobEnvelope } from './composeJobs';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 import type { RegisterNodeRequest, RegisterNodeResponse } from './types/registration';
 import type { IngestClaimRecord } from './types/ingestClaim';
+import {
+  normalizeWebRtcLiveSessions,
+  type WebRtcLiveSession,
+} from './contracts/live';
+import { normalizeLiveSessionList } from './contracts/liveSessions';
+import {
+  normalizeRecordingSession,
+  normalizeRecordingSessions,
+  type RecordingSession,
+  type RecordingSessionState,
+} from './contracts/recordings';
 import type {
   LiveSessionControlAction,
   LiveSessionRecord,
@@ -19,19 +30,10 @@ export interface ResolveRequest {
   media_rel_paths: string[];
   mode: string;
 }
-
-
-export type WebRtcLiveSession = {
-  session_id: string;
-  node_id: string;
-  has_offer?: boolean;
-  has_answer?: boolean;
-  viewer_count?: number;
-  viewer_ids?: string[];
-  connection_states?: Record<string, string>;
-  state?: 'waiting_for_answer' | 'connected' | 'inactive' | string;
-  created_at?: string;
-  updated_at?: string;
+export type {
+  WebRtcLiveSession,
+  RecordingSession,
+  RecordingSessionState,
 };
 
 export interface AssetRef {
@@ -55,23 +57,7 @@ export type LiveRecordingUploadResult = {
   size_bytes: number;
   content_type: string;
 };
-
-export type RecordingSessionState = 'recording' | 'stopping' | 'uploading' | 'completed' | 'failed';
-
-export type RecordingSessionRecord = {
-  recording_id: string;
-  session_id: string;
-  node_id: string;
-  state: RecordingSessionState;
-  created_at: string;
-  updated_at: string;
-  project: string;
-  source: string;
-  target_dir: string;
-  filename?: string | null;
-  asset_url?: string | null;
-  error?: string | null;
-};
+export type RecordingSessionRecord = RecordingSession;
 
 export interface ApiClient {
   listSources: () => Promise<SourceControlRecord[]>;
@@ -357,11 +343,11 @@ export function createApiClient(baseUrl = ''): ApiClient {
         headers: { Accept: 'application/json' },
         cache: 'no-store',
       });
-      const payload = await parseJson<{ recordings: RecordingSessionRecord[]; detail?: string }>(response);
+      const payload = await parseJson<{ recordings?: RecordingSessionRecord[]; detail?: string }>(response);
       if (!response.ok) {
         throw new Error(String(payload?.detail || `Failed to load recording sessions: ${response.status}`));
       }
-      return Array.isArray(payload.recordings) ? payload.recordings : [];
+      return normalizeRecordingSessions(payload);
     },
     async startRecordingSession(payload: {
       session_id: string;
@@ -380,11 +366,15 @@ export function createApiClient(baseUrl = ''): ApiClient {
         cache: 'no-store',
         body: JSON.stringify(payload),
       });
-      const data = await parseJson<{ recording: RecordingSessionRecord; detail?: string }>(response);
+      const data = await parseJson<{ recording?: RecordingSessionRecord; detail?: string }>(response);
       if (!response.ok) {
         throw new Error(String(data?.detail || `Failed to start recording session: ${response.status}`));
       }
-      return data.recording;
+      const session = normalizeRecordingSession(data);
+      if (!session) {
+        throw new Error('Failed to parse recording session payload');
+      }
+      return session;
     },
     async completeRecordingSession(
       recordingId: string,
@@ -399,11 +389,15 @@ export function createApiClient(baseUrl = ''): ApiClient {
         cache: 'no-store',
         body: JSON.stringify(payload),
       });
-      const data = await parseJson<{ recording: RecordingSessionRecord; detail?: string }>(response);
+      const data = await parseJson<{ recording?: RecordingSessionRecord; detail?: string }>(response);
       if (!response.ok) {
         throw new Error(String(data?.detail || `Failed to complete recording session: ${response.status}`));
       }
-      return data.recording;
+      const session = normalizeRecordingSession(data);
+      if (!session) {
+        throw new Error('Failed to parse recording session payload');
+      }
+      return session;
     },
     async failRecordingSession(recordingId: string, payload: { error: string }): Promise<RecordingSessionRecord> {
       const response = await fetch(buildUrl(`/api/recordings/${encodeURIComponent(recordingId)}/fail`), {
@@ -415,11 +409,15 @@ export function createApiClient(baseUrl = ''): ApiClient {
         cache: 'no-store',
         body: JSON.stringify(payload),
       });
-      const data = await parseJson<{ recording: RecordingSessionRecord; detail?: string }>(response);
+      const data = await parseJson<{ recording?: RecordingSessionRecord; detail?: string }>(response);
       if (!response.ok) {
         throw new Error(String(data?.detail || `Failed to fail recording session: ${response.status}`));
       }
-      return data.recording;
+      const session = normalizeRecordingSession(data);
+      if (!session) {
+        throw new Error('Failed to parse recording session payload');
+      }
+      return session;
     },
     async deleteRecordingSession(recordingId: string): Promise<{ ok: boolean; recording_id: string; deleted: boolean }> {
       const response = await fetch(buildUrl(`/api/recordings/${encodeURIComponent(recordingId)}`), {
@@ -548,7 +546,8 @@ export function createApiClient(baseUrl = ''): ApiClient {
       if (!response.ok) {
         throw new Error(`Failed to load live sessions: ${response.status}`);
       }
-      return response.json();
+      const payload = await parseJson<unknown>(response);
+      return normalizeLiveSessionList(payload);
     },
     async listWebRtcLiveSessions(): Promise<WebRtcLiveSession[]> {
       const response = await fetch(buildUrl('/api/live'), {
@@ -559,9 +558,8 @@ export function createApiClient(baseUrl = ''): ApiClient {
       if (!response.ok) {
         throw new Error(`Failed to load live WebRTC sessions: ${response.status}`);
       }
-      const payload = await parseJson<any>(response);
-      const sessions = Array.isArray(payload) ? payload : payload?.sessions;
-      return Array.isArray(sessions) ? sessions : [];
+      const payload = await parseJson<unknown>(response);
+      return normalizeWebRtcLiveSessions(payload);
     },
     async postLiveViewerAnswer(
       sessionId: string,

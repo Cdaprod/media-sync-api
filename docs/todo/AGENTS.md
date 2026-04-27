@@ -1,3 +1,12 @@
+## 2026-04-27 — API ownership and contract normalization
+- [x] Documented route naming policy in API surface docs.
+- [x] Added frontend contract modules for live, live sessions, recordings, and assets.
+- [x] Updated api.ts to use contract normalizers instead of inline payload shape checks.
+- [x] Added OpenAPI contract tests for live/recording/media route families.
+- [x] Regenerated architecture OpenAPI snapshot.
+- [ ] Follow-up: migrate remaining implicit object responses to explicit response models.
+- [ ] Follow-up: split ExplorerApp orchestration after contracts stabilize.
+
 ## 2026-04-27 — Multi-viewer ICE reliability for live sessions pass (active)
 - [x] Extended runtime WebRTC session model to support multi-viewer answers, viewer-scoped ICE lanes, device ICE lane, connection-state map, and updated-at continuity while preserving legacy default-answer compatibility.
 - [x] Added viewer-aware signaling routes under `/api/live` for per-viewer answer/ICE/state plus device ICE publish/list and legacy `/answer` compatibility behavior.

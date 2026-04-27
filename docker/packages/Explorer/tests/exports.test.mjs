@@ -21,6 +21,10 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useLiveRecordingAssets.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useRecordingSessions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'live.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'liveSessions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'recordings.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'assets.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx')));
@@ -226,6 +230,22 @@ test('explorer api client includes bulk media action endpoints', () => {
   assert.ok(content.includes('getIngestClaim'));
   assert.ok(content.includes('deleteIngestClaim'));
   assert.ok(content.includes("buildUrl(`/api/ingest/claims/${encodeURIComponent(claimId)}`)"));
+  assert.ok(content.includes('normalizeWebRtcLiveSessions'));
+  assert.ok(content.includes('normalizeRecordingSessions'));
+  assert.ok(content.includes('normalizeRecordingSession'));
+  assert.ok(content.includes('normalizeLiveSessionList'));
+});
+
+test('contract normalizers keep compatibility payload support', () => {
+  const liveContractsPath = path.join(packageRoot, 'src', 'contracts', 'live.ts');
+  const recordingsContractsPath = path.join(packageRoot, 'src', 'contracts', 'recordings.ts');
+  const liveContent = fs.readFileSync(liveContractsPath, 'utf8');
+  const recordingsContent = fs.readFileSync(recordingsContractsPath, 'utf8');
+  assert.ok(liveContent.includes('Array.isArray(payload)'));
+  assert.ok(liveContent.includes('Array.isArray(maybe.sessions)'));
+  assert.ok(recordingsContent.includes('Array.isArray(payload)'));
+  assert.ok(recordingsContent.includes("const obj = payload as { recording?: RecordingSession };"));
+  assert.ok(recordingsContent.includes("if ('recording_id' in (payload as Record<string, unknown>))"));
 });
 
 test('api base inference uses centralized Explorer URL policy', () => {

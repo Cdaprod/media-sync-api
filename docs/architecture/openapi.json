@@ -700,6 +700,69 @@
         "title": "LiveSessionControlRequest",
         "type": "object"
       },
+      "LiveSessionRecordingUploadResponse": {
+        "properties": {
+          "asset_url": {
+            "title": "Asset Url",
+            "type": "string"
+          },
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "output_path": {
+            "title": "Output Path",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "recording_id": {
+            "title": "Recording Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "target_dir": {
+            "title": "Target Dir",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recording_id",
+          "session_id",
+          "state",
+          "project",
+          "source",
+          "target_dir",
+          "filename",
+          "output_path",
+          "asset_url",
+          "size_bytes",
+          "content_type"
+        ],
+        "title": "LiveSessionRecordingUploadResponse",
+        "type": "object"
+      },
       "LiveSessionResponse": {
         "properties": {
           "chunk_count": {
@@ -1026,6 +1089,93 @@
           "state"
         ],
         "title": "LiveViewerStatePayload",
+        "type": "object"
+      },
+      "LiveWebRtcSessionListResponse": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/LiveWebRtcSessionResponse"
+            },
+            "title": "Sessions",
+            "type": "array"
+          }
+        },
+        "title": "LiveWebRtcSessionListResponse",
+        "type": "object"
+      },
+      "LiveWebRtcSessionResponse": {
+        "properties": {
+          "connection_states": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Connection States",
+            "type": "object"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "has_answer": {
+            "default": false,
+            "title": "Has Answer",
+            "type": "boolean"
+          },
+          "has_offer": {
+            "default": false,
+            "title": "Has Offer",
+            "type": "boolean"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "viewer_count": {
+            "default": 0,
+            "title": "Viewer Count",
+            "type": "integer"
+          },
+          "viewer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Viewer Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "node_id",
+          "state"
+        ],
+        "title": "LiveWebRtcSessionResponse",
         "type": "object"
       },
       "MoveMediaRequest": {
@@ -2748,14 +2898,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "items": {
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "title": "Response List Live Sessions Api Live Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LiveWebRtcSessionListResponse"
                 }
               }
             },
@@ -3948,6 +4091,7 @@
     },
     "/api/live_sessions/{session_id}/recording/upload": {
       "post": {
+        "description": "Recording persistence/upload endpoint for durable asset writes.\n\nRoute ownership:\n- Audience: browser recording upload lifecycle.\n- Auth boundary: browser same-origin gateway/Caddy operator boundary.\n- State owner: source registry/filesystem/index write path.",
         "operationId": "upload_live_session_recording_api_live_sessions__session_id__recording_upload_post",
         "parameters": [
           {
@@ -3974,7 +4118,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LiveSessionRecordingUploadResponse"
+                }
               }
             },
             "description": "Successful Response"

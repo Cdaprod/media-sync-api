@@ -19,6 +19,12 @@ from app.runtime.nodes import NodeRecord, NodeStatus, public_node_record_dict, v
 from app.runtime.types import AppRuntime
 
 router = APIRouter(prefix="/api/nodes", tags=["nodes"])
+"""Route ownership:
+- Audience: operator/read + registered node heartbeat mutation.
+- Auth boundary: Caddy/operator boundary for operator routes; node bearer token for registered-node mutations.
+- State owner: runtime.services.node_registry.
+- Naming policy: /api/nodes remains runtime node registry/control-plane inventory.
+"""
 
 
 class NodeRegisterRequest(BaseModel):

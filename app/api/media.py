@@ -65,6 +65,12 @@ registry_router = APIRouter(prefix="/api/registry", tags=["registry"])
 media_router = APIRouter(prefix="/media", tags=["media"])
 thumbnail_router = APIRouter(prefix="/thumbnails", tags=["media"])
 debug_router = APIRouter(prefix="/debug", tags=["debug"])
+"""Route ownership:
+- Audience: media read path (Explorer/operator/public read delivery).
+- Auth boundary: app-layer public/read route behind optional Caddy/operator boundary.
+- State owner: source registry/filesystem/index (+ thumbnail cache generation pipeline).
+- Naming policy: /media and /thumbnails stay read-optimized delivery paths without node bearer auth.
+"""
 
 ORPHAN_PROJECT_NAME = "Unsorted-Loose"
 MANIFEST_DB = "_manifest/manifest.db"

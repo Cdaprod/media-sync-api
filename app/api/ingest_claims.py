@@ -18,6 +18,12 @@ from app.runtime import get_runtime
 from app.runtime.types import AppRuntime
 
 router = APIRouter(prefix="/api/ingest/claims", tags=["ingest"])
+"""Route ownership:
+- Audience: operator/read + registered node mutation for claim submission.
+- Auth boundary: Caddy/operator boundary for read/maintenance; node bearer token for submit mutation.
+- State owner: ingest claim service/registry.
+- Naming policy: keep ingest claim ownership under /api/ingest/claims.
+"""
 
 
 @router.post("", response_model=SubmitAssetClaimResponse, status_code=201)

@@ -8,6 +8,14 @@ Regenerate inventory:
 python scripts/export_openapi.py
 ```
 
+## Route Naming Policy
+
+- `/api/live` owns browser WebRTC signaling/control-plane transport.
+- `/api/live_sessions` owns durable live capture/session lifecycle.
+- `/api/recordings` owns recording lifecycle state.
+- `/api/live_sessions/{session_id}/recording/upload` owns recording persistence/upload.
+- `/media` and `/thumbnails` are read-optimized media delivery paths and must remain free of node bearer auth.
+
 ## Route Classes
 
 - **Operator / Explorer-readable**
