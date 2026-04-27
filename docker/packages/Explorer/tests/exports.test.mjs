@@ -46,6 +46,9 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'awaitVisibleVideoPaint.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useLivePreviewState.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeEventReactions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
@@ -361,12 +364,15 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
 
 test('runtime SSE hook exists and uses EventSource /api/events', () => {
   const hookPath = path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts');
+  const runtimeControllerPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts');
   const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const hook = fs.readFileSync(hookPath, 'utf8');
+  const runtimeController = fs.readFileSync(runtimeControllerPath, 'utf8');
   const app = fs.readFileSync(appPath, 'utf8');
   assert.ok(hook.includes("new EventSource('/api/events')"));
   assert.ok(hook.includes("new CustomEvent('runtime:event'"));
-  assert.ok(app.includes('useRuntimeEvents({ enabled: true })'));
+  assert.ok(runtimeController.includes('useRuntimeEvents({ enabled: true })'));
+  assert.ok(app.includes('useRuntimeController'));
 });
 
 test('clipboard helper includes fallback copy behavior', () => {
@@ -3157,7 +3163,7 @@ test('explorer runtime panel wires live WebRTC session hooks and chip normalizat
   const livePreview = fs.readFileSync(livePreviewPath, 'utf8');
   const api = fs.readFileSync(apiPath, 'utf8');
 
-  assert.ok(explorer.includes('useWebRtcLiveSessions'));
+  assert.ok(explorer.includes('useRuntimeController'));
   assert.ok(explorer.includes('LivePreview'));
   assert.ok(explorer.includes('/connect/device?node_id='));
   assert.ok(explorer.includes('buildRuntimeChips(node, liveSession)'));
@@ -3175,6 +3181,36 @@ test('explorer runtime panel wires live WebRTC session hooks and chip normalizat
   assert.ok(chips.includes('viewer_count'));
   assert.ok(chips.includes('connection_states'));
   assert.ok(chips.includes("addChip('live', 'capability')"));
+});
+
+test('explorer runtime orchestration decomposition wiring remains intact', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const runtimeControllerPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts');
+  const livePreviewStatePath = path.join(packageRoot, 'src', 'runtime', 'useLivePreviewState.ts');
+  const runtimeReactionsPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeEventReactions.ts');
+  const streamHubPath = path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts');
+  const livePreviewPath = path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const runtimeController = fs.readFileSync(runtimeControllerPath, 'utf8');
+  const livePreviewState = fs.readFileSync(livePreviewStatePath, 'utf8');
+  const runtimeReactions = fs.readFileSync(runtimeReactionsPath, 'utf8');
+  const streamHub = fs.readFileSync(streamHubPath, 'utf8');
+  const livePreview = fs.readFileSync(livePreviewPath, 'utf8');
+
+  assert.ok(runtimeController.includes('useWebRtcLiveSessions'));
+  assert.ok(runtimeController.includes('useRuntimeEvents'));
+  assert.ok(livePreviewState.includes('openLivePreview'));
+  assert.ok(livePreviewState.includes('closeLivePreview'));
+  assert.ok(runtimeReactions.includes("window.addEventListener('runtime:event'"));
+  assert.ok(runtimeReactions.includes("evt.type === 'recording.complete'"));
+  assert.ok(runtimeReactions.includes("evt.type === 'live.offer'"));
+  assert.ok(explorer.includes('useRuntimeController'));
+  assert.ok(explorer.includes('useLivePreviewState'));
+  assert.ok(explorer.includes('useRuntimeEventReactions'));
+  assert.ok(explorer.includes('LivePreview'));
+  assert.ok(streamHub.includes('const streams = new Map<string, MediaStream>()'));
+  assert.ok(livePreview.includes('postLiveViewerAnswer'));
 });
 
 test('live recorder pipeline wiring captures peer stream and records durable assets', () => {

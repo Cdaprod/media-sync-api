@@ -57,3 +57,11 @@ This document maps the current Explorer package feature architecture under `dock
 3. Introduce event-stream consumption (SSE/WebSocket) after backend route/contracts stabilize.
 4. Unify pending artifact rendering model for compose + recording lifecycle entities.
 5. Add stronger runtime integration checks around live reconnection and recording reconciliation timing.
+
+## Phase 4B: Explorer orchestration decomposition
+
+- [x] Extracted runtime controller hooks.
+- [x] Extracted live preview state.
+- [x] Extracted runtime event reaction layer.
+- [ ] Follow-up: extract pending artifact controller.
+- [ ] Follow-up: split asset grid orchestration.

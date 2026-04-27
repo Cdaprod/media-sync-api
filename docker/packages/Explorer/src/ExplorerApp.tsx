@@ -59,9 +59,10 @@ import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
-import { useWebRtcLiveSessions } from './hooks/useWebRtcLiveSessions';
 import { useRecordingSessions } from './hooks/useRecordingSessions';
-import { useRuntimeEvents } from './hooks/useRuntimeEvents';
+import { useRuntimeController } from './runtime/useRuntimeController';
+import { useLivePreviewState } from './runtime/useLivePreviewState';
+import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -664,11 +665,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     subtitle?: string;
     payload: unknown;
   } | null>(null);
-  const [activeLivePreview, setActiveLivePreview] = useState<{
-    sessionId: string;
-    nodeId: string;
-    label?: string;
-  } | null>(null);
+  const livePreview = useLivePreviewState();
   const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
@@ -753,37 +750,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     defaultView: DEFAULT_VIEW,
     defaultGridColumns: DEFAULT_COLUMNS_MOBILE,
   });
+  const runtime = useRuntimeController({
+    listWebRtcLiveSessions: api.listWebRtcLiveSessions,
+    poll: sidebarOpen || detailsModal !== null,
+  });
   const {
     sessions: webRtcLiveSessions,
     sessionsByNodeId: webRtcSessionsByNodeId,
     waitingByNodeId: waitingWebRtcByNodeId,
     reload: reloadWebRtcLiveSessions,
-  } = useWebRtcLiveSessions({
-    listWebRtcLiveSessions: api.listWebRtcLiveSessions,
-    enabled: true,
-    poll: sidebarOpen || detailsModal !== null,
+  } = runtime;
+  const reloadRuntimeLiveSessions = useCallback(async () => {
+    await Promise.all([
+      reloadLiveSessions(),
+      reloadWebRtcLiveSessions(),
+    ]);
+  }, [reloadLiveSessions, reloadWebRtcLiveSessions]);
+
+  useRuntimeEventReactions({
+    reloadLibrarySnapshot: refreshLibrarySnapshot,
+    reloadLiveSessions: reloadRuntimeLiveSessions,
   });
-  useRuntimeEvents({ enabled: true });
-
-  useEffect(() => {
-    const onEvt = (event: Event) => {
-      const customEvent = event as CustomEvent<{ type?: string }>;
-      const evt = customEvent.detail;
-      if (!evt || typeof evt !== 'object') return;
-
-      if (evt.type === 'recording.complete') {
-        void refreshLibrarySnapshot();
-      }
-
-      if (evt.type === 'live.offer') {
-        void reloadLiveSessions();
-        void reloadWebRtcLiveSessions();
-      }
-    };
-
-    window.addEventListener('runtime:event', onEvt as EventListener);
-    return () => window.removeEventListener('runtime:event', onEvt as EventListener);
-  }, [refreshLibrarySnapshot, reloadLiveSessions, reloadWebRtcLiveSessions]);
 
 
   const reloadIngestClaims = useCallback(async () => {
@@ -802,12 +789,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [reloadIngestClaims]);
 
   useEffect(() => {
-    if (!activeLivePreview) return;
+    if (!livePreview.activeLivePreview) return;
     const timeout = window.setTimeout(() => {
       void reloadWebRtcLiveSessions();
     }, 1200);
     return () => window.clearTimeout(timeout);
-  }, [activeLivePreview, reloadWebRtcLiveSessions]);
+  }, [livePreview.activeLivePreview, reloadWebRtcLiveSessions]);
 
 
   useEffect(() => {
@@ -6333,11 +6320,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
             return (
               <button
                 type="button"
-                onClick={() => runContextAction(() => setActiveLivePreview({
-                  sessionId: waitingSession.session_id,
-                  nodeId: contextMenu.node.node_id,
-                  label: contextMenu.node.label || contextMenu.node.node_id,
-                }))}
+                onClick={() => runContextAction(() => livePreview.openLivePreview(
+                  waitingSession.session_id,
+                  contextMenu.node.node_id,
+                  contextMenu.node.label || contextMenu.node.node_id,
+                ))}
               >
                 Answer Live
               </button>
@@ -6436,23 +6423,23 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         onClose={() => setDetailsModal(null)}
       />
 
-      {activeLivePreview ? (
+      {livePreview.activeLivePreview ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal-card live-preview-modal custom-ui-surface">
             <header className="live-preview-head">
-              <strong>{activeLivePreview.label || activeLivePreview.nodeId}</strong>
+              <strong>{livePreview.activeLivePreview.label || livePreview.activeLivePreview.nodeId}</strong>
               <button
                 type="button"
                 className="btn"
                 onClick={() => {
-                  setActiveLivePreview(null);
+                  livePreview.closeLivePreview();
                   void reloadWebRtcLiveSessions();
                 }}
               >
                 Close
               </button>
             </header>
-            <LivePreview sessionId={activeLivePreview.sessionId} />
+            <LivePreview sessionId={livePreview.activeLivePreview.sessionId} />
           </div>
         </div>
       ) : null}

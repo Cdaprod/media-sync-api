@@ -1,3 +1,10 @@
+## 2026-04-27 — Explorer runtime extraction
+- [x] Runtime controller extracted.
+- [x] Live preview state extracted.
+- [x] Runtime event reactions extracted.
+- [ ] Pending artifact controller extraction.
+- [ ] Grid/render orchestration split.
+
 ## 2026-04-27 — SSE runtime events
 - [x] Runtime event bus added
 - [x] SSE endpoint added
