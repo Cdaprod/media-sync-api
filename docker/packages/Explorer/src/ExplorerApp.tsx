@@ -5188,35 +5188,50 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   </div>
                 </div>
                 <div className="sources">
-                    {liveSessions.map((session) => (
-                      <div key={session.session_id} onContextMenu={(event) => openLiveSessionContextMenu(event, session)}>
-                        <LiveSourceCard
-                          session={session}
-                          apiBase={resolvedApiBase}
-                          onStartRecording={(entry) => {
-                            void api.controlLiveSession(entry.session_id, 'start_recording')
-                              .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))
-                              .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
-                          }}
-                          onStopRecording={(entry) => {
-                            void api.controlLiveSession(entry.session_id, 'stop_recording')
-                              .then(() => addToast('good', 'Live control', `Stop requested for ${entry.node_id}`))
-                              .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
-                          }}
-                          onOpen={(entry) => {
-                            window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
-                          }}
-                        />
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={(event) => openLiveSessionContextMenu(event, session)}
-                          style={{ marginTop: 8 }}
-                        >
-                          ⋯
-                        </button>
-                      </div>
-                    ))}
+                    {liveSessions.map((session) => {
+                      const metadataProject = typeof session.metadata?.project_name === 'string' ? session.metadata.project_name : '';
+                      const recordingProject = activeProject?.name || metadataProject || 'default';
+                      const recordingSource = activeProject?.source || 'primary';
+                      return (
+                        <div key={session.session_id} onContextMenu={(event) => openLiveSessionContextMenu(event, session)}>
+                          <LiveSourceCard
+                            session={session}
+                            apiBase={resolvedApiBase}
+                            recordingProject={recordingProject}
+                            recordingSource={recordingSource}
+                            recordingTargetDir="ingest/live"
+                            onRecordingSaved={() => {
+                              void refreshLibrarySnapshot({
+                                source: recordingSource || undefined,
+                                scope: activeProject ? 'project' : 'all',
+                                project: activeProject?.name || recordingProject,
+                              });
+                            }}
+                            onStartRecording={(entry) => {
+                              void api.sendLiveSessionControl(entry.session_id, 'start_recording')
+                                .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))
+                                .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                            }}
+                            onStopRecording={(entry) => {
+                              void api.sendLiveSessionControl(entry.session_id, 'stop_recording')
+                                .then(() => addToast('good', 'Live control', `Stop requested for ${entry.node_id}`))
+                                .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                            }}
+                            onOpen={(entry) => {
+                              window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
+                            }}
+                          />
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={(event) => openLiveSessionContextMenu(event, session)}
+                            style={{ marginTop: 8 }}
+                          >
+                            ⋯
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
               </>
             ) : null}

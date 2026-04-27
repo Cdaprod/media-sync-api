@@ -21,6 +21,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'composeJobs.ts')));
@@ -3112,4 +3113,22 @@ test('explorer runtime panel wires live WebRTC session hooks and chip normalizat
   assert.ok(chips.includes("tokens.includes('session-node')"));
   assert.ok(chips.includes("tokens.includes('session')"));
   assert.ok(chips.includes("addChip('live', 'capability')"));
+});
+
+test('live recorder wiring captures peer stream and uploads durable recording assets', () => {
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const recorderPath = path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx');
+  const cardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const api = fs.readFileSync(apiPath, 'utf8');
+  const recorder = fs.readFileSync(recorderPath, 'utf8');
+  const card = fs.readFileSync(cardPath, 'utf8');
+
+  assert.ok(api.includes('uploadLiveSessionRecording'));
+  assert.ok(api.includes('/api/live_sessions/'));
+  assert.ok(api.includes('/recording/upload'));
+  assert.ok(api.includes('sendLiveSessionControl'));
+  assert.ok(recorder.includes('MediaRecorder'));
+  assert.ok(recorder.includes('uploadLiveSessionRecording'));
+  assert.ok(card.includes('LiveRecorder'));
+  assert.ok(card.includes('setPeerStream'));
 });

@@ -1,3 +1,14 @@
+## 2026-04-27 — Durable browser-side WebRTC recording upload pass (active)
+- [x] Added `/api/live_sessions/{session_id}/recording/upload` multipart endpoint to persist browser-captured `.webm` recordings into source/project storage roots.
+- [x] Added upload validation for live-session existence, non-empty payloads, content type constraints (`video/webm` or `application/octet-stream`), target-dir safety, and `.webm` filename sanitization.
+- [x] Implemented defensive source-root resolution across common registry API shapes (`require/get/get_source/resolve`) and root-field variants (`root/root_path/path/base_path`).
+- [x] Added Explorer API client methods for browser-recording upload and explicit live-session control dispatch (`sendLiveSessionControl`).
+- [x] Added `LiveRecorder` component that records peer `MediaStream` with `MediaRecorder`, tracks elapsed time, uploads on stop, and surfaces saved-asset links.
+- [x] Integrated `LiveRecorder` into `LiveSourceCard` peer-view lifecycle with `setPeerStream(...)` track wiring and cleanup.
+- [x] Wired Explorer live card rendering to pass recording project/source/target-dir context and refresh library snapshot after recording save.
+- [x] Added backend tests for recording upload success and unsafe target-dir rejection plus Explorer static contract checks for recorder wiring.
+- [ ] Next: add focused runtime UI smoke coverage for repeated start/stop browser recording cycles against one active peer stream.
+
 ## 2026-04-27 — Explorer live-session side panel correlation pass (active)
 - [x] Updated `/api/live` list serialization to prefer object payload shape (`{ sessions: [...] }`) with derived `has_offer`, `has_answer`, and `state` fields for operator-facing WebRTC session state.
 - [x] Hardened `/connect/device` answer polling to treat 404 as expected waiting state, reduce status noise, back off polling cadence (1s→2s→5s), and pause polling while tab is hidden.

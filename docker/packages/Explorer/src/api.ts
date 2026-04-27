@@ -37,6 +37,22 @@ export interface AssetRef {
   source?: string | null;
 }
 
+export type LiveRecordingState = 'idle' | 'recording' | 'uploading' | 'completed' | 'failed';
+
+export type LiveRecordingUploadResult = {
+  recording_id: string;
+  session_id: string;
+  state: 'completed' | string;
+  project: string;
+  source: string;
+  target_dir: string;
+  filename: string;
+  output_path: string;
+  asset_url: string;
+  size_bytes: number;
+  content_type: string;
+};
+
 export interface ApiClient {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
@@ -54,6 +70,15 @@ export interface ApiClient {
   publishLiveSignalOffer: (sessionId: string, offer: LiveSignalDescription) => Promise<LiveSignalState>;
   publishLiveSignalAnswer: (sessionId: string, viewerId: string, answer: LiveSignalDescription) => Promise<LiveSignalState>;
   publishLiveSignalIce: (sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate) => Promise<LiveSignalState>;
+  sendLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }>;
+  uploadLiveSessionRecording: (sessionId: string, payload: {
+    file: Blob;
+    project: string;
+    source?: string;
+    targetDir?: string;
+    recordingId?: string;
+    filename?: string;
+  }) => Promise<LiveRecordingUploadResult>;
   heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
@@ -248,6 +273,47 @@ export function createApiClient(baseUrl = ''): ApiClient {
         throw new Error(`Failed to control live session: ${response.status}`);
       }
       return response.json();
+    },
+    async sendLiveSessionControl(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ action }),
+      });
+      const payload = await parseJson<{ ok: boolean; action: LiveSessionControlAction; session_id: string; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to send live session control: ${response.status}`));
+      }
+      return payload;
+    },
+    async uploadLiveSessionRecording(sessionId: string, payload: {
+      file: Blob;
+      project: string;
+      source?: string;
+      targetDir?: string;
+      recordingId?: string;
+      filename?: string;
+    }): Promise<LiveRecordingUploadResult> {
+      const form = new FormData();
+      form.append('file', payload.file, payload.filename || 'live-recording.webm');
+      form.append('project', payload.project);
+      form.append('source', payload.source || 'primary');
+      form.append('target_dir', payload.targetDir || 'ingest/live');
+      if (payload.recordingId) form.append('recording_id', payload.recordingId);
+      if (payload.filename) form.append('filename', payload.filename);
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/recording/upload`), {
+        method: 'POST',
+        body: form,
+      });
+      const data = await parseJson<LiveRecordingUploadResult & { detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || `Failed to upload live recording: ${response.status}`));
+      }
+      return data;
     },
     async acknowledgeLiveSessionControl(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction }> {
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control/ack`), {

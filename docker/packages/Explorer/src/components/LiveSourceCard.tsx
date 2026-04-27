@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import type { LiveSessionRecord } from '../types/liveSession';
+import { LiveRecorder } from './LiveRecorder';
 
 function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
   const [url, setUrl] = useState('');
@@ -31,6 +32,10 @@ function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
 interface LiveSourceCardProps {
   session: LiveSessionRecord;
   apiBase?: string;
+  recordingProject: string;
+  recordingSource?: string;
+  recordingTargetDir?: string;
+  onRecordingSaved?: () => void;
   onOpen?: (session: LiveSessionRecord) => void;
   onStartRecording?: (session: LiveSessionRecord) => void;
   onStopRecording?: (session: LiveSessionRecord) => void;
@@ -39,6 +44,10 @@ interface LiveSourceCardProps {
 export function LiveSourceCard({
   session,
   apiBase = '',
+  recordingProject,
+  recordingSource = 'primary',
+  recordingTargetDir = 'ingest/live',
+  onRecordingSaved,
   onOpen,
   onStartRecording,
   onStopRecording,
@@ -51,6 +60,7 @@ export function LiveSourceCard({
   const deviceIceSeenRef = useRef<Set<string>>(new Set());
   const viewerIdRef = useRef(`viewer-${Math.random().toString(36).slice(2, 10)}`);
   const [peerEnabled, setPeerEnabled] = useState(false);
+  const [peerStream, setPeerStream] = useState<MediaStream | null>(null);
   const [peerError, setPeerError] = useState<string | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');
   const [peerRetryToken, setPeerRetryToken] = useState(0);
@@ -83,6 +93,7 @@ export function LiveSourceCard({
       const stream = event.streams?.[0];
       if (!stream || !peerVideoRef.current) return;
       peerVideoRef.current.srcObject = stream;
+      setPeerStream(stream);
     };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === 'connected') setPeerStatus('connected');
@@ -145,6 +156,7 @@ export function LiveSourceCard({
       peerConnRef.current = null;
       deviceIceSeenRef.current.clear();
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+      setPeerStream(null);
       setPeerStatus('idle');
     };
   }, [apiBase, isActive, peerEnabled, peerRetryToken, session.session_id]);
@@ -225,7 +237,7 @@ export function LiveSourceCard({
                 style={{ flex: 1, fontSize: 11 }}
                 onClick={() => onStartRecording(session)}
               >
-                Record
+                Request device rec
               </button>
             ) : null}
             {onStopRecording ? (
@@ -235,7 +247,7 @@ export function LiveSourceCard({
                 style={{ flex: 1, fontSize: 11 }}
                 onClick={() => onStopRecording(session)}
               >
-                Stop
+                Stop device rec
               </button>
             ) : null}
           </div>
@@ -263,6 +275,16 @@ export function LiveSourceCard({
               Reconnect peer view
             </button>
             {peerError ? <div className="small" style={{ marginTop: 6, color: '#ff9a90' }}>{peerError}</div> : null}
+            <LiveRecorder
+              stream={peerStream}
+              apiBase={apiBase}
+              sessionId={session.session_id}
+              nodeId={session.node_id}
+              project={recordingProject}
+              source={recordingSource}
+              targetDir={recordingTargetDir}
+              onRecordingSaved={() => onRecordingSaved?.()}
+            />
           </div>
         ) : null}
         {onOpen ? (
