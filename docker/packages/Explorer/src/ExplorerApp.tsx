@@ -40,7 +40,11 @@ import { LiveSourceCard } from './components/LiveSourceCard';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
-import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl, normalizeAssetUrl } from './utils/mediaUrls';
+import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl } from './utils/mediaUrls';
+import {
+  absolutizeNonAssetUrl,
+  resolveBrowserRenderableUrl,
+} from './config/urlPolicy';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
 import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
@@ -1501,44 +1505,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const resolveAssetUrl = useCallback(
     (path?: string) => {
-      const normalized = normalizeAssetUrl(path);
-      if (!normalized) return '';
-      if (normalized.startsWith('data:')) return normalized;
-  
-      // Do NOT send browser-rendered asset paths through api.buildUrl.
-      // Let Caddy serve them from the current origin.
-      if (
-        normalized.startsWith('/media/') ||
-        normalized.startsWith('/thumbnails/')
-      ) {
-        return normalized;
-      }
-  
-      return api.buildUrl(normalized);
+      return resolveBrowserRenderableUrl(
+        path,
+        api.buildUrl,
+        typeof window === 'undefined' ? undefined : window.location,
+      );
     },
     [api],
   );
-  
+
   const absolutizeMediaUrl = useCallback((path?: string) => {
-    if (!path) return '';
-    if (
-      path.startsWith('data:') ||
-      path.startsWith('http://') ||
-      path.startsWith('https://')
-    ) {
-      return path;
-    }
-    // Critical: under Caddy/HTTPS, browser-rendered media assets must stay same-origin.
-    if (path.startsWith('/media/') || path.startsWith('/thumbnails/')) {
-      return path;
-    }
-    if (typeof window === 'undefined') return path;
-    const base = resolvedApiBase || window.location.origin;
-    try {
-      return new URL(path, base).toString();
-    } catch {
-      return path;
-    }
+    if (typeof window === 'undefined') return path || '';
+    return absolutizeNonAssetUrl(path, resolvedApiBase || window.location.origin);
   }, [resolvedApiBase]);
   const resolveThumbCandidatePlan = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>): ThumbnailCandidatePlan => {
     const rawPrimaryThumb = normalizeThumbUrl(item.thumbnail_url || '');

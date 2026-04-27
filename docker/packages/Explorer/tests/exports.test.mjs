@@ -215,17 +215,18 @@ test('explorer api client includes bulk media action endpoints', () => {
   assert.ok(content.includes('getIngestClaim'));
 });
 
-test('api base inference keeps LAN host reachable', () => {
+test('api base inference uses centralized Explorer URL policy', () => {
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
+  const policyPath = path.join(packageRoot, 'src', 'config', 'urlPolicy.ts');
   const content = fs.readFileSync(utilsPath, 'utf8');
-  assert.ok(content.includes('inferApiBaseUrl'));
-  assert.ok(content.includes('media-sync-api'));
-  assert.ok(content.includes(':8787'));
-  assert.ok(content.includes("if (!trimmed) {"));
-  assert.ok(content.includes("currentPort !== '8787'"));
-  assert.ok(content.includes("if (location.protocol === 'https:') {"));
-  assert.ok(content.includes("if (location.protocol === 'https:' && parsed.protocol === 'http:') {"));
-  assert.ok(content.includes('normalizeMediaUrlForOrigin'));
+  const policy = fs.readFileSync(policyPath, 'utf8');
+  assert.ok(content.includes('inferExplorerApiBaseUrl'));
+  assert.ok(content.includes('normalizeBrowserAssetUrl'));
+  assert.ok(policy.includes('inferExplorerApiBaseUrl'));
+  assert.ok(policy.includes("if (location.protocol === 'https:') {"));
+  assert.ok(policy.includes("currentPort !== '8787'"));
+  assert.ok(policy.includes('isBrowserAssetPath'));
+  assert.ok(policy.includes('resolveBrowserRenderableUrl'));
 });
 
 test('register modal redirects directly to device activation and keeps session-node payload contract', () => {
@@ -3032,18 +3033,19 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes('className="search-input"'));
 });
 
-test('media URL helpers keep relative URLs and rewrite insecure absolute URLs on HTTPS', () => {
+test('media URL helpers delegate normalization to centralized URL policy', () => {
   const mediaUrlsPath = path.join(packageRoot, 'src', 'utils', 'mediaUrls.ts');
+  const policyPath = path.join(packageRoot, 'src', 'config', 'urlPolicy.ts');
   const mediaUrls = fs.readFileSync(mediaUrlsPath, 'utf8');
+  const policy = fs.readFileSync(policyPath, 'utf8');
 
-  assert.ok(mediaUrls.includes("if (raw.startsWith('/')) return raw;"));
-  assert.ok(mediaUrls.includes("return `${window.location.protocol}${raw}`;"));
-  assert.ok(mediaUrls.includes("window.location.protocol === 'https:'"));
-  assert.ok(mediaUrls.includes("parsed.protocol === 'http:'"));
-  assert.ok(mediaUrls.includes("const rewritten = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;"));
+  assert.ok(mediaUrls.includes('normalizeBrowserAssetUrl'));
+  assert.ok(mediaUrls.includes('absolutizeNonAssetUrl'));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.thumbnail_url || item.thumb_url || '');"));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.stream_url || item.url || '');"));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.download_url || item.stream_url || '');"));
+  assert.ok(policy.includes("if (location.protocol === 'https:' && (sameHost || privateHost || apiPort)) {"));
+  assert.ok(policy.includes('isLikelyPrivateHost'));
 });
 
 test('thumbnail normalization preserves API port when remapping localhost urls', () => {

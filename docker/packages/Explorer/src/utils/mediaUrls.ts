@@ -1,55 +1,15 @@
 import type { MediaItem } from '../types';
+import {
+  absolutizeNonAssetUrl,
+  normalizeBrowserAssetUrl,
+} from '../config/urlPolicy';
 
 export function normalizeAssetUrl(url: string | null | undefined): string {
-  if (!url) return '';
-  const raw = String(url).trim();
-  if (!raw) return '';
-
-  if (raw.startsWith('/')) return raw;
-
-  if (typeof window !== 'undefined' && raw.startsWith('//')) {
-    return `${window.location.protocol}${raw}`;
+  if (typeof window === 'undefined') {
+    return String(url || '').trim();
   }
 
-  try {
-    const parsed = new URL(raw);
-
-    if (typeof window !== 'undefined') {
-      const loc = window.location;
-
-      const isAssetPath =
-        parsed.pathname.startsWith('/media/') ||
-        parsed.pathname.startsWith('/thumbnails/');
-
-      const sameHost =
-        parsed.hostname.toLowerCase() === loc.hostname.toLowerCase();
-
-      const isWrongPort =
-        parsed.port === '8787';
-
-      const isHttp =
-        parsed.protocol === 'http:';
-
-      if (
-        loc.protocol === 'https:' &&
-        isAssetPath &&
-        sameHost &&
-        (isHttp || isWrongPort)
-      ) {
-        const rewritten = `${loc.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
-
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('[Explorer] Rewrote asset URL', raw, rewritten);
-        }
-
-        return rewritten;
-      }
-    }
-
-    return parsed.toString();
-  } catch {
-    return raw;
-  }
+  return normalizeBrowserAssetUrl(url, window.location);
 }
 
 export function getBestThumbnailUrl(item: Pick<MediaItem, 'thumbnail_url' | 'thumb_url'>): string {
@@ -67,5 +27,5 @@ export function getBestDownloadUrl(item: Pick<MediaItem, 'download_url' | 'strea
 export function absoluteAssetUrl(url: string): string {
   if (!url) return '';
   if (typeof window === 'undefined') return url;
-  return new URL(url, window.location.origin).toString();
+  return absolutizeNonAssetUrl(url, window.location.origin);
 }

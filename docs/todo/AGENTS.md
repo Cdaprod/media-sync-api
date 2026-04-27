@@ -1,3 +1,11 @@
+## 2026-04-27 — Explorer URL policy + auth-layering PR tasks (active)
+- [x] Add a centralized Explorer URL policy module for browser-renderable media/API normalization and HTTPS same-origin routing behavior.
+- [x] Route Explorer media URL resolution through the shared policy layer (`utils.ts`, `utils/mediaUrls.ts`, `ExplorerApp.tsx`) to remove scattered URL guessing.
+- [x] Keep direct Next dev mode functional through explicit rewrites and avoid hardcoded production defaults for `192.168.0.25:8787`.
+- [x] Add minimal backend auth scaffolding modules for device auth and platform credential references without forcing auth gates onto existing routes.
+- [x] Add minimal regression tests for auth scaffolding behavior and credential-ref shaping.
+- [ ] Next: integrate device-auth dependency on selected ingest/live routes only after route-level tests are expanded for the new auth boundary.
+
 ## 2026-04-25 — Media byte-range compliance + debug path diagnostics (active)
 - [x] Implemented explicit HTTP byte-range handling for `GET /media/{project}/{relative_path}`:
   - `bytes=0-1` returns `206` with `Content-Length: 2`.
