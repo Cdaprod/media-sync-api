@@ -21,8 +21,10 @@ from fastapi.staticfiles import StaticFiles
 from app.api.compose import router as compose_router
 from app.api.compose import shutdown_compose_jobs
 from app.api.connect import router as connect_router
+from app.api.connect_device import router as connect_device_router
 from app.api.library import router as library_router
 from app.api.ingest_claims import router as ingest_claims_router
+from app.api.live_webrtc import router as live_webrtc_router
 from app.api.live_sessions import router as live_sessions_router
 from app.api.media import bulk_router as assets_bulk_router
 from app.api.media import debug_router, global_media_router, media_router, registry_router, router as media_api_router, thumbnail_router
@@ -126,7 +128,9 @@ def create_app() -> FastAPI:
     application.include_router(nodes_router)
     application.include_router(ingest_claims_router)
     application.include_router(connect_router)
+    application.include_router(connect_device_router)
     application.include_router(live_sessions_router)
+    application.include_router(live_webrtc_router)
 
     application.mount(
         "/public",

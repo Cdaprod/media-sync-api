@@ -80,8 +80,19 @@ class IngestClaimRegistry:
             return False
         return self.remove(normalized)
 
-    def prune_claims(self, *, older_than_seconds: int, statuses: set[str] | None = None) -> list[str]:
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=max(0, int(older_than_seconds)))
+    def prune_claims(
+        self,
+        *,
+        older_than: datetime | None = None,
+        older_than_seconds: int | None = None,
+        statuses: set[str] | None = None,
+    ) -> list[str]:
+        cutoff = older_than
+        if cutoff is None:
+            seconds = max(0, int(older_than_seconds or 0))
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
+        if cutoff.tzinfo is None:
+            cutoff = cutoff.replace(tzinfo=timezone.utc)
         allowed_statuses = set(statuses or set())
         removed: list[str] = []
 

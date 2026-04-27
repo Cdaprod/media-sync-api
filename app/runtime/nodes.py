@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 NODE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 
-NodeStatus = Literal["unknown", "healthy", "degraded", "offline"]
+NodeStatus = Literal["unknown", "healthy", "degraded", "online", "offline"]
 
 
 def validate_node_id(node_id: str) -> str:

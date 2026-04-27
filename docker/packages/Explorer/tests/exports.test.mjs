@@ -20,6 +20,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'composeJobs.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'usePendingComposeJobs.ts')));

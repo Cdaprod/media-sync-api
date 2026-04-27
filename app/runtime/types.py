@@ -82,6 +82,8 @@ class AppRuntime:
     capabilities: RuntimeCapabilities
     services: RuntimeServices
     metadata: dict[str, Any] = field(default_factory=dict)
+    lifecycle: Any | None = None
+    live_sessions: Any | None = None
     started: bool = False
 
     async def start(self) -> None:
@@ -107,6 +109,10 @@ class AppRuntime:
         if runner_control is not None:
             await runner_control.start()
 
+        lifecycle = self.lifecycle
+        if lifecycle is not None:
+            await lifecycle.start()
+
         self.metadata.setdefault("boot_role", self.identity.role)
         self.metadata.setdefault("node_id", self.identity.node_id)
         self.metadata.setdefault("node_name", self.identity.node_name)
@@ -121,6 +127,10 @@ class AppRuntime:
         runner_control = self.services.runner_control
         if runner_control is not None:
             await runner_control.stop()
+
+        lifecycle = self.lifecycle
+        if lifecycle is not None:
+            await lifecycle.stop()
 
         upstream = self.services.upstream_client
         if upstream is not None:

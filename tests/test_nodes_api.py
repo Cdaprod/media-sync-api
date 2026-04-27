@@ -1,6 +1,30 @@
 from __future__ import annotations
 
 
+def _register_node_auth(client, node_id: str) -> tuple[str, str]:
+    response = client.post(
+        "/connect/register",
+        json={
+            "node_id": node_id,
+            "label": f"{node_id} label",
+            "base_url": "http://127.0.0.1:9998",
+            "roles": ["runner", "capture"],
+            "source_name": "primary",
+            "source_kind": "capture",
+            "metadata": {"transport_hint": "session"},
+        },
+    )
+    assert response.status_code == 200
+    return node_id, response.json()["auth"]["token"]
+
+
+def _auth_headers(node_id: str, token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-Media-Sync-Node-Id": node_id,
+    }
+
+
 def test_nodes_register_list_get_claim_and_heartbeat(client):
     payload = {
         "node_id": "runner-1",
@@ -39,9 +63,11 @@ def test_nodes_register_list_get_claim_and_heartbeat(client):
     assert claim_data["status"] == "degraded"
     assert claim_data["metadata"]["zone"] == "lab"
 
-    heartbeated = client.post("/api/nodes/runner-1/heartbeat")
+    _, token = _register_node_auth(client, "runner-1")
+    heartbeated = client.post("/api/nodes/runner-1/heartbeat", headers=_auth_headers("runner-1", token))
     assert heartbeated.status_code == 200
     assert heartbeated.json()["last_heartbeat_at"]
+    assert heartbeated.json()["status"] == "online"
 
 
 def test_nodes_reject_invalid_id(client):

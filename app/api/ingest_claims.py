@@ -101,13 +101,13 @@ async def prune_ingest_claims(
     if service is None:
         raise HTTPException(status_code=503, detail="Ingest claim service is unavailable")
 
-    removed = service.prune_claims(
+    removed_count = service.prune_claims(
         older_than_seconds=older_than_seconds,
         statuses={"materialization_pending", "failed"},
     )
     return {
         "ok": True,
-        "removed": removed,
-        "count": len(removed),
+        "removed": removed_count,
+        "count": removed_count,
         "older_than_seconds": older_than_seconds,
     }

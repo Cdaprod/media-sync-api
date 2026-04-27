@@ -13,6 +13,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, ValidationError
 
+from app.auth.runtime_device_auth import RuntimeDeviceAuthContext, require_registered_node
 from app.runtime import get_runtime
 from app.runtime.nodes import NodeRecord, NodeStatus, public_node_record_dict, validate_node_id
 from app.runtime.types import AppRuntime
@@ -124,13 +125,21 @@ async def register_node(payload: NodeRegisterRequest, runtime: AppRuntime = Depe
 
 
 @router.post("/{node_id}/heartbeat", response_model=NodeRecordPublic)
-async def heartbeat_node(node_id: str, runtime: AppRuntime = Depends(get_runtime)) -> NodeRecordPublic:
+async def heartbeat_node(
+    node_id: str,
+    ctx: RuntimeDeviceAuthContext = Depends(require_registered_node),
+    runtime: AppRuntime = Depends(get_runtime),
+) -> NodeRecordPublic:
     registry = runtime.services.node_registry
     if registry is None:
         raise HTTPException(status_code=503, detail="Node registry is unavailable")
+    if ctx.node_id != node_id:
+        raise HTTPException(status_code=403, detail="node_mismatch")
 
     try:
-        return _to_public_node(registry.heartbeat(node_id))
+        current = registry.require(node_id)
+        updated = current.with_heartbeat().model_copy(update={"status": "online"})
+        return _to_public_node(registry.upsert(updated))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

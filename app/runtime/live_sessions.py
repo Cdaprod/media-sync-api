@@ -1,4 +1,4 @@
-"""Runtime in-memory live session registry.
+"""Runtime in-memory live session registries.
 
 Example:
     registry = LiveSessionRegistry()
@@ -7,6 +7,7 @@ Example:
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from app.domain.live_sessions.models import LiveSession
@@ -26,7 +27,7 @@ def _parse_utc_iso(raw: str) -> datetime | None:
 
 
 class LiveSessionRegistry:
-    """Runtime-owned in-memory live session registry."""
+    """Runtime-owned in-memory live recording session registry."""
 
     def __init__(self) -> None:
         self._sessions: dict[str, LiveSession] = {}
@@ -83,3 +84,54 @@ class LiveSessionRegistry:
             )
             self.upsert(session)
         return session
+
+
+@dataclass(slots=True)
+class WebRtcLiveSession:
+    """Runtime-owned lightweight WebRTC signaling session."""
+
+    session_id: str
+    node_id: str
+    offer: dict | None = None
+    answer: dict | None = None
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class WebRtcLiveSessionRegistry:
+    """In-memory signaling registry for LAN-first WebRTC offer/answer exchange."""
+
+    def __init__(self) -> None:
+        self._sessions: dict[str, WebRtcLiveSession] = {}
+
+    def create(self, session_id: str, node_id: str) -> WebRtcLiveSession:
+        session = WebRtcLiveSession(session_id=session_id, node_id=node_id)
+        self._sessions[session_id] = session
+        return session
+
+    def get(self, session_id: str) -> WebRtcLiveSession | None:
+        return self._sessions.get(session_id)
+
+    def require(self, session_id: str) -> WebRtcLiveSession:
+        session = self.get(session_id)
+        if session is None:
+            raise ValueError(f"Live WebRTC session '{session_id}' not found")
+        return session
+
+    def set_offer(self, session_id: str, offer: dict) -> WebRtcLiveSession:
+        session = self.require(session_id)
+        session.offer = offer
+        session.updated_at = datetime.now(timezone.utc).isoformat()
+        return session
+
+    def set_answer(self, session_id: str, answer: dict) -> WebRtcLiveSession:
+        session = self.require(session_id)
+        session.answer = answer
+        session.updated_at = datetime.now(timezone.utc).isoformat()
+        return session
+
+    def delete(self, session_id: str) -> bool:
+        return self._sessions.pop(session_id, None) is not None
+
+    def list(self) -> list[WebRtcLiveSession]:
+        return list(self._sessions.values())

@@ -1,3 +1,14 @@
+## 2026-04-27 — Runtime lifecycle + live WebRTC surface pass (active)
+- [x] Added runtime lifecycle controller (`RuntimeLifecycleController`) with settings dataclass, idempotent start/stop guards, periodic sweep loop, and sweep result logging.
+- [x] Wired lifecycle into runtime startup/shutdown through `AppRuntime` + runtime assembly, including lightweight runtime WebRTC session registry mount (`runtime.live_sessions`).
+- [x] Added LAN-first WebRTC signaling API (`/api/live/{session_id}/offer|answer`, list, delete) backed by in-memory runtime session registry.
+- [x] Added real `/connect/device` browser camera shell that captures local media, publishes WebRTC offer, and polls for answer via same-origin API paths.
+- [x] Updated node heartbeat API to require registered-node bearer auth, enforce `ctx.node_id == path node_id`, and set status to `online` on heartbeat.
+- [x] Updated ingest claim pruning path to support lifecycle cutoff datetime + status-aware pruning without introducing duplicate claim stores.
+- [x] Added Explorer `LivePreview` component scaffold and static contract check for component presence.
+- [x] Added lifecycle and live WebRTC API tests (`test_runtime_lifecycle.py`, `test_live_webrtc_api.py`).
+- [ ] Next: evaluate whether legacy `/api/live_sessions` signaling and new `/api/live` signaling should converge under one registry after first LAN validation pass.
+
 ## 2026-04-27 — Explorer sidebar delete TDZ hydration fix (active)
 - [x] Fixed `ExplorerApp` callback declaration order so `openPayloadDetails` initializes before callbacks that depend on it (`openDeviceForNode`), eliminating hydration-time TDZ `ReferenceError`.
 - [x] Preserved runtime/ingest destructive context actions (`Delete node`, `Delete claim`) and guarded device URL menu behavior.

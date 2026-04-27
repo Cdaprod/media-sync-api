@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
+from app.runtime.create_runtime import create_runtime
 from app.runtime.types import AppRuntime
 
 
@@ -18,5 +19,6 @@ def get_runtime(request: Request) -> AppRuntime:
 
     runtime = getattr(request.app.state, "runtime", None)
     if runtime is None:
-        raise RuntimeError("App runtime is not initialized")
+        runtime = create_runtime()
+        request.app.state.runtime = runtime
     return runtime
