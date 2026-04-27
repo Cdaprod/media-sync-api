@@ -1,3 +1,9 @@
+## 2026-04-27 — Follow-up: absolute handoff URLs + HTTPS asset rewrite guard (active)
+- [x] Fixed Explorer `absoluteAssetUrl(...)` to always return origin-qualified URLs for relative asset paths used in clipboard/OBS/program-monitor handoff flows.
+- [x] Tightened HTTPS asset normalization rewrite guard to only rewrite unsafe API authorities (`http` / `:8787`) and avoid dropping explicit secure custom ports.
+- [x] Updated Explorer static regression contracts to lock the new `unsafeApiAuthority` guard and absolute-URL handoff behavior markers.
+- [ ] Next: add runtime integration coverage for absolute URL handoff outputs (copy/OBS/program-monitor) under HTTPS + custom-port scenarios.
+
 ## 2026-04-27 — Register authority origin + node bearer credential issuance (active)
 - [x] Added Explorer authority-origin helper (`resolveAuthorityOrigin` + `buildAuthorityUrl`) for register/connect URL generation.
 - [x] Updated `RegisterNodeModal` to resolve HTTPS gateway authority as same-origin and `:3000` dev authority as `:8787`.

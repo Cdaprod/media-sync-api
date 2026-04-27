@@ -3041,10 +3041,12 @@ test('media URL helpers delegate normalization to centralized URL policy', () =>
 
   assert.ok(mediaUrls.includes('normalizeBrowserAssetUrl'));
   assert.ok(mediaUrls.includes('absolutizeNonAssetUrl'));
+  assert.ok(mediaUrls.includes('new URL(raw, window.location.origin).toString()'));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.thumbnail_url || item.thumb_url || '');"));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.stream_url || item.url || '');"));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.download_url || item.stream_url || '');"));
-  assert.ok(policy.includes("if (location.protocol === 'https:' && (sameHost || privateHost || apiPort)) {"));
+  assert.ok(policy.includes("const unsafeApiAuthority = parsed.protocol === 'http:' || apiPort;"));
+  assert.ok(policy.includes("if (location.protocol === 'https:' && unsafeApiAuthority && (sameHost || privateHost || apiPort)) {"));
   assert.ok(policy.includes('isLikelyPrivateHost'));
 });
 

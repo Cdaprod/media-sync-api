@@ -71,8 +71,9 @@ export function normalizeBrowserAssetUrl(
     const sameHost = parsed.hostname.toLowerCase() === location.hostname.toLowerCase();
     const privateHost = isLikelyPrivateHost(parsed.hostname);
     const apiPort = parsed.port === '8787';
+    const unsafeApiAuthority = parsed.protocol === 'http:' || apiPort;
 
-    if (location.protocol === 'https:' && (sameHost || privateHost || apiPort)) {
+    if (location.protocol === 'https:' && unsafeApiAuthority && (sameHost || privateHost || apiPort)) {
       const host = location.host || location.hostname;
       return `${location.protocol}//${host}${parsed.pathname}${parsed.search}${parsed.hash}`;
     }

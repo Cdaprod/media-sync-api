@@ -25,7 +25,14 @@ export function getBestDownloadUrl(item: Pick<MediaItem, 'download_url' | 'strea
 }
 
 export function absoluteAssetUrl(url: string): string {
-  if (!url) return '';
-  if (typeof window === 'undefined') return url;
-  return absolutizeNonAssetUrl(url, window.location.origin);
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (typeof window === 'undefined') return raw;
+  if (raw.startsWith('data:')) return raw;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  try {
+    return new URL(raw, window.location.origin).toString();
+  } catch {
+    return absolutizeNonAssetUrl(raw, window.location.origin);
+  }
 }
