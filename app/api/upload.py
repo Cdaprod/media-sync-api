@@ -8,7 +8,6 @@ Example upload:
 from __future__ import annotations
 
 import json
-import shutil
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -25,6 +24,7 @@ from app.config import get_settings
 from app.storage.dedupe import record_file_hash, compute_sha256_from_path, lookup_file_hash
 from app.storage.index import append_file_entry, load_index, save_index, bump_count, append_event
 from app.storage.metadata import ensure_metadata
+from app.storage.atomic import copy_file_atomic
 from app.storage.paths import ensure_subdirs, project_path, validate_project_name, safe_filename
 from app.storage.sources import SourceRegistry
 
@@ -207,14 +207,18 @@ async def _handle_single_upload(
     dest_path = ingest_dir / filename
     if dest_path.exists():
         dest_path = ingest_dir / f"{datetime.now(timezone.utc).timestamp()}_{filename}"
-    shutil.move(str(temp_path), dest_path)
+    try:
+        write_result = copy_file_atomic(temp_path, dest_path)
+    finally:
+        temp_path.unlink(missing_ok=True)
     relative_dest = f"ingest/originals/{dest_path.name}"
+    sha = str(write_result["sha256"])
     record_file_hash(manifest_db, sha, relative_dest)
 
     entry = {
         "relative_path": str(dest_path.relative_to(project)),
         "sha256": sha,
-        "size": dest_path.stat().st_size,
+        "size": int(write_result["size_bytes"]),
         "uploaded_at": _now_iso(),
     }
     ensure_metadata(

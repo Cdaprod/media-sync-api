@@ -7,3 +7,12 @@
 - [x] Behavior-preserving response model stabilization started.
 - [ ] Follow-up: convert more implicit route responses to explicit schemas.
 - [ ] Follow-up: decide long-term persistence for runtime live/recording state.
+
+## Phase 2A: Atomic writes and deterministic fingerprints
+- [x] Added atomic write helpers.
+- [x] Recording upload uses atomic persistence.
+- [x] Upload paths use atomic persistence where safe.
+- [x] Temp files are excluded from indexing.
+- [x] sha256 fingerprints are computed after durable writes.
+- [ ] Follow-up: move all compose/export generation to temp-output then atomic rename if any path remains direct-write.
+- [ ] Follow-up: persist CAS metadata in index schema.

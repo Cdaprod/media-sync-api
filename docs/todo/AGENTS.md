@@ -1,3 +1,12 @@
+## 2026-04-27 — Atomic CAS write hardening
+- [x] Added storage atomic write helpers.
+- [x] Hardened recording upload persistence.
+- [x] Hardened direct upload persistence where safe.
+- [x] Added deterministic sha256 fingerprint tests.
+- [x] Ensured temp files do not leak into index results.
+- [ ] Follow-up: complete compose/export atomic-output migration.
+- [ ] Follow-up: extend indexed media schema with sha256/content-address fields.
+
 ## 2026-04-27 — API ownership and contract normalization
 - [x] Documented route naming policy in API surface docs.
 - [x] Added frontend contract modules for live, live sessions, recordings, and assets.

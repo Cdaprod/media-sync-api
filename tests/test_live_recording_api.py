@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 
@@ -65,10 +66,12 @@ def test_upload_recording_persists_webm_and_returns_asset_url(client):
     assert payload["filename"] == "peer-recording.webm"
     assert payload["asset_url"] == "/media/recordings-project/ingest/live/peer-recording.webm?source=primary"
     assert payload["size_bytes"] == len(b"webm-payload")
+    assert payload.get("sha256") == hashlib.sha256(b"webm-payload").hexdigest()
 
     output_path = Path(payload["output_path"])
     assert output_path.exists()
     assert output_path.read_bytes() == b"webm-payload"
+    assert list(output_path.parent.glob("*.tmp")) == []
 
 
 def test_upload_recording_rejects_parent_target_dir(client):

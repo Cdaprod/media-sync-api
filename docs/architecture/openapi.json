@@ -730,6 +730,17 @@
             "title": "Session Id",
             "type": "string"
           },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
           "size_bytes": {
             "title": "Size Bytes",
             "type": "integer"

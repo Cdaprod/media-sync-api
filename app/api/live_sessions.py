@@ -21,6 +21,7 @@ from app.auth.runtime_device_auth import RuntimeDeviceAuthContext, require_devic
 from app.domain.live_sessions.models import LiveSessionControlAction, LiveSourceKind
 from app.runtime import get_runtime
 from app.runtime.types import AppRuntime
+from app.storage.atomic import write_bytes_atomic
 
 router = APIRouter(prefix="/api/live_sessions", tags=["live_sessions"])
 """Route ownership:
@@ -69,6 +70,7 @@ class LiveSessionRecordingUploadResponse(BaseModel):
     asset_url: str
     size_bytes: int
     content_type: str
+    sha256: str | None = None
 
 
 class LiveSessionControlRequest(BaseModel):
@@ -335,7 +337,7 @@ async def upload_live_session_recording(
     output_dir = (source_root / normalized_project / normalized_target_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = (output_dir / normalized_filename).resolve()
-    output_path.write_bytes(payload)
+    write_result = write_bytes_atomic(output_path, payload)
 
     relative_target_dir = normalized_target_dir.as_posix()
     asset_url = f"/media/{normalized_project}/{relative_target_dir}/{normalized_filename}?source={source}"
@@ -349,8 +351,9 @@ async def upload_live_session_recording(
         "filename": normalized_filename,
         "output_path": str(output_path),
         "asset_url": asset_url,
-        "size_bytes": len(payload),
+        "size_bytes": int(write_result["size_bytes"]),
         "content_type": content_type or "application/octet-stream",
+        "sha256": write_result.get("sha256"),
     }
     return LiveSessionRecordingUploadResponse(**response_payload)
 

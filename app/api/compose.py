@@ -1577,6 +1577,9 @@ class ComposeExecutor:
     """
     Accepts a ComposePlan and invokes ffmpeg.
     Owns: concat list file, ffmpeg subprocess, error translation.
+
+    TODO(stage2-atomic-compose): move ffmpeg output writes to temp output
+    path in target dir and os.replace() into final output path after success.
     """
 
     def execute(self, plan: ComposePlan, *, job_id: str | None = None) -> ComposeResult:

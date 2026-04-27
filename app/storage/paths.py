@@ -24,7 +24,7 @@ THUMBNAIL_DIR_NAMES = {
 THUMBNAIL_OUTPUT_DIR = "ingest/thumbnails"
 THUMBNAIL_EXTENSION = ".jpg"
 TEMPORARY_FILE_PREFIXES = (".tmp.", ".bak.")
-TEMPORARY_FILE_SUFFIXES = (".lock",)
+TEMPORARY_FILE_SUFFIXES = (".lock", ".tmp", ".partial")
 
 
 def is_thumbnail_path(path: str | Path) -> bool:
@@ -53,6 +53,8 @@ def is_temporary_path(path: str | Path) -> bool:
     if name.startswith(TEMPORARY_FILE_PREFIXES):
         return True
     if any(name.endswith(suffix) for suffix in TEMPORARY_FILE_SUFFIXES):
+        return True
+    if name.startswith(".") and (".tmp." in name or ".partial." in name):
         return True
     return False
 

@@ -13,6 +13,31 @@ def _create_project(client: TestClient) -> str:
     return created.json()["name"]
 
 
+def test_upload_endpoint_persists_file_without_temp_artifacts(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    payload = b"upload-bytes"
+
+    upload = client.post(
+        f"/api/projects/{project_name}/upload",
+        files={"file": ("uploaded.mov", payload, "video/quicktime")},
+    )
+    assert upload.status_code == 200
+    upload_payload = upload.json()
+    assert upload_payload["status"] == "stored"
+    assert upload_payload["size"] == len(payload)
+    assert upload_payload["sha256"]
+
+    output_path = env_settings / project_name / upload_payload["path"]
+    assert output_path.exists()
+    assert output_path.read_bytes() == payload
+    assert list(output_path.parent.glob("*.tmp")) == []
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    media_paths = {item["relative_path"] for item in listing.json().get("media", [])}
+    assert upload_payload["path"] in media_paths
+
+
 def test_list_media_and_stream(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     ingest = env_settings / project_name / "ingest" / "originals"
