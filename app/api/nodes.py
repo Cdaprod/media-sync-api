@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, ValidationError
 
 from app.runtime import get_runtime
@@ -166,3 +166,38 @@ async def claim_node(
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _to_public_node(registry.upsert(validated_record))
+
+
+@router.delete("/{node_id}")
+async def delete_node(node_id: str, runtime: AppRuntime = Depends(get_runtime)) -> dict[str, object]:
+    registry = runtime.services.node_registry
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Node registry is unavailable")
+
+    deleted = registry.delete_node(node_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="node_not_found")
+
+    return {
+        "ok": True,
+        "deleted": True,
+        "node_id": node_id,
+    }
+
+
+@router.post("/prune")
+async def prune_nodes(
+    older_than_seconds: int = Query(default=86400, ge=1),
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, object]:
+    registry = runtime.services.node_registry
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Node registry is unavailable")
+
+    removed = registry.prune_ephemeral_nodes(older_than_seconds=older_than_seconds)
+    return {
+        "ok": True,
+        "removed": removed,
+        "count": len(removed),
+        "older_than_seconds": older_than_seconds,
+    }

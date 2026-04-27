@@ -1,3 +1,13 @@
+## 2026-04-27 — Runtime bearer enforcement for node-owned mutations (active)
+- [x] Added runtime-backed device auth dependency (`runtime_device_auth`) that verifies bearer token + node ID against runtime node registry token hashes.
+- [x] Enforced bearer scope checks on ingest-claim creation and bound `node_id` to authenticated node identity.
+- [x] Added ingest claim cleanup endpoints (`DELETE /api/ingest/claims/{claim_id}`, `POST /api/ingest/claims/prune`) and backing registry/service methods.
+- [x] Enforced live-session mutation auth (`start`, `heartbeat`, `chunk`, `end`, `control`, `control/ack`, `signal/offer`) with session ownership checks.
+- [x] Preserved operator/browser read paths (`GET` list/detail/signal and viewer answer path) without new bearer requirements.
+- [x] Added node cleanup endpoints (`DELETE /api/nodes/{node_id}`, `POST /api/nodes/prune`) plus registry helpers (`get_node`, `delete_node`, `prune_ephemeral_nodes`).
+- [x] Added/updated tests for runtime auth dependency + ingest/live/node enforcement behaviors.
+- [ ] Next: evaluate optional `stream:proxy` enforcement once dedicated device-owned proxy mutation routes are finalized.
+
 ## 2026-04-27 — Follow-up: absolute handoff URLs + HTTPS asset rewrite guard (active)
 - [x] Fixed Explorer `absoluteAssetUrl(...)` to always return origin-qualified URLs for relative asset paths used in clipboard/OBS/program-monitor handoff flows.
 - [x] Tightened HTTPS asset normalization rewrite guard to only rewrite unsafe API authorities (`http` / `:8787`) and avoid dropping explicit secure custom ports.

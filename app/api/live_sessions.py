@@ -12,10 +12,11 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from app.auth.runtime_device_auth import RuntimeDeviceAuthContext, require_device_scope, require_registered_node
 from app.domain.live_sessions.models import LiveSessionControlAction, LiveSourceKind
 from app.runtime import get_runtime
 from app.runtime.types import AppRuntime
@@ -113,12 +114,26 @@ def _ensure_node(runtime: AppRuntime, node_id: str) -> None:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+def _require_session_owner(runtime: AppRuntime, session_id: str, node_id: str) -> None:
+    registry = runtime.services.live_session_registry
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Live session registry is unavailable")
+    try:
+        session = registry.require(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if session.node_id != node_id:
+        raise HTTPException(status_code=403, detail="session_not_owned_by_node")
+
+
 @router.post("/start", response_model=LiveSessionResponse)
 async def start_live_session(
     payload: StartLiveSessionRequest,
+    ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSessionResponse:
-    _ensure_node(runtime, payload.node_id)
+    _ensure_node(runtime, ctx.node_id)
+    payload = payload.model_copy(update={"node_id": ctx.node_id})
     session = _session_service(runtime).start_session(
         node_id=payload.node_id,
         source_kind=payload.source_kind,
@@ -130,8 +145,10 @@ async def start_live_session(
 @router.post("/{session_id}/heartbeat", response_model=LiveSessionResponse)
 async def heartbeat_live_session(
     session_id: str,
+    ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSessionResponse:
+    _require_session_owner(runtime, session_id, ctx.node_id)
     try:
         session = _session_service(runtime).heartbeat(session_id)
     except ValueError as exc:
@@ -143,8 +160,10 @@ async def heartbeat_live_session(
 async def upload_live_session_chunk(
     session_id: str,
     request: Request,
+    ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ):
+    _require_session_owner(runtime, session_id, ctx.node_id)
     raw = await request.body()
     if not raw:
         raise HTTPException(status_code=400, detail="Chunk body cannot be empty")
@@ -176,8 +195,10 @@ async def upload_live_session_chunk(
 @router.post("/{session_id}/end", response_model=EndLiveSessionResponse)
 async def end_live_session(
     session_id: str,
+    ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> EndLiveSessionResponse:
+    _require_session_owner(runtime, session_id, ctx.node_id)
     try:
         session = _session_service(runtime).end_session(session_id)
     except ValueError as exc:
@@ -213,8 +234,10 @@ async def get_live_session(
 async def control_live_session(
     session_id: str,
     payload: LiveSessionControlRequest,
+    ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> JSONResponse:
+    _require_session_owner(runtime, session_id, ctx.node_id)
     try:
         session = _session_service(runtime).control_session(session_id, payload.action)
     except ValueError as exc:
@@ -226,8 +249,10 @@ async def control_live_session(
 async def acknowledge_live_session_control(
     session_id: str,
     payload: LiveSessionControlAckRequest,
+    ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> JSONResponse:
+    _require_session_owner(runtime, session_id, ctx.node_id)
     try:
         session = _session_service(runtime).acknowledge_control_action(session_id, payload.action)
     except ValueError as exc:
@@ -239,8 +264,10 @@ async def acknowledge_live_session_control(
 async def publish_live_signal_offer(
     session_id: str,
     payload: LiveSignalOfferRequest,
+    ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
+    _require_session_owner(runtime, session_id, ctx.node_id)
     try:
         state = _session_service(runtime).publish_signal_offer(session_id, payload.offer.model_dump(mode="python"))
     except ValueError as exc:
@@ -269,8 +296,20 @@ async def publish_live_signal_answer(
 async def publish_live_signal_ice(
     session_id: str,
     payload: LiveSignalIceRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_media_sync_node_id: str | None = Header(default=None),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
+    if payload.role == "device":
+        ctx = require_registered_node(
+            request=request,
+            authorization=authorization,
+            x_media_sync_node_id=x_media_sync_node_id,
+        )
+        if not ctx.can("live:write"):
+            raise HTTPException(status_code=403, detail="insufficient_device_scope")
+        _require_session_owner(runtime, session_id, ctx.node_id)
     try:
         state = _session_service(runtime).publish_signal_ice(
             session_id,

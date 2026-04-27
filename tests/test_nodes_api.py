@@ -112,3 +112,50 @@ def test_nodes_reject_missing_base_url_for_non_session_node(client):
     response = client.post("/api/nodes", json=payload)
     assert response.status_code == 400
     assert "base_url" in response.json()["detail"]
+
+
+
+def test_nodes_delete_endpoint(client):
+    create = client.post(
+        "/api/nodes",
+        json={"node_id": "runner-delete", "label": "Runner Delete", "base_url": "http://127.0.0.1:8777"},
+    )
+    assert create.status_code == 201
+
+    deleted = client.delete("/api/nodes/runner-delete")
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+
+    missing = client.get("/api/nodes/runner-delete")
+    assert missing.status_code == 404
+
+
+def test_nodes_prune_endpoint(client):
+    create = client.post(
+        "/api/nodes",
+        json={
+            "node_id": "runner-prune",
+            "label": "Runner Prune",
+            "base_url": None,
+            "ephemeral": True,
+            "metadata": {
+                "transport_hint": "session",
+                "session_node": "true",
+                "browser_push": "true",
+            },
+        },
+    )
+    assert create.status_code == 201
+
+    claim = client.post(
+        "/api/nodes/runner-prune/claim",
+        json={"metadata": {"transport_hint": "session", "session_node": "true", "browser_push": "true"}},
+    )
+    assert claim.status_code == 200
+
+    import time
+    time.sleep(1.1)
+    pruned = client.post("/api/nodes/prune", params={"older_than_seconds": 1})
+    assert pruned.status_code == 200
+    assert pruned.json()["ok"] is True
+    assert "runner-prune" in pruned.json()["removed"]

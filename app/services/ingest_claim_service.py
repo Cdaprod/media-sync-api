@@ -51,6 +51,12 @@ class IngestClaimService:
     def get_claim(self, claim_id: str) -> IngestClaim:
         return self.ingest_registry.require(claim_id)
 
+    def delete_claim(self, claim_id: str) -> bool:
+        return self.ingest_registry.delete_claim(claim_id)
+
+    def prune_claims(self, *, older_than_seconds: int, statuses: set[str]) -> list[str]:
+        return self.ingest_registry.prune_claims(older_than_seconds=older_than_seconds, statuses=statuses)
+
     def _classify(self, claim: IngestClaim) -> tuple[IngestClaim, AcceptanceReport]:
         now = datetime.now(timezone.utc).isoformat()
         if claim.size_bytes is not None and claim.size_bytes < 0:

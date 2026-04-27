@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Literal
 
@@ -128,6 +128,15 @@ class NodeRegistry:
                 return record
         return None
 
+    def get_node(self, node_id: str) -> NodeRecord | None:
+        normalized = (node_id or "").strip()
+        if not normalized:
+            return None
+        try:
+            return self.get(normalized)
+        except ValueError:
+            return None
+
     def require(self, node_id: str) -> NodeRecord:
         record = self.get(node_id)
         if record is None:
@@ -143,6 +152,44 @@ class NodeRegistry:
     def heartbeat(self, node_id: str) -> NodeRecord:
         current = self.require(node_id)
         return self.upsert(current.with_heartbeat())
+
+    def delete_node(self, node_id: str) -> bool:
+        normalized = (node_id or "").strip()
+        if not normalized:
+            return False
+        try:
+            return self.remove(normalized)
+        except ValueError:
+            return False
+
+    def prune_ephemeral_nodes(self, *, older_than_seconds: int) -> list[str]:
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=max(0, int(older_than_seconds)))
+        current = self._load()
+        kept: list[NodeRecord] = []
+        removed: list[str] = []
+
+        for node in current:
+            if not node.ephemeral:
+                kept.append(node)
+                continue
+            if not node.last_heartbeat_at:
+                kept.append(node)
+                continue
+            try:
+                parsed = datetime.fromisoformat(node.last_heartbeat_at.replace("Z", "+00:00"))
+            except ValueError:
+                kept.append(node)
+                continue
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            if parsed < cutoff:
+                removed.append(node.node_id)
+                continue
+            kept.append(node)
+
+        if len(kept) != len(current):
+            self._save(kept)
+        return removed
 
     def remove(self, node_id: str) -> bool:
         validated = validate_node_id(node_id)
