@@ -20,6 +20,17 @@ export interface ResolveRequest {
   mode: string;
 }
 
+
+export type WebRtcLiveSession = {
+  session_id: string;
+  node_id: string;
+  has_offer?: boolean;
+  has_answer?: boolean;
+  state?: 'waiting_for_answer' | 'connected' | 'inactive' | string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export interface AssetRef {
   relative_path: string;
   project: string;
@@ -47,6 +58,7 @@ export interface ApiClient {
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
   listLiveSessions: () => Promise<LiveSessionRecord[]>;
+  listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
@@ -354,6 +366,19 @@ export function createApiClient(baseUrl = ''): ApiClient {
         throw new Error(`Failed to load live sessions: ${response.status}`);
       }
       return response.json();
+    },
+    async listWebRtcLiveSessions(): Promise<WebRtcLiveSession[]> {
+      const response = await fetch(buildUrl('/api/live'), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load live WebRTC sessions: ${response.status}`);
+      }
+      const payload = await parseJson<any>(response);
+      const sessions = Array.isArray(payload) ? payload : payload?.sessions;
+      return Array.isArray(sessions) ? sessions : [];
     },
     async listProjects(): Promise<Project[]> {
       const response = await fetch(buildUrl('/api/projects'));

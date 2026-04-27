@@ -18,6 +18,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx')));
@@ -34,6 +35,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'awaitVisibleVideoPaint.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
@@ -1297,17 +1299,17 @@ test('package explorer context menu styles are explicit and stable', () => {
   assert.ok(styles.includes('.context-menu button.danger'));
 });
 
-test('runtime and ingest context menus expose operator delete actions with safe URL guards', () => {
+test('runtime and ingest context menus expose operator delete actions with live-aware device guards', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
-  const labelsPath = path.join(packageRoot, 'src', 'utils', 'runtimeLabels.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
-  const labels = fs.readFileSync(labelsPath, 'utf8');
   assert.ok(content.includes('const deleteNodeFromSidebar = useCallback(async (nodeId: string) => {'));
   assert.ok(content.includes('await api.deleteNode(nodeId);'));
   assert.ok(content.includes('await reloadSourceControl();'));
   assert.ok(content.includes('Delete node'));
-  assert.ok(content.includes('disabled={!hasRegisteredNodeDeviceUrl(contextMenu.node)}'));
-  assert.ok(content.includes("title={hasRegisteredNodeDeviceUrl(contextMenu.node) ? 'Open device URL' : 'No device URL registered'}"));
+  assert.ok(content.includes('const canOpenDeviceForNode = useCallback((node: NodeControlRecord) => {'));
+  assert.ok(content.includes('return webRtcSessionsByNodeId.has(node.node_id);'));
+  assert.ok(content.includes('disabled={!canOpenDeviceForNode(contextMenu.node)}'));
+  assert.ok(content.includes('Answer Live'));
   assert.ok(content.includes('const deleteIngestClaimFromSidebar = useCallback(async (claimId: string) => {'));
   assert.ok(content.includes('await api.deleteIngestClaim(claimId);'));
   assert.ok(content.includes('await reloadIngestClaims();'));
@@ -1324,8 +1326,6 @@ test('runtime and ingest context menus expose operator delete actions with safe 
   const claimMenuIndex = content.indexOf("{contextMenu?.kind === 'ingest_claim' ? (");
   assert.ok(deleteClaimIndex >= 0);
   assert.ok(claimMenuIndex > deleteClaimIndex);
-  assert.ok(labels.includes('export function getRegisteredNodeDeviceUrl(node: NodeControlRecord): string | null {'));
-  assert.ok(labels.includes('export function hasRegisteredNodeDeviceUrl(node: NodeControlRecord): boolean {'));
 });
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {
@@ -3096,4 +3096,20 @@ test('thumbnail normalization preserves API port when remapping localhost urls',
   assert.ok(!loader.includes('const resolvedPort = parsed.port || \'\';'));
   assert.ok(loader.includes('return normalized || undefined;'));
   assert.ok(loader.includes("import { normalizeAssetUrl } from './utils/mediaUrls';"));
+});
+
+test('explorer runtime panel wires live WebRTC session hooks and chip normalization', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const chipsPath = path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const chips = fs.readFileSync(chipsPath, 'utf8');
+
+  assert.ok(explorer.includes('useWebRtcLiveSessions'));
+  assert.ok(explorer.includes('LivePreview'));
+  assert.ok(explorer.includes('/connect/device?node_id='));
+  assert.ok(explorer.includes('buildRuntimeChips(node, liveSession)'));
+  assert.ok(chips.includes('can_proxy_streams'));
+  assert.ok(chips.includes("tokens.includes('session-node')"));
+  assert.ok(chips.includes("tokens.includes('session')"));
+  assert.ok(chips.includes("addChip('live', 'capability')"));
 });

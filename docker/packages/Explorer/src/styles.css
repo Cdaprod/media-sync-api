@@ -1384,6 +1384,10 @@ select.control{
 }
 .tag.good{ border-color: rgba(34,197,94,0.35); color: rgba(187,247,208,0.85); background: rgba(34,197,94,0.12); }
 .tag.bad{ border-color: rgba(239,68,68,0.35); color: rgba(254,202,202,0.85); background: rgba(239,68,68,0.12); }
+.tag.status-online{ border-color: rgba(34,197,94,0.35); color: rgba(187,247,208,0.9); background: rgba(34,197,94,0.12); }
+.tag.status-waiting{ border-color: rgba(251,191,36,0.38); color: rgba(254,240,138,0.95); background: rgba(234,179,8,0.14); }
+.tag.status-connected{ border-color: rgba(96,165,250,0.45); color: rgba(191,219,254,0.95); background: rgba(59,130,246,0.14); }
+.tag.status-offline{ border-color: rgba(148,163,184,0.4); color: rgba(203,213,225,0.88); background: rgba(100,116,139,0.18); }
 
 .taglist{
   padding: 12px;
@@ -2924,6 +2928,34 @@ body.confirm-open{
   width: min(760px, 96vw);
   max-height: 88vh;
   overflow: auto;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(5, 8, 20, 0.72);
+}
+
+.modal-card.live-preview-modal {
+  width: min(760px, 96vw);
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 170, 255, 0.2);
+  background: rgba(13, 18, 35, 0.95);
+  padding: 12px;
+}
+
+.live-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .register-node-head {

@@ -37,6 +37,7 @@ import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewP
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { LiveSourceCard } from './components/LiveSourceCard';
+import { LivePreview } from './components/live/LivePreview';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
@@ -52,6 +53,7 @@ import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
+import { useWebRtcLiveSessions } from './hooks/useWebRtcLiveSessions';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -83,14 +85,11 @@ import type { LiveSession } from './types/liveSession';
 import type { IngestClaimRecord } from './types/ingestClaim';
 import {
   getDeviceUrl,
-  getRegisteredNodeDeviceUrl,
-  getRuntimeCapabilityTags,
-  getRuntimeKinds,
-  hasRegisteredNodeDeviceUrl,
   isSessionNode,
   isTestPayloadClaim,
   isTestPayloadNode,
 } from './utils/runtimeLabels';
+import { buildRuntimeChips } from './utils/runtimeChips';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -655,6 +654,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     subtitle?: string;
     payload: unknown;
   } | null>(null);
+  const [activeLivePreview, setActiveLivePreview] = useState<{
+    sessionId: string;
+    nodeId: string;
+    label?: string;
+  } | null>(null);
   const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
@@ -739,6 +743,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     defaultView: DEFAULT_VIEW,
     defaultGridColumns: DEFAULT_COLUMNS_MOBILE,
   });
+  const {
+    sessions: webRtcLiveSessions,
+    sessionsByNodeId: webRtcSessionsByNodeId,
+    waitingByNodeId: waitingWebRtcByNodeId,
+    reload: reloadWebRtcLiveSessions,
+  } = useWebRtcLiveSessions({
+    listWebRtcLiveSessions: api.listWebRtcLiveSessions,
+    enabled: true,
+    poll: sidebarOpen || detailsModal !== null,
+  });
 
 
   const reloadIngestClaims = useCallback(async () => {
@@ -755,6 +769,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const interval = window.setInterval(() => void reloadIngestClaims(), 5000);
     return () => window.clearInterval(interval);
   }, [reloadIngestClaims]);
+
+  useEffect(() => {
+    if (!activeLivePreview) return;
+    const timeout = window.setTimeout(() => {
+      void reloadWebRtcLiveSessions();
+    }, 1200);
+    return () => window.clearTimeout(timeout);
+  }, [activeLivePreview, reloadWebRtcLiveSessions]);
 
 
   useEffect(() => {
@@ -3177,10 +3199,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return runtimeNodes.find((entry) => entry.node_id === nodeId) ?? null;
   }, [runtimeNodes]);
 
+  const canOpenDeviceForNode = useCallback((node: NodeControlRecord) => {
+    if (!node.node_id) return false;
+    if (node.enabled !== false) return true;
+    if (node.metadata?.session_node === 'true') return true;
+    if (node.metadata?.browser_push === 'true') return true;
+    return webRtcSessionsByNodeId.has(node.node_id);
+  }, [webRtcSessionsByNodeId]);
+
   const openDeviceForNode = useCallback((node: NodeControlRecord) => {
-    const baseUrl = getRegisteredNodeDeviceUrl(node);
-    if (baseUrl) {
-      window.location.href = baseUrl;
+    if (canOpenDeviceForNode(node)) {
+      window.open(`/connect/device?node_id=${encodeURIComponent(node.node_id)}`, '_blank', 'noopener,noreferrer');
       return;
     }
     if (isSessionNode(node)) {
@@ -3189,14 +3218,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         `${node.node_id} · browser/session node`,
         {
           ...node,
-          open_device_hint: `/connect?node_id=${encodeURIComponent(node.node_id)}`,
+          open_device_hint: `/connect/device?node_id=${encodeURIComponent(node.node_id)}`,
         },
       );
-      addToast('warn', 'Runtime', 'No device URL registered; browser/session node details opened.');
+      addToast('warn', 'Runtime', 'Node is not currently openable; check session state and registration.');
       return;
     }
-    addToast('warn', 'Runtime', 'No device URL registered');
-  }, [addToast, openPayloadDetails]);
+    addToast('warn', 'Runtime', 'Node is not currently openable');
+  }, [addToast, canOpenDeviceForNode, openPayloadDetails]);
 
   const openDevice = useCallback((nodeId: string) => {
     const node = resolveNodeRecord(nodeId);
@@ -5231,6 +5260,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     <div className="small">
                       {healthyNodes.length} healthy · {sourceControlSnapshot.sources.length} total sources
                     </div>
+                    <div className="small">
+                      {webRtcLiveSessions.length} live WebRTC sessions
+                    </div>
                   </div>
 
                   {canonicalSources.length > 0 ? (
@@ -5323,43 +5355,44 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       <strong>Registered runtimes</strong>
                       <div className="small">Control-plane view of registered runtime nodes.</div>
                       <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {runtimeNodes.map((node: NodeControlRecord) => (
-                          <div className="card" key={node.node_id} onContextMenu={(event) => openRuntimeContextMenu(event, node)}>
-                            <strong>{node.label}</strong>
-                            <div className="small">{node.node_id}</div>
-                            <div className="small">{node.base_url}</div>
-                            <div className="tagrow">
-                              <span className={`tag ${node.status === 'healthy' ? 'good' : ''}`}>{node.status}</span>
-                              {getRuntimeKinds(node).map((kind) => (
-                                <span className="tag" key={`${node.node_id}-kind-${kind}`}>{kind}</span>
-                              ))}
-                              {getRuntimeCapabilityTags(node).map((tag) => (
-                                <span className="tag" key={`${node.node_id}-cap-${tag}`}>{tag}</span>
-                              ))}
-                              {isSessionNode(node) ? <span className="tag">session-node</span> : null}
-                              {isTestPayloadNode(node) ? <span className="tag bad">test payload</span> : null}
-                            </div>
-
-                            {node.last_heartbeat_at ? (
-                              <div className="small">heartbeat: {node.last_heartbeat_at}</div>
-                            ) : null}
-
-                            {isTestPayloadNode(node) ? (
-                              <div className="small">
-                                This node appears modified by Swagger example data. Re-register from Explorer.
+                        {runtimeNodes.map((node: NodeControlRecord) => {
+                          const liveSession = webRtcSessionsByNodeId.get(node.node_id);
+                          const runtimeChips = buildRuntimeChips(node, liveSession);
+                          return (
+                            <div className="card" key={node.node_id} onContextMenu={(event) => openRuntimeContextMenu(event, node)}>
+                              <strong>{node.label}</strong>
+                              <div className="small">{node.node_id}</div>
+                              <div className="small">{node.base_url}</div>
+                              <div className="tagrow">
+                                {runtimeChips.map((chip) => (
+                                  <span className={`tag ${chip.tone}`} key={`${node.node_id}-chip-${chip.label}`}>
+                                    {chip.label}
+                                  </span>
+                                ))}
+                                {isTestPayloadNode(node) ? <span className="tag bad">test payload</span> : null}
                               </div>
-                            ) : null}
 
-                            <button
-                              className="btn"
-                              type="button"
-                              onClick={(event) => openRuntimeContextMenu(event, node)}
-                              style={{ marginTop: 8 }}
-                            >
-                              ⋯
-                            </button>
-                          </div>
-                        ))}
+                              {node.last_heartbeat_at ? (
+                                <div className="small">heartbeat: {node.last_heartbeat_at}</div>
+                              ) : null}
+
+                              {isTestPayloadNode(node) ? (
+                                <div className="small">
+                                  This node appears modified by Swagger example data. Re-register from Explorer.
+                                </div>
+                              ) : null}
+
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={(event) => openRuntimeContextMenu(event, node)}
+                                style={{ marginTop: 8 }}
+                              >
+                                ⋯
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : null}
@@ -6143,12 +6176,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         >
           <button
             type="button"
-            disabled={!hasRegisteredNodeDeviceUrl(contextMenu.node)}
-            title={hasRegisteredNodeDeviceUrl(contextMenu.node) ? 'Open device URL' : 'No device URL registered'}
+            disabled={!canOpenDeviceForNode(contextMenu.node)}
+            title={canOpenDeviceForNode(contextMenu.node) ? 'Open device' : 'Node is not currently openable'}
             onClick={() => runContextAction(() => openDevice(contextMenu.node.node_id))}
           >
             Open Device
           </button>
+          {(() => {
+            const waitingSession = waitingWebRtcByNodeId.get(contextMenu.node.node_id);
+            if (!waitingSession) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => runContextAction(() => setActiveLivePreview({
+                  sessionId: waitingSession.session_id,
+                  nodeId: contextMenu.node.node_id,
+                  label: contextMenu.node.label || contextMenu.node.node_id,
+                }))}
+              >
+                Answer Live
+              </button>
+            );
+          })()}
           <button
             type="button"
             onClick={() => runContextAction(() => openPayloadDetails('Runtime details', contextMenu.node.node_id, contextMenu.node))}
@@ -6160,9 +6209,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </button>
           <button
             type="button"
-            disabled={!hasRegisteredNodeDeviceUrl(contextMenu.node)}
-            title={hasRegisteredNodeDeviceUrl(contextMenu.node) ? 'Copy registered device URL' : 'No device URL registered'}
-            onClick={() => runContextAction(() => copyText(getRegisteredNodeDeviceUrl(contextMenu.node) || ''))}
+            disabled={!contextMenu.node.node_id}
+            title={contextMenu.node.node_id ? 'Copy connect/device URL' : 'No node ID'}
+            onClick={() => runContextAction(() => copyText(`/connect/device?node_id=${encodeURIComponent(contextMenu.node.node_id)}`))}
           >
             Copy Device URL
           </button>
@@ -6241,6 +6290,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         payload={detailsModal?.payload}
         onClose={() => setDetailsModal(null)}
       />
+
+      {activeLivePreview ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card live-preview-modal custom-ui-surface">
+            <header className="live-preview-head">
+              <strong>{activeLivePreview.label || activeLivePreview.nodeId}</strong>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setActiveLivePreview(null);
+                  void reloadWebRtcLiveSessions();
+                }}
+              >
+                Close
+              </button>
+            </header>
+            <LivePreview sessionId={activeLivePreview.sessionId} />
+          </div>
+        </div>
+      ) : null}
 
       {deleteModalRendered ? (
         <div

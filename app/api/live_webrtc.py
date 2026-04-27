@@ -8,14 +8,13 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.runtime import get_runtime
-from app.runtime.live_sessions import WebRtcLiveSessionRegistry
+from app.runtime.live_sessions import WebRtcLiveSession, WebRtcLiveSessionRegistry
 from app.runtime.types import AppRuntime
 
 router = APIRouter(prefix="/api/live", tags=["live-webrtc"])
@@ -29,6 +28,27 @@ class LiveOfferPayload(BaseModel):
 class LiveAnswerPayload(BaseModel):
     answer: dict[str, Any]
 
+
+
+
+def _serialize_live_session(session: WebRtcLiveSession) -> dict[str, Any]:
+    has_offer = session.offer is not None
+    has_answer = session.answer is not None
+    if has_offer and not has_answer:
+        state = "waiting_for_answer"
+    elif has_offer and has_answer:
+        state = "connected"
+    else:
+        state = "inactive"
+    return {
+        "session_id": session.session_id,
+        "node_id": session.node_id,
+        "has_offer": has_offer,
+        "has_answer": has_answer,
+        "state": state,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+    }
 
 def _registry(runtime: AppRuntime) -> WebRtcLiveSessionRegistry:
     registry = runtime.live_sessions
@@ -86,9 +106,10 @@ async def fetch_answer(session_id: str, runtime: AppRuntime = Depends(get_runtim
 
 
 @router.get("")
-async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> list[dict[str, Any]]:
+async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> dict[str, list[dict[str, Any]]]:
     registry = _registry(runtime)
-    return [asdict(session) for session in registry.list()]
+    sessions = [_serialize_live_session(session) for session in registry.list()]
+    return {"sessions": sessions}
 
 
 @router.delete("/{session_id}")

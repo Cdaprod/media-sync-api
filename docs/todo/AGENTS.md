@@ -1,3 +1,13 @@
+## 2026-04-27 — Explorer live-session side panel correlation pass (active)
+- [x] Updated `/api/live` list serialization to prefer object payload shape (`{ sessions: [...] }`) with derived `has_offer`, `has_answer`, and `state` fields for operator-facing WebRTC session state.
+- [x] Hardened `/connect/device` answer polling to treat 404 as expected waiting state, reduce status noise, back off polling cadence (1s→2s→5s), and pause polling while tab is hidden.
+- [x] Added Explorer WebRTC session API typing + client fetch (`listWebRtcLiveSessions`) with compatibility normalization for legacy list payloads.
+- [x] Added `useWebRtcLiveSessions` polling hook with visibility-aware polling and node-indexed maps for runtime panel correlation.
+- [x] Added `buildRuntimeChips(...)` helper to dedupe/normalize runtime chips and surface status/auth/live capability tones.
+- [x] Integrated live-session correlation into `ExplorerApp` runtime sidebar: Open Device enablement now includes session-capable/live nodes and waiting sessions expose Answer Live modal actions via `LivePreview`.
+- [x] Added/updated regression tests for `/api/live` session shape/state serialization and Explorer static contracts for live hook + chip helper wiring.
+- [ ] Next: add lightweight runtime-panel E2E coverage asserting waiting→connected chip/state transitions under a mocked offer/answer lifecycle.
+
 ## 2026-04-27 — Runtime lifecycle + live WebRTC surface pass (active)
 - [x] Added runtime lifecycle controller (`RuntimeLifecycleController`) with settings dataclass, idempotent start/stop guards, periodic sweep loop, and sweep result logging.
 - [x] Wired lifecycle into runtime startup/shutdown through `AppRuntime` + runtime assembly, including lightweight runtime WebRTC session registry mount (`runtime.live_sessions`).

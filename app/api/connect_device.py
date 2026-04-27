@@ -63,16 +63,51 @@ async def connect_device(node_id: str, runtime: AppRuntime = Depends(get_runtime
       statusEl.textContent = text;
     }}
 
+    function pollDelayMs(attempt) {{
+      if (attempt > 30) return 5000;
+      if (attempt > 10) return 2000;
+      return 1000;
+    }}
+
+    async function waitForVisibleDocument() {{
+      if (document.visibilityState !== 'hidden') return;
+      await new Promise((resolve) => {{
+        const onVisibility = () => {{
+          if (document.visibilityState === 'visible') {{
+            document.removeEventListener('visibilitychange', onVisibility);
+            resolve();
+          }}
+        }};
+        document.addEventListener('visibilitychange', onVisibility);
+      }});
+    }}
+
     async function pollForAnswer(pc, sessionId) {{
+      let attempts = 0;
       while (true) {{
-        const response = await fetch(`/api/live/${{encodeURIComponent(sessionId)}}/answer`, {{ cache: 'no-store' }});
+        await waitForVisibleDocument();
+        let response;
+        try {{
+          response = await fetch(`/api/live/${{encodeURIComponent(sessionId)}}/answer`, {{ cache: 'no-store' }});
+        }} catch (error) {{
+          setStatus(`Polling answer failed: ${{error?.message || error}}`);
+          await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs(attempts)));
+          continue;
+        }}
+
         if (response.ok) {{
           const payload = await response.json();
           await pc.setRemoteDescription(payload.answer);
-          setStatus(`Live session ready: ${{sessionId}}`);
+          setStatus('Explorer answered. Live connection established.');
           return;
         }}
-        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+
+        if (response.status !== 404) {{
+          setStatus(`Waiting for answer (status ${{response.status}})…`);
+        }}
+
+        attempts += 1;
+        await new Promise((resolve) => window.setTimeout(resolve, pollDelayMs(attempts)));
       }}
     }}
 
@@ -94,7 +129,7 @@ async def connect_device(node_id: str, runtime: AppRuntime = Depends(get_runtime
           body: JSON.stringify({{ node_id: nodeId, offer: pc.localDescription }}),
         }});
 
-        setStatus(`Published offer for session ${{sessionId}}. Waiting for answer…`);
+        setStatus(`Published offer for session ${{sessionId}}. Waiting for Explorer answer…`);
         await pollForAnswer(pc, sessionId);
 
         // TODO(recording): fork recording from MediaStreamTrack / MediaStream via MediaRecorder.
