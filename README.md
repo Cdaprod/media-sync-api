@@ -6,6 +6,52 @@ LAN-first, Dockerized Python API for deterministic media ingest and project hygi
 ![Python](https://img.shields.io/badge/python-3.8+-green.svg)
 ![DaVinci Resolve](https://img.shields.io/badge/DaVinci%20Resolve-18%2B-red.svg)
 
+A LAN/VPN-aware multi-camera + media-ingest control plane where phones, browsers, Raspberry Pis, desktops, and camera daemons register as nodes, publish capabilities, create claims, stream/capture media, and materialize assets into Explorer.
+
+Open Explorer → see devices/cameras/sources → start capture or ingest → watch claims/live sessions → resulting media appears as assets → preview/compose/export/share.
+
+Authority API = source of truth
+Nodes = devices/runners/camera agents
+Claims = work assignments
+Leases = safety against stuck work
+Assets = completed media objects
+Explorer = operator UI/control surface
+
+Mobile devices + computer-attached cameras + Pi capture daemons
+→ registered as nodes
+→ authenticated by bearer tokens
+→ managed through Explorer
+→ usable across LAN/VPN
+→ writing into local/remote storage
+→ browsed as an asset library
+
+ThatDAMToolbox / Explorer is a private local production studio dashboard.
+
+1. iPhone joins as a capture node.
+2. Desktop joins as authority/storage-primary.
+3. Raspberry Pi joins as camera/HDMI capture daemon.
+4. Nikon/USB/HDMI capture becomes a live session.
+5. Each recording/upload becomes an ingest claim.
+6. Claim completes into a canonical asset.
+7. Explorer shows thumbnails, stream URLs, source, node, status.
+8. You compose/export from selected assets.
+9. VPN/Tailscale lets trusted devices participate remotely.
+
+Explorer is the control room.
+
+To do:
+
+Register Device
+→ Show Device Online
+→ Start Capture
+→ Create Claim
+→ Show Claim Progress
+→ Materialize Asset
+→ Show Asset in Grid
+→ Export/Share
+
+---
+
 A distributed node-based ingest system where agents (“runners”) observe local sources (filesystems/devices), produce asset candidates, and submit claims to a central authority for canonical acceptance and reconciliation mirrored in an explorer web application.
 
 ## What it does
