@@ -12,7 +12,11 @@ interface DevicePickerSheetProps {
   localPermission: 'prompt' | 'granted' | 'denied';
   remoteNodes: RemoteCameraNode[];
   selectedDeviceId: string | null;
-  onSelectLocalDevice: (deviceId: string) => void;
+  onSelectLocalDevice: (deviceId: string) => void | Promise<void>;
+  onUseSelectedLocalDevice: () => void | Promise<void>;
+  mode: 'local' | 'remote';
+  onModeChange: (mode: 'local' | 'remote') => void;
+  onOpenRemoteNode: (nodeId: string) => void;
   onRefresh: () => void;
 }
 
@@ -24,38 +28,39 @@ export default function DevicePickerSheet({
   remoteNodes,
   selectedDeviceId,
   onSelectLocalDevice,
+  onUseSelectedLocalDevice,
+  mode,
+  onModeChange,
+  onOpenRemoteNode,
   onRefresh,
 }: DevicePickerSheetProps) {
   const [pendingId, setPendingId] = useState<string | null>(selectedDeviceId);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     if (isOpen) setPendingId(selectedDeviceId);
   }, [isOpen, selectedDeviceId]);
+  useEffect(() => { setMounted(true); }, []);
 
   if (!isOpen) return null;
 
-  const handleSelectRemote = (nodeId: string) => {
-    // Open remote node in a new tab
-    window.open(`/connect/device?node_id=${nodeId}`, '_blank');
-    onClose();
-  };
+  const handleSelectRemote = (nodeId: string) => onOpenRemoteNode(nodeId);
 
-  const handleConfirm = () => {
-    if (pendingId && localDevices.some(d => d.deviceId === pendingId)) {
-      onSelectLocalDevice(pendingId);
-    }
-    onClose();
-  };
+  const handleConfirm = async () => { await onUseSelectedLocalDevice(); };
 
   return (
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker-sheet" onClick={e => e.stopPropagation()}>
         <div className="picker-header">
           <h2>Select a device</h2>
+          <div className="device-monitor-segment">
+            <button type="button" className={mode === 'local' ? 'active' : ''} onClick={() => onModeChange('local')}>Local</button>
+            <button type="button" className={mode === 'remote' ? 'active' : ''} onClick={() => onModeChange('remote')}>Remote</button>
+          </div>
           <button className="btn-pill" onClick={onClose}>Close</button>
         </div>
         <div className="picker-body">
-          <section>
+          <section style={{ order: mode === 'local' ? 0 : 1 }}>
             <p className="picker-section-title">Local cameras</p>
             <div className="device-list">
               {localDevices.length === 0 && (
@@ -67,15 +72,15 @@ export default function DevicePickerSheet({
                 <button
                   key={d.deviceId}
                   className={`device-btn ${pendingId === d.deviceId ? 'active' : ''}`}
-                  onClick={() => setPendingId(d.deviceId)}
+                  onClick={() => { setPendingId(d.deviceId); void onSelectLocalDevice(d.deviceId); }}
                 >
                   <span>{d.label || `Camera ${d.deviceId.slice(0,8)}`}</span>
                 </button>
               ))}
             </div>
           </section>
-          <section>
-            <p className="picker-section-title">Remote cameras (Explorer nodes)</p>
+          <section style={{ order: mode === 'remote' ? 0 : 1 }}>
+            <p className="picker-section-title">Remote devices are other local capture nodes.</p>
             <div className="device-list">
               {remoteNodes.length === 0 ? (
                 <div className="device-warn">
@@ -89,7 +94,7 @@ export default function DevicePickerSheet({
                     onClick={() => handleSelectRemote(node.node_id)}
                   >
                     <span>{node.label}</span>
-                    <span className="device-desc">remote</span>
+                    <span className="device-desc">Open Device</span>
                   </button>
                 ))
               )}
@@ -102,7 +107,7 @@ export default function DevicePickerSheet({
             <button className="btn-pill" onClick={onClose}>Cancel</button>
             <button
               className="btn-pill solid"
-              disabled={!pendingId || !localDevices.some(d => d.deviceId === pendingId)}
+              disabled={!mounted ? false : (!pendingId || !localDevices.some(d => d.deviceId === pendingId))}
               onClick={handleConfirm}
             >
               Use selected

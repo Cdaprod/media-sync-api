@@ -7,10 +7,21 @@ import { RemoteCameraNode } from './deviceMonitorTypes';
 // Local cameras enumeration
 // ----------------------------------------------------------------------
 export function useLocalCameras() {
+  // TODO(camera-session): CameraSession owns canonical local camera lifecycle.
+  // Keep this hook as compatibility inventory until FullscreenDevicePreview migration is complete.
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [permission, setPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
 
   const enumerate = useCallback(async () => {
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.enumerateDevices !== 'function'
+    ) {
+      setDevices([]);
+      setPermission('prompt');
+      return;
+    }
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
       const videoInputs = all.filter(d => d.kind === 'videoinput');
@@ -24,6 +35,14 @@ export function useLocalCameras() {
 
   useEffect(() => {
     enumerate();
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      void navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then((stream) => {
+          stream.getTracks().forEach((track) => track.stop());
+          return enumerate();
+        })
+        .catch(() => undefined);
+    }
     navigator.mediaDevices?.addEventListener('devicechange', enumerate);
     return () => navigator.mediaDevices?.removeEventListener('devicechange', enumerate);
   }, [enumerate]);
@@ -46,8 +65,14 @@ export function useRemoteCameras() {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const allNodes = data.nodes || [];
+      const payload = await res.json();
+      const allNodes = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload.nodes)
+          ? payload.nodes
+          : Array.isArray(payload.items)
+            ? payload.items
+            : [];
       // Only reject when enabled === false (undefined is allowed)
       const cameraNodes = allNodes.filter((n: any) => {
         if (n.enabled === false) return false;

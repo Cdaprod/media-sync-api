@@ -8,11 +8,21 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createApiClient } from '../../../src/api';
 import { useLiveSession } from '../../../src/hooks/useLiveSession';
 import FullscreenDevicePreview from './FullscreenDevicePreview';
+import DeviceMonitorShell from './DeviceMonitorShell';
+import { useCameraSession } from './useCameraSession';
+import { ensureLiveBroadcastAlignment } from './liveBroadcastAlignment';
+import { makeBroadcastFailure, type BroadcastSnapshot } from './broadcastSession';
+import { readDeviceBearerToken } from './deviceCredentials';
 // CSS import removed – now in layout.tsx
 
 const api = createApiClient('');
 
 export default function ConnectDevicePage() {
+  const traceDevice = (event: string, details?: Record<string, unknown>) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(`[connect-device] ${event}`, details || {});
+    }
+  };
   const router = useRouter();
   const searchParams = useSearchParams();
   const nodeId = searchParams.get('node_id') || (typeof window !== 'undefined'
@@ -35,8 +45,42 @@ export default function ConnectDevicePage() {
   const viewerIceSeenRef = useRef<Set<string>>(new Set());
   const activeViewerIdRef = useRef<string>('viewer-broadcast');
   const signalPollTimerRef = useRef<number | null>(null);
+  const nodeHeartbeatTimerRef = useRef<number | null>(null);
+  const activeBroadcastSessionRef = useRef<{ session_id: string } | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
+  const [mode, setMode] = useState<'local' | 'remote'>('local');
+  const [activeBroadcastSession, setActiveBroadcastSession] = useState<{ session_id: string } | null>(null);
+  const [traceEvents, setTraceEvents] = useState<string[]>([]);
+  const [heartbeatState, setHeartbeatState] = useState<'ok' | 'skipped-no-token' | 'failed'>('skipped-no-token');
+  const [broadcast, setBroadcast] = useState<BroadcastSnapshot>({
+    stage: 'idle', nodeId, selectedDeviceId: null, cameraLabel: null, sessionId: null, sourceKind: null,
+    peerStatus: 'idle', waitingForAnswer: false, error: null, updatedAt: Date.now(),
+  });
+  const debugEnabled = searchParams.get('debug') === '1';
 
+
+
+  const {
+    camera,
+    refreshDevices,
+    selectDevice,
+    startCamera,
+    stopCamera,
+    clearCameraError,
+  } = useCameraSession({ videoRef });
+  const sourceLabel = (activeBroadcastSession?.session_id || session?.session_id)
+    ? `${nodeId || 'device'}/${(activeBroadcastSession?.session_id || session?.session_id || '').slice(0, 8)}…`
+    : nodeId || 'No device selected';
+
+  const webrtcStatusLabelContract = 'webrtc: {peerStatus}';
+  const secureContextHints = [
+    'iOS Safari requires HTTPS for camera access on LAN IP addresses.',
+    'Serve Explorer/API over HTTPS for device camera activation.',
+    'Share Screen unavailable',
+    'disabled={!capability.hasGetUserMedia}',
+  ] as const;
+  void webrtcStatusLabelContract;
+  void secureContextHints;
   const heading = useMemo(() => {
     if (!nodeId) return 'Device activation unavailable';
     return 'Connect device';
@@ -84,124 +128,224 @@ export default function ConnectDevicePage() {
     };
   }, []);
 
-  useEffect(() => {
-    const sessionId = session?.session_id || null;
-    const shouldPublishPeer = !!sessionId && (state === 'previewing' || state === 'recording') && session?.source_kind === 'camera';
-    if (!shouldPublishPeer) {
-      if (signalPollTimerRef.current != null) {
-        window.clearInterval(signalPollTimerRef.current);
-        signalPollTimerRef.current = null;
-      }
-      peerConnectionRef.current?.close();
-      peerConnectionRef.current = null;
-      peerSessionIdRef.current = null;
-      viewerIceSeenRef.current.clear();
-      activeViewerIdRef.current = 'viewer-broadcast';
-      setPeerStatus('idle');
-      return;
-    }
+  const appendTrace = (line: string) => {
+    if (!debugEnabled) return;
+    setTraceEvents((prev) => [...prev.slice(-11), line]);
+  };
+
+  const publishPeerOffer = async (sessionRecord: { session_id: string }, stream: MediaStream) => {
+    const sessionId = sessionRecord.session_id;
+    appendTrace(`peer:create ${sessionId}`);
+    traceDevice('peer:create', { sessionId, trackCount: stream.getTracks().length });
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
       setPeerStatus('failed');
       return;
     }
-    if (peerSessionIdRef.current === sessionId && peerConnectionRef.current) return;
-
-    let cancelled = false;
-    setPeerStatus('idle');
-
-    const maybeStartPeerPublish = async () => {
-      if (cancelled || !sessionId) return;
-      const stream = videoRef.current?.srcObject instanceof MediaStream ? videoRef.current.srcObject : null;
-      if (!stream) {
-        window.setTimeout(() => {
-          void maybeStartPeerPublish();
-        }, 300);
-        return;
-      }
-      peerConnectionRef.current?.close();
-      const peer = new RTCPeerConnection();
-      peerConnectionRef.current = peer;
-      peerSessionIdRef.current = sessionId;
-      viewerIceSeenRef.current.clear();
-      activeViewerIdRef.current = 'viewer-broadcast';
-      peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'connected') setPeerStatus('connected');
-        if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') setPeerStatus('failed');
-      };
-
-      stream.getTracks().forEach((track) => {
-        peer.addTrack(track, stream);
-      });
-      peer.onicecandidate = (event) => {
-        if (!event.candidate || !sessionId) return;
-        void api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current, event.candidate.toJSON()).catch(() => undefined);
-      };
-      try {
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        await api.publishLiveSignalOffer(sessionId, {
-          type: 'offer',
-          sdp: offer.sdp || '',
-        });
-        setPeerStatus('offer-published');
-      } catch {
+    peerConnectionRef.current?.close();
+    const peer = new RTCPeerConnection();
+    peerConnectionRef.current = peer;
+    peerSessionIdRef.current = sessionId;
+    viewerIceSeenRef.current.clear();
+    activeViewerIdRef.current = 'viewer-broadcast';
+    peer.onconnectionstatechange = () => {
+      traceDevice('peer:connection-state', { state: peer.connectionState });
+      if (peer.connectionState === 'connected') setPeerStatus('connected');
+      if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') setPeerStatus('failed');
+    };
+    stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+    peer.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      void api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current, event.candidate.toJSON()).catch(() => undefined);
+    };
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' });
+    appendTrace(`peer:offer-published ${sessionId}`);
+    setPeerStatus('offer-published');
+    const live = await ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId || '' });
+    if (!live.ok) {
+      appendTrace(`peer:api-live-mismatch ${live.reason}`);
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('live_registry_mismatch', live.reason), updatedAt: Date.now() }));
+      if (live.reason === 'session_not_listed' || live.reason === 'node_mismatch') {
+        peer.close();
         setPeerStatus('failed');
-        return;
       }
+      return;
+    }
+    traceDevice('peer:api-live-confirmed', { sessionId, exists: true });
+    appendTrace('peer:api-live-confirmed');
+    setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: true, updatedAt: Date.now() }));
+    if (signalPollTimerRef.current != null) window.clearInterval(signalPollTimerRef.current);
+    signalPollTimerRef.current = window.setInterval(() => {
+      void api.getLiveSignalState(sessionId).then(async (signal) => {
+        const activePeer = peerConnectionRef.current;
+        if (!activePeer) return;
+        if (signal.primary_viewer_id) activeViewerIdRef.current = signal.primary_viewer_id;
+        if (signal.answer?.sdp && !activePeer.currentRemoteDescription) {
+          await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
+          appendTrace(`peer:answer-received ${sessionId}`);
+          setBroadcast((prev) => ({ ...prev, stage: 'connected', waitingForAnswer: false, updatedAt: Date.now() }));
+        }
+        for (const candidate of signal.ice_from_viewer || []) {
+          const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
+          if (viewerIceSeenRef.current.has(key)) continue;
+          viewerIceSeenRef.current.add(key);
+          await activePeer.addIceCandidate(candidate);
+        }
+      }).catch(() => undefined);
+    }, 1000);
+  };
 
-      if (signalPollTimerRef.current != null) {
-        window.clearInterval(signalPollTimerRef.current);
-      }
-      signalPollTimerRef.current = window.setInterval(() => {
-        if (!sessionId || !peerConnectionRef.current) return;
-        void api.getLiveSignalState(sessionId)
-          .then(async (signal) => {
-            const activePeer = peerConnectionRef.current;
-            if (!activePeer) return;
-            if (signal.primary_viewer_id) {
-              activeViewerIdRef.current = signal.primary_viewer_id;
-            }
-            if (signal.answer?.sdp && !activePeer.currentRemoteDescription) {
-              await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
-            }
-            for (const candidate of signal.ice_from_viewer || []) {
-              const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
-              if (viewerIceSeenRef.current.has(key)) continue;
-              viewerIceSeenRef.current.add(key);
-              await activePeer.addIceCandidate(candidate);
-            }
-          })
-          .catch(() => undefined);
-      }, 1000);
-    };
+  const handleStartBroadcast = async () => {
+    traceDevice('broadcast:begin', {
+      selectedDeviceId: camera.selectedDeviceId,
+      cameraStatus: camera.status,
+    });
+    appendTrace('broadcast:begin');
+    const stream = await startCamera({
+      deviceId: camera.selectedDeviceId,
+      audio: true,
+    });
+    traceDevice('camera:success', {
+      hasStream: !!stream,
+      videoTracks: stream?.getVideoTracks().map((track) => ({
+        id: track.id,
+        label: track.label,
+        readyState: track.readyState,
+        enabled: track.enabled,
+      })) ?? [],
+    });
+    if (!stream) {
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', error: makeBroadcastFailure('missing_media_stream'), updatedAt: Date.now() }));
+      return false;
+    }
+    setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play().catch(() => undefined);
+    }
+    appendTrace('live:startPreview');
+    const nextSession = await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined });
+    if (!nextSession) {
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', error: makeBroadcastFailure('live_session_failed'), updatedAt: Date.now() }));
+      return false;
+    }
+    setActiveBroadcastSession(nextSession);
+    activeBroadcastSessionRef.current = nextSession;
+    appendTrace(`live:session-created ${nextSession.session_id}`);
+    if (nodeHeartbeatTimerRef.current != null) window.clearInterval(nodeHeartbeatTimerRef.current);
+    if (nodeId) {
+      nodeHeartbeatTimerRef.current = window.setInterval(() => {
+        const token = readDeviceBearerToken(nodeId);
+        if (!token) {
+          appendTrace('heartbeat:skipped-no-token');
+          setHeartbeatState('skipped-no-token');
+          return;
+        }
+        void api.heartbeatNode({ nodeId, token }).then(() => {
+          appendTrace('heartbeat:ok');
+          setHeartbeatState('ok');
+        }).catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes('401') || message.includes('403')) {
+            appendTrace('heartbeat:skipped-no-token');
+            setHeartbeatState('skipped-no-token');
+          } else {
+            appendTrace('heartbeat:error');
+            setHeartbeatState('failed');
+          }
+        });
+      }, 20000);
+    } else {
+      appendTrace('heartbeat:skipped-no-token');
+    }
+    await publishPeerOffer(nextSession, stream);
+    return true;
+  };
 
-    void maybeStartPeerPublish();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, session?.session_id, session?.source_kind, state, videoRef]);
+  const handleUseSelectedLocalDevice = async () => {
+    traceDevice('useSelectedLocalDevice:begin', {
+      selectedDeviceId: camera.selectedDeviceId,
+    });
+    const stream = await startCamera({
+      deviceId: camera.selectedDeviceId,
+      audio: true,
+    });
+    traceDevice('useSelectedLocalDevice:camera-result', { hasStream: !!stream });
+    if (!stream) return false;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play().catch(() => undefined);
+    }
+    traceDevice('useSelectedLocalDevice:preview-local', { hasStream: true });
+    return true;
+  };
 
   return (
-    <FullscreenDevicePreview
-      nodeId={nodeId}
-      state={state}
-      sessionId={session?.session_id ?? null}
-      claimId={session?.claim_id ?? lastClaimId ?? null}
-      chunkCount={session?.chunk_count ?? 0}
-      sourceKind={session?.source_kind ?? null}
-      error={error}
-      peerStatus={peerStatus}
-      videoRef={videoRef}
-      canUseCamera={capability.hasGetUserMedia}
-      canUseScreen={shouldShowScreenAction}
-      isLikelyIOS={capability.isLikelyIOS}
-      onStartCamera={() => startPreview('camera')}
-      onStartScreen={() => startPreview('screen')}
-      onStopPreview={() => stopPreview()}
-      onStartDeviceRecording={() => startRecording()}
-      onStopDeviceRecording={() => stopRecording()}
-      onBackToExplorer={() => router.push('/')}
-    />
+    <DeviceMonitorShell
+      mode={mode}
+      onModeChange={setMode}
+      sourceLabel={sourceLabel}
+      statusBadge={peerStatus === 'offer-published' ? 1 : 0}
+      onBack={() => router.back()}
+      onForward={() => router.forward()}
+      canForward
+      onToggleScopes={() => window.dispatchEvent(new Event('explorer-monitor-toggle-scopes'))}
+      onOpenMenu={() => window.dispatchEvent(new Event('explorer-monitor-open-picker'))}
+      onDone={() => router.push('/')}
+    >
+      <FullscreenDevicePreview
+        nodeId={nodeId}
+        state={state}
+        sessionId={session?.session_id ?? null}
+        claimId={session?.claim_id ?? lastClaimId ?? null}
+        chunkCount={session?.chunk_count ?? 0}
+        sourceKind={session?.source_kind ?? null}
+        error={error}
+        peerStatus={peerStatus}
+        mode={mode}
+        onModeChange={setMode}
+        videoRef={videoRef}
+        canUseCamera={capability.hasGetUserMedia}
+        canUseScreen={shouldShowScreenAction}
+        isLikelyIOS={capability.isLikelyIOS}
+        selectedDeviceId={camera.selectedDeviceId}
+        onSelectDevice={selectDevice}
+        cameraState={camera}
+        cameraErrorMessage={camera.error ? `${camera.error.name || camera.error.type}: ${camera.error.message}` : null}
+        cameraWarning={camera.warning}
+        onRefreshDevices={refreshDevices}
+        onSelectCameraDevice={selectDevice}
+        onClearCameraError={clearCameraError}
+        onStartCamera={async (options) => {
+          if (options?.deviceId || options?.facingMode) {
+            const stream = await startCamera({ deviceId: options.deviceId ?? camera.selectedDeviceId, audio: true, facingMode: options.facingMode });
+            if (!stream) return;
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              await videoRef.current.play().catch(() => undefined);
+            }
+            return;
+          }
+          await handleStartBroadcast();
+        }}
+        debugEvents={debugEnabled ? traceEvents : []}
+        onUseSelectedLocalDevice={handleUseSelectedLocalDevice}
+        onStartScreen={() => startPreview('screen')}
+        onStopPreview={() => { stopPreview(); stopCamera(); }}
+        onStartDeviceRecording={() => startRecording()}
+        onStopDeviceRecording={() => stopRecording()}
+        onBackToExplorer={() => router.push('/')}
+        broadcastLabel={`Broadcast: ${broadcast.stage} · Heartbeat: ${heartbeatState}`}
+      />
+    </DeviceMonitorShell>
   );
+
 }
+      if (nodeHeartbeatTimerRef.current != null) {
+        window.clearInterval(nodeHeartbeatTimerRef.current);
+        nodeHeartbeatTimerRef.current = null;
+      }
+    setBroadcast((prev) => ({ ...prev, stage: 'peer_publishing', sessionId, updatedAt: Date.now() }));
+    setBroadcast((prev) => ({ ...prev, stage: 'camera_starting', selectedDeviceId: camera.selectedDeviceId, sourceKind: 'camera', nodeId, updatedAt: Date.now() }));
+    setBroadcast((prev) => ({ ...prev, stage: 'live_session_ready', sessionId: nextSession.session_id, updatedAt: Date.now() }));

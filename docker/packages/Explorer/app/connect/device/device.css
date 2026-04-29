@@ -102,6 +102,9 @@ html, body {
   backdrop-filter: blur(8px);
   padding: calc(24px * var(--ui-scale));
 }
+.fullscreen-container.picker-open .overlay-card {
+  opacity: 0.5;
+}
 
 .overlay-card {
   max-width: calc(360px * var(--ui-scale));
@@ -358,7 +361,7 @@ html, body {
 .picker-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 48;
+  z-index: 90;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -385,7 +388,7 @@ html, body {
   justify-content: space-between;
   align-items: center;
 }
-.picker-footer { border-top: 1px solid rgba(255,255,255,0.09); border-bottom: none; }
+.picker-footer { border-top: 1px solid rgba(255,255,255,0.09); border-bottom: none; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); }
 .picker-body {
   flex: 1;
   overflow-y: auto;
@@ -427,13 +430,26 @@ html, body {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 110;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(0,0,0,0.65);
   backdrop-filter: blur(6px);
   padding: calc(24px * var(--ui-scale));
+}
+.picker-status-chip {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 110px);
+  z-index: 95;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+  font-size: 0.8rem;
 }
 .modal-card {
   max-width: calc(420px * var(--ui-scale));
@@ -485,4 +501,134 @@ html, body {
 }
 .fullscreen-container.app-fullscreen #video-bg {
   object-fit: contain;
+}
+.device-monitor-shell {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: #02060f;
+}
+
+.device-monitor-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
+  background: rgba(16, 18, 24, 0.6);
+  backdrop-filter: blur(18px);
+}
+
+.device-monitor-segment {
+  display: inline-flex;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  padding: 3px;
+}
+
+.device-monitor-segment button {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  border-radius: 9px;
+  font-weight: 600;
+  padding: 8px 14px;
+}
+
+.device-monitor-segment button.active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.device-monitor-source-pill {
+  margin: 0;
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.device-monitor-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.device-monitor-main {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.device-monitor-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 75;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(44px, auto)) 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  background: rgba(9, 11, 16, 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.device-monitor-footer-btn {
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  position: relative;
+}
+
+.device-monitor-footer-done {
+  justify-self: end;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 212, 59, 0.4);
+  background: rgba(255, 212, 59, 0.18);
+  color: #ffd43b;
+  font-weight: 700;
+}
+
+.device-monitor-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #facc15;
+  color: #111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.device-monitor-content {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 92px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
+  min-height: 100vh;
+  min-height: 100dvh;
 }

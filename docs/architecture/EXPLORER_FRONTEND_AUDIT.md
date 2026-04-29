@@ -1,3 +1,9 @@
+## Connect device monitor surface
+- /connect/device uses DeviceMonitorShell for route chrome.
+- FullscreenDevicePreview owns camera monitor content.
+- page.tsx owns live-session and WebRTC publishing.
+- deviceMonitorHooks currently owns local devices, remote devices, scopes, WebGL FX, and audio metering; split later.
+
 # Explorer Frontend Audit
 
 This document maps the current Explorer package feature architecture under `docker/packages/Explorer/src`.
@@ -92,3 +98,17 @@ This document maps the current Explorer package feature architecture under `dock
 - [x] Recording reconciliation highlight behavior preserved.
 - [ ] Follow-up: extract bulk action orchestration.
 - [ ] Follow-up: add behavior tests for selection/focus transitions.
+## Connect device lifecycle ownership
+- CameraSession owns local camera capture.
+- useLiveSession owns live session creation.
+- ConnectDevicePage owns the bridge from local stream to live WebRTC offer.
+- FullscreenDevicePreview owns monitor UI only.
+- Remote devices are other local capture nodes, not local getUserMedia inputs.
+- Explorer remains owner of remote stream viewing and asset recording.
+
+## Connect device broadcast lifecycle
+- Local camera capture is owned by CameraSession.
+- Device broadcast lifecycle is represented by BroadcastSnapshot.
+- /connect/device publishes a WebRTC offer using the same session_id created by useLiveSession.startPreview.
+- Remote devices are other local capture nodes, not local getUserMedia inputs.
+- Explorer remains owner of remote stream viewing and asset recording.

@@ -1,3 +1,8 @@
+## Connect route ownership behind Caddy
+- `/connect/device` is frontend-owned and served by Explorer Next.js route chrome behind Caddy.
+- `app/api/connect_device.py` remains available as a direct-backend fallback for API-only/dev access.
+- `/connect` and `/connect/register` remain backend-owned endpoints.
+
 # API Surface
 
 This document maps the currently exposed FastAPI route surface for `media-sync-api` as of the latest OpenAPI snapshot in `docs/architecture/openapi.json`.

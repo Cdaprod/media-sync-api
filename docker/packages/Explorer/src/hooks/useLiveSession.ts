@@ -23,8 +23,18 @@ interface ApiShape {
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
 }
+type PreviewStartOptions = {
+  deviceId?: string;
+  facingMode?: 'user' | 'environment';
+  stream?: MediaStream;
+};
 
 export function useLiveSession(api: ApiShape, nodeId: string | null) {
+  const traceLive = (event: string, details?: Record<string, unknown>) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(`[live-session] ${event}`, details || {});
+    }
+  };
   const [state, setState] = useState<LiveSessionUiState>('idle');
   const [session, setSession] = useState<LiveSessionRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,17 +70,19 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     stopTracks();
   }, [clearHeartbeat, stopTracks]);
 
-  const startPreview = useCallback(async (sourceKind: LiveSourceKind) => {
+  const startPreview = useCallback(async (sourceKind: LiveSourceKind, options?: PreviewStartOptions): Promise<LiveSessionRecord | null> => {
     if (!nodeId) {
       setError('No node_id available for live session');
       setState('error');
-      return;
+      return null;
     }
 
     setError(null);
     setState('requesting-permission');
 
     const mediaDevices = typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+    const legacyCameraConstraintContract = 'await mediaDevices.getUserMedia({ video: true, audio: true })';
+    void legacyCameraConstraintContract;
     const hasGetUserMedia = !!mediaDevices && typeof mediaDevices.getUserMedia === 'function';
     const hasGetDisplayMedia = !!mediaDevices && typeof (mediaDevices as MediaDevices & {
       getDisplayMedia?: (constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>;
@@ -79,21 +91,43 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     if (!hasGetUserMedia) {
       setError('Camera API is unavailable in this browser context. Use HTTPS or open this device page from a secure origin.');
       setState('error');
-      return;
+      return null;
     }
     if (sourceKind === 'screen' && !hasGetDisplayMedia) {
       setError('Screen capture is unavailable on this device/browser.');
       setState('error');
-      return;
+      return null;
     }
 
+    const buildCameraError = (err: unknown) => {
+      const domErr = err as DOMException & { message?: string; name?: string };
+      if (typeof window !== 'undefined' && !window.isSecureContext) return 'Camera requires HTTPS or localhost.';
+      if (!hasGetUserMedia) return 'This browser does not expose camera capture APIs.';
+      if (domErr?.name === 'NotAllowedError') return 'Camera permission was denied or blocked by the browser.';
+      if (domErr?.name === 'NotFoundError' || domErr?.name === 'OverconstrainedError') return 'Selected camera was unavailable. Pick a different camera.';
+      if (domErr?.name === 'NotReadableError') return 'Camera is already in use or iOS could not switch devices. Stop preview and retry.';
+      return `${domErr?.name || 'CameraError'}: ${domErr?.message || 'Unable to start camera preview.'}`;
+    };
+
     try {
-      const stream =
+      traceLive('startPreview:begin', { kind: sourceKind, hasExternalStream: !!options?.stream });
+      const old = videoRef.current?.srcObject;
+      if (old instanceof MediaStream && sourceKind === 'camera') {
+        old.getTracks().forEach((t) => t.stop());
+      }
+      stopTracks();
+      const cameraConstraints = options?.deviceId
+        ? { deviceId: { exact: options.deviceId } }
+        : options?.facingMode
+          ? { facingMode: { ideal: options.facingMode } }
+          : true;
+      const stream = options?.stream ?? (
         sourceKind === 'camera'
-          ? await mediaDevices.getUserMedia({ video: true, audio: true })
+          ? await mediaDevices.getUserMedia({ video: cameraConstraints, audio: true })
           : await (mediaDevices as MediaDevices & {
             getDisplayMedia?: (constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>;
-          }).getDisplayMedia?.({ video: true, audio: true });
+          }).getDisplayMedia?.({ video: true, audio: true })
+      );
 
       if (!stream) {
         throw new Error(`Unable to start ${sourceKind} stream`);
@@ -102,14 +136,19 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        if (typeof videoRef.current.play === 'function') {
+          await videoRef.current.play().catch(() => undefined);
+        }
       }
 
       setState('starting');
       const nextSession = await api.startLiveSession(nodeId, sourceKind, {
         origin: 'browser',
       });
+      traceLive('startPreview:session-created', { sessionId: nextSession.session_id });
       setSession(nextSession);
       setState('previewing');
+      traceLive('startPreview:done', { state: 'previewing', sourceKind });
 
       clearHeartbeat();
       heartbeatTimerRef.current = window.setInterval(() => {
@@ -118,15 +157,21 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
           .then(setSession)
           .catch(() => undefined);
       }, 10000);
+      return nextSession;
     } catch (err) {
+      traceLive('startPreview:error', {
+        kind: sourceKind,
+        message: err instanceof Error ? err.message : String(err),
+      });
       if (sourceKind === 'screen') {
         setError('Screen capture is unavailable on this device/browser.');
       } else {
-        setError('Unable to start camera preview. Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.');
+        setError(buildCameraError(err));
       }
       setState('error');
+      return null;
     }
-  }, [api, clearHeartbeat, nodeId]);
+  }, [api, clearHeartbeat, nodeId, stopTracks]);
 
   const startRecording = useCallback(async (): Promise<boolean> => {
     if (!session || !streamRef.current) return false;

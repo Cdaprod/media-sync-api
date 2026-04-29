@@ -16,9 +16,15 @@
     }
   }
 
+  @connectDevice path /connect/device
+  reverse_proxy @connectDevice 127.0.0.1:3000 {
+    header_up Host {host}
+  }
+
   @backend path \
     /api/* \
-    /connect* \
+    /connect \
+    /connect/register \
     /debug/* \
     /public/* \
     /player.html \

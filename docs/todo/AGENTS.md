@@ -1,3 +1,92 @@
+## 2026-04-29 — Complete connect device deterministic broadcast path
+- [x] Made useLiveSession.startPreview return the created live session.
+- [x] Replaced reactive WebRTC offer publishing with deterministic Start Broadcast chain.
+- [x] Ensured WebRTC offer uses the exact returned live-session session_id.
+- [x] Kept Use Selected as local preview-only.
+- [x] Added /api/live verification after offer publish.
+- [x] Preserved Local vs Remote semantics.
+- [ ] Follow-up: wire Remote tab Watch/Answer Live directly into Explorer live preview modal.
+
+## 2026-04-29 — Stabilize connect device lifecycle ownership
+- [x] Fixed hook placement and prop wiring in the fullscreen device monitor.
+- [x] Made Start Live Broadcast a deterministic camera → live session → WebRTC offer chain.
+- [x] Ensured WebRTC offer uses the exact session_id returned by useLiveSession.
+- [x] Bounded answer polling and avoided duplicate offer publication.
+- [x] Preserved Local vs Remote semantics without moving recording into /connect/device.
+- [ ] Follow-up: wire Remote tab Watch/Answer Live directly into Explorer live preview modal.
+- [ ] Follow-up: add browser automation for iOS camera switching.
+
+## 2026-04-29 — Harden connect device broadcast lifecycle
+- [x] Added typed broadcast lifecycle state model.
+- [x] Added live broadcast alignment check after offer publish.
+- [x] Ensured WebRTC offer uses the exact live-session session_id.
+- [x] Added bounded answer polling and structured debug status.
+- [x] Added heartbeat maintenance without bypassing auth.
+- [x] Clarified Local vs Remote device semantics.
+- [x] Preserved Explorer-owned remote recording path.
+- [ ] Follow-up: wire Remote tab Watch/Answer Live directly into Explorer live preview modal.
+- [ ] Follow-up: add browser automation for iOS camera switching.
+
+## 2026-04-29 — Make connect device broadcast commit selected camera session
+- [x] Added canonical handleStartBroadcast path that commits selected camera into live session creation.
+- [x] Added explicit publishPeerOffer(session, stream) startup lane (offer + ICE + answer polling).
+- [x] Added active broadcast session state/ref tracking and startup traces for debug=1.
+- [x] Added node heartbeat lane while device page stays active.
+- [x] Kept picker row select-only and Use Selected local-preview-only (no live session creation).
+- [x] Added hydration-safe mounted guard for client-only disabled controls.
+- [ ] Follow-up: replace debug chip event dump with compact expandable event console.
+
+## 2026-04-29 — Trace connect device startPreview path
+- [x] Added canonical Start Live Broadcast handler.
+- [x] Added canonical Use Selected local device handler.
+- [x] Added dev-only tracing across CameraSession, useLiveSession, and WebRTC publish effect.
+- [x] Hardened startPreview external stream path.
+- [x] Added dev-only monitor status strip.
+- [ ] Follow-up: remove verbose traces after browser behavior is stable.
+
+## 2026-04-29 — Make connect device monitor controls functional
+- [x] Wired Start Live Broadcast to CameraSession + live session start.
+- [x] Made local camera picker selection actionable with Use Selected.
+- [x] Wired Local/Remote mode into picker behavior.
+- [x] Added bottom monitor controls for picker/scopes/navigation.
+- [x] Kept CameraSession as canonical camera lifecycle owner.
+- [ ] Follow-up: implement real remote camera node handoff.
+- [ ] Follow-up: add browser automation coverage for iOS camera switching.
+
+## 2026-04-29 — Add CameraSession layer for connect device monitor
+- [x] Added typed CameraSession state and camera error model.
+- [x] Added useCameraSession for enumeration, switching, fallback, and stream lifecycle.
+- [x] Wired ConnectDevicePage to pass externally-owned camera streams into useLiveSession.
+- [x] Preserved WebRTC publishing and runtime live-session behavior.
+- [x] Kept compatibility camera hooks in place for later cleanup.
+- [ ] Follow-up: fully remove duplicate local camera inventory ownership from FullscreenDevicePreview.
+- [ ] Follow-up: add browser-level camera switching tests.
+
+## 2026-04-29 — Fix iOS camera selection and monitor error states
+- [x] Wired selected local camera deviceId into startPreview.
+- [x] Stopped old tracks before iOS camera switching.
+- [x] Added fallback handling for iOS camera constraints.
+- [x] Replaced misleading generic HTTPS permission error with cause-aware messages.
+- [x] Prevented fatal camera unavailable state when a live video stream exists.
+- [ ] Follow-up: add remote camera session selection behavior.
+- [ ] Follow-up: add real deviceId switching behavior tests in browser automation.
+
+## 2026-04-29 — Route connect device path to Explorer frontend
+- [x] Kept /connect/device as the canonical Explorer device monitor route.
+- [x] Updated Caddy routing so /connect/device reaches Next.js.
+- [x] Preserved backend /connect/device as direct-backend fallback.
+- [x] Kept /connect and /connect/register backend-owned.
+- [ ] Follow-up: document backend fallback invocation path.
+
+## 2026-04-29 — Add fullscreen monitor shell for connect device
+- [x] Added DeviceMonitorShell for route-level fullscreen monitor chrome.
+- [x] Added Local/Remote mode bar and source/session pill.
+- [x] Added bottom monitor footer controls.
+- [x] Preserved WebRTC publish flow and monitor controls.
+- [x] Updated stale monitor copy.
+- [ ] Follow-up: implement true deviceId-based camera switching.
+- [ ] Follow-up: split device monitor hooks into focused modules.
+
 ## 2026-04-27 — Selection and preview controller extraction
 - [x] Extracted selection/preview controller.
 - [x] Preserved selected asset behavior.

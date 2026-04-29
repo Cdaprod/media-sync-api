@@ -180,6 +180,29 @@ def test_list_live_sessions_state_connected_after_answer(client):
     assert first["state"] == "connected"
 
 
+def test_live_offer_is_visible_in_live_session_list(client):
+    session_id = "test-live-align-001"
+    node_id = "test-node-align-001"
+
+    res = client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": node_id, "offer": {"type": "offer", "sdp": "v=0\\n"}},
+    )
+    assert res.status_code == 200
+
+    listed = client.get("/api/live")
+    assert listed.status_code == 200
+    payload = listed.json()
+    sessions = payload["sessions"] if isinstance(payload, dict) else payload
+
+    match = next((s for s in sessions if s["session_id"] == session_id), None)
+    assert match is not None
+    assert match["node_id"] == node_id
+    assert match["has_offer"] is True
+    assert match["has_answer"] is False
+    assert match["state"] == "waiting_for_answer"
+
+
 def test_connect_device_renders_camera_shell_for_registered_node(client):
     registered = client.post(
         "/connect/register",
