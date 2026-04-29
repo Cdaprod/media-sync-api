@@ -1,3 +1,9 @@
+## 2026-04-29 — Recording materialization truth gate follow-up
+- [x] Stop-recording now fails honestly when no asset materialization exists (`recording_not_materialized`).
+- [x] Stop-recording can mark completed only when a real `asset_url` exists on the recording session.
+- [x] Added test coverage proving uploaded live recording appears in source library media listing.
+- [ ] Follow-up: wire stop-record path to invoke upload/finalization automatically in device UI flow.
+
 ## 2026-04-29 — Add remote viewer attach for live sessions
 - [x] Backend recording lifecycle endpoints
 - [x] Live session → recording linkage

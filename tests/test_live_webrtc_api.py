@@ -260,7 +260,8 @@ def test_record_stop_transitions_honestly(client):
 
     stopped = client.post(f"/api/live/{session_id}/record/stop", json={})
     assert stopped.status_code == 200
-    assert stopped.json()["recording"]["state"] == "stopping"
+    assert stopped.json()["recording"]["state"] == "failed"
+    assert stopped.json()["recording"]["error"] == "recording_not_materialized"
 
 def test_viewer_attach_does_not_overwrite_publisher_offer_and_supports_two_viewers(client):
     session_id = "sess-live-viewer-iso"

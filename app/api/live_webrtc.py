@@ -319,8 +319,28 @@ async def stop_live_recording(
     if active is None:
         raise HTTPException(status_code=404, detail="recording_not_found")
     registry = _recordings_registry(runtime)
-    state = "failed" if payload.error else "stopping"
-    updated = registry.update_state(active.recording_id, state, error=payload.error, updated_at=datetime.now(timezone.utc))
+    if payload.error:
+        updated = registry.update_state(
+            active.recording_id,
+            "failed",
+            error=payload.error,
+            updated_at=datetime.now(timezone.utc),
+        )
+        return {"recording": updated.model_dump(mode="json")}
+    if active.asset_url:
+        updated = registry.update_state(
+            active.recording_id,
+            "completed",
+            error=None,
+            updated_at=datetime.now(timezone.utc),
+        )
+        return {"recording": updated.model_dump(mode="json")}
+    updated = registry.update_state(
+        active.recording_id,
+        "failed",
+        error="recording_not_materialized",
+        updated_at=datetime.now(timezone.utc),
+    )
     return {"recording": updated.model_dump(mode="json")}
 
 
