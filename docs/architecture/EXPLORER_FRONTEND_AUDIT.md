@@ -1,3 +1,9 @@
+## Connect device monitor surface
+- /connect/device uses DeviceMonitorShell for route chrome.
+- FullscreenDevicePreview owns camera monitor content.
+- page.tsx owns live-session and WebRTC publishing.
+- deviceMonitorHooks currently owns local devices, remote devices, scopes, WebGL FX, and audio metering; split later.
+
 # Explorer Frontend Audit
 
 This document maps the current Explorer package feature architecture under `docker/packages/Explorer/src`.

@@ -11,6 +11,15 @@ export function useLocalCameras() {
   const [permission, setPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
 
   const enumerate = useCallback(async () => {
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.enumerateDevices !== 'function'
+    ) {
+      setDevices([]);
+      setPermission('prompt');
+      return;
+    }
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
       const videoInputs = all.filter(d => d.kind === 'videoinput');
@@ -46,8 +55,14 @@ export function useRemoteCameras() {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const allNodes = data.nodes || [];
+      const payload = await res.json();
+      const allNodes = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload.nodes)
+          ? payload.nodes
+          : Array.isArray(payload.items)
+            ? payload.items
+            : [];
       // Only reject when enabled === false (undefined is allowed)
       const cameraNodes = allNodes.filter((n: any) => {
         if (n.enabled === false) return false;

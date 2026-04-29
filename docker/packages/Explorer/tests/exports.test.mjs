@@ -3339,3 +3339,30 @@ test('live recording provisional asset grid contract exists', () => {
   assert.match(liveSourceCard, /setPeerStream/);
   assert.match(liveSourceCard, /Record as asset/);
 });
+
+test('connect device monitor shell wiring and contracts', () => {
+  const shellPath = path.join(packageRoot, 'app', 'connect', 'device', 'DeviceMonitorShell.tsx');
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const cssPath = path.join(packageRoot, 'app', 'connect', 'device', 'device.css');
+  const previewPath = path.join(packageRoot, 'app', 'connect', 'device', 'FullscreenDevicePreview.tsx');
+  const hooksPath = path.join(packageRoot, 'app', 'connect', 'device', 'deviceMonitorHooks.ts');
+
+  assert.ok(fs.existsSync(shellPath));
+  const shell = fs.readFileSync(shellPath, 'utf8');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const css = fs.readFileSync(cssPath, 'utf8');
+  const preview = fs.readFileSync(previewPath, 'utf8');
+  const hooks = fs.readFileSync(hooksPath, 'utf8');
+
+  assert.ok(page.includes("import DeviceMonitorShell from './DeviceMonitorShell'"));
+  assert.ok(page.includes("useState<'local' | 'remote'>('local')"));
+  assert.ok(shell.includes('FullscreenPreview · ThatDAMToolbox'));
+  assert.ok(css.includes('.device-monitor-shell'));
+  assert.ok(css.includes('.device-monitor-topbar'));
+  assert.ok(css.includes('.device-monitor-footer'));
+  assert.ok(preview.includes('device-monitor-content'));
+  assert.ok(page.includes('publishLiveSignalOffer'));
+  assert.ok(page.includes('publishLiveSignalIce'));
+  assert.ok(hooks.includes('Array.isArray(payload)'));
+  assert.ok(hooks.includes('enumerateDevices'));
+});

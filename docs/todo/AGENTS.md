@@ -1,3 +1,12 @@
+## 2026-04-29 — Add fullscreen monitor shell for connect device
+- [x] Added DeviceMonitorShell for route-level fullscreen monitor chrome.
+- [x] Added Local/Remote mode bar and source/session pill.
+- [x] Added bottom monitor footer controls.
+- [x] Preserved WebRTC publish flow and monitor controls.
+- [x] Updated stale monitor copy.
+- [ ] Follow-up: implement true deviceId-based camera switching.
+- [ ] Follow-up: split device monitor hooks into focused modules.
+
 ## 2026-04-27 — Selection and preview controller extraction
 - [x] Extracted selection/preview controller.
 - [x] Preserved selected asset behavior.

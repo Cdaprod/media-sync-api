@@ -161,7 +161,7 @@ export default function FullscreenDevicePreview({
   };
 
   return (
-    <div id="fullscreen-root" className="fullscreen-container">
+    <div id="fullscreen-root" className="fullscreen-container device-monitor-content">
       <video ref={videoRef} id="video-bg" autoPlay playsInline muted disablePictureInPicture />
       <canvas ref={fxCanvasRef} id="fx-canvas" />
       <canvas ref={hudHistCanvasRef} id="hud-histogram-canvas" className={`scope-hud-canvas ${overlays.scopeHud ? '' : 'hidden'}`} width="260" height="70" />

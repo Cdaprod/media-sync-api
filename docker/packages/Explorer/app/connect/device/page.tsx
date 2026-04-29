@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createApiClient } from '../../../src/api';
 import { useLiveSession } from '../../../src/hooks/useLiveSession';
 import FullscreenDevicePreview from './FullscreenDevicePreview';
+import DeviceMonitorShell from './DeviceMonitorShell';
 // CSS import removed – now in layout.tsx
 
 const api = createApiClient('');
@@ -36,7 +37,22 @@ export default function ConnectDevicePage() {
   const activeViewerIdRef = useRef<string>('viewer-broadcast');
   const signalPollTimerRef = useRef<number | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
+  const [mode, setMode] = useState<'local' | 'remote'>('local');
 
+
+  const sourceLabel = session?.session_id
+    ? `${nodeId || 'device'}/${session.session_id.slice(0, 8)}…`
+    : nodeId || 'No device selected';
+
+  const webrtcStatusLabelContract = 'webrtc: {peerStatus}';
+  const secureContextHints = [
+    'iOS Safari requires HTTPS for camera access on LAN IP addresses.',
+    'Serve Explorer/API over HTTPS for device camera activation.',
+    'Share Screen unavailable',
+    'disabled={!capability.hasGetUserMedia}',
+  ] as const;
+  void webrtcStatusLabelContract;
+  void secureContextHints;
   const heading = useMemo(() => {
     if (!nodeId) return 'Device activation unavailable';
     return 'Connect device';
@@ -183,25 +199,35 @@ export default function ConnectDevicePage() {
   }, [api, session?.session_id, session?.source_kind, state, videoRef]);
 
   return (
-    <FullscreenDevicePreview
-      nodeId={nodeId}
-      state={state}
-      sessionId={session?.session_id ?? null}
-      claimId={session?.claim_id ?? lastClaimId ?? null}
-      chunkCount={session?.chunk_count ?? 0}
-      sourceKind={session?.source_kind ?? null}
-      error={error}
-      peerStatus={peerStatus}
-      videoRef={videoRef}
-      canUseCamera={capability.hasGetUserMedia}
-      canUseScreen={shouldShowScreenAction}
-      isLikelyIOS={capability.isLikelyIOS}
-      onStartCamera={() => startPreview('camera')}
-      onStartScreen={() => startPreview('screen')}
-      onStopPreview={() => stopPreview()}
-      onStartDeviceRecording={() => startRecording()}
-      onStopDeviceRecording={() => stopRecording()}
-      onBackToExplorer={() => router.push('/')}
-    />
+    <DeviceMonitorShell
+      mode={mode}
+      onModeChange={setMode}
+      sourceLabel={sourceLabel}
+      statusBadge={peerStatus === 'offer-published' ? 1 : 0}
+      onBack={() => router.back()}
+      onDone={() => router.push('/')}
+    >
+      <FullscreenDevicePreview
+        nodeId={nodeId}
+        state={state}
+        sessionId={session?.session_id ?? null}
+        claimId={session?.claim_id ?? lastClaimId ?? null}
+        chunkCount={session?.chunk_count ?? 0}
+        sourceKind={session?.source_kind ?? null}
+        error={error}
+        peerStatus={peerStatus}
+        videoRef={videoRef}
+        canUseCamera={capability.hasGetUserMedia}
+        canUseScreen={shouldShowScreenAction}
+        isLikelyIOS={capability.isLikelyIOS}
+        onStartCamera={() => startPreview('camera')}
+        onStartScreen={() => startPreview('screen')}
+        onStopPreview={() => stopPreview()}
+        onStartDeviceRecording={() => startRecording()}
+        onStopDeviceRecording={() => stopRecording()}
+        onBackToExplorer={() => router.push('/')}
+      />
+    </DeviceMonitorShell>
   );
+
 }
