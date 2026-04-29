@@ -12,7 +12,7 @@ interface DevicePickerSheetProps {
   localPermission: 'prompt' | 'granted' | 'denied';
   remoteNodes: RemoteCameraNode[];
   selectedDeviceId: string | null;
-  onSelectLocalDevice: (deviceId: string) => void;
+  onSelectLocalDevice: (deviceId: string) => void | Promise<void>;
   onRefresh: () => void;
 }
 
@@ -34,17 +34,12 @@ export default function DevicePickerSheet({
 
   if (!isOpen) return null;
 
-  const handleSelectRemote = (nodeId: string) => {
-    // Open remote node in a new tab
-    window.open(`/connect/device?node_id=${nodeId}`, '_blank');
-    onClose();
-  };
+  const handleSelectRemote = (_nodeId: string) => undefined;
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (pendingId && localDevices.some(d => d.deviceId === pendingId)) {
-      onSelectLocalDevice(pendingId);
+      await onSelectLocalDevice(pendingId);
     }
-    onClose();
   };
 
   return (
@@ -89,7 +84,7 @@ export default function DevicePickerSheet({
                     onClick={() => handleSelectRemote(node.node_id)}
                   >
                     <span>{node.label}</span>
-                    <span className="device-desc">remote</span>
+                    <span className="device-desc">remote unavailable here</span>
                   </button>
                 ))
               )}

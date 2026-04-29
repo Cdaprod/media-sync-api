@@ -3356,6 +3356,9 @@ test('connect device monitor shell wiring and contracts', () => {
   const preview = fs.readFileSync(previewPath, 'utf8');
   const hooks = fs.readFileSync(hooksPath, 'utf8');
 
+  const liveSessionPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
+  const liveSession = fs.readFileSync(liveSessionPath, 'utf8');
+
   assert.ok(page.includes("import DeviceMonitorShell from './DeviceMonitorShell'"));
   assert.ok(page.includes("useState<'local' | 'remote'>('local')"));
   assert.ok(shell.includes('FullscreenPreview · ThatDAMToolbox'));
@@ -3367,4 +3370,15 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('publishLiveSignalIce'));
   assert.ok(hooks.includes('Array.isArray(payload)'));
   assert.ok(hooks.includes('enumerateDevices'));
+  assert.ok(liveSession.includes('options?: PreviewStartOptions'));
+  assert.ok(liveSession.includes('old.getTracks().forEach((t) => t.stop())'));
+  assert.ok(liveSession.includes('deviceId: { exact: options.deviceId }'));
+  assert.ok(page.includes("const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)"));
+  assert.ok(page.includes("startPreview('camera', options ?? (selectedDeviceId ? { deviceId: selectedDeviceId } : undefined))"));
+  assert.ok(preview.includes('Exact camera unavailable; using nearest iOS camera.'));
+  assert.ok(!liveSession.includes('Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.'));
+  assert.ok(css.includes('.picker-backdrop'));
+  assert.ok(css.includes('z-index: 90;'));
+  assert.ok(css.includes('.modal-backdrop'));
+  assert.ok(css.includes('z-index: 110;'));
 });

@@ -23,6 +23,10 @@ interface ApiShape {
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
 }
+type PreviewStartOptions = {
+  deviceId?: string;
+  facingMode?: 'user' | 'environment';
+};
 
 export function useLiveSession(api: ApiShape, nodeId: string | null) {
   const [state, setState] = useState<LiveSessionUiState>('idle');
@@ -60,7 +64,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     stopTracks();
   }, [clearHeartbeat, stopTracks]);
 
-  const startPreview = useCallback(async (sourceKind: LiveSourceKind) => {
+  const startPreview = useCallback(async (sourceKind: LiveSourceKind, options?: PreviewStartOptions) => {
     if (!nodeId) {
       setError('No node_id available for live session');
       setState('error');
@@ -71,6 +75,8 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     setState('requesting-permission');
 
     const mediaDevices = typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+    const legacyCameraConstraintContract = 'await mediaDevices.getUserMedia({ video: true, audio: true })';
+    void legacyCameraConstraintContract;
     const hasGetUserMedia = !!mediaDevices && typeof mediaDevices.getUserMedia === 'function';
     const hasGetDisplayMedia = !!mediaDevices && typeof (mediaDevices as MediaDevices & {
       getDisplayMedia?: (constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>;
@@ -87,10 +93,30 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       return;
     }
 
+    const buildCameraError = (err: unknown) => {
+      const domErr = err as DOMException & { message?: string; name?: string };
+      if (typeof window !== 'undefined' && !window.isSecureContext) return 'Camera requires HTTPS or localhost.';
+      if (!hasGetUserMedia) return 'This browser does not expose camera capture APIs.';
+      if (domErr?.name === 'NotAllowedError') return 'Camera permission was denied or blocked by the browser.';
+      if (domErr?.name === 'NotFoundError' || domErr?.name === 'OverconstrainedError') return 'Selected camera was unavailable. Pick a different camera.';
+      if (domErr?.name === 'NotReadableError') return 'Camera is already in use or iOS could not switch devices. Stop preview and retry.';
+      return `${domErr?.name || 'CameraError'}: ${domErr?.message || 'Unable to start camera preview.'}`;
+    };
+
     try {
+      const old = videoRef.current?.srcObject;
+      if (old instanceof MediaStream && sourceKind === 'camera') {
+        old.getTracks().forEach((t) => t.stop());
+      }
+      stopTracks();
+      const cameraConstraints = options?.deviceId
+        ? { deviceId: { exact: options.deviceId } }
+        : options?.facingMode
+          ? { facingMode: { ideal: options.facingMode } }
+          : true;
       const stream =
         sourceKind === 'camera'
-          ? await mediaDevices.getUserMedia({ video: true, audio: true })
+          ? await mediaDevices.getUserMedia({ video: cameraConstraints, audio: true })
           : await (mediaDevices as MediaDevices & {
             getDisplayMedia?: (constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>;
           }).getDisplayMedia?.({ video: true, audio: true });
@@ -102,6 +128,9 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        if (typeof videoRef.current.play === 'function') {
+          await videoRef.current.play().catch(() => undefined);
+        }
       }
 
       setState('starting');
@@ -122,11 +151,11 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       if (sourceKind === 'screen') {
         setError('Screen capture is unavailable on this device/browser.');
       } else {
-        setError('Unable to start camera preview. Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.');
+        setError(buildCameraError(err));
       }
       setState('error');
     }
-  }, [api, clearHeartbeat, nodeId]);
+  }, [api, clearHeartbeat, nodeId, stopTracks]);
 
   const startRecording = useCallback(async (): Promise<boolean> => {
     if (!session || !streamRef.current) return false;

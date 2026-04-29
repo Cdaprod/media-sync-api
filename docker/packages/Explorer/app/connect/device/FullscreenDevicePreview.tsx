@@ -30,7 +30,9 @@ interface FullscreenDevicePreviewProps {
   canUseCamera: boolean;
   canUseScreen: boolean;
   isLikelyIOS: boolean;
-  onStartCamera: () => void | Promise<void>;
+  selectedDeviceId: string | null;
+  onSelectDevice: (deviceId: string | null) => void;
+  onStartCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
   onStartScreen: () => void | Promise<void>;
   onStopPreview: () => void | Promise<void>;
   onStartDeviceRecording: () => void | Promise<void>;
@@ -51,6 +53,8 @@ export default function FullscreenDevicePreview({
   canUseCamera,
   canUseScreen,
   isLikelyIOS,
+  selectedDeviceId,
+  onSelectDevice,
   onStartCamera,
   onStartScreen,
   onStopPreview,
@@ -68,6 +72,7 @@ export default function FullscreenDevicePreview({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [overlaysVisible, setOverlaysVisible] = useState(true);
+  const [pickerStatus, setPickerStatus] = useState<string | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { devices: localDevices, permission: localPermission, refresh: refreshLocal } = useLocalCameras();
@@ -155,13 +160,38 @@ export default function FullscreenDevicePreview({
     return sourceKind === 'camera' ? 'Camera feed' : 'No camera selected';
   })();
 
-  const handleSelectLocalDevice = (deviceId: string) => {
-    // TODO: extend useLiveSession to support deviceId selection
-    onStartCamera();
+  const hasLiveVideoStream = () => {
+    const stream = videoRef.current?.srcObject;
+    return stream instanceof MediaStream && stream.getVideoTracks().some((track) => track.readyState === 'live');
+  };
+  const showFatalError = isError && !hasLiveVideoStream();
+
+  const fallbackFacingMode = (label: string): 'user' | 'environment' | undefined => {
+    const normalized = label.toLowerCase();
+    if (normalized.includes('front')) return 'user';
+    if (normalized.includes('back')) return 'environment';
+    return undefined;
+  };
+
+  const handleSelectLocalDevice = async (deviceId: string) => {
+    onSelectDevice(deviceId);
+    setPickerStatus(null);
+    try {
+      await onStartCamera({ deviceId });
+      setPickerOpen(false);
+    } catch {
+      const picked = localDevices.find((d) => d.deviceId === deviceId);
+      const facingMode = fallbackFacingMode(picked?.label || '');
+      if (facingMode) {
+        await onStartCamera({ facingMode });
+        setPickerStatus('Exact camera unavailable; using nearest iOS camera.');
+      }
+      setPickerOpen(false);
+    }
   };
 
   return (
-    <div id="fullscreen-root" className="fullscreen-container device-monitor-content">
+    <div id="fullscreen-root" className={`fullscreen-container device-monitor-content ${pickerOpen ? 'picker-open' : ''} ${modalOpen ? 'error-modal-open' : ''}`}>
       <video ref={videoRef} id="video-bg" autoPlay playsInline muted disablePictureInPicture />
       <canvas ref={fxCanvasRef} id="fx-canvas" />
       <canvas ref={hudHistCanvasRef} id="hud-histogram-canvas" className={`scope-hud-canvas ${overlays.scopeHud ? '' : 'hidden'}`} width="260" height="70" />
@@ -170,14 +200,14 @@ export default function FullscreenDevicePreview({
       <div className="gradient-vignette" />
 
       {/* Overlay layer for idle/busy/error/ended */}
-      {(isIdle || isBusy) && (
+      {(isIdle || isBusy || showFatalError) && (
         <div className="overlay-layer">
-          <div className={`overlay-card ${isError ? 'error-card' : ''}`}>
+          <div className={`overlay-card ${showFatalError ? 'error-card' : ''}`}>
             <h2>
-              {isError ? 'Camera unavailable' : isEnded ? 'Session ended' : isBusy ? 'Starting...' : 'Enable your camera'}
+              {showFatalError ? 'Camera unavailable' : isEnded ? 'Session ended' : isBusy ? 'Starting...' : 'Enable your camera'}
             </h2>
             <p>
-              {isError ? (error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : 'Tap once to grant access and start broadcasting.'}
+              {showFatalError ? (error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : 'Tap once to grant access and start broadcasting.'}
             </p>
             <div className="btn-stack">
               {isIdle && !isError && !isEnded && (
@@ -195,7 +225,7 @@ export default function FullscreenDevicePreview({
                   </button>
                 </>
               )}
-              {(isError || isEnded) && (
+              {(showFatalError || isEnded) && (
                 <>
                   <button className="btn-overlay primary" onClick={onStartCamera}>
                     Retry
@@ -276,10 +306,11 @@ export default function FullscreenDevicePreview({
         localDevices={localDevices}
         localPermission={localPermission}
         remoteNodes={remoteNodes}
-        selectedDeviceId={null}
+        selectedDeviceId={selectedDeviceId}
         onSelectLocalDevice={handleSelectLocalDevice}
         onRefresh={() => { refreshLocal(); refreshRemote(); }}
       />
+      {pickerStatus && <div className="picker-status-chip">{pickerStatus}</div>}
 
       <DeviceCameraInfoModal
         isOpen={modalOpen}
@@ -297,3 +328,8 @@ export default function FullscreenDevicePreview({
     </div>
   );
 }
+  useEffect(() => {
+    if (selectedDeviceId && !localDevices.some((device) => device.deviceId === selectedDeviceId)) {
+      onSelectDevice(null);
+    }
+  }, [localDevices, onSelectDevice, selectedDeviceId]);

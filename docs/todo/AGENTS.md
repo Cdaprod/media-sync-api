@@ -1,3 +1,12 @@
+## 2026-04-29 — Fix iOS camera selection and monitor error states
+- [x] Wired selected local camera deviceId into startPreview.
+- [x] Stopped old tracks before iOS camera switching.
+- [x] Added fallback handling for iOS camera constraints.
+- [x] Replaced misleading generic HTTPS permission error with cause-aware messages.
+- [x] Prevented fatal camera unavailable state when a live video stream exists.
+- [ ] Follow-up: add remote camera session selection behavior.
+- [ ] Follow-up: add real deviceId switching behavior tests in browser automation.
+
 ## 2026-04-29 — Route connect device path to Explorer frontend
 - [x] Kept /connect/device as the canonical Explorer device monitor route.
 - [x] Updated Caddy routing so /connect/device reaches Next.js.

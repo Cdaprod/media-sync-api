@@ -38,6 +38,7 @@ export default function ConnectDevicePage() {
   const signalPollTimerRef = useRef<number | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
   const [mode, setMode] = useState<'local' | 'remote'>('local');
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
 
 
   const sourceLabel = session?.session_id
@@ -220,7 +221,9 @@ export default function ConnectDevicePage() {
         canUseCamera={capability.hasGetUserMedia}
         canUseScreen={shouldShowScreenAction}
         isLikelyIOS={capability.isLikelyIOS}
-        onStartCamera={() => startPreview('camera')}
+        selectedDeviceId={selectedDeviceId}
+        onSelectDevice={setSelectedDeviceId}
+        onStartCamera={(options) => startPreview('camera', options ?? (selectedDeviceId ? { deviceId: selectedDeviceId } : undefined))}
         onStartScreen={() => startPreview('screen')}
         onStopPreview={() => stopPreview()}
         onStartDeviceRecording={() => startRecording()}

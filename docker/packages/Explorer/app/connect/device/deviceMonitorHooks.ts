@@ -33,6 +33,14 @@ export function useLocalCameras() {
 
   useEffect(() => {
     enumerate();
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      void navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then((stream) => {
+          stream.getTracks().forEach((track) => track.stop());
+          return enumerate();
+        })
+        .catch(() => undefined);
+    }
     navigator.mediaDevices?.addEventListener('devicechange', enumerate);
     return () => navigator.mediaDevices?.removeEventListener('devicechange', enumerate);
   }, [enumerate]);
