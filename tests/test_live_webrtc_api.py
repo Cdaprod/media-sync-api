@@ -223,3 +223,41 @@ def test_connect_device_renders_camera_shell_for_registered_node(client):
     assert "/api/live/" in response.text
     assert "/ice/device" in response.text
     assert "viewers/default/ice" in response.text
+
+def test_record_start_is_idempotent_and_visible_in_live_list(client):
+    session_id = "sess-live-rec-idem"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-rec", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+
+    started = client.post(f"/api/live/{session_id}/record/start", json={"project": "ProjA", "source": "primary"})
+    assert started.status_code == 200
+    first = started.json()["recording"]
+    assert first["state"] == "recording"
+
+    started_again = client.post(f"/api/live/{session_id}/record/start", json={"project": "ProjA", "source": "primary"})
+    assert started_again.status_code == 200
+    second = started_again.json()["recording"]
+    assert second["recording_id"] == first["recording_id"]
+    assert started_again.json()["idempotent"] is True
+
+    listed = client.get("/api/live")
+    session = next((entry for entry in listed.json()["sessions"] if entry["session_id"] == session_id), None)
+    assert session is not None
+    assert session["active_recording_id"] == first["recording_id"]
+    assert session["recording_state"] == "recording"
+
+
+def test_record_stop_transitions_honestly(client):
+    session_id = "sess-live-rec-stop"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-rec-stop", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+    started = client.post(f"/api/live/{session_id}/record/start", json={"project": "ProjA", "source": "primary"})
+    assert started.status_code == 200
+
+    stopped = client.post(f"/api/live/{session_id}/record/stop", json={})
+    assert stopped.status_code == 200
+    assert stopped.json()["recording"]["state"] == "stopping"

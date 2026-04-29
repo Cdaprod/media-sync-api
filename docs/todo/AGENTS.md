@@ -1,3 +1,10 @@
+## 2026-04-29 — Live WebRTC recording lifecycle ownership follow-up
+- [x] Added /api/live recording lifecycle routes (`record/start`, `record/stop`, session-scoped recording list).
+- [x] Enforced idempotent record start for the same active live session.
+- [x] Surfaced recording linkage on `/api/live` session list (`recording_count`, `active_recording_id`, `recording_state`, `asset_url`).
+- [x] Added backend tests for idempotent start, honest stop transition, and live-list recording linkage.
+- [ ] Follow-up: wire full remote viewer attach/track playback handshake in connect device UI beyond stub watch entrypoint.
+
 ## 2026-04-29 — Complete connect device deterministic broadcast path
 - [x] Made useLiveSession.startPreview return the created live session.
 - [x] Replaced reactive WebRTC offer publishing with deterministic Start Broadcast chain.

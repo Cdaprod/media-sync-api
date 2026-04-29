@@ -9,6 +9,8 @@ Example:
 from __future__ import annotations
 
 from typing import Any
+from datetime import datetime, timezone
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -16,6 +18,7 @@ from pydantic import BaseModel, Field
 from app.runtime import get_runtime
 from app.runtime.live_sessions import WebRtcLiveSession, WebRtcLiveSessionRegistry
 from app.runtime.types import AppRuntime
+from app.models.recording_session import RecordingSession
 
 router = APIRouter(prefix="/api/live", tags=["live-webrtc"])
 """Route ownership:
@@ -52,6 +55,10 @@ class LiveWebRtcSessionResponse(BaseModel):
     viewer_ids: list[str] = Field(default_factory=list)
     state: str
     connection_states: dict[str, str] = Field(default_factory=dict)
+    recording_count: int = 0
+    active_recording_id: str | None = None
+    recording_state: str | None = None
+    asset_url: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -60,9 +67,32 @@ class LiveWebRtcSessionListResponse(BaseModel):
     sessions: list[LiveWebRtcSessionResponse] = Field(default_factory=list)
 
 
+class LiveRecordStartPayload(BaseModel):
+    project: str = "Live"
+    source: str = "primary"
+    target_dir: str = "ingest/live"
+    recording_id: str | None = None
 
 
-def _serialize_live_session(session: WebRtcLiveSession) -> dict[str, Any]:
+class LiveRecordStopPayload(BaseModel):
+    error: str | None = None
+
+
+def _recordings_registry(runtime: AppRuntime):
+    registry = getattr(runtime, "recording_sessions", None)
+    if registry is None:
+        raise HTTPException(status_code=503, detail="recording_registry_unavailable")
+    return registry
+
+
+def _active_recording_for_session(runtime: AppRuntime, session_id: str):
+    registry = _recordings_registry(runtime)
+    for rec in registry.list():
+        if rec.session_id == session_id and rec.state in {"recording", "stopping", "uploading"}:
+            return rec
+    return None
+
+def _serialize_live_session(session: WebRtcLiveSession, runtime: AppRuntime | None = None) -> dict[str, Any]:
     has_offer = session.offer is not None
     has_answer = bool(session.answers)
     viewer_ids = sorted(session.answers.keys())
@@ -73,6 +103,7 @@ def _serialize_live_session(session: WebRtcLiveSession) -> dict[str, Any]:
         state = "connected"
     else:
         state = "inactive"
+    active_recording = _active_recording_for_session(runtime, session.session_id) if runtime is not None else None
     return {
         "session_id": session.session_id,
         "node_id": session.node_id,
@@ -84,6 +115,10 @@ def _serialize_live_session(session: WebRtcLiveSession) -> dict[str, Any]:
         "connection_states": dict(session.connection_states),
         "created_at": session.created_at,
         "updated_at": session.updated_at,
+        "recording_count": 1 if active_recording else 0,
+        "active_recording_id": active_recording.recording_id if active_recording else None,
+        "recording_state": active_recording.state if active_recording else None,
+        "asset_url": active_recording.asset_url if active_recording else None,
     }
 
 def _registry(runtime: AppRuntime) -> WebRtcLiveSessionRegistry:
@@ -240,9 +275,61 @@ async def publish_viewer_state(
 @router.get("", response_model=LiveWebRtcSessionListResponse)
 async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> LiveWebRtcSessionListResponse:
     registry = _registry(runtime)
-    sessions = [LiveWebRtcSessionResponse(**_serialize_live_session(session)) for session in registry.list()]
+    sessions = [LiveWebRtcSessionResponse(**_serialize_live_session(session, runtime)) for session in registry.list()]
     return LiveWebRtcSessionListResponse(sessions=sessions)
 
+
+
+
+@router.post("/{session_id}/record/start")
+async def start_live_recording(
+    session_id: str,
+    payload: LiveRecordStartPayload,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, object]:
+    registry = _registry(runtime)
+    session = registry.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    recording_registry = _recordings_registry(runtime)
+    active = _active_recording_for_session(runtime, session_id)
+    if active is not None:
+        return {"recording": active.model_dump(mode="json"), "idempotent": True}
+    recording_id = (payload.recording_id or f"rec-{uuid.uuid4().hex}").strip()
+    recording = RecordingSession(
+        recording_id=recording_id,
+        session_id=session_id,
+        node_id=session.node_id,
+        state="recording",
+        project=(payload.project or "Live").strip() or "Live",
+        source=(payload.source or "primary").strip() or "primary",
+        target_dir=(payload.target_dir or "ingest/live").strip() or "ingest/live",
+    )
+    recording_registry.create(recording)
+    return {"recording": recording.model_dump(mode="json"), "idempotent": False}
+
+
+@router.post("/{session_id}/record/stop")
+async def stop_live_recording(
+    session_id: str,
+    payload: LiveRecordStopPayload,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> dict[str, object]:
+    active = _active_recording_for_session(runtime, session_id)
+    if active is None:
+        raise HTTPException(status_code=404, detail="recording_not_found")
+    registry = _recordings_registry(runtime)
+    state = "failed" if payload.error else "stopping"
+    updated = registry.update_state(active.recording_id, state, error=payload.error, updated_at=datetime.now(timezone.utc))
+    return {"recording": updated.model_dump(mode="json")}
+
+
+@router.get("/{session_id}/recordings")
+async def list_live_recordings(session_id: str, runtime: AppRuntime = Depends(get_runtime)) -> dict[str, object]:
+    _registry(runtime).require(session_id)
+    registry = _recordings_registry(runtime)
+    records = [r.model_dump(mode="json") for r in registry.list() if r.session_id == session_id]
+    return {"recordings": records}
 
 @router.delete("/{session_id}")
 async def delete_live_session(session_id: str, runtime: AppRuntime = Depends(get_runtime)) -> dict[str, object]:
