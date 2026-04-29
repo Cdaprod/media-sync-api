@@ -4,6 +4,7 @@
 
 import { useState, useRef, useEffect, useCallback, RefObject } from 'react';
 import { OverlayState } from './deviceMonitorTypes';
+import type { CameraSessionState } from './cameraSession';
 import {
   useLocalCameras,
   useRemoteCameras,
@@ -32,6 +33,12 @@ interface FullscreenDevicePreviewProps {
   isLikelyIOS: boolean;
   selectedDeviceId: string | null;
   onSelectDevice: (deviceId: string | null) => void;
+  cameraState?: CameraSessionState;
+  cameraErrorMessage?: string | null;
+  cameraWarning?: string | null;
+  onRefreshDevices?: () => Promise<void>;
+  onSelectCameraDevice?: (deviceId: string | null) => void;
+  onClearCameraError?: () => void;
   onStartCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
   onStartScreen: () => void | Promise<void>;
   onStopPreview: () => void | Promise<void>;
@@ -55,6 +62,12 @@ export default function FullscreenDevicePreview({
   isLikelyIOS,
   selectedDeviceId,
   onSelectDevice,
+  cameraState,
+  cameraErrorMessage,
+  cameraWarning,
+  onRefreshDevices,
+  onSelectCameraDevice,
+  onClearCameraError,
   onStartCamera,
   onStartScreen,
   onStopPreview,
@@ -75,7 +88,8 @@ export default function FullscreenDevicePreview({
   const [pickerStatus, setPickerStatus] = useState<string | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const { devices: localDevices, permission: localPermission, refresh: refreshLocal } = useLocalCameras();
+  const { devices: hookLocalDevices, permission: localPermission, refresh: refreshLocal } = useLocalCameras();
+  const localDevices = cameraState?.devices ?? hookLocalDevices;
   const safeLocalDevices = Array.isArray(localDevices) ? localDevices : [];
   const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras();
 
@@ -214,7 +228,7 @@ export default function FullscreenDevicePreview({
               {showFatalError ? 'Camera unavailable' : isEnded ? 'Session ended' : isBusy ? 'Starting...' : 'Enable your camera'}
             </h2>
             <p>
-              {showFatalError ? (error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : 'Tap once to grant access and start broadcasting.'}
+              {showFatalError ? (cameraErrorMessage || error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : 'Tap once to grant access and start broadcasting.'}
             </p>
             <div className="btn-stack">
               {isIdle && !isError && !isEnded && (
@@ -307,6 +321,7 @@ export default function FullscreenDevicePreview({
         peakLevel={peakLevel}
       />
 
+      {cameraWarning ? <div className="picker-status-chip">{cameraWarning}</div> : null}
       <DevicePickerSheet
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -315,7 +330,10 @@ export default function FullscreenDevicePreview({
         remoteNodes={remoteNodes}
         selectedDeviceId={selectedDeviceId}
         onSelectLocalDevice={handleSelectLocalDevice}
-        onRefresh={() => { refreshLocal(); refreshRemote(); }}
+        onRefresh={async () => {
+          await (onRefreshDevices ? onRefreshDevices() : refreshLocal());
+          refreshRemote();
+        }}
       />
       {pickerStatus && <div className="picker-status-chip">{pickerStatus}</div>}
 

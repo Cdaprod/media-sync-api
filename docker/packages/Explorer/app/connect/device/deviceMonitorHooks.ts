@@ -7,6 +7,8 @@ import { RemoteCameraNode } from './deviceMonitorTypes';
 // Local cameras enumeration
 // ----------------------------------------------------------------------
 export function useLocalCameras() {
+  // TODO(camera-session): CameraSession owns canonical local camera lifecycle.
+  // Keep this hook as compatibility inventory until FullscreenDevicePreview migration is complete.
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [permission, setPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
 

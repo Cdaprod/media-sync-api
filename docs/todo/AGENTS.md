@@ -1,3 +1,12 @@
+## 2026-04-29 — Add CameraSession layer for connect device monitor
+- [x] Added typed CameraSession state and camera error model.
+- [x] Added useCameraSession for enumeration, switching, fallback, and stream lifecycle.
+- [x] Wired ConnectDevicePage to pass externally-owned camera streams into useLiveSession.
+- [x] Preserved WebRTC publishing and runtime live-session behavior.
+- [x] Kept compatibility camera hooks in place for later cleanup.
+- [ ] Follow-up: fully remove duplicate local camera inventory ownership from FullscreenDevicePreview.
+- [ ] Follow-up: add browser-level camera switching tests.
+
 ## 2026-04-29 — Fix iOS camera selection and monitor error states
 - [x] Wired selected local camera deviceId into startPreview.
 - [x] Stopped old tracks before iOS camera switching.

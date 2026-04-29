@@ -3359,6 +3359,13 @@ test('connect device monitor shell wiring and contracts', () => {
   const liveSessionPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
   const liveSession = fs.readFileSync(liveSessionPath, 'utf8');
 
+  const connectPagePath = path.join(packageRoot, 'app', 'connect', 'device', 'ConnectDevicePage.tsx');
+  const cameraSessionPath = path.join(packageRoot, 'app', 'connect', 'device', 'cameraSession.ts');
+  const useCameraSessionPath = path.join(packageRoot, 'app', 'connect', 'device', 'useCameraSession.ts');
+  const connectPage = fs.readFileSync(connectPagePath, 'utf8');
+  const cameraSession = fs.readFileSync(cameraSessionPath, 'utf8');
+  const useCameraSession = fs.readFileSync(useCameraSessionPath, 'utf8');
+
   assert.ok(page.includes("import DeviceMonitorShell from './DeviceMonitorShell'"));
   assert.ok(page.includes("useState<'local' | 'remote'>('local')"));
   assert.ok(shell.includes('FullscreenPreview · ThatDAMToolbox'));
@@ -3373,10 +3380,10 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(liveSession.includes('options?: PreviewStartOptions'));
   assert.ok(liveSession.includes('old.getTracks().forEach((t) => t.stop())'));
   assert.ok(liveSession.includes('deviceId: { exact: options.deviceId }'));
-  assert.ok(page.includes("const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)"));
-  assert.ok(page.includes("startPreview('camera', options ?? (selectedDeviceId ? { deviceId: selectedDeviceId } : undefined))"));
+  assert.ok(page.includes('camera.selectedDeviceId'));
+  assert.ok(connectPage.includes("await startPreview('camera', { ...options, stream })"));
   assert.ok(preview.includes('Exact camera unavailable; using nearest iOS camera.'));
-  assert.ok(preview.includes('const { devices: localDevices'));
+  assert.ok(preview.includes('const { devices: hookLocalDevices'));
   assert.ok(preview.includes('Array.isArray(localDevices) ? localDevices : []'));
   assert.ok(preview.includes('localDevices={safeLocalDevices}'));
   assert.ok(!liveSession.includes('Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.'));
@@ -3384,4 +3391,16 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(css.includes('z-index: 90;'));
   assert.ok(css.includes('.modal-backdrop'));
   assert.ok(css.includes('z-index: 110;'));
+
+  assert.ok(fs.existsSync(cameraSessionPath));
+  assert.ok(fs.existsSync(useCameraSessionPath));
+  assert.ok(cameraSession.includes('normalizeCameraError'));
+  assert.ok(cameraSession.includes('describeCameraError'));
+  assert.ok(useCameraSession.includes('getUserMedia'));
+  assert.ok(useCameraSession.includes('old.getTracks().forEach((t) => t.stop())'));
+  assert.ok(useCameraSession.includes('facingMode'));
+  assert.ok(connectPage.includes("import { useCameraSession } from './useCameraSession'"));
+  assert.ok(connectPage.includes("await startPreview('camera', { ...options, stream })"));
+  assert.ok(liveSession.includes('stream?: MediaStream'));
+  assert.ok(preview.includes('cameraState'));
 });

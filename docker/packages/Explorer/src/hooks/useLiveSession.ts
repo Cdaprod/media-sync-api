@@ -26,6 +26,7 @@ interface ApiShape {
 type PreviewStartOptions = {
   deviceId?: string;
   facingMode?: 'user' | 'environment';
+  stream?: MediaStream;
 };
 
 export function useLiveSession(api: ApiShape, nodeId: string | null) {
@@ -114,12 +115,13 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
         : options?.facingMode
           ? { facingMode: { ideal: options.facingMode } }
           : true;
-      const stream =
+      const stream = options?.stream ?? (
         sourceKind === 'camera'
           ? await mediaDevices.getUserMedia({ video: cameraConstraints, audio: true })
           : await (mediaDevices as MediaDevices & {
             getDisplayMedia?: (constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>;
-          }).getDisplayMedia?.({ video: true, audio: true });
+          }).getDisplayMedia?.({ video: true, audio: true })
+      );
 
       if (!stream) {
         throw new Error(`Unable to start ${sourceKind} stream`);
