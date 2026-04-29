@@ -76,6 +76,7 @@ export default function FullscreenDevicePreview({
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { devices: localDevices, permission: localPermission, refresh: refreshLocal } = useLocalCameras();
+  const safeLocalDevices = Array.isArray(localDevices) ? localDevices : [];
   const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras();
 
   // Poll videoRef.srcObject for audio analyser (fix 2)
@@ -180,7 +181,7 @@ export default function FullscreenDevicePreview({
       await onStartCamera({ deviceId });
       setPickerOpen(false);
     } catch {
-      const picked = localDevices.find((d) => d.deviceId === deviceId);
+      const picked = safeLocalDevices.find((d) => d.deviceId === deviceId);
       const facingMode = fallbackFacingMode(picked?.label || '');
       if (facingMode) {
         await onStartCamera({ facingMode });
@@ -189,6 +190,12 @@ export default function FullscreenDevicePreview({
       setPickerOpen(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedDeviceId && !safeLocalDevices.some((device) => device.deviceId === selectedDeviceId)) {
+      onSelectDevice(null);
+    }
+  }, [onSelectDevice, safeLocalDevices, selectedDeviceId]);
 
   return (
     <div id="fullscreen-root" className={`fullscreen-container device-monitor-content ${pickerOpen ? 'picker-open' : ''} ${modalOpen ? 'error-modal-open' : ''}`}>
@@ -303,7 +310,7 @@ export default function FullscreenDevicePreview({
       <DevicePickerSheet
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        localDevices={localDevices}
+        localDevices={safeLocalDevices}
         localPermission={localPermission}
         remoteNodes={remoteNodes}
         selectedDeviceId={selectedDeviceId}
@@ -328,8 +335,3 @@ export default function FullscreenDevicePreview({
     </div>
   );
 }
-  useEffect(() => {
-    if (selectedDeviceId && !localDevices.some((device) => device.deviceId === selectedDeviceId)) {
-      onSelectDevice(null);
-    }
-  }, [localDevices, onSelectDevice, selectedDeviceId]);

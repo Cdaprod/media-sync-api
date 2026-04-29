@@ -3376,6 +3376,9 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes("const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)"));
   assert.ok(page.includes("startPreview('camera', options ?? (selectedDeviceId ? { deviceId: selectedDeviceId } : undefined))"));
   assert.ok(preview.includes('Exact camera unavailable; using nearest iOS camera.'));
+  assert.ok(preview.includes('const { devices: localDevices'));
+  assert.ok(preview.includes('Array.isArray(localDevices) ? localDevices : []'));
+  assert.ok(preview.includes('localDevices={safeLocalDevices}'));
   assert.ok(!liveSession.includes('Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.'));
   assert.ok(css.includes('.picker-backdrop'));
   assert.ok(css.includes('z-index: 90;'));
