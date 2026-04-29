@@ -1,3 +1,9 @@
+## 2026-04-29 — Runtime overlay safety lock (persisted + runtime merge discipline)
+- [x] Locked runtime asset overlay comment/contract in pending artifact controller.
+- [x] Runtime asset polling failures now preserve existing UI state (no destructive clear-to-empty fallback).
+- [x] Added static contract assertions for overlay semantics and graceful runtime-fetch failure handling.
+- [ ] Follow-up: add runtime-vs-persisted dedupe identity helper tests by asset_url/content hash.
+
 ## 2026-04-29 — Runtime live preview asset visibility follow-up
 - [x] Live WebRTC offer now creates `RuntimeAsset(kind=live, state=previewable)`.
 - [x] Explorer runtime-asset placeholder mapping now includes `previewable` live state.

@@ -99,8 +99,8 @@ export function usePendingArtifactController({
   useEffect(() => {
     let mounted = true;
     const poll = async () => {
-      const assets = await runtimeApiRef.current.listRuntimeAssets().catch(() => []);
-      if (!mounted) return;
+      const assets = await runtimeApiRef.current.listRuntimeAssets().catch(() => null);
+      if (!mounted || !assets) return;
       const mapped = (assets as RuntimeAssetRecord[])
         .map((asset) => runtimeAssetToPendingRecording(asset))
         .filter((asset): asset is PendingRecordingAsset => !!asset);
@@ -167,6 +167,7 @@ export function usePendingArtifactController({
     return sortPendingComposeItemsForDisplay(relevant);
   }, [activeProject, mediaScope, pendingComposeItems]);
 
+  // Runtime assets are an overlay, not a replacement for persisted media.
   const visiblePendingRecordingAssets = useMemo(() => (
     sortPendingRecordingAssetsForDisplay([...pendingRecordingAssets, ...runtimeRecordingAssets])
       .filter((recording) => !media.some((item) => pendingRecordingMatchesMediaItem(recording, item)))
