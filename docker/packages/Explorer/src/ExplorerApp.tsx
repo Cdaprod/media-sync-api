@@ -5,10 +5,10 @@ import { createPortal } from 'react-dom';
 
 import { createApiClient } from './api';
 import type { AssetRef } from './api';
+import type { ComposeJobEnvelope } from './composeJobs';
 import {
-  sortPendingComposeItemsForDisplay,
-} from './composeJobs';
-import type { ComposeJobEnvelope, PendingComposeItem } from './composeJobs';
+  pendingRecordingMatchesMediaItem,
+} from './liveRecordings';
 import {
   buildMediaIdentityKey,
   collectMediaMeta,
@@ -20,7 +20,6 @@ import {
   selectionOrderIndexMap,
   sortMedia,
   sortMediaByRecent,
-  toggleSelectionWithOrder,
 } from './state';
 import type { MediaMeta, MediaTypeFilter, SortKey } from './state';
 import type { ExplorerView, MediaItem, Project, ToastMessage } from './types';
@@ -37,17 +36,31 @@ import { AssetPreviewPanel, ProxyFocusedChromeFullParity } from './AssetPreviewP
 import { AssetGrid } from './components/AssetGrid';
 import { AssetList } from './components/AssetList';
 import { LiveSourceCard } from './components/LiveSourceCard';
+import { LivePreview } from './components/live/LivePreview';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
-import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl, normalizeAssetUrl } from './utils/mediaUrls';
+import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl } from './utils/mediaUrls';
+import {
+  absolutizeNonAssetUrl,
+  resolveBrowserRenderableUrl,
+} from './config/urlPolicy';
 import { buildThumbJobKey, getThumbCacheKey, isThumbableRelativePath, normalizeThumbUrl } from './thumbnailLoader';
-import { usePendingComposeJobs } from './hooks/usePendingComposeJobs';
 import { useAssetInteractions } from './hooks/useAssetInteractions';
 import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
+import { useRuntimeController } from './runtime/useRuntimeController';
+import { useLivePreviewState } from './runtime/useLivePreviewState';
+import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
+import { usePendingArtifactController } from './pending/usePendingArtifactController';
+import type { PendingComposeRenderedEntry, PendingRecordingRenderedEntry } from './render/renderedEntries';
+import { useExplorerRenderController } from './render/useExplorerRenderController';
+import { useSelectionPreviewController } from './selection/useSelectionPreviewController';
+import { useBulkActionController } from './actions/useBulkActionController';
+import { useExplorerFeedbackController } from './feedback/useExplorerFeedbackController';
+import { useExplorerSearchFilterController } from './search/useExplorerSearchFilterController';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -75,17 +88,19 @@ import { useExplorerUiState } from './hooks/useExplorerUiState';
 import { useVideoOwnershipHandoff } from './hooks/useVideoOwnershipHandoff';
 import type { RegisterNodeResponse } from './types/registration';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
-import type { LiveSession } from './types/liveSession';
 import type { IngestClaimRecord } from './types/ingestClaim';
-import { getDeviceUrl, getRuntimeCapabilityTags, getRuntimeKinds, isSessionNode, isTestPayloadClaim, isTestPayloadNode } from './utils/runtimeLabels';
+import {
+  getDeviceUrl,
+  isSessionNode,
+  isTestPayloadClaim,
+  isTestPayloadNode,
+} from './utils/runtimeLabels';
+import { buildRuntimeChips } from './utils/runtimeChips';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
 }
 
-type AssetRenderedEntry = { kind: 'asset'; item: MediaItem };
-type PendingRenderedEntry = { kind: 'pending'; pendingItem: PendingComposeItem };
-type RenderedMediaEntry = AssetRenderedEntry | PendingRenderedEntry;
 type PinchOverlayPoint = { x: number; y: number } | null;
 type ThumbnailCandidatePlan = {
   primary?: string;
@@ -528,52 +543,10 @@ const cancelExplorerRaf = (rafId: number | null) => {
   window.cancelAnimationFrame(rafId);
 };
 
-function useToastQueue() {
-  const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
-  const timeouts = useRef<number[]>([]);
-  const lastOperationToastRef = useRef<Map<string, number>>(new Map());
-
-  const beginToastExit = useCallback((id: string) => {
-    setToasts((prev) => prev.map((toast) => (toast.id === id ? { ...toast, exiting: true } : toast)));
-  }, []);
-
-  const addToast = useCallback((
-    type: ToastMessage['type'],
-    title: string,
-    message: string,
-    operationId?: string,
-  ) => {
-    if (operationId) {
-      const now = Date.now();
-      const lastShownAt = lastOperationToastRef.current.get(operationId) ?? 0;
-      if (now - lastShownAt < 500) {
-        return `${operationId}-deduped`;
-      }
-      lastOperationToastRef.current.set(operationId, now);
-    }
-    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    setToasts((prev) => [...prev, { id, type, title, message, exiting: false }]);
-    const timeout = window.setTimeout(() => {
-      beginToastExit(id);
-    }, 3100);
-    timeouts.current.push(timeout);
-    return id;
-  }, [beginToastExit]);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      timeouts.current.forEach((timeout) => window.clearTimeout(timeout));
-    };
-  }, []);
-
-  return { toasts, addToast, removeToast, beginToastExit };
-}
-
 export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
+  // ExplorerApp is now the composition shell: feature controllers own runtime,
+  // pending artifacts, rendering, selection/preview, bulk actions, filters,
+  // and feedback while this component preserves the existing UI layout.
   // ---------------------------------------------------------------------------
   // Query/data authority: API client + aggregate snapshot ownership.
   // ---------------------------------------------------------------------------
@@ -584,6 +557,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const api = useMemo(() => createApiClient(resolvedApiBase), [resolvedApiBase]);
   const {
     sessions: liveSessions,
+    reload: reloadLiveSessions,
   } = useLiveSessions({
     listLiveSessions: api.listLiveSessions,
   });
@@ -609,7 +583,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     refreshLibrarySnapshot,
     clearSnapshotError,
   } = useLibrarySnapshot(api);
-  const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
+  const { toasts, addToast, dismissToast: removeToast, beginToastExit } = useExplorerFeedbackController();
 
 
   // ---------------------------------------------------------------------------
@@ -619,11 +593,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [mediaScope, setMediaScope] = useState<'project' | 'all'>('project');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
-  const [activeAssetKey, setActiveAssetKey] = useState('');
-  const [previewActivationKey, setPreviewActivationKey] = useState('');
   const [previewPlaybackToken, setPreviewPlaybackToken] = useState(0);
+  const selectionPreview = useSelectionPreviewController({
+    onPreviewActivationChanged: () => setPreviewPlaybackToken((token) => token + 1),
+  });
+  const {
+    selected,
+    setSelected,
+    selectedOrder,
+    setSelectedOrder,
+    clearSelectionState,
+    toggleSelectedByKey,
+    activeAssetKey,
+    setActiveAssetKey,
+    previewActivationKey,
+    setPreviewActivationKey,
+    commitPreviewActivationKey,
+    reinforcedActiveKey,
+    setReinforcedActiveKey,
+    selectAndActivateAssetKey,
+  } = selectionPreview;
   const [focused, setFocused] = useState<MediaItem | null>(null);
   const [dynamicOrientations, setDynamicOrientations] = useState<Record<string, string>>({});
   const [gridSurfaceEl, setGridSurfaceEl] = useState<HTMLDivElement | null>(null);
@@ -642,6 +631,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     subtitle?: string;
     payload: unknown;
   } | null>(null);
+  const livePreview = useLivePreviewState();
   const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
@@ -726,6 +716,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     defaultView: DEFAULT_VIEW,
     defaultGridColumns: DEFAULT_COLUMNS_MOBILE,
   });
+  const runtime = useRuntimeController({
+    listWebRtcLiveSessions: api.listWebRtcLiveSessions,
+    poll: sidebarOpen || detailsModal !== null,
+  });
+  const {
+    sessions: webRtcLiveSessions,
+    sessionsByNodeId: webRtcSessionsByNodeId,
+    waitingByNodeId: waitingWebRtcByNodeId,
+    reload: reloadWebRtcLiveSessions,
+  } = runtime;
+  const reloadRuntimeLiveSessions = useCallback(async () => {
+    await Promise.all([
+      reloadLiveSessions(),
+      reloadWebRtcLiveSessions(),
+    ]);
+  }, [reloadLiveSessions, reloadWebRtcLiveSessions]);
+
+  useRuntimeEventReactions({
+    reloadLibrarySnapshot: refreshLibrarySnapshot,
+    reloadLiveSessions: reloadRuntimeLiveSessions,
+  });
 
 
   const reloadIngestClaims = useCallback(async () => {
@@ -742,6 +753,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const interval = window.setInterval(() => void reloadIngestClaims(), 5000);
     return () => window.clearInterval(interval);
   }, [reloadIngestClaims]);
+
+  useEffect(() => {
+    if (!livePreview.activeLivePreview) return;
+    const timeout = window.setTimeout(() => {
+      void reloadWebRtcLiveSessions();
+    }, 1200);
+    return () => window.clearTimeout(timeout);
+  }, [livePreview.activeLivePreview, reloadWebRtcLiveSessions]);
 
 
   useEffect(() => {
@@ -764,7 +783,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   // ---------------------------------------------------------------------------
   const composeNameInputRef = useRef<HTMLInputElement | null>(null);
   const deleteConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
-  const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
+  const reconciledRecordingIdsRef = useRef<Set<string>>(new Set());
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -778,7 +797,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const orientationCacheRef = useRef<Map<string, string>>(new Map());
   const [retainedPrefsHydrated, setRetainedPrefsHydrated] = useState(false);
   const lastCommittedColumnsRef = useRef(DEFAULT_COLUMNS_MOBILE);
-  const selectedOrderRef = useRef<string[]>([]);
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const topbarIntentRef = useRef<IntentController | null>(null);
   const [topbarMeasuredHeight, setTopbarMeasuredHeight] = useState(0);
@@ -810,7 +828,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [holdOverlayProgress, setHoldOverlayProgress] = useState(0);
   const [holdOverlayCompleteBeat, setHoldOverlayCompleteBeat] = useState(0);
   const [holdEmphasisKey, setHoldEmphasisKey] = useState('');
-  const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');
 
   // ---------------------------------------------------------------------------
   // Deferred preview/focus coupled domain (intentionally root-owned for now).
@@ -1357,23 +1374,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const assetRenderKey = assetSelectionKey;
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
-  const filteredMedia = useMemo(() => {
-    const filtered = filterMedia(
-      media,
-      {
-        query,
-        type: typeFilter,
-        selectedOnly: false,
-        untaggedOnly,
-        selected,
-      },
-      mediaMeta,
-    );
-    const selectedFiltered = selectedOnly
-      ? filtered.filter((item) => selected.has(assetSelectionKey(item, activeProject)))
-      : filtered;
-    return sortMedia(selectedFiltered, sortKey, mediaMeta);
-  }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const { filteredMedia } = useExplorerSearchFilterController({
+    media,
+    mediaMeta,
+    activeProject,
+    selected,
+    query,
+    typeFilter,
+    selectedOnly,
+    untaggedOnly,
+    sortKey,
+    assetSelectionKey,
+  });
   const devAssetTraceLoggedRef = useRef(false);
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
@@ -1412,11 +1424,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     ? `${selected.size} item(s) queued.`
     : 'Select clips to enable.';
 
-  const clearSelectionState = useCallback(() => {
-    setSelected(new Set());
-    setSelectedOrder([]);
-  }, []);
-
   const clearActiveAsset = useCallback(() => {
     focusOrchestratorRef.current?.clearRetainedProxyOnDeselect();
     setActiveAssetKey('');
@@ -1437,10 +1444,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     orientationCacheRef.current = readOrientationCache();
   }, []);
-
-  useEffect(() => {
-    selectedOrderRef.current = selectedOrder;
-  }, [selectedOrder]);
 
   const getCachedOrientation = useCallback((key: string) => {
     return orientationCacheRef.current.get(key) ?? null;
@@ -1501,44 +1504,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const resolveAssetUrl = useCallback(
     (path?: string) => {
-      const normalized = normalizeAssetUrl(path);
-      if (!normalized) return '';
-      if (normalized.startsWith('data:')) return normalized;
-  
-      // Do NOT send browser-rendered asset paths through api.buildUrl.
-      // Let Caddy serve them from the current origin.
-      if (
-        normalized.startsWith('/media/') ||
-        normalized.startsWith('/thumbnails/')
-      ) {
-        return normalized;
-      }
-  
-      return api.buildUrl(normalized);
+      return resolveBrowserRenderableUrl(
+        path,
+        api.buildUrl,
+        typeof window === 'undefined' ? undefined : window.location,
+      );
     },
     [api],
   );
-  
+
   const absolutizeMediaUrl = useCallback((path?: string) => {
-    if (!path) return '';
-    if (
-      path.startsWith('data:') ||
-      path.startsWith('http://') ||
-      path.startsWith('https://')
-    ) {
-      return path;
-    }
-    // Critical: under Caddy/HTTPS, browser-rendered media assets must stay same-origin.
-    if (path.startsWith('/media/') || path.startsWith('/thumbnails/')) {
-      return path;
-    }
-    if (typeof window === 'undefined') return path;
-    const base = resolvedApiBase || window.location.origin;
-    try {
-      return new URL(path, base).toString();
-    } catch {
-      return path;
-    }
+    if (typeof window === 'undefined') return path || '';
+    return absolutizeNonAssetUrl(path, resolvedApiBase || window.location.origin);
   }, [resolvedApiBase]);
   const resolveThumbCandidatePlan = useCallback((item: MediaItem, kind: ReturnType<typeof guessKind>): ThumbnailCandidatePlan => {
     const rawPrimaryThumb = normalizeThumbUrl(item.thumbnail_url || '');
@@ -1654,6 +1631,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       ['Relative', focused.relative_path || '(none)'],
       ['MIME', focused.mime || focused.content_type || ''],
       ['Hash', focused.sha256 || focused.hash || ''],
+      ['Content Address', focused.content_address || ''],
       ['Created', focused.created_at || focused.createdAt || ''],
       ['Modified', focused.updated_at || focused.updatedAt || ''],
       ['Duration', focused.duration ? `${focused.duration}s` : ''],
@@ -2029,14 +2007,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     (item: MediaItem) => {
       const key = assetSelectionKey(item, activeProject);
       if (!key) return;
-      setSelected((current) => {
-        const { selected: nextSelected, order } = toggleSelectionWithOrder(current, selectedOrderRef.current, key);
-        selectedOrderRef.current = order;
-        setSelectedOrder(order);
-        return nextSelected;
-      });
+      toggleSelectedByKey(key);
     },
-    [activeProject, assetSelectionKey],
+    [activeProject, assetSelectionKey, toggleSelectedByKey],
   );
 
   const clearSelection = useCallback(() => {
@@ -2357,15 +2330,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     clearCloseSettleTimeout();
   }, [clearCloseSettleTimeout]);
 
-  const commitPreviewActivationKey = useCallback((nextKey: string) => {
-    setPreviewActivationKey((prev) => {
-      if (prev !== nextKey) {
-        setPreviewPlaybackToken((token) => token + 1);
-      }
-      return nextKey;
-    });
-  }, []);
-
   const focusRelative = useCallback((offset: number) => {
     if (!focused || !filteredMedia.length) return;
     const currentKey = assetSelectionKey(focused, activeProject);
@@ -2673,7 +2637,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     () => selectionItems.filter((item) => guessKind(item) === 'video'),
     [selectionItems],
   );
-
   useEffect(() => {
     if (!activeAssetKey) return;
     if (itemsBySelectionKey.has(activeAssetKey)) return;
@@ -2722,57 +2685,99 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   // ---------------------------------------------------------------------------
   // Pending compose integration lane.
   // ---------------------------------------------------------------------------
+  const pending = usePendingArtifactController({
+    resolvedApiBase,
+    activeProject,
+    projects,
+    media,
+    mediaScope,
+    addToast,
+    refreshLibrarySnapshot: () => refreshLibrarySnapshot(),
+    fetchComposeJobJson,
+    handleComposeCompletion,
+  });
   const {
-    pendingComposeItems,
+    pendingComposeEntries,
+    pendingRecordingEntries,
+    pendingRecordingAssets,
     registerAcceptedJob,
     removePendingJob,
-  } = usePendingComposeJobs({
-    pollIntervalMs: 2000,
-    fetchJson: fetchComposeJobJson,
-    mediaItems: media,
-    onCompletedRefreshScope: handleComposeCompletion,
+    stopPendingRecording,
+    dismissPendingRecording,
+    recordPeerSession,
+  } = pending;
+
+  // Controller order matters: later controllers receive dependencies produced by earlier controllers.
+  const {
+    deleteSelected: deleteMediaSelection,
+    confirmDeleteSelected: handleDeleteConfirm,
+    cancelDeleteSelected: handleDeleteCancel,
+    composeSelected: handleComposeSelected,
+  } = useBulkActionController({
+    addToast,
+    selected,
+    selectedOrder,
+    selectionItems,
+    selectedVideoItems,
+    projects,
+    composeSubmitting,
+    composeOutputName,
+    composeOutputProject,
+    setComposeOutputName,
+    setComposeOutputProject,
+    setComposeSubmitting,
+    setComposeModalOpen,
+    pendingDeleteSelectionKeys,
+    setPendingDeleteSelectionKeys,
+    setDeleteModalOpen,
+    deleteSubmitting,
+    performDeleteMediaSelection,
+    resolveSelectionKeysForItems,
+    resolveItemsForSelection,
+    toAssetRef,
+    composeMediaCommand,
+    registerAcceptedJob,
+    buildComposeTimestampName,
+    defaultComposeProject,
+    tagMediaSelection,
   });
 
+  const renderController = useExplorerRenderController({
+    filteredMedia,
+    pendingComposeEntries,
+    pendingRecordingEntries,
+  });
+  const renderedMediaEntries = renderController.renderedEntries;
+
   useEffect(() => {
-    const previous = pendingStatusSnapshotRef.current;
-    const next = new Map<string, PendingComposeItem['status']>();
-    pendingComposeItems.forEach((item) => {
-      next.set(item.jobId, item.status);
-      const previousStatus = previous.get(item.jobId);
-      if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {
-        addToast('good', 'Compose', 'Compose completed');
-      }
-      if (item.status === 'failed' && previousStatus && previousStatus !== 'failed') {
-        addToast('bad', 'Compose', 'Compose failed');
-      }
-    });
-    pendingStatusSnapshotRef.current = next;
-  }, [addToast, pendingComposeItems]);
+    if (!pendingRecordingAssets.length) return;
+    for (const recording of pendingRecordingAssets) {
+      if (recording.status !== 'completed' && recording.status !== 'saved') continue;
+      if (reconciledRecordingIdsRef.current.has(recording.recordingId)) continue;
+      const matchedMedia = media.find((item) => pendingRecordingMatchesMediaItem(recording, item));
+      if (!matchedMedia) continue;
+      const matchedKey = assetSelectionKey(matchedMedia, activeProject);
+      if (!matchedKey) continue;
 
-  const visiblePendingComposeItems = useMemo(() => {
-    const relevant = pendingComposeItems.filter((item) => {
-      if (mediaScope === 'all') return true;
-      if (!activeProject) return false;
-      return item.project === activeProject.name
-        && (item.source || 'primary') === (activeProject.source || 'primary');
-    });
-    return sortPendingComposeItemsForDisplay(relevant);
-  }, [activeProject, mediaScope, pendingComposeItems]);
-
-  const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({
-    kind: 'pending' as const,
-    pendingItem,
-  })), [visiblePendingComposeItems]);
-
-  const assetEntries = useMemo<AssetRenderedEntry[]>(() => filteredMedia.map((item) => ({
-      kind: 'asset' as const,
-      item,
-    })), [filteredMedia]);
-
-  const renderedMediaEntries = useMemo<RenderedMediaEntry[]>(() => ([
-    ...pendingEntries,
-    ...assetEntries,
-  ]), [assetEntries, pendingEntries]);
+      reconciledRecordingIdsRef.current.add(recording.recordingId);
+      selectAndActivateAssetKey(matchedKey);
+      addToast(
+        'good',
+        'Recording reconciled',
+        `Saved recording indexed: ${matchedMedia.relative_path || recording.outputName || 'asset ready'}.`,
+        `live-recording-reconciled-${recording.recordingId}`,
+      );
+      void dismissPendingRecording(recording.recordingId);
+    }
+  }, [
+    activeProject,
+    addToast,
+    assetSelectionKey,
+    media,
+    dismissPendingRecording,
+    pendingRecordingAssets,
+    selectAndActivateAssetKey,
+  ]);
 
   useEffect(() => {
     if (!inspectorOpen || !activeAssetKey) return;
@@ -2790,25 +2795,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setFocusWorldTransform(next.transform);
     });
     return () => cancelExplorerRaf(rafId);
-  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingEntries.length, recordPreviewDebug, view]);
-
-  useEffect(() => {
-    if (!pendingComposeItems.length) return;
-    pendingComposeItems.forEach((item) => {
-      if (item.status !== 'finalizing') return;
-      if (!item.completedPath) return;
-      const visible = media.some((mediaItem) => {
-        const relativePath = String(mediaItem.relative_path || '').trim();
-        if (relativePath !== item.completedPath) return false;
-        const mediaProject = String(mediaItem.project_name || mediaItem.project || activeProject?.name || '').trim();
-        const mediaSource = String(mediaItem.project_source || mediaItem.source || activeProject?.source || '').trim() || 'primary';
-        return mediaProject === item.project && mediaSource === (item.source || 'primary');
-      });
-      if (visible) {
-        removePendingJob(item.jobId);
-      }
-    });
-  }, [activeProject, media, pendingComposeItems, removePendingJob]);
+  }, [activeAssetKey, computeFocusWorldTransform, focusPresentationState, gridColumnCount, inspectorOpen, filteredMedia.length, moveFocusPresentationToFallbackOrIdle, pendingComposeEntries.length, pendingRecordingEntries.length, recordPreviewDebug, view]);
 
   const handleUpload = useCallback(async () => {
     const project = activeProject;
@@ -2853,41 +2840,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [activeProject, addToast, buildUploadUrl, uploadMediaBatchCommand],
   );
 
-  const deleteMediaSelection = useCallback((selectionKeys: string[]) => {
-    const items = resolveItemsForSelection(selectionKeys);
-    if (!items.length) {
-      addToast('warn', 'Delete', 'Select one or more clips');
-      return;
-    }
-    const refs = items
-      .map((item) => toAssetRef(item))
-      .filter((item): item is AssetRef => Boolean(item));
-    if (!refs.length) {
-      addToast('warn', 'Delete', 'Unable to resolve selected media paths');
-      return;
-    }
-    setPendingDeleteSelectionKeys(resolveSelectionKeysForItems(items));
-    setDeleteModalOpen(true);
-  }, [addToast, resolveItemsForSelection, resolveSelectionKeysForItems, toAssetRef]);
-
-  const handleDeleteConfirm = useCallback(async () => {
-    if (deleteSubmitting) return;
-    const selectionKeys = pendingDeleteSelectionKeys.slice();
-    if (!selectionKeys.length) {
-      setDeleteModalOpen(false);
-      return;
-    }
-    setDeleteModalOpen(false);
-    setPendingDeleteSelectionKeys([]);
-    await performDeleteMediaSelection(selectionKeys);
-  }, [deleteSubmitting, pendingDeleteSelectionKeys, performDeleteMediaSelection]);
-
-  const handleDeleteCancel = useCallback(() => {
-    if (deleteSubmitting) return;
-    setDeleteModalOpen(false);
-    setPendingDeleteSelectionKeys([]);
-  }, [deleteSubmitting]);
-
   const handleBulkTag = useCallback(async () => {
     if (!selected.size) {
       addToast('warn', 'Tags', 'Select one or more clips first');
@@ -2905,26 +2857,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     await tagMediaSelection(selectionItems, addTags, removeTags);
   }, [addToast, selected, selectionItems, tagMediaSelection]);
-
-  const handleComposeSelected = useCallback(async () => {
-    if (!selected.size) {
-      addToast('warn', 'Compose', 'Select one or more clips');
-      return;
-    }
-    if (!selectedVideoItems.length) {
-      addToast('warn', 'Compose', 'Select one or more video clips');
-      return;
-    }
-    if (!projects.length) {
-      addToast('warn', 'Compose', 'No projects available for compose output.');
-      return;
-    }
-    const preferredProject = defaultComposeProject(projects);
-    setComposeOutputName(buildComposeTimestampName());
-    setComposeOutputProject(preferredProject?.name || 'P5-SHARED-Exported-Media');
-    setComposeSubmitting(false);
-    setComposeModalOpen(true);
-  }, [addToast, projects, selected, selectedVideoItems]);
 
   const handleComposeConfirm = useCallback(async () => {
     if (composeSubmitting) {
@@ -3180,9 +3112,52 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setContextMenu({ kind: 'ingest_claim', x, y, claim });
   }, [setContextMenu]);
 
+  const openPayloadDetails = useCallback((title: string, subtitle: string | undefined, payload: unknown) => {
+    setDetailsModal({ title, subtitle, payload });
+    setContextMenu(null);
+  }, [setContextMenu]);
+
+  const resolveNodeRecord = useCallback((nodeId: string): NodeControlRecord | null => {
+    if (!nodeId) return null;
+    return runtimeNodes.find((entry) => entry.node_id === nodeId) ?? null;
+  }, [runtimeNodes]);
+
+  const canOpenDeviceForNode = useCallback((node: NodeControlRecord) => {
+    if (!node.node_id) return false;
+    if (node.enabled !== false) return true;
+    if (node.metadata?.session_node === 'true') return true;
+    if (node.metadata?.browser_push === 'true') return true;
+    return webRtcSessionsByNodeId.has(node.node_id);
+  }, [webRtcSessionsByNodeId]);
+
+  const openDeviceForNode = useCallback((node: NodeControlRecord) => {
+    if (canOpenDeviceForNode(node)) {
+      window.open(`/connect/device?node_id=${encodeURIComponent(node.node_id)}`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    if (isSessionNode(node)) {
+      openPayloadDetails(
+        'Runtime details',
+        `${node.node_id} · browser/session node`,
+        {
+          ...node,
+          open_device_hint: `/connect/device?node_id=${encodeURIComponent(node.node_id)}`,
+        },
+      );
+      addToast('warn', 'Runtime', 'Node is not currently openable; check session state and registration.');
+      return;
+    }
+    addToast('warn', 'Runtime', 'Node is not currently openable');
+  }, [addToast, canOpenDeviceForNode, openPayloadDetails]);
+
   const openDevice = useCallback((nodeId: string) => {
+    const node = resolveNodeRecord(nodeId);
+    if (node) {
+      openDeviceForNode(node);
+      return;
+    }
     window.location.href = getDeviceUrl(nodeId);
-  }, []);
+  }, [openDeviceForNode, resolveNodeRecord]);
 
   const heartbeatNodeNow = useCallback(async (nodeId: string) => {
     try {
@@ -3194,10 +3169,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [api, addToast, reloadSourceControl]);
 
-  const openPayloadDetails = useCallback((title: string, subtitle: string | undefined, payload: unknown) => {
-    setDetailsModal({ title, subtitle, payload });
-    setContextMenu(null);
-  }, [setContextMenu]);
+  const deleteNodeFromSidebar = useCallback(async (nodeId: string) => {
+    if (!nodeId) return;
+    const ok = window.confirm(`Delete stale node "${nodeId}"?`);
+    if (!ok) return;
+
+    try {
+      await api.deleteNode(nodeId);
+      addToast('good', 'Runtime', `Deleted node ${nodeId}`);
+      await reloadSourceControl();
+    } catch (error) {
+      addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Delete node failed');
+    }
+  }, [addToast, api, reloadSourceControl]);
 
   const runContextAction = useCallback((action: () => void | Promise<void>) => {
     setContextMenu(null);
@@ -3221,14 +3205,25 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     persistHiddenIngestClaimIds(next);
   }, [hiddenIngestClaimIds, persistHiddenIngestClaimIds]);
 
-  const hideAllTestPayloadClaims = useCallback(() => {
-    const next = new Set(hiddenIngestClaimIds);
-    for (const claim of ingestClaims) {
-      if (!isTestPayloadClaim(claim)) continue;
-      next.add(claim.claim_id);
+  const deleteIngestClaimFromSidebar = useCallback(async (claimId: string) => {
+    if (!claimId) return;
+    const ok = window.confirm(`Delete ingest claim "${claimId}"?`);
+    if (!ok) return;
+
+    try {
+      await api.deleteIngestClaim(claimId);
+      setIngestClaims((prev) => prev.filter((claim) => claim.claim_id !== claimId));
+      if (hiddenIngestClaimIds.has(claimId)) {
+        const next = new Set(hiddenIngestClaimIds);
+        next.delete(claimId);
+        persistHiddenIngestClaimIds(next);
+      }
+      addToast('good', 'Runtime', `Deleted claim ${claimId}`);
+      await reloadIngestClaims();
+    } catch (error) {
+      addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Delete claim failed');
     }
-    persistHiddenIngestClaimIds(next);
-  }, [hiddenIngestClaimIds, ingestClaims, persistHiddenIngestClaimIds]);
+  }, [addToast, api, hiddenIngestClaimIds, persistHiddenIngestClaimIds, reloadIngestClaims]);
 
   const resetHiddenIngestClaims = useCallback(() => {
     persistHiddenIngestClaimIds(new Set());
@@ -5117,33 +5112,36 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 </div>
                 <div className="sources">
                     {liveSessions.map((session) => (
-                      <div key={session.session_id} onContextMenu={(event) => openLiveSessionContextMenu(event, session)}>
-                        <LiveSourceCard
-                          session={session}
-                          apiBase={resolvedApiBase}
-                          onStartRecording={(entry) => {
-                            void api.controlLiveSession(entry.session_id, 'start_recording')
-                              .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))
-                              .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
-                          }}
-                          onStopRecording={(entry) => {
-                            void api.controlLiveSession(entry.session_id, 'stop_recording')
-                              .then(() => addToast('good', 'Live control', `Stop requested for ${entry.node_id}`))
-                              .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
-                          }}
-                          onOpen={(entry) => {
-                            window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
-                          }}
-                        />
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={(event) => openLiveSessionContextMenu(event, session)}
-                          style={{ marginTop: 8 }}
-                        >
-                          ⋯
-                        </button>
-                      </div>
+                        <div key={session.session_id} onContextMenu={(event) => openLiveSessionContextMenu(event, session)}>
+                          <LiveSourceCard
+                            session={session}
+                            apiBase={resolvedApiBase}
+                            onRecordPeerSession={(recordingSessionId) => {
+                              void recordPeerSession(session, recordingSessionId);
+                            }}
+                            onStartRecording={(entry) => {
+                              void api.sendLiveSessionControl(entry.session_id, 'start_recording')
+                                .then(() => addToast('good', 'Live control', `Start requested for ${entry.node_id}`))
+                                .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                            }}
+                            onStopRecording={(entry) => {
+                              void api.sendLiveSessionControl(entry.session_id, 'stop_recording')
+                                .then(() => addToast('good', 'Live control', `Stop requested for ${entry.node_id}`))
+                                .catch((err) => addToast('bad', 'Live control', err instanceof Error ? err.message : 'Control failed'));
+                            }}
+                            onOpen={(entry) => {
+                              window.location.href = `/connect/device?node_id=${encodeURIComponent(entry.node_id)}`;
+                            }}
+                          />
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={(event) => openLiveSessionContextMenu(event, session)}
+                            style={{ marginTop: 8 }}
+                          >
+                            ⋯
+                          </button>
+                        </div>
                     ))}
                   </div>
               </>
@@ -5187,6 +5185,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                     </div>
                     <div className="small">
                       {healthyNodes.length} healthy · {sourceControlSnapshot.sources.length} total sources
+                    </div>
+                    <div className="small">
+                      {webRtcLiveSessions.length} live WebRTC sessions
                     </div>
                   </div>
 
@@ -5280,43 +5281,44 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       <strong>Registered runtimes</strong>
                       <div className="small">Control-plane view of registered runtime nodes.</div>
                       <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {runtimeNodes.map((node: NodeControlRecord) => (
-                          <div className="card" key={node.node_id} onContextMenu={(event) => openRuntimeContextMenu(event, node)}>
-                            <strong>{node.label}</strong>
-                            <div className="small">{node.node_id}</div>
-                            <div className="small">{node.base_url}</div>
-                            <div className="tagrow">
-                              <span className={`tag ${node.status === 'healthy' ? 'good' : ''}`}>{node.status}</span>
-                              {getRuntimeKinds(node).map((kind) => (
-                                <span className="tag" key={`${node.node_id}-kind-${kind}`}>{kind}</span>
-                              ))}
-                              {getRuntimeCapabilityTags(node).map((tag) => (
-                                <span className="tag" key={`${node.node_id}-cap-${tag}`}>{tag}</span>
-                              ))}
-                              {isSessionNode(node) ? <span className="tag">session-node</span> : null}
-                              {isTestPayloadNode(node) ? <span className="tag bad">test payload</span> : null}
-                            </div>
-
-                            {node.last_heartbeat_at ? (
-                              <div className="small">heartbeat: {node.last_heartbeat_at}</div>
-                            ) : null}
-
-                            {isTestPayloadNode(node) ? (
-                              <div className="small">
-                                This node appears modified by Swagger example data. Re-register from Explorer.
+                        {runtimeNodes.map((node: NodeControlRecord) => {
+                          const liveSession = webRtcSessionsByNodeId.get(node.node_id);
+                          const runtimeChips = buildRuntimeChips(node, liveSession);
+                          return (
+                            <div className="card" key={node.node_id} onContextMenu={(event) => openRuntimeContextMenu(event, node)}>
+                              <strong>{node.label}</strong>
+                              <div className="small">{node.node_id}</div>
+                              <div className="small">{node.base_url}</div>
+                              <div className="tagrow">
+                                {runtimeChips.map((chip) => (
+                                  <span className={`tag ${chip.tone}`} key={`${node.node_id}-chip-${chip.label}`}>
+                                    {chip.label}
+                                  </span>
+                                ))}
+                                {isTestPayloadNode(node) ? <span className="tag bad">test payload</span> : null}
                               </div>
-                            ) : null}
 
-                            <button
-                              className="btn"
-                              type="button"
-                              onClick={(event) => openRuntimeContextMenu(event, node)}
-                              style={{ marginTop: 8 }}
-                            >
-                              ⋯
-                            </button>
-                          </div>
-                        ))}
+                              {node.last_heartbeat_at ? (
+                                <div className="small">heartbeat: {node.last_heartbeat_at}</div>
+                              ) : null}
+
+                              {isTestPayloadNode(node) ? (
+                                <div className="small">
+                                  This node appears modified by Swagger example data. Re-register from Explorer.
+                                </div>
+                              ) : null}
+
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={(event) => openRuntimeContextMenu(event, node)}
+                                style={{ marginTop: 8 }}
+                              >
+                                ⋯
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : null}
@@ -5813,6 +5815,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       entries={renderedMediaEntries}
                       onToggleSelected={toggleSelected}
                       onDismissPendingJob={removePendingJob}
+                      onStopPendingRecording={stopPendingRecording}
+                      onDismissPendingRecording={dismissPendingRecording}
+                      onOpenPendingRecordingAsset={(assetUrl) => {
+                        window.open(assetUrl, '_blank', 'noopener,noreferrer');
+                      }}
                     />
                   )}
                 </div>
@@ -6098,12 +6105,30 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           className="context-menu open custom-ui-surface"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button type="button" onClick={() => runContextAction(() => openDevice(contextMenu.node.node_id))}>
+          <button
+            type="button"
+            disabled={!canOpenDeviceForNode(contextMenu.node)}
+            title={canOpenDeviceForNode(contextMenu.node) ? 'Open device' : 'Node is not currently openable'}
+            onClick={() => runContextAction(() => openDevice(contextMenu.node.node_id))}
+          >
             Open Device
           </button>
-          <button type="button" onClick={() => runContextAction(() => heartbeatNodeNow(contextMenu.node.node_id))}>
-            Heartbeat now
-          </button>
+          {(() => {
+            const waitingSession = waitingWebRtcByNodeId.get(contextMenu.node.node_id);
+            if (!waitingSession) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => runContextAction(() => livePreview.openLivePreview(
+                  waitingSession.session_id,
+                  contextMenu.node.node_id,
+                  contextMenu.node.label || contextMenu.node.node_id,
+                ))}
+              >
+                Answer Live
+              </button>
+            );
+          })()}
           <button
             type="button"
             onClick={() => runContextAction(() => openPayloadDetails('Runtime details', contextMenu.node.node_id, contextMenu.node))}
@@ -6113,11 +6138,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.node.node_id))}>
             Copy Node ID
           </button>
-          <button type="button" onClick={() => runContextAction(() => copyText(getDeviceUrl(contextMenu.node.node_id)))}>
+          <button
+            type="button"
+            disabled={!contextMenu.node.node_id}
+            title={contextMenu.node.node_id ? 'Copy connect/device URL' : 'No node ID'}
+            onClick={() => runContextAction(() => copyText(`/connect/device?node_id=${encodeURIComponent(contextMenu.node.node_id)}`))}
+          >
             Copy Device URL
           </button>
           <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.node, null, 2)))}>
             Copy Node JSON
+          </button>
+          <button type="button" onClick={() => runContextAction(() => heartbeatNodeNow(contextMenu.node.node_id))}>
+            Heartbeat now
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => runContextAction(() => deleteNodeFromSidebar(contextMenu.node.node_id))}
+          >
+            Delete node
           </button>
         </div>
       ) : null}
@@ -6148,18 +6188,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         >
           <button
             type="button"
-            onClick={() => runContextAction(() => hideIngestClaim(contextMenu.claim.claim_id))}
-          >
-            Hide claim from sidebar
-          </button>
-          <button
-            type="button"
-            onClick={() => runContextAction(() => hideAllTestPayloadClaims())}
-          >
-            Hide all test payload claims
-          </button>
-          <button
-            type="button"
             onClick={() => runContextAction(() => openPayloadDetails('Ingest claim details', `${contextMenu.claim.claim_id}${isTestPayloadClaim(contextMenu.claim) ? ' · test payload' : ''}`, contextMenu.claim))}
           >
             Details
@@ -6169,6 +6197,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           </button>
           <button type="button" onClick={() => runContextAction(() => copyText(JSON.stringify(contextMenu.claim, null, 2)))}>
             Copy Claim JSON
+          </button>
+          <button
+            type="button"
+            onClick={() => runContextAction(() => hideIngestClaim(contextMenu.claim.claim_id))}
+          >
+            Hide claim from sidebar
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => runContextAction(() => deleteIngestClaimFromSidebar(contextMenu.claim.claim_id))}
+          >
+            Delete claim
           </button>
         </div>
       ) : null}
@@ -6180,6 +6221,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         payload={detailsModal?.payload}
         onClose={() => setDetailsModal(null)}
       />
+
+      {livePreview.activeLivePreview ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card live-preview-modal custom-ui-surface">
+            <header className="live-preview-head">
+              <strong>{livePreview.activeLivePreview.label || livePreview.activeLivePreview.nodeId}</strong>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  livePreview.closeLivePreview();
+                  void reloadWebRtcLiveSessions();
+                }}
+              >
+                Close
+              </button>
+            </header>
+            <LivePreview sessionId={livePreview.activeLivePreview.sessionId} />
+          </div>
+        </div>
+      ) : null}
 
       {deleteModalRendered ? (
         <div

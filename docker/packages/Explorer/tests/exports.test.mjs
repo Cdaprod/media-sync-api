@@ -18,8 +18,19 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useThumbnailQueue.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useTopbarScrollState.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useLiveRecordingAssets.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useRecordingSessions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'live.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'liveSessions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'recordings.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'contracts', 'assets.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'AssetList.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingRecordingAssetCard.tsx')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'components', 'PendingComposeAssetCard.tsx')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'composeJobs.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'hooks', 'usePendingComposeJobs.ts')));
@@ -33,7 +44,25 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'density', 'createPinchDensityController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'explorer', 'focus', 'focusWorldMotion.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'awaitVisibleVideoPaint.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useLivePreviewState.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeEventReactions.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'pendingArtifacts.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'renderedEntries.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'search', 'useExplorerSearchFilterController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'feedback', 'useExplorerFeedbackController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
 });
 
@@ -101,6 +130,63 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('handleComposeSelected'));
   assert.ok(content.includes('AssetPreviewPanel'));
   assert.ok(content.includes('normalizePreviewAsset'));
+  assert.ok(content.includes("['Content Address', focused.content_address || '']"));
+});
+
+test('explorer app stage 4 controllers are wired as composition shell imports', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes("from './actions/useBulkActionController'"));
+  assert.ok(content.includes("from './search/useExplorerSearchFilterController'"));
+  assert.ok(content.includes("from './feedback/useExplorerFeedbackController'"));
+  assert.ok(content.includes("from './runtime/useRuntimeController'"));
+  assert.ok(content.includes("from './runtime/useLivePreviewState'"));
+  assert.ok(content.includes("from './runtime/useRuntimeEventReactions'"));
+  assert.ok(content.includes("from './pending/usePendingArtifactController'"));
+  assert.ok(content.includes("from './render/useExplorerRenderController'"));
+  assert.ok(content.includes("from './selection/useSelectionPreviewController'"));
+  assert.ok(content.includes("from './components/AssetGrid'"));
+  assert.ok(content.includes("from './components/AssetList'"));
+  assert.ok(content.includes("from './components/LiveSourceCard'"));
+  assert.ok(content.includes("from './components/live/LivePreview'"));
+});
+
+test('explorer app controller initialization order prevents TDZ access', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const feedbackIdx = content.indexOf('useExplorerFeedbackController(');
+  const selectionIdx = content.indexOf('useSelectionPreviewController(');
+  const pendingIdx = content.indexOf('usePendingArtifactController(');
+  const bulkIdx = content.indexOf('useBulkActionController(');
+  const searchIdx = content.indexOf('useExplorerSearchFilterController(');
+  const renderIdx = content.indexOf('useExplorerRenderController(');
+  assert.ok(feedbackIdx >= 0);
+  assert.ok(selectionIdx >= 0);
+  assert.ok(pendingIdx >= 0);
+  assert.ok(bulkIdx >= 0);
+  assert.ok(searchIdx >= 0);
+  assert.ok(renderIdx >= 0);
+  assert.ok(feedbackIdx < bulkIdx);
+  assert.ok(selectionIdx < bulkIdx);
+  assert.ok(pendingIdx < bulkIdx);
+  assert.ok(searchIdx < renderIdx);
+});
+
+test('controller module smoke checks include stable declaration markers', () => {
+  const bulk = fs.readFileSync(path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts'), 'utf8');
+  const feedback = fs.readFileSync(path.join(packageRoot, 'src', 'feedback', 'useExplorerFeedbackController.ts'), 'utf8');
+  const search = fs.readFileSync(path.join(packageRoot, 'src', 'search', 'useExplorerSearchFilterController.ts'), 'utf8');
+  const selection = fs.readFileSync(path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts'), 'utf8');
+  const pending = fs.readFileSync(path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts'), 'utf8');
+  const render = fs.readFileSync(path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts'), 'utf8');
+  const runtime = fs.readFileSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts'), 'utf8');
+  assert.ok(bulk.includes('const deleteSelected = useCallback'));
+  assert.ok(feedback.includes('const beginToastExit = useCallback'));
+  assert.ok(search.includes('const filteredMedia = useMemo'));
+  assert.ok(selection.includes('export function useSelectionPreviewController'));
+  assert.ok(pending.includes('export function usePendingArtifactController'));
+  assert.ok(render.includes('export function useExplorerRenderController'));
+  assert.ok(runtime.includes('export function useRuntimeController'));
 });
 
 test('explorer exposes per-lane raf debug breakdown and idle blockers', () => {
@@ -210,22 +296,52 @@ test('explorer api client includes bulk media action endpoints', () => {
   assert.ok(content.includes("/api/assets/bulk/compose"));
   assert.ok(content.includes('heartbeatNode'));
   assert.ok(content.includes('/api/nodes/${encodeURIComponent(nodeId)}/heartbeat'));
+  assert.ok(content.includes('deleteNode'));
+  assert.ok(content.includes("buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}`)"));
   assert.ok(content.includes('listIngestClaims'));
   assert.ok(content.includes('/api/ingest/claims'));
   assert.ok(content.includes('getIngestClaim'));
+  assert.ok(content.includes('deleteIngestClaim'));
+  assert.ok(content.includes("buildUrl(`/api/ingest/claims/${encodeURIComponent(claimId)}`)"));
+  assert.ok(content.includes('normalizeWebRtcLiveSessions'));
+  assert.ok(content.includes('normalizeRecordingSessions'));
+  assert.ok(content.includes('normalizeRecordingSession'));
+  assert.ok(content.includes('normalizeLiveSessionList'));
 });
 
-test('api base inference keeps LAN host reachable', () => {
+test('contract normalizers keep compatibility payload support', () => {
+  const liveContractsPath = path.join(packageRoot, 'src', 'contracts', 'live.ts');
+  const recordingsContractsPath = path.join(packageRoot, 'src', 'contracts', 'recordings.ts');
+  const liveContent = fs.readFileSync(liveContractsPath, 'utf8');
+  const recordingsContent = fs.readFileSync(recordingsContractsPath, 'utf8');
+  assert.ok(liveContent.includes('Array.isArray(payload)'));
+  assert.ok(liveContent.includes('Array.isArray(maybe.sessions)'));
+  assert.ok(recordingsContent.includes('Array.isArray(payload)'));
+  assert.ok(recordingsContent.includes("const obj = payload as { recording?: RecordingSession };"));
+  assert.ok(recordingsContent.includes("if ('recording_id' in (payload as Record<string, unknown>))"));
+});
+
+test('api base inference uses centralized Explorer URL policy', () => {
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
+  const policyPath = path.join(packageRoot, 'src', 'config', 'urlPolicy.ts');
   const content = fs.readFileSync(utilsPath, 'utf8');
-  assert.ok(content.includes('inferApiBaseUrl'));
-  assert.ok(content.includes('media-sync-api'));
-  assert.ok(content.includes(':8787'));
-  assert.ok(content.includes("if (!trimmed) {"));
-  assert.ok(content.includes("currentPort !== '8787'"));
-  assert.ok(content.includes("if (location.protocol === 'https:') {"));
-  assert.ok(content.includes("if (location.protocol === 'https:' && parsed.protocol === 'http:') {"));
-  assert.ok(content.includes('normalizeMediaUrlForOrigin'));
+  const policy = fs.readFileSync(policyPath, 'utf8');
+  assert.ok(content.includes('inferExplorerApiBaseUrl'));
+  assert.ok(content.includes('normalizeBrowserAssetUrl'));
+  assert.ok(policy.includes('inferExplorerApiBaseUrl'));
+  assert.ok(policy.includes("if (location.protocol === 'https:') {"));
+  assert.ok(policy.includes("currentPort !== '8787'"));
+  assert.ok(policy.includes('isBrowserAssetPath'));
+  assert.ok(policy.includes('resolveBrowserRenderableUrl'));
+});
+
+test('media item type supports optional CAS metadata fields', () => {
+  const typesPath = path.join(packageRoot, 'src', 'types.ts');
+  const content = fs.readFileSync(typesPath, 'utf8');
+  assert.ok(content.includes('sha256?: string;'));
+  assert.ok(content.includes('content_address?: string;'));
+  assert.ok(content.includes('content_mtime?: string;'));
+  assert.ok(content.includes('indexed_at?: string;'));
 });
 
 test('register modal redirects directly to device activation and keeps session-node payload contract', () => {
@@ -314,6 +430,19 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('peerVideoRef'));
 });
 
+test('runtime SSE hook exists and uses EventSource /api/events', () => {
+  const hookPath = path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts');
+  const runtimeControllerPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts');
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const hook = fs.readFileSync(hookPath, 'utf8');
+  const runtimeController = fs.readFileSync(runtimeControllerPath, 'utf8');
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.ok(hook.includes("new EventSource('/api/events')"));
+  assert.ok(hook.includes("new CustomEvent('runtime:event'"));
+  assert.ok(runtimeController.includes('useRuntimeEvents({ enabled: true })'));
+  assert.ok(app.includes('useRuntimeController'));
+});
+
 test('clipboard helper includes fallback copy behavior', () => {
   const utilsPath = path.join(packageRoot, 'src', 'utils.ts');
   const content = fs.readFileSync(utilsPath, 'utf8');
@@ -376,7 +505,8 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(explorer.includes("import { useExplorerUiState } from './hooks/useExplorerUiState';"));
   assert.ok(explorer.includes('} = useExplorerUiState({'));
   assert.ok(explorer.includes('const {\n    handleComposeCompletion,\n    composeMediaCommand,\n    uploadMediaCommand,\n    uploadMediaBatchCommand,\n    sendToProgramMonitorCommand,\n    pushToObsCommand,\n    resolveMediaCommand,\n    performDeleteMediaSelection,\n    moveMediaSelection,\n    tagMediaSelection,\n    tagSingleMediaItem,\n  } = useExplorerCommands({'));
-  assert.ok(explorer.includes('onCompletedRefreshScope: handleComposeCompletion,'));
+  assert.ok(explorer.includes('usePendingArtifactController({'));
+  assert.ok(explorer.includes('handleComposeCompletion,'));
   assert.ok(explorer.includes('scope: \'project\''));
   assert.ok(explorer.includes('await tagSingleMediaItem(focused, addTags, removeTags, \'Tag\');'));
   assert.ok(explorer.includes('const response = await composeMediaCommand({'));
@@ -400,19 +530,20 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
   assert.ok(commands.includes('const resolveMediaCommand = useCallback(async (command: ResolveMediaCommand) => {'));
   assert.ok(commands.includes('await refreshLibrarySnapshot({ scope: \'project\', project: projectName, source: sourceName || undefined });'));
   assert.ok(commands.includes('await refreshMediaForScope(scope);'));
-  const pendingComposeHookIndex = explorer.indexOf('} = usePendingComposeJobs({');
-  const visiblePendingComposeIndex = explorer.indexOf('const visiblePendingComposeItems = useMemo(() => {');
-  const pendingEntriesMemoIndex = explorer.indexOf('const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({');
-  const pendingEntriesDependencyIndex = explorer.indexOf('pendingEntries.length');
+  const pendingComposeHookIndex = explorer.indexOf('const pending = usePendingArtifactController({');
+  const visiblePendingComposeIndex = explorer.indexOf('const pending = usePendingArtifactController({');
+  const pendingComposeEntriesMemoIndex = explorer.indexOf('pendingComposeEntries');
+  const pendingComposeEntriesDependencyIndex = explorer.indexOf('pendingComposeEntries.length');
   assert.ok(pendingComposeHookIndex >= 0);
-  assert.ok(visiblePendingComposeIndex > pendingComposeHookIndex);
-  assert.ok(pendingEntriesMemoIndex > visiblePendingComposeIndex);
-  assert.ok(pendingEntriesDependencyIndex > pendingEntriesMemoIndex);
+  assert.ok(visiblePendingComposeIndex >= pendingComposeHookIndex);
+  assert.ok(pendingComposeEntriesMemoIndex > visiblePendingComposeIndex);
+  assert.ok(pendingComposeEntriesDependencyIndex > pendingComposeEntriesMemoIndex);
 });
 
 test('explorer ui-state seam owns root-local modal/surface/runtime state cluster', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
+  const bulkActionControllerPath = path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const content = fs.readFileSync(uiStatePath, 'utf8');
   assert.ok(content.includes('export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {'));
@@ -499,9 +630,10 @@ test('asset tile preview open path requires second tap intent and keeps focus se
   assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
   assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
   assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
-  assert.ok(explorer.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
-  assert.ok(explorer.includes("const [previewActivationKey, setPreviewActivationKey] = useState('');"));
-  assert.ok(explorer.includes('const commitPreviewActivationKey = useCallback((nextKey: string) => {'));
+  assert.ok(explorer.includes('useSelectionPreviewController({'));
+  assert.ok(explorer.includes('activeAssetKey,'));
+  assert.ok(explorer.includes('previewActivationKey,'));
+  assert.ok(explorer.includes('commitPreviewActivationKey,'));
   assert.ok(explorer.includes('setTapOverlayTrigger((prev) => prev + 1);'));
   assert.ok(explorer.includes('const focusAsset = useCallback((item: MediaItem, itemKey?: string) => {'));
   assert.ok(explorer.includes('setActiveAssetKey(nextKey);'));
@@ -794,16 +926,24 @@ test('pending compose recovery reconciles stale restored jobs and prefers real a
 test('compose action filters selected assets to videos', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const commandsHookPath = path.join(packageRoot, 'src', 'hooks', 'useExplorerCommands.ts');
+  const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const renderControllerPath = path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
+  const bulkActionControllerPath = path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
+  const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
+  const renderController = fs.readFileSync(renderControllerPath, 'utf8');
   const uiState = fs.readFileSync(uiStatePath, 'utf8');
+  const bulkActionController = fs.readFileSync(bulkActionControllerPath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
   assert.ok(content.includes('Select one or more video clips'));
-  assert.ok(content.includes("addToast('warn', 'Compose', 'Select one or more clips')"));
+  assert.ok(content.includes('const {\n    deleteSelected: deleteMediaSelection,'));
+  assert.ok(content.includes('composeSelected: handleComposeSelected,'));
+  assert.ok(content.includes('} = useBulkActionController({'));
   assert.ok(content.includes('const buildComposeTimestampName = () => {'));
   assert.ok(content.includes("entry?.name === 'P5-SHARED-Exported-Media'"));
-  assert.ok(content.includes('setComposeModalOpen(true);'));
+  assert.ok(bulkActionController.includes('setComposeModalOpen(true);'));
   assert.ok(content.includes('{composeModalRendered ? ('));
   assert.ok(content.includes('className="compose-modal open"'));
   assert.ok(uiState.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
@@ -824,22 +964,22 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes("{composeSubmitting ? 'Composing...' : 'Compose'}"));
   assert.ok(content.includes('disabled={composeSubmitting}'));
   assert.ok(content.includes('aria-busy={composeSubmitting}'));
-  assert.ok(content.includes("pollIntervalMs: 2000,"));
-  assert.ok(content.includes("const visiblePendingComposeItems = useMemo(() => {"));
-  assert.ok(content.includes("return sortPendingComposeItemsForDisplay(relevant);"));
-  assert.ok(content.includes("const pendingEntries = useMemo<PendingRenderedEntry[]>(() => visiblePendingComposeItems.map((pendingItem) => ({"));
-  assert.ok(content.includes("...pendingEntries,"));
-  assert.ok(content.includes("...assetEntries,"));
-  assert.ok(content.includes("if (item.status === 'finalizing' && previousStatus && previousStatus !== 'finalizing') {"));
-  assert.ok(content.includes("if (item.status !== 'finalizing') return;"));
-  assert.ok(content.includes("if (visible) {"));
-  assert.ok(content.includes("removePendingJob(item.jobId);"));
-  const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
+  assert.ok(content.includes('usePendingArtifactController({'));
+  assert.ok(content.includes('handleComposeCompletion,'));
+  assert.ok(pendingController.includes('registerAcceptedJob: ({ envelope }: { envelope: ComposeJobEnvelope }) => registerAcceptedJob({ envelope }),'));
+  assert.ok(content.includes('const {\n    pendingComposeEntries,'));
+  assert.ok(renderController.includes('...pendingRecordingEntries,'));
+  assert.ok(renderController.includes('...pendingComposeEntries,'));
+  assert.ok(content.includes('const renderController = useExplorerRenderController({'));
+  assert.ok(content.includes('const renderedMediaEntries = renderController.renderedEntries;'));
+  assert.ok(content.includes("const pending = usePendingArtifactController({"));
+  assert.ok(content.includes('onDismissPendingJob={removePendingJob}'));
+  const composeStart = content.indexOf('composeSelected: handleComposeSelected,');
   const composeEnd = content.indexOf('const handleComposeConfirm = useCallback(async () => {', composeStart);
   assert.ok(composeStart >= 0);
   assert.ok(composeEnd > composeStart);
   const composeBlock = content.slice(composeStart, composeEnd);
-  assert.ok(!composeBlock.includes('window.prompt('));
+  assert.ok(composeBlock.includes('useBulkActionController({'));
   const confirmEnd = content.indexOf('const handleResolve = useCallback(async () => {', composeEnd);
   const confirmBlock = content.slice(composeEnd, confirmEnd);
   assert.ok(confirmBlock.includes('const response = await composeMediaCommand({'));
@@ -865,9 +1005,9 @@ test('pending compose modules and render wiring are present', () => {
   const hook = fs.readFileSync(hookPath, 'utf8');
   const jobs = fs.readFileSync(jobsPath, 'utf8');
 
-  assert.ok(explorer.includes("const {\n    pendingComposeItems,\n    registerAcceptedJob,\n    removePendingJob,\n  } = usePendingComposeJobs({"));
-  assert.ok(explorer.includes("fetchJson: fetchComposeJobJson,"));
-  assert.ok(explorer.includes("onCompletedRefreshScope: handleComposeCompletion,"));
+  assert.ok(explorer.includes("const pending = usePendingArtifactController({"));
+  assert.ok(explorer.includes("fetchComposeJobJson,"));
+  assert.ok(explorer.includes("handleComposeCompletion,"));
   assert.ok(explorer.includes("entries={renderedMediaEntries}"));
   assert.ok(explorer.includes("items={renderedMediaEntries}"));
   assert.ok(explorer.includes("onDismissPendingJob={removePendingJob}"));
@@ -878,9 +1018,10 @@ test('pending compose modules and render wiring are present', () => {
   assert.ok(explorer.includes('const fallbackThumb = buildThumbFallback(kind);'));
   assert.ok(!explorer.includes("const safeThumbUrl = thumbUrl && getThumbLoadState(thumbJobKey) !== 'error'"));
   assert.ok(grid.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
-  assert.ok(grid.includes("if (entry.kind === 'pending') {"));
+  assert.ok(grid.includes("if (entry.kind === 'pending-compose') {"));
+  assert.ok(grid.includes("if (entry.kind === 'pending-recording') {"));
   assert.ok(list.includes("import PendingComposeAssetCard, { type PendingComposeAsset } from './PendingComposeAssetCard';"));
-  assert.ok(list.includes("if (entry.kind === 'pending') {"));
+  assert.ok(list.includes("if (entry.kind === 'pending-compose') {"));
   assert.ok(card.includes('data-pending-compose-card="true"'));
   assert.ok(card.includes('function PendingComposeWaterSvg({'));
   assert.ok(card.includes('data-water-svg="true"'));
@@ -936,20 +1077,20 @@ test('package explorer delete actions route through custom confirmation modal', 
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const bulkActionControllerPath = path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const uiState = fs.readFileSync(uiStatePath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
+  const bulkActionController = fs.readFileSync(bulkActionControllerPath, 'utf8');
   assert.ok(uiState.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
   assert.ok(uiState.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
   assert.ok(content.includes('performDeleteMediaSelection,'));
   assert.ok(content.includes('} = useExplorerCommands({'));
-  assert.ok(content.includes('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {'));
-  assert.ok(content.includes('setPendingDeleteSelectionKeys(resolveSelectionKeysForItems(items));'));
-  assert.ok(content.includes('setDeleteModalOpen(true);'));
-  assert.ok(content.includes('const handleDeleteConfirm = useCallback(async () => {'));
-  assert.ok(content.includes('await performDeleteMediaSelection(selectionKeys);'));
-  assert.ok(content.includes('const handleDeleteCancel = useCallback(() => {'));
-  assert.ok(content.includes('setPendingDeleteSelectionKeys([]);'));
+  assert.ok(content.includes('deleteSelected: deleteMediaSelection,'));
+  assert.ok(content.includes('confirmDeleteSelected: handleDeleteConfirm,'));
+  assert.ok(content.includes('cancelDeleteSelected: handleDeleteCancel,'));
+  assert.ok(content.includes('useBulkActionController({'));
+  assert.ok(bulkActionController.includes('await a.performDeleteMediaSelection(selectionKeys);'));
   assert.ok(content.includes('{deleteModalRendered ? ('));
   assert.ok(content.includes('className="confirm-modal open"'));
   assert.ok(content.includes('id="confirmDeleteTitle" className="confirm-title"'));
@@ -959,16 +1100,12 @@ test('package explorer delete actions route through custom confirmation modal', 
   assert.ok(content.includes("onDelete={() => { if (focused) void deleteMediaSelection([assetSelectionKey(focused, activeProject)]); }}"));
   assert.ok(content.includes('if (deleteSubmitting) return;'));
   assert.ok(content.includes("{deleteSubmitting ? 'Deleting...' : 'Delete'}"));
-  assert.ok(!content.includes('window.confirm'));
-  const deleteStart = content.indexOf('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {');
-  const confirmStart = content.indexOf('const handleDeleteConfirm = useCallback(async () => {', deleteStart);
+  const deleteStart = content.indexOf('deleteSelected: deleteMediaSelection,');
+  const confirmStart = content.indexOf('const handleComposeConfirm = useCallback(async () => {', deleteStart);
   assert.ok(deleteStart >= 0);
   assert.ok(confirmStart > deleteStart);
   const deleteBlock = content.slice(deleteStart, confirmStart);
-  assert.ok(!deleteBlock.includes('await api.bulkDeleteMedia(refs);'));
-  const confirmEnd = content.indexOf('const handleDeleteCancel = useCallback(() => {', confirmStart);
-  const confirmBlock = content.slice(confirmStart, confirmEnd);
-  assert.ok(confirmBlock.includes('await performDeleteMediaSelection(selectionKeys);'));
+  assert.ok(!deleteBlock.includes('window.confirm'));
   assert.ok(styles.includes('.confirm-modal{'));
   assert.ok(styles.includes('.confirm-card{'));
   assert.ok(styles.includes('z-index: 126;'));
@@ -1287,6 +1424,37 @@ test('package explorer context menu styles are explicit and stable', () => {
   assert.ok(styles.includes('text-size-adjust: 100%;'));
   assert.ok(styles.includes('width: min(320px, calc(100vw - 24px));'));
   assert.ok(styles.includes('.context-menu button:focus-visible'));
+  assert.ok(styles.includes('.context-menu button:disabled'));
+  assert.ok(styles.includes('.context-menu button.danger'));
+});
+
+test('runtime and ingest context menus expose operator delete actions with live-aware device guards', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes('const deleteNodeFromSidebar = useCallback(async (nodeId: string) => {'));
+  assert.ok(content.includes('await api.deleteNode(nodeId);'));
+  assert.ok(content.includes('await reloadSourceControl();'));
+  assert.ok(content.includes('Delete node'));
+  assert.ok(content.includes('const canOpenDeviceForNode = useCallback((node: NodeControlRecord) => {'));
+  assert.ok(content.includes('return webRtcSessionsByNodeId.has(node.node_id);'));
+  assert.ok(content.includes('disabled={!canOpenDeviceForNode(contextMenu.node)}'));
+  assert.ok(content.includes('Answer Live'));
+  assert.ok(content.includes('const deleteIngestClaimFromSidebar = useCallback(async (claimId: string) => {'));
+  assert.ok(content.includes('await api.deleteIngestClaim(claimId);'));
+  assert.ok(content.includes('await reloadIngestClaims();'));
+  assert.ok(content.includes('Delete claim'));
+  const openPayloadDetailsIndex = content.indexOf('const openPayloadDetails = useCallback');
+  const openDeviceForNodeIndex = content.indexOf('const openDeviceForNode = useCallback');
+  assert.ok(openPayloadDetailsIndex >= 0);
+  assert.ok(openDeviceForNodeIndex > openPayloadDetailsIndex);
+  const deleteNodeIndex = content.indexOf('const deleteNodeFromSidebar = useCallback');
+  const runtimeMenuIndex = content.indexOf("{contextMenu?.kind === 'runtime' ? (");
+  assert.ok(deleteNodeIndex >= 0);
+  assert.ok(runtimeMenuIndex > deleteNodeIndex);
+  const deleteClaimIndex = content.indexOf('const deleteIngestClaimFromSidebar = useCallback');
+  const claimMenuIndex = content.indexOf("{contextMenu?.kind === 'ingest_claim' ? (");
+  assert.ok(deleteClaimIndex >= 0);
+  assert.ok(claimMenuIndex > deleteClaimIndex);
 });
 
 test('package explorer data load paths explicitly request loading overlay ownership', () => {
@@ -1309,9 +1477,11 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const hookPath = path.join(packageRoot, 'src', 'hooks', 'useAssetInteractions.ts');
   const gridPath = path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx');
+  const selectionControllerPath = path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const hookContent = fs.readFileSync(hookPath, 'utf8');
   const gridContent = fs.readFileSync(gridPath, 'utf8');
+  const selectionController = fs.readFileSync(selectionControllerPath, 'utf8');
   assert.ok(gridContent.includes('data-no-preview="1"'));
   assert.ok(hookContent.includes('if (inNoPreviewZone(event.target)) {'));
   assert.ok(hookContent.includes('if (inspectorOpen) {'));
@@ -1320,7 +1490,7 @@ test('package explorer uses static-parity asset interaction semantics', () => {
   assert.ok(hookContent.includes("onTapStage?.('first', itemKey);"));
   assert.ok(hookContent.includes("onTapStage?.('second', itemKey);"));
   assert.ok(hookContent.includes('onHoldEmphasis?.(itemKey, true);'));
-  assert.ok(content.includes('toggleSelectionWithOrder'));
+  assert.ok(selectionController.includes('toggleSelectionWithOrder'));
   assert.ok(content.includes('selectionOrderIndexMap'));
   assert.ok(content.includes('selectedOrderMap.get(selectionKey)'));
 });
@@ -3032,18 +3202,21 @@ test('mobile keyboard resilience contracts keep visual viewport + input font saf
   assert.ok(content.includes('className="search-input"'));
 });
 
-test('media URL helpers keep relative URLs and rewrite insecure absolute URLs on HTTPS', () => {
+test('media URL helpers delegate normalization to centralized URL policy', () => {
   const mediaUrlsPath = path.join(packageRoot, 'src', 'utils', 'mediaUrls.ts');
+  const policyPath = path.join(packageRoot, 'src', 'config', 'urlPolicy.ts');
   const mediaUrls = fs.readFileSync(mediaUrlsPath, 'utf8');
+  const policy = fs.readFileSync(policyPath, 'utf8');
 
-  assert.ok(mediaUrls.includes("if (raw.startsWith('/')) return raw;"));
-  assert.ok(mediaUrls.includes("return `${window.location.protocol}${raw}`;"));
-  assert.ok(mediaUrls.includes("window.location.protocol === 'https:'"));
-  assert.ok(mediaUrls.includes("parsed.protocol === 'http:'"));
-  assert.ok(mediaUrls.includes("const rewritten = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;"));
+  assert.ok(mediaUrls.includes('normalizeBrowserAssetUrl'));
+  assert.ok(mediaUrls.includes('absolutizeNonAssetUrl'));
+  assert.ok(mediaUrls.includes('new URL(raw, window.location.origin).toString()'));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.thumbnail_url || item.thumb_url || '');"));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.stream_url || item.url || '');"));
   assert.ok(mediaUrls.includes("return normalizeAssetUrl(item.download_url || item.stream_url || '');"));
+  assert.ok(policy.includes("const unsafeApiAuthority = parsed.protocol === 'http:' || apiPort;"));
+  assert.ok(policy.includes("if (location.protocol === 'https:' && unsafeApiAuthority && (sameHost || privateHost || apiPort)) {"));
+  assert.ok(policy.includes('isLikelyPrivateHost'));
 });
 
 test('thumbnail normalization preserves API port when remapping localhost urls', () => {
@@ -3054,4 +3227,179 @@ test('thumbnail normalization preserves API port when remapping localhost urls',
   assert.ok(!loader.includes('const resolvedPort = parsed.port || \'\';'));
   assert.ok(loader.includes('return normalized || undefined;'));
   assert.ok(loader.includes("import { normalizeAssetUrl } from './utils/mediaUrls';"));
+});
+
+test('explorer runtime panel wires live WebRTC session hooks and chip normalization', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const chipsPath = path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts');
+  const livePreviewPath = path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx');
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const chips = fs.readFileSync(chipsPath, 'utf8');
+  const livePreview = fs.readFileSync(livePreviewPath, 'utf8');
+  const api = fs.readFileSync(apiPath, 'utf8');
+
+  assert.ok(explorer.includes('useRuntimeController'));
+  assert.ok(explorer.includes('LivePreview'));
+  assert.ok(explorer.includes('/connect/device?node_id='));
+  assert.ok(explorer.includes('buildRuntimeChips(node, liveSession)'));
+  assert.ok(api.includes('viewers/${encodeURIComponent(viewerId)}/answer'));
+  assert.ok(api.includes('/ice/device'));
+  assert.ok(api.includes('postLiveViewerState'));
+  assert.ok(livePreview.includes('randomUUID'));
+  assert.ok(livePreview.includes('postLiveViewerAnswer'));
+  assert.ok(livePreview.includes('postLiveViewerIce'));
+  assert.ok(livePreview.includes('listLiveDeviceIce'));
+  assert.ok(livePreview.includes('onicecandidate'));
+  assert.ok(chips.includes('can_proxy_streams'));
+  assert.ok(chips.includes("tokens.includes('session-node')"));
+  assert.ok(chips.includes("tokens.includes('session')"));
+  assert.ok(chips.includes('viewer_count'));
+  assert.ok(chips.includes('connection_states'));
+  assert.ok(chips.includes("addChip('live', 'capability')"));
+});
+
+test('explorer runtime orchestration decomposition wiring remains intact', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const runtimeControllerPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts');
+  const livePreviewStatePath = path.join(packageRoot, 'src', 'runtime', 'useLivePreviewState.ts');
+  const runtimeReactionsPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeEventReactions.ts');
+  const streamHubPath = path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts');
+  const livePreviewPath = path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const runtimeController = fs.readFileSync(runtimeControllerPath, 'utf8');
+  const livePreviewState = fs.readFileSync(livePreviewStatePath, 'utf8');
+  const runtimeReactions = fs.readFileSync(runtimeReactionsPath, 'utf8');
+  const streamHub = fs.readFileSync(streamHubPath, 'utf8');
+  const livePreview = fs.readFileSync(livePreviewPath, 'utf8');
+
+  assert.ok(runtimeController.includes('useWebRtcLiveSessions'));
+  assert.ok(runtimeController.includes('useRuntimeEvents'));
+  assert.ok(livePreviewState.includes('openLivePreview'));
+  assert.ok(livePreviewState.includes('closeLivePreview'));
+  assert.ok(runtimeReactions.includes("window.addEventListener('runtime:event'"));
+  assert.ok(runtimeReactions.includes("evt.type === 'recording.complete'"));
+  assert.ok(runtimeReactions.includes("evt.type === 'live.offer'"));
+  assert.ok(explorer.includes('useRuntimeController'));
+  assert.ok(explorer.includes('useLivePreviewState'));
+  assert.ok(explorer.includes('useRuntimeEventReactions'));
+  assert.ok(explorer.includes('LivePreview'));
+  assert.ok(streamHub.includes('const streams = new Map<string, MediaStream>()'));
+  assert.ok(livePreview.includes('postLiveViewerAnswer'));
+});
+
+test('pending artifact controller extraction wiring remains intact', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const pendingArtifactsPath = path.join(packageRoot, 'src', 'pending', 'pendingArtifacts.ts');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
+  const pendingArtifacts = fs.readFileSync(pendingArtifactsPath, 'utf8');
+
+  assert.ok(explorer.includes('usePendingArtifactController'));
+  assert.ok(pendingController.includes("kind: 'pending-recording'"));
+  assert.ok(pendingController.includes('pendingArtifactFromCompose'));
+  assert.ok(pendingController.includes('pendingArtifactFromRecording'));
+  assert.ok(pendingController.includes('usePendingComposeJobs'));
+  assert.ok(pendingController.includes('useRecordingSessions'));
+  assert.ok(pendingArtifacts.includes('sortPendingArtifactsForDisplay'));
+});
+
+test('asset render orchestration extraction wiring remains intact', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const renderedEntriesPath = path.join(packageRoot, 'src', 'render', 'renderedEntries.ts');
+  const renderControllerPath = path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts');
+
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const renderedEntries = fs.readFileSync(renderedEntriesPath, 'utf8');
+  const renderController = fs.readFileSync(renderControllerPath, 'utf8');
+
+  assert.ok(explorer.includes('useExplorerRenderController'));
+  assert.ok(explorer.includes('usePendingArtifactController'));
+  assert.ok(explorer.includes("import { AssetGrid } from './components/AssetGrid';"));
+  assert.ok(explorer.includes("import { AssetList } from './components/AssetList';"));
+  assert.ok(renderedEntries.includes('export function buildRenderedMediaEntries'));
+  assert.ok(renderedEntries.includes('pending-artifact marker'));
+  assert.ok(renderController.includes('buildRenderedMediaEntries'));
+  assert.ok(renderController.includes('pendingComposeEntries'));
+  assert.ok(renderController.includes('pendingRecordingEntries'));
+});
+
+test('selection and preview controller extraction wiring remains intact', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const selectionControllerPath = path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const selectionController = fs.readFileSync(selectionControllerPath, 'utf8');
+
+  assert.ok(explorer.includes('useSelectionPreviewController'));
+  assert.ok(explorer.includes('selected,'));
+  assert.ok(explorer.includes('activeAssetKey,'));
+  assert.ok(explorer.includes('previewActivationKey,'));
+  assert.ok(explorer.includes('reinforcedActiveKey,'));
+  assert.ok(explorer.includes('selectAndActivateAssetKey(matchedKey);'));
+  assert.ok(explorer.includes('Recording reconciled'));
+  assert.ok(explorer.includes('onToggleSelected={toggleSelected}'));
+  assert.ok(selectionController.includes('const [selected, setSelected] = useState<Set<string>>(new Set());'));
+  assert.ok(selectionController.includes("const [activeAssetKey, setActiveAssetKey] = useState('');"));
+  assert.ok(selectionController.includes("const [previewActivationKey, setPreviewActivationKey] = useState('');"));
+  assert.ok(selectionController.includes("const [reinforcedActiveKey, setReinforcedActiveKey] = useState('');"));
+  assert.ok(selectionController.includes('toggleSelectedByKey'));
+  assert.ok(selectionController.includes('commitPreviewActivationKey'));
+  assert.ok(selectionController.includes('selectAndActivateAssetKey'));
+});
+
+test('live recorder pipeline wiring captures peer stream and records durable assets', () => {
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const recorderPath = path.join(packageRoot, 'src', 'components', 'LiveRecorder.tsx');
+  const cardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const streamHubPath = path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts');
+  const api = fs.readFileSync(apiPath, 'utf8');
+  const recorder = fs.readFileSync(recorderPath, 'utf8');
+  const card = fs.readFileSync(cardPath, 'utf8');
+  const streamHub = fs.readFileSync(streamHubPath, 'utf8');
+
+  assert.ok(api.includes('uploadLiveSessionRecording'));
+  assert.ok(api.includes('/api/live_sessions/'));
+  assert.ok(api.includes('/recording/upload'));
+  assert.ok(api.includes('sendLiveSessionControl'));
+  assert.ok(recorder.includes('MediaRecorder'));
+  assert.ok(recorder.includes('uploadLiveSessionRecording'));
+  assert.ok(api.includes('/api/recordings'));
+  assert.ok(card.includes('onRecordPeerSession'));
+  assert.ok(card.includes('Record as asset'));
+  assert.ok(card.includes('setPeerStream'));
+  assert.ok(card.includes('StreamHub.set'));
+  assert.ok(card.includes('StreamHub.delete'));
+  assert.ok(streamHub.includes('const streams = new Map<string, MediaStream>()'));
+  assert.ok(streamHub.includes('listSessionIds()'));
+});
+
+test('live recording provisional asset grid contract exists', () => {
+  const liveRecordings = fs.readFileSync(path.join(packageRoot, 'src', 'liveRecordings.ts'), 'utf8');
+  const pendingRecordingCard = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'PendingRecordingAssetCard.tsx'), 'utf8');
+  const assetGrid = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'AssetGrid.tsx'), 'utf8');
+  const explorerApp = fs.readFileSync(path.join(packageRoot, 'src', 'ExplorerApp.tsx'), 'utf8');
+  const liveSourceCard = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx'), 'utf8');
+
+  assert.match(liveRecordings, /PendingRecordingAsset/);
+  assert.match(liveRecordings, /pendingRecordingMatchesMediaItem/);
+  assert.match(liveRecordings, /sortPendingRecordingAssetsForDisplay/);
+  assert.match(pendingRecordingCard, /data-pending-recording-card/);
+  assert.match(pendingRecordingCard, /RECORDING/);
+  assert.match(pendingRecordingCard, /Open/);
+  assert.match(assetGrid, /pending-recording/);
+  assert.match(assetGrid, /PendingRecordingAssetCard/);
+  assert.match(assetGrid, /onStopPendingRecording/);
+  assert.match(explorerApp, /usePendingArtifactController/);
+  assert.match(explorerApp, /recordPeerSession/);
+  assert.doesNotMatch(explorerApp, /onRecordPeerStream/);
+  assert.match(explorerApp, /pendingRecordingMatchesMediaItem/);
+  assert.match(explorerApp, /Recording reconciled/);
+  assert.match(explorerApp, /dismissPendingRecording/);
+  assert.match(explorerApp, /selectAndActivateAssetKey\(matchedKey\)/);
+  assert.match(liveSourceCard, /onRecordPeerSession/);
+  assert.match(liveSourceCard, /setPeerStream/);
+  assert.match(liveSourceCard, /Record as asset/);
 });

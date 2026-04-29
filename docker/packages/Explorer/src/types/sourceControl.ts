@@ -14,12 +14,15 @@ export interface SourceControlRecord {
   can_proxy?: boolean | null;
   can_record?: boolean | null;
   metadata?: Record<string, string>;
+  token_preview?: string | null;
+  auth_type?: string | null;
+  auth_scopes?: string[];
 }
 
 export interface NodeControlRecord {
   node_id: string;
   label: string;
-  base_url: string;
+  base_url: string | null;
   roles: string[];
   capabilities: string[];
   source_name?: string | null;
@@ -30,6 +33,9 @@ export interface NodeControlRecord {
   ephemeral: boolean;
   last_heartbeat_at?: string | null;
   metadata?: Record<string, string>;
+  token_preview?: string | null;
+  auth_type?: string | null;
+  auth_scopes?: string[];
 }
 
 export interface SourceControlSnapshot {

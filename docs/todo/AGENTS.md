@@ -1,3 +1,188 @@
+## 2026-04-29 — Fix Stage 4 controller initialization order
+- [x] Fixed ExplorerApp controller initialization order after Stage 4 extraction.
+- [x] Added static contract coverage for controller dependency order.
+- [x] Preserved Stage 4 controller boundaries.
+- [ ] Follow-up: add runtime smoke test for ExplorerApp mount.
+
+## 2026-04-29 — Complete Stage 4 Explorer orchestration decomposition
+- [x] Added bulk action controller.
+- [x] Added search/filter controller.
+- [x] Added feedback/toast controller.
+- [x] Wired Stage 4 controllers into ExplorerApp.
+- [x] Updated static contracts for Stage 4 controller boundaries.
+- [ ] Follow-up: add behavior tests for bulk actions, filters, and toast feedback.
+- [ ] Follow-up: continue only after verifying mobile Explorer behavior.
+
+## 2026-04-27 — Selection and preview controller extraction
+- [x] Extracted selection/preview controller.
+- [x] Preserved selected asset behavior.
+- [x] Preserved preview activation behavior.
+- [x] Preserved completed-recording highlight behavior.
+- [ ] Follow-up: extract bulk/action menu controller.
+
+## 2026-04-27 — Asset render orchestration extraction
+- [x] Extracted rendered entry model.
+- [x] Extracted Explorer render controller.
+- [x] Preserved AssetGrid and AssetList behavior.
+- [x] Preserved pending artifact render lane.
+- [ ] Follow-up: extract selection/focus/preview controller.
+- [ ] Follow-up: add render ordering behavior tests.
+
+## 2026-04-27 — Pending artifact controller extraction
+- [x] Extracted pending artifact controller from ExplorerApp.
+- [x] Preserved pending compose behavior.
+- [x] Preserved pending recording behavior.
+- [x] Kept recording reconciliation behavior intact.
+- [ ] Follow-up: split asset grid orchestration.
+- [ ] Follow-up: add runtime event-driven pending artifact refresh.
+
+## 2026-04-27 — Explorer runtime extraction
+- [x] Runtime controller extracted.
+- [x] Live preview state extracted.
+- [x] Runtime event reactions extracted.
+- [ ] Pending artifact controller extraction.
+- [ ] Grid/render orchestration split.
+
+## 2026-04-27 — SSE runtime events
+- [x] Runtime event bus added
+- [x] SSE endpoint added
+- [x] Explorer receives runtime events
+- [ ] Replace polling progressively
+- [ ] Add event persistence/replay
+
+## 2026-04-27 — CAS metadata in indexed media
+- [x] Added optional sha256/content_address fields to indexed media records.
+- [x] Preserved legacy media compatibility for entries without sha256.
+- [x] Added duplicate-content deterministic hash tests.
+- [x] Kept temp/partial files excluded from indexing.
+- [ ] Follow-up: promote content_address to primary asset identity where safe.
+- [ ] Follow-up: add duplicate detection UX in Explorer.
+
+## 2026-04-27 — Atomic CAS write hardening
+- [x] Added storage atomic write helpers.
+- [x] Hardened recording upload persistence.
+- [x] Hardened direct upload persistence where safe.
+- [x] Added deterministic sha256 fingerprint tests.
+- [x] Ensured temp files do not leak into index results.
+- [ ] Follow-up: complete compose/export atomic-output migration.
+- [ ] Follow-up: extend indexed media schema with sha256/content-address fields.
+
+## 2026-04-27 — API ownership and contract normalization
+- [x] Documented route naming policy in API surface docs.
+- [x] Added frontend contract modules for live, live sessions, recordings, and assets.
+- [x] Updated api.ts to use contract normalizers instead of inline payload shape checks.
+- [x] Added OpenAPI contract tests for live/recording/media route families.
+- [x] Regenerated architecture OpenAPI snapshot.
+- [ ] Follow-up: migrate remaining implicit object responses to explicit response models.
+- [ ] Follow-up: split ExplorerApp orchestration after contracts stabilize.
+
+## 2026-04-27 — Multi-viewer ICE reliability for live sessions pass (active)
+- [x] Extended runtime WebRTC session model to support multi-viewer answers, viewer-scoped ICE lanes, device ICE lane, connection-state map, and updated-at continuity while preserving legacy default-answer compatibility.
+- [x] Added viewer-aware signaling routes under `/api/live` for per-viewer answer/ICE/state plus device ICE publish/list and legacy `/answer` compatibility behavior.
+- [x] Updated `/connect/device` browser shell to publish device ICE, poll viewer ICE (`viewers/default/ice`), and expose richer connection-state text (`ICE gathering`, `connected`, `disconnected`, etc.) without changing baseline offer flow.
+- [x] Extended Explorer API client + live preview answer flow for stable explicit viewer IDs, viewer answer posting, viewer ICE publishing, device ICE polling, candidate dedupe, and viewer-state publication on connect/cleanup.
+- [x] Updated runtime chip normalization to surface viewer count and connection-state chips (`connected/checking/disconnected/failed`) in runtime side panel.
+- [x] Added/updated backend and frontend static contract tests for multi-viewer answers, ICE exchange routes, viewer state updates, viewer_count serialization, and client wiring markers.
+- [ ] Next: add an end-to-end browser automation scenario proving two simultaneous Explorer viewers can answer one live session and both maintain ICE connectivity across one reconnect cycle.
+
+## 2026-04-27 — Completed-recording reconciliation + saved asset feedback pass (active)
+- [x] Added Explorer reconciliation lane for completed/saved runtime recording sessions that detects indexed media matches via `pendingRecordingMatchesMediaItem(...)`.
+- [x] On successful match, Explorer now auto-selects/highlights the indexed asset (`setSelected`, `setActiveAssetKey`, `setPreviewActivationKey`, `setReinforcedActiveKey`) and emits an explicit `Recording reconciled` toast.
+- [x] Reconciliation now dismisses the matched runtime recording session (`dismissLiveRecordingAsset(recordingId)`) to remove duplicate pending-recording card noise once the real media asset is present.
+- [x] Updated Explorer static contracts to lock reconciliation markers (`Recording reconciled`, `dismissLiveRecordingAsset`, preview activation write-through).
+- [ ] Next: add focused runtime UI test coverage for reconciliation timing where media indexing lands several polling ticks after recording session completion.
+
+## 2026-04-27 — Runtime-backed recording session lifecycle + StreamHub ownership pass (active)
+- [x] Added runtime-backed `RecordingSession` model (`app/models/recording_session.py`) and in-memory runtime registry (`app/runtime/recording_sessions.py`) with create/get/list/update/delete semantics.
+- [x] Wired runtime recording session ownership (`runtime.recording_sessions`) during runtime assembly and mounted dedicated `/api/recordings` routes for start/list/complete/fail/delete lifecycle transitions.
+- [x] Added backend API coverage (`tests/test_recordings_api.py`) validating start/list/complete/fail/delete behavior for recording sessions.
+- [x] Added Explorer `StreamHub` (`src/runtime/StreamHub.ts`) keyed by live `session_id` to avoid passing raw `MediaStream` objects through component boundaries.
+- [x] Added Explorer runtime-backed recording hook (`useRecordingSessions`) and refactored `ExplorerApp` to use session-owned recording start flow (`onRecordPeerSession`) instead of raw stream callback handoff.
+- [x] Updated `LiveSourceCard` peer-track lifecycle to `StreamHub.set(...)` on track receipt and `StreamHub.delete(...)` on teardown, plus record action callback by `session_id`.
+- [x] Preserved browser-side `MediaRecorder` ownership and existing upload endpoint (`/api/live_sessions/{session_id}/recording/upload`) while posting recording lifecycle state transitions to `/api/recordings`.
+- [x] Updated Explorer static contracts to assert StreamHub presence/usage, recording API client `/api/recordings` references, and session-based recording callback wiring.
+- [ ] Next: add reconciliation coverage for runtime recording sessions when Explorer reconnects mid-recording (local recorder runtime unavailable but runtime session still present).
+
+## 2026-04-27 — Durable browser-side WebRTC recording upload pass (active)
+- [x] Added `/api/live_sessions/{session_id}/recording/upload` multipart endpoint to persist browser-captured `.webm` recordings into source/project storage roots.
+- [x] Added upload validation for live-session existence, non-empty payloads, content type constraints (`video/webm` or `application/octet-stream`), target-dir safety, and `.webm` filename sanitization.
+- [x] Implemented defensive source-root resolution across common registry API shapes (`require/get/get_source/resolve`) and root-field variants (`root/root_path/path/base_path`).
+- [x] Added Explorer API client methods for browser-recording upload and explicit live-session control dispatch (`sendLiveSessionControl`).
+- [x] Added `LiveRecorder` component that records peer `MediaStream` with `MediaRecorder`, tracks elapsed time, uploads on stop, and surfaces saved-asset links.
+- [x] Integrated `LiveRecorder` into `LiveSourceCard` peer-view lifecycle with `setPeerStream(...)` track wiring and cleanup.
+- [x] Wired Explorer live card rendering to pass recording project/source/target-dir context and refresh library snapshot after recording save.
+- [x] Added backend tests for recording upload success and unsafe target-dir rejection plus Explorer static contract checks for recorder wiring.
+- [ ] Next: add focused runtime UI smoke coverage for repeated start/stop browser recording cycles against one active peer stream.
+
+## 2026-04-27 — Explorer live-session side panel correlation pass (active)
+- [x] Updated `/api/live` list serialization to prefer object payload shape (`{ sessions: [...] }`) with derived `has_offer`, `has_answer`, and `state` fields for operator-facing WebRTC session state.
+- [x] Hardened `/connect/device` answer polling to treat 404 as expected waiting state, reduce status noise, back off polling cadence (1s→2s→5s), and pause polling while tab is hidden.
+- [x] Added Explorer WebRTC session API typing + client fetch (`listWebRtcLiveSessions`) with compatibility normalization for legacy list payloads.
+- [x] Added `useWebRtcLiveSessions` polling hook with visibility-aware polling and node-indexed maps for runtime panel correlation.
+- [x] Added `buildRuntimeChips(...)` helper to dedupe/normalize runtime chips and surface status/auth/live capability tones.
+- [x] Integrated live-session correlation into `ExplorerApp` runtime sidebar: Open Device enablement now includes session-capable/live nodes and waiting sessions expose Answer Live modal actions via `LivePreview`.
+- [x] Added/updated regression tests for `/api/live` session shape/state serialization and Explorer static contracts for live hook + chip helper wiring.
+- [ ] Next: add lightweight runtime-panel E2E coverage asserting waiting→connected chip/state transitions under a mocked offer/answer lifecycle.
+
+## 2026-04-27 — Runtime lifecycle + live WebRTC surface pass (active)
+- [x] Added runtime lifecycle controller (`RuntimeLifecycleController`) with settings dataclass, idempotent start/stop guards, periodic sweep loop, and sweep result logging.
+- [x] Wired lifecycle into runtime startup/shutdown through `AppRuntime` + runtime assembly, including lightweight runtime WebRTC session registry mount (`runtime.live_sessions`).
+- [x] Added LAN-first WebRTC signaling API (`/api/live/{session_id}/offer|answer`, list, delete) backed by in-memory runtime session registry.
+- [x] Added real `/connect/device` browser camera shell that captures local media, publishes WebRTC offer, and polls for answer via same-origin API paths.
+- [x] Updated node heartbeat API to require registered-node bearer auth, enforce `ctx.node_id == path node_id`, and set status to `online` on heartbeat.
+- [x] Updated ingest claim pruning path to support lifecycle cutoff datetime + status-aware pruning without introducing duplicate claim stores.
+- [x] Added Explorer `LivePreview` component scaffold and static contract check for component presence.
+- [x] Added lifecycle and live WebRTC API tests (`test_runtime_lifecycle.py`, `test_live_webrtc_api.py`).
+- [ ] Next: evaluate whether legacy `/api/live_sessions` signaling and new `/api/live` signaling should converge under one registry after first LAN validation pass.
+
+## 2026-04-27 — Explorer sidebar delete TDZ hydration fix (active)
+- [x] Fixed `ExplorerApp` callback declaration order so `openPayloadDetails` initializes before callbacks that depend on it (`openDeviceForNode`), eliminating hydration-time TDZ `ReferenceError`.
+- [x] Preserved runtime/ingest destructive context actions (`Delete node`, `Delete claim`) and guarded device URL menu behavior.
+- [x] Added static contract assertions that enforce ordering invariants for `openPayloadDetails`, delete callbacks, and runtime/ingest context-menu render blocks.
+- [ ] Next: replace sidebar `window.confirm` prompts with shared confirm modal surface to keep all destructive flows non-blocking and style-consistent.
+
+## 2026-04-27 — Explorer sidebar destructive runtime/claim actions (active)
+- [x] Added Explorer API client methods for `DELETE /api/nodes/{node_id}` and `DELETE /api/ingest/claims/{claim_id}` with structured error propagation.
+- [x] Added runtime context-menu destructive action (`Delete node`) with confirm → delete → refresh (`reloadSourceControl`) → toast flow.
+- [x] Added ingest-claim context-menu destructive action (`Delete claim`) with confirm → delete → refresh (`reloadIngestClaims`) → toast flow.
+- [x] Updated runtime context menu ordering to match operator minimum set (`Details`, `Heartbeat now`, `Copy Node ID`, `Copy Node JSON`, `Delete node`) while keeping `Open Device` and `Copy Device URL` guarded by registered `base_url`.
+- [x] Hardened runtime open/copy URL behavior to avoid blind device navigation when nodes do not have a registered `base_url`; browser/session nodes now surface details fallback and non-session nodes show explicit warning toast.
+- [x] Added Explorer static contract assertions for new API methods, destructive menu actions, and guarded runtime URL helpers/styles.
+- [ ] Next: replace `window.confirm` with shared Explorer confirm modal for runtime/ingest destructive context actions to align with non-blocking UI conventions.
+
+## 2026-04-27 — Runtime bearer enforcement for node-owned mutations (active)
+- [x] Added runtime-backed device auth dependency (`runtime_device_auth`) that verifies bearer token + node ID against runtime node registry token hashes.
+- [x] Enforced bearer scope checks on ingest-claim creation and bound `node_id` to authenticated node identity.
+- [x] Added ingest claim cleanup endpoints (`DELETE /api/ingest/claims/{claim_id}`, `POST /api/ingest/claims/prune`) and backing registry/service methods.
+- [x] Enforced live-session mutation auth (`start`, `heartbeat`, `chunk`, `end`, `control`, `control/ack`, `signal/offer`) with session ownership checks.
+- [x] Preserved operator/browser read paths (`GET` list/detail/signal and viewer answer path) without new bearer requirements.
+- [x] Added node cleanup endpoints (`DELETE /api/nodes/{node_id}`, `POST /api/nodes/prune`) plus registry helpers (`get_node`, `delete_node`, `prune_ephemeral_nodes`).
+- [x] Added/updated tests for runtime auth dependency + ingest/live/node enforcement behaviors.
+- [ ] Next: evaluate optional `stream:proxy` enforcement once dedicated device-owned proxy mutation routes are finalized.
+
+## 2026-04-27 — Follow-up: absolute handoff URLs + HTTPS asset rewrite guard (active)
+- [x] Fixed Explorer `absoluteAssetUrl(...)` to always return origin-qualified URLs for relative asset paths used in clipboard/OBS/program-monitor handoff flows.
+- [x] Tightened HTTPS asset normalization rewrite guard to only rewrite unsafe API authorities (`http` / `:8787`) and avoid dropping explicit secure custom ports.
+- [x] Updated Explorer static regression contracts to lock the new `unsafeApiAuthority` guard and absolute-URL handoff behavior markers.
+- [ ] Next: add runtime integration coverage for absolute URL handoff outputs (copy/OBS/program-monitor) under HTTPS + custom-port scenarios.
+
+## 2026-04-27 — Register authority origin + node bearer credential issuance (active)
+- [x] Added Explorer authority-origin helper (`resolveAuthorityOrigin` + `buildAuthorityUrl`) for register/connect URL generation.
+- [x] Updated `RegisterNodeModal` to resolve HTTPS gateway authority as same-origin and `:3000` dev authority as `:8787`.
+- [x] Added node-token helper module (`issue`, `hash`, `preview`, `verify`) and expanded device-auth helper scaffolding without route enforcement.
+- [x] Updated `/connect/register` to issue bearer credential once, persist only token hash/preview/auth metadata, and return one-time auth instructions.
+- [x] Updated node API/connect serialization so public node payloads omit `token_hash` and raw token while exposing `auth_type`, `token_preview`, and `auth_scopes`.
+- [x] Added auth helper test coverage (`test_node_tokens.py`, `test_device_auth.py`) and updated connect/auth scaffolding tests.
+- [ ] Next: wire optional verification endpoint to registry lookup once node-registry auth-read path is finalized (without enabling ingest/live enforcement yet).
+
+## 2026-04-27 — Explorer URL policy + auth-layering PR tasks (active)
+- [x] Add a centralized Explorer URL policy module for browser-renderable media/API normalization and HTTPS same-origin routing behavior.
+- [x] Route Explorer media URL resolution through the shared policy layer (`utils.ts`, `utils/mediaUrls.ts`, `ExplorerApp.tsx`) to remove scattered URL guessing.
+- [x] Keep direct Next dev mode functional through explicit rewrites and avoid hardcoded production defaults for `192.168.0.25:8787`.
+- [x] Add minimal backend auth scaffolding modules for device auth and platform credential references without forcing auth gates onto existing routes.
+- [x] Add minimal regression tests for auth scaffolding behavior and credential-ref shaping.
+- [ ] Next: integrate device-auth dependency on selected ingest/live routes only after route-level tests are expanded for the new auth boundary.
+
 ## 2026-04-25 — Media byte-range compliance + debug path diagnostics (active)
 - [x] Implemented explicit HTTP byte-range handling for `GET /media/{project}/{relative_path}`:
   - `bytes=0-1` returns `206` with `Content-Length: 2`.

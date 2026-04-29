@@ -8,7 +8,8 @@
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "lint": "next lint"
   },
   "dependencies": {
     "gsap": "3.13.0",
@@ -20,6 +21,8 @@
     "@types/node": "25.0.3",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.5",
     "typescript": "5.5.3"
   },
   "exports": {

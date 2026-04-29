@@ -5,39 +5,57 @@ from datetime import datetime, timedelta, timezone
 from app.domain.live_sessions.models import LiveSession
 
 
-def test_live_session_start_heartbeat_chunk_list_and_end(client):
-    register = client.post(
-        "/api/nodes",
+def _register_node_auth(client, node_id: str) -> tuple[str, str]:
+    response = client.post(
+        "/connect/register",
         json={
-            "node_id": "runner-live-1",
-            "label": "Runner Live 1",
+            "node_id": node_id,
+            "label": f"{node_id} label",
             "base_url": "http://127.0.0.1:9001",
-            "roles": ["runner"],
+            "roles": ["runner", "capture"],
+            "capabilities": ["can_proxy_streams"],
+            "source_name": "camera-primary",
+            "source_kind": "capture",
+            "source_authority": "runner-local",
             "advertised_source_kinds": ["capture"],
             "status": "healthy",
+            "metadata": {"transport_hint": "session"},
         },
     )
-    assert register.status_code == 201
+    assert response.status_code == 200
+    return node_id, response.json()["auth"]["token"]
+
+
+def _auth_headers(node_id: str, token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-Media-Sync-Node-Id": node_id,
+    }
+
+
+def test_live_session_start_heartbeat_chunk_list_and_end(client):
+    node_id, token = _register_node_auth(client, "runner-live-1")
 
     started = client.post(
         "/api/live_sessions/start",
-        json={"node_id": "runner-live-1", "source_kind": "camera", "metadata": {"origin": "test"}},
+        json={"node_id": "other-node", "source_kind": "camera", "metadata": {"origin": "test"}},
+        headers=_auth_headers(node_id, token),
     )
     assert started.status_code == 200
     session = started.json()
-    assert session["node_id"] == "runner-live-1"
+    assert session["node_id"] == node_id
     assert session["source_kind"] == "camera"
     assert session["status"] == "previewing"
     session_id = session["session_id"]
 
-    heart = client.post(f"/api/live_sessions/{session_id}/heartbeat")
+    heart = client.post(f"/api/live_sessions/{session_id}/heartbeat", headers=_auth_headers(node_id, token))
     assert heart.status_code == 200
     assert heart.json()["session_id"] == session_id
 
     chunk = client.post(
         f"/api/live_sessions/{session_id}/chunk",
         content=b"fake-webm-chunk",
-        headers={"content-type": "video/webm"},
+        headers={**_auth_headers(node_id, token), "content-type": "video/webm"},
     )
     assert chunk.status_code == 200
     assert chunk.json()["chunk_count"] == 1
@@ -49,7 +67,7 @@ def test_live_session_start_heartbeat_chunk_list_and_end(client):
     assert active[0]["session_id"] == session_id
     assert active[0]["chunk_count"] == 1
 
-    ended = client.post(f"/api/live_sessions/{session_id}/end")
+    ended = client.post(f"/api/live_sessions/{session_id}/end", headers=_auth_headers(node_id, token))
     assert ended.status_code == 200
     payload = ended.json()
     assert payload["session"]["status"] == "ended"
@@ -60,31 +78,31 @@ def test_live_session_start_heartbeat_chunk_list_and_end(client):
     assert listed_after.json() == []
 
 
-def test_live_session_requires_registered_node(client):
+def test_live_session_start_requires_registered_node_bearer(client):
     started = client.post(
         "/api/live_sessions/start",
         json={"node_id": "missing-node", "source_kind": "camera"},
     )
-    assert started.status_code == 404
+    assert started.status_code == 401
+
+
+def test_live_session_start_rejects_wrong_node_header_with_valid_token(client):
+    node_id, token = _register_node_auth(client, "runner-live-auth")
+    started = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=_auth_headers("wrong-node", token),
+    )
+    assert started.status_code == 401
 
 
 def test_live_session_preview_endpoint_returns_latest_chunk(client):
-    register = client.post(
-        "/api/nodes",
-        json={
-            "node_id": "runner-live-2",
-            "label": "Runner Live 2",
-            "base_url": "http://127.0.0.1:9002",
-            "roles": ["runner"],
-            "advertised_source_kinds": ["capture"],
-            "status": "healthy",
-        },
-    )
-    assert register.status_code == 201
+    node_id, token = _register_node_auth(client, "runner-live-2")
 
     started = client.post(
         "/api/live_sessions/start",
-        json={"node_id": "runner-live-2", "source_kind": "camera"},
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=_auth_headers(node_id, token),
     )
     assert started.status_code == 200
     session_id = started.json()["session_id"]
@@ -92,7 +110,7 @@ def test_live_session_preview_endpoint_returns_latest_chunk(client):
     chunk = client.post(
         f"/api/live_sessions/{session_id}/chunk",
         content=b"preview-webm",
-        headers={"content-type": "video/webm"},
+        headers={**_auth_headers(node_id, token), "content-type": "video/webm"},
     )
     assert chunk.status_code == 200
 
@@ -127,22 +145,12 @@ def test_live_session_list_drops_stale_active_sessions(client):
 
 
 def test_live_session_control_updates_desired_action(client):
-    register = client.post(
-        "/api/nodes",
-        json={
-            "node_id": "runner-live-3",
-            "label": "Runner Live 3",
-            "base_url": "http://127.0.0.1:9003",
-            "roles": ["runner"],
-            "advertised_source_kinds": ["capture"],
-            "status": "healthy",
-        },
-    )
-    assert register.status_code == 201
+    node_id, token = _register_node_auth(client, "runner-live-3")
 
     started = client.post(
         "/api/live_sessions/start",
-        json={"node_id": "runner-live-3", "source_kind": "camera"},
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=_auth_headers(node_id, token),
     )
     assert started.status_code == 200
     session_id = started.json()["session_id"]
@@ -150,6 +158,7 @@ def test_live_session_control_updates_desired_action(client):
     control = client.post(
         f"/api/live_sessions/{session_id}/control",
         json={"action": "start_recording"},
+        headers=_auth_headers(node_id, token),
     )
     assert control.status_code == 200
     assert control.json()["ok"] is True
@@ -164,6 +173,7 @@ def test_live_session_control_updates_desired_action(client):
     ack = client.post(
         f"/api/live_sessions/{session_id}/control/ack",
         json={"action": "start_recording"},
+        headers=_auth_headers(node_id, token),
     )
     assert ack.status_code == 200
     assert ack.json()["ok"] is True
@@ -175,22 +185,12 @@ def test_live_session_control_updates_desired_action(client):
 
 
 def test_live_session_signal_offer_answer_ice_round_trip(client):
-    register = client.post(
-        "/api/nodes",
-        json={
-            "node_id": "runner-live-signal",
-            "label": "Runner Live Signal",
-            "base_url": "http://127.0.0.1:9010",
-            "roles": ["runner"],
-            "advertised_source_kinds": ["capture"],
-            "status": "healthy",
-        },
-    )
-    assert register.status_code == 201
+    node_id, token = _register_node_auth(client, "runner-live-signal")
 
     started = client.post(
         "/api/live_sessions/start",
-        json={"node_id": "runner-live-signal", "source_kind": "camera"},
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=_auth_headers(node_id, token),
     )
     assert started.status_code == 200
     session_id = started.json()["session_id"]
@@ -198,6 +198,7 @@ def test_live_session_signal_offer_answer_ice_round_trip(client):
     offer = client.post(
         f"/api/live_sessions/{session_id}/signal/offer",
         json={"offer": {"type": "offer", "sdp": "v=0\r\no=device-offer"}},
+        headers=_auth_headers(node_id, token),
     )
     assert offer.status_code == 200
     assert offer.json()["offer"]["type"] == "offer"
@@ -216,6 +217,7 @@ def test_live_session_signal_offer_answer_ice_round_trip(client):
             "viewer_id": "viewer-a",
             "candidate": {"candidate": "candidate-device-1", "sdpMid": "0", "sdpMLineIndex": 0},
         },
+        headers=_auth_headers(node_id, token),
     )
     assert device_ice.status_code == 200
     assert len(device_ice.json()["ice_from_device"]) == 1
@@ -243,26 +245,18 @@ def test_live_session_signal_offer_answer_ice_round_trip(client):
 
 
 def test_live_session_signal_isolates_multiple_viewers(client):
-    register = client.post(
-        "/api/nodes",
-        json={
-            "node_id": "runner-live-signal-multi",
-            "label": "Runner Live Signal Multi",
-            "base_url": "http://127.0.0.1:9011",
-            "roles": ["runner"],
-            "advertised_source_kinds": ["capture"],
-            "status": "healthy",
-        },
-    )
-    assert register.status_code == 201
+    node_id, token = _register_node_auth(client, "runner-live-signal-multi")
+
     started = client.post(
         "/api/live_sessions/start",
-        json={"node_id": "runner-live-signal-multi", "source_kind": "camera"},
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=_auth_headers(node_id, token),
     )
     session_id = started.json()["session_id"]
     client.post(
         f"/api/live_sessions/{session_id}/signal/offer",
         json={"offer": {"type": "offer", "sdp": "v=0\r\no=shared"}},
+        headers=_auth_headers(node_id, token),
     )
     client.post(
         f"/api/live_sessions/{session_id}/signal/answer",
@@ -289,7 +283,7 @@ def test_live_session_signal_isolates_multiple_viewers(client):
     assert state_a.json()["ice_from_viewer"][0]["candidate"] == "viewer-a-ice"
     assert state_b.json()["ice_from_viewer"][0]["candidate"] == "viewer-b-ice"
 
-    end = client.post(f"/api/live_sessions/{session_id}/end")
+    end = client.post(f"/api/live_sessions/{session_id}/end", headers=_auth_headers(node_id, token))
     assert end.status_code == 200
     after_end_signal = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-a"})
     assert after_end_signal.status_code == 404

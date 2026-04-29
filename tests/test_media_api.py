@@ -13,6 +13,35 @@ def _create_project(client: TestClient) -> str:
     return created.json()["name"]
 
 
+def test_upload_endpoint_persists_file_without_temp_artifacts(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    payload = b"upload-bytes"
+
+    upload = client.post(
+        f"/api/projects/{project_name}/upload",
+        files={"file": ("uploaded.mov", payload, "video/quicktime")},
+    )
+    assert upload.status_code == 200
+    upload_payload = upload.json()
+    assert upload_payload["status"] == "stored"
+    assert upload_payload["size"] == len(payload)
+    assert upload_payload["sha256"]
+    assert upload_payload["content_address"] == f"sha256:{upload_payload['sha256']}"
+
+    output_path = env_settings / project_name / upload_payload["path"]
+    assert output_path.exists()
+    assert output_path.read_bytes() == payload
+    assert list(output_path.parent.glob("*.tmp")) == []
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    listed_media = listing.json().get("media", [])
+    media_paths = {item["relative_path"] for item in listed_media}
+    assert upload_payload["path"] in media_paths
+    stored_item = next(item for item in listed_media if item["relative_path"] == upload_payload["path"])
+    assert stored_item["content_address"] == f"sha256:{stored_item['sha256']}"
+
+
 def test_list_media_and_stream(client: TestClient, env_settings: Path) -> None:
     project_name = _create_project(client)
     ingest = env_settings / project_name / "ingest" / "originals"
@@ -39,6 +68,59 @@ def test_list_media_and_stream(client: TestClient, env_settings: Path) -> None:
 
     traversal = client.get(f"/media/{project_name}/..%2Fsecret.txt")
     assert traversal.status_code == 400
+
+
+def test_list_media_preserves_legacy_items_without_sha(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    project_root = env_settings / project_name
+    ingest = project_root / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    legacy_path = ingest / "legacy-no-sha.mov"
+    legacy_path.write_bytes(b"legacy-no-sha")
+
+    from app.storage.index import load_index, save_index
+
+    index = load_index(project_root)
+    index["files"].append({"relative_path": "ingest/originals/legacy-no-sha.mov", "size": len(b"legacy-no-sha")})
+    save_index(project_root, index)
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    item = next(entry for entry in listing.json()["media"] if entry["relative_path"] == "ingest/originals/legacy-no-sha.mov")
+    assert "sha256" not in item or not item["sha256"]
+
+
+def test_reindex_ignores_partial_and_tmp_artifacts(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    (ingest / ".capture.123.tmp").write_bytes(b"tmp-bytes")
+    (ingest / "capture.partial").write_bytes(b"partial-bytes")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    assert listing.json()["media"] == []
+
+
+def test_reindex_duplicate_content_has_deterministic_sha(client: TestClient, env_settings: Path) -> None:
+    project_name = _create_project(client)
+    ingest = env_settings / project_name / "ingest" / "originals"
+    ingest.mkdir(parents=True, exist_ok=True)
+    (ingest / "dup-a.mov").write_bytes(b"same-content-sha")
+    (ingest / "dup-b.mov").write_bytes(b"same-content-sha")
+
+    reindexed = client.post(f"/api/projects/{project_name}/reindex")
+    assert reindexed.status_code == 200
+    listing = client.get(f"/api/projects/{project_name}/media")
+    assert listing.status_code == 200
+    media = [item for item in listing.json()["media"] if item["relative_path"] in {"ingest/originals/dup-a.mov", "ingest/originals/dup-b.mov"}]
+    assert len(media) == 2
+    assert media[0]["sha256"] == media[1]["sha256"]
+    assert media[0]["content_address"] == f"sha256:{media[0]['sha256']}"
+    assert media[1]["content_address"] == f"sha256:{media[1]['sha256']}"
 
 
 def test_download_media_and_link_in_listing(client: TestClient, env_settings: Path) -> None:

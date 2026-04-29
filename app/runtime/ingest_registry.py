@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -72,6 +73,42 @@ class IngestClaimRegistry:
             return False
         path.unlink()
         return True
+
+    def delete_claim(self, claim_id: str) -> bool:
+        normalized = (claim_id or "").strip()
+        if not normalized:
+            return False
+        return self.remove(normalized)
+
+    def prune_claims(
+        self,
+        *,
+        older_than: datetime | None = None,
+        older_than_seconds: int | None = None,
+        statuses: set[str] | None = None,
+    ) -> list[str]:
+        cutoff = older_than
+        if cutoff is None:
+            seconds = max(0, int(older_than_seconds or 0))
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
+        if cutoff.tzinfo is None:
+            cutoff = cutoff.replace(tzinfo=timezone.utc)
+        allowed_statuses = set(statuses or set())
+        removed: list[str] = []
+
+        for claim in self.list_all():
+            if allowed_statuses and claim.status not in allowed_statuses:
+                continue
+            try:
+                updated_at = datetime.fromisoformat(claim.updated_at.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
+            if updated_at < cutoff and self.remove(claim.claim_id):
+                removed.append(claim.claim_id)
+
+        return removed
 
     def bulk_upsert(self, claims: Iterable[IngestClaim]) -> None:
         for claim in claims:

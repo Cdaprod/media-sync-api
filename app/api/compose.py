@@ -1577,6 +1577,9 @@ class ComposeExecutor:
     """
     Accepts a ComposePlan and invokes ffmpeg.
     Owns: concat list file, ffmpeg subprocess, error translation.
+
+    TODO(stage2-atomic-compose): move ffmpeg output writes to temp output
+    path in target dir and os.replace() into final output path after success.
     """
 
     def execute(self, plan: ComposePlan, *, job_id: str | None = None) -> ComposeResult:
@@ -1831,12 +1834,17 @@ class ComposeRegistrar:
         manifest_db = project / "_manifest/manifest.db"
 
         record_file_hash(manifest_db, sha256, output_rel)
-        size = result.output_path.stat().st_size
+        output_stat = result.output_path.stat()
+        indexed_at = _now_iso()
         entry = {
             "relative_path": output_rel,
             "sha256": sha256,
-            "size": size,
-            "uploaded_at": _now_iso(),
+            "size": output_stat.st_size,
+            "size_bytes": output_stat.st_size,
+            "content_mtime": datetime.fromtimestamp(output_stat.st_mtime, timezone.utc).isoformat(),
+            "indexed_at": indexed_at,
+            "content_address": f"sha256:{sha256}",
+            "uploaded_at": indexed_at,
         }
         ensure_metadata(project, output_rel, sha256, result.output_path, source=ctx.source_name, method="compose")
         append_file_entry(project, entry)
@@ -1853,7 +1861,7 @@ class ComposeRegistrar:
             "source": ctx.source_name,
             "path": output_rel,
             "sha256": sha256,
-            "size": size,
+            "size": output_stat.st_size,
             "mode_used": result.mode_used,
             "served": self._served_urls(base_url, ctx.project_name, output_rel, ctx.source_name),
         }, result)

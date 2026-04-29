@@ -3,6 +3,17 @@ import type { ComposeJobEnvelope } from './composeJobs';
 import type { NodeControlRecord, SourceControlRecord } from './types/sourceControl';
 import type { RegisterNodeRequest, RegisterNodeResponse } from './types/registration';
 import type { IngestClaimRecord } from './types/ingestClaim';
+import {
+  normalizeWebRtcLiveSessions,
+  type WebRtcLiveSession,
+} from './contracts/live';
+import { normalizeLiveSessionList } from './contracts/liveSessions';
+import {
+  normalizeRecordingSession,
+  normalizeRecordingSessions,
+  type RecordingSession,
+  type RecordingSessionState,
+} from './contracts/recordings';
 import type {
   LiveSessionControlAction,
   LiveSessionRecord,
@@ -19,6 +30,11 @@ export interface ResolveRequest {
   media_rel_paths: string[];
   mode: string;
 }
+export type {
+  WebRtcLiveSession,
+  RecordingSession,
+  RecordingSessionState,
+};
 
 export interface AssetRef {
   relative_path: string;
@@ -26,13 +42,32 @@ export interface AssetRef {
   source?: string | null;
 }
 
+export type LiveRecordingState = 'idle' | 'recording' | 'uploading' | 'completed' | 'failed';
+
+export type LiveRecordingUploadResult = {
+  recording_id: string;
+  session_id: string;
+  state: 'completed' | string;
+  project: string;
+  source: string;
+  target_dir: string;
+  filename: string;
+  output_path: string;
+  asset_url: string;
+  size_bytes: number;
+  content_type: string;
+};
+export type RecordingSessionRecord = RecordingSession;
+
 export interface ApiClient {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
   heartbeatNode: (nodeId: string) => Promise<NodeControlRecord>;
+  deleteNode: (nodeId: string) => Promise<{ ok: boolean; deleted: boolean; node_id: string }>;
   registerNode: (payload: RegisterNodeRequest) => Promise<RegisterNodeResponse>;
   listIngestClaims: () => Promise<IngestClaimRecord[]>;
   getIngestClaim: (claimId: string) => Promise<IngestClaimRecord>;
+  deleteIngestClaim: (claimId: string) => Promise<{ ok: boolean; deleted: boolean; claim_id: string }>;
   startLiveSession: (nodeId: string, sourceKind: LiveSourceKind, metadata?: Record<string, unknown>) => Promise<LiveSessionRecord>;
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
@@ -41,10 +76,36 @@ export interface ApiClient {
   publishLiveSignalOffer: (sessionId: string, offer: LiveSignalDescription) => Promise<LiveSignalState>;
   publishLiveSignalAnswer: (sessionId: string, viewerId: string, answer: LiveSignalDescription) => Promise<LiveSignalState>;
   publishLiveSignalIce: (sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate) => Promise<LiveSignalState>;
+  sendLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }>;
+  uploadLiveSessionRecording: (sessionId: string, payload: {
+    file: Blob;
+    project: string;
+    source?: string;
+    targetDir?: string;
+    recordingId?: string;
+    filename?: string;
+  }) => Promise<LiveRecordingUploadResult>;
+  listRecordingSessions: () => Promise<RecordingSessionRecord[]>;
+  startRecordingSession: (payload: {
+    session_id: string;
+    node_id: string;
+    project: string;
+    source?: string;
+    target_dir?: string;
+    recording_id?: string;
+  }) => Promise<RecordingSessionRecord>;
+  completeRecordingSession: (recordingId: string, payload: { asset_url?: string | null; filename?: string | null }) => Promise<RecordingSessionRecord>;
+  failRecordingSession: (recordingId: string, payload: { error: string }) => Promise<RecordingSessionRecord>;
+  deleteRecordingSession: (recordingId: string) => Promise<{ ok: boolean; recording_id: string; deleted: boolean }>;
   heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
   endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
   listLiveSessions: () => Promise<LiveSessionRecord[]>;
+  listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
+  postLiveViewerAnswer: (sessionId: string, viewerId: string, answer: RTCSessionDescriptionInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
+  postLiveViewerIce: (sessionId: string, viewerId: string, candidate: RTCIceCandidateInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
+  listLiveDeviceIce: (sessionId: string) => Promise<RTCIceCandidateInit[]>;
+  postLiveViewerState: (sessionId: string, viewerId: string, state: string) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
@@ -130,6 +191,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
 
       return response.json();
     },
+    async deleteNode(nodeId: string): Promise<{ ok: boolean; deleted: boolean; node_id: string }> {
+      const response = await fetch(buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}`), {
+        method: 'DELETE',
+      });
+      const payload = await parseJson<{ ok: boolean; deleted: boolean; node_id: string; detail?: string }>(response);
+      if (!response.ok) throw new Error(String(payload?.detail || 'Delete node failed'));
+      return payload;
+    },
     async listIngestClaims(): Promise<IngestClaimRecord[]> {
       const response = await fetch(buildUrl('/api/ingest/claims'), {
         method: 'GET',
@@ -159,6 +228,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
 
       return response.json();
+    },
+    async deleteIngestClaim(claimId: string): Promise<{ ok: boolean; deleted: boolean; claim_id: string }> {
+      const response = await fetch(buildUrl(`/api/ingest/claims/${encodeURIComponent(claimId)}`), {
+        method: 'DELETE',
+      });
+      const payload = await parseJson<{ ok: boolean; deleted: boolean; claim_id: string; detail?: string }>(response);
+      if (!response.ok) throw new Error(String(payload?.detail || 'Delete ingest claim failed'));
+      return payload;
     },
     async registerNode(payload: RegisterNodeRequest): Promise<RegisterNodeResponse> {
       const response = await fetch(buildUrl('/connect/register'), {
@@ -218,6 +295,140 @@ export function createApiClient(baseUrl = ''): ApiClient {
         throw new Error(`Failed to control live session: ${response.status}`);
       }
       return response.json();
+    },
+    async sendLiveSessionControl(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }> {
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ action }),
+      });
+      const payload = await parseJson<{ ok: boolean; action: LiveSessionControlAction; session_id: string; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to send live session control: ${response.status}`));
+      }
+      return payload;
+    },
+    async uploadLiveSessionRecording(sessionId: string, payload: {
+      file: Blob;
+      project: string;
+      source?: string;
+      targetDir?: string;
+      recordingId?: string;
+      filename?: string;
+    }): Promise<LiveRecordingUploadResult> {
+      const form = new FormData();
+      form.append('file', payload.file, payload.filename || 'live-recording.webm');
+      form.append('project', payload.project);
+      form.append('source', payload.source || 'primary');
+      form.append('target_dir', payload.targetDir || 'ingest/live');
+      if (payload.recordingId) form.append('recording_id', payload.recordingId);
+      if (payload.filename) form.append('filename', payload.filename);
+      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/recording/upload`), {
+        method: 'POST',
+        body: form,
+      });
+      const data = await parseJson<LiveRecordingUploadResult & { detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || `Failed to upload live recording: ${response.status}`));
+      }
+      return data;
+    },
+    async listRecordingSessions(): Promise<RecordingSessionRecord[]> {
+      const response = await fetch(buildUrl('/api/recordings'), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const payload = await parseJson<{ recordings?: RecordingSessionRecord[]; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to load recording sessions: ${response.status}`));
+      }
+      return normalizeRecordingSessions(payload);
+    },
+    async startRecordingSession(payload: {
+      session_id: string;
+      node_id: string;
+      project: string;
+      source?: string;
+      target_dir?: string;
+      recording_id?: string;
+    }): Promise<RecordingSessionRecord> {
+      const response = await fetch(buildUrl('/api/recordings/start'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify(payload),
+      });
+      const data = await parseJson<{ recording?: RecordingSessionRecord; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || `Failed to start recording session: ${response.status}`));
+      }
+      const session = normalizeRecordingSession(data);
+      if (!session) {
+        throw new Error('Failed to parse recording session payload');
+      }
+      return session;
+    },
+    async completeRecordingSession(
+      recordingId: string,
+      payload: { asset_url?: string | null; filename?: string | null },
+    ): Promise<RecordingSessionRecord> {
+      const response = await fetch(buildUrl(`/api/recordings/${encodeURIComponent(recordingId)}/complete`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify(payload),
+      });
+      const data = await parseJson<{ recording?: RecordingSessionRecord; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || `Failed to complete recording session: ${response.status}`));
+      }
+      const session = normalizeRecordingSession(data);
+      if (!session) {
+        throw new Error('Failed to parse recording session payload');
+      }
+      return session;
+    },
+    async failRecordingSession(recordingId: string, payload: { error: string }): Promise<RecordingSessionRecord> {
+      const response = await fetch(buildUrl(`/api/recordings/${encodeURIComponent(recordingId)}/fail`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify(payload),
+      });
+      const data = await parseJson<{ recording?: RecordingSessionRecord; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || `Failed to fail recording session: ${response.status}`));
+      }
+      const session = normalizeRecordingSession(data);
+      if (!session) {
+        throw new Error('Failed to parse recording session payload');
+      }
+      return session;
+    },
+    async deleteRecordingSession(recordingId: string): Promise<{ ok: boolean; recording_id: string; deleted: boolean }> {
+      const response = await fetch(buildUrl(`/api/recordings/${encodeURIComponent(recordingId)}`), {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      });
+      const data = await parseJson<{ ok: boolean; recording_id: string; deleted: boolean; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(data?.detail || `Failed to delete recording session: ${response.status}`));
+      }
+      return data;
     },
     async acknowledgeLiveSessionControl(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction }> {
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control/ack`), {
@@ -335,7 +546,92 @@ export function createApiClient(baseUrl = ''): ApiClient {
       if (!response.ok) {
         throw new Error(`Failed to load live sessions: ${response.status}`);
       }
-      return response.json();
+      const payload = await parseJson<unknown>(response);
+      return normalizeLiveSessionList(payload);
+    },
+    async listWebRtcLiveSessions(): Promise<WebRtcLiveSession[]> {
+      const response = await fetch(buildUrl('/api/live'), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load live WebRTC sessions: ${response.status}`);
+      }
+      const payload = await parseJson<unknown>(response);
+      return normalizeWebRtcLiveSessions(payload);
+    },
+    async postLiveViewerAnswer(
+      sessionId: string,
+      viewerId: string,
+      answer: RTCSessionDescriptionInit,
+    ): Promise<{ ok: boolean; session_id: string; viewer_id: string }> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/viewers/${encodeURIComponent(viewerId)}/answer`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ answer }),
+      });
+      const payload = await parseJson<{ ok: boolean; session_id: string; viewer_id: string; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to post viewer answer: ${response.status}`));
+      }
+      return payload;
+    },
+    async postLiveViewerIce(
+      sessionId: string,
+      viewerId: string,
+      candidate: RTCIceCandidateInit,
+    ): Promise<{ ok: boolean; session_id: string; viewer_id: string }> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/viewers/${encodeURIComponent(viewerId)}/ice`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ candidate }),
+      });
+      const payload = await parseJson<{ ok: boolean; session_id: string; viewer_id: string; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to post viewer ICE candidate: ${response.status}`));
+      }
+      return payload;
+    },
+    async listLiveDeviceIce(sessionId: string): Promise<RTCIceCandidateInit[]> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/ice/device`), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const payload = await parseJson<{ candidates?: RTCIceCandidateInit[]; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to load device ICE candidates: ${response.status}`));
+      }
+      return Array.isArray(payload.candidates) ? payload.candidates : [];
+    },
+    async postLiveViewerState(
+      sessionId: string,
+      viewerId: string,
+      state: string,
+    ): Promise<{ ok: boolean; session_id: string; viewer_id: string }> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/viewers/${encodeURIComponent(viewerId)}/state`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ state }),
+      });
+      const payload = await parseJson<{ ok: boolean; session_id: string; viewer_id: string; detail?: string }>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || `Failed to post viewer state: ${response.status}`));
+      }
+      return payload;
     },
     async listProjects(): Promise<Project[]> {
       const response = await fetch(buildUrl('/api/projects'));

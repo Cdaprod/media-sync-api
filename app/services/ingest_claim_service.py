@@ -51,6 +51,32 @@ class IngestClaimService:
     def get_claim(self, claim_id: str) -> IngestClaim:
         return self.ingest_registry.require(claim_id)
 
+    def delete_claim(self, claim_id: str) -> bool:
+        return self.ingest_registry.delete_claim(claim_id)
+
+    def prune_claims(
+        self,
+        *,
+        older_than: datetime | None = None,
+        older_than_seconds: int | None = None,
+        statuses: set[str],
+    ) -> int:
+        """Prune stale ingest claims by age and status.
+
+        Example:
+            removed = service.prune_claims(
+                older_than=datetime.now(timezone.utc) - timedelta(days=1),
+                statuses={"materialization_pending", "failed"},
+            )
+        """
+
+        removed_ids = self.ingest_registry.prune_claims(
+            older_than=older_than,
+            older_than_seconds=older_than_seconds,
+            statuses=statuses,
+        )
+        return len(removed_ids)
+
     def _classify(self, claim: IngestClaim) -> tuple[IngestClaim, AcceptanceReport]:
         now = datetime.now(timezone.utc).isoformat()
         if claim.size_bytes is not None and claim.size_bytes < 0:

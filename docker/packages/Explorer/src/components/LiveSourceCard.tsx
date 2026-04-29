@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import type { LiveSessionRecord } from '../types/liveSession';
+import { StreamHub } from '../runtime/StreamHub';
 
 function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
   const [url, setUrl] = useState('');
@@ -34,6 +35,8 @@ interface LiveSourceCardProps {
   onOpen?: (session: LiveSessionRecord) => void;
   onStartRecording?: (session: LiveSessionRecord) => void;
   onStopRecording?: (session: LiveSessionRecord) => void;
+  onRemoteStream?: (session: LiveSessionRecord, stream: MediaStream) => void;
+  onRecordPeerSession?: (sessionId: string) => void;
 }
 
 export function LiveSourceCard({
@@ -42,6 +45,8 @@ export function LiveSourceCard({
   onOpen,
   onStartRecording,
   onStopRecording,
+  onRemoteStream,
+  onRecordPeerSession,
 }: LiveSourceCardProps) {
   const isActive = session.status === 'previewing' || session.status === 'recording';
   const previewUrl = usePreviewUrl(apiBase, session.session_id, isActive);
@@ -51,6 +56,7 @@ export function LiveSourceCard({
   const deviceIceSeenRef = useRef<Set<string>>(new Set());
   const viewerIdRef = useRef(`viewer-${Math.random().toString(36).slice(2, 10)}`);
   const [peerEnabled, setPeerEnabled] = useState(false);
+  const [peerStream, setPeerStream] = useState<MediaStream | null>(null);
   const [peerError, setPeerError] = useState<string | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');
   const [peerRetryToken, setPeerRetryToken] = useState(0);
@@ -81,8 +87,13 @@ export function LiveSourceCard({
 
     peer.ontrack = (event) => {
       const stream = event.streams?.[0];
-      if (!stream || !peerVideoRef.current) return;
-      peerVideoRef.current.srcObject = stream;
+      if (!stream) return;
+      StreamHub.set(session.session_id, stream);
+      if (peerVideoRef.current) {
+        peerVideoRef.current.srcObject = stream;
+      }
+      setPeerStream(stream);
+      onRemoteStream?.(session, stream);
     };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === 'connected') setPeerStatus('connected');
@@ -145,9 +156,11 @@ export function LiveSourceCard({
       peerConnRef.current = null;
       deviceIceSeenRef.current.clear();
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+      StreamHub.delete(session.session_id);
+      setPeerStream(null);
       setPeerStatus('idle');
     };
-  }, [apiBase, isActive, peerEnabled, peerRetryToken, session.session_id]);
+  }, [apiBase, isActive, onRemoteStream, peerEnabled, peerRetryToken, session, session.session_id]);
 
   const statusColor =
     session.status === 'recording' ? 'var(--red, #ff4444)'
@@ -225,7 +238,7 @@ export function LiveSourceCard({
                 style={{ flex: 1, fontSize: 11 }}
                 onClick={() => onStartRecording(session)}
               >
-                Record
+                Request device rec
               </button>
             ) : null}
             {onStopRecording ? (
@@ -235,7 +248,7 @@ export function LiveSourceCard({
                 style={{ flex: 1, fontSize: 11 }}
                 onClick={() => onStopRecording(session)}
               >
-                Stop
+                Stop device rec
               </button>
             ) : null}
           </div>
@@ -254,6 +267,19 @@ export function LiveSourceCard({
           <div style={{ marginTop: 8 }}>
             <video ref={peerVideoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 8, background: '#000' }} />
             <div className="small" style={{ marginTop: 6 }}>viewer: {peerStatus}</div>
+            {onRecordPeerSession ? (
+              <button
+                className="btn"
+                type="button"
+                disabled={!peerStream}
+                style={{ marginTop: 6, width: '100%', fontSize: 11 }}
+                onClick={() => {
+                  if (peerStream) onRecordPeerSession(session.session_id);
+                }}
+              >
+                Record as asset
+              </button>
+            ) : null}
             <button
               className="btn"
               type="button"

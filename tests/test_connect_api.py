@@ -64,9 +64,22 @@ def test_connect_register_upserts_node_and_returns_source_bearing_participant(cl
     assert body["source_record"]["owner_node_id"] == "capture-rpi5-1"
     assert body["device_url"] == "/connect/device?node_id=capture-rpi5-1"
     assert "Ingest claims are still separate" in body["message"]
+    assert body["auth"]["type"] == "bearer"
+    assert body["auth"]["token"]
+    assert body["auth"]["token_preview"]
+    assert body["auth"]["shown_once"] is True
+    assert "node:heartbeat" in body["auth"]["scopes"]
+    assert body["registered_node"]["auth_type"] == "bearer"
+    assert body["registered_node"]["token_preview"]
+    assert "token_hash" not in body["registered_node"]
 
     nodes = client.get("/api/nodes").json()
     assert any(node["node_id"] == "capture-rpi5-1" for node in nodes)
+    target_node = next(node for node in nodes if node["node_id"] == "capture-rpi5-1")
+    assert target_node.get("token_preview")
+    assert target_node.get("auth_scopes")
+    assert "token_hash" not in target_node
+    assert "token" not in target_node
 
     manifest = client.get("/connect", headers={"Accept": "application/json"}).json()
     sources = manifest["source_records"]

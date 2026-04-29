@@ -1,0 +1,58 @@
+# Refinement Roadmap
+
+## Phase 1A: API ownership and contract normalization
+- [x] Route naming policy documented.
+- [x] Frontend contract normalizers introduced.
+- [x] OpenAPI contract tests added.
+- [x] Behavior-preserving response model stabilization started.
+- [ ] Follow-up: convert more implicit route responses to explicit schemas.
+- [ ] Follow-up: decide long-term persistence for runtime live/recording state.
+
+## Phase 2A: Atomic writes and deterministic fingerprints
+- [x] Added atomic write helpers.
+- [x] Recording upload uses atomic persistence.
+- [x] Upload paths use atomic persistence where safe.
+- [x] Temp files are excluded from indexing.
+- [x] sha256 fingerprints are computed after durable writes.
+- [ ] Follow-up: move all compose/export generation to temp-output then atomic rename if any path remains direct-write.
+- [ ] Follow-up: persist CAS metadata in index schema.
+
+## Phase 2B: CAS metadata in indexed media
+- [x] Added optional sha256/content_address fields.
+- [x] Preserved legacy media compatibility.
+- [x] Added duplicate-content deterministic hash tests.
+- [ ] Follow-up: promote content_address to primary asset identity where safe.
+- [ ] Follow-up: add duplicate detection UX in Explorer.
+
+## Phase 3: Event-driven runtime state
+- [x] Added SSE event stream
+- [x] Added runtime event bus
+- [x] Explorer receives real-time hints
+- [ ] Replace polling with event-driven updates
+- [ ] Add event replay/backfill
+
+## Phase 4C: Pending artifact controller extraction
+- [x] Extracted pending artifact controller.
+- [x] Preserved compose and recording pending UI behavior.
+- [ ] Follow-up: extract asset grid orchestration.
+- [ ] Follow-up: convert pending artifact lifecycle to behavior tests.
+
+## Phase 4D: Asset render orchestration extraction
+- [x] Extracted render entry model.
+- [x] Extracted render controller.
+- [x] Preserved grid/list behavior.
+- [ ] Follow-up: extract selection/focus/preview controller.
+
+## Phase 4E: Selection and preview controller extraction
+- [x] Extracted selection/preview controller.
+- [x] Preserved active asset and preview behavior.
+- [ ] Follow-up: bulk action controller extraction.
+
+## Phase 4F-I: ExplorerApp orchestration completion
+- [x] Extracted bulk action controller.
+- [x] Extracted search/filter controller.
+- [x] Extracted feedback controller.
+- [x] Documented ExplorerApp as composition shell.
+- [ ] Follow-up: add behavior tests for controller boundaries.
+- [ ] Follow-up: verify mobile Explorer behavior.
+

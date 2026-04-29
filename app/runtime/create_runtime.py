@@ -13,8 +13,11 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.runtime.ingest_registry import IngestClaimRegistry
-from app.runtime.live_sessions import LiveSessionRegistry
+from app.runtime.events import RuntimeEventBus
+from app.runtime.lifecycle import RuntimeLifecycleController, RuntimeLifecycleSettings
+from app.runtime.live_sessions import LiveSessionRegistry, WebRtcLiveSessionRegistry
 from app.runtime.nodes import NodeRegistry
+from app.runtime.recording_sessions import RecordingSessionRegistry
 from app.runtime.runner_control import RunnerControlPlane
 from app.runtime.source_records import build_primary_source_record
 from app.runtime.types import (
@@ -186,6 +189,10 @@ def create_runtime() -> AppRuntime:
             "remote_source_records": [],
         },
     )
+    runtime.live_sessions = WebRtcLiveSessionRegistry()
+    runtime.recording_sessions = RecordingSessionRegistry()
+    runtime.events = RuntimeEventBus()
+    runtime.lifecycle = RuntimeLifecycleController(runtime=runtime, settings=RuntimeLifecycleSettings())
 
     if role == "runner" and services.upstream_client is not None:
         runtime.services.runner_control = RunnerControlPlane(runtime=runtime)
