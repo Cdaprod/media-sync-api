@@ -48,6 +48,10 @@ export default function ConnectDevicePage() {
   const nodeHeartbeatTimerRef = useRef<number | null>(null);
   const publisherBusyRef = useRef(false);
   const activeBroadcastSessionRef = useRef<{ session_id: string } | null>(null);
+  const viewerPeerRef = useRef<RTCPeerConnection | null>(null);
+  const viewerPollTimerRef = useRef<number | null>(null);
+  const viewerSessionIdRef = useRef<string | null>(null);
+  const viewerIdRef = useRef<string>('viewer-default');
   const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
   const [mode, setMode] = useState<'local' | 'remote'>('local');
   const [activeBroadcastSession, setActiveBroadcastSession] = useState<{ session_id: string } | null>(null);
@@ -130,6 +134,12 @@ export default function ConnectDevicePage() {
         window.clearInterval(nodeHeartbeatTimerRef.current);
         nodeHeartbeatTimerRef.current = null;
       }
+      if (viewerPollTimerRef.current != null) {
+        window.clearInterval(viewerPollTimerRef.current);
+        viewerPollTimerRef.current = null;
+      }
+      viewerPeerRef.current?.close();
+      viewerPeerRef.current = null;
     };
   }, []);
 
@@ -276,14 +286,69 @@ export default function ConnectDevicePage() {
 
 
   async function watchLiveSession(sessionRecord: { session_id: string }): Promise<void> {
-    appendTrace(`viewer:watch ${sessionRecord.session_id}`);
+    const sessionId = sessionRecord.session_id;
+    appendTrace(`viewer:watch ${sessionId}`);
     setMode('remote');
-    const signal = await api.getLiveSignalState(sessionRecord.session_id).catch(() => null);
-    if (!signal) {
+    if (viewerPollTimerRef.current != null) {
+      window.clearInterval(viewerPollTimerRef.current);
+      viewerPollTimerRef.current = null;
+    }
+    viewerPeerRef.current?.close();
+    viewerPeerRef.current = null;
+    viewerSessionIdRef.current = sessionId;
+    viewerIdRef.current = `viewer-${Date.now().toString(36)}`;
+    if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
       setPeerStatus('failed');
       return;
     }
+
+    const offer = await fetch(api.buildUrl(`/api/live/${encodeURIComponent(sessionId)}/offer`), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    }).then((res) => res.ok ? res.json() : null).catch(() => null);
+    if (!offer?.sdp) {
+      setPeerStatus('failed');
+      return;
+    }
+
+    const peer = new RTCPeerConnection();
+    viewerPeerRef.current = peer;
+    const remoteStream = new MediaStream();
+    peer.ontrack = (event) => {
+      for (const track of event.streams[0]?.getTracks?.() || []) {
+        remoteStream.addTrack(track);
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = remoteStream;
+        void videoRef.current.play?.().catch(() => undefined);
+      }
+      setPeerStatus('connected');
+    };
+    peer.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      void api.postLiveViewerIce(sessionId, viewerIdRef.current, event.candidate.toJSON()).catch(() => undefined);
+    };
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    await api.postLiveViewerAnswer(sessionId, viewerIdRef.current, { type: 'answer', sdp: answer.sdp || '' });
+    await api.postLiveViewerState(sessionId, viewerIdRef.current, 'answer-posted').catch(() => undefined);
     setPeerStatus('offer-published');
+
+    const seenIce = new Set<string>();
+    viewerPollTimerRef.current = window.setInterval(() => {
+      const activePeer = viewerPeerRef.current;
+      if (!activePeer || viewerSessionIdRef.current !== sessionId) return;
+      void api.listLiveDeviceIce(sessionId).then(async (candidates) => {
+        for (const candidate of candidates || []) {
+          const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
+          if (seenIce.has(key)) continue;
+          seenIce.add(key);
+          await activePeer.addIceCandidate(candidate);
+        }
+      }).catch(() => undefined);
+    }, 1000);
   }
 
   const handleUseSelectedLocalDevice = async () => {
@@ -348,6 +413,12 @@ export default function ConnectDevicePage() {
               videoRef.current.srcObject = stream;
               await videoRef.current.play().catch(() => undefined);
             }
+            return;
+          }
+          if (mode === 'remote') {
+            const sessions = await api.listWebRtcLiveSessions().catch(() => []);
+            const nextSession = sessions.find((item) => item.session_id && item.has_offer);
+            if (nextSession) await watchLiveSession(nextSession);
             return;
           }
           await handleStartBroadcast();

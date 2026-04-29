@@ -3477,3 +3477,20 @@ test('connect device route keeps canonical shim and deterministic broadcast wiri
   assert.ok(liveHook.includes('const stream = options?.stream ?? ('));
   assert.ok(cameraHook.includes('navigator.mediaDevices.getUserMedia'));
 });
+
+
+test('connect device viewer attach path stays remote-only and avoids local camera reacquire', () => {
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const start = page.indexOf('async function watchLiveSession');
+  const end = page.indexOf('const handleUseSelectedLocalDevice', start);
+  assert.ok(start >= 0 && end > start);
+  const watchBody = page.slice(start, end);
+  assert.ok(watchBody.includes('new RTCPeerConnection()'));
+  assert.ok(watchBody.includes('ontrack'));
+  assert.ok(watchBody.includes('postLiveViewerAnswer'));
+  assert.ok(watchBody.includes('postLiveViewerIce'));
+  assert.ok(!watchBody.includes('startCamera('));
+  assert.ok(!watchBody.includes('startPreview('));
+  assert.ok(!watchBody.includes('getUserMedia'));
+});

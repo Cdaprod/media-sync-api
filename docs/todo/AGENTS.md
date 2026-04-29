@@ -1,3 +1,10 @@
+## 2026-04-29 — Add remote viewer attach for live sessions
+- [x] Backend recording lifecycle endpoints
+- [x] Live session → recording linkage
+- [x] Viewer attach WebRTC flow implemented
+- [x] Multiple viewers supported per live session
+- [ ] Follow-up: UI polish + latency optimization
+
 ## 2026-04-29 — Live WebRTC recording lifecycle ownership follow-up
 - [x] Added /api/live recording lifecycle routes (`record/start`, `record/stop`, session-scoped recording list).
 - [x] Enforced idempotent record start for the same active live session.

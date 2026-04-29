@@ -261,3 +261,30 @@ def test_record_stop_transitions_honestly(client):
     stopped = client.post(f"/api/live/{session_id}/record/stop", json={})
     assert stopped.status_code == 200
     assert stopped.json()["recording"]["state"] == "stopping"
+
+def test_viewer_attach_does_not_overwrite_publisher_offer_and_supports_two_viewers(client):
+    session_id = "sess-live-viewer-iso"
+    offer_payload = {"type": "offer", "sdp": "v=0\r\no=publisher-offer"}
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-view", "offer": offer_payload},
+    )
+
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-a/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer-a"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-b/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer-b"}},
+    )
+
+    offer = client.get(f"/api/live/{session_id}/offer")
+    assert offer.status_code == 200
+    assert offer.json()["sdp"] == offer_payload["sdp"]
+
+    listed = client.get('/api/live')
+    match = next((s for s in listed.json()["sessions"] if s["session_id"] == session_id), None)
+    assert match is not None
+    assert match["viewer_count"] >= 2
+    assert match["has_offer"] is True
