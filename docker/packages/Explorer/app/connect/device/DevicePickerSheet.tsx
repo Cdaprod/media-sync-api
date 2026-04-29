@@ -13,6 +13,10 @@ interface DevicePickerSheetProps {
   remoteNodes: RemoteCameraNode[];
   selectedDeviceId: string | null;
   onSelectLocalDevice: (deviceId: string) => void | Promise<void>;
+  onUseSelectedLocalDevice: () => void | Promise<void>;
+  mode: 'local' | 'remote';
+  onModeChange: (mode: 'local' | 'remote') => void;
+  onOpenRemoteNode: (nodeId: string) => void;
   onRefresh: () => void;
 }
 
@@ -24,6 +28,10 @@ export default function DevicePickerSheet({
   remoteNodes,
   selectedDeviceId,
   onSelectLocalDevice,
+  onUseSelectedLocalDevice,
+  mode,
+  onModeChange,
+  onOpenRemoteNode,
   onRefresh,
 }: DevicePickerSheetProps) {
   const [pendingId, setPendingId] = useState<string | null>(selectedDeviceId);
@@ -34,23 +42,23 @@ export default function DevicePickerSheet({
 
   if (!isOpen) return null;
 
-  const handleSelectRemote = (_nodeId: string) => undefined;
+  const handleSelectRemote = (nodeId: string) => onOpenRemoteNode(nodeId);
 
-  const handleConfirm = async () => {
-    if (pendingId && localDevices.some(d => d.deviceId === pendingId)) {
-      await onSelectLocalDevice(pendingId);
-    }
-  };
+  const handleConfirm = async () => { await onUseSelectedLocalDevice(); };
 
   return (
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker-sheet" onClick={e => e.stopPropagation()}>
         <div className="picker-header">
           <h2>Select a device</h2>
+          <div className="device-monitor-segment">
+            <button type="button" className={mode === 'local' ? 'active' : ''} onClick={() => onModeChange('local')}>Local</button>
+            <button type="button" className={mode === 'remote' ? 'active' : ''} onClick={() => onModeChange('remote')}>Remote</button>
+          </div>
           <button className="btn-pill" onClick={onClose}>Close</button>
         </div>
         <div className="picker-body">
-          <section>
+          <section style={{ order: mode === 'local' ? 0 : 1 }}>
             <p className="picker-section-title">Local cameras</p>
             <div className="device-list">
               {localDevices.length === 0 && (
@@ -62,14 +70,14 @@ export default function DevicePickerSheet({
                 <button
                   key={d.deviceId}
                   className={`device-btn ${pendingId === d.deviceId ? 'active' : ''}`}
-                  onClick={() => setPendingId(d.deviceId)}
+                  onClick={() => { setPendingId(d.deviceId); void onSelectLocalDevice(d.deviceId); }}
                 >
                   <span>{d.label || `Camera ${d.deviceId.slice(0,8)}`}</span>
                 </button>
               ))}
             </div>
           </section>
-          <section>
+          <section style={{ order: mode === 'remote' ? 0 : 1 }}>
             <p className="picker-section-title">Remote cameras (Explorer nodes)</p>
             <div className="device-list">
               {remoteNodes.length === 0 ? (

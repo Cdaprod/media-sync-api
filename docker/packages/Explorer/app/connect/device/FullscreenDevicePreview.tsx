@@ -27,6 +27,8 @@ interface FullscreenDevicePreviewProps {
   sourceKind?: string | null;
   error?: string | null;
   peerStatus: 'idle' | 'offer-published' | 'connected' | 'failed';
+  mode: 'local' | 'remote';
+  onModeChange: (mode: 'local' | 'remote') => void;
   videoRef: RefObject<HTMLVideoElement>;
   canUseCamera: boolean;
   canUseScreen: boolean;
@@ -39,6 +41,8 @@ interface FullscreenDevicePreviewProps {
   onRefreshDevices?: () => Promise<void>;
   onSelectCameraDevice?: (deviceId: string | null) => void;
   onClearCameraError?: () => void;
+  onRequestOpenPicker?: () => void;
+  onRequestToggleScopes?: () => void;
   onStartCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
   onStartScreen: () => void | Promise<void>;
   onStopPreview: () => void | Promise<void>;
@@ -56,6 +60,8 @@ export default function FullscreenDevicePreview({
   sourceKind,
   error,
   peerStatus,
+  mode,
+  onModeChange,
   videoRef,
   canUseCamera,
   canUseScreen,
@@ -68,6 +74,8 @@ export default function FullscreenDevicePreview({
   onRefreshDevices,
   onSelectCameraDevice,
   onClearCameraError,
+  onRequestOpenPicker,
+  onRequestToggleScopes,
   onStartCamera,
   onStartScreen,
   onStopPreview,
@@ -161,6 +169,16 @@ export default function FullscreenDevicePreview({
       root?.removeEventListener('pointerdown', onMove);
     };
   }, [showOverlays]);
+  useEffect(() => {
+    const openPicker = () => setPickerOpen(true);
+    const toggleScopes = () => setShelfOpen((prev) => !prev);
+    window.addEventListener('explorer-monitor-open-picker', openPicker);
+    window.addEventListener('explorer-monitor-toggle-scopes', toggleScopes);
+    return () => {
+      window.removeEventListener('explorer-monitor-open-picker', openPicker);
+      window.removeEventListener('explorer-monitor-toggle-scopes', toggleScopes);
+    };
+  }, []);
 
   const isActive = state === 'previewing' || state === 'recording';
   const isDeviceRecording = state === 'recording';
@@ -233,7 +251,7 @@ export default function FullscreenDevicePreview({
             <div className="btn-stack">
               {isIdle && !isError && !isEnded && (
                 <>
-                  <button className="btn-overlay ghost" onClick={onStartCamera} disabled={!canUseCamera}>
+                  <button className="btn-overlay ghost" onClick={() => { void onStartCamera(); }} disabled={!canUseCamera}>
                     Start Live Broadcast
                   </button>
                   {canUseScreen && !isLikelyIOS && (
@@ -248,7 +266,7 @@ export default function FullscreenDevicePreview({
               )}
               {(showFatalError || isEnded) && (
                 <>
-                  <button className="btn-overlay primary" onClick={onStartCamera}>
+                  <button className="btn-overlay primary" onClick={() => { void onStartCamera(); }}>
                     Retry
                   </button>
                   <button className="btn-overlay ghost" onClick={() => setPickerOpen(true)}>
@@ -273,6 +291,9 @@ export default function FullscreenDevicePreview({
             <p className="perm-label">Permission: {localPermission}</p>
             {error && <p className="err-label">{error}</p>}
             {peerStatus !== 'idle' && <p className="perm-label">WebRTC: {peerStatus}</p>}
+            {state === 'starting' && <p className="perm-label">Starting camera…</p>}
+            {peerStatus === 'idle' && state === 'previewing' && <p className="perm-label">Publishing live offer…</p>}
+            {peerStatus === 'offer-published' && <p className="perm-label">Waiting for Explorer answer…</p>}
             {sessionId && <p className="perm-label">Session: {sessionId.slice(0,8)}…</p>}
           </div>
           <div className="top-actions">
@@ -330,6 +351,14 @@ export default function FullscreenDevicePreview({
         remoteNodes={remoteNodes}
         selectedDeviceId={selectedDeviceId}
         onSelectLocalDevice={handleSelectLocalDevice}
+        onUseSelectedLocalDevice={async () => {
+          if (!selectedDeviceId) return;
+          await handleSelectLocalDevice(selectedDeviceId);
+          setPickerOpen(false);
+        }}
+        mode={mode}
+        onModeChange={onModeChange}
+        onOpenRemoteNode={(nodeId) => window.open(`/connect/device?node_id=${encodeURIComponent(nodeId)}`, '_blank')}
         onRefresh={async () => {
           await (onRefreshDevices ? onRefreshDevices() : refreshLocal());
           refreshRemote();

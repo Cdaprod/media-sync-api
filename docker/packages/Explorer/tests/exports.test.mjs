@@ -3355,6 +3355,8 @@ test('connect device monitor shell wiring and contracts', () => {
   const css = fs.readFileSync(cssPath, 'utf8');
   const preview = fs.readFileSync(previewPath, 'utf8');
   const hooks = fs.readFileSync(hooksPath, 'utf8');
+  const pickerPath = path.join(packageRoot, 'app', 'connect', 'device', 'DevicePickerSheet.tsx');
+  const picker = fs.readFileSync(pickerPath, 'utf8');
 
   const liveSessionPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
   const liveSession = fs.readFileSync(liveSessionPath, 'utf8');
@@ -3403,4 +3405,17 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(connectPage.includes("await startPreview('camera', { ...options, stream })"));
   assert.ok(liveSession.includes('stream?: MediaStream'));
   assert.ok(preview.includes('cameraState'));
+
+  assert.ok(picker.includes('Use selected'));
+  assert.ok(picker.includes('onUseSelectedLocalDevice'));
+  assert.ok(shell.includes("onClick={() => onModeChange('local')"));
+  assert.ok(shell.includes("onClick={() => onModeChange('remote')"));
+  assert.ok(preview.includes('Start Live Broadcast'));
+  assert.ok(preview.includes('onClick={() => { void onStartCamera(); }}'));
+  assert.ok(preview.includes('Pick Camera'));
+  assert.ok(preview.includes('explorer-monitor-open-picker'));
+  assert.ok(page.includes('mode={mode}'));
+  assert.ok(page.includes('onModeChange={setMode}'));
+  assert.ok(useCameraSession.includes('return stream;'));
+  assert.ok(useCameraSession.includes('return null;'));
 });

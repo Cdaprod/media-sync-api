@@ -11,6 +11,10 @@ type DeviceMonitorShellProps = {
   title?: string;
   statusBadge?: number;
   onBack: () => void;
+  onForward?: () => void;
+  canForward?: boolean;
+  onToggleScopes?: () => void;
+  onOpenMenu?: () => void;
   onDone: () => void;
   children: ReactNode;
 };
@@ -22,6 +26,10 @@ export default function DeviceMonitorShell({
   title = 'FullscreenPreview · ThatDAMToolbox',
   statusBadge = 0,
   onBack,
+  onForward,
+  canForward = false,
+  onToggleScopes,
+  onOpenMenu,
   onDone,
   children,
 }: DeviceMonitorShellProps) {
@@ -44,9 +52,9 @@ export default function DeviceMonitorShell({
 
       <footer className="device-monitor-footer">
         <button type="button" className="device-monitor-footer-btn" onClick={onBack} aria-label="Back">←</button>
-        <button type="button" className="device-monitor-footer-btn" aria-label="Forward" disabled>→</button>
-        <button type="button" className="device-monitor-footer-btn" aria-label="Compass">◉</button>
-        <button type="button" className="device-monitor-footer-btn" aria-label="Messages">
+        <button type="button" className="device-monitor-footer-btn" aria-label="Forward" disabled={!canForward} onClick={onForward}>→</button>
+        <button type="button" className="device-monitor-footer-btn" aria-label="Toggle scopes" onClick={onToggleScopes}>◉</button>
+        <button type="button" className="device-monitor-footer-btn" aria-label="Open monitor menu" onClick={onOpenMenu}>
           ☰
           {statusBadge > 0 ? <span className="device-monitor-badge">{statusBadge}</span> : null}
         </button>

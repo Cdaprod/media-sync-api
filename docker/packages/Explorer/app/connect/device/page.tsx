@@ -215,6 +215,10 @@ export default function ConnectDevicePage() {
       sourceLabel={sourceLabel}
       statusBadge={peerStatus === 'offer-published' ? 1 : 0}
       onBack={() => router.back()}
+      onForward={() => router.forward()}
+      canForward
+      onToggleScopes={() => window.dispatchEvent(new Event('explorer-monitor-toggle-scopes'))}
+      onOpenMenu={() => window.dispatchEvent(new Event('explorer-monitor-open-picker'))}
       onDone={() => router.push('/')}
     >
       <FullscreenDevicePreview
@@ -226,6 +230,8 @@ export default function ConnectDevicePage() {
         sourceKind={session?.source_kind ?? null}
         error={error}
         peerStatus={peerStatus}
+        mode={mode}
+        onModeChange={setMode}
         videoRef={videoRef}
         canUseCamera={capability.hasGetUserMedia}
         canUseScreen={shouldShowScreenAction}

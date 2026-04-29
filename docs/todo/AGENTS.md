@@ -1,3 +1,12 @@
+## 2026-04-29 — Make connect device monitor controls functional
+- [x] Wired Start Live Broadcast to CameraSession + live session start.
+- [x] Made local camera picker selection actionable with Use Selected.
+- [x] Wired Local/Remote mode into picker behavior.
+- [x] Added bottom monitor controls for picker/scopes/navigation.
+- [x] Kept CameraSession as canonical camera lifecycle owner.
+- [ ] Follow-up: implement real remote camera node handoff.
+- [ ] Follow-up: add browser automation coverage for iOS camera switching.
+
 ## 2026-04-29 — Add CameraSession layer for connect device monitor
 - [x] Added typed CameraSession state and camera error model.
 - [x] Added useCameraSession for enumeration, switching, fallback, and stream lifecycle.
