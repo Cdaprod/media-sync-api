@@ -117,6 +117,12 @@ export default function FullscreenDevicePreview({
     }, 500);
     return () => window.clearInterval(timer);
   }, [videoRef]);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  useEffect(() => () => {
+    clearTimeout(idleTimerRef.current);
+  }, []);
 
   const { analyser, peakLevel } = useAudioAnalyser(mediaStream);
 
@@ -376,6 +382,3 @@ export default function FullscreenDevicePreview({
     </div>
   );
 }
-  useEffect(() => {
-    setMounted(true);
-  }, []);

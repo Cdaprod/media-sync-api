@@ -98,6 +98,14 @@ This document maps the current Explorer package feature architecture under `dock
 - [x] Recording reconciliation highlight behavior preserved.
 - [ ] Follow-up: extract bulk action orchestration.
 - [ ] Follow-up: add behavior tests for selection/focus transitions.
+## Connect device lifecycle ownership
+- CameraSession owns local camera capture.
+- useLiveSession owns live session creation.
+- ConnectDevicePage owns the bridge from local stream to live WebRTC offer.
+- FullscreenDevicePreview owns monitor UI only.
+- Remote devices are other local capture nodes, not local getUserMedia inputs.
+- Explorer remains owner of remote stream viewing and asset recording.
+
 ## Connect device broadcast lifecycle
 - Local camera capture is owned by CameraSession.
 - Device broadcast lifecycle is represented by BroadcastSnapshot.

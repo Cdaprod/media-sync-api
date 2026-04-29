@@ -1,3 +1,12 @@
+## 2026-04-29 — Stabilize connect device lifecycle ownership
+- [x] Fixed hook placement and prop wiring in the fullscreen device monitor.
+- [x] Made Start Live Broadcast a deterministic camera → live session → WebRTC offer chain.
+- [x] Ensured WebRTC offer uses the exact session_id returned by useLiveSession.
+- [x] Bounded answer polling and avoided duplicate offer publication.
+- [x] Preserved Local vs Remote semantics without moving recording into /connect/device.
+- [ ] Follow-up: wire Remote tab Watch/Answer Live directly into Explorer live preview modal.
+- [ ] Follow-up: add browser automation for iOS camera switching.
+
 ## 2026-04-29 — Harden connect device broadcast lifecycle
 - [x] Added typed broadcast lifecycle state model.
 - [x] Added live broadcast alignment check after offer publish.
