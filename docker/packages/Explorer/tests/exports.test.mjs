@@ -3502,6 +3502,7 @@ test('explorer pending artifact controller merges runtime assets into pending re
   const content = fs.readFileSync(pendingControllerPath, 'utf8');
   assert.ok(content.includes('listRuntimeAssets'));
   assert.ok(content.includes('runtimeAssetToPendingRecording'));
+  assert.ok(content.includes("previewable: 'recording'"));
   assert.ok(content.includes("materializing: 'finalizing'"));
   assert.ok(content.includes("ready: 'saved'"));
   assert.ok(content.includes('[...pendingRecordingAssets, ...runtimeRecordingAssets]'));

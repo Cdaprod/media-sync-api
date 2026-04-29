@@ -156,6 +156,17 @@ async def publish_offer(
     elif session.node_id != payload.node_id:
         raise HTTPException(status_code=409, detail="session_node_mismatch")
     registry.set_offer(session_id, payload.offer)
+    _assets_registry(runtime).upsert(RuntimeAsset(
+        id=f"runtime-live-{session_id}",
+        kind="live",
+        state="previewable",
+        session_id=session_id,
+        node_id=session.node_id,
+        source_kind="camera",
+        project="Live",
+        source="primary",
+        metadata={"session_id": session_id, "node_id": session.node_id},
+    ))
     _emit_event(runtime, "live.offer", {"session_id": session_id, "node_id": session.node_id})
     return {"ok": True, "session_id": session_id, "node_id": session.node_id}
 
@@ -386,4 +397,5 @@ async def delete_live_session(session_id: str, runtime: AppRuntime = Depends(get
     deleted = registry.delete(session_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="session_not_found")
+    _assets_registry(runtime).remove(f"runtime-live-{session_id}")
     return {"ok": True, "deleted": True, "session_id": session_id}

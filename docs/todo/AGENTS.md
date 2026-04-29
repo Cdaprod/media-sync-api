@@ -1,3 +1,9 @@
+## 2026-04-29 — Runtime live preview asset visibility follow-up
+- [x] Live WebRTC offer now creates `RuntimeAsset(kind=live, state=previewable)`.
+- [x] Explorer runtime-asset placeholder mapping now includes `previewable` live state.
+- [x] Added backend test proving live offer creates previewable runtime asset.
+- [ ] Follow-up: dedicated live-card rendering polish beyond pending-recording visual reuse.
+
 ## 2026-04-29 — Explorer runtime asset merge visibility wiring
 - [x] Explorer pending artifact controller now polls `/api/runtime/assets`.
 - [x] Runtime recording assets are mapped into pending recording placeholder cards.

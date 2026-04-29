@@ -43,9 +43,10 @@ type RuntimeAssetRecord = {
 };
 
 function runtimeAssetToPendingRecording(asset: RuntimeAssetRecord): PendingRecordingAsset | null {
-  if (asset.kind !== 'recording') return null;
+  if (asset.kind !== 'recording' && asset.kind !== 'live') return null;
   const statusByState: Record<string, PendingRecordingAsset['status']> = {
     recording: 'recording',
+    previewable: 'recording',
     materializing: 'finalizing',
     ready: 'saved',
     failed: 'failed',
@@ -59,7 +60,7 @@ function runtimeAssetToPendingRecording(asset: RuntimeAssetRecord): PendingRecor
     project: asset.project || 'Runtime',
     source: asset.source || 'primary',
     targetDir: asset.target_dir || 'ingest/live',
-    outputName: null,
+    outputName: asset.kind === 'live' ? 'Live Preview' : null,
     createdAt: asset.created_at || new Date().toISOString(),
     startedAt: asset.created_at || new Date().toISOString(),
     status,

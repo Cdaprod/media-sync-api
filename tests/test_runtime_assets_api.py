@@ -26,3 +26,18 @@ def test_record_start_creates_runtime_asset_and_stop_without_materialization_fai
     assert match_after is not None
     assert match_after['state'] == 'failed'
     assert match_after['error'] == 'recording_not_materialized'
+
+def test_live_offer_creates_previewable_runtime_asset(client):
+    session_id = 'sess-runtime-live-1'
+    posted = client.post(
+        f'/api/live/{session_id}/offer',
+        json={'node_id': 'node-runtime-live', 'offer': {'type': 'offer', 'sdp': 'v=0\r\no=offer'}},
+    )
+    assert posted.status_code == 200
+
+    listed = client.get('/api/runtime/assets')
+    assert listed.status_code == 200
+    match = next((a for a in listed.json()['assets'] if a['id'] == f'runtime-live-{session_id}'), None)
+    assert match is not None
+    assert match['kind'] == 'live'
+    assert match['state'] == 'previewable'
