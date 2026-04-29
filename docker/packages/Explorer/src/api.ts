@@ -62,7 +62,7 @@ export type RecordingSessionRecord = RecordingSession;
 export interface ApiClient {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
-  heartbeatNode: (nodeId: string) => Promise<NodeControlRecord>;
+  heartbeatNode: (node: string | { nodeId: string; token?: string | null }) => Promise<NodeControlRecord>;
   deleteNode: (nodeId: string) => Promise<{ ok: boolean; deleted: boolean; node_id: string }>;
   registerNode: (payload: RegisterNodeRequest) => Promise<RegisterNodeResponse>;
   listIngestClaims: () => Promise<IngestClaimRecord[]>;
@@ -176,12 +176,17 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async heartbeatNode(nodeId: string): Promise<NodeControlRecord> {
+    async heartbeatNode(node: string | { nodeId: string; token?: string | null }): Promise<NodeControlRecord> {
+      const nodeId = typeof node === 'string' ? node : node.nodeId;
+      const token = typeof node === 'string' ? null : (node.token ?? null);
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+        headers['X-Media-Sync-Node-Id'] = nodeId;
+      }
       const response = await fetch(buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}/heartbeat`), {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-        },
+        headers,
         cache: 'no-store',
       });
 

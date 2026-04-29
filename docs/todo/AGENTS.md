@@ -1,3 +1,14 @@
+## 2026-04-29 — Harden connect device broadcast lifecycle
+- [x] Added typed broadcast lifecycle state model.
+- [x] Added live broadcast alignment check after offer publish.
+- [x] Ensured WebRTC offer uses the exact live-session session_id.
+- [x] Added bounded answer polling and structured debug status.
+- [x] Added heartbeat maintenance without bypassing auth.
+- [x] Clarified Local vs Remote device semantics.
+- [x] Preserved Explorer-owned remote recording path.
+- [ ] Follow-up: wire Remote tab Watch/Answer Live directly into Explorer live preview modal.
+- [ ] Follow-up: add browser automation for iOS camera switching.
+
 ## 2026-04-29 — Make connect device broadcast commit selected camera session
 - [x] Added canonical handleStartBroadcast path that commits selected camera into live session creation.
 - [x] Added explicit publishPeerOffer(session, stream) startup lane (offer + ICE + answer polling).

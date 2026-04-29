@@ -46,6 +46,7 @@ interface FullscreenDevicePreviewProps {
   onStartCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
   onUseSelectedLocalDevice: () => Promise<boolean>;
   debugEvents?: string[];
+  broadcastLabel?: string;
   onStartScreen: () => void | Promise<void>;
   onStopPreview: () => void | Promise<void>;
   onStartDeviceRecording: () => void | Promise<void>;
@@ -81,6 +82,7 @@ export default function FullscreenDevicePreview({
   onStartCamera,
   onUseSelectedLocalDevice,
   debugEvents = [],
+  broadcastLabel,
   onStartScreen,
   onStopPreview,
   onStartDeviceRecording,
@@ -293,6 +295,7 @@ export default function FullscreenDevicePreview({
       {process.env.NODE_ENV !== 'production' ? (
         <div className="picker-status-chip">
           Camera: {cameraState?.status || 'unknown'} · Selected: {cameraState?.selectedDeviceId || 'default'} · Session: {sessionId || 'none'} · Peer: {peerStatus}
+          {broadcastLabel ? ` · ${broadcastLabel}` : ''}
           {debugEvents.length > 0 ? ` · ${debugEvents.join(' | ')}` : ''}
         </div>
       ) : null}

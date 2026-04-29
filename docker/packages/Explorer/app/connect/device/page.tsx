@@ -10,6 +10,9 @@ import { useLiveSession } from '../../../src/hooks/useLiveSession';
 import FullscreenDevicePreview from './FullscreenDevicePreview';
 import DeviceMonitorShell from './DeviceMonitorShell';
 import { useCameraSession } from './useCameraSession';
+import { ensureLiveBroadcastAlignment } from './liveBroadcastAlignment';
+import { makeBroadcastFailure, type BroadcastSnapshot } from './broadcastSession';
+import { readDeviceBearerToken } from './deviceCredentials';
 // CSS import removed – now in layout.tsx
 
 const api = createApiClient('');
@@ -48,6 +51,11 @@ export default function ConnectDevicePage() {
   const [mode, setMode] = useState<'local' | 'remote'>('local');
   const [activeBroadcastSession, setActiveBroadcastSession] = useState<{ session_id: string } | null>(null);
   const [traceEvents, setTraceEvents] = useState<string[]>([]);
+  const [heartbeatState, setHeartbeatState] = useState<'ok' | 'skipped-no-token' | 'failed'>('skipped-no-token');
+  const [broadcast, setBroadcast] = useState<BroadcastSnapshot>({
+    stage: 'idle', nodeId, selectedDeviceId: null, cameraLabel: null, sessionId: null, sourceKind: null,
+    peerStatus: 'idle', waitingForAnswer: false, error: null, updatedAt: Date.now(),
+  });
   const debugEnabled = searchParams.get('debug') === '1';
 
 
@@ -154,10 +162,19 @@ export default function ConnectDevicePage() {
     await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' });
     appendTrace(`peer:offer-published ${sessionId}`);
     setPeerStatus('offer-published');
-    const live = await api.listWebRtcLiveSessions().catch(() => []);
-    const exists = live.some((entry) => entry.session_id === sessionId);
-    traceDevice('peer:api-live-confirmed', { sessionId, exists });
-    appendTrace(`peer:api-live-confirmed ${exists}`);
+    const live = await ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId || '' });
+    if (!live.ok) {
+      appendTrace(`peer:api-live-mismatch ${live.reason}`);
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('live_registry_mismatch', live.reason), updatedAt: Date.now() }));
+      if (live.reason === 'session_not_listed' || live.reason === 'node_mismatch') {
+        peer.close();
+        setPeerStatus('failed');
+      }
+      return;
+    }
+    traceDevice('peer:api-live-confirmed', { sessionId, exists: true });
+    appendTrace('peer:api-live-confirmed');
+    setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: true, updatedAt: Date.now() }));
     if (signalPollTimerRef.current != null) window.clearInterval(signalPollTimerRef.current);
     signalPollTimerRef.current = window.setInterval(() => {
       void api.getLiveSignalState(sessionId).then(async (signal) => {
@@ -167,6 +184,7 @@ export default function ConnectDevicePage() {
         if (signal.answer?.sdp && !activePeer.currentRemoteDescription) {
           await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
           appendTrace(`peer:answer-received ${sessionId}`);
+          setBroadcast((prev) => ({ ...prev, stage: 'connected', waitingForAnswer: false, updatedAt: Date.now() }));
         }
         for (const candidate of signal.ice_from_viewer || []) {
           const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
@@ -197,28 +215,49 @@ export default function ConnectDevicePage() {
         enabled: track.enabled,
       })) ?? [],
     });
-    if (!stream) return false;
+    if (!stream) {
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', error: makeBroadcastFailure('missing_media_stream'), updatedAt: Date.now() }));
+      return false;
+    }
+    setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
       await videoRef.current.play().catch(() => undefined);
     }
     appendTrace('live:startPreview');
     const nextSession = await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined });
-    if (!nextSession) return false;
+    if (!nextSession) {
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', error: makeBroadcastFailure('live_session_failed'), updatedAt: Date.now() }));
+      return false;
+    }
     setActiveBroadcastSession(nextSession);
     activeBroadcastSessionRef.current = nextSession;
     appendTrace(`live:session-created ${nextSession.session_id}`);
     if (nodeHeartbeatTimerRef.current != null) window.clearInterval(nodeHeartbeatTimerRef.current);
     if (nodeId) {
       nodeHeartbeatTimerRef.current = window.setInterval(() => {
-        void api.heartbeatNode(nodeId).then(() => appendTrace('heartbeat:ok')).catch((err: unknown) => {
+        const token = readDeviceBearerToken(nodeId);
+        if (!token) {
+          appendTrace('heartbeat:skipped-no-token');
+          setHeartbeatState('skipped-no-token');
+          return;
+        }
+        void api.heartbeatNode({ nodeId, token }).then(() => {
+          appendTrace('heartbeat:ok');
+          setHeartbeatState('ok');
+        }).catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
-          if (message.includes('401') || message.includes('403')) appendTrace('heartbeat:skipped');
-          else appendTrace('heartbeat:error');
+          if (message.includes('401') || message.includes('403')) {
+            appendTrace('heartbeat:skipped-no-token');
+            setHeartbeatState('skipped-no-token');
+          } else {
+            appendTrace('heartbeat:error');
+            setHeartbeatState('failed');
+          }
         });
       }, 20000);
     } else {
-      appendTrace('heartbeat:skipped');
+      appendTrace('heartbeat:skipped-no-token');
     }
     await publishPeerOffer(nextSession, stream);
     return true;
@@ -297,6 +336,7 @@ export default function ConnectDevicePage() {
         onStartDeviceRecording={() => startRecording()}
         onStopDeviceRecording={() => stopRecording()}
         onBackToExplorer={() => router.push('/')}
+        broadcastLabel={`Broadcast: ${broadcast.stage} · Heartbeat: ${heartbeatState}`}
       />
     </DeviceMonitorShell>
   );
@@ -306,3 +346,6 @@ export default function ConnectDevicePage() {
         window.clearInterval(nodeHeartbeatTimerRef.current);
         nodeHeartbeatTimerRef.current = null;
       }
+    setBroadcast((prev) => ({ ...prev, stage: 'peer_publishing', sessionId, updatedAt: Date.now() }));
+    setBroadcast((prev) => ({ ...prev, stage: 'camera_starting', selectedDeviceId: camera.selectedDeviceId, sourceKind: 'camera', nodeId, updatedAt: Date.now() }));
+    setBroadcast((prev) => ({ ...prev, stage: 'live_session_ready', sessionId: nextSession.session_id, updatedAt: Date.now() }));

@@ -3362,11 +3362,15 @@ test('connect device monitor shell wiring and contracts', () => {
   const liveSession = fs.readFileSync(liveSessionPath, 'utf8');
 
   const connectPagePath = path.join(packageRoot, 'app', 'connect', 'device', 'ConnectDevicePage.tsx');
+  const broadcastSessionPath = path.join(packageRoot, 'app', 'connect', 'device', 'broadcastSession.ts');
+  const liveBroadcastAlignmentPath = path.join(packageRoot, 'app', 'connect', 'device', 'liveBroadcastAlignment.ts');
   const cameraSessionPath = path.join(packageRoot, 'app', 'connect', 'device', 'cameraSession.ts');
   const useCameraSessionPath = path.join(packageRoot, 'app', 'connect', 'device', 'useCameraSession.ts');
   const connectPage = fs.readFileSync(connectPagePath, 'utf8');
   const cameraSession = fs.readFileSync(cameraSessionPath, 'utf8');
   const useCameraSession = fs.readFileSync(useCameraSessionPath, 'utf8');
+  const broadcastSession = fs.readFileSync(broadcastSessionPath, 'utf8');
+  const liveBroadcastAlignment = fs.readFileSync(liveBroadcastAlignmentPath, 'utf8');
 
   assert.ok(page.includes("import DeviceMonitorShell from './DeviceMonitorShell'"));
   assert.ok(page.includes("useState<'local' | 'remote'>('local')"));
@@ -3385,10 +3389,12 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('camera.selectedDeviceId'));
   assert.ok(page.includes('const handleStartBroadcast = async () => {'));
   assert.ok(page.includes('const publishPeerOffer = async (sessionRecord'));
+  assert.ok(page.includes("import { ensureLiveBroadcastAlignment } from './liveBroadcastAlignment'"));
+  assert.ok(!page.includes('crypto.randomUUID()'));
   assert.ok(page.includes('await startCamera({'));
   assert.ok(page.includes("await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined })"));
   assert.ok(page.includes('publishLiveSignalOffer(sessionId'));
-  assert.ok(page.includes('listWebRtcLiveSessions'));
+  assert.ok(page.includes('ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId ||'));
   assert.ok(page.includes('const handleUseSelectedLocalDevice = async () => {'));
   assert.ok(preview.includes('const { devices: hookLocalDevices'));
   assert.ok(preview.includes('Array.isArray(localDevices) ? localDevices : []'));
@@ -3425,7 +3431,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('onModeChange={setMode}'));
   assert.ok(page.includes('videoRef.current.srcObject = stream;'));
   assert.ok(page.includes('nodeHeartbeatTimerRef.current = window.setInterval'));
-  assert.ok(page.includes("appendTrace('heartbeat:skipped')"));
+  assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));
   assert.ok(liveSession.includes('return nextSession;'));
   assert.ok(liveSession.includes('return null;'));
@@ -3434,4 +3440,11 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(useCameraSession.includes('return null;'));
   assert.ok(preview.includes('const [mounted, setMounted] = useState(false);'));
   assert.ok(preview.includes('disabled={!mounted ? false : !canUseCamera}'));
+  assert.ok(picker.includes('Use selected'));
+  assert.ok(!picker.includes('cameraSession.start'));
+  assert.ok(picker.includes('Remote devices are other local capture nodes.'));
+  assert.ok(broadcastSession.includes('export type BroadcastStage'));
+  assert.ok(liveBroadcastAlignment.includes('session.session_id === input.sessionId') || liveBroadcastAlignment.includes('session_id === input.sessionId'));
+  assert.ok(liveBroadcastAlignment.includes('match.node_id !== input.nodeId'));
+  assert.ok(liveBroadcastAlignment.includes('!match.has_offer'));
 });

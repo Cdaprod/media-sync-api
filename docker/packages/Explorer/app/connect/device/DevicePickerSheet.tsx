@@ -35,10 +35,12 @@ export default function DevicePickerSheet({
   onRefresh,
 }: DevicePickerSheetProps) {
   const [pendingId, setPendingId] = useState<string | null>(selectedDeviceId);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     if (isOpen) setPendingId(selectedDeviceId);
   }, [isOpen, selectedDeviceId]);
+  useEffect(() => { setMounted(true); }, []);
 
   if (!isOpen) return null;
 
@@ -78,7 +80,7 @@ export default function DevicePickerSheet({
             </div>
           </section>
           <section style={{ order: mode === 'remote' ? 0 : 1 }}>
-            <p className="picker-section-title">Remote cameras (Explorer nodes)</p>
+            <p className="picker-section-title">Remote devices are other local capture nodes.</p>
             <div className="device-list">
               {remoteNodes.length === 0 ? (
                 <div className="device-warn">
@@ -92,7 +94,7 @@ export default function DevicePickerSheet({
                     onClick={() => handleSelectRemote(node.node_id)}
                   >
                     <span>{node.label}</span>
-                    <span className="device-desc">remote unavailable here</span>
+                    <span className="device-desc">Open Device</span>
                   </button>
                 ))
               )}
@@ -105,7 +107,7 @@ export default function DevicePickerSheet({
             <button className="btn-pill" onClick={onClose}>Cancel</button>
             <button
               className="btn-pill solid"
-              disabled={!pendingId || !localDevices.some(d => d.deviceId === pendingId)}
+              disabled={!mounted ? false : (!pendingId || !localDevices.some(d => d.deviceId === pendingId))}
               onClick={handleConfirm}
             >
               Use selected
