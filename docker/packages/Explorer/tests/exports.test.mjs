@@ -3412,7 +3412,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(useCameraSession.includes('getUserMedia'));
   assert.ok(useCameraSession.includes('old.getTracks().forEach((t) => t.stop())'));
   assert.ok(useCameraSession.includes('facingMode'));
-  assert.ok(connectPage.includes("import { useCameraSession } from './useCameraSession'"));
+  assert.ok(connectPage.includes("export { default } from './page';"));
   assert.ok(page.includes("if (process.env.NODE_ENV !== 'production')"));
   assert.ok(liveSession.includes('stream?: MediaStream'));
   assert.ok(liveSession.includes('hasExternalStream'));

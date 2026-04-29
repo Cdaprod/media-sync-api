@@ -1,3 +1,12 @@
+## 2026-04-29 — Complete connect device deterministic broadcast path
+- [x] Made useLiveSession.startPreview return the created live session.
+- [x] Replaced reactive WebRTC offer publishing with deterministic Start Broadcast chain.
+- [x] Ensured WebRTC offer uses the exact returned live-session session_id.
+- [x] Kept Use Selected as local preview-only.
+- [x] Added /api/live verification after offer publish.
+- [x] Preserved Local vs Remote semantics.
+- [ ] Follow-up: wire Remote tab Watch/Answer Live directly into Explorer live preview modal.
+
 ## 2026-04-29 — Stabilize connect device lifecycle ownership
 - [x] Fixed hook placement and prop wiring in the fullscreen device monitor.
 - [x] Made Start Live Broadcast a deterministic camera → live session → WebRTC offer chain.
