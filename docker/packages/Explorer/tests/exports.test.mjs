@@ -57,6 +57,10 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'search', 'useExplorerSearchFilterController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'feedback', 'useExplorerFeedbackController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
@@ -145,6 +149,44 @@ test('explorer app stage 4 controllers are wired as composition shell imports', 
   assert.ok(content.includes("from './components/AssetList'"));
   assert.ok(content.includes("from './components/LiveSourceCard'"));
   assert.ok(content.includes("from './components/live/LivePreview'"));
+});
+
+test('explorer app controller initialization order prevents TDZ access', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  const feedbackIdx = content.indexOf('useExplorerFeedbackController(');
+  const selectionIdx = content.indexOf('useSelectionPreviewController(');
+  const pendingIdx = content.indexOf('usePendingArtifactController(');
+  const bulkIdx = content.indexOf('useBulkActionController(');
+  const searchIdx = content.indexOf('useExplorerSearchFilterController(');
+  const renderIdx = content.indexOf('useExplorerRenderController(');
+  assert.ok(feedbackIdx >= 0);
+  assert.ok(selectionIdx >= 0);
+  assert.ok(pendingIdx >= 0);
+  assert.ok(bulkIdx >= 0);
+  assert.ok(searchIdx >= 0);
+  assert.ok(renderIdx >= 0);
+  assert.ok(feedbackIdx < bulkIdx);
+  assert.ok(selectionIdx < bulkIdx);
+  assert.ok(pendingIdx < bulkIdx);
+  assert.ok(searchIdx < renderIdx);
+});
+
+test('controller module smoke checks include stable declaration markers', () => {
+  const bulk = fs.readFileSync(path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts'), 'utf8');
+  const feedback = fs.readFileSync(path.join(packageRoot, 'src', 'feedback', 'useExplorerFeedbackController.ts'), 'utf8');
+  const search = fs.readFileSync(path.join(packageRoot, 'src', 'search', 'useExplorerSearchFilterController.ts'), 'utf8');
+  const selection = fs.readFileSync(path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts'), 'utf8');
+  const pending = fs.readFileSync(path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts'), 'utf8');
+  const render = fs.readFileSync(path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts'), 'utf8');
+  const runtime = fs.readFileSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts'), 'utf8');
+  assert.ok(bulk.includes('const deleteSelected = useCallback'));
+  assert.ok(feedback.includes('const beginToastExit = useCallback'));
+  assert.ok(search.includes('const filteredMedia = useMemo'));
+  assert.ok(selection.includes('export function useSelectionPreviewController'));
+  assert.ok(pending.includes('export function usePendingArtifactController'));
+  assert.ok(render.includes('export function useExplorerRenderController'));
+  assert.ok(runtime.includes('export function useRuntimeController'));
 });
 
 test('explorer exposes per-lane raf debug breakdown and idle blockers', () => {

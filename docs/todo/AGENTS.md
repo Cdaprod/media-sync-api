@@ -1,3 +1,9 @@
+## 2026-04-29 — Fix Stage 4 controller initialization order
+- [x] Fixed ExplorerApp controller initialization order after Stage 4 extraction.
+- [x] Added static contract coverage for controller dependency order.
+- [x] Preserved Stage 4 controller boundaries.
+- [ ] Follow-up: add runtime smoke test for ExplorerApp mount.
+
 ## 2026-04-29 — Complete Stage 4 Explorer orchestration decomposition
 - [x] Added bulk action controller.
 - [x] Added search/filter controller.

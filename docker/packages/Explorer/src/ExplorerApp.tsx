@@ -2624,10 +2624,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, assetSelectionKey]);
 
   const selectedKeysOrdered = useMemo(() => {
-    const ordered = bulkSelectedOrder.filter((value) => selected.has(value));
+    const ordered = selectedOrder.filter((value) => selected.has(value));
     const extras = Array.from(selected).filter((value) => !ordered.includes(value));
     return [...ordered, ...extras];
-  }, [bulkSelectedOrder, selected]);
+  }, [selected, selectedOrder]);
 
   const selectionItems = useMemo(
     () => resolveItemsForSelection(selectedKeysOrdered),
@@ -2637,41 +2637,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     () => selectionItems.filter((item) => guessKind(item) === 'video'),
     [selectionItems],
   );
-  const {
-    deleteSelected: deleteMediaSelection,
-    confirmDeleteSelected: handleDeleteConfirm,
-    cancelDeleteSelected: handleDeleteCancel,
-    composeSelected: handleComposeSelected,
-    selectedOrder: bulkSelectedOrder,
-  } = useBulkActionController({
-    addToast,
-    selected,
-    selectedOrder,
-    selectionItems,
-    selectedVideoItems,
-    projects,
-    composeSubmitting,
-    composeOutputName,
-    composeOutputProject,
-    setComposeOutputName,
-    setComposeOutputProject,
-    setComposeSubmitting,
-    setComposeModalOpen,
-    pendingDeleteSelectionKeys,
-    setPendingDeleteSelectionKeys,
-    setDeleteModalOpen,
-    deleteSubmitting,
-    performDeleteMediaSelection,
-    resolveSelectionKeysForItems,
-    resolveItemsForSelection,
-    toAssetRef,
-    composeMediaCommand,
-    registerAcceptedJob,
-    buildComposeTimestampName,
-    defaultComposeProject,
-    tagMediaSelection,
-  });
-
   useEffect(() => {
     if (!activeAssetKey) return;
     if (itemsBySelectionKey.has(activeAssetKey)) return;
@@ -2741,6 +2706,41 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     dismissPendingRecording,
     recordPeerSession,
   } = pending;
+
+  // Controller order matters: later controllers receive dependencies produced by earlier controllers.
+  const {
+    deleteSelected: deleteMediaSelection,
+    confirmDeleteSelected: handleDeleteConfirm,
+    cancelDeleteSelected: handleDeleteCancel,
+    composeSelected: handleComposeSelected,
+  } = useBulkActionController({
+    addToast,
+    selected,
+    selectedOrder,
+    selectionItems,
+    selectedVideoItems,
+    projects,
+    composeSubmitting,
+    composeOutputName,
+    composeOutputProject,
+    setComposeOutputName,
+    setComposeOutputProject,
+    setComposeSubmitting,
+    setComposeModalOpen,
+    pendingDeleteSelectionKeys,
+    setPendingDeleteSelectionKeys,
+    setDeleteModalOpen,
+    deleteSubmitting,
+    performDeleteMediaSelection,
+    resolveSelectionKeysForItems,
+    resolveItemsForSelection,
+    toAssetRef,
+    composeMediaCommand,
+    registerAcceptedJob,
+    buildComposeTimestampName,
+    defaultComposeProject,
+    tagMediaSelection,
+  });
 
   const renderController = useExplorerRenderController({
     filteredMedia,
@@ -4555,7 +4555,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const selectedCount = selected.size;
-  const selectedOrderMap = useMemo(() => selectionOrderIndexMap(selected, bulkSelectedOrder), [bulkSelectedOrder, selected]);
+  const selectedOrderMap = useMemo(() => selectionOrderIndexMap(selected, selectedOrder), [selected, selectedOrder]);
   const contextActions = useMemo(
     () => (contextMenu?.kind === 'media_asset' ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
