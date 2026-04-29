@@ -44,6 +44,7 @@ interface FullscreenDevicePreviewProps {
   onRequestOpenPicker?: () => void;
   onRequestToggleScopes?: () => void;
   onStartCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
+  onUseSelectedLocalDevice: () => Promise<boolean>;
   onStartScreen: () => void | Promise<void>;
   onStopPreview: () => void | Promise<void>;
   onStartDeviceRecording: () => void | Promise<void>;
@@ -77,6 +78,7 @@ export default function FullscreenDevicePreview({
   onRequestOpenPicker,
   onRequestToggleScopes,
   onStartCamera,
+  onUseSelectedLocalDevice,
   onStartScreen,
   onStopPreview,
   onStartDeviceRecording,
@@ -199,28 +201,9 @@ export default function FullscreenDevicePreview({
   };
   const showFatalError = isError && !hasLiveVideoStream();
 
-  const fallbackFacingMode = (label: string): 'user' | 'environment' | undefined => {
-    const normalized = label.toLowerCase();
-    if (normalized.includes('front')) return 'user';
-    if (normalized.includes('back')) return 'environment';
-    return undefined;
-  };
-
   const handleSelectLocalDevice = async (deviceId: string) => {
     onSelectDevice(deviceId);
     setPickerStatus(null);
-    try {
-      await onStartCamera({ deviceId });
-      setPickerOpen(false);
-    } catch {
-      const picked = safeLocalDevices.find((d) => d.deviceId === deviceId);
-      const facingMode = fallbackFacingMode(picked?.label || '');
-      if (facingMode) {
-        await onStartCamera({ facingMode });
-        setPickerStatus('Exact camera unavailable; using nearest iOS camera.');
-      }
-      setPickerOpen(false);
-    }
   };
 
   useEffect(() => {
@@ -304,6 +287,11 @@ export default function FullscreenDevicePreview({
           </div>
         </div>
       </div>
+      {process.env.NODE_ENV !== 'production' ? (
+        <div className="picker-status-chip">
+          Camera: {cameraState?.status || 'unknown'} · Selected: {cameraState?.selectedDeviceId || 'default'} · Session: {sessionId || 'none'} · Peer: {peerStatus}
+        </div>
+      ) : null}
 
       {/* Bottom bar (active only) */}
       <div className={`bottom-bar ${overlaysVisible && isActive ? 'visible' : 'hidden'}`}>
@@ -352,9 +340,8 @@ export default function FullscreenDevicePreview({
         selectedDeviceId={selectedDeviceId}
         onSelectLocalDevice={handleSelectLocalDevice}
         onUseSelectedLocalDevice={async () => {
-          if (!selectedDeviceId) return;
-          await handleSelectLocalDevice(selectedDeviceId);
-          setPickerOpen(false);
+          const used = await onUseSelectedLocalDevice();
+          if (used) setPickerOpen(false);
         }}
         mode={mode}
         onModeChange={onModeChange}

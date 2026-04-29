@@ -1,3 +1,11 @@
+## 2026-04-29 — Trace connect device startPreview path
+- [x] Added canonical Start Live Broadcast handler.
+- [x] Added canonical Use Selected local device handler.
+- [x] Added dev-only tracing across CameraSession, useLiveSession, and WebRTC publish effect.
+- [x] Hardened startPreview external stream path.
+- [x] Added dev-only monitor status strip.
+- [ ] Follow-up: remove verbose traces after browser behavior is stable.
+
 ## 2026-04-29 — Make connect device monitor controls functional
 - [x] Wired Start Live Broadcast to CameraSession + live session start.
 - [x] Made local camera picker selection actionable with Use Selected.

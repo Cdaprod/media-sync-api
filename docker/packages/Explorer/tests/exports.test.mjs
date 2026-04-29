@@ -3383,8 +3383,10 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(liveSession.includes('old.getTracks().forEach((t) => t.stop())'));
   assert.ok(liveSession.includes('deviceId: { exact: options.deviceId }'));
   assert.ok(page.includes('camera.selectedDeviceId'));
-  assert.ok(connectPage.includes("await startPreview('camera', { ...options, stream })"));
-  assert.ok(preview.includes('Exact camera unavailable; using nearest iOS camera.'));
+  assert.ok(page.includes('const handleStartBroadcast = async () => {'));
+  assert.ok(page.includes('await startCamera({'));
+  assert.ok(page.includes("await startPreview('camera', { stream })"));
+  assert.ok(page.includes('const handleUseSelectedLocalDevice = async () => {'));
   assert.ok(preview.includes('const { devices: hookLocalDevices'));
   assert.ok(preview.includes('Array.isArray(localDevices) ? localDevices : []'));
   assert.ok(preview.includes('localDevices={safeLocalDevices}'));
@@ -3402,8 +3404,10 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(useCameraSession.includes('old.getTracks().forEach((t) => t.stop())'));
   assert.ok(useCameraSession.includes('facingMode'));
   assert.ok(connectPage.includes("import { useCameraSession } from './useCameraSession'"));
-  assert.ok(connectPage.includes("await startPreview('camera', { ...options, stream })"));
+  assert.ok(page.includes("if (process.env.NODE_ENV !== 'production')"));
   assert.ok(liveSession.includes('stream?: MediaStream'));
+  assert.ok(liveSession.includes('hasExternalStream'));
+  assert.ok(liveSession.includes('videoRef.current.srcObject = stream;'));
   assert.ok(preview.includes('cameraState'));
 
   assert.ok(picker.includes('Use selected'));
@@ -3416,6 +3420,8 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(preview.includes('explorer-monitor-open-picker'));
   assert.ok(page.includes('mode={mode}'));
   assert.ok(page.includes('onModeChange={setMode}'));
+  assert.ok(page.includes('videoRef.current?.srcObject instanceof MediaStream'));
+  assert.ok(useCameraSession.includes('if (process.env.NODE_ENV !== \'production\')'));
   assert.ok(useCameraSession.includes('return stream;'));
   assert.ok(useCameraSession.includes('return null;'));
 });

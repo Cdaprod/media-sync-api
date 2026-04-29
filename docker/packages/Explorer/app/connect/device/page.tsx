@@ -15,6 +15,11 @@ import { useCameraSession } from './useCameraSession';
 const api = createApiClient('');
 
 export default function ConnectDevicePage() {
+  const traceDevice = (event: string, details?: Record<string, unknown>) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(`[connect-device] ${event}`, details || {});
+    }
+  };
   const router = useRouter();
   const searchParams = useSearchParams();
   const nodeId = searchParams.get('node_id') || (typeof window !== 'undefined'
@@ -112,8 +117,21 @@ export default function ConnectDevicePage() {
 
   useEffect(() => {
     const sessionId = session?.session_id || null;
-    const shouldPublishPeer = !!sessionId && (state === 'previewing' || state === 'recording') && session?.source_kind === 'camera';
+    const hasStream = videoRef.current?.srcObject instanceof MediaStream;
+    traceDevice('webrtc:effect-check', {
+      sessionId,
+      state,
+      sourceKind: session?.source_kind ?? null,
+      hasStream,
+    });
+    const shouldPublishPeer = !!sessionId
+      && (state === 'previewing' || state === 'recording')
+      && session?.source_kind === 'camera'
+      && hasStream;
     if (!shouldPublishPeer) {
+      if (sessionId && (state === 'previewing' || state === 'recording') && session?.source_kind === 'camera' && !hasStream) {
+        traceDevice('webrtc:waiting-for-stream', { sessionId });
+      }
       if (signalPollTimerRef.current != null) {
         window.clearInterval(signalPollTimerRef.current);
         signalPollTimerRef.current = null;
@@ -139,11 +157,13 @@ export default function ConnectDevicePage() {
       if (cancelled || !sessionId) return;
       const stream = videoRef.current?.srcObject instanceof MediaStream ? videoRef.current.srcObject : null;
       if (!stream) {
+        traceDevice('webrtc:waiting-for-stream', { sessionId });
         window.setTimeout(() => {
           void maybeStartPeerPublish();
         }, 300);
         return;
       }
+      traceDevice('webrtc:creating-peer', { sessionId, trackCount: stream.getTracks().length });
       peerConnectionRef.current?.close();
       const peer = new RTCPeerConnection();
       peerConnectionRef.current = peer;
@@ -151,6 +171,7 @@ export default function ConnectDevicePage() {
       viewerIceSeenRef.current.clear();
       activeViewerIdRef.current = 'viewer-broadcast';
       peer.onconnectionstatechange = () => {
+        traceDevice('webrtc:connection-state', { state: peer.connectionState });
         if (peer.connectionState === 'connected') setPeerStatus('connected');
         if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') setPeerStatus('failed');
       };
@@ -169,6 +190,7 @@ export default function ConnectDevicePage() {
           type: 'offer',
           sdp: offer.sdp || '',
         });
+        traceDevice('webrtc:offer-published', { sessionId });
         setPeerStatus('offer-published');
       } catch {
         setPeerStatus('failed');
@@ -189,12 +211,14 @@ export default function ConnectDevicePage() {
             }
             if (signal.answer?.sdp && !activePeer.currentRemoteDescription) {
               await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
+              traceDevice('webrtc:answer-received', { sessionId });
             }
             for (const candidate of signal.ice_from_viewer || []) {
               const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
               if (viewerIceSeenRef.current.has(key)) continue;
               viewerIceSeenRef.current.add(key);
               await activePeer.addIceCandidate(candidate);
+              traceDevice('webrtc:ice-added', { sessionId, candidate: key });
             }
           })
           .catch(() => undefined);
@@ -207,6 +231,48 @@ export default function ConnectDevicePage() {
       cancelled = true;
     };
   }, [api, session?.session_id, session?.source_kind, state, videoRef]);
+
+  const handleStartBroadcast = async () => {
+    traceDevice('startBroadcast:begin', {
+      selectedDeviceId: camera.selectedDeviceId,
+      cameraStatus: camera.status,
+    });
+    const stream = await startCamera({
+      deviceId: camera.selectedDeviceId,
+      audio: true,
+    });
+    traceDevice('startBroadcast:camera-result', {
+      hasStream: !!stream,
+      videoTracks: stream?.getVideoTracks().map((track) => ({
+        id: track.id,
+        label: track.label,
+        readyState: track.readyState,
+        enabled: track.enabled,
+      })) ?? [],
+    });
+    if (!stream) return;
+    await startPreview('camera', { stream });
+    traceDevice('startBroadcast:startPreview-called', {
+      hasVideoRefStream: videoRef.current?.srcObject instanceof MediaStream,
+    });
+  };
+
+  const handleUseSelectedLocalDevice = async () => {
+    traceDevice('useSelectedLocalDevice:begin', {
+      selectedDeviceId: camera.selectedDeviceId,
+    });
+    const stream = await startCamera({
+      deviceId: camera.selectedDeviceId,
+      audio: true,
+    });
+    traceDevice('useSelectedLocalDevice:camera-result', { hasStream: !!stream });
+    if (!stream) return false;
+    await startPreview('camera', { stream });
+    traceDevice('useSelectedLocalDevice:startPreview-called', {
+      sessionId: session?.session_id ?? null,
+    });
+    return true;
+  };
 
   return (
     <DeviceMonitorShell
@@ -245,10 +311,15 @@ export default function ConnectDevicePage() {
         onSelectCameraDevice={selectDevice}
         onClearCameraError={clearCameraError}
         onStartCamera={async (options) => {
-          const stream = await startCamera({ deviceId: camera.selectedDeviceId, audio: true, ...options });
-          if (!stream) return;
-          await startPreview('camera', { ...options, stream });
+          if (options?.deviceId || options?.facingMode) {
+            const stream = await startCamera({ deviceId: options.deviceId ?? camera.selectedDeviceId, audio: true, facingMode: options.facingMode });
+            if (!stream) return;
+            await startPreview('camera', { stream });
+            return;
+          }
+          await handleStartBroadcast();
         }}
+        onUseSelectedLocalDevice={handleUseSelectedLocalDevice}
         onStartScreen={() => startPreview('screen')}
         onStopPreview={() => { stopPreview(); stopCamera(); }}
         onStartDeviceRecording={() => startRecording()}

@@ -30,6 +30,11 @@ type PreviewStartOptions = {
 };
 
 export function useLiveSession(api: ApiShape, nodeId: string | null) {
+  const traceLive = (event: string, details?: Record<string, unknown>) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(`[live-session] ${event}`, details || {});
+    }
+  };
   const [state, setState] = useState<LiveSessionUiState>('idle');
   const [session, setSession] = useState<LiveSessionRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +110,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     };
 
     try {
+      traceLive('startPreview:begin', { kind: sourceKind, hasExternalStream: !!options?.stream });
       const old = videoRef.current?.srcObject;
       if (old instanceof MediaStream && sourceKind === 'camera') {
         old.getTracks().forEach((t) => t.stop());
@@ -139,8 +145,10 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       const nextSession = await api.startLiveSession(nodeId, sourceKind, {
         origin: 'browser',
       });
+      traceLive('startPreview:session-created', { sessionId: nextSession.session_id });
       setSession(nextSession);
       setState('previewing');
+      traceLive('startPreview:done', { state: 'previewing', sourceKind });
 
       clearHeartbeat();
       heartbeatTimerRef.current = window.setInterval(() => {
@@ -150,6 +158,10 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
           .catch(() => undefined);
       }, 10000);
     } catch (err) {
+      traceLive('startPreview:error', {
+        kind: sourceKind,
+        message: err instanceof Error ? err.message : String(err),
+      });
       if (sourceKind === 'screen') {
         setError('Screen capture is unavailable on this device/browser.');
       } else {
