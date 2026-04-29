@@ -3496,3 +3496,13 @@ test('connect device viewer attach path stays remote-only and avoids local camer
   assert.ok(!watchBody.includes('startPreview('));
   assert.ok(!watchBody.includes('getUserMedia'));
 });
+
+test('explorer pending artifact controller merges runtime assets into pending recording placeholders', () => {
+  const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const content = fs.readFileSync(pendingControllerPath, 'utf8');
+  assert.ok(content.includes('listRuntimeAssets'));
+  assert.ok(content.includes('runtimeAssetToPendingRecording'));
+  assert.ok(content.includes("materializing: 'finalizing'"));
+  assert.ok(content.includes("ready: 'saved'"));
+  assert.ok(content.includes('[...pendingRecordingAssets, ...runtimeRecordingAssets]'));
+});

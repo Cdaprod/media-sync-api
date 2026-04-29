@@ -1,3 +1,9 @@
+## 2026-04-29 — Explorer runtime asset merge visibility wiring
+- [x] Explorer pending artifact controller now polls `/api/runtime/assets`.
+- [x] Runtime recording assets are mapped into pending recording placeholder cards.
+- [x] Runtime recording states map to visible statuses (`recording`, `finalizing`, `saved`, `failed`).
+- [ ] Follow-up: migrate runtime-asset polling to SSE stream consumption.
+
 ## 2026-04-29 — Implement RuntimeAsset representation plane
 - [x] Added authority-owned RuntimeAsset registry.
 - [x] Added runtime asset API surface.
