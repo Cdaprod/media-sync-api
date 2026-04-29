@@ -19,6 +19,7 @@ from app.runtime import get_runtime
 from app.runtime.live_sessions import WebRtcLiveSession, WebRtcLiveSessionRegistry
 from app.runtime.types import AppRuntime
 from app.models.recording_session import RecordingSession
+from app.runtime.assets import RuntimeAsset
 
 router = APIRouter(prefix="/api/live", tags=["live-webrtc"])
 """Route ownership:
@@ -76,6 +77,13 @@ class LiveRecordStartPayload(BaseModel):
 
 class LiveRecordStopPayload(BaseModel):
     error: str | None = None
+
+
+def _assets_registry(runtime: AppRuntime):
+    registry = getattr(runtime, "assets", None)
+    if registry is None:
+        raise HTTPException(status_code=503, detail="runtime_assets_unavailable")
+    return registry
 
 
 def _recordings_registry(runtime: AppRuntime):
@@ -306,6 +314,19 @@ async def start_live_recording(
         target_dir=(payload.target_dir or "ingest/live").strip() or "ingest/live",
     )
     recording_registry.create(recording)
+    _assets_registry(runtime).upsert(RuntimeAsset(
+        id=f"runtime-recording-{recording.recording_id}",
+        kind="recording",
+        state="recording",
+        project=recording.project,
+        source=recording.source,
+        target_dir=recording.target_dir,
+        session_id=recording.session_id,
+        recording_id=recording.recording_id,
+        node_id=recording.node_id,
+        source_kind="camera",
+        metadata={"session_id": recording.session_id, "recording_id": recording.recording_id},
+    ))
     return {"recording": recording.model_dump(mode="json"), "idempotent": False}
 
 
@@ -319,6 +340,8 @@ async def stop_live_recording(
     if active is None:
         raise HTTPException(status_code=404, detail="recording_not_found")
     registry = _recordings_registry(runtime)
+    assets = _assets_registry(runtime)
+
     if payload.error:
         updated = registry.update_state(
             active.recording_id,
@@ -326,7 +349,10 @@ async def stop_live_recording(
             error=payload.error,
             updated_at=datetime.now(timezone.utc),
         )
+        assets.fail(f"runtime-recording-{updated.recording_id}", str(payload.error))
         return {"recording": updated.model_dump(mode="json")}
+
+    assets.transition(f"runtime-recording-{active.recording_id}", "materializing")
     if active.asset_url:
         updated = registry.update_state(
             active.recording_id,
@@ -334,13 +360,16 @@ async def stop_live_recording(
             error=None,
             updated_at=datetime.now(timezone.utc),
         )
+        assets.transition(f"runtime-recording-{updated.recording_id}", "ready", asset_url=updated.asset_url, error=None)
         return {"recording": updated.model_dump(mode="json")}
+
     updated = registry.update_state(
         active.recording_id,
         "failed",
         error="recording_not_materialized",
         updated_at=datetime.now(timezone.utc),
     )
+    assets.fail(f"runtime-recording-{updated.recording_id}", "recording_not_materialized")
     return {"recording": updated.model_dump(mode="json")}
 
 

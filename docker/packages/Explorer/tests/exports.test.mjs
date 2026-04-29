@@ -244,6 +244,8 @@ test('explorer api client includes bulk media action endpoints', () => {
   assert.ok(content.includes('normalizeRecordingSessions'));
   assert.ok(content.includes('normalizeRecordingSession'));
   assert.ok(content.includes('normalizeLiveSessionList'));
+  assert.ok(content.includes('listRuntimeAssets'));
+  assert.ok(content.includes('/api/runtime/assets'));
 });
 
 test('contract normalizers keep compatibility payload support', () => {

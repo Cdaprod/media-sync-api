@@ -1,3 +1,11 @@
+## 2026-04-29 — Implement RuntimeAsset representation plane
+- [x] Added authority-owned RuntimeAsset registry.
+- [x] Added runtime asset API surface.
+- [x] Recording start now creates visible runtime asset immediately.
+- [x] Recording stop transitions runtime asset to materializing/ready/failed.
+- [x] Added backend tests for runtime recording asset transitions.
+- [ ] Follow-up: replace polling with SSE push updates if not fully implemented.
+
 ## 2026-04-29 — Recording materialization truth gate follow-up
 - [x] Stop-recording now fails honestly when no asset materialization exists (`recording_not_materialized`).
 - [x] Stop-recording can mark completed only when a real `asset_url` exists on the recording session.

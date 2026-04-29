@@ -106,6 +106,7 @@ export interface ApiClient {
   postLiveViewerIce: (sessionId: string, viewerId: string, candidate: RTCIceCandidateInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
   listLiveDeviceIce: (sessionId: string) => Promise<RTCIceCandidateInit[]>;
   postLiveViewerState: (sessionId: string, viewerId: string, state: string) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
+  listRuntimeAssets: () => Promise<Array<Record<string, unknown>>>;
   listProjects: () => Promise<Project[]>;
   listMedia: (project: string, source?: string) => Promise<MediaResponse>;
   listLibrarySnapshot: (params?: { source?: string; scope?: 'all' | 'project'; project?: string }) => Promise<LibrarySnapshot>;
@@ -637,6 +638,12 @@ export function createApiClient(baseUrl = ''): ApiClient {
         throw new Error(String(payload?.detail || `Failed to post viewer state: ${response.status}`));
       }
       return payload;
+    },
+    async listRuntimeAssets(): Promise<Array<Record<string, unknown>>> {
+      const response = await fetch(buildUrl('/api/runtime/assets'), { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+      const payload = await parseJson<{ assets?: Array<Record<string, unknown>>; detail?: string }>(response);
+      if (!response.ok) throw new Error(String(payload?.detail || `Failed to load runtime assets: ${response.status}`));
+      return Array.isArray(payload.assets) ? payload.assets : [];
     },
     async listProjects(): Promise<Project[]> {
       const response = await fetch(buildUrl('/api/projects'));

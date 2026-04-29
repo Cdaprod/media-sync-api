@@ -31,6 +31,7 @@ from app.api.media import debug_router, global_media_router, media_router, regis
 from app.api.nodes import router as nodes_router
 from app.api.projects import router as projects_router
 from app.api.recordings import router as recordings_router
+from app.api.runtime_assets import router as runtime_assets_router
 from app.api.sources import router as sources_router
 from app.api.upload import router as upload_router
 from app.api.reindex import all_router as reindex_all_router
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
     application.include_router(live_sessions_router)
     application.include_router(live_webrtc_router)
     application.include_router(recordings_router)
+    application.include_router(runtime_assets_router)
     application.include_router(events_router)
 
     application.mount(
