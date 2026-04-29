@@ -1,3 +1,12 @@
+## 2026-04-29 — Complete Stage 4 Explorer orchestration decomposition
+- [x] Added bulk action controller.
+- [x] Added search/filter controller.
+- [x] Added feedback/toast controller.
+- [x] Wired Stage 4 controllers into ExplorerApp.
+- [x] Updated static contracts for Stage 4 controller boundaries.
+- [ ] Follow-up: add behavior tests for bulk actions, filters, and toast feedback.
+- [ ] Follow-up: continue only after verifying mobile Explorer behavior.
+
 ## 2026-04-27 — Selection and preview controller extraction
 - [x] Extracted selection/preview controller.
 - [x] Preserved selected asset behavior.

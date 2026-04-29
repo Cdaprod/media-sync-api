@@ -92,3 +92,24 @@ This document maps the current Explorer package feature architecture under `dock
 - [x] Recording reconciliation highlight behavior preserved.
 - [ ] Follow-up: extract bulk action orchestration.
 - [ ] Follow-up: add behavior tests for selection/focus transitions.
+
+## Phase 4F: Bulk action controller extraction
+- [x] Bulk selected-asset action orchestration moved out of ExplorerApp.
+- [x] Delete/compose staging centralized where safe.
+- [x] Selection controller remains owner of selected state.
+- [x] Pending artifact controller remains owner of pending compose lifecycle.
+
+## Phase 4G: Search/filter/topbar controller extraction
+- [x] Search/filter orchestration moved out of ExplorerApp where safe.
+- [x] Filtering semantics preserved.
+- [x] Topbar visual behavior preserved.
+
+## Phase 4H: Feedback controller extraction
+- [x] Toast/operator feedback orchestration moved out of ExplorerApp.
+- [x] Existing toast rendering and messages preserved.
+
+## Phase 4I: ExplorerApp composition shell audit
+- [x] ExplorerApp documented as composition shell.
+- [x] Stage 4 controller ownership map completed.
+- [ ] Follow-up: add behavior tests beyond static contracts.
+

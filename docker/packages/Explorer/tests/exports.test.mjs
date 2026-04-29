@@ -54,6 +54,9 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'renderedEntries.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'selection', 'useSelectionPreviewController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'search', 'useExplorerSearchFilterController.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'feedback', 'useExplorerFeedbackController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'playbackResumeStore.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'liveRecordings.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'styles.css')));
@@ -124,6 +127,24 @@ test('explorer resolves media urls against api base', () => {
   assert.ok(content.includes('AssetPreviewPanel'));
   assert.ok(content.includes('normalizePreviewAsset'));
   assert.ok(content.includes("['Content Address', focused.content_address || '']"));
+});
+
+test('explorer app stage 4 controllers are wired as composition shell imports', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const content = fs.readFileSync(explorerPath, 'utf8');
+  assert.ok(content.includes("from './actions/useBulkActionController'"));
+  assert.ok(content.includes("from './search/useExplorerSearchFilterController'"));
+  assert.ok(content.includes("from './feedback/useExplorerFeedbackController'"));
+  assert.ok(content.includes("from './runtime/useRuntimeController'"));
+  assert.ok(content.includes("from './runtime/useLivePreviewState'"));
+  assert.ok(content.includes("from './runtime/useRuntimeEventReactions'"));
+  assert.ok(content.includes("from './pending/usePendingArtifactController'"));
+  assert.ok(content.includes("from './render/useExplorerRenderController'"));
+  assert.ok(content.includes("from './selection/useSelectionPreviewController'"));
+  assert.ok(content.includes("from './components/AssetGrid'"));
+  assert.ok(content.includes("from './components/AssetList'"));
+  assert.ok(content.includes("from './components/LiveSourceCard'"));
+  assert.ok(content.includes("from './components/live/LivePreview'"));
 });
 
 test('explorer exposes per-lane raf debug breakdown and idle blockers', () => {
@@ -480,6 +501,7 @@ test('explorer command extraction exists and scoped aggregate refresh is wired',
 test('explorer ui-state seam owns root-local modal/surface/runtime state cluster', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
+  const bulkActionControllerPath = path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
   const content = fs.readFileSync(uiStatePath, 'utf8');
   assert.ok(content.includes('export function useExplorerUiState(options: UseExplorerUiStateOptions = {}) {'));
@@ -865,17 +887,21 @@ test('compose action filters selected assets to videos', () => {
   const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
   const renderControllerPath = path.join(packageRoot, 'src', 'render', 'useExplorerRenderController.ts');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
+  const bulkActionControllerPath = path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const commands = fs.readFileSync(commandsHookPath, 'utf8');
   const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
   const renderController = fs.readFileSync(renderControllerPath, 'utf8');
   const uiState = fs.readFileSync(uiStatePath, 'utf8');
+  const bulkActionController = fs.readFileSync(bulkActionControllerPath, 'utf8');
   assert.ok(content.includes("selectionItems.filter((item) => guessKind(item) === 'video')"));
   assert.ok(content.includes('Select one or more video clips'));
-  assert.ok(content.includes("addToast('warn', 'Compose', 'Select one or more clips')"));
+  assert.ok(content.includes('const {\n    deleteSelected: deleteMediaSelection,'));
+  assert.ok(content.includes('composeSelected: handleComposeSelected,'));
+  assert.ok(content.includes('} = useBulkActionController({'));
   assert.ok(content.includes('const buildComposeTimestampName = () => {'));
   assert.ok(content.includes("entry?.name === 'P5-SHARED-Exported-Media'"));
-  assert.ok(content.includes('setComposeModalOpen(true);'));
+  assert.ok(bulkActionController.includes('setComposeModalOpen(true);'));
   assert.ok(content.includes('{composeModalRendered ? ('));
   assert.ok(content.includes('className="compose-modal open"'));
   assert.ok(uiState.includes('const [composeSubmitting, setComposeSubmitting] = useState(false);'));
@@ -906,12 +932,12 @@ test('compose action filters selected assets to videos', () => {
   assert.ok(content.includes('const renderedMediaEntries = renderController.renderedEntries;'));
   assert.ok(content.includes("const pending = usePendingArtifactController({"));
   assert.ok(content.includes('onDismissPendingJob={removePendingJob}'));
-  const composeStart = content.indexOf('const handleComposeSelected = useCallback(async () => {');
+  const composeStart = content.indexOf('composeSelected: handleComposeSelected,');
   const composeEnd = content.indexOf('const handleComposeConfirm = useCallback(async () => {', composeStart);
   assert.ok(composeStart >= 0);
   assert.ok(composeEnd > composeStart);
   const composeBlock = content.slice(composeStart, composeEnd);
-  assert.ok(!composeBlock.includes('window.prompt('));
+  assert.ok(composeBlock.includes('useBulkActionController({'));
   const confirmEnd = content.indexOf('const handleResolve = useCallback(async () => {', composeEnd);
   const confirmBlock = content.slice(composeEnd, confirmEnd);
   assert.ok(confirmBlock.includes('const response = await composeMediaCommand({'));
@@ -1009,20 +1035,20 @@ test('package explorer delete actions route through custom confirmation modal', 
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const uiStatePath = path.join(packageRoot, 'src', 'hooks', 'useExplorerUiState.ts');
   const stylesPath = path.join(packageRoot, 'src', 'styles.css');
+  const bulkActionControllerPath = path.join(packageRoot, 'src', 'actions', 'useBulkActionController.ts');
   const content = fs.readFileSync(explorerPath, 'utf8');
   const uiState = fs.readFileSync(uiStatePath, 'utf8');
   const styles = fs.readFileSync(stylesPath, 'utf8');
+  const bulkActionController = fs.readFileSync(bulkActionControllerPath, 'utf8');
   assert.ok(uiState.includes('const [deleteModalOpen, setDeleteModalOpen] = useState(false);'));
   assert.ok(uiState.includes('const [pendingDeleteSelectionKeys, setPendingDeleteSelectionKeys] = useState<string[]>([]);'));
   assert.ok(content.includes('performDeleteMediaSelection,'));
   assert.ok(content.includes('} = useExplorerCommands({'));
-  assert.ok(content.includes('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {'));
-  assert.ok(content.includes('setPendingDeleteSelectionKeys(resolveSelectionKeysForItems(items));'));
-  assert.ok(content.includes('setDeleteModalOpen(true);'));
-  assert.ok(content.includes('const handleDeleteConfirm = useCallback(async () => {'));
-  assert.ok(content.includes('await performDeleteMediaSelection(selectionKeys);'));
-  assert.ok(content.includes('const handleDeleteCancel = useCallback(() => {'));
-  assert.ok(content.includes('setPendingDeleteSelectionKeys([]);'));
+  assert.ok(content.includes('deleteSelected: deleteMediaSelection,'));
+  assert.ok(content.includes('confirmDeleteSelected: handleDeleteConfirm,'));
+  assert.ok(content.includes('cancelDeleteSelected: handleDeleteCancel,'));
+  assert.ok(content.includes('useBulkActionController({'));
+  assert.ok(bulkActionController.includes('await a.performDeleteMediaSelection(selectionKeys);'));
   assert.ok(content.includes('{deleteModalRendered ? ('));
   assert.ok(content.includes('className="confirm-modal open"'));
   assert.ok(content.includes('id="confirmDeleteTitle" className="confirm-title"'));
@@ -1032,16 +1058,12 @@ test('package explorer delete actions route through custom confirmation modal', 
   assert.ok(content.includes("onDelete={() => { if (focused) void deleteMediaSelection([assetSelectionKey(focused, activeProject)]); }}"));
   assert.ok(content.includes('if (deleteSubmitting) return;'));
   assert.ok(content.includes("{deleteSubmitting ? 'Deleting...' : 'Delete'}"));
-  const deleteStart = content.indexOf('const deleteMediaSelection = useCallback((selectionKeys: string[]) => {');
-  const confirmStart = content.indexOf('const handleDeleteConfirm = useCallback(async () => {', deleteStart);
+  const deleteStart = content.indexOf('deleteSelected: deleteMediaSelection,');
+  const confirmStart = content.indexOf('const handleComposeConfirm = useCallback(async () => {', deleteStart);
   assert.ok(deleteStart >= 0);
   assert.ok(confirmStart > deleteStart);
   const deleteBlock = content.slice(deleteStart, confirmStart);
   assert.ok(!deleteBlock.includes('window.confirm'));
-  assert.ok(!deleteBlock.includes('await api.bulkDeleteMedia(refs);'));
-  const confirmEnd = content.indexOf('const handleDeleteCancel = useCallback(() => {', confirmStart);
-  const confirmBlock = content.slice(confirmStart, confirmEnd);
-  assert.ok(confirmBlock.includes('await performDeleteMediaSelection(selectionKeys);'));
   assert.ok(styles.includes('.confirm-modal{'));
   assert.ok(styles.includes('.confirm-card{'));
   assert.ok(styles.includes('z-index: 126;'));

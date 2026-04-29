@@ -47,3 +47,12 @@
 - [x] Extracted selection/preview controller.
 - [x] Preserved active asset and preview behavior.
 - [ ] Follow-up: bulk action controller extraction.
+
+## Phase 4F-I: ExplorerApp orchestration completion
+- [x] Extracted bulk action controller.
+- [x] Extracted search/filter controller.
+- [x] Extracted feedback controller.
+- [x] Documented ExplorerApp as composition shell.
+- [ ] Follow-up: add behavior tests for controller boundaries.
+- [ ] Follow-up: verify mobile Explorer behavior.
+

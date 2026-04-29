@@ -58,6 +58,9 @@ import { usePendingArtifactController } from './pending/usePendingArtifactContro
 import type { PendingComposeRenderedEntry, PendingRecordingRenderedEntry } from './render/renderedEntries';
 import { useExplorerRenderController } from './render/useExplorerRenderController';
 import { useSelectionPreviewController } from './selection/useSelectionPreviewController';
+import { useBulkActionController } from './actions/useBulkActionController';
+import { useExplorerFeedbackController } from './feedback/useExplorerFeedbackController';
+import { useExplorerSearchFilterController } from './search/useExplorerSearchFilterController';
 import { createTopbarMotion } from './ui/motion/topbarMotion';
 import { createDrawerMotion } from './ui/motion/drawerMotion';
 import { createTopbarSnapBand } from './ui/motion/topbarSnapBand';
@@ -540,52 +543,10 @@ const cancelExplorerRaf = (rafId: number | null) => {
   window.cancelAnimationFrame(rafId);
 };
 
-function useToastQueue() {
-  const [toasts, setToasts] = useState<Array<ToastMessage & { exiting: boolean }>>([]);
-  const timeouts = useRef<number[]>([]);
-  const lastOperationToastRef = useRef<Map<string, number>>(new Map());
-
-  const beginToastExit = useCallback((id: string) => {
-    setToasts((prev) => prev.map((toast) => (toast.id === id ? { ...toast, exiting: true } : toast)));
-  }, []);
-
-  const addToast = useCallback((
-    type: ToastMessage['type'],
-    title: string,
-    message: string,
-    operationId?: string,
-  ) => {
-    if (operationId) {
-      const now = Date.now();
-      const lastShownAt = lastOperationToastRef.current.get(operationId) ?? 0;
-      if (now - lastShownAt < 500) {
-        return `${operationId}-deduped`;
-      }
-      lastOperationToastRef.current.set(operationId, now);
-    }
-    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    setToasts((prev) => [...prev, { id, type, title, message, exiting: false }]);
-    const timeout = window.setTimeout(() => {
-      beginToastExit(id);
-    }, 3100);
-    timeouts.current.push(timeout);
-    return id;
-  }, [beginToastExit]);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      timeouts.current.forEach((timeout) => window.clearTimeout(timeout));
-    };
-  }, []);
-
-  return { toasts, addToast, removeToast, beginToastExit };
-}
-
 export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
+  // ExplorerApp is now the composition shell: feature controllers own runtime,
+  // pending artifacts, rendering, selection/preview, bulk actions, filters,
+  // and feedback while this component preserves the existing UI layout.
   // ---------------------------------------------------------------------------
   // Query/data authority: API client + aggregate snapshot ownership.
   // ---------------------------------------------------------------------------
@@ -622,7 +583,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     refreshLibrarySnapshot,
     clearSnapshotError,
   } = useLibrarySnapshot(api);
-  const { toasts, addToast, removeToast, beginToastExit } = useToastQueue();
+  const { toasts, addToast, dismissToast: removeToast, beginToastExit } = useExplorerFeedbackController();
 
 
   // ---------------------------------------------------------------------------
@@ -1413,23 +1374,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const assetRenderKey = assetSelectionKey;
 
   const mediaMeta = useMemo<MediaMeta>(() => collectMediaMeta(media), [media]);
-  const filteredMedia = useMemo(() => {
-    const filtered = filterMedia(
-      media,
-      {
-        query,
-        type: typeFilter,
-        selectedOnly: false,
-        untaggedOnly,
-        selected,
-      },
-      mediaMeta,
-    );
-    const selectedFiltered = selectedOnly
-      ? filtered.filter((item) => selected.has(assetSelectionKey(item, activeProject)))
-      : filtered;
-    return sortMedia(selectedFiltered, sortKey, mediaMeta);
-  }, [activeProject, assetSelectionKey, media, query, typeFilter, selectedOnly, untaggedOnly, selected, sortKey, mediaMeta]);
+  const { filteredMedia } = useExplorerSearchFilterController({
+    media,
+    mediaMeta,
+    activeProject,
+    selected,
+    query,
+    typeFilter,
+    selectedOnly,
+    untaggedOnly,
+    sortKey,
+    assetSelectionKey,
+  });
   const devAssetTraceLoggedRef = useRef(false);
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
@@ -2668,10 +2624,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, assetSelectionKey]);
 
   const selectedKeysOrdered = useMemo(() => {
-    const ordered = selectedOrder.filter((value) => selected.has(value));
+    const ordered = bulkSelectedOrder.filter((value) => selected.has(value));
     const extras = Array.from(selected).filter((value) => !ordered.includes(value));
     return [...ordered, ...extras];
-  }, [selected, selectedOrder]);
+  }, [bulkSelectedOrder, selected]);
 
   const selectionItems = useMemo(
     () => resolveItemsForSelection(selectedKeysOrdered),
@@ -2681,6 +2637,40 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     () => selectionItems.filter((item) => guessKind(item) === 'video'),
     [selectionItems],
   );
+  const {
+    deleteSelected: deleteMediaSelection,
+    confirmDeleteSelected: handleDeleteConfirm,
+    cancelDeleteSelected: handleDeleteCancel,
+    composeSelected: handleComposeSelected,
+    selectedOrder: bulkSelectedOrder,
+  } = useBulkActionController({
+    addToast,
+    selected,
+    selectedOrder,
+    selectionItems,
+    selectedVideoItems,
+    projects,
+    composeSubmitting,
+    composeOutputName,
+    composeOutputProject,
+    setComposeOutputName,
+    setComposeOutputProject,
+    setComposeSubmitting,
+    setComposeModalOpen,
+    pendingDeleteSelectionKeys,
+    setPendingDeleteSelectionKeys,
+    setDeleteModalOpen,
+    deleteSubmitting,
+    performDeleteMediaSelection,
+    resolveSelectionKeysForItems,
+    resolveItemsForSelection,
+    toAssetRef,
+    composeMediaCommand,
+    registerAcceptedJob,
+    buildComposeTimestampName,
+    defaultComposeProject,
+    tagMediaSelection,
+  });
 
   useEffect(() => {
     if (!activeAssetKey) return;
@@ -2850,41 +2840,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     [activeProject, addToast, buildUploadUrl, uploadMediaBatchCommand],
   );
 
-  const deleteMediaSelection = useCallback((selectionKeys: string[]) => {
-    const items = resolveItemsForSelection(selectionKeys);
-    if (!items.length) {
-      addToast('warn', 'Delete', 'Select one or more clips');
-      return;
-    }
-    const refs = items
-      .map((item) => toAssetRef(item))
-      .filter((item): item is AssetRef => Boolean(item));
-    if (!refs.length) {
-      addToast('warn', 'Delete', 'Unable to resolve selected media paths');
-      return;
-    }
-    setPendingDeleteSelectionKeys(resolveSelectionKeysForItems(items));
-    setDeleteModalOpen(true);
-  }, [addToast, resolveItemsForSelection, resolveSelectionKeysForItems, toAssetRef]);
-
-  const handleDeleteConfirm = useCallback(async () => {
-    if (deleteSubmitting) return;
-    const selectionKeys = pendingDeleteSelectionKeys.slice();
-    if (!selectionKeys.length) {
-      setDeleteModalOpen(false);
-      return;
-    }
-    setDeleteModalOpen(false);
-    setPendingDeleteSelectionKeys([]);
-    await performDeleteMediaSelection(selectionKeys);
-  }, [deleteSubmitting, pendingDeleteSelectionKeys, performDeleteMediaSelection]);
-
-  const handleDeleteCancel = useCallback(() => {
-    if (deleteSubmitting) return;
-    setDeleteModalOpen(false);
-    setPendingDeleteSelectionKeys([]);
-  }, [deleteSubmitting]);
-
   const handleBulkTag = useCallback(async () => {
     if (!selected.size) {
       addToast('warn', 'Tags', 'Select one or more clips first');
@@ -2902,26 +2857,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     await tagMediaSelection(selectionItems, addTags, removeTags);
   }, [addToast, selected, selectionItems, tagMediaSelection]);
-
-  const handleComposeSelected = useCallback(async () => {
-    if (!selected.size) {
-      addToast('warn', 'Compose', 'Select one or more clips');
-      return;
-    }
-    if (!selectedVideoItems.length) {
-      addToast('warn', 'Compose', 'Select one or more video clips');
-      return;
-    }
-    if (!projects.length) {
-      addToast('warn', 'Compose', 'No projects available for compose output.');
-      return;
-    }
-    const preferredProject = defaultComposeProject(projects);
-    setComposeOutputName(buildComposeTimestampName());
-    setComposeOutputProject(preferredProject?.name || 'P5-SHARED-Exported-Media');
-    setComposeSubmitting(false);
-    setComposeModalOpen(true);
-  }, [addToast, projects, selected, selectedVideoItems]);
 
   const handleComposeConfirm = useCallback(async () => {
     if (composeSubmitting) {
@@ -4620,7 +4555,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, []);
 
   const selectedCount = selected.size;
-  const selectedOrderMap = useMemo(() => selectionOrderIndexMap(selected, selectedOrder), [selected, selectedOrder]);
+  const selectedOrderMap = useMemo(() => selectionOrderIndexMap(selected, bulkSelectedOrder), [bulkSelectedOrder, selected]);
   const contextActions = useMemo(
     () => (contextMenu?.kind === 'media_asset' ? getContextActions(contextMenu.items) : []),
     [contextMenu, getContextActions],
