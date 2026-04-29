@@ -46,6 +46,7 @@ export default function ConnectDevicePage() {
   const activeViewerIdRef = useRef<string>('viewer-broadcast');
   const signalPollTimerRef = useRef<number | null>(null);
   const nodeHeartbeatTimerRef = useRef<number | null>(null);
+  const publisherBusyRef = useRef(false);
   const activeBroadcastSessionRef = useRef<{ session_id: string } | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
   const [mode, setMode] = useState<'local' | 'remote'>('local');
@@ -125,6 +126,10 @@ export default function ConnectDevicePage() {
       peerSessionIdRef.current = null;
       viewerIceSeenRef.current.clear();
       activeViewerIdRef.current = 'viewer-broadcast';
+      if (nodeHeartbeatTimerRef.current != null) {
+        window.clearInterval(nodeHeartbeatTimerRef.current);
+        nodeHeartbeatTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -197,6 +202,9 @@ export default function ConnectDevicePage() {
   };
 
   const handleStartBroadcast = async () => {
+    if (publisherBusyRef.current) return false;
+    publisherBusyRef.current = true;
+    try {
     traceDevice('broadcast:begin', {
       selectedDeviceId: camera.selectedDeviceId,
       cameraStatus: camera.status,
@@ -261,7 +269,22 @@ export default function ConnectDevicePage() {
     }
     await publishPeerOffer(nextSession, stream);
     return true;
+    } finally {
+      publisherBusyRef.current = false;
+    }
   };
+
+
+  async function watchLiveSession(sessionRecord: { session_id: string }): Promise<void> {
+    appendTrace(`viewer:watch ${sessionRecord.session_id}`);
+    setMode('remote');
+    const signal = await api.getLiveSignalState(sessionRecord.session_id).catch(() => null);
+    if (!signal) {
+      setPeerStatus('failed');
+      return;
+    }
+    setPeerStatus('offer-published');
+  }
 
   const handleUseSelectedLocalDevice = async () => {
     traceDevice('useSelectedLocalDevice:begin', {
@@ -342,10 +365,3 @@ export default function ConnectDevicePage() {
   );
 
 }
-      if (nodeHeartbeatTimerRef.current != null) {
-        window.clearInterval(nodeHeartbeatTimerRef.current);
-        nodeHeartbeatTimerRef.current = null;
-      }
-    setBroadcast((prev) => ({ ...prev, stage: 'peer_publishing', sessionId, updatedAt: Date.now() }));
-    setBroadcast((prev) => ({ ...prev, stage: 'camera_starting', selectedDeviceId: camera.selectedDeviceId, sourceKind: 'camera', nodeId, updatedAt: Date.now() }));
-    setBroadcast((prev) => ({ ...prev, stage: 'live_session_ready', sessionId: nextSession.session_id, updatedAt: Date.now() }));

@@ -3450,3 +3450,30 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(liveBroadcastAlignment.includes('match.node_id !== input.nodeId'));
   assert.ok(liveBroadcastAlignment.includes('!match.has_offer'));
 });
+
+test('connect device route keeps canonical shim and deterministic broadcast wiring', () => {
+  const shimPath = path.join(packageRoot, 'app', 'connect', 'device', 'ConnectDevicePage.tsx');
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const pickerPath = path.join(packageRoot, 'app', 'connect', 'device', 'DevicePickerSheet.tsx');
+  const liveHookPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
+  const cameraHookPath = path.join(packageRoot, 'app', 'connect', 'device', 'useCameraSession.ts');
+  const shim = fs.readFileSync(shimPath, 'utf8');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const picker = fs.readFileSync(pickerPath, 'utf8');
+  const liveHook = fs.readFileSync(liveHookPath, 'utf8');
+  const cameraHook = fs.readFileSync(cameraHookPath, 'utf8');
+
+  assert.ok(shim.includes("export { default } from './page';"));
+  assert.ok(page.includes('const handleStartBroadcast = async () => {'));
+  assert.ok(page.includes('const publishPeerOffer = async (sessionRecord: { session_id: string }, stream: MediaStream) => {'));
+  assert.ok(page.includes('watchLiveSession('));
+  assert.ok(page.includes("startPreview('camera', { stream"));
+  assert.ok(page.includes('await publishPeerOffer(nextSession, stream);'));
+  assert.ok(!page.includes('crypto.randomUUID()'));
+  assert.ok(page.includes('ensureLiveBroadcastAlignment'));
+  assert.ok(!page.includes('navigator.mediaDevices.getUserMedia'));
+  assert.ok(picker.includes('other local capture nodes'));
+  assert.ok(liveHook.includes('const startPreview = useCallback(async (sourceKind: LiveSourceKind, options?: PreviewStartOptions): Promise<LiveSessionRecord | null>'));
+  assert.ok(liveHook.includes('const stream = options?.stream ?? ('));
+  assert.ok(cameraHook.includes('navigator.mediaDevices.getUserMedia'));
+});
