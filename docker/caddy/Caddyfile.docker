@@ -20,9 +20,15 @@
     }
   }
 
+  @connectDevice path /connect/device
+  reverse_proxy @connectDevice host.docker.internal:3000 {
+    header_up Host {host}
+  }
+
   @backend path \
     /api/* \
-    /connect* \
+    /connect \
+    /connect/register \
     /debug/* \
     /public/* \
     /player.html \

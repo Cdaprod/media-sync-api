@@ -9,7 +9,8 @@ def _read(path: str) -> str:
 
 REQUIRED_BACKEND_PATHS = (
     "/api/*",
-    "/connect*",
+    "/connect",
+    "/connect/register",
     "/debug/*",
     "/public/*",
     "/player.html",
@@ -33,6 +34,11 @@ def test_caddy_route_ownership_is_explicit_for_backend_media_and_next() -> None:
     assert "reverse_proxy @next host.docker.internal:3000" in docker_content
     assert "reverse_proxy host.docker.internal:3000" in docker_content
 
+
+    assert "@connectDevice path /connect/device" in host_content
+    assert "reverse_proxy @connectDevice 127.0.0.1:3000" in host_content
+    assert "@connectDevice path /connect/device" in docker_content
+    assert "reverse_proxy @connectDevice host.docker.internal:3000" in docker_content
     for content in (host_content, docker_content):
         assert "@media path /media/* /thumbnails/*" in content
         assert "transport http {" in content
@@ -43,6 +49,7 @@ def test_caddy_route_ownership_is_explicit_for_backend_media_and_next() -> None:
             assert route in content
 
         backend_section = content.split("@backend path", 1)[1].split("reverse_proxy @backend", 1)[0]
+        assert "/connect/device" not in backend_section
         assert "/_next/*" not in backend_section
 
 

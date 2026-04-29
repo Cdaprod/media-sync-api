@@ -19,6 +19,9 @@ router = APIRouter(tags=["connect-device"])
 async def connect_device(node_id: str, runtime: AppRuntime = Depends(get_runtime)) -> HTMLResponse:
     """Render browser camera shell for a registered node.
 
+    /connect/device is now normally served by the Explorer frontend behind Caddy.
+    This FastAPI route remains a direct-backend fallback for API-only/dev access.
+
     Example:
         /connect/device?node_id=runner-browser-1
     """

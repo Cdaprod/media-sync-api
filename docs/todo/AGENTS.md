@@ -1,3 +1,10 @@
+## 2026-04-29 — Route connect device path to Explorer frontend
+- [x] Kept /connect/device as the canonical Explorer device monitor route.
+- [x] Updated Caddy routing so /connect/device reaches Next.js.
+- [x] Preserved backend /connect/device as direct-backend fallback.
+- [x] Kept /connect and /connect/register backend-owned.
+- [ ] Follow-up: document backend fallback invocation path.
+
 ## 2026-04-29 — Add fullscreen monitor shell for connect device
 - [x] Added DeviceMonitorShell for route-level fullscreen monitor chrome.
 - [x] Added Local/Remote mode bar and source/session pill.

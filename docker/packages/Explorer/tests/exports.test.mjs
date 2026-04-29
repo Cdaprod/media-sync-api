@@ -3347,6 +3347,8 @@ test('connect device monitor shell wiring and contracts', () => {
   const previewPath = path.join(packageRoot, 'app', 'connect', 'device', 'FullscreenDevicePreview.tsx');
   const hooksPath = path.join(packageRoot, 'app', 'connect', 'device', 'deviceMonitorHooks.ts');
 
+  assert.ok(fs.existsSync(pagePath));
+  assert.ok(fs.existsSync(previewPath));
   assert.ok(fs.existsSync(shellPath));
   const shell = fs.readFileSync(shellPath, 'utf8');
   const page = fs.readFileSync(pagePath, 'utf8');
