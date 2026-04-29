@@ -70,11 +70,11 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     stopTracks();
   }, [clearHeartbeat, stopTracks]);
 
-  const startPreview = useCallback(async (sourceKind: LiveSourceKind, options?: PreviewStartOptions) => {
+  const startPreview = useCallback(async (sourceKind: LiveSourceKind, options?: PreviewStartOptions): Promise<LiveSessionRecord | null> => {
     if (!nodeId) {
       setError('No node_id available for live session');
       setState('error');
-      return;
+      return null;
     }
 
     setError(null);
@@ -91,12 +91,12 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     if (!hasGetUserMedia) {
       setError('Camera API is unavailable in this browser context. Use HTTPS or open this device page from a secure origin.');
       setState('error');
-      return;
+      return null;
     }
     if (sourceKind === 'screen' && !hasGetDisplayMedia) {
       setError('Screen capture is unavailable on this device/browser.');
       setState('error');
-      return;
+      return null;
     }
 
     const buildCameraError = (err: unknown) => {
@@ -157,6 +157,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
           .then(setSession)
           .catch(() => undefined);
       }, 10000);
+      return nextSession;
     } catch (err) {
       traceLive('startPreview:error', {
         kind: sourceKind,
@@ -168,6 +169,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
         setError(buildCameraError(err));
       }
       setState('error');
+      return null;
     }
   }, [api, clearHeartbeat, nodeId, stopTracks]);
 

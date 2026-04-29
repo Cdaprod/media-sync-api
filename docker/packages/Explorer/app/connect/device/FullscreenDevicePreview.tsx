@@ -45,6 +45,7 @@ interface FullscreenDevicePreviewProps {
   onRequestToggleScopes?: () => void;
   onStartCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
   onUseSelectedLocalDevice: () => Promise<boolean>;
+  debugEvents?: string[];
   onStartScreen: () => void | Promise<void>;
   onStopPreview: () => void | Promise<void>;
   onStartDeviceRecording: () => void | Promise<void>;
@@ -79,6 +80,7 @@ export default function FullscreenDevicePreview({
   onRequestToggleScopes,
   onStartCamera,
   onUseSelectedLocalDevice,
+  debugEvents = [],
   onStartScreen,
   onStopPreview,
   onStartDeviceRecording,
@@ -96,6 +98,7 @@ export default function FullscreenDevicePreview({
   const [modalOpen, setModalOpen] = useState(false);
   const [overlaysVisible, setOverlaysVisible] = useState(true);
   const [pickerStatus, setPickerStatus] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { devices: hookLocalDevices, permission: localPermission, refresh: refreshLocal } = useLocalCameras();
@@ -234,7 +237,7 @@ export default function FullscreenDevicePreview({
             <div className="btn-stack">
               {isIdle && !isError && !isEnded && (
                 <>
-                  <button className="btn-overlay ghost" onClick={() => { void onStartCamera(); }} disabled={!canUseCamera}>
+                  <button className="btn-overlay ghost" onClick={() => { void onStartCamera(); }} disabled={!mounted ? false : !canUseCamera}>
                     Start Live Broadcast
                   </button>
                   {canUseScreen && !isLikelyIOS && (
@@ -290,6 +293,7 @@ export default function FullscreenDevicePreview({
       {process.env.NODE_ENV !== 'production' ? (
         <div className="picker-status-chip">
           Camera: {cameraState?.status || 'unknown'} · Selected: {cameraState?.selectedDeviceId || 'default'} · Session: {sessionId || 'none'} · Peer: {peerStatus}
+          {debugEvents.length > 0 ? ` · ${debugEvents.join(' | ')}` : ''}
         </div>
       ) : null}
 
@@ -369,3 +373,6 @@ export default function FullscreenDevicePreview({
     </div>
   );
 }
+  useEffect(() => {
+    setMounted(true);
+  }, []);

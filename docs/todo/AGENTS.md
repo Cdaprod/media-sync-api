@@ -1,3 +1,12 @@
+## 2026-04-29 — Make connect device broadcast commit selected camera session
+- [x] Added canonical handleStartBroadcast path that commits selected camera into live session creation.
+- [x] Added explicit publishPeerOffer(session, stream) startup lane (offer + ICE + answer polling).
+- [x] Added active broadcast session state/ref tracking and startup traces for debug=1.
+- [x] Added node heartbeat lane while device page stays active.
+- [x] Kept picker row select-only and Use Selected local-preview-only (no live session creation).
+- [x] Added hydration-safe mounted guard for client-only disabled controls.
+- [ ] Follow-up: replace debug chip event dump with compact expandable event console.
+
 ## 2026-04-29 — Trace connect device startPreview path
 - [x] Added canonical Start Live Broadcast handler.
 - [x] Added canonical Use Selected local device handler.
