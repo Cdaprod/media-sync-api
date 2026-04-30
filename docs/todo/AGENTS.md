@@ -1,3 +1,10 @@
+## 2026-04-30 — Restore live device instance cards in Explorer sidebar
+- [x] Added combined `LiveDeviceInstance` view model in `ExplorerApp`.
+- [x] Merged node/source/live/runtime lanes by `node_id` and `session_id` overlays.
+- [x] Rendered `LIVE DEVICE INSTANCES` cards without replacing existing Canonical/Remote/Registered runtime sections.
+- [x] Preserved persisted library/snapshot assets and existing sidebar ownership lanes.
+- [ ] Follow-up: wire Watch Live card action into full viewer attach flow parity path.
+
 ## 2026-04-30 — External-stream continuity hardening for live-session bootstrap
 - [x] Prevented `useLiveSession.startPreview` from stopping existing camera tracks when an external stream is provided by connect-device flow.
 - [x] Added explicit `hasExternalStream` guard so camera-track stop and `stopTracks()` cleanup run only for internally-owned stream acquisition lanes.

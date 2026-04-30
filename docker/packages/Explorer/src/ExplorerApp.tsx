@@ -147,6 +147,19 @@ type FocusMeasurementSnapshot = {
   viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
   transform: FocusWorldTransform | null;
 };
+type LiveDeviceInstance = {
+  nodeId: string;
+  label: string;
+  status?: string;
+  sourceName?: string;
+  sourceKind?: string;
+  sessionId?: string;
+  sessionState?: string;
+  hasOffer?: boolean;
+  hasAnswer?: boolean;
+  runtimeAssetId?: string;
+  runtimeState?: string;
+};
 type PreviewDebugEntry = {
   stage: string;
   selectionKey?: string;
@@ -675,6 +688,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
+  const [runtimeAssets, setRuntimeAssets] = useState<Array<Record<string, unknown>>>([]);
 
   // ---------------------------------------------------------------------------
   // UI/runtime authority seam.
@@ -772,6 +786,17 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       reloadWebRtcLiveSessions(),
     ]);
   }, [reloadLiveSessions, reloadWebRtcLiveSessions]);
+  const reloadDeviceInstanceLanes = useCallback(async () => {
+    const laneResults = await Promise.allSettled([
+      reloadSourceControl(),
+      reloadWebRtcLiveSessions(),
+      api.listRuntimeAssets(),
+    ]);
+    const runtimeAssetsLane = laneResults[2];
+    if (runtimeAssetsLane.status === 'fulfilled') {
+      setRuntimeAssets(Array.isArray(runtimeAssetsLane.value) ? runtimeAssetsLane.value : []);
+    }
+  }, [api, reloadSourceControl, reloadWebRtcLiveSessions]);
 
   useRuntimeEventReactions({
     reloadLibrarySnapshot: refreshLibrarySnapshot,
@@ -797,10 +822,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (!livePreview.activeLivePreview) return;
     const timeout = window.setTimeout(() => {
-      void reloadWebRtcLiveSessions();
+      void reloadDeviceInstanceLanes();
     }, 1200);
     return () => window.clearTimeout(timeout);
-  }, [livePreview.activeLivePreview, reloadWebRtcLiveSessions]);
+  }, [livePreview.activeLivePreview, reloadDeviceInstanceLanes]);
+
+  useEffect(() => {
+    void reloadDeviceInstanceLanes();
+    const timer = window.setInterval(() => {
+      void reloadDeviceInstanceLanes();
+    }, 7000);
+    return () => window.clearInterval(timer);
+  }, [reloadDeviceInstanceLanes]);
 
 
   useEffect(() => {
@@ -3191,13 +3224,62 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return webRtcSessionsByNodeId.has(node.node_id);
   }, [webRtcSessionsByNodeId]);
 
+  const liveDeviceInstances = useMemo<LiveDeviceInstance[]>(() => {
+    const instancesByNodeId = new Map<string, LiveDeviceInstance>();
+    for (const node of runtimeNodes) {
+      instancesByNodeId.set(node.node_id, {
+        nodeId: node.node_id,
+        label: node.label || node.node_id,
+        status: node.status,
+      });
+    }
+    for (const source of runtimeSources) {
+      const ownerNodeId = typeof source.owner_node_id === 'string' ? source.owner_node_id : '';
+      if (!ownerNodeId) continue;
+      const existing = instancesByNodeId.get(ownerNodeId) || { nodeId: ownerNodeId, label: ownerNodeId };
+      existing.sourceName = source.name;
+      existing.sourceKind = source.kind || source.type || undefined;
+      instancesByNodeId.set(ownerNodeId, existing);
+    }
+    for (const session of webRtcLiveSessions) {
+      const nodeId = typeof session.node_id === 'string' ? session.node_id : '';
+      if (!nodeId) continue;
+      const existing = instancesByNodeId.get(nodeId) || { nodeId, label: nodeId };
+      existing.sessionId = session.session_id;
+      existing.sessionState = session.state;
+      existing.hasOffer = Boolean(session.offer?.sdp);
+      existing.hasAnswer = Boolean(session.answer?.sdp);
+      instancesByNodeId.set(nodeId, existing);
+    }
+    for (const asset of runtimeAssets) {
+      const assetNodeId = typeof asset.node_id === 'string'
+        ? asset.node_id
+        : (typeof asset.owner_node_id === 'string' ? asset.owner_node_id : '');
+      const assetSessionId = typeof asset.session_id === 'string' ? asset.session_id : '';
+      const fallbackNodeId = assetSessionId
+        ? Array.from(instancesByNodeId.values()).find((entry) => entry.sessionId === assetSessionId)?.nodeId
+        : undefined;
+      const nodeId = assetNodeId || fallbackNodeId || '';
+      if (!nodeId) continue;
+      const existing = instancesByNodeId.get(nodeId) || { nodeId, label: nodeId };
+      existing.runtimeAssetId = typeof asset.asset_id === 'string' ? asset.asset_id : undefined;
+      existing.runtimeState = typeof asset.state === 'string' ? asset.state : undefined;
+      if (!existing.sessionId && assetSessionId) existing.sessionId = assetSessionId;
+      instancesByNodeId.set(nodeId, existing);
+    }
+    return Array.from(instancesByNodeId.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [runtimeAssets, runtimeNodes, runtimeSources, webRtcLiveSessions]);
+
   useEffect(() => {
     setTabRole('explorer');
     pruneLegacyNodeIdentityKeys();
     return subscribeBrowserRuntimeChannel((message) => {
       console.debug('[browser-runtime] channel', message);
+      if (message?.type === 'session' || message?.type === 'identity') {
+        void reloadDeviceInstanceLanes();
+      }
     });
-  }, []);
+  }, [reloadDeviceInstanceLanes]);
 
   const openDeviceForNode = useCallback((node: NodeControlRecord) => {
     if (canOpenDeviceForNode(node)) {
@@ -5259,6 +5341,44 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                       {webRtcLiveSessions.length} live WebRTC sessions
                     </div>
                   </div>
+
+                  {liveDeviceInstances.length > 0 ? (
+                    <div className="card">
+                      <strong>LIVE DEVICE INSTANCES</strong>
+                      <div className="small">Merged node/source/live/runtime lane visibility for device instances.</div>
+                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
+                        {liveDeviceInstances.map((instance) => (
+                          <div className="card" key={`live-instance-${instance.nodeId}`}>
+                            <strong>{instance.label}</strong>
+                            <div className="small">node_id: {instance.nodeId}</div>
+                            {instance.sourceName ? <div className="small">source: {instance.sourceName} ({instance.sourceKind || 'unknown'})</div> : null}
+                            {instance.status ? <div className="small">status: {instance.status}</div> : null}
+                            {instance.sessionId ? <div className="small">session: {instance.sessionId} ({instance.sessionState || 'unknown'})</div> : null}
+                            <div className="tagrow">
+                              <span className={`tag ${instance.hasOffer ? 'good' : ''}`}>offer:{instance.hasOffer ? 'yes' : 'no'}</span>
+                              <span className={`tag ${instance.hasAnswer ? 'good' : ''}`}>answer:{instance.hasAnswer ? 'yes' : 'no'}</span>
+                              {instance.runtimeState ? <span className="tag">{instance.runtimeState}</span> : null}
+                            </div>
+                            <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <button className="btn" type="button" onClick={() => openDevice(instance.nodeId)}>Open Device</button>
+                              {instance.sessionId ? (
+                                <button
+                                  className="btn"
+                                  type="button"
+                                  onClick={() => {
+                                    const session = webRtcLiveSessions.find((entry) => entry.session_id === instance.sessionId);
+                                    if (session) void openLivePeerViewer(session);
+                                  }}
+                                >
+                                  Open peer view / Watch live
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   {canonicalSources.length > 0 ? (
                     <div className="card">

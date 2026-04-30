@@ -335,6 +335,14 @@ test('connect device page and live-session hook guard media APIs for insecure iO
 
   assert.ok(app.includes('Remote source surfaces'));
   assert.ok(app.includes('Registered runtimes'));
+  assert.ok(app.includes('type LiveDeviceInstance = {'));
+  assert.ok(app.includes('LIVE DEVICE INSTANCES'));
+  assert.ok(app.includes('listRuntimeAssets'));
+  assert.ok(app.includes('listWebRtcLiveSessions'));
+  assert.ok(app.includes('Promise.allSettled(['));
+  assert.ok(app.includes('source.owner_node_id'));
+  assert.ok(app.includes('session.node_id'));
+  assert.ok(app.includes('openLivePeerViewer(session)'));
 });
 
 test('live session signaling API and peer-viewer hooks are wired', () => {
