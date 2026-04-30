@@ -377,8 +377,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(device.includes("traceDevice('node-identity:resolved'"));
   assert.ok(device.includes("source: queryNodeId ? 'query' : 'localStorage'"));
   assert.ok(device.includes('const getUsableCameraStream = () => {'));
-  assert.ok(device.includes('const existingStream = getUsableCameraStream();'));
-  assert.ok(device.includes('const stream = existingStream ?? await startCamera({'));
+  assert.ok(device.includes('let stream = getUsableCameraStream();'));
+  assert.ok(device.includes('const enabled = await handleEnableCamera();'));
   assert.ok(device.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(device.includes("setPeerStatus('offer-published')"));
   assert.ok(device.includes("setPeerStatus('connected')"));
@@ -3477,7 +3477,10 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(shell.includes("onClick={() => onModeChange('local')"));
   assert.ok(shell.includes("onClick={() => onModeChange('remote')"));
   assert.ok(preview.includes('Start Live Broadcast'));
-  assert.ok(preview.includes('onClick={() => { void onStartCamera(); }}'));
+  assert.ok(preview.includes('onClick={() => { void onEnableCamera(); }}'));
+  assert.ok(preview.includes('onClick={() => { void onStartBroadcast(); }}'));
+  assert.ok(preview.includes('Camera source'));
+  assert.ok(preview.includes('Camera ready'));
   assert.ok(preview.includes('Pick Camera'));
   assert.ok(preview.includes('explorer-monitor-open-picker'));
   assert.ok(page.includes('mode={mode}'));
@@ -3488,7 +3491,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const clearNodeHeartbeatTimer = () => {'));
   assert.ok(page.includes('clearNodeHeartbeatTimer();'));
   assert.ok(page.includes('const getUsableCameraStream = () => {'));
-  assert.ok(page.includes('const existingStream = getUsableCameraStream();'));
+  assert.ok(page.includes('let stream = getUsableCameraStream();'));
   assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));

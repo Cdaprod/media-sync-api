@@ -43,7 +43,8 @@ interface FullscreenDevicePreviewProps {
   onClearCameraError?: () => void;
   onRequestOpenPicker?: () => void;
   onRequestToggleScopes?: () => void;
-  onStartCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
+  onEnableCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
+  onStartBroadcast: () => void | Promise<void>;
   onUseSelectedLocalDevice: () => Promise<boolean>;
   debugEvents?: string[];
   broadcastLabel?: string;
@@ -79,7 +80,8 @@ export default function FullscreenDevicePreview({
   onClearCameraError,
   onRequestOpenPicker,
   onRequestToggleScopes,
-  onStartCamera,
+  onEnableCamera,
+  onStartBroadcast,
   onUseSelectedLocalDevice,
   debugEvents = [],
   broadcastLabel,
@@ -195,7 +197,7 @@ export default function FullscreenDevicePreview({
 
   const isActive = state === 'previewing' || state === 'recording';
   const isDeviceRecording = state === 'recording';
-  const isBusy = state === 'starting' || state === 'requesting-permission';
+  const isBusy = cameraState?.status === 'starting' || state === 'requesting-permission';
   const isError = state === 'error';
   const isEnded = state === 'ended';
   const isIdle = state === 'idle' || state === 'ended' || state === 'error';
@@ -210,7 +212,8 @@ export default function FullscreenDevicePreview({
     const stream = videoRef.current?.srcObject;
     return stream instanceof MediaStream && stream.getVideoTracks().some((track) => track.readyState === 'live');
   };
-  const showFatalError = isError && !hasLiveVideoStream();
+  const hasCameraReady = !!cameraState?.stream || hasLiveVideoStream();
+  const showFatalError = isError && !hasLiveVideoStream() && !hasCameraReady;
 
   const handleSelectLocalDevice = async (deviceId: string) => {
     onSelectDevice(deviceId);
@@ -237,15 +240,18 @@ export default function FullscreenDevicePreview({
         <div className="overlay-layer">
           <div className={`overlay-card ${showFatalError ? 'error-card' : ''}`}>
             <h2>
-              {showFatalError ? 'Camera unavailable' : isEnded ? 'Session ended' : isBusy ? 'Starting...' : 'Enable your camera'}
+              {showFatalError ? 'Camera unavailable' : isEnded ? 'Session ended' : isBusy ? 'Starting...' : hasCameraReady ? 'Camera ready' : 'Camera source'}
             </h2>
             <p>
-              {showFatalError ? (cameraErrorMessage || error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : 'Tap once to grant access and start broadcasting.'}
+              {showFatalError ? (cameraErrorMessage || error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : hasCameraReady ? 'Local preview is active. You can start live broadcast.' : 'Enable this device camera first. Broadcast is optional.'}
             </p>
             <div className="btn-stack">
               {isIdle && !isError && !isEnded && (
                 <>
-                  <button className="btn-overlay ghost" onClick={() => { void onStartCamera(); }} disabled={!mounted ? false : !canUseCamera}>
+                  <button className="btn-overlay ghost" onClick={() => { void onEnableCamera(); }} disabled={!mounted ? false : !canUseCamera}>
+                    Enable Camera
+                  </button>
+                  <button className="btn-overlay ghost" onClick={() => { void onStartBroadcast(); }} disabled={isBusy || !hasCameraReady}>
                     Start Live Broadcast
                   </button>
                   {canUseScreen && !isLikelyIOS && (
@@ -260,7 +266,7 @@ export default function FullscreenDevicePreview({
               )}
               {(showFatalError || isEnded) && (
                 <>
-                  <button className="btn-overlay primary" onClick={() => { void onStartCamera(); }}>
+                  <button className="btn-overlay primary" onClick={() => { void onStartBroadcast(); }}>
                     Retry
                   </button>
                   <button className="btn-overlay ghost" onClick={() => setPickerOpen(true)}>
@@ -293,7 +299,7 @@ export default function FullscreenDevicePreview({
           <div className="top-actions">
             <button className="btn-pill" onClick={() => setModalOpen(true)}>Camera Info</button>
             <button className="btn-pill" onClick={() => setShelfOpen(true)}>Scopes · Overlays · Controls</button>
-            {showResume && <button className="btn-pill" onClick={onStartCamera}>Resume</button>}
+            {showResume && <button className="btn-pill" onClick={onEnableCamera}>Resume</button>}
             <button className="btn-pill" onClick={onBackToExplorer}>Explorer</button>
           </div>
         </div>

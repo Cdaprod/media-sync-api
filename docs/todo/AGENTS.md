@@ -1,3 +1,10 @@
+## 2026-04-30 — Split local camera preview from live broadcast startup
+- [x] Made local camera preview a first-class state before live broadcast.
+- [x] Added explicit `handleEnableCamera` and `bindPreviewStream` flow.
+- [x] Start broadcast now reuses existing camera stream and only enables camera when needed.
+- [x] Broadcast failure no longer implies camera failure state in overlay copy.
+- [ ] Follow-up: add local MediaRecorder recording/download path from camera.stream.
+
 ## 2026-04-30 — Register launcher UX and legacy identity pruning
 - [x] Register modal now exposes explicit launcher actions (`Open Device Tab`, `Re-register`) when identity already exists.
 - [x] Existing-identity register path now opens device tab directly instead of silently no-op closing.

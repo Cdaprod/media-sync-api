@@ -165,6 +165,29 @@ export default function ConnectDevicePage() {
     const liveVideoTracks = stream.getVideoTracks().filter((track) => track.readyState === 'live');
     return liveVideoTracks.length > 0 ? stream : null;
   };
+  const bindPreviewStream = async (stream: MediaStream): Promise<void> => {
+    if (!videoRef.current) return;
+    if (videoRef.current.srcObject !== stream) videoRef.current.srcObject = stream;
+    videoRef.current.muted = true;
+    videoRef.current.playsInline = true;
+    await videoRef.current.play?.().catch((error) => {
+      traceDevice('camera:preview:play-blocked', { message: error instanceof Error ? error.message : String(error) });
+    });
+  };
+  const handleEnableCamera = async (): Promise<boolean> => {
+    traceDevice('camera:enable:begin', { selectedDeviceId: camera.selectedDeviceId });
+    const existing = getUsableCameraStream();
+    if (existing) {
+      await bindPreviewStream(existing);
+      traceDevice('camera:enable:reuse-existing');
+      return true;
+    }
+    const stream = await startCamera({ deviceId: camera.selectedDeviceId, audio: true });
+    if (!stream) return false;
+    await bindPreviewStream(stream);
+    traceDevice('camera:enable:ready', { videoTracks: stream.getVideoTracks().length, audioTracks: stream.getAudioTracks().length });
+    return true;
+  };
 
   useEffect(() => {
     return () => {
@@ -271,11 +294,12 @@ export default function ConnectDevicePage() {
       cameraStatus: camera.status,
     });
     appendTrace('broadcast:begin');
-    const existingStream = getUsableCameraStream();
-    const stream = existingStream ?? await startCamera({
-      deviceId: camera.selectedDeviceId,
-      audio: true,
-    });
+    let stream = getUsableCameraStream();
+    if (!stream) {
+      const enabled = await handleEnableCamera();
+      if (!enabled) return false;
+      stream = getUsableCameraStream();
+    }
     traceDevice('broadcast:stream-source', {
       source: existingStream ? 'existing-camera-session' : 'new-camera-session',
       videoTracks: stream?.getVideoTracks().length ?? 0,
@@ -294,10 +318,8 @@ export default function ConnectDevicePage() {
       return false;
     }
     setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
-    if (videoRef.current && videoRef.current.srcObject !== stream) {
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play().catch(() => undefined);
-    }
+    if (!stream) return false;
+    await bindPreviewStream(stream);
     appendTrace('live:startPreview');
     const nextSession = await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined });
     if (!nextSession) {
@@ -466,7 +488,7 @@ export default function ConnectDevicePage() {
         onRefreshDevices={refreshDevices}
         onSelectCameraDevice={selectDevice}
         onClearCameraError={clearCameraError}
-        onStartCamera={async (options) => {
+        onEnableCamera={async (options) => {
           if (options?.deviceId || options?.facingMode) {
             const stream = await startCamera({ deviceId: options.deviceId ?? camera.selectedDeviceId, audio: true, facingMode: options.facingMode });
             if (!stream) return;
@@ -482,8 +504,9 @@ export default function ConnectDevicePage() {
             if (nextSession) await watchLiveSession(nextSession);
             return;
           }
-          await handleStartBroadcast();
+          await handleEnableCamera();
         }}
+        onStartBroadcast={async () => { await handleStartBroadcast(); }}
         debugEvents={debugEnabled ? traceEvents : []}
         onUseSelectedLocalDevice={handleUseSelectedLocalDevice}
         onStartScreen={() => startPreview('screen')}
