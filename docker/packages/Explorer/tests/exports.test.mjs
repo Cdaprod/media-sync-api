@@ -3456,6 +3456,9 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const nodeHeartbeatTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);'));
   assert.ok(page.includes('const clearNodeHeartbeatTimer = () => {'));
   assert.ok(page.includes('clearNodeHeartbeatTimer();'));
+  assert.ok(page.includes('const getUsableCameraStream = () => {'));
+  assert.ok(page.includes('const existingStream = getUsableCameraStream();'));
+  assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));
   assert.ok(liveSession.includes('return nextSession;'));

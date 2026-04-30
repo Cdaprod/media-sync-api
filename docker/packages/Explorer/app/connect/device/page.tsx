@@ -126,6 +126,12 @@ export default function ConnectDevicePage() {
   }, []);
 
   const shouldShowScreenAction = capability.hasGetDisplayMedia && !capability.isLikelyIOS;
+  const getUsableCameraStream = () => {
+    const stream = camera.stream;
+    if (!stream) return null;
+    const liveVideoTracks = stream.getVideoTracks().filter((track) => track.readyState === 'live');
+    return liveVideoTracks.length > 0 ? stream : null;
+  };
 
   useEffect(() => {
     return () => {
@@ -232,9 +238,14 @@ export default function ConnectDevicePage() {
       cameraStatus: camera.status,
     });
     appendTrace('broadcast:begin');
-    const stream = await startCamera({
+    const existingStream = getUsableCameraStream();
+    const stream = existingStream ?? await startCamera({
       deviceId: camera.selectedDeviceId,
       audio: true,
+    });
+    traceDevice('broadcast:stream-source', {
+      source: existingStream ? 'existing-camera-session' : 'new-camera-session',
+      videoTracks: stream?.getVideoTracks().length ?? 0,
     });
     traceDevice('camera:success', {
       hasStream: !!stream,
@@ -250,7 +261,7 @@ export default function ConnectDevicePage() {
       return false;
     }
     setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
-    if (videoRef.current) {
+    if (videoRef.current && videoRef.current.srcObject !== stream) {
       videoRef.current.srcObject = stream;
       await videoRef.current.play().catch(() => undefined);
     }

@@ -1,3 +1,9 @@
+## 2026-04-30 — Duplicate camera acquisition guard in broadcast start
+- [x] Added `getUsableCameraStream()` guard so broadcast start reuses existing live camera stream.
+- [x] Added explicit stream-source trace marker (`existing-camera-session` vs `new-camera-session`).
+- [x] Prevented redundant `videoRef.srcObject` rebinding when stream is unchanged.
+- [ ] Follow-up: gate any remaining auto-start camera path with one-shot ref in fullscreen preview flow.
+
 ## 2026-04-30 — Cross-tab device token handoff follow-up
 - [x] Device-open links now include node-scoped token query handoff when available.
 - [x] Connect-device route now persists query token into shared node-auth storage for publisher tab continuity.
