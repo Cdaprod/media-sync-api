@@ -1,3 +1,9 @@
+## 2026-04-30 — Cross-tab device token handoff follow-up
+- [x] Device-open links now include node-scoped token query handoff when available.
+- [x] Connect-device route now persists query token into shared node-auth storage for publisher tab continuity.
+- [x] Added static contracts for token query handoff + connect-device token import seam.
+- [ ] Follow-up: add automated browser test for explorer-tab open-device handoff ensuring no offer 401 on fresh publisher tab.
+
 ## 2026-04-30 — Live control bearer ownership + unhandled offer error containment
 - [x] Added shared frontend node-auth helper (`nodeAuth`) with scoped token lookup, header synthesis, and diagnostics.
 - [x] Updated register flow to require/persist a real bearer token (never token preview), and fail fast when missing.

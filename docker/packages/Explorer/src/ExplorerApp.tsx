@@ -40,6 +40,7 @@ import { LivePreview } from './components/live/LivePreview';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
+import { getStoredNodeToken } from './nodeAuth';
 import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl } from './utils/mediaUrls';
 import {
   absolutizeNonAssetUrl,
@@ -3192,7 +3193,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   const openDeviceForNode = useCallback((node: NodeControlRecord) => {
     if (canOpenDeviceForNode(node)) {
-      window.open(`/connect/device?node_id=${encodeURIComponent(node.node_id)}`, '_blank', 'noopener,noreferrer');
+      const query = new URLSearchParams();
+      query.set('node_id', node.node_id);
+      const token = getStoredNodeToken(node.node_id);
+      if (token) query.set('token', token);
+      window.open(`/connect/device?${query.toString()}`, '_blank', 'noopener,noreferrer');
       return;
     }
     if (isSessionNode(node)) {

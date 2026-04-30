@@ -13,6 +13,7 @@ import { useCameraSession } from './useCameraSession';
 import { ensureLiveBroadcastAlignment } from './liveBroadcastAlignment';
 import { makeBroadcastFailure, type BroadcastSnapshot } from './broadcastSession';
 import { readDeviceBearerToken } from './deviceCredentials';
+import { setStoredNodeId, setStoredNodeToken } from '../../../src/nodeAuth';
 // CSS import removed – now in layout.tsx
 
 const api = createApiClient('');
@@ -28,6 +29,13 @@ export default function ConnectDevicePage() {
   const nodeId = searchParams.get('node_id') || (typeof window !== 'undefined'
     ? window.localStorage.getItem('explorer_capture_node_id')
     : null);
+  const queryToken = searchParams.get('token');
+
+  useEffect(() => {
+    if (!nodeId || !queryToken) return;
+    setStoredNodeId(nodeId);
+    setStoredNodeToken(nodeId, queryToken);
+  }, [nodeId, queryToken]);
 
   const {
     state,
