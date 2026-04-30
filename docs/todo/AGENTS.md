@@ -1,3 +1,9 @@
+## 2026-04-30 — Connect device heartbeat ref safety hotfix
+- [x] Locked `nodeHeartbeatTimerRef` declaration to stable component scope ref type.
+- [x] Centralized heartbeat interval cleanup via `clearNodeHeartbeatTimer()`.
+- [x] Added static contracts to prevent dangling heartbeat ref regressions.
+- [ ] Follow-up: add browser runtime smoke test for connect-device mount/unmount heartbeat churn.
+
 ## 2026-04-30 — Runtime/persisted identity dedupe seam
 - [x] Added pending overlay dedupe helper keyed by asset_url/path/fallback recording identity.
 - [x] Overlay dedupe now prefers asset-url-backed entries over transient duplicates.

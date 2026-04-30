@@ -45,7 +45,7 @@ export default function ConnectDevicePage() {
   const viewerIceSeenRef = useRef<Set<string>>(new Set());
   const activeViewerIdRef = useRef<string>('viewer-broadcast');
   const signalPollTimerRef = useRef<number | null>(null);
-  const nodeHeartbeatTimerRef = useRef<number | null>(null);
+  const nodeHeartbeatTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const publisherBusyRef = useRef(false);
   const activeBroadcastSessionRef = useRef<{ session_id: string } | null>(null);
   const viewerPeerRef = useRef<RTCPeerConnection | null>(null);
@@ -130,10 +130,7 @@ export default function ConnectDevicePage() {
       peerSessionIdRef.current = null;
       viewerIceSeenRef.current.clear();
       activeViewerIdRef.current = 'viewer-broadcast';
-      if (nodeHeartbeatTimerRef.current != null) {
-        window.clearInterval(nodeHeartbeatTimerRef.current);
-        nodeHeartbeatTimerRef.current = null;
-      }
+      clearNodeHeartbeatTimer();
       if (viewerPollTimerRef.current != null) {
         window.clearInterval(viewerPollTimerRef.current);
         viewerPollTimerRef.current = null;
@@ -142,6 +139,13 @@ export default function ConnectDevicePage() {
       viewerPeerRef.current = null;
     };
   }, []);
+
+  const clearNodeHeartbeatTimer = () => {
+    if (nodeHeartbeatTimerRef.current != null) {
+      window.clearInterval(nodeHeartbeatTimerRef.current);
+      nodeHeartbeatTimerRef.current = null;
+    }
+  };
 
   const appendTrace = (line: string) => {
     if (!debugEnabled) return;
@@ -251,9 +255,9 @@ export default function ConnectDevicePage() {
     setActiveBroadcastSession(nextSession);
     activeBroadcastSessionRef.current = nextSession;
     appendTrace(`live:session-created ${nextSession.session_id}`);
-    if (nodeHeartbeatTimerRef.current != null) window.clearInterval(nodeHeartbeatTimerRef.current);
+    clearNodeHeartbeatTimer();
     if (nodeId) {
-      nodeHeartbeatTimerRef.current = window.setInterval(() => {
+      if (!nodeHeartbeatTimerRef.current) nodeHeartbeatTimerRef.current = window.setInterval(() => {
         const token = readDeviceBearerToken(nodeId);
         if (!token) {
           appendTrace('heartbeat:skipped-no-token');
