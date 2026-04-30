@@ -1,3 +1,9 @@
+## 2026-04-30 — Register launcher UX and legacy identity pruning
+- [x] Register modal now exposes explicit launcher actions (`Open Device Tab`, `Re-register`) when identity already exists.
+- [x] Existing-identity register path now opens device tab directly instead of silently no-op closing.
+- [x] Added legacy scoped-token pruning helper to reduce stale multi-node storage drift across tabs.
+- [ ] Follow-up: add explicit `Refresh registration` control tied to source/node reload callback for immediate side-panel reconciliation.
+
 ## 2026-04-30 — Browser runtime identity and tab role model
 - [x] Added browser runtime identity helper backed by localStorage.
 - [x] Added per-tab role/session state backed by sessionStorage.

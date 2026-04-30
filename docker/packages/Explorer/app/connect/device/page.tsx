@@ -18,6 +18,7 @@ import {
   getBrowserRuntimeIdentityDiagnostics,
   importNodeAuthFromQuery,
   publishBrowserRuntimeSession,
+  pruneLegacyNodeIdentityKeys,
   setActiveRuntimeSession,
   setBrowserRuntimeIdentity,
   setTabRole,
@@ -45,6 +46,7 @@ export default function ConnectDevicePage() {
     stripNodeAuthQueryParams();
     const identity = getBrowserRuntimeIdentity(imported.nodeId);
     if (identity.nodeId) setBrowserRuntimeIdentity(identity.nodeId, identity.token);
+    pruneLegacyNodeIdentityKeys();
     traceDevice('node-auth:bootstrap', {
       imported: imported.imported,
       nodeId: imported.nodeId || identity.nodeId,

@@ -363,6 +363,7 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(nodeAuth.includes('explorer_capture_node_token'));
   assert.ok(nodeAuth.includes("throw new Error('missing_device_bearer_token')"));
   assert.ok(nodeAuth.includes('tokenSource'));
+  assert.ok(nodeAuth.includes('pruneLegacyNodeIdentityKeys'));
   assert.ok(api.includes('requireNodeAuthHeaders(nodeId)'));
   assert.ok(api.includes('missing_device_bearer_token'));
 
@@ -391,11 +392,14 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('api.publishLiveSignalAnswer(session.session_id, viewerId'));
   assert.ok(card.includes('peerVideoRef'));
   assert.ok(app.includes('openDeviceTab(node.node_id);'));
+  assert.ok(app.includes('pruneLegacyNodeIdentityKeys();'));
   assert.ok(registerModal.includes('const existingNodeId = getStoredNodeId();'));
   assert.ok(registerModal.includes('const nextNodeId = existingNodeId || buildDefaultNodeId(nextContext.deviceClass);'));
   assert.ok(registerModal.includes('setBrowserRuntimeIdentity(payload.node_id, token);'));
   assert.ok(registerModal.includes("throw new Error('register response missing bearer token')"));
   assert.ok(registerModal.includes('token_preview'));
+  assert.ok(registerModal.includes('Open Device Tab'));
+  assert.ok(registerModal.includes('Re-register'));
 });
 
 test('runtime SSE hook exists and uses EventSource /api/events', () => {

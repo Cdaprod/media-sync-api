@@ -54,3 +54,12 @@ export const subscribeBrowserRuntimeChannel = (onMessage: (message: any) => void
 
 export const buildOpenDeviceUrl = (basePath = '/connect/device', nodeIdOverride?: string | null): string => { const identity = getBrowserRuntimeIdentity(nodeIdOverride); const params = new URLSearchParams(); if (identity.nodeId) params.set('node_id', identity.nodeId); if (identity.token) params.set('token', identity.token); const query = params.toString(); return query ? `${basePath}?${query}` : basePath; };
 export const openDeviceTab = (nodeId?: string | null): void => { if (typeof window === 'undefined') return; window.open(buildOpenDeviceUrl('/connect/device', nodeId), '_blank', 'noopener,noreferrer'); };
+export const pruneLegacyNodeIdentityKeys = (): void => {
+  if (!canUseStorage()) return;
+  const current = getStoredNodeId();
+  for (const key of Object.keys(window.localStorage)) {
+    if (!key.startsWith(`${CAPTURE_TOKEN_KEY}:`)) continue;
+    if (current && key === getCaptureNodeTokenKey(current)) continue;
+    window.localStorage.removeItem(key);
+  }
+};

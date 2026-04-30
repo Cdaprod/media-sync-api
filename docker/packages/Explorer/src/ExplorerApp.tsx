@@ -40,7 +40,7 @@ import { LivePreview } from './components/live/LivePreview';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
-import { openDeviceTab, setTabRole, subscribeBrowserRuntimeChannel } from './lib/browserRuntimeIdentity';
+import { openDeviceTab, pruneLegacyNodeIdentityKeys, setTabRole, subscribeBrowserRuntimeChannel } from './lib/browserRuntimeIdentity';
 import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl } from './utils/mediaUrls';
 import {
   absolutizeNonAssetUrl,
@@ -3193,6 +3193,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   useEffect(() => {
     setTabRole('explorer');
+    pruneLegacyNodeIdentityKeys();
     return subscribeBrowserRuntimeChannel((message) => {
       console.debug('[browser-runtime] channel', message);
     });

@@ -9,6 +9,7 @@ import {
   getBrowserRuntimeIdentityDiagnostics,
   getStoredNodeId,
   getStoredNodeToken,
+  openDeviceTab,
   setBrowserRuntimeIdentity,
 } from '../lib/browserRuntimeIdentity';
 
@@ -167,6 +168,7 @@ export function RegisterNodeModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [issuedAuth, setIssuedAuth] = useState<RegisterNodeAuth | null>(null);
+  const [forceReregister, setForceReregister] = useState(false);
 
   const cameraApiLabel = useMemo(() => {
     if (!detectedContext) return 'unknown';
@@ -198,6 +200,7 @@ export function RegisterNodeModal({
     setShowAdvanced(false);
     setError(null);
     setIssuedAuth(null);
+    setForceReregister(false);
     setHasCamera(nextContext.hasCameraApi ? null : false);
 
     const likelyCapture = nextContext.isLikelyMobile && nextContext.hasCameraApi;
@@ -403,11 +406,12 @@ export function RegisterNodeModal({
     try {
       const existingNodeId = getStoredNodeId();
       const existingToken = getStoredNodeToken(existingNodeId).token;
-      if (existingNodeId && existingToken && existingNodeId === payload.node_id) {
+      if (existingNodeId && existingToken && existingNodeId === payload.node_id && !forceReregister) {
         console.debug('[register-node] reusing stored node identity', {
           nodeId: existingNodeId,
           diagnostics: getBrowserRuntimeIdentityDiagnostics(existingNodeId),
         });
+        openDeviceTab(existingNodeId);
         onClose();
         return;
       }
@@ -438,7 +442,8 @@ export function RegisterNodeModal({
         }
         try {
           window.open(nextDeviceUrl, '_blank', 'noopener,noreferrer');
-          onClose();
+          openDeviceTab(existingNodeId);
+        onClose();
           return;
         }
         catch {
@@ -455,7 +460,7 @@ export function RegisterNodeModal({
     finally {
       setSubmitting(false);
     }
-  }, [onClose, onSuccess, payload, registerNode, resolveResponseUrl, router]);
+  }, [forceReregister, onClose, onSuccess, payload, registerNode, resolveResponseUrl, router]);
 
   const handleConfigureAsCamera = useCallback(() => {
     applyCapturePreset({
@@ -502,6 +507,16 @@ export function RegisterNodeModal({
             <div className="small">Camera permission: {cameraPermission ?? 'unknown'}</div>
             <div className="small">Authority URL: {authorityOrigin}</div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {!forceReregister && getStoredNodeId() && getStoredNodeToken(getStoredNodeId()).token ? (
+                <>
+                  <button type="button" className="btn" onClick={() => openDeviceTab(getStoredNodeId())}>
+                    Open Device Tab
+                  </button>
+                  <button type="button" className="btn" onClick={() => setForceReregister(true)}>
+                    Re-register
+                  </button>
+                </>
+              ) : null}
               <button type="button" className="btn" onClick={handleConfigureAsCamera}>
                 Configure as camera device
               </button>
