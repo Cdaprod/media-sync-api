@@ -69,6 +69,37 @@ function runtimeAssetToPendingRecording(asset: RuntimeAssetRecord): PendingRecor
   };
 }
 
+
+function normalizeIdentityPath(path: string | null | undefined): string {
+  return String(path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
+function dedupePendingOverlayAssets(items: PendingRecordingAsset[]): PendingRecordingAsset[] {
+  const seen = new Map<string, PendingRecordingAsset>();
+  for (const item of items) {
+    const key = item.assetUrl
+      || normalizeIdentityPath(item.completedPath)
+      || normalizeIdentityPath(item.outputName)
+      || `${item.recordingId}:${item.sessionId}`;
+    if (!key) continue;
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, item);
+      continue;
+    }
+    const existingHasAssetUrl = !!existing.assetUrl;
+    const nextHasAssetUrl = !!item.assetUrl;
+    if (!existingHasAssetUrl && nextHasAssetUrl) {
+      seen.set(key, item);
+      continue;
+    }
+    if (!existingHasAssetUrl && !nextHasAssetUrl && existing.status !== 'saved' && item.status === 'saved') {
+      seen.set(key, item);
+    }
+  }
+  return Array.from(seen.values());
+}
+
 type UsePendingArtifactControllerArgs = {
   resolvedApiBase: string;
   activeProject: Project | null;
@@ -169,7 +200,7 @@ export function usePendingArtifactController({
 
   // Runtime assets are an overlay, not a replacement for persisted media.
   const visiblePendingRecordingAssets = useMemo(() => (
-    sortPendingRecordingAssetsForDisplay([...pendingRecordingAssets, ...runtimeRecordingAssets])
+    sortPendingRecordingAssetsForDisplay(dedupePendingOverlayAssets([...pendingRecordingAssets, ...runtimeRecordingAssets]))
       .filter((recording) => !media.some((item) => pendingRecordingMatchesMediaItem(recording, item)))
       .filter((recording) => {
         if (activeProject?.name && recording.project !== activeProject.name) return mediaScope === 'all';

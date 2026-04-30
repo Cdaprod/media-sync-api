@@ -1,3 +1,9 @@
+## 2026-04-30 — Runtime/persisted identity dedupe seam
+- [x] Added pending overlay dedupe helper keyed by asset_url/path/fallback recording identity.
+- [x] Overlay dedupe now prefers asset-url-backed entries over transient duplicates.
+- [x] Added static contracts locking dedupe helper usage in pending merge lane.
+- [ ] Follow-up: add explicit persisted-vs-runtime identity regression tests with fixture payloads.
+
 ## 2026-04-29 — Runtime overlay safety lock (persisted + runtime merge discipline)
 - [x] Locked runtime asset overlay comment/contract in pending artifact controller.
 - [x] Runtime asset polling failures now preserve existing UI state (no destructive clear-to-empty fallback).

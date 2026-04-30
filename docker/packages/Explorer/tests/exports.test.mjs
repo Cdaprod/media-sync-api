@@ -3506,6 +3506,8 @@ test('explorer pending artifact controller merges runtime assets into pending re
   assert.ok(content.includes("materializing: 'finalizing'"));
   assert.ok(content.includes("ready: 'saved'"));
   assert.ok(content.includes('[...pendingRecordingAssets, ...runtimeRecordingAssets]'));
+  assert.ok(content.includes('dedupePendingOverlayAssets'));
+  assert.ok(content.includes('existingHasAssetUrl'));
   assert.ok(content.includes('Runtime assets are an overlay, not a replacement'));
   assert.ok(content.includes('if (!mounted || !assets) return;'));
 });
