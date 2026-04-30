@@ -148,6 +148,27 @@ async function parseJson<T>(response: Response): Promise<T> {
 
 export function createApiClient(baseUrl = ''): ApiClient {
   const buildUrl = buildUrlFactory(baseUrl);
+  const readNodeBearerToken = (nodeId?: string | null): string | null => {
+    if (typeof window === 'undefined') return null;
+    const keys = [
+      nodeId ? `explorer_capture_node_token:${nodeId}` : null,
+      'explorer_capture_node_token',
+      'explorer_node_token',
+    ].filter(Boolean) as string[];
+    for (const key of keys) {
+      const value = window.localStorage.getItem(key);
+      if (value) return value;
+    }
+    return null;
+  };
+  const buildNodeAuthHeaders = (nodeId?: string | null): Record<string, string> => {
+    const resolvedNodeId = (nodeId || '').trim();
+    const token = readNodeBearerToken(resolvedNodeId || null);
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (resolvedNodeId) headers['X-Media-Sync-Node-Id'] = resolvedNodeId;
+    return headers;
+  };
 
   return {
     buildUrl,
@@ -270,11 +291,13 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async startLiveSession(nodeId: string, sourceKind: LiveSourceKind, metadata: Record<string, unknown> = {}): Promise<LiveSessionRecord> {
+      const authHeaders = buildNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl('/api/live_sessions/start'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          ...authHeaders,
         },
         cache: 'no-store',
         body: JSON.stringify({ node_id: nodeId, source_kind: sourceKind, metadata }),

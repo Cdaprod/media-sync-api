@@ -394,6 +394,11 @@ export function RegisterNodeModal({
       const response = await registerNode(payload);
       setIssuedAuth(response.auth ?? null);
       window.localStorage.setItem('explorer_capture_node_id', payload.node_id);
+      if (response.auth?.token) {
+        window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, response.auth.token);
+        window.localStorage.setItem('explorer_capture_node_token', response.auth.token);
+        window.localStorage.setItem('explorer_node_token', response.auth.token);
+      }
       onSuccess(response.registered_node ?? null, response);
       if (response.device_url) {
         const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;

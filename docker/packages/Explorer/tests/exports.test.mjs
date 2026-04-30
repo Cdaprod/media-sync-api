@@ -340,9 +340,11 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
   const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
   const liveCardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const registerModalPath = path.join(packageRoot, 'src', 'components', 'RegisterNodeModal.tsx');
   const api = fs.readFileSync(apiPath, 'utf8');
   const device = fs.readFileSync(devicePath, 'utf8');
   const card = fs.readFileSync(liveCardPath, 'utf8');
+  const registerModal = fs.readFileSync(registerModalPath, 'utf8');
 
   assert.ok(api.includes('getLiveSignalState'));
   assert.ok(api.includes('publishLiveSignalOffer'));
@@ -351,6 +353,10 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(api.includes('/signal/offer'));
   assert.ok(api.includes('/signal/answer'));
   assert.ok(api.includes('/signal/ice'));
+  assert.ok(api.includes('const buildNodeAuthHeaders = (nodeId?: string | null): Record<string, string> => {'));
+  assert.ok(api.includes("headers.Authorization = `Bearer ${token}`;"));
+  assert.ok(api.includes("headers['X-Media-Sync-Node-Id'] = resolvedNodeId;"));
+  assert.ok(api.includes('...authHeaders,'));
 
   assert.ok(device.includes('webrtc: {peerStatus}'));
   assert.ok(device.includes('new RTCPeerConnection()'));
@@ -367,6 +373,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('api.getLiveSignalState(session.session_id, viewerId)'));
   assert.ok(card.includes('api.publishLiveSignalAnswer(session.session_id, viewerId'));
   assert.ok(card.includes('peerVideoRef'));
+  assert.ok(registerModal.includes("window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, response.auth.token);"));
+  assert.ok(registerModal.includes("window.localStorage.setItem('explorer_node_token', response.auth.token);"));
 });
 
 test('runtime SSE hook exists and uses EventSource /api/events', () => {

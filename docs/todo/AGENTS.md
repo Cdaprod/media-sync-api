@@ -1,3 +1,9 @@
+## 2026-04-30 — Node auth propagation fix for connect-device live start
+- [x] Added API-client node auth header synthesis for live session start (`Authorization` + `X-Media-Sync-Node-Id`).
+- [x] Persisted issued registration bearer token into connect-device local-storage keys on register success.
+- [x] Expanded Explorer static contracts to lock auth header injection + token persistence seams.
+- [ ] Follow-up: add runtime integration test that simulates empty-token vs token-present connect-device start outcomes.
+
 ## 2026-04-30 — Runtime/API layer alignment follow-up
 - [x] Routed remaining live-offer and signal polling fetches through `createApiClient` contract methods.
 - [x] Removed direct compose-job JSON fetch from `ExplorerApp` in favor of API client ownership.
