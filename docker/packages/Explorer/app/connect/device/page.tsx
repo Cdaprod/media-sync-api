@@ -13,7 +13,16 @@ import { useCameraSession } from './useCameraSession';
 import { ensureLiveBroadcastAlignment } from './liveBroadcastAlignment';
 import { makeBroadcastFailure, type BroadcastSnapshot } from './broadcastSession';
 import { readDeviceBearerToken } from './deviceCredentials';
-import { getNodeAuthDiagnostics, setStoredNodeId, setStoredNodeToken } from '../../../src/nodeAuth';
+import {
+  getBrowserRuntimeIdentity,
+  getBrowserRuntimeIdentityDiagnostics,
+  importNodeAuthFromQuery,
+  publishBrowserRuntimeSession,
+  setActiveRuntimeSession,
+  setBrowserRuntimeIdentity,
+  setTabRole,
+  stripNodeAuthQueryParams,
+} from '../../../src/lib/browserRuntimeIdentity';
 // CSS import removed – now in layout.tsx
 
 const api = createApiClient('');
@@ -30,15 +39,27 @@ export default function ConnectDevicePage() {
   const storedNodeId = typeof window !== 'undefined' ? window.localStorage.getItem('explorer_capture_node_id') : null;
   const nodeId = queryNodeId || storedNodeId;
   const queryToken = searchParams.get('token');
+  useEffect(() => {
+    setTabRole('device');
+    const imported = importNodeAuthFromQuery();
+    stripNodeAuthQueryParams();
+    const identity = getBrowserRuntimeIdentity(imported.nodeId);
+    if (identity.nodeId) setBrowserRuntimeIdentity(identity.nodeId, identity.token);
+    traceDevice('node-auth:bootstrap', {
+      imported: imported.imported,
+      nodeId: imported.nodeId || identity.nodeId,
+      tokenSource: imported.tokenSource || identity.tokenSource,
+      diagnostics: getBrowserRuntimeIdentityDiagnostics(imported.nodeId || identity.nodeId),
+    });
+  }, []);
 
   useEffect(() => {
     if (!nodeId || !queryToken) return;
-    setStoredNodeId(nodeId);
-    setStoredNodeToken(nodeId, queryToken);
+    setBrowserRuntimeIdentity(nodeId, queryToken);
   }, [nodeId, queryToken]);
   useEffect(() => {
     if (!nodeId) return;
-    const diagnostics = getNodeAuthDiagnostics(nodeId);
+    const diagnostics = getBrowserRuntimeIdentityDiagnostics(nodeId);
     traceDevice('node-identity:resolved', {
       nodeId,
       source: queryNodeId ? 'query' : 'localStorage',
@@ -283,6 +304,8 @@ export default function ConnectDevicePage() {
     }
     setActiveBroadcastSession(nextSession);
     activeBroadcastSessionRef.current = nextSession;
+    setActiveRuntimeSession(nextSession.session_id, nextSession.node_id);
+    publishBrowserRuntimeSession(nextSession.session_id, nextSession.node_id);
     appendTrace(`live:session-created ${nextSession.session_id}`);
     clearNodeHeartbeatTimer();
     if (nodeId) {

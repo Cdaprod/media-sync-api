@@ -40,7 +40,7 @@ import { LivePreview } from './components/live/LivePreview';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
-import { getStoredNodeToken } from './nodeAuth';
+import { openDeviceTab, setTabRole, subscribeBrowserRuntimeChannel } from './lib/browserRuntimeIdentity';
 import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl } from './utils/mediaUrls';
 import {
   absolutizeNonAssetUrl,
@@ -3191,13 +3191,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return webRtcSessionsByNodeId.has(node.node_id);
   }, [webRtcSessionsByNodeId]);
 
+  useEffect(() => {
+    setTabRole('explorer');
+    return subscribeBrowserRuntimeChannel((message) => {
+      console.debug('[browser-runtime] channel', message);
+    });
+  }, []);
+
   const openDeviceForNode = useCallback((node: NodeControlRecord) => {
     if (canOpenDeviceForNode(node)) {
-      const query = new URLSearchParams();
-      query.set('node_id', node.node_id);
-      const token = getStoredNodeToken(node.node_id);
-      if (token) query.set('token', token);
-      window.open(`/connect/device?${query.toString()}`, '_blank', 'noopener,noreferrer');
+      openDeviceTab(node.node_id);
       return;
     }
     if (isSessionNode(node)) {

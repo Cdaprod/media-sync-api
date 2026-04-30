@@ -1,3 +1,15 @@
+## 2026-04-30 — Browser runtime identity and tab role model
+- [x] Added browser runtime identity helper backed by localStorage.
+- [x] Added per-tab role/session state backed by sessionStorage.
+- [x] Added BroadcastChannel coordination seam for Explorer/device tabs.
+- [x] Kept query token handoff as bootstrap fallback only.
+- [x] Stripped bearer token from URL after import.
+- [x] Routed protected live/device API calls through owner-node auth headers.
+- [x] Reused existing CameraSession stream before acquiring another camera stream.
+- [x] Added polling visibility/throttle helpers to reduce node/recording request storms.
+- [ ] Follow-up: replace live polling loops with runtime event stream / BroadcastChannel fanout.
+- [ ] Follow-up: complete viewer offer/answer/ICE diagnostics if video still fails after auth stabilization.
+
 ### Latest Implementation Notes (2026-04-30)
 - [x] Stabilize connect-device broadcast stream ownership with reusable CameraSession stream preference (`getUsableCameraStream`) and explicit stream-source tracing.
 - [x] Stabilize connect-device node identity resolution ordering (query -> localStorage) with node/token diagnostics to reduce multi-node drift.

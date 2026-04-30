@@ -5,7 +5,12 @@ import type { RegisterNodeAuth, RegisterNodeRequest, RegisterNodeResponse } from
 import type { NodeControlRecord } from '../types/sourceControl';
 import { serializeMetadata } from '../utils/serializeMetadata';
 import { buildAuthorityUrl, resolveAuthorityOrigin } from '../config/authority';
-import { getStoredNodeId, getStoredNodeToken } from '../nodeAuth';
+import {
+  getBrowserRuntimeIdentityDiagnostics,
+  getStoredNodeId,
+  getStoredNodeToken,
+  setBrowserRuntimeIdentity,
+} from '../lib/browserRuntimeIdentity';
 
 interface RegisterNodeModalProps {
   isOpen: boolean;
@@ -396,6 +401,16 @@ export function RegisterNodeModal({
     setSubmitting(true);
     setError(null);
     try {
+      const existingNodeId = getStoredNodeId();
+      const existingToken = getStoredNodeToken(existingNodeId).token;
+      if (existingNodeId && existingToken && existingNodeId === payload.node_id) {
+        console.debug('[register-node] reusing stored node identity', {
+          nodeId: existingNodeId,
+          diagnostics: getBrowserRuntimeIdentityDiagnostics(existingNodeId),
+        });
+        onClose();
+        return;
+      }
       const response = await registerNode(payload);
       const authCandidate = response.auth as Record<string, unknown> | null | undefined;
       const token = [
@@ -408,11 +423,11 @@ export function RegisterNodeModal({
       if (!token) {
         throw new Error('register response missing bearer token');
       }
+      if (String(token) === String(authCandidate?.token_preview ?? '')) {
+        throw new Error('register response returned token_preview instead of bearer token');
+      }
       setIssuedAuth(response.auth ?? null);
-      window.localStorage.setItem('explorer_capture_node_id', payload.node_id);
-      window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, token);
-      window.localStorage.setItem('explorer_capture_node_token', token);
-      window.localStorage.setItem('explorer_node_token', token);
+      setBrowserRuntimeIdentity(payload.node_id, token);
       onSuccess(response.registered_node ?? null, response);
       if (response.device_url) {
         const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;

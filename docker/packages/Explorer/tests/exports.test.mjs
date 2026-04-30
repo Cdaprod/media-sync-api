@@ -222,7 +222,7 @@ test('normalized preview asset declaration is placed after resolveAssetUrl callb
 
 test('explorer api client includes bulk media action endpoints', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
-  const nodeAuthPath = path.join(packageRoot, 'src', 'nodeAuth.ts');
+  const nodeAuthPath = path.join(packageRoot, 'src', 'lib', 'browserRuntimeIdentity.ts');
   const content = fs.readFileSync(apiPath, 'utf8');
   assert.ok(content.includes('bulkDeleteMedia'));
   assert.ok(content.includes("/api/assets/bulk/delete"));
@@ -287,7 +287,7 @@ test('media item type supports optional CAS metadata fields', () => {
 test('register modal redirects directly to device activation and keeps session-node payload contract', () => {
   const modalPath = path.join(packageRoot, 'src', 'components', 'RegisterNodeModal.tsx');
   const content = fs.readFileSync(modalPath, 'utf8');
-  assert.ok(content.includes("window.localStorage.setItem('explorer_capture_node_id', payload.node_id);"));
+  assert.ok(content.includes('setBrowserRuntimeIdentity(payload.node_id, token);'));
   assert.ok(content.includes('const resolveResponseUrl = useCallback((url: string | undefined, preferredOrigin?: string | null) => {'));
   assert.ok(content.includes("const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;"));
   assert.ok(content.includes('const nextDeviceUrl = resolveResponseUrl(response.device_url, responseAuthority);'));
@@ -339,7 +339,7 @@ test('connect device page and live-session hook guard media APIs for insecure iO
 
 test('live session signaling API and peer-viewer hooks are wired', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
-  const nodeAuthPath = path.join(packageRoot, 'src', 'nodeAuth.ts');
+  const nodeAuthPath = path.join(packageRoot, 'src', 'lib', 'browserRuntimeIdentity.ts');
   const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
   const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const liveCardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
@@ -358,19 +358,19 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(api.includes('/signal/offer'));
   assert.ok(api.includes('/signal/answer'));
   assert.ok(api.includes('/signal/ice'));
-  assert.ok(nodeAuth.includes('export function getStoredNodeId(): string | null'));
-  assert.ok(nodeAuth.includes('export function getStoredNodeToken(nodeId?: string | null): string | null'));
-  assert.ok(nodeAuth.includes('explorer_capture_node_token:${resolved}'));
+  assert.ok(nodeAuth.includes('explorer_capture_node_id'));
+  assert.ok(nodeAuth.includes('getStoredNodeToken'));
+  assert.ok(nodeAuth.includes('explorer_capture_node_token'));
   assert.ok(nodeAuth.includes("throw new Error('missing_device_bearer_token')"));
   assert.ok(nodeAuth.includes('tokenSource'));
-  assert.ok(api.includes('getNodeAuthHeaders(nodeId)'));
+  assert.ok(api.includes('requireNodeAuthHeaders(nodeId)'));
   assert.ok(api.includes('missing_device_bearer_token'));
 
   assert.ok(device.includes('webrtc: {peerStatus}'));
   assert.ok(device.includes('new RTCPeerConnection()'));
   assert.ok(device.includes("api.publishLiveSignalOffer(sessionId"));
   assert.ok(device.includes("api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current"));
-  assert.ok(device.includes('setStoredNodeToken(nodeId, queryToken);'));
+  assert.ok(device.includes('setBrowserRuntimeIdentity(nodeId, queryToken);'));
   assert.ok(device.includes("const queryNodeId = searchParams.get('node_id');"));
   assert.ok(device.includes("const nodeId = queryNodeId || storedNodeId;"));
   assert.ok(device.includes("traceDevice('node-identity:resolved'"));
@@ -390,13 +390,12 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('api.getLiveSignalState(session.session_id, viewerId)'));
   assert.ok(card.includes('api.publishLiveSignalAnswer(session.session_id, viewerId'));
   assert.ok(card.includes('peerVideoRef'));
-  assert.ok(app.includes('const token = getStoredNodeToken(node.node_id);'));
-  assert.ok(app.includes("if (token) query.set('token', token);"));
+  assert.ok(app.includes('openDeviceTab(node.node_id);'));
   assert.ok(registerModal.includes('const existingNodeId = getStoredNodeId();'));
   assert.ok(registerModal.includes('const nextNodeId = existingNodeId || buildDefaultNodeId(nextContext.deviceClass);'));
-  assert.ok(registerModal.includes("window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, token);"));
+  assert.ok(registerModal.includes('setBrowserRuntimeIdentity(payload.node_id, token);'));
   assert.ok(registerModal.includes("throw new Error('register response missing bearer token')"));
-  assert.ok(registerModal.includes("window.localStorage.setItem('explorer_node_token', token);"));
+  assert.ok(registerModal.includes('token_preview'));
 });
 
 test('runtime SSE hook exists and uses EventSource /api/events', () => {

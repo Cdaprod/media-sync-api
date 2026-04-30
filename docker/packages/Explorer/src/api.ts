@@ -23,6 +23,7 @@ import type {
   LiveSignalState,
   LiveSourceKind,
 } from './types/liveSession';
+import { getBrowserRuntimeIdentityDiagnostics, getNodeAuthHeaders, getStoredNodeToken, requireNodeAuthHeaders } from './lib/browserRuntimeIdentity';
 
 export interface ResolveRequest {
   project: string;
@@ -145,6 +146,7 @@ function buildUrlFactory(baseUrl: string): (path: string) => string {
 async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json().catch(() => ({}))) as T;
 }
+function mergeHeaders(...headers: Array<HeadersInit | undefined>): HeadersInit { return Object.assign({}, ...headers); }
 
 export function createApiClient(baseUrl = ''): ApiClient {
   const buildUrl = buildUrlFactory(baseUrl);
@@ -186,9 +188,9 @@ export function createApiClient(baseUrl = ''): ApiClient {
     },
     async heartbeatNode(node: string | { nodeId: string; token?: string | null }): Promise<NodeControlRecord> {
       const nodeId = typeof node === 'string' ? node : node.nodeId;
-      const token = typeof node === 'string' ? getStoredNodeToken(nodeId) : (node.token ?? getStoredNodeToken(nodeId));
+      const token = typeof node === 'string' ? getStoredNodeToken(nodeId).token : (node.token ?? getStoredNodeToken(nodeId).token);
       if (!token) throw new Error('missing_device_bearer_token');
-      const headers: Record<string, string> = { Accept: 'application/json', ...getNodeAuthHeaders(nodeId) };
+      const headers: HeadersInit = mergeHeaders({ Accept: 'application/json' }, requireNodeAuthHeaders(nodeId));
       const response = await fetch(buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}/heartbeat`), {
         method: 'POST',
         headers,
@@ -266,7 +268,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async startLiveSession(nodeId: string, sourceKind: LiveSourceKind, metadata: Record<string, unknown> = {}): Promise<LiveSessionRecord> {
-      const authHeaders = getNodeAuthHeaders(nodeId);
+      const authHeaders = requireNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl('/api/live_sessions/start'), {
         method: 'POST',
         headers: {
@@ -470,7 +472,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async publishLiveSignalOffer(sessionId: string, offer: LiveSignalDescription, nodeId?: string): Promise<LiveSignalState> {
-      const authHeaders = getNodeAuthHeaders(nodeId);
+      const authHeaders = requireNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/offer`), {
         method: 'POST',
         headers: {
@@ -487,7 +489,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async publishLiveSignalAnswer(sessionId: string, viewerId: string, answer: LiveSignalDescription, nodeId?: string): Promise<LiveSignalState> {
-      const authHeaders = getNodeAuthHeaders(nodeId);
+      const authHeaders = requireNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/answer`), {
         method: 'POST',
         headers: {
@@ -504,7 +506,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async publishLiveSignalIce(sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate, nodeId?: string): Promise<LiveSignalState> {
-      const authHeaders = getNodeAuthHeaders(nodeId);
+      const authHeaders = requireNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/ice`), {
         method: 'POST',
         headers: {
