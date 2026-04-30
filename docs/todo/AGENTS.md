@@ -1,3 +1,12 @@
+## 2026-04-30 — Connect-device last-mile correctness + control-plane resilience
+- [x] Removed remaining connect-device broadcast stream null fallback ambiguity by hard-failing with `camera_stream_not_ready` after enable/reacquire.
+- [x] Kept all broadcast continuation lanes scoped to local `stream` binding after `existingStream` capture.
+- [x] Heartbeat token resolution now prefers shared browser-runtime identity token lookup (`getStoredNodeToken`) with legacy credential fallback.
+- [x] Local monitor overlay now hides live-broadcast CTA in Local mode so camera-preview-first UX is not blocked by remote controls.
+- [x] Source-control refresh now uses `Promise.allSettled` and preserves last good nodes/sources data on partial failures.
+- [ ] Follow-up: add a focused runtime integration test for connect-device heartbeat token continuity across fresh-tab open + stripped query auth.
+- [ ] Follow-up: add an Explorer side-panel failure-banner contract test to ensure partial refresh errors never clear healthy prior rows.
+
 ## 2026-04-30 — Split local camera preview from live broadcast startup
 - [x] Made local camera preview a first-class state before live broadcast.
 - [x] Added explicit `handleEnableCamera` and `bindPreviewStream` flow.

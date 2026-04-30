@@ -16,6 +16,7 @@ import { readDeviceBearerToken } from './deviceCredentials';
 import {
   getBrowserRuntimeIdentity,
   getBrowserRuntimeIdentityDiagnostics,
+  getStoredNodeToken,
   importNodeAuthFromQuery,
   publishBrowserRuntimeSession,
   pruneLegacyNodeIdentityKeys,
@@ -314,12 +315,8 @@ export default function ConnectDevicePage() {
         enabled: track.enabled,
       })) ?? [],
     });
-    if (!stream) {
-      setBroadcast((prev) => ({ ...prev, stage: 'failed', error: makeBroadcastFailure('missing_media_stream'), updatedAt: Date.now() }));
-      return false;
-    }
+    if (!stream) throw new Error('camera_stream_not_ready');
     setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
-    if (!stream) return false;
     await bindPreviewStream(stream);
     appendTrace('live:startPreview');
     const nextSession = await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined });
@@ -335,7 +332,7 @@ export default function ConnectDevicePage() {
     clearNodeHeartbeatTimer();
     if (nodeId) {
       if (!nodeHeartbeatTimerRef.current) nodeHeartbeatTimerRef.current = window.setInterval(() => {
-        const token = readDeviceBearerToken(nodeId);
+        const token = getStoredNodeToken(nodeId).token ?? readDeviceBearerToken(nodeId);
         if (!token) {
           appendTrace('heartbeat:skipped-no-token');
           setHeartbeatState('skipped-no-token');

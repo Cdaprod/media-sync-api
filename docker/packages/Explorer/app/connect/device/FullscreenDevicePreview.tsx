@@ -262,9 +262,11 @@ export default function FullscreenDevicePreview({
                   <button className="btn-overlay ghost" onClick={() => { void onEnableCamera(); }} disabled={!mounted ? false : !canUseCamera}>
                     Enable Camera
                   </button>
-                  <button className="btn-overlay ghost" onClick={() => { void onStartBroadcast(); }} disabled={isBusy || !hasCameraReady}>
-                    Start Live Broadcast
-                  </button>
+                  {mode === 'remote' ? (
+                    <button className="btn-overlay ghost" onClick={() => { void onStartBroadcast(); }} disabled={isBusy || !hasCameraReady}>
+                      Start Live Broadcast
+                    </button>
+                  ) : null}
                   {canUseScreen && !isLikelyIOS && (
                     <button className="btn-overlay ghost" onClick={onStartScreen}>
                       Share Screen

@@ -3494,6 +3494,8 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const getUsableCameraStream = () => {'));
   assert.ok(page.includes('const existingStream = getUsableCameraStream();'))
   assert.ok(page.includes('let stream = existingStream;'));
+  assert.ok(page.includes("if (!stream) throw new Error('camera_stream_not_ready');"));
+  assert.ok(page.includes('const token = getStoredNodeToken(nodeId).token ?? readDeviceBearerToken(nodeId);'));
   assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));
