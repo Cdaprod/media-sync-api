@@ -222,6 +222,7 @@ test('normalized preview asset declaration is placed after resolveAssetUrl callb
 
 test('explorer api client includes bulk media action endpoints', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const nodeAuthPath = path.join(packageRoot, 'src', 'nodeAuth.ts');
   const content = fs.readFileSync(apiPath, 'utf8');
   assert.ok(content.includes('bulkDeleteMedia'));
   assert.ok(content.includes("/api/assets/bulk/delete"));
@@ -290,7 +291,7 @@ test('register modal redirects directly to device activation and keeps session-n
   assert.ok(content.includes('const resolveResponseUrl = useCallback((url: string | undefined, preferredOrigin?: string | null) => {'));
   assert.ok(content.includes("const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;"));
   assert.ok(content.includes('const nextDeviceUrl = resolveResponseUrl(response.device_url, responseAuthority);'));
-  assert.ok(content.includes('router.push(nextDeviceUrl);'));
+  assert.ok(content.includes("window.open(nextDeviceUrl, '_blank', 'noopener,noreferrer');"));
   assert.ok(content.includes('window.location.href = nextDeviceUrl;'));
   assert.ok(content.includes('if (response.device_url) {'));
   assert.ok(content.includes("base_url: null,"));
@@ -338,10 +339,12 @@ test('connect device page and live-session hook guard media APIs for insecure iO
 
 test('live session signaling API and peer-viewer hooks are wired', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const nodeAuthPath = path.join(packageRoot, 'src', 'nodeAuth.ts');
   const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
   const liveCardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
   const registerModalPath = path.join(packageRoot, 'src', 'components', 'RegisterNodeModal.tsx');
   const api = fs.readFileSync(apiPath, 'utf8');
+  const nodeAuth = fs.readFileSync(nodeAuthPath, 'utf8');
   const device = fs.readFileSync(devicePath, 'utf8');
   const card = fs.readFileSync(liveCardPath, 'utf8');
   const registerModal = fs.readFileSync(registerModalPath, 'utf8');
@@ -353,10 +356,13 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(api.includes('/signal/offer'));
   assert.ok(api.includes('/signal/answer'));
   assert.ok(api.includes('/signal/ice'));
-  assert.ok(api.includes('const buildNodeAuthHeaders = (nodeId?: string | null): Record<string, string> => {'));
-  assert.ok(api.includes("headers.Authorization = `Bearer ${token}`;"));
-  assert.ok(api.includes("headers['X-Media-Sync-Node-Id'] = resolvedNodeId;"));
-  assert.ok(api.includes('...authHeaders,'));
+  assert.ok(nodeAuth.includes('export function getStoredNodeId(): string | null'));
+  assert.ok(nodeAuth.includes('export function getStoredNodeToken(nodeId?: string | null): string | null'));
+  assert.ok(nodeAuth.includes('explorer_capture_node_token:${resolved}'));
+  assert.ok(nodeAuth.includes("throw new Error('missing_device_bearer_token')"));
+  assert.ok(nodeAuth.includes('tokenSource'));
+  assert.ok(api.includes('getNodeAuthHeaders(nodeId)'));
+  assert.ok(api.includes('missing_device_bearer_token'));
 
   assert.ok(device.includes('webrtc: {peerStatus}'));
   assert.ok(device.includes('new RTCPeerConnection()'));
@@ -373,8 +379,9 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('api.getLiveSignalState(session.session_id, viewerId)'));
   assert.ok(card.includes('api.publishLiveSignalAnswer(session.session_id, viewerId'));
   assert.ok(card.includes('peerVideoRef'));
-  assert.ok(registerModal.includes("window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, response.auth.token);"));
-  assert.ok(registerModal.includes("window.localStorage.setItem('explorer_node_token', response.auth.token);"));
+  assert.ok(registerModal.includes("window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, token);"));
+  assert.ok(registerModal.includes("throw new Error('register response missing bearer token')"));
+  assert.ok(registerModal.includes("window.localStorage.setItem('explorer_node_token', token);"));
 });
 
 test('runtime SSE hook exists and uses EventSource /api/events', () => {

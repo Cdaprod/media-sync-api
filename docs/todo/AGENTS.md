@@ -1,3 +1,10 @@
+## 2026-04-30 — Live control bearer ownership + unhandled offer error containment
+- [x] Added shared frontend node-auth helper (`nodeAuth`) with scoped token lookup, header synthesis, and diagnostics.
+- [x] Updated register flow to require/persist a real bearer token (never token preview), and fail fast when missing.
+- [x] Wired protected live signaling APIs to require bearer headers and fail with `missing_device_bearer_token` before fetch.
+- [x] Contained connect-device offer publish failures in UI state to prevent unhandled runtime error overlays.
+- [ ] Follow-up: unify all remaining live control endpoints on `nodeAuth` and add runtime-level integration test for owner-node token mismatch.
+
 ## 2026-04-30 — Node auth propagation fix for connect-device live start
 - [x] Added API-client node auth header synthesis for live session start (`Authorization` + `X-Media-Sync-Node-Id`).
 - [x] Persisted issued registration bearer token into connect-device local-storage keys on register success.

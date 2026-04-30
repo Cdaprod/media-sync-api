@@ -73,9 +73,9 @@ export interface ApiClient {
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   acknowledgeLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   getLiveSignalState: (sessionId: string, viewerId?: string | null) => Promise<LiveSignalState>;
-  publishLiveSignalOffer: (sessionId: string, offer: LiveSignalDescription) => Promise<LiveSignalState>;
-  publishLiveSignalAnswer: (sessionId: string, viewerId: string, answer: LiveSignalDescription) => Promise<LiveSignalState>;
-  publishLiveSignalIce: (sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate) => Promise<LiveSignalState>;
+  publishLiveSignalOffer: (sessionId: string, offer: LiveSignalDescription, nodeId?: string) => Promise<LiveSignalState>;
+  publishLiveSignalAnswer: (sessionId: string, viewerId: string, answer: LiveSignalDescription, nodeId?: string) => Promise<LiveSignalState>;
+  publishLiveSignalIce: (sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate, nodeId?: string) => Promise<LiveSignalState>;
   sendLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }>;
   uploadLiveSessionRecording: (sessionId: string, payload: {
     file: Blob;
@@ -148,28 +148,6 @@ async function parseJson<T>(response: Response): Promise<T> {
 
 export function createApiClient(baseUrl = ''): ApiClient {
   const buildUrl = buildUrlFactory(baseUrl);
-  const readNodeBearerToken = (nodeId?: string | null): string | null => {
-    if (typeof window === 'undefined') return null;
-    const keys = [
-      nodeId ? `explorer_capture_node_token:${nodeId}` : null,
-      'explorer_capture_node_token',
-      'explorer_node_token',
-    ].filter(Boolean) as string[];
-    for (const key of keys) {
-      const value = window.localStorage.getItem(key);
-      if (value) return value;
-    }
-    return null;
-  };
-  const buildNodeAuthHeaders = (nodeId?: string | null): Record<string, string> => {
-    const resolvedNodeId = (nodeId || '').trim();
-    const token = readNodeBearerToken(resolvedNodeId || null);
-    const headers: Record<string, string> = {};
-    if (token) headers.Authorization = `Bearer ${token}`;
-    if (resolvedNodeId) headers['X-Media-Sync-Node-Id'] = resolvedNodeId;
-    return headers;
-  };
-
   return {
     buildUrl,
     async getJson(url: string): Promise<Record<string, unknown>> {
@@ -208,12 +186,9 @@ export function createApiClient(baseUrl = ''): ApiClient {
     },
     async heartbeatNode(node: string | { nodeId: string; token?: string | null }): Promise<NodeControlRecord> {
       const nodeId = typeof node === 'string' ? node : node.nodeId;
-      const token = typeof node === 'string' ? null : (node.token ?? null);
-      const headers: Record<string, string> = { Accept: 'application/json' };
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-        headers['X-Media-Sync-Node-Id'] = nodeId;
-      }
+      const token = typeof node === 'string' ? getStoredNodeToken(nodeId) : (node.token ?? getStoredNodeToken(nodeId));
+      if (!token) throw new Error('missing_device_bearer_token');
+      const headers: Record<string, string> = { Accept: 'application/json', ...getNodeAuthHeaders(nodeId) };
       const response = await fetch(buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}/heartbeat`), {
         method: 'POST',
         headers,
@@ -291,7 +266,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async startLiveSession(nodeId: string, sourceKind: LiveSourceKind, metadata: Record<string, unknown> = {}): Promise<LiveSessionRecord> {
-      const authHeaders = buildNodeAuthHeaders(nodeId);
+      const authHeaders = getNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl('/api/live_sessions/start'), {
         method: 'POST',
         headers: {
@@ -494,12 +469,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async publishLiveSignalOffer(sessionId: string, offer: LiveSignalDescription): Promise<LiveSignalState> {
+    async publishLiveSignalOffer(sessionId: string, offer: LiveSignalDescription, nodeId?: string): Promise<LiveSignalState> {
+      const authHeaders = getNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/offer`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          ...authHeaders,
         },
         cache: 'no-store',
         body: JSON.stringify({ offer }),
@@ -509,12 +486,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async publishLiveSignalAnswer(sessionId: string, viewerId: string, answer: LiveSignalDescription): Promise<LiveSignalState> {
+    async publishLiveSignalAnswer(sessionId: string, viewerId: string, answer: LiveSignalDescription, nodeId?: string): Promise<LiveSignalState> {
+      const authHeaders = getNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/answer`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          ...authHeaders,
         },
         cache: 'no-store',
         body: JSON.stringify({ viewer_id: viewerId, answer }),
@@ -524,12 +503,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async publishLiveSignalIce(sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate): Promise<LiveSignalState> {
+    async publishLiveSignalIce(sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate, nodeId?: string): Promise<LiveSignalState> {
+      const authHeaders = getNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/ice`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          ...authHeaders,
         },
         cache: 'no-store',
         body: JSON.stringify({ role, viewer_id: viewerId, candidate }),

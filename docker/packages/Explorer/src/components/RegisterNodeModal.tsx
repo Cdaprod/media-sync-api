@@ -392,13 +392,22 @@ export function RegisterNodeModal({
     setError(null);
     try {
       const response = await registerNode(payload);
+      const authCandidate = response.auth as Record<string, unknown> | null | undefined;
+      const token = [
+        authCandidate?.token,
+        authCandidate?.auth_token,
+        authCandidate?.bearer_token,
+        authCandidate?.node_token,
+        authCandidate?.secret,
+      ].find((value) => typeof value === 'string' && value.trim().length > 0) as string | undefined;
+      if (!token) {
+        throw new Error('register response missing bearer token');
+      }
       setIssuedAuth(response.auth ?? null);
       window.localStorage.setItem('explorer_capture_node_id', payload.node_id);
-      if (response.auth?.token) {
-        window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, response.auth.token);
-        window.localStorage.setItem('explorer_capture_node_token', response.auth.token);
-        window.localStorage.setItem('explorer_node_token', response.auth.token);
-      }
+      window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, token);
+      window.localStorage.setItem('explorer_capture_node_token', token);
+      window.localStorage.setItem('explorer_node_token', token);
       onSuccess(response.registered_node ?? null, response);
       if (response.device_url) {
         const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;
@@ -408,7 +417,9 @@ export function RegisterNodeModal({
           return;
         }
         try {
-          router.push(nextDeviceUrl);
+          window.open(nextDeviceUrl, '_blank', 'noopener,noreferrer');
+          onClose();
+          return;
         }
         catch {
           window.location.href = nextDeviceUrl;

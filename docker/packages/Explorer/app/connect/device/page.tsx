@@ -174,11 +174,11 @@ export default function ConnectDevicePage() {
     stream.getTracks().forEach((track) => peer.addTrack(track, stream));
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
-      void api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current, event.candidate.toJSON()).catch(() => undefined);
+      void api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current, event.candidate.toJSON(), nodeId || undefined).catch(() => undefined);
     };
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' });
+    await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
     appendTrace(`peer:offer-published ${sessionId}`);
     setPeerStatus('offer-published');
     const live = await ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId || '' });
@@ -281,7 +281,14 @@ export default function ConnectDevicePage() {
     } else {
       appendTrace('heartbeat:skipped-no-token');
     }
-    await publishPeerOffer(nextSession, stream);
+    try {
+      await publishPeerOffer(nextSession, stream);
+    } catch (err) {
+      appendTrace('peer:offer-failed');
+      setPeerStatus('failed');
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('peer_offer_failed', err instanceof Error ? err.message : String(err)), updatedAt: Date.now() }));
+      return false;
+    }
     return true;
     } finally {
       publisherBusyRef.current = false;

@@ -103,7 +103,7 @@ export function LiveSourceCard({
     };
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
-      void api.publishLiveSignalIce(session.session_id, 'viewer', viewerId, event.candidate.toJSON()).catch(() => undefined);
+      void api.publishLiveSignalIce(session.session_id, 'viewer', viewerId, event.candidate.toJSON(), session.node_id).catch(() => undefined);
     };
     peer.addTransceiver('video', { direction: 'recvonly' });
     peer.addTransceiver('audio', { direction: 'recvonly' });
@@ -116,7 +116,7 @@ export function LiveSourceCard({
             await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
             const answer = await peerConnRef.current.createAnswer();
             await peerConnRef.current.setLocalDescription(answer);
-            await api.publishLiveSignalAnswer(session.session_id, viewerId, { type: 'answer', sdp: answer.sdp || '' });
+            await api.publishLiveSignalAnswer(session.session_id, viewerId, { type: 'answer', sdp: answer.sdp || '' }, session.node_id);
           }
           for (const candidate of signal.ice_from_device || []) {
             const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
