@@ -377,7 +377,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(device.includes("traceDevice('node-identity:resolved'"));
   assert.ok(device.includes("source: queryNodeId ? 'query' : 'localStorage'"));
   assert.ok(device.includes('const getUsableCameraStream = () => {'));
-  assert.ok(device.includes('let stream = getUsableCameraStream();'));
+  assert.ok(device.includes('const existingStream = getUsableCameraStream();'))
+  assert.ok(device.includes('let stream = existingStream;'));
   assert.ok(device.includes('const enabled = await handleEnableCamera();'));
   assert.ok(device.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(device.includes("setPeerStatus('offer-published')"));
@@ -3491,7 +3492,8 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const clearNodeHeartbeatTimer = () => {'));
   assert.ok(page.includes('clearNodeHeartbeatTimer();'));
   assert.ok(page.includes('const getUsableCameraStream = () => {'));
-  assert.ok(page.includes('let stream = getUsableCameraStream();'));
+  assert.ok(page.includes('const existingStream = getUsableCameraStream();'))
+  assert.ok(page.includes('let stream = existingStream;'));
   assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));

@@ -101,6 +101,7 @@ export default function FullscreenDevicePreview({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [overlaysVisible, setOverlaysVisible] = useState(true);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [pickerStatus, setPickerStatus] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -213,6 +214,11 @@ export default function FullscreenDevicePreview({
     return stream instanceof MediaStream && stream.getVideoTracks().some((track) => track.readyState === 'live');
   };
   const hasCameraReady = !!cameraState?.stream || hasLiveVideoStream();
+  useEffect(() => {
+    if (mode === 'local' && hasCameraReady) setControlsOpen(false);
+    if (mode === 'remote') setControlsOpen(true);
+  }, [hasCameraReady, mode]);
+  const overlayVisible = controlsOpen || !hasCameraReady || mode === 'remote';
   const showFatalError = isError && !hasLiveVideoStream() && !hasCameraReady;
 
   const handleSelectLocalDevice = async (deviceId: string) => {
@@ -236,7 +242,7 @@ export default function FullscreenDevicePreview({
       <div className="gradient-vignette" />
 
       {/* Overlay layer for idle/busy/error/ended */}
-      {(isIdle || isBusy || showFatalError) && (
+      {overlayVisible && (isIdle || isBusy || showFatalError || hasCameraReady) && (
         <div className="overlay-layer">
           <div className={`overlay-card ${showFatalError ? 'error-card' : ''}`}>
             <h2>
@@ -246,6 +252,11 @@ export default function FullscreenDevicePreview({
               {showFatalError ? (cameraErrorMessage || error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : hasCameraReady ? 'Local preview is active. You can start live broadcast.' : 'Enable this device camera first. Broadcast is optional.'}
             </p>
             <div className="btn-stack">
+              {mode === 'local' && hasCameraReady ? (
+                <button className="btn-overlay ghost" onClick={() => setControlsOpen(false)}>
+                  Hide Controls
+                </button>
+              ) : null}
               {isIdle && !isError && !isEnded && (
                 <>
                   <button className="btn-overlay ghost" onClick={() => { void onEnableCamera(); }} disabled={!mounted ? false : !canUseCamera}>
@@ -281,6 +292,11 @@ export default function FullscreenDevicePreview({
           </div>
         </div>
       )}
+      {mode === 'local' && hasCameraReady && !controlsOpen ? (
+        <button className="btn-pill" style={{ position: 'absolute', top: 88, right: 16, zIndex: 20 }} onClick={() => setControlsOpen(true)}>
+          Controls
+        </button>
+      ) : null}
 
       {/* Top cluster (active only) */}
       <div className={`top-cluster ${overlaysVisible && isActive ? 'visible' : 'hidden'}`}>

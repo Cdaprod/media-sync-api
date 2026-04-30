@@ -294,7 +294,8 @@ export default function ConnectDevicePage() {
       cameraStatus: camera.status,
     });
     appendTrace('broadcast:begin');
-    let stream = getUsableCameraStream();
+    const existingStream = getUsableCameraStream();
+    let stream = existingStream;
     if (!stream) {
       const enabled = await handleEnableCamera();
       if (!enabled) return false;
