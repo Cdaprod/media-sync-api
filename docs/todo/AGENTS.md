@@ -1,3 +1,9 @@
+### Latest Implementation Notes (2026-04-30)
+- [x] Stabilize connect-device broadcast stream ownership with reusable CameraSession stream preference (`getUsableCameraStream`) and explicit stream-source tracing.
+- [x] Stabilize connect-device node identity resolution ordering (query -> localStorage) with node/token diagnostics to reduce multi-node drift.
+- [x] Throttle live polling surfaces with visibility gating helper (`shouldPollLiveSurface`) and slower runtime/live recording poll cadence.
+- [ ] Follow-up: move remaining per-card live preview polling to a shared surface poller if on-device traces still show request bursts.
+
 ## 2026-04-30 — Duplicate camera acquisition guard in broadcast start
 - [x] Added `getUsableCameraStream()` guard so broadcast start reuses existing live camera stream.
 - [x] Added explicit stream-source trace marker (`existing-camera-session` vs `new-camera-session`).

@@ -13,7 +13,7 @@ import { useCameraSession } from './useCameraSession';
 import { ensureLiveBroadcastAlignment } from './liveBroadcastAlignment';
 import { makeBroadcastFailure, type BroadcastSnapshot } from './broadcastSession';
 import { readDeviceBearerToken } from './deviceCredentials';
-import { setStoredNodeId, setStoredNodeToken } from '../../../src/nodeAuth';
+import { getNodeAuthDiagnostics, setStoredNodeId, setStoredNodeToken } from '../../../src/nodeAuth';
 // CSS import removed – now in layout.tsx
 
 const api = createApiClient('');
@@ -26,9 +26,9 @@ export default function ConnectDevicePage() {
   };
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nodeId = searchParams.get('node_id') || (typeof window !== 'undefined'
-    ? window.localStorage.getItem('explorer_capture_node_id')
-    : null);
+  const queryNodeId = searchParams.get('node_id');
+  const storedNodeId = typeof window !== 'undefined' ? window.localStorage.getItem('explorer_capture_node_id') : null;
+  const nodeId = queryNodeId || storedNodeId;
   const queryToken = searchParams.get('token');
 
   useEffect(() => {
@@ -36,6 +36,16 @@ export default function ConnectDevicePage() {
     setStoredNodeId(nodeId);
     setStoredNodeToken(nodeId, queryToken);
   }, [nodeId, queryToken]);
+  useEffect(() => {
+    if (!nodeId) return;
+    const diagnostics = getNodeAuthDiagnostics(nodeId);
+    traceDevice('node-identity:resolved', {
+      nodeId,
+      source: queryNodeId ? 'query' : 'localStorage',
+      hasToken: diagnostics.hasToken,
+      tokenSource: diagnostics.tokenSource,
+    });
+  }, [nodeId, queryNodeId]);
 
   const {
     state,

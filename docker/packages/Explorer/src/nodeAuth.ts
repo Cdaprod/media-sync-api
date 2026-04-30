@@ -18,6 +18,13 @@ export function setStoredNodeId(nodeId: string): void {
   window.localStorage.setItem(NODE_ID_KEY, nodeId);
 }
 
+export function resolveStoredNodeIdentity(): { nodeId: string | null; token: string | null; source: 'localStorage' | 'missing' } {
+  const nodeId = getStoredNodeId();
+  const token = getStoredNodeToken(nodeId);
+  if (!nodeId) return { nodeId: null, token: null, source: 'missing' };
+  return { nodeId, token: token || null, source: 'localStorage' };
+}
+
 export function getStoredNodeToken(nodeId?: string | null): string | null {
   const resolved = (nodeId || '').trim();
   if (resolved) {

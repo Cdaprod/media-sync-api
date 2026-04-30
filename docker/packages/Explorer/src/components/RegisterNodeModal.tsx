@@ -5,6 +5,7 @@ import type { RegisterNodeAuth, RegisterNodeRequest, RegisterNodeResponse } from
 import type { NodeControlRecord } from '../types/sourceControl';
 import { serializeMetadata } from '../utils/serializeMetadata';
 import { buildAuthorityUrl, resolveAuthorityOrigin } from '../config/authority';
+import { getStoredNodeId, getStoredNodeToken } from '../nodeAuth';
 
 interface RegisterNodeModalProps {
   isOpen: boolean;
@@ -182,7 +183,8 @@ export function RegisterNodeModal({
     if (!isOpen) return;
 
     const nextContext = detectBrowserSourceContext();
-    const nextNodeId = buildDefaultNodeId(nextContext.deviceClass);
+    const existingNodeId = getStoredNodeId();
+    const nextNodeId = existingNodeId || buildDefaultNodeId(nextContext.deviceClass);
 
     setDetectedContext(nextContext);
     setNodeId(nextNodeId);
@@ -194,6 +196,9 @@ export function RegisterNodeModal({
     setHasCamera(nextContext.hasCameraApi ? null : false);
 
     const likelyCapture = nextContext.isLikelyMobile && nextContext.hasCameraApi;
+    if (existingNodeId && getStoredNodeToken(existingNodeId)) {
+      setError('Existing capture node identity detected. Registration will reuse stored node unless you explicitly re-register.');
+    }
     if (likelyCapture) {
       setRoles(['runner', 'capture']);
       setCapabilities(['can_proxy_streams']);

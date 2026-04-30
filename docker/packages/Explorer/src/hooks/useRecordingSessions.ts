@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createApiClient, type LiveRecordingUploadResult, type RecordingSessionRecord } from '../api';
 import type { PendingRecordingAsset } from '../liveRecordings';
 import { StreamHub } from '../runtime/StreamHub';
+import { shouldPollLiveSurface } from '../utils/polling';
 
 type RecorderRuntime = {
   mediaRecorder: MediaRecorder;
@@ -54,9 +55,10 @@ export function useRecordingSessions({
         if (mounted) onError?.(error instanceof Error ? error.message : 'Unable to load recording sessions.');
       } finally {
         if (!mounted) return;
-        timer = window.setTimeout(run, 2000);
+        timer = window.setTimeout(run, 5000);
       }
     };
+    if (!shouldPollLiveSurface()) return;
     void run();
     return () => {
       mounted = false;

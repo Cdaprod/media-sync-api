@@ -371,6 +371,14 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(device.includes("api.publishLiveSignalOffer(sessionId"));
   assert.ok(device.includes("api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current"));
   assert.ok(device.includes('setStoredNodeToken(nodeId, queryToken);'));
+  assert.ok(device.includes("const queryNodeId = searchParams.get('node_id');"));
+  assert.ok(device.includes("const nodeId = queryNodeId || storedNodeId;"));
+  assert.ok(device.includes("traceDevice('node-identity:resolved'"));
+  assert.ok(device.includes("source: queryNodeId ? 'query' : 'localStorage'"));
+  assert.ok(device.includes('const getUsableCameraStream = () => {'));
+  assert.ok(device.includes('const existingStream = getUsableCameraStream();'));
+  assert.ok(device.includes('const stream = existingStream ?? await startCamera({'));
+  assert.ok(device.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(device.includes("setPeerStatus('offer-published')"));
   assert.ok(device.includes("setPeerStatus('connected')"));
   assert.ok(device.includes("setPeerStatus('failed')"));
@@ -384,6 +392,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('peerVideoRef'));
   assert.ok(app.includes('const token = getStoredNodeToken(node.node_id);'));
   assert.ok(app.includes("if (token) query.set('token', token);"));
+  assert.ok(registerModal.includes('const existingNodeId = getStoredNodeId();'));
+  assert.ok(registerModal.includes('const nextNodeId = existingNodeId || buildDefaultNodeId(nextContext.deviceClass);'));
   assert.ok(registerModal.includes("window.localStorage.setItem(`explorer_capture_node_token:${payload.node_id}`, token);"));
   assert.ok(registerModal.includes("throw new Error('register response missing bearer token')"));
   assert.ok(registerModal.includes("window.localStorage.setItem('explorer_node_token', token);"));
@@ -400,6 +410,24 @@ test('runtime SSE hook exists and uses EventSource /api/events', () => {
   assert.ok(hook.includes("new CustomEvent('runtime:event'"));
   assert.ok(runtimeController.includes('useRuntimeEvents({ enabled: true })'));
   assert.ok(app.includes('useRuntimeController'));
+});
+
+test('live polling is visibility-gated and throttled', () => {
+  const liveSessionsPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSessions.ts');
+  const recordingSessionsPath = path.join(packageRoot, 'src', 'hooks', 'useRecordingSessions.ts');
+  const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const pollingPath = path.join(packageRoot, 'src', 'utils', 'polling.ts');
+  const liveSessions = fs.readFileSync(liveSessionsPath, 'utf8');
+  const recordingSessions = fs.readFileSync(recordingSessionsPath, 'utf8');
+  const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
+  const polling = fs.readFileSync(pollingPath, 'utf8');
+  assert.ok(polling.includes('document.visibilityState === \'visible\''));
+  assert.ok(liveSessions.includes('shouldPollLiveSurface'));
+  assert.ok(liveSessions.includes('}, 5000);'));
+  assert.ok(recordingSessions.includes('shouldPollLiveSurface'));
+  assert.ok(recordingSessions.includes('window.setTimeout(run, 5000);'));
+  assert.ok(pendingController.includes('shouldPollLiveSurface'));
+  assert.ok(pendingController.includes('window.setInterval(() => { void poll(); }, 3000);'));
 });
 
 test('clipboard helper includes fallback copy behavior', () => {
