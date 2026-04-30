@@ -1,3 +1,9 @@
+## 2026-04-30 — External-stream continuity hardening for live-session bootstrap
+- [x] Prevented `useLiveSession.startPreview` from stopping existing camera tracks when an external stream is provided by connect-device flow.
+- [x] Added explicit `hasExternalStream` guard so camera-track stop and `stopTracks()` cleanup run only for internally-owned stream acquisition lanes.
+- [x] Preserved stream-ref continuity for externally-provided stream reuse to keep local preview alive through broadcast/session bootstrap.
+- [ ] Follow-up: add focused browser runtime test that simulates `startLiveSession` failure while asserting external preview stream remains active.
+
 ## 2026-04-30 — Connect-device last-mile correctness + control-plane resilience
 - [x] Removed remaining connect-device broadcast stream null fallback ambiguity by hard-failing with `camera_stream_not_ready` after enable/reacquire.
 - [x] Kept all broadcast continuation lanes scoped to local `stream` binding after `existingStream` capture.

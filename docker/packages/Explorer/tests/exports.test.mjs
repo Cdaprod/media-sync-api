@@ -3439,6 +3439,8 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(hooks.includes('enumerateDevices'));
   assert.ok(liveSession.includes('options?: PreviewStartOptions'));
   assert.ok(liveSession.includes('old.getTracks().forEach((t) => t.stop())'));
+  assert.ok(liveSession.includes("sourceKind === 'camera' && !hasExternalStream"));
+  assert.ok(liveSession.includes('if (!hasExternalStream) {'));
   assert.ok(liveSession.includes('deviceId: { exact: options.deviceId }'));
   assert.ok(page.includes('camera.selectedDeviceId'));
   assert.ok(page.includes('const handleStartBroadcast = async () => {'));
