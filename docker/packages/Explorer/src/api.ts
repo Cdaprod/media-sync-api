@@ -151,6 +151,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
 
   return {
     buildUrl,
+    async getJson(url: string): Promise<Record<string, unknown>> {
+      const response = await fetch(buildUrl(url), { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+      const payload = await parseJson<Record<string, unknown>>(response);
+      if (!response.ok) {
+        throw new Error(String(payload?.detail || payload?.message || `Failed to load JSON: ${response.status}`));
+      }
+      return payload;
+    },
     async listSources(): Promise<SourceControlRecord[]> {
       const response = await fetch(buildUrl('/api/sources'), {
         method: 'GET',
@@ -566,6 +574,15 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       const payload = await parseJson<unknown>(response);
       return normalizeWebRtcLiveSessions(payload);
+    },
+    async getLiveOffer(sessionId: string): Promise<RTCSessionDescriptionInit | null> {
+      const response = await fetch(buildUrl(`/api/live/${encodeURIComponent(sessionId)}/offer`), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      return parseJson<RTCSessionDescriptionInit | null>(response);
     },
     async postLiveViewerAnswer(
       sessionId: string,

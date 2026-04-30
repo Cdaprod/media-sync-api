@@ -1991,12 +1991,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, hydrateProjectMediaItems, mediaScope, projects, refreshLibrarySnapshot]);
 
   const fetchComposeJobJson = useCallback(async (url: string) => {
-    const response = await fetch(api.buildUrl(url));
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(String(payload?.detail || payload?.message || 'Failed to poll compose job'));
-    }
-    return payload;
+    return api.getJson(url);
   }, [api]);
 
   const refreshAll = useCallback(async () => {

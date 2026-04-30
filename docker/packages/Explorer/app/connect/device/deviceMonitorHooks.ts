@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, RefObject } from 'react';
 import { RemoteCameraNode } from './deviceMonitorTypes';
+import { createApiClient } from '../../../src/api';
 
 // ----------------------------------------------------------------------
 // Local cameras enumeration
@@ -56,16 +57,12 @@ export function useLocalCameras() {
 export function useRemoteCameras() {
   const [nodes, setNodes] = useState<RemoteCameraNode[]>([]);
   const [loading, setLoading] = useState(false);
+  const api = createApiClient('');
 
   const fetchRemote = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/nodes', {
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const payload = await res.json();
+      const payload = await api.listNodes();
       const allNodes = Array.isArray(payload)
         ? payload
         : Array.isArray(payload.nodes)
@@ -96,7 +93,7 @@ export function useRemoteCameras() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     fetchRemote();

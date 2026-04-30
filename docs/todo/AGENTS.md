@@ -1,3 +1,8 @@
+## 2026-04-30 — Runtime/API layer alignment follow-up
+- [x] Routed remaining live-offer and signal polling fetches through `createApiClient` contract methods.
+- [x] Removed direct compose-job JSON fetch from `ExplorerApp` in favor of API client ownership.
+- [ ] Follow-up: finish migrating remaining `fetch('/api/...')` usage in connect-device compatibility hooks to explicit service seams.
+
 ## 2026-04-30 — Connect device heartbeat ref safety hotfix
 - [x] Locked `nodeHeartbeatTimerRef` declaration to stable component scope ref type.
 - [x] Centralized heartbeat interval cleanup via `clearNodeHeartbeatTimer()`.

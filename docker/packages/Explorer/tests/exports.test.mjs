@@ -363,9 +363,9 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('Open peer view'));
   assert.ok(card.includes('Hide peer view'));
   assert.ok(card.includes('Reconnect peer view'));
-  assert.ok(card.includes("role: 'viewer'"));
-  assert.ok(card.includes('viewer_id: viewerId'));
-  assert.ok(card.includes('/signal/answer'));
+  assert.ok(card.includes('api.publishLiveSignalIce(session.session_id, \'viewer\', viewerId'));
+  assert.ok(card.includes('api.getLiveSignalState(session.session_id, viewerId)'));
+  assert.ok(card.includes('api.publishLiveSignalAnswer(session.session_id, viewerId'));
   assert.ok(card.includes('peerVideoRef'));
 });
 

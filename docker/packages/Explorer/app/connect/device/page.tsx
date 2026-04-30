@@ -306,11 +306,7 @@ export default function ConnectDevicePage() {
       return;
     }
 
-    const offer = await fetch(api.buildUrl(`/api/live/${encodeURIComponent(sessionId)}/offer`), {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    }).then((res) => res.ok ? res.json() : null).catch(() => null);
+    const offer = await api.getLiveOffer(sessionId).catch(() => null);
     if (!offer?.sdp) {
       setPeerStatus('failed');
       return;
