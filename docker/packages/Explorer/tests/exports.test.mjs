@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(packageRoot, '..', '..', '..');
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
@@ -222,6 +223,7 @@ test('normalized preview asset declaration is placed after resolveAssetUrl callb
 
 test('explorer api client includes bulk media action endpoints', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const nodeAuthPath = path.join(packageRoot, 'src', 'lib', 'browserRuntimeIdentity.ts');
   const content = fs.readFileSync(apiPath, 'utf8');
   assert.ok(content.includes('bulkDeleteMedia'));
   assert.ok(content.includes("/api/assets/bulk/delete"));
@@ -244,6 +246,8 @@ test('explorer api client includes bulk media action endpoints', () => {
   assert.ok(content.includes('normalizeRecordingSessions'));
   assert.ok(content.includes('normalizeRecordingSession'));
   assert.ok(content.includes('normalizeLiveSessionList'));
+  assert.ok(content.includes('listRuntimeAssets'));
+  assert.ok(content.includes('/api/runtime/assets'));
 });
 
 test('contract normalizers keep compatibility payload support', () => {
@@ -284,11 +288,11 @@ test('media item type supports optional CAS metadata fields', () => {
 test('register modal redirects directly to device activation and keeps session-node payload contract', () => {
   const modalPath = path.join(packageRoot, 'src', 'components', 'RegisterNodeModal.tsx');
   const content = fs.readFileSync(modalPath, 'utf8');
-  assert.ok(content.includes("window.localStorage.setItem('explorer_capture_node_id', payload.node_id);"));
+  assert.ok(content.includes('setBrowserRuntimeIdentity(payload.node_id, token);'));
   assert.ok(content.includes('const resolveResponseUrl = useCallback((url: string | undefined, preferredOrigin?: string | null) => {'));
   assert.ok(content.includes("const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;"));
   assert.ok(content.includes('const nextDeviceUrl = resolveResponseUrl(response.device_url, responseAuthority);'));
-  assert.ok(content.includes('router.push(nextDeviceUrl);'));
+  assert.ok(content.includes('openDeviceTab(existingNodeId);'));
   assert.ok(content.includes('window.location.href = nextDeviceUrl;'));
   assert.ok(content.includes('if (response.device_url) {'));
   assert.ok(content.includes("base_url: null,"));
@@ -332,15 +336,31 @@ test('connect device page and live-session hook guard media APIs for insecure iO
 
   assert.ok(app.includes('Remote source surfaces'));
   assert.ok(app.includes('Registered runtimes'));
+  assert.ok(app.includes('type LiveDeviceInstance = {'));
+  assert.ok(app.includes('LIVE DEVICE INSTANCES'));
+  assert.ok(app.includes('listRuntimeAssets'));
+  assert.ok(app.includes('listWebRtcLiveSessions'));
+  assert.ok(app.includes('Promise.allSettled(['));
+  assert.ok(app.includes('refreshControlPlaneSurfaces'));
+  assert.ok(app.includes('scheduleExplorerObservabilityRefresh'));
+  assert.ok(app.includes('source.owner_node_id'));
+  assert.ok(app.includes('session.node_id'));
+  assert.ok(app.includes('openLivePeerViewer(session)'));
 });
 
 test('live session signaling API and peer-viewer hooks are wired', () => {
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const nodeAuthPath = path.join(packageRoot, 'src', 'lib', 'browserRuntimeIdentity.ts');
   const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const liveCardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const registerModalPath = path.join(packageRoot, 'src', 'components', 'RegisterNodeModal.tsx');
   const api = fs.readFileSync(apiPath, 'utf8');
+  const nodeAuth = fs.readFileSync(nodeAuthPath, 'utf8');
   const device = fs.readFileSync(devicePath, 'utf8');
+  const app = fs.readFileSync(appPath, 'utf8');
   const card = fs.readFileSync(liveCardPath, 'utf8');
+  const registerModal = fs.readFileSync(registerModalPath, 'utf8');
 
   assert.ok(api.includes('getLiveSignalState'));
   assert.ok(api.includes('publishLiveSignalOffer'));
@@ -349,11 +369,29 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(api.includes('/signal/offer'));
   assert.ok(api.includes('/signal/answer'));
   assert.ok(api.includes('/signal/ice'));
+  assert.ok(nodeAuth.includes('explorer_capture_node_id'));
+  assert.ok(nodeAuth.includes('getStoredNodeToken'));
+  assert.ok(nodeAuth.includes('explorer_capture_node_token'));
+  assert.ok(nodeAuth.includes("throw new Error('missing_device_bearer_token')"));
+  assert.ok(nodeAuth.includes('tokenSource'));
+  assert.ok(nodeAuth.includes('pruneLegacyNodeIdentityKeys'));
+  assert.ok(api.includes('requireNodeAuthHeaders(nodeId)'));
+  assert.ok(api.includes('missing_device_bearer_token'));
 
   assert.ok(device.includes('webrtc: {peerStatus}'));
   assert.ok(device.includes('new RTCPeerConnection()'));
   assert.ok(device.includes("api.publishLiveSignalOffer(sessionId"));
   assert.ok(device.includes("api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current"));
+  assert.ok(device.includes('setBrowserRuntimeIdentity(nodeId, queryToken);'));
+  assert.ok(device.includes("const queryNodeId = searchParams.get('node_id');"));
+  assert.ok(device.includes("const nodeId = queryNodeId || storedNodeId;"));
+  assert.ok(device.includes("traceDevice('node-identity:resolved'"));
+  assert.ok(device.includes("source: queryNodeId ? 'query' : 'localStorage'"));
+  assert.ok(device.includes('const getUsableCameraStream = () => {'));
+  assert.ok(device.includes('const existingStream = getUsableCameraStream();'))
+  assert.ok(device.includes('let stream = existingStream;'));
+  assert.ok(device.includes('const enabled = await handleEnableCamera();'));
+  assert.ok(device.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(device.includes("setPeerStatus('offer-published')"));
   assert.ok(device.includes("setPeerStatus('connected')"));
   assert.ok(device.includes("setPeerStatus('failed')"));
@@ -361,23 +399,107 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('Open peer view'));
   assert.ok(card.includes('Hide peer view'));
   assert.ok(card.includes('Reconnect peer view'));
-  assert.ok(card.includes("role: 'viewer'"));
-  assert.ok(card.includes('viewer_id: viewerId'));
-  assert.ok(card.includes('/signal/answer'));
+  assert.ok(card.includes('api.publishLiveSignalIce(session.session_id, \'viewer\', viewerId'));
+  assert.ok(card.includes('api.getLiveSignalState(session.session_id, viewerId)'));
+  assert.ok(card.includes('api.publishLiveSignalAnswer(session.session_id, viewerId'));
   assert.ok(card.includes('peerVideoRef'));
+  assert.ok(app.includes('openDeviceTab(node.node_id);'));
+  assert.ok(nodeAuth.includes("const CHANNEL_NAME = 'thatdamtoolbox-ui';"));
+  assert.ok(nodeAuth.includes("export const EXPLORER_WINDOW_NAME = 'thatdamtoolbox-explorer';"));
+  assert.ok(nodeAuth.includes("export const CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox-connect-device';"));
+  assert.ok(nodeAuth.includes('openNamedWindow'));
+  assert.ok(nodeAuth.includes('requestExplorerRefresh'));
+  assert.ok(device.includes("registerWindowName('device');"));
+  assert.ok(device.includes("publishBrowserRuntimeTabActive('device');"));
+  assert.ok(device.includes("requestExplorerRefresh('device-focus');"));
+  assert.ok(device.includes('openExplorerTab(\'/\');'));
+  assert.ok(app.includes("registerWindowName('explorer');"));
+  assert.ok(app.includes("if (message?.type === 'request-refresh') {"));
+  assert.ok(app.includes("scheduleExplorerObservabilityRefresh(reason, 0);"));
+  assert.ok(app.includes('pruneLegacyNodeIdentityKeys();'));
+  assert.ok(registerModal.includes('const existingNodeId = getStoredNodeId();'));
+  assert.ok(registerModal.includes('const nextNodeId = existingNodeId || buildDefaultNodeId(nextContext.deviceClass);'));
+  assert.ok(registerModal.includes('setBrowserRuntimeIdentity(payload.node_id, token);'));
+  assert.ok(registerModal.includes("throw new Error('register response missing bearer token')"));
+  assert.ok(registerModal.includes('token_preview'));
+  assert.ok(registerModal.includes('Open Device Tab'));
+  assert.ok(registerModal.includes('Re-register'));
 });
 
-test('runtime SSE hook exists and uses EventSource /api/events', () => {
+test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   const hookPath = path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts');
   const runtimeControllerPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts');
   const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const runtimeEventsApiPath = path.join(repoRoot, 'app', 'api', 'runtime_events.py');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const runtimeController = fs.readFileSync(runtimeControllerPath, 'utf8');
   const app = fs.readFileSync(appPath, 'utf8');
-  assert.ok(hook.includes("new EventSource('/api/events')"));
+  const runtimeEventsApi = fs.readFileSync(runtimeEventsApiPath, 'utf8');
+  assert.ok(hook.includes("new EventSource('/api/runtime/events')"));
+  assert.ok(hook.includes('es.onopen = () => {'));
+  assert.ok(hook.includes('lastEventStreamOpenAt'));
+  assert.ok(hook.includes('lastEventStreamMessageAt'));
+  assert.ok(hook.includes('lastEventStreamErrorAt'));
+  assert.ok(hook.includes('lastEventStreamReadyState'));
+  assert.ok(hook.includes('lastEventStreamUrl'));
+  assert.ok(hook.includes('eventStreamReconnecting'));
+  assert.ok(hook.includes('EventSource.CLOSED'));
+  assert.ok(hook.includes('EventSource.CONNECTING'));
   assert.ok(hook.includes("new CustomEvent('runtime:event'"));
-  assert.ok(runtimeController.includes('useRuntimeEvents({ enabled: true })'));
+  assert.ok(hook.includes('__explorerRuntimeEventsOpen'));
+  assert.ok(!app.includes("scheduleExplorerObservabilityRefresh(`sse:${event.type}`"));
+  assert.ok(!app.includes("scheduleExplorerObservabilityRefresh('runtime-event'"));
+  assert.ok(!app.includes("scheduleExplorerObservabilityRefresh('live-event'"));
+  assert.ok(app.includes("case 'node.updated'"));
+  assert.ok(app.includes("case 'source.updated'"));
+  assert.ok(app.includes("case 'live_session.updated'"));
+  assert.ok(app.includes("case 'runtime_asset.updated'"));
+  assert.ok(app.includes("case 'recording.updated'"));
+  assert.ok(app.includes("case 'ingest_claim.updated'"));
+  assert.ok(app.includes("case 'live_session.deleted'"));
+  assert.ok(app.includes("case 'ingest_claim.deleted'"));
+  assert.ok(app.includes("case 'reconnect'"));
+  assert.ok(app.includes("case 'missed_sequence'"));
+  assert.ok(app.includes("case 'snapshot_required'"));
+  assert.ok(app.includes("scheduleExplorerObservabilityRefresh('sse-recovery', 0);"));
+  assert.ok(app.includes("const allowed = reason === 'initial' || reason === 'manual' || reason === 'sse-recovery';"));
+  assert.ok(app.includes("console.warn('[OBSERVABILITY FETCH]', lane, reason);"));
+  assert.ok(app.includes("console.warn(allowed ? '[REFRESH TRIGGER]' : '[BLOCKED REFRESH]', reason);"));
+  assert.ok(app.includes("scheduleExplorerObservabilityRefresh('initial', 0);"));
+  assert.ok(app.includes("eventStreamConnected: true"));
+  assert.ok(app.includes("new BroadcastChannel('thatdamtoolbox-ui')"));
+  assert.ok(!app.includes('setInterval(() => {\n      const hasActiveLiveWork'));
   assert.ok(app.includes('useRuntimeController'));
+  assert.ok(runtimeEventsApi.includes('SSE_HEARTBEAT_INTERVAL_SECONDS = 5.0'));
+  assert.ok(runtimeEventsApi.includes('await asyncio.sleep(0)'));
+  assert.ok(runtimeEventsApi.includes('except asyncio.CancelledError:'));
+  assert.ok(runtimeEventsApi.includes('"Cache-Control": "no-cache, no-transform"'));
+  assert.ok(runtimeEventsApi.includes('"X-Accel-Buffering": "no"'));
+});
+
+test('live polling is visibility-gated and throttled', () => {
+  const liveSessionsPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSessions.ts');
+  const recordingSessionsPath = path.join(packageRoot, 'src', 'hooks', 'useRecordingSessions.ts');
+  const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const pollingPath = path.join(packageRoot, 'src', 'utils', 'polling.ts');
+  const liveSessions = fs.readFileSync(liveSessionsPath, 'utf8');
+  const recordingSessions = fs.readFileSync(recordingSessionsPath, 'utf8');
+  const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
+  const polling = fs.readFileSync(pollingPath, 'utf8');
+  const sourceControl = fs.readFileSync(path.join(packageRoot, 'src', 'hooks', 'useSourceControlData.ts'), 'utf8');
+  const webRtcSessions = fs.readFileSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts'), 'utf8');
+  assert.ok(polling.includes('document.visibilityState === \'visible\''));
+  assert.ok(liveSessions.includes("document.visibilityState === 'hidden'"));
+  assert.ok(liveSessions.includes('}, 5000);'));
+  assert.ok(recordingSessions.includes("document.visibilityState === 'hidden'"));
+  assert.ok(recordingSessions.includes('window.setTimeout(run, 5000);'));
+  assert.ok(pendingController.includes("document.visibilityState === 'hidden'"));
+  assert.ok(pendingController.includes('activeRecordingIntentRef.current.size === 0'));
+  assert.ok(pendingController.includes('window.setInterval(() => { void poll(); }, 3000);'));
+  assert.ok(sourceControl.includes('initialLoad = false'));
+  assert.ok(!sourceControl.includes('setInterval('));
+  assert.ok(webRtcSessions.includes('poll = false'));
+  assert.ok(webRtcSessions.includes('initialLoad = false'));
 });
 
 test('clipboard helper includes fallback copy behavior', () => {
@@ -1369,7 +1491,7 @@ test('runtime and ingest context menus expose operator delete actions with live-
   const content = fs.readFileSync(explorerPath, 'utf8');
   assert.ok(content.includes('const deleteNodeFromSidebar = useCallback(async (nodeId: string) => {'));
   assert.ok(content.includes('await api.deleteNode(nodeId);'));
-  assert.ok(content.includes('await reloadSourceControl();'));
+  assert.ok(content.includes("scheduleExplorerObservabilityRefresh('manual', 0);"));
   assert.ok(content.includes('Delete node'));
   assert.ok(content.includes('const canOpenDeviceForNode = useCallback((node: NodeControlRecord) => {'));
   assert.ok(content.includes('return webRtcSessionsByNodeId.has(node.node_id);'));
@@ -3211,7 +3333,8 @@ test('explorer runtime orchestration decomposition wiring remains intact', () =>
   const livePreview = fs.readFileSync(livePreviewPath, 'utf8');
 
   assert.ok(runtimeController.includes('useWebRtcLiveSessions'));
-  assert.ok(runtimeController.includes('useRuntimeEvents'));
+  assert.ok(!runtimeController.includes('useRuntimeEvents'));
+  assert.ok(runtimeController.includes('poll = false'));
   assert.ok(livePreviewState.includes('openLivePreview'));
   assert.ok(livePreviewState.includes('closeLivePreview'));
   assert.ok(runtimeReactions.includes("window.addEventListener('runtime:event'"));
@@ -3385,6 +3508,8 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(hooks.includes('enumerateDevices'));
   assert.ok(liveSession.includes('options?: PreviewStartOptions'));
   assert.ok(liveSession.includes('old.getTracks().forEach((t) => t.stop())'));
+  assert.ok(liveSession.includes("sourceKind === 'camera' && !hasExternalStream"));
+  assert.ok(liveSession.includes('if (!hasExternalStream) {'));
   assert.ok(liveSession.includes('deviceId: { exact: options.deviceId }'));
   assert.ok(page.includes('camera.selectedDeviceId'));
   assert.ok(page.includes('const handleStartBroadcast = async () => {'));
@@ -3397,6 +3522,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId ||'));
   assert.ok(page.includes('const handleUseSelectedLocalDevice = async () => {'));
   assert.ok(preview.includes('const { devices: hookLocalDevices'));
+  assert.ok(preview.includes("useRemoteCameras({ mode, remotePickerOpen: pickerOpen && mode === 'remote' })"));
   assert.ok(preview.includes('Array.isArray(localDevices) ? localDevices : []'));
   assert.ok(preview.includes('localDevices={safeLocalDevices}'));
   assert.ok(!liveSession.includes('Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.'));
@@ -3424,14 +3550,33 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(shell.includes("onClick={() => onModeChange('local')"));
   assert.ok(shell.includes("onClick={() => onModeChange('remote')"));
   assert.ok(preview.includes('Start Live Broadcast'));
-  assert.ok(preview.includes('onClick={() => { void onStartCamera(); }}'));
+  assert.ok(preview.includes('onClick={() => { void onEnableCamera(); }}'));
+  assert.ok(preview.includes('onClick={() => { void onStartBroadcast(); }}'));
+  assert.ok(preview.includes('Camera source'));
+  assert.ok(preview.includes('Camera ready'));
   assert.ok(preview.includes('Pick Camera'));
   assert.ok(preview.includes('explorer-monitor-open-picker'));
   assert.ok(page.includes('mode={mode}'));
   assert.ok(page.includes('onModeChange={setMode}'));
   assert.ok(page.includes('videoRef.current.srcObject = stream;'));
   assert.ok(page.includes('nodeHeartbeatTimerRef.current = window.setInterval'));
+  assert.ok(page.includes('const nodeHeartbeatTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);'));
+  assert.ok(page.includes('const clearNodeHeartbeatTimer = () => {'));
+  assert.ok(page.includes('clearNodeHeartbeatTimer();'));
+  assert.ok(page.includes('const getUsableCameraStream = () => {'));
+  assert.ok(page.includes('const existingStream = getUsableCameraStream();'))
+  assert.ok(page.includes('let stream = existingStream;'));
+  assert.ok(page.includes("if (!stream) throw new Error('camera_stream_not_ready');"));
+  assert.ok(page.includes('const token = getStoredNodeToken(nodeId).token ?? readDeviceBearerToken(nodeId);'));
+  assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
+  assert.ok(page.includes('const tokenInfo = getStoredNodeToken(nodeId);'));
+  assert.ok(page.includes('const nodes = await api.listNodes();'));
+  assert.ok(page.includes('await api.registerNode({'));
+  assert.ok(page.includes('await api.heartbeatNode({ nodeId, token: tokenInfo.token });'));
+  assert.ok(hooks.includes('shouldPollDeviceControlPlane'));
+  assert.ok(hooks.includes('if (!shouldPollLiveSurface()) return;'));
+  assert.ok(hooks.includes('}, 10000);'));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));
   assert.ok(liveSession.includes('return nextSession;'));
   assert.ok(liveSession.includes('return null;'));
@@ -3439,6 +3584,11 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(useCameraSession.includes('return stream;'));
   assert.ok(useCameraSession.includes('return null;'));
   assert.ok(preview.includes('const [mounted, setMounted] = useState(false);'));
+  assert.ok(preview.includes('setControlsOpen((current) => {'));
+  assert.ok(preview.includes('return current === shouldControlsBeOpen ? current : shouldControlsBeOpen;'));
+  assert.ok(preview.includes('const cameraStatus = cameraState?.status || \'idle\';'));
+  assert.ok(preview.includes('}, [mode, hasCameraReady, cameraStatus]);'));
+  assert.ok(!preview.includes('}, [cameraState, mode]);'));
   assert.ok(preview.includes('disabled={!mounted ? false : !canUseCamera}'));
   assert.ok(preview.includes('useEffect(() => {\n    setMounted(true);'));
   assert.ok(!preview.includes(');\n}\n  useEffect(() => {\n    setMounted(true);'));
@@ -3449,4 +3599,120 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(liveBroadcastAlignment.includes('session.session_id === input.sessionId') || liveBroadcastAlignment.includes('session_id === input.sessionId'));
   assert.ok(liveBroadcastAlignment.includes('match.node_id !== input.nodeId'));
   assert.ok(liveBroadcastAlignment.includes('!match.has_offer'));
+});
+
+test('connect device route keeps canonical shim and deterministic broadcast wiring', () => {
+  const shimPath = path.join(packageRoot, 'app', 'connect', 'device', 'ConnectDevicePage.tsx');
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const pickerPath = path.join(packageRoot, 'app', 'connect', 'device', 'DevicePickerSheet.tsx');
+  const liveHookPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
+  const cameraHookPath = path.join(packageRoot, 'app', 'connect', 'device', 'useCameraSession.ts');
+  const shim = fs.readFileSync(shimPath, 'utf8');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const picker = fs.readFileSync(pickerPath, 'utf8');
+  const liveHook = fs.readFileSync(liveHookPath, 'utf8');
+  const cameraHook = fs.readFileSync(cameraHookPath, 'utf8');
+
+  assert.ok(shim.includes("export { default } from './page';"));
+  assert.ok(page.includes('const handleStartBroadcast = async () => {'));
+  assert.ok(page.includes('const publishPeerOffer = async (sessionRecord: { session_id: string }, stream: MediaStream) => {'));
+  assert.ok(page.includes('watchLiveSession('));
+  assert.ok(page.includes("startPreview('camera', { stream"));
+  assert.ok(page.includes('await publishPeerOffer(nextSession, stream);'));
+  assert.ok(page.includes('const markLiveFlowStep = useCallback((patch: Record<string, unknown>) => {'));
+  assert.ok(page.includes('deviceBroadcastRequestedAt'));
+  assert.ok(page.includes('deviceCameraReadyAt'));
+  assert.ok(page.includes('deviceBroadcastPublishedAt'));
+  assert.ok(!page.includes('crypto.randomUUID()'));
+  assert.ok(page.includes('ensureLiveBroadcastAlignment'));
+  assert.ok(!page.includes('navigator.mediaDevices.getUserMedia'));
+  assert.ok(picker.includes('other local capture nodes'));
+  assert.ok(liveHook.includes('const startPreview = useCallback(async (sourceKind: LiveSourceKind, options?: PreviewStartOptions): Promise<LiveSessionRecord | null>'));
+  assert.ok(liveHook.includes('const stream = options?.stream ?? ('));
+  assert.ok(cameraHook.includes('navigator.mediaDevices.getUserMedia'));
+});
+
+
+test('connect device viewer attach path stays remote-only and avoids local camera reacquire', () => {
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const start = page.indexOf('async function watchLiveSession');
+  const end = page.indexOf('const handleUseSelectedLocalDevice', start);
+  assert.ok(start >= 0 && end > start);
+  const watchBody = page.slice(start, end);
+  assert.ok(watchBody.includes('new RTCPeerConnection()'));
+  assert.ok(watchBody.includes('ontrack'));
+  assert.ok(watchBody.includes('postLiveViewerAnswer'));
+  assert.ok(watchBody.includes('postLiveViewerIce'));
+  assert.ok(!watchBody.includes('startCamera('));
+  assert.ok(!watchBody.includes('startPreview('));
+  assert.ok(!watchBody.includes('getUserMedia'));
+});
+
+test('explorer pending artifact controller merges runtime assets into pending recording placeholders', () => {
+  const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const recordingHookPath = path.join(packageRoot, 'src', 'hooks', 'useRecordingSessions.ts');
+  const content = fs.readFileSync(pendingControllerPath, 'utf8');
+  const recordingHook = fs.readFileSync(recordingHookPath, 'utf8');
+  assert.ok(content.includes('listRuntimeAssets'));
+  assert.ok(content.includes('runtimeAssetToPendingRecording'));
+  assert.ok(content.includes("if (asset.kind !== 'recording') return null;"));
+  assert.ok(!content.includes("asset.kind !== 'recording' && asset.kind !== 'live'"));
+  assert.ok(content.includes("previewable: 'recording'"));
+  assert.ok(content.includes("materializing: 'finalizing'"));
+  assert.ok(content.includes("ready: 'saved'"));
+  assert.ok(content.includes('activeRecordingIntentRef'));
+  assert.ok(content.includes('enabled: activeRecordingIntentRef.current.size > 0 || runtimeRecordingAssets.length > 0'));
+  assert.ok(content.includes('live-recording-failed-'));
+  assert.ok(!content.includes("'live-recording-failed'"));
+  assert.ok(content.includes('[...pendingRecordingAssets, ...runtimeRecordingAssets]'));
+  assert.ok(content.includes('dedupePendingOverlayAssets'));
+  assert.ok(content.includes('existingHasAssetUrl'));
+  assert.ok(content.includes('Runtime assets are an overlay, not a replacement'));
+  assert.ok(content.includes('if (!mounted || !assets) return;'));
+  assert.ok(recordingHook.includes('enabled?: boolean;'));
+  assert.ok(recordingHook.includes("if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;"));
+  assert.ok(recordingHook.includes('Polling failures are non-fatal'));
+});
+
+
+test('startup null diagnostics guard against null throws/rejections and SSE onerror remains non-throwing', () => {
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const runtimeEventsPath = path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts');
+  const sourceControlPath = path.join(packageRoot, 'src', 'hooks', 'useSourceControlData.ts');
+  const webRtcPath = path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts');
+  const liveSessionsPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSessions.ts');
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+
+  const app = fs.readFileSync(appPath, 'utf8');
+  const runtimeEvents = fs.readFileSync(runtimeEventsPath, 'utf8');
+  const sourceControl = fs.readFileSync(sourceControlPath, 'utf8');
+  const webRtc = fs.readFileSync(webRtcPath, 'utf8');
+  const liveSessions = fs.readFileSync(liveSessionsPath, 'utf8');
+  const api = fs.readFileSync(apiPath, 'utf8');
+
+  const corpus = [app, runtimeEvents, sourceControl, webRtc, liveSessions, api].join('\n');
+  assert.ok(!corpus.includes('throw null'));
+  assert.ok(!corpus.includes('Promise.reject(null)'));
+  assert.ok(!corpus.includes('reject(null)'));
+
+  assert.ok(app.includes("if (process.env.NODE_ENV === 'production') return;"));
+  assert.ok(app.includes("window.addEventListener('error', onWindowErrorDiagnostic);"));
+  assert.ok(app.includes("window.addEventListener('unhandledrejection', onWindowUnhandledRejectionDiagnostic);"));
+  assert.ok(app.includes("const isOpaqueScriptError = event.message === 'Script error.' && !event.filename && event.lineno === 0;"));
+  assert.ok(app.includes('if (isOpaqueScriptError) return;'));
+  assert.ok(app.includes("console.warn('[window:error]'"));
+  assert.ok(app.includes("console.warn('[window:unhandledrejection]'"));
+
+  assert.ok(runtimeEvents.includes('es.onerror = (event) => {'));
+  assert.ok(runtimeEvents.includes('if (es.readyState === EventSource.CONNECTING) {'));
+  assert.ok(runtimeEvents.includes('eventStreamReconnecting: true'));
+  assert.ok(runtimeEvents.includes('return;'));
+  assert.ok(runtimeEvents.includes("if (process.env.NODE_ENV !== 'production' && closed) {"));
+  assert.ok(runtimeEvents.includes('if (now - lastClosedErrorWarnAt < 10_000) return;'));
+  assert.ok(runtimeEvents.includes('lastEventStreamErrorReason'));
+  assert.ok(runtimeEvents.includes("console.warn('[runtime-events:error]'"));
+  assert.ok(app.includes('__explorerLiveFlowDebug'));
+  assert.ok(app.includes('appliedLiveSessionUpdates'));
+  assert.ok(!runtimeEvents.includes('es.onerror = (event) => {\n      throw'));
 });

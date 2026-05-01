@@ -107,6 +107,17 @@ def _remote_source_records(runtime: AppRuntime) -> list[SourceRecord]:
     return [record for record in records if isinstance(record, SourceRecord)]
 
 
+def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
+    bus = getattr(runtime, "events", None)
+    if bus is None:
+        return
+    if hasattr(bus, "publish"):
+        bus.publish(event_type, payload)
+        return
+    if hasattr(bus, "emit"):
+        bus.emit(event_type, payload)
+
+
 def _merge_source_rows(runtime: AppRuntime) -> list[SourceResponse]:
     registry = _runtime_registry(runtime)
     local_sources = [SourceResponse.from_registry(source) for source in registry.list_all()]
@@ -154,6 +165,7 @@ async def register_source(payload: SourceCreateRequest, runtime: AppRuntime = De
 
     source = registry.upsert(name=payload.name, root=root, type=payload.type, enabled=payload.enabled)
     logger.info("source_registered", extra={"source": source.name, "root": str(source.root)})
+    _emit_event(runtime, "source.updated", {"name": source.name, "enabled": source.enabled, "action": "registered"})
     return SourceResponse.from_registry(source)
 
 
@@ -179,4 +191,5 @@ async def toggle_source(
 
     updated = registry.upsert(name=current.name, root=current.root, type=current.type, enabled=enabled)
     logger.info("source_toggled", extra={"source": updated.name, "enabled": updated.enabled})
+    _emit_event(runtime, "source.updated", {"name": updated.name, "enabled": updated.enabled, "action": "toggled"})
     return SourceResponse.from_registry(updated)

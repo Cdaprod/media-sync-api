@@ -41,11 +41,8 @@ export function LivePreview({ sessionId }: { sessionId: string }) {
     };
 
     async function run() {
-      const offerRes = await fetch(`/api/live/${sessionId}/offer`, { cache: 'no-store' });
-      if (!offerRes.ok || disposed) return;
-
-      const offer = await offerRes.json();
-      if (disposed) return;
+      const offer = await api.getLiveOffer(sessionId);
+      if (!offer || disposed) return;
 
       await pc.setRemoteDescription(offer);
 
