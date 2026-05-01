@@ -10,6 +10,17 @@ export function useRuntimeEvents({ enabled = true, onEvent }: { enabled?: boolea
     (window as any).__explorerRuntimeEventsOpen = true;
 
     const es = new EventSource('/api/runtime/events');
+    const normalizeErrorReason = (value: unknown): string => {
+      if (value instanceof Error) return value.message || value.name || 'unknown-error';
+      if (typeof value === 'string' && value.trim()) return value.trim();
+      if (value === null) return 'null-reason';
+      if (typeof value === 'undefined') return 'undefined-reason';
+      try {
+        return JSON.stringify(value) || 'unknown-error';
+      } catch {
+        return String(value);
+      }
+    };
     const publishDebug = (patch: Record<string, unknown>) => {
       (window as any).__explorerPollingDebug = {
         ...((window as any).__explorerPollingDebug || {}),
@@ -60,17 +71,16 @@ export function useRuntimeEvents({ enabled = true, onEvent }: { enabled?: boolea
       onEvent?.({ id: (e as MessageEvent).lastEventId, type, payload: parseData((e as MessageEvent).data) });
     });
     ['node.updated', 'source.updated', 'live_session.updated', 'live_session.deleted', 'runtime_asset.updated', 'recording.updated', 'ingest_claim.updated', 'ingest_claim.deleted', 'reconnect', 'missed_sequence', 'snapshot_required'].forEach(wire);
-    es.onerror = () => {
-      if (typeof window !== 'undefined') {
-        const closed = es.readyState === EventSource.CLOSED;
-        publishDebug({
-          eventStreamConnected: closed ? false : true,
-          eventStreamReconnecting: es.readyState === EventSource.CONNECTING,
-          lastEventStreamErrorAt: Date.now(),
-          lastEventStreamReadyState: es.readyState,
-          lastEventStreamUrl: '/api/runtime/events',
-        });
-      }
+    es.onerror = (event) => {
+      const closed = es.readyState === EventSource.CLOSED;
+      publishDebug({
+        eventStreamConnected: closed ? false : true,
+        eventStreamReconnecting: es.readyState === EventSource.CONNECTING,
+        lastEventStreamErrorAt: Date.now(),
+        lastEventStreamReadyState: es.readyState,
+        lastEventStreamUrl: '/api/runtime/events',
+        lastEventStreamErrorReason: normalizeErrorReason((event as Event | null)?.type || 'eventsource-error'),
+      });
     };
 
     return () => {

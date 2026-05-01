@@ -3670,3 +3670,35 @@ test('explorer pending artifact controller merges runtime assets into pending re
   assert.ok(recordingHook.includes("if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;"));
   assert.ok(recordingHook.includes('Polling failures are non-fatal'));
 });
+
+
+test('startup null diagnostics guard against null throws/rejections and SSE onerror remains non-throwing', () => {
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const runtimeEventsPath = path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts');
+  const sourceControlPath = path.join(packageRoot, 'src', 'hooks', 'useSourceControlData.ts');
+  const webRtcPath = path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts');
+  const liveSessionsPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSessions.ts');
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+
+  const app = fs.readFileSync(appPath, 'utf8');
+  const runtimeEvents = fs.readFileSync(runtimeEventsPath, 'utf8');
+  const sourceControl = fs.readFileSync(sourceControlPath, 'utf8');
+  const webRtc = fs.readFileSync(webRtcPath, 'utf8');
+  const liveSessions = fs.readFileSync(liveSessionsPath, 'utf8');
+  const api = fs.readFileSync(apiPath, 'utf8');
+
+  const corpus = [app, runtimeEvents, sourceControl, webRtc, liveSessions, api].join('\n');
+  assert.ok(!corpus.includes('throw null'));
+  assert.ok(!corpus.includes('Promise.reject(null)'));
+  assert.ok(!corpus.includes('reject(null)'));
+
+  assert.ok(app.includes("if (process.env.NODE_ENV === 'production') return;"));
+  assert.ok(app.includes("window.addEventListener('error', onWindowErrorDiagnostic);"));
+  assert.ok(app.includes("window.addEventListener('unhandledrejection', onWindowUnhandledRejectionDiagnostic);"));
+  assert.ok(app.includes("console.warn('[window:error]'"));
+  assert.ok(app.includes("console.warn('[window:unhandledrejection]'"));
+
+  assert.ok(runtimeEvents.includes('es.onerror = (event) => {'));
+  assert.ok(runtimeEvents.includes('lastEventStreamErrorReason'));
+  assert.ok(!runtimeEvents.includes('es.onerror = (event) => {\n      throw'));
+});

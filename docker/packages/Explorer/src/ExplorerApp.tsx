@@ -954,6 +954,36 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
 
   useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (typeof window === 'undefined') return;
+
+    const onWindowErrorDiagnostic = (event: ErrorEvent) => {
+      console.warn('[window:error]', {
+        message: event.message || 'unknown-window-error',
+        filename: event.filename || null,
+        lineno: Number.isFinite(event.lineno) ? event.lineno : null,
+        colno: Number.isFinite(event.colno) ? event.colno : null,
+        error: event.error ? String(event.error) : 'null-error',
+      });
+    };
+
+    const onWindowUnhandledRejectionDiagnostic = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      console.warn('[window:unhandledrejection]', {
+        reason: reason ? String(reason) : 'null-reason',
+        reasonType: typeof reason,
+      });
+    };
+
+    window.addEventListener('error', onWindowErrorDiagnostic);
+    window.addEventListener('unhandledrejection', onWindowUnhandledRejectionDiagnostic);
+    return () => {
+      window.removeEventListener('error', onWindowErrorDiagnostic);
+      window.removeEventListener('unhandledrejection', onWindowUnhandledRejectionDiagnostic);
+    };
+  }, []);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const raw = window.localStorage.getItem(HIDDEN_INGEST_CLAIMS_KEY);
     if (!raw) return;
