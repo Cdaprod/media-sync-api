@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createApiClient, type LiveRecordingUploadResult, type RecordingSessionRecord } from '../api';
 import type { PendingRecordingAsset } from '../liveRecordings';
 import { StreamHub } from '../runtime/StreamHub';
-import { shouldPollLiveSurface } from '../utils/polling';
 
 type RecorderRuntime = {
   mediaRecorder: MediaRecorder;
@@ -60,7 +59,8 @@ export function useRecordingSessions({
         timer = window.setTimeout(run, 5000);
       }
     };
-    if (!enabled || !shouldPollLiveSurface()) return;
+    if (!enabled) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     void run();
     return () => {
       mounted = false;

@@ -1,3 +1,10 @@
+## 2026-05-01 — Remove shouldPollLiveSurface dependency after SSE transition
+- [x] Eliminated remaining runtime references to `shouldPollLiveSurface` across Explorer refresh and recording/pending hooks.
+- [x] Replaced legacy helper checks with local visibility guards (`document.visibilityState === 'hidden'`) plus explicit `enabled` gating.
+- [x] Fixed runtime crash path (`ReferenceError: shouldPollLiveSurface`) that prevented SSE diagnostics from stabilizing.
+- [x] Updated static contracts to assert visibility-guard behavior instead of legacy polling helper usage.
+- [ ] Follow-up: remove redundant legacy polling helper modules once no external imports remain.
+
 ## 2026-05-01 — Stabilize runtime SSE keepalive and connection diagnostics
 - [x] Lowered runtime SSE heartbeat interval to 5s and kept valid comment heartbeat framing (`: heartbeat\\n\\n`) to prevent ~20s connection churn.
 - [x] Added SSE response keepalive headers (`no-cache, no-transform`, `keep-alive`, `X-Accel-Buffering: no`) for proxy/mobile stability.

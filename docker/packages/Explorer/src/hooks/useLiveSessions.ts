@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { LiveSessionRecord } from '../types/liveSession';
-import { shouldPollLiveSurface } from '../utils/polling';
 
 interface UseLiveSessionsOptions {
   listLiveSessions: () => Promise<LiveSessionRecord[]>;
@@ -34,7 +33,7 @@ export function useLiveSessions({ listLiveSessions, enabled = false }: UseLiveSe
     if (!enabled) return;
     void reload();
     const timer = window.setInterval(() => {
-      if (!shouldPollLiveSurface()) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void reload();
     }, 5000);
     return () => window.clearInterval(timer);

@@ -481,11 +481,11 @@ test('live polling is visibility-gated and throttled', () => {
   const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
   const polling = fs.readFileSync(pollingPath, 'utf8');
   assert.ok(polling.includes('document.visibilityState === \'visible\''));
-  assert.ok(liveSessions.includes('shouldPollLiveSurface'));
+  assert.ok(liveSessions.includes("document.visibilityState === 'hidden'"));
   assert.ok(liveSessions.includes('}, 5000);'));
-  assert.ok(recordingSessions.includes('shouldPollLiveSurface'));
+  assert.ok(recordingSessions.includes("document.visibilityState === 'hidden'"));
   assert.ok(recordingSessions.includes('window.setTimeout(run, 5000);'));
-  assert.ok(pendingController.includes('shouldPollLiveSurface'));
+  assert.ok(pendingController.includes("document.visibilityState === 'hidden'"));
   assert.ok(pendingController.includes('activeRecordingIntentRef.current.size === 0'));
   assert.ok(pendingController.includes('window.setInterval(() => { void poll(); }, 3000);'));
 });
@@ -3563,7 +3563,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('await api.registerNode({'));
   assert.ok(page.includes('await api.heartbeatNode({ nodeId, token: tokenInfo.token });'));
   assert.ok(hooks.includes('shouldPollDeviceControlPlane'));
-  assert.ok(hooks.includes('if (!enabled || !shouldPollLiveSurface()) return;') || hooks.includes('if (!shouldPollLiveSurface()) return;'));
+  assert.ok(hooks.includes('if (!shouldPollLiveSurface()) return;'));
   assert.ok(hooks.includes('}, 10000);'));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));
   assert.ok(liveSession.includes('return nextSession;'));
@@ -3655,6 +3655,6 @@ test('explorer pending artifact controller merges runtime assets into pending re
   assert.ok(content.includes('Runtime assets are an overlay, not a replacement'));
   assert.ok(content.includes('if (!mounted || !assets) return;'));
   assert.ok(recordingHook.includes('enabled?: boolean;'));
-  assert.ok(recordingHook.includes('if (!enabled || !shouldPollLiveSurface()) return;'));
+  assert.ok(recordingHook.includes("if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;"));
   assert.ok(recordingHook.includes('Polling failures are non-fatal'));
 });

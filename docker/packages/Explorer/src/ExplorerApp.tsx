@@ -873,7 +873,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     controlPlaneRefreshDebounceRef.current = window.setTimeout(() => {
       controlPlaneRefreshDebounceRef.current = null;
-      if (!shouldPollLiveSurface()) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       refreshCountRef.current += 1;
       void Promise.allSettled([
         reloadSourceControl(),

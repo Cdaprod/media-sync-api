@@ -7,7 +7,6 @@ import { pendingComposeMatchesMediaItem, sortPendingComposeItemsForDisplay } fro
 import { usePendingComposeJobs } from '../hooks/usePendingComposeJobs';
 import { useRecordingSessions } from '../hooks/useRecordingSessions';
 import { createApiClient } from '../api';
-import { shouldPollLiveSurface } from '../utils/polling';
 import type { PendingRecordingAsset } from '../liveRecordings';
 import { pendingRecordingMatchesMediaItem, sortPendingRecordingAssetsForDisplay } from '../liveRecordings';
 import type { MediaItem, Project, ToastMessage } from '../types';
@@ -132,7 +131,7 @@ export function usePendingArtifactController({
   useEffect(() => {
     let mounted = true;
     const poll = async () => {
-      if (!shouldPollLiveSurface() || activeRecordingIntentRef.current.size === 0) return;
+      if ((typeof document !== 'undefined' && document.visibilityState === 'hidden') || activeRecordingIntentRef.current.size === 0) return;
       const assets = await runtimeApiRef.current.listRuntimeAssets().catch(() => null);
       if (!mounted || !assets) return;
       const mapped = (assets as RuntimeAssetRecord[])
