@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback, RefObject } from 'react';
 import { RemoteCameraNode } from './deviceMonitorTypes';
+import { createApiClient } from '../../../src/api';
+import { shouldPollDeviceControlPlane, shouldPollLiveSurface } from '../../../src/utils/polling';
 
 // ----------------------------------------------------------------------
 // Local cameras enumeration
@@ -53,19 +55,17 @@ export function useLocalCameras() {
 // ----------------------------------------------------------------------
 // Remote camera nodes (fetch from /api/nodes)
 // ----------------------------------------------------------------------
-export function useRemoteCameras() {
+export function useRemoteCameras(options?: { mode?: 'local' | 'remote'; remotePickerOpen?: boolean }) {
   const [nodes, setNodes] = useState<RemoteCameraNode[]>([]);
   const [loading, setLoading] = useState(false);
+  const api = createApiClient('');
+  const mode = options?.mode || 'local';
+  const remotePickerOpen = !!options?.remotePickerOpen;
 
   const fetchRemote = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/nodes', {
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const payload = await res.json();
+      const payload = await api.listNodes();
       const allNodes = Array.isArray(payload)
         ? payload
         : Array.isArray(payload.nodes)
@@ -96,11 +96,25 @@ export function useRemoteCameras() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
-    fetchRemote();
+    void fetchRemote(); // bootstrap fetch only
   }, [fetchRemote]);
+
+  useEffect(() => {
+    const shouldPoll = shouldPollDeviceControlPlane({
+      mode,
+      visible: shouldPollLiveSurface(),
+      remotePickerOpen,
+    });
+    if (!shouldPoll) return;
+    const timer = window.setInterval(() => {
+      if (!shouldPollLiveSurface()) return;
+      void fetchRemote();
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [fetchRemote, mode, remotePickerOpen]);
 
   return { nodes, loading, refresh: fetchRemote };
 }

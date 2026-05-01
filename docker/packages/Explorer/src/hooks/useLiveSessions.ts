@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { LiveSessionRecord } from '../types/liveSession';
+import { shouldPollLiveSurface } from '../utils/polling';
 
 interface UseLiveSessionsOptions {
   listLiveSessions: () => Promise<LiveSessionRecord[]>;
+  enabled?: boolean;
 }
 
-export function useLiveSessions({ listLiveSessions }: UseLiveSessionsOptions) {
+export function useLiveSessions({ listLiveSessions, enabled = false }: UseLiveSessionsOptions) {
   const [sessions, setSessions] = useState<LiveSessionRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +29,14 @@ export function useLiveSessions({ listLiveSessions }: UseLiveSessionsOptions) {
   }, [listLiveSessions]);
 
   useEffect(() => {
+    if (!enabled) return;
     void reload();
     const timer = window.setInterval(() => {
+      if (!shouldPollLiveSurface()) return;
       void reload();
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [reload]);
+  }, [enabled, reload]);
 
   return { sessions, loading, error, reload };
 }

@@ -17,6 +17,7 @@ import {
 import DeviceScopesPanel from './DeviceScopesPanel';
 import DevicePickerSheet from './DevicePickerSheet';
 import DeviceCameraInfoModal from './DeviceCameraInfoModal';
+import { openDeviceTab } from '../../../src/lib/browserRuntimeIdentity';
 
 interface FullscreenDevicePreviewProps {
   nodeId: string | null;
@@ -43,7 +44,8 @@ interface FullscreenDevicePreviewProps {
   onClearCameraError?: () => void;
   onRequestOpenPicker?: () => void;
   onRequestToggleScopes?: () => void;
-  onStartCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
+  onEnableCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
+  onStartBroadcast: () => void | Promise<void>;
   onUseSelectedLocalDevice: () => Promise<boolean>;
   debugEvents?: string[];
   broadcastLabel?: string;
@@ -79,7 +81,8 @@ export default function FullscreenDevicePreview({
   onClearCameraError,
   onRequestOpenPicker,
   onRequestToggleScopes,
-  onStartCamera,
+  onEnableCamera,
+  onStartBroadcast,
   onUseSelectedLocalDevice,
   debugEvents = [],
   broadcastLabel,
@@ -99,6 +102,7 @@ export default function FullscreenDevicePreview({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [overlaysVisible, setOverlaysVisible] = useState(true);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [pickerStatus, setPickerStatus] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -106,7 +110,7 @@ export default function FullscreenDevicePreview({
   const { devices: hookLocalDevices, permission: localPermission, refresh: refreshLocal } = useLocalCameras();
   const localDevices = cameraState?.devices ?? hookLocalDevices;
   const safeLocalDevices = Array.isArray(localDevices) ? localDevices : [];
-  const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras();
+  const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras({ mode, remotePickerOpen: pickerOpen && mode === 'remote' });
 
   // Poll videoRef.srcObject for audio analyser (fix 2)
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
@@ -195,7 +199,7 @@ export default function FullscreenDevicePreview({
 
   const isActive = state === 'previewing' || state === 'recording';
   const isDeviceRecording = state === 'recording';
-  const isBusy = state === 'starting' || state === 'requesting-permission';
+  const isBusy = cameraState?.status === 'starting' || state === 'requesting-permission';
   const isError = state === 'error';
   const isEnded = state === 'ended';
   const isIdle = state === 'idle' || state === 'ended' || state === 'error';
@@ -210,7 +214,16 @@ export default function FullscreenDevicePreview({
     const stream = videoRef.current?.srcObject;
     return stream instanceof MediaStream && stream.getVideoTracks().some((track) => track.readyState === 'live');
   };
-  const showFatalError = isError && !hasLiveVideoStream();
+  const hasCameraReady = !!cameraState?.stream || hasLiveVideoStream();
+  const cameraStatus = cameraState?.status || 'idle';
+  useEffect(() => {
+    setControlsOpen((current) => {
+      const shouldControlsBeOpen = mode === 'remote' || (mode === 'local' && !hasCameraReady);
+      return current === shouldControlsBeOpen ? current : shouldControlsBeOpen;
+    });
+  }, [mode, hasCameraReady, cameraStatus]);
+  const overlayVisible = controlsOpen || !hasCameraReady || mode === 'remote';
+  const showFatalError = isError && !hasLiveVideoStream() && !hasCameraReady;
 
   const handleSelectLocalDevice = async (deviceId: string) => {
     onSelectDevice(deviceId);
@@ -233,21 +246,31 @@ export default function FullscreenDevicePreview({
       <div className="gradient-vignette" />
 
       {/* Overlay layer for idle/busy/error/ended */}
-      {(isIdle || isBusy || showFatalError) && (
+      {overlayVisible && (isIdle || isBusy || showFatalError || hasCameraReady) && (
         <div className="overlay-layer">
           <div className={`overlay-card ${showFatalError ? 'error-card' : ''}`}>
             <h2>
-              {showFatalError ? 'Camera unavailable' : isEnded ? 'Session ended' : isBusy ? 'Starting...' : 'Enable your camera'}
+              {showFatalError ? 'Camera unavailable' : isEnded ? 'Session ended' : isBusy ? 'Starting...' : hasCameraReady ? 'Camera ready' : 'Camera source'}
             </h2>
             <p>
-              {showFatalError ? (cameraErrorMessage || error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : 'Tap once to grant access and start broadcasting.'}
+              {showFatalError ? (cameraErrorMessage || error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : hasCameraReady ? 'Local preview is active. You can start live broadcast.' : 'Enable this device camera first. Broadcast is optional.'}
             </p>
             <div className="btn-stack">
+              {mode === 'local' && hasCameraReady ? (
+                <button className="btn-overlay ghost" onClick={() => setControlsOpen(false)}>
+                  Hide Controls
+                </button>
+              ) : null}
               {isIdle && !isError && !isEnded && (
                 <>
-                  <button className="btn-overlay ghost" onClick={() => { void onStartCamera(); }} disabled={!mounted ? false : !canUseCamera}>
-                    Start Live Broadcast
+                  <button className="btn-overlay ghost" onClick={() => { void onEnableCamera(); }} disabled={!mounted ? false : !canUseCamera}>
+                    Enable Camera
                   </button>
+                  {mode === 'remote' ? (
+                    <button className="btn-overlay ghost" onClick={() => { void onStartBroadcast(); }} disabled={isBusy || !hasCameraReady}>
+                      Start Live Broadcast
+                    </button>
+                  ) : null}
                   {canUseScreen && !isLikelyIOS && (
                     <button className="btn-overlay ghost" onClick={onStartScreen}>
                       Share Screen
@@ -260,7 +283,7 @@ export default function FullscreenDevicePreview({
               )}
               {(showFatalError || isEnded) && (
                 <>
-                  <button className="btn-overlay primary" onClick={() => { void onStartCamera(); }}>
+                  <button className="btn-overlay primary" onClick={() => { void onStartBroadcast(); }}>
                     Retry
                   </button>
                   <button className="btn-overlay ghost" onClick={() => setPickerOpen(true)}>
@@ -275,6 +298,11 @@ export default function FullscreenDevicePreview({
           </div>
         </div>
       )}
+      {mode === 'local' && hasCameraReady && !controlsOpen ? (
+        <button className="btn-pill" style={{ position: 'absolute', top: 88, right: 16, zIndex: 20 }} onClick={() => setControlsOpen(true)}>
+          Controls
+        </button>
+      ) : null}
 
       {/* Top cluster (active only) */}
       <div className={`top-cluster ${overlaysVisible && isActive ? 'visible' : 'hidden'}`}>
@@ -293,7 +321,7 @@ export default function FullscreenDevicePreview({
           <div className="top-actions">
             <button className="btn-pill" onClick={() => setModalOpen(true)}>Camera Info</button>
             <button className="btn-pill" onClick={() => setShelfOpen(true)}>Scopes · Overlays · Controls</button>
-            {showResume && <button className="btn-pill" onClick={onStartCamera}>Resume</button>}
+            {showResume && <button className="btn-pill" onClick={onEnableCamera}>Resume</button>}
             <button className="btn-pill" onClick={onBackToExplorer}>Explorer</button>
           </div>
         </div>
@@ -358,7 +386,7 @@ export default function FullscreenDevicePreview({
         }}
         mode={mode}
         onModeChange={onModeChange}
-        onOpenRemoteNode={(nodeId) => window.open(`/connect/device?node_id=${encodeURIComponent(nodeId)}`, '_blank')}
+        onOpenRemoteNode={(nodeId) => openDeviceTab(nodeId)}
         onRefresh={async () => {
           await (onRefreshDevices ? onRefreshDevices() : refreshLocal());
           refreshRemote();
