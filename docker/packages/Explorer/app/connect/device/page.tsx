@@ -162,6 +162,15 @@ export default function ConnectDevicePage() {
     peerStatus: 'idle', waitingForAnswer: false, error: null, updatedAt: Date.now(),
   });
   const debugEnabled = searchParams.get('debug') === '1';
+  const markLiveFlowStep = useCallback((patch: Record<string, unknown>) => {
+    if (typeof window === 'undefined') return;
+    const current = ((window as any).__explorerLiveFlowDebug || {}) as Record<string, unknown>;
+    (window as any).__explorerLiveFlowDebug = {
+      ...current,
+      ...patch,
+      lastUpdatedAt: Date.now(),
+    };
+  }, []);
 
 
 
@@ -353,6 +362,7 @@ export default function ConnectDevicePage() {
       cameraStatus: camera.status,
     });
     appendTrace('broadcast:begin');
+    markLiveFlowStep({ deviceBroadcastRequestedAt: Date.now() });
     const existingStream = getUsableCameraStream();
     let stream = existingStream;
     if (!stream) {
@@ -374,6 +384,7 @@ export default function ConnectDevicePage() {
       })) ?? [],
     });
     if (!stream) throw new Error('camera_stream_not_ready');
+    markLiveFlowStep({ deviceCameraReadyAt: Date.now() });
     setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
     await bindPreviewStream(stream);
     appendTrace('live:startPreview');
@@ -387,6 +398,10 @@ export default function ConnectDevicePage() {
     setActiveRuntimeSession(nextSession.session_id, nextSession.node_id);
     publishBrowserRuntimeSession(nextSession.session_id, nextSession.node_id);
     appendTrace(`live:session-created ${nextSession.session_id}`);
+    markLiveFlowStep({
+      deviceBroadcastSessionId: nextSession.session_id,
+      deviceBroadcastPublishedAt: Date.now(),
+    });
     clearNodeHeartbeatTimer();
     if (nodeId) {
       if (!nodeHeartbeatTimerRef.current) nodeHeartbeatTimerRef.current = window.setInterval(() => {

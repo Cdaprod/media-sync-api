@@ -930,6 +930,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           scheduleExplorerObservabilityRefresh('sse-recovery', 0);
           break;
       }
+      if (event.type === 'live_session.updated' && typeof window !== 'undefined') {
+        const current = ((window as any).__explorerLiveFlowDebug || {}) as Record<string, unknown>;
+        (window as any).__explorerLiveFlowDebug = {
+          ...current,
+          lastLiveSessionUpdatedAt: Date.now(),
+          lastLiveSessionPayload: payload,
+          appliedLiveSessionUpdates: Number(current.appliedLiveSessionUpdates || 0) + 1,
+        };
+      }
       publishExplorerPollingDebug({ eventStreamConnected: true, lastEventType: event.type, lastEventId: event.id || null, lastEventAt: Date.now() });
       if (typeof window !== 'undefined' && typeof window.BroadcastChannel !== 'undefined') {
         const channel = new BroadcastChannel('thatdamtoolbox-ui');

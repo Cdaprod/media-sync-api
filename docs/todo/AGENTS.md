@@ -1,4 +1,10 @@
 ### Latest Implementation Notes (2026-05-01)
+- [x] Added live-flow milestone diagnostics across Connect Device + Explorer runtime apply path via shared `window.__explorerLiveFlowDebug` markers (`deviceBroadcastRequestedAt`, `deviceCameraReadyAt`, `deviceBroadcastPublishedAt`, `lastLiveSessionUpdatedAt`, `appliedLiveSessionUpdates`).
+- [x] Preserved event-driven authority: live session sidebar state still updates directly from `live_session.updated` application path while now exposing explicit milestone timestamps for runtime triage.
+- [x] Extended Explorer static contracts to lock live-flow marker wiring in both connect-device broadcast start and Explorer SSE apply lanes.
+- [ ] Next pass: add runtime UI assertion that sidebar live instance card renders when `appliedLiveSessionUpdates > 0` and a matching session payload includes `has_offer`.
+
+### Latest Implementation Notes (2026-05-01)
 - [x] Classified startup opaque browser noise in Explorer dev diagnostics: `window:error` now suppresses un-attributable cross-context `Script error.` events (`filename:null`, `lineno:0`) so console triage focuses on actionable app/runtime faults.
 - [x] Added explicit dev-only SSE lane tagging in `useRuntimeEvents` (`[runtime-events:error]` with `readyState` + normalized event type) while keeping `EventSource.onerror` side-effect-only (no throw/reject lanes).
 - [x] Expanded Explorer static contracts to lock opaque-script suppression and SSE error-tag diagnostics, plus the existing null-throw/reject guards.

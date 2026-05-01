@@ -3619,6 +3619,10 @@ test('connect device route keeps canonical shim and deterministic broadcast wiri
   assert.ok(page.includes('watchLiveSession('));
   assert.ok(page.includes("startPreview('camera', { stream"));
   assert.ok(page.includes('await publishPeerOffer(nextSession, stream);'));
+  assert.ok(page.includes('const markLiveFlowStep = useCallback((patch: Record<string, unknown>) => {'));
+  assert.ok(page.includes('deviceBroadcastRequestedAt'));
+  assert.ok(page.includes('deviceCameraReadyAt'));
+  assert.ok(page.includes('deviceBroadcastPublishedAt'));
   assert.ok(!page.includes('crypto.randomUUID()'));
   assert.ok(page.includes('ensureLiveBroadcastAlignment'));
   assert.ok(!page.includes('navigator.mediaDevices.getUserMedia'));
@@ -3703,5 +3707,7 @@ test('startup null diagnostics guard against null throws/rejections and SSE oner
   assert.ok(runtimeEvents.includes('es.onerror = (event) => {'));
   assert.ok(runtimeEvents.includes('lastEventStreamErrorReason'));
   assert.ok(runtimeEvents.includes("console.warn('[runtime-events:error]'"));
+  assert.ok(app.includes('__explorerLiveFlowDebug'));
+  assert.ok(app.includes('appliedLiveSessionUpdates'));
   assert.ok(!runtimeEvents.includes('es.onerror = (event) => {\n      throw'));
 });
