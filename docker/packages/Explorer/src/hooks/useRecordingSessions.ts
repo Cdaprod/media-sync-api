@@ -15,6 +15,7 @@ type RecorderRuntime = {
 
 export interface UseRecordingSessionsOptions {
   apiBase?: string;
+  enabled?: boolean;
   onSaved?: (result: LiveRecordingUploadResult) => void;
   onError?: (message: string) => void;
 }
@@ -29,6 +30,7 @@ type StartRecordingInput = {
 
 export function useRecordingSessions({
   apiBase = '',
+  enabled = false,
   onSaved,
   onError,
 }: UseRecordingSessionsOptions = {}) {
@@ -51,20 +53,20 @@ export function useRecordingSessions({
       try {
         const next = await api.listRecordingSessions();
         if (mounted) setSessions(next);
-      } catch (error) {
-        if (mounted) onError?.(error instanceof Error ? error.message : 'Unable to load recording sessions.');
+      } catch {
+        // Polling failures are non-fatal and should not emit "Recording failed" UX toasts.
       } finally {
         if (!mounted) return;
         timer = window.setTimeout(run, 5000);
       }
     };
-    if (!shouldPollLiveSurface()) return;
+    if (!enabled || !shouldPollLiveSurface()) return;
     void run();
     return () => {
       mounted = false;
       if (timer != null) window.clearTimeout(timer);
     };
-  }, [api, onError]);
+  }, [api, enabled]);
 
   useEffect(() => {
     const tick = window.setInterval(() => {
@@ -86,7 +88,7 @@ export function useRecordingSessions({
     targetDir = 'ingest/live',
   }: StartRecordingInput) => {
     if (typeof MediaRecorder === 'undefined') {
-      onError?.('Recording is not supported on this device/browser.');
+      onError?.(`unknown|${sessionId}|${nodeId}|Recording is not supported on this device/browser.`);
       return null;
     }
 
@@ -105,7 +107,7 @@ export function useRecordingSessions({
         error: 'Peer stream is unavailable. Reopen peer view and try again.',
       });
       setSessions((prev) => prev.map((item) => (item.recording_id === failed.recording_id ? failed : item)));
-      onError?.('Peer stream is unavailable. Reopen peer view and try again.');
+      onError?.(`${created.recording_id}|${sessionId}|${nodeId}|Peer stream is unavailable. Reopen peer view and try again.`);
       return failed.recording_id;
     }
 
@@ -115,7 +117,7 @@ export function useRecordingSessions({
         error: 'No live tracks are available to record.',
       });
       setSessions((prev) => prev.map((item) => (item.recording_id === failed.recording_id ? failed : item)));
-      onError?.('No live tracks are available to record.');
+      onError?.(`${created.recording_id}|${sessionId}|${nodeId}|No live tracks are available to record.`);
       return failed.recording_id;
     }
 
@@ -127,7 +129,7 @@ export function useRecordingSessions({
       const message = error instanceof Error ? error.message : 'MediaRecorder is not supported for this stream.';
       const failed = await api.failRecordingSession(created.recording_id, { error: message });
       setSessions((prev) => prev.map((item) => (item.recording_id === failed.recording_id ? failed : item)));
-      onError?.(message);
+      onError?.(`${created.recording_id}|${sessionId}|${nodeId}|${message}`);
       return created.recording_id;
     }
     const runtime: RecorderRuntime = {
@@ -149,7 +151,7 @@ export function useRecordingSessions({
         error: 'MediaRecorder failed while recording the live stream.',
       });
       setSessions((prev) => prev.map((item) => (item.recording_id === failed.recording_id ? failed : item)));
-      onError?.('MediaRecorder failed while recording the live stream.');
+      onError?.(`${created.recording_id}|${sessionId}|${nodeId}|MediaRecorder failed while recording the live stream.`);
     };
 
     mediaRecorder.onstop = async () => {
@@ -187,7 +189,7 @@ export function useRecordingSessions({
         const message = error instanceof Error ? error.message : 'Recording upload failed.';
         const failed = await api.failRecordingSession(created.recording_id, { error: message });
         setSessions((prev) => prev.map((item) => (item.recording_id === failed.recording_id ? failed : item)));
-        onError?.(message);
+        onError?.(`${created.recording_id}|${sessionId}|${nodeId}|${message}`);
       } finally {
         runtimesRef.current.delete(created.recording_id);
       }

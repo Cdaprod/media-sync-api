@@ -340,6 +340,9 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   assert.ok(app.includes('listRuntimeAssets'));
   assert.ok(app.includes('listWebRtcLiveSessions'));
   assert.ok(app.includes('Promise.allSettled(['));
+  assert.ok(app.includes('refreshControlPlaneSurfaces'));
+  assert.ok(app.includes('scheduleControlPlaneRefresh'));
+  assert.ok(app.includes('10000'));
   assert.ok(app.includes('source.owner_node_id'));
   assert.ok(app.includes('session.node_id'));
   assert.ok(app.includes('openLivePeerViewer(session)'));
@@ -3573,15 +3576,26 @@ test('connect device viewer attach path stays remote-only and avoids local camer
 
 test('explorer pending artifact controller merges runtime assets into pending recording placeholders', () => {
   const pendingControllerPath = path.join(packageRoot, 'src', 'pending', 'usePendingArtifactController.ts');
+  const recordingHookPath = path.join(packageRoot, 'src', 'hooks', 'useRecordingSessions.ts');
   const content = fs.readFileSync(pendingControllerPath, 'utf8');
+  const recordingHook = fs.readFileSync(recordingHookPath, 'utf8');
   assert.ok(content.includes('listRuntimeAssets'));
   assert.ok(content.includes('runtimeAssetToPendingRecording'));
+  assert.ok(content.includes("if (asset.kind !== 'recording') return null;"));
+  assert.ok(!content.includes("asset.kind !== 'recording' && asset.kind !== 'live'"));
   assert.ok(content.includes("previewable: 'recording'"));
   assert.ok(content.includes("materializing: 'finalizing'"));
   assert.ok(content.includes("ready: 'saved'"));
+  assert.ok(content.includes('activeRecordingIntentRef'));
+  assert.ok(content.includes('enabled: activeRecordingIntentRef.current.size > 0 || runtimeRecordingAssets.length > 0'));
+  assert.ok(content.includes('live-recording-failed-'));
+  assert.ok(!content.includes("'live-recording-failed'"));
   assert.ok(content.includes('[...pendingRecordingAssets, ...runtimeRecordingAssets]'));
   assert.ok(content.includes('dedupePendingOverlayAssets'));
   assert.ok(content.includes('existingHasAssetUrl'));
   assert.ok(content.includes('Runtime assets are an overlay, not a replacement'));
   assert.ok(content.includes('if (!mounted || !assets) return;'));
+  assert.ok(recordingHook.includes('enabled?: boolean;'));
+  assert.ok(recordingHook.includes('if (!enabled || !shouldPollLiveSurface()) return;'));
+  assert.ok(recordingHook.includes('Polling failures are non-fatal'));
 });

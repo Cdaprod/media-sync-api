@@ -689,6 +689,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
   const [runtimeAssets, setRuntimeAssets] = useState<Array<Record<string, unknown>>>([]);
+  const controlPlaneRefreshDebounceRef = useRef<number | null>(null);
 
   // ---------------------------------------------------------------------------
   // UI/runtime authority seam.
@@ -786,7 +787,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       reloadWebRtcLiveSessions(),
     ]);
   }, [reloadLiveSessions, reloadWebRtcLiveSessions]);
-  const reloadDeviceInstanceLanes = useCallback(async () => {
+  const refreshControlPlaneSurfaces = useCallback(async () => {
     const laneResults = await Promise.allSettled([
       reloadSourceControl(),
       reloadWebRtcLiveSessions(),
@@ -797,6 +798,15 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       setRuntimeAssets(Array.isArray(runtimeAssetsLane.value) ? runtimeAssetsLane.value : []);
     }
   }, [api, reloadSourceControl, reloadWebRtcLiveSessions]);
+  const scheduleControlPlaneRefresh = useCallback((delayMs = 600) => {
+    if (controlPlaneRefreshDebounceRef.current != null) {
+      window.clearTimeout(controlPlaneRefreshDebounceRef.current);
+    }
+    controlPlaneRefreshDebounceRef.current = window.setTimeout(() => {
+      controlPlaneRefreshDebounceRef.current = null;
+      void refreshControlPlaneSurfaces();
+    }, delayMs);
+  }, [refreshControlPlaneSurfaces]);
 
   useRuntimeEventReactions({
     reloadLibrarySnapshot: refreshLibrarySnapshot,
@@ -822,18 +832,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   useEffect(() => {
     if (!livePreview.activeLivePreview) return;
     const timeout = window.setTimeout(() => {
-      void reloadDeviceInstanceLanes();
+      scheduleControlPlaneRefresh(400);
     }, 1200);
     return () => window.clearTimeout(timeout);
-  }, [livePreview.activeLivePreview, reloadDeviceInstanceLanes]);
+  }, [livePreview.activeLivePreview, scheduleControlPlaneRefresh]);
 
   useEffect(() => {
-    void reloadDeviceInstanceLanes();
+    void refreshControlPlaneSurfaces();
     const timer = window.setInterval(() => {
-      void reloadDeviceInstanceLanes();
-    }, 7000);
+      void refreshControlPlaneSurfaces();
+    }, 10000);
     return () => window.clearInterval(timer);
-  }, [reloadDeviceInstanceLanes]);
+  }, [refreshControlPlaneSurfaces]);
 
 
   useEffect(() => {
@@ -3276,10 +3286,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return subscribeBrowserRuntimeChannel((message) => {
       console.debug('[browser-runtime] channel', message);
       if (message?.type === 'session' || message?.type === 'identity') {
-        void reloadDeviceInstanceLanes();
+        scheduleControlPlaneRefresh(900);
       }
     });
-  }, [reloadDeviceInstanceLanes]);
+  }, [scheduleControlPlaneRefresh]);
 
   const openDeviceForNode = useCallback((node: NodeControlRecord) => {
     if (canOpenDeviceForNode(node)) {

@@ -1,3 +1,10 @@
+## 2026-05-01 — Throttle recording + node observability polling and toast noise
+- [x] Stopped `kind=live` runtime assets from mapping into pending recording overlay lane.
+- [x] Added recording intent-gated failure toasts so background/polling churn no longer emits global `Recording failed`.
+- [x] Added `enabled` gate to `useRecordingSessions` polling and silenced polling/load failures from user-facing recording error toast path.
+- [x] Replaced overlapping control-plane refresh triggers with debounced `scheduleControlPlaneRefresh(...)` and raised interval floor to 10s.
+- [ ] Follow-up: add dedicated live-preview placeholder lane for `RuntimeAsset.kind=live` separate from recording UX.
+
 ## 2026-04-30 — Restore live device instance cards in Explorer sidebar
 - [x] Added combined `LiveDeviceInstance` view model in `ExplorerApp`.
 - [x] Merged node/source/live/runtime lanes by `node_id` and `session_id` overlays.

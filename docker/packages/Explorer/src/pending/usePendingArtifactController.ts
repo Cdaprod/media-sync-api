@@ -44,7 +44,7 @@ type RuntimeAssetRecord = {
 };
 
 function runtimeAssetToPendingRecording(asset: RuntimeAssetRecord): PendingRecordingAsset | null {
-  if (asset.kind !== 'recording' && asset.kind !== 'live') return null;
+  if (asset.kind !== 'recording') return null;
   const statusByState: Record<string, PendingRecordingAsset['status']> = {
     recording: 'recording',
     previewable: 'recording',
@@ -61,7 +61,7 @@ function runtimeAssetToPendingRecording(asset: RuntimeAssetRecord): PendingRecor
     project: asset.project || 'Runtime',
     source: asset.source || 'primary',
     targetDir: asset.target_dir || 'ingest/live',
-    outputName: asset.kind === 'live' ? 'Live Preview' : null,
+    outputName: null,
     createdAt: asset.created_at || new Date().toISOString(),
     startedAt: asset.created_at || new Date().toISOString(),
     status,
@@ -127,6 +127,7 @@ export function usePendingArtifactController({
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
   const [runtimeRecordingAssets, setRuntimeRecordingAssets] = useState<PendingRecordingAsset[]>([]);
   const runtimeApiRef = useRef(createApiClient(''));
+  const activeRecordingIntentRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let mounted = true;
@@ -165,12 +166,16 @@ export function usePendingArtifactController({
     dismissRecording: dismissLiveRecordingAsset,
   } = useRecordingSessions({
     apiBase: resolvedApiBase,
+    enabled: activeRecordingIntentRef.current.size > 0 || runtimeRecordingAssets.length > 0,
     onSaved: () => {
       addToast('good', 'Recording saved', 'Live recording was saved as a media asset.', 'live-recording-saved');
       void refreshLibrarySnapshot();
     },
     onError: (message) => {
-      addToast('bad', 'Recording failed', message, 'live-recording-failed');
+      const [recordingId = 'unknown', sessionId = 'unknown', nodeId = 'unknown', detail = 'Recording failed.'] = String(message || '').split('|');
+      const intentKey = `${sessionId}:${nodeId}`;
+      if (!activeRecordingIntentRef.current.has(intentKey)) return;
+      addToast('bad', 'Recording failed', detail, `live-recording-failed-${recordingId || sessionId || 'unknown'}`);
     },
   });
 
@@ -251,6 +256,8 @@ export function usePendingArtifactController({
     const source = activeProject?.source || 'primary';
 
     try {
+      const intentKey = `${session.session_id}:${session.node_id}`;
+      activeRecordingIntentRef.current.add(intentKey);
       await startLiveRecordingAsset({
         sessionId,
         nodeId: session.node_id,
