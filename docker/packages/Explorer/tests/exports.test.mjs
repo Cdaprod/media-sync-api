@@ -3526,6 +3526,11 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(useCameraSession.includes('return stream;'));
   assert.ok(useCameraSession.includes('return null;'));
   assert.ok(preview.includes('const [mounted, setMounted] = useState(false);'));
+  assert.ok(preview.includes('setControlsOpen((current) => {'));
+  assert.ok(preview.includes('return current === shouldControlsBeOpen ? current : shouldControlsBeOpen;'));
+  assert.ok(preview.includes('const cameraStatus = cameraState?.status || \'idle\';'));
+  assert.ok(preview.includes('}, [mode, hasCameraReady, cameraStatus]);'));
+  assert.ok(!preview.includes('}, [cameraState, mode]);'));
   assert.ok(preview.includes('disabled={!mounted ? false : !canUseCamera}'));
   assert.ok(preview.includes('useEffect(() => {\n    setMounted(true);'));
   assert.ok(!preview.includes(');\n}\n  useEffect(() => {\n    setMounted(true);'));

@@ -214,10 +214,13 @@ export default function FullscreenDevicePreview({
     return stream instanceof MediaStream && stream.getVideoTracks().some((track) => track.readyState === 'live');
   };
   const hasCameraReady = !!cameraState?.stream || hasLiveVideoStream();
+  const cameraStatus = cameraState?.status || 'idle';
   useEffect(() => {
-    if (mode === 'local' && hasCameraReady) setControlsOpen(false);
-    if (mode === 'remote') setControlsOpen(true);
-  }, [hasCameraReady, mode]);
+    setControlsOpen((current) => {
+      const shouldControlsBeOpen = mode === 'remote' || (mode === 'local' && !hasCameraReady);
+      return current === shouldControlsBeOpen ? current : shouldControlsBeOpen;
+    });
+  }, [mode, hasCameraReady, cameraStatus]);
   const overlayVisible = controlsOpen || !hasCameraReady || mode === 'remote';
   const showFatalError = isError && !hasLiveVideoStream() && !hasCameraReady;
 

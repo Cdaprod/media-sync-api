@@ -1,3 +1,10 @@
+## 2026-05-01 — Fix FullscreenDevicePreview maximum update depth loop
+- [x] Guarded mode/camera-derived controls updates with idempotent `setControlsOpen` callback (`current === next` short-circuit).
+- [x] Removed unstable object dependency usage from controls effect and replaced with scalar state markers.
+- [x] Preserved Local preview controls auto-hide/open behavior without repeated render-loop state churn.
+- [x] Preserved Remote mode controls availability without uncontrolled setState loops.
+- [ ] Follow-up: continue device control-plane registration/polling hardening after render-loop stability is verified on-device.
+
 ## 2026-05-01 — Stop device control-plane spam and restore registered device observability
 - [x] Prevented `/connect/device` Local mode from continuously polling `/api/nodes` by mode-aware polling guard in device monitor hooks.
 - [x] Kept remote-node polling for Remote mode or explicit remote picker use, throttled to 10s and visibility-gated.
