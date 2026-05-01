@@ -138,9 +138,13 @@ def _registry(runtime: AppRuntime) -> WebRtcLiveSessionRegistry:
 
 def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
     bus = getattr(runtime, "events", None)
-    if bus is None or not hasattr(bus, "emit"):
+    if bus is None:
         return
-    bus.emit(event_type, payload)
+    if hasattr(bus, "publish"):
+        bus.publish(event_type, payload)
+        return
+    if hasattr(bus, "emit"):
+        bus.emit(event_type, payload)
 
 
 @router.post("/{session_id}/offer")
@@ -167,7 +171,8 @@ async def publish_offer(
         source="primary",
         metadata={"session_id": session_id, "node_id": session.node_id},
     ))
-    _emit_event(runtime, "live.offer", {"session_id": session_id, "node_id": session.node_id})
+    _emit_event(runtime, "live_session.updated", {"session_id": session_id, "node_id": session.node_id, "action": "offer_published"})
+    _emit_event(runtime, "runtime_asset.updated", {"asset_id": f"runtime-live-{session_id}", "state": "previewable"})
     return {"ok": True, "session_id": session_id, "node_id": session.node_id}
 
 
@@ -202,7 +207,7 @@ async def publish_viewer_answer(
         raise HTTPException(status_code=404, detail="session_not_found")
     normalized_viewer_id = (viewer_id or "default").strip() or "default"
     registry.set_answer(session_id, payload.answer, normalized_viewer_id)
-    _emit_event(runtime, "live.answer", {"session_id": session_id, "viewer_id": normalized_viewer_id})
+    _emit_event(runtime, "live_session.updated", {"session_id": session_id, "viewer_id": normalized_viewer_id, "action": "viewer_answer"})
     return {"ok": True, "session_id": session_id, "viewer_id": normalized_viewer_id}
 
 
@@ -237,6 +242,7 @@ async def publish_device_ice(
     if registry.get(session_id) is None:
         raise HTTPException(status_code=404, detail="session_not_found")
     registry.add_device_ice(session_id, payload.candidate)
+    _emit_event(runtime, "live_session.updated", {"session_id": session_id, "action": "device_ice"})
     return {"ok": True, "session_id": session_id}
 
 
@@ -260,6 +266,7 @@ async def publish_viewer_ice(
         raise HTTPException(status_code=404, detail="session_not_found")
     normalized_viewer_id = (viewer_id or "default").strip() or "default"
     registry.add_viewer_ice(session_id, normalized_viewer_id, payload.candidate)
+    _emit_event(runtime, "live_session.updated", {"session_id": session_id, "viewer_id": normalized_viewer_id, "action": "viewer_ice"})
     return {"ok": True, "session_id": session_id, "viewer_id": normalized_viewer_id}
 
 
@@ -288,6 +295,7 @@ async def publish_viewer_state(
         raise HTTPException(status_code=404, detail="session_not_found")
     normalized_viewer_id = (viewer_id or "default").strip() or "default"
     registry.set_connection_state(session_id, normalized_viewer_id, payload.state)
+    _emit_event(runtime, "live_session.updated", {"session_id": session_id, "viewer_id": normalized_viewer_id, "state": payload.state, "action": "viewer_state"})
     return {"ok": True, "session_id": session_id, "viewer_id": normalized_viewer_id}
 
 
@@ -338,6 +346,8 @@ async def start_live_recording(
         source_kind="camera",
         metadata={"session_id": recording.session_id, "recording_id": recording.recording_id},
     ))
+    _emit_event(runtime, "recording.updated", {"recording_id": recording.recording_id, "session_id": session_id, "state": "recording"})
+    _emit_event(runtime, "runtime_asset.updated", {"asset_id": f"runtime-recording-{recording.recording_id}", "state": "recording"})
     return {"recording": recording.model_dump(mode="json"), "idempotent": False}
 
 
@@ -361,6 +371,8 @@ async def stop_live_recording(
             updated_at=datetime.now(timezone.utc),
         )
         assets.fail(f"runtime-recording-{updated.recording_id}", str(payload.error))
+        _emit_event(runtime, "recording.updated", {"recording_id": updated.recording_id, "session_id": session_id, "state": "failed"})
+        _emit_event(runtime, "runtime_asset.updated", {"asset_id": f"runtime-recording-{updated.recording_id}", "state": "failed"})
         return {"recording": updated.model_dump(mode="json")}
 
     assets.transition(f"runtime-recording-{active.recording_id}", "materializing")
@@ -372,6 +384,8 @@ async def stop_live_recording(
             updated_at=datetime.now(timezone.utc),
         )
         assets.transition(f"runtime-recording-{updated.recording_id}", "ready", asset_url=updated.asset_url, error=None)
+        _emit_event(runtime, "recording.updated", {"recording_id": updated.recording_id, "session_id": session_id, "state": "completed"})
+        _emit_event(runtime, "runtime_asset.updated", {"asset_id": f"runtime-recording-{updated.recording_id}", "state": "ready"})
         return {"recording": updated.model_dump(mode="json")}
 
     updated = registry.update_state(
@@ -381,6 +395,8 @@ async def stop_live_recording(
         updated_at=datetime.now(timezone.utc),
     )
     assets.fail(f"runtime-recording-{updated.recording_id}", "recording_not_materialized")
+    _emit_event(runtime, "recording.updated", {"recording_id": updated.recording_id, "session_id": session_id, "state": "failed"})
+    _emit_event(runtime, "runtime_asset.updated", {"asset_id": f"runtime-recording-{updated.recording_id}", "state": "failed"})
     return {"recording": updated.model_dump(mode="json")}
 
 
@@ -398,4 +414,6 @@ async def delete_live_session(session_id: str, runtime: AppRuntime = Depends(get
     if not deleted:
         raise HTTPException(status_code=404, detail="session_not_found")
     _assets_registry(runtime).remove(f"runtime-live-{session_id}")
+    _emit_event(runtime, "live_session.updated", {"session_id": session_id, "action": "deleted"})
+    _emit_event(runtime, "runtime_asset.updated", {"asset_id": f"runtime-live-{session_id}", "state": "removed"})
     return {"ok": True, "deleted": True, "session_id": session_id}

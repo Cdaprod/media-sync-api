@@ -67,9 +67,13 @@ def _to_public_node(record: NodeRecord) -> NodeRecordPublic:
 
 def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
     bus = getattr(runtime, "events", None)
-    if bus is None or not hasattr(bus, "emit"):
+    if bus is None:
         return
-    bus.emit(event_type, payload)
+    if hasattr(bus, "publish"):
+        bus.publish(event_type, payload)
+        return
+    if hasattr(bus, "emit"):
+        bus.emit(event_type, payload)
 
 
 class NodeClaimRequest(BaseModel):
@@ -134,7 +138,9 @@ async def register_node(payload: NodeRegisterRequest, runtime: AppRuntime = Depe
         ).with_heartbeat()
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _to_public_node(registry.upsert(record))
+    persisted = _to_public_node(registry.upsert(record))
+    _emit_event(runtime, "node.updated", {"node_id": persisted.node_id, "status": persisted.status, "action": "registered"})
+    return persisted
 
 
 @router.post("/{node_id}/heartbeat", response_model=NodeRecordPublic)
@@ -193,7 +199,9 @@ async def claim_node(
         validated_record = NodeRecord(**merged_payload).with_heartbeat()
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _to_public_node(registry.upsert(validated_record))
+    persisted = _to_public_node(registry.upsert(validated_record))
+    _emit_event(runtime, "node.updated", {"node_id": persisted.node_id, "status": persisted.status, "action": "claimed"})
+    return persisted
 
 
 @router.delete("/{node_id}")
@@ -206,6 +214,7 @@ async def delete_node(node_id: str, runtime: AppRuntime = Depends(get_runtime)) 
     if not deleted:
         raise HTTPException(status_code=404, detail="node_not_found")
 
+    _emit_event(runtime, "node.updated", {"node_id": node_id, "action": "deleted"})
     return {
         "ok": True,
         "deleted": True,

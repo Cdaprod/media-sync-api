@@ -55,6 +55,7 @@ import { useLiveSessions } from './hooks/useLiveSessions';
 import { useRuntimeController } from './runtime/useRuntimeController';
 import { useLivePreviewState } from './runtime/useLivePreviewState';
 import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
+import { useRuntimeEvents } from './hooks/useRuntimeEvents';
 import { usePendingArtifactController } from './pending/usePendingArtifactController';
 import type { PendingComposeRenderedEntry, PendingRecordingRenderedEntry } from './render/renderedEntries';
 import { useExplorerRenderController } from './render/useExplorerRenderController';
@@ -861,12 +862,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
 
   useEffect(() => {
     void Promise.allSettled([refreshControlPlaneSurfaces(), reloadIngestClaims(), reloadLiveSessions()]);
-    const timer = window.setInterval(() => {
-      const hasActiveLiveWork = webRtcLiveSessions.length > 0;
-      scheduleExplorerObservabilityRefresh('interval', hasActiveLiveWork ? 3000 : 10000);
-    }, 10000);
-    return () => window.clearInterval(timer);
-  }, [refreshControlPlaneSurfaces, reloadIngestClaims, reloadLiveSessions, scheduleExplorerObservabilityRefresh, webRtcLiveSessions.length]);
+  }, [refreshControlPlaneSurfaces, reloadIngestClaims, reloadLiveSessions]);
+
+  useRuntimeEvents({
+    enabled: typeof document !== 'undefined' ? document.visibilityState === 'visible' : true,
+    onEvent: (event) => {
+      scheduleExplorerObservabilityRefresh(`sse:${event.type}`, 150);
+      if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+        (window as any).__explorerPollingDebug = {
+          ...((window as any).__explorerPollingDebug || {}),
+          eventStreamConnected: true,
+          lastEventType: event.type,
+          lastEventId: event.id || null,
+          lastEventAt: Date.now(),
+        };
+      }
+      if (typeof window !== 'undefined' && typeof window.BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('thatdamtoolbox-ui');
+        channel.postMessage({ type: 'runtime-event', event });
+        channel.close();
+      }
+    },
+  });
 
 
   useEffect(() => {
@@ -2006,9 +2023,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         // ignore malformed storage value
       }
     };
+    const onStorage = (evt: StorageEvent) => {
+      if (evt.key === 'explorer_live_claim_event') handleClaimEvent();
+    };
     handleClaimEvent();
-    const timer = window.setInterval(handleClaimEvent, 2500);
-    return () => window.clearInterval(timer);
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, [activeProject, addToast, loadAllMedia, loadMedia, mediaScope]);
 
   const refreshMediaForScope = useCallback(async (

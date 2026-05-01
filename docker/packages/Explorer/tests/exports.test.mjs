@@ -342,7 +342,6 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   assert.ok(app.includes('Promise.allSettled(['));
   assert.ok(app.includes('refreshControlPlaneSurfaces'));
   assert.ok(app.includes('scheduleExplorerObservabilityRefresh'));
-  assert.ok(app.includes('10000'));
   assert.ok(app.includes('source.owner_node_id'));
   assert.ok(app.includes('session.node_id'));
   assert.ok(app.includes('openLivePeerViewer(session)'));
@@ -426,16 +425,20 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(registerModal.includes('Re-register'));
 });
 
-test('runtime SSE hook exists and uses EventSource /api/events', () => {
+test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   const hookPath = path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts');
   const runtimeControllerPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts');
   const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const runtimeController = fs.readFileSync(runtimeControllerPath, 'utf8');
   const app = fs.readFileSync(appPath, 'utf8');
-  assert.ok(hook.includes("new EventSource('/api/events')"));
+  assert.ok(hook.includes("new EventSource('/api/runtime/events')"));
   assert.ok(hook.includes("new CustomEvent('runtime:event'"));
-  assert.ok(runtimeController.includes('useRuntimeEvents({ enabled: true })'));
+  assert.ok(hook.includes('__explorerRuntimeEventsOpen'));
+  assert.ok(app.includes("scheduleExplorerObservabilityRefresh(`sse:${event.type}`"));
+  assert.ok(app.includes("eventStreamConnected: true"));
+  assert.ok(app.includes("new BroadcastChannel('thatdamtoolbox-ui')"));
+  assert.ok(!app.includes('setInterval(() => {\n      const hasActiveLiveWork'));
   assert.ok(app.includes('useRuntimeController'));
 });
 
@@ -3289,7 +3292,7 @@ test('explorer runtime orchestration decomposition wiring remains intact', () =>
   const livePreview = fs.readFileSync(livePreviewPath, 'utf8');
 
   assert.ok(runtimeController.includes('useWebRtcLiveSessions'));
-  assert.ok(runtimeController.includes('useRuntimeEvents'));
+  assert.ok(!runtimeController.includes('useRuntimeEvents'));
   assert.ok(livePreviewState.includes('openLivePreview'));
   assert.ok(livePreviewState.includes('closeLivePreview'));
   assert.ok(runtimeReactions.includes("window.addEventListener('runtime:event'"));

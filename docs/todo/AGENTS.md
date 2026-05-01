@@ -1,3 +1,11 @@
+## 2026-05-01 — Replace Explorer observability polling with runtime event stream
+- [x] Added runtime-owned SSE event stream endpoint (`/api/runtime/events`) backed by `RuntimeEventBus` replay + heartbeat support.
+- [x] Published node/source/live-session/runtime-asset/recording update events from existing mutation paths.
+- [x] Wired Explorer to a single EventSource connection and guarded against duplicate stream opens per tab.
+- [x] Converted idle observability polling to fallback-only refresh triggers (initial load + event-triggered refresh).
+- [x] Added BroadcastChannel runtime event fanout (`thatdamtoolbox-ui`) from Explorer to satellite tabs.
+- [ ] Follow-up: apply events directly into normalized frontend stores instead of triggering refresh fetches.
+
 ## 2026-05-01 — Enforce single Explorer and Connect Device tab ownership
 - [x] Reused stable named window targets for Explorer and Connect Device tabs (`thatdamtoolbox-explorer`, `thatdamtoolbox-connect-device`) and routed open/focus flows through shared identity helpers.
 - [x] Added explicit `window.name` self-registration on Explorer and Connect Device mount to lock tab identity.
