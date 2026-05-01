@@ -435,7 +435,21 @@ test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   assert.ok(hook.includes("new EventSource('/api/runtime/events')"));
   assert.ok(hook.includes("new CustomEvent('runtime:event'"));
   assert.ok(hook.includes('__explorerRuntimeEventsOpen'));
-  assert.ok(app.includes("scheduleExplorerObservabilityRefresh(`sse:${event.type}`"));
+  assert.ok(!app.includes("scheduleExplorerObservabilityRefresh(`sse:${event.type}`"));
+  assert.ok(!app.includes("scheduleExplorerObservabilityRefresh('runtime-event'"));
+  assert.ok(!app.includes("scheduleExplorerObservabilityRefresh('live-event'"));
+  assert.ok(app.includes("case 'node.updated'"));
+  assert.ok(app.includes("case 'source.updated'"));
+  assert.ok(app.includes("case 'live_session.updated'"));
+  assert.ok(app.includes("case 'runtime_asset.updated'"));
+  assert.ok(app.includes("case 'recording.updated'"));
+  assert.ok(app.includes("case 'ingest_claim.updated'"));
+  assert.ok(app.includes("case 'live_session.deleted'"));
+  assert.ok(app.includes("case 'ingest_claim.deleted'"));
+  assert.ok(app.includes("case 'reconnect'"));
+  assert.ok(app.includes("case 'missed_sequence'"));
+  assert.ok(app.includes("case 'snapshot_required'"));
+  assert.ok(app.includes("scheduleExplorerObservabilityRefresh('sse-recovery', 0);"));
   assert.ok(app.includes("eventStreamConnected: true"));
   assert.ok(app.includes("new BroadcastChannel('thatdamtoolbox-ui')"));
   assert.ok(!app.includes('setInterval(() => {\n      const hasActiveLiveWork'));
@@ -3293,6 +3307,7 @@ test('explorer runtime orchestration decomposition wiring remains intact', () =>
 
   assert.ok(runtimeController.includes('useWebRtcLiveSessions'));
   assert.ok(!runtimeController.includes('useRuntimeEvents'));
+  assert.ok(runtimeController.includes('poll = false'));
   assert.ok(livePreviewState.includes('openLivePreview'));
   assert.ok(livePreviewState.includes('closeLivePreview'));
   assert.ok(runtimeReactions.includes("window.addEventListener('runtime:event'"));

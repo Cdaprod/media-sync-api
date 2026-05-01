@@ -10,21 +10,35 @@ export function useRuntimeEvents({ enabled = true, onEvent }: { enabled?: boolea
     (window as any).__explorerRuntimeEventsOpen = true;
 
     const es = new EventSource('/api/runtime/events');
+    if (typeof window !== 'undefined') {
+      (window as any).__explorerPollingDebug = {
+        ...((window as any).__explorerPollingDebug || {}),
+        eventStreamConnected: true,
+      };
+    }
+    const parseData = (value: string): Record<string, unknown> => {
+      try { return JSON.parse(value || '{}'); } catch { return {}; }
+    };
 
     es.onmessage = (e) => {
       try {
-        const evt = { id: e.lastEventId, type: 'message', payload: JSON.parse(e.data) };
+        const evt = { id: e.lastEventId, type: 'message', payload: parseData(e.data) };
         onEvent?.(evt);
         window.dispatchEvent(new CustomEvent('runtime:event', { detail: evt }));
       } catch {
         // Ignore malformed events.
       }
     };
-    es.addEventListener('node.updated', (e) => onEvent?.({ id: (e as MessageEvent).lastEventId, type: 'node.updated', payload: JSON.parse((e as MessageEvent).data || '{}') }));
-    es.addEventListener('source.updated', (e) => onEvent?.({ id: (e as MessageEvent).lastEventId, type: 'source.updated', payload: JSON.parse((e as MessageEvent).data || '{}') }));
-    es.addEventListener('live_session.updated', (e) => onEvent?.({ id: (e as MessageEvent).lastEventId, type: 'live_session.updated', payload: JSON.parse((e as MessageEvent).data || '{}') }));
-    es.addEventListener('runtime_asset.updated', (e) => onEvent?.({ id: (e as MessageEvent).lastEventId, type: 'runtime_asset.updated', payload: JSON.parse((e as MessageEvent).data || '{}') }));
-    es.addEventListener('recording.updated', (e) => onEvent?.({ id: (e as MessageEvent).lastEventId, type: 'recording.updated', payload: JSON.parse((e as MessageEvent).data || '{}') }));
+    const wire = (type: string) => es.addEventListener(type, (e) => onEvent?.({ id: (e as MessageEvent).lastEventId, type, payload: parseData((e as MessageEvent).data) }));
+    ['node.updated', 'source.updated', 'live_session.updated', 'live_session.deleted', 'runtime_asset.updated', 'recording.updated', 'ingest_claim.updated', 'ingest_claim.deleted', 'reconnect', 'missed_sequence', 'snapshot_required'].forEach(wire);
+    es.onerror = () => {
+      if (typeof window !== 'undefined') {
+        (window as any).__explorerPollingDebug = {
+          ...((window as any).__explorerPollingDebug || {}),
+          eventStreamConnected: false,
+        };
+      }
+    };
 
     return () => {
       es.close();

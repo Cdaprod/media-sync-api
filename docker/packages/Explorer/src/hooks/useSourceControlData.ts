@@ -6,6 +6,8 @@ interface UseSourceControlDataOptions {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
 }
+type IdRecord = Record<string, unknown>;
+const readRuntimeId = (record: IdRecord): string | null => String(record.node_id ?? record.name ?? '').trim() || null;
 
 export function useSourceControlData({
   listSources,
@@ -63,6 +65,42 @@ export function useSourceControlData({
     () => nodes.filter((node) => node.status === 'healthy'),
     [nodes],
   );
+  const applySourceUpdate = useCallback((payload: IdRecord) => {
+    setSources((prev) => {
+      const id = readRuntimeId(payload);
+      if (!id) return prev;
+      let seen = false;
+      const next = prev.map((entry) => {
+        if (readRuntimeId(entry as unknown as IdRecord) !== id) return entry;
+        seen = true;
+        return { ...entry, ...payload } as SourceControlRecord;
+      });
+      return seen ? next : [...next, payload as SourceControlRecord];
+    });
+  }, []);
+  const applyNodeUpdate = useCallback((payload: IdRecord) => {
+    setNodes((prev) => {
+      const id = readRuntimeId(payload);
+      if (!id) return prev;
+      let seen = false;
+      const next = prev.map((entry) => {
+        if (readRuntimeId(entry as unknown as IdRecord) !== id) return entry;
+        seen = true;
+        return { ...entry, ...payload } as NodeControlRecord;
+      });
+      return seen ? next : [...next, payload as NodeControlRecord];
+    });
+  }, []);
+  const removeSource = useCallback((payload: IdRecord) => {
+    const id = readRuntimeId(payload);
+    if (!id) return;
+    setSources((prev) => prev.filter((entry) => readRuntimeId(entry as unknown as IdRecord) !== id));
+  }, []);
+  const removeNode = useCallback((payload: IdRecord) => {
+    const id = readRuntimeId(payload);
+    if (!id) return;
+    setNodes((prev) => prev.filter((entry) => readRuntimeId(entry as unknown as IdRecord) !== id));
+  }, []);
 
   return {
     snapshot,
@@ -73,6 +111,12 @@ export function useSourceControlData({
     healthyNodes,
     loading,
     error,
+    setSources,
+    setNodes,
+    applySourceUpdate,
+    applyNodeUpdate,
+    removeSource,
+    removeNode,
     reload,
   };
 }

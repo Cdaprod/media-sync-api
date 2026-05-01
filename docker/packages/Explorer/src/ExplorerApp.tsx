@@ -55,7 +55,7 @@ import { useLiveSessions } from './hooks/useLiveSessions';
 import { useRuntimeController } from './runtime/useRuntimeController';
 import { useLivePreviewState } from './runtime/useLivePreviewState';
 import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
-import { useRuntimeEvents } from './hooks/useRuntimeEvents';
+import { useRuntimeEvents, type RuntimeStreamEvent } from './hooks/useRuntimeEvents';
 import { usePendingArtifactController } from './pending/usePendingArtifactController';
 import type { PendingComposeRenderedEntry, PendingRecordingRenderedEntry } from './render/renderedEntries';
 import { useExplorerRenderController } from './render/useExplorerRenderController';
@@ -309,6 +309,24 @@ const LEGACY_FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const LEGACY_OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 const HIDDEN_INGEST_CLAIMS_KEY = 'explorer_hidden_ingest_claim_ids';
+type IdRecord = Record<string, unknown>;
+const readRecordId = (record: IdRecord): string | null => String(record.id ?? record.node_id ?? record.source ?? record.name ?? record.session_id ?? record.claim_id ?? record.asset_id ?? record.recording_id ?? '').trim() || null;
+const upsertByRuntimeId = <T extends IdRecord>(prev: T[], payload: IdRecord): T[] => {
+  const id = readRecordId(payload);
+  if (!id) return prev;
+  let found = false;
+  const next = prev.map((entry) => {
+    if (readRecordId(entry) !== id) return entry;
+    found = true;
+    return { ...entry, ...payload } as T;
+  });
+  return found ? next : [...next, payload as T];
+};
+const removeByRuntimeId = <T extends IdRecord>(prev: T[], payload: IdRecord): T[] => {
+  const id = readRecordId(payload);
+  if (!id) return prev;
+  return prev.filter((entry) => readRecordId(entry) !== id);
+};
 const clampLayoutColumns = (value: number) => (
   Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
 );
@@ -612,6 +630,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const {
     sessions: liveSessions,
     reload: reloadLiveSessions,
+    applyLiveSessionUpdate,
+    removeLiveSession,
   } = useLiveSessions({
     listLiveSessions: api.listLiveSessions,
     enabled: false,
@@ -626,6 +646,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     loading: sourceControlLoading,
     error: sourceControlError,
     reload: reloadSourceControl,
+    applySourceUpdate,
+    applyNodeUpdate,
   } = useSourceControlData({
     listSources: api.listSources,
     listNodes: api.listNodes,
@@ -826,6 +848,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [api]);
 
   const [explorerPollingDebugTick, setExplorerPollingDebugTick] = useState(0);
+  const pendingRuntimeEventsRef = useRef<RuntimeStreamEvent[]>([]);
+  const flushRuntimeEventsTimerRef = useRef<number | null>(null);
+  const eventApplyCountRef = useRef(0);
+  const refreshCountRef = useRef(0);
+  const publishExplorerPollingDebug = useCallback((patch: Record<string, unknown> = {}) => {
+    if (typeof window === 'undefined') return;
+    (window as any).__explorerPollingDebug = {
+      ...((window as any).__explorerPollingDebug || {}),
+      ...patch,
+      refreshCount: refreshCountRef.current,
+      eventApplyCount: eventApplyCountRef.current,
+    };
+  }, []);
   const scheduleExplorerObservabilityRefresh = useCallback((reason: string, delayMs = 450) => {
     if (controlPlaneRefreshDebounceRef.current != null) {
       window.clearTimeout(controlPlaneRefreshDebounceRef.current);
@@ -833,6 +868,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     controlPlaneRefreshDebounceRef.current = window.setTimeout(() => {
       controlPlaneRefreshDebounceRef.current = null;
       if (!shouldPollLiveSurface()) return;
+      refreshCountRef.current += 1;
       void Promise.allSettled([
         reloadSourceControl(),
         reloadWebRtcLiveSessions(),
@@ -841,16 +877,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         reloadIngestClaims(),
       ]);
       if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
-        (window as any).__explorerPollingDebug = {
+        publishExplorerPollingDebug({
           activeTimers: controlPlaneRefreshDebounceRef.current ? 1 : 0,
           lastRefreshReason: reason,
           requestCountsByLane: ((window as any).__explorerPollingDebug?.requestCountsByLane || {}),
           lastRefreshAt: Date.now(),
-        };
+        });
         setExplorerPollingDebugTick((x) => x + 1);
       }
     }, delayMs);
-  }, [api, reloadIngestClaims, reloadLiveSessions, reloadSourceControl, reloadWebRtcLiveSessions]);
+  }, [api, publishExplorerPollingDebug, reloadIngestClaims, reloadLiveSessions, reloadSourceControl, reloadWebRtcLiveSessions]);
 
   useEffect(() => {
     if (!livePreview.activeLivePreview) return;
@@ -864,26 +900,47 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     void Promise.allSettled([refreshControlPlaneSurfaces(), reloadIngestClaims(), reloadLiveSessions()]);
   }, [refreshControlPlaneSurfaces, reloadIngestClaims, reloadLiveSessions]);
 
-  useRuntimeEvents({
-    enabled: typeof document !== 'undefined' ? document.visibilityState === 'visible' : true,
-    onEvent: (event) => {
-      scheduleExplorerObservabilityRefresh(`sse:${event.type}`, 150);
-      if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
-        (window as any).__explorerPollingDebug = {
-          ...((window as any).__explorerPollingDebug || {}),
-          eventStreamConnected: true,
-          lastEventType: event.type,
-          lastEventId: event.id || null,
-          lastEventAt: Date.now(),
-        };
+  const applyRuntimeEvents = useCallback((events: RuntimeStreamEvent[]) => {
+    if (!events.length) return;
+    eventApplyCountRef.current += events.length;
+    for (const event of events) {
+      const payload = (event.payload || {}) as IdRecord;
+      switch (event.type) {
+        case 'node.updated': applyNodeUpdate(payload); break;
+        case 'source.updated': applySourceUpdate(payload); break;
+        case 'live_session.updated': applyLiveSessionUpdate(payload); break;
+        case 'runtime_asset.updated':
+        case 'recording.updated': setRuntimeAssets((prev) => upsertByRuntimeId(prev, payload)); break;
+        case 'ingest_claim.updated': setIngestClaims((prev) => upsertByRuntimeId(prev as unknown as IdRecord[], payload) as IngestClaimRecord[]); break;
+        case 'live_session.deleted': removeLiveSession(payload); break;
+        case 'ingest_claim.deleted': setIngestClaims((prev) => removeByRuntimeId(prev as unknown as IdRecord[], payload) as IngestClaimRecord[]); break;
+        case 'reconnect':
+        case 'missed_sequence':
+        case 'snapshot_required':
+          scheduleExplorerObservabilityRefresh('sse-recovery', 0);
+          break;
       }
+      publishExplorerPollingDebug({ eventStreamConnected: true, lastEventType: event.type, lastEventId: event.id || null, lastEventAt: Date.now() });
       if (typeof window !== 'undefined' && typeof window.BroadcastChannel !== 'undefined') {
         const channel = new BroadcastChannel('thatdamtoolbox-ui');
         channel.postMessage({ type: 'runtime-event', event });
         channel.close();
       }
-    },
-  });
+    }
+  }, [applyLiveSessionUpdate, applyNodeUpdate, applySourceUpdate, publishExplorerPollingDebug, removeLiveSession, scheduleExplorerObservabilityRefresh]);
+  const queueRuntimeEvent = useCallback((event: RuntimeStreamEvent) => {
+    pendingRuntimeEventsRef.current.push(event);
+    if (flushRuntimeEventsTimerRef.current !== null) return;
+    flushRuntimeEventsTimerRef.current = window.setTimeout(() => {
+      flushRuntimeEventsTimerRef.current = null;
+      const events = pendingRuntimeEventsRef.current.splice(0);
+      applyRuntimeEvents(events);
+    }, 50);
+  }, [applyRuntimeEvents]);
+  useRuntimeEvents({ enabled: true, onEvent: queueRuntimeEvent });
+  useEffect(() => () => {
+    if (flushRuntimeEventsTimerRef.current != null) window.clearTimeout(flushRuntimeEventsTimerRef.current);
+  }, []);
 
 
   useEffect(() => {

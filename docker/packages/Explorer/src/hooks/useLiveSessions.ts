@@ -9,6 +9,8 @@ interface UseLiveSessionsOptions {
   listLiveSessions: () => Promise<LiveSessionRecord[]>;
   enabled?: boolean;
 }
+type IdRecord = Record<string, unknown>;
+const readRuntimeId = (record: IdRecord): string | null => String(record.session_id ?? record.id ?? '').trim() || null;
 
 export function useLiveSessions({ listLiveSessions, enabled = false }: UseLiveSessionsOptions) {
   const [sessions, setSessions] = useState<LiveSessionRecord[]>([]);
@@ -38,5 +40,24 @@ export function useLiveSessions({ listLiveSessions, enabled = false }: UseLiveSe
     return () => window.clearInterval(timer);
   }, [enabled, reload]);
 
-  return { sessions, loading, error, reload };
+  const applyLiveSessionUpdate = useCallback((payload: IdRecord) => {
+    setSessions((prev) => {
+      const id = readRuntimeId(payload);
+      if (!id) return prev;
+      let seen = false;
+      const next = prev.map((entry) => {
+        if (readRuntimeId(entry as unknown as IdRecord) !== id) return entry;
+        seen = true;
+        return { ...entry, ...payload } as LiveSessionRecord;
+      });
+      return seen ? next : [...next, payload as LiveSessionRecord];
+    });
+  }, []);
+  const removeLiveSession = useCallback((payload: IdRecord) => {
+    const id = readRuntimeId(payload);
+    if (!id) return;
+    setSessions((prev) => prev.filter((entry) => readRuntimeId(entry as unknown as IdRecord) !== id));
+  }, []);
+
+  return { sessions, loading, error, reload, setSessions, applyLiveSessionUpdate, removeLiveSession };
 }

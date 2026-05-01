@@ -1,3 +1,10 @@
+## 2026-05-01 — Apply SSE events directly to Explorer state
+- [x] Replaced normal SSE -> full refresh fanout path with direct Explorer state application for node/source/live session/runtime asset/recording/ingest claim events.
+- [x] Added runtime event burst queue (`50ms` flush) to coalesce rapid SSE updates into single state-application lanes.
+- [x] Kept full refresh restricted to initial/manual/recovery (`reconnect`, `missed_sequence`, `snapshot_required`) paths only.
+- [x] Preserved BroadcastChannel runtime event fanout and expanded debug counters (`refreshCount`, `eventApplyCount`) without reintroducing idle loops.
+- [ ] Follow-up: map runtime-asset/recording event payloads into richer typed pending placeholder reducers (less generic record merge).
+
 ## 2026-05-01 — Replace Explorer observability polling with runtime event stream
 - [x] Added runtime-owned SSE event stream endpoint (`/api/runtime/events`) backed by `RuntimeEventBus` replay + heartbeat support.
 - [x] Published node/source/live-session/runtime-asset/recording update events from existing mutation paths.
