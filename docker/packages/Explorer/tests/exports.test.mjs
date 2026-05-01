@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(packageRoot, '..', '..', '..');
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
@@ -429,10 +430,18 @@ test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   const hookPath = path.join(packageRoot, 'src', 'hooks', 'useRuntimeEvents.ts');
   const runtimeControllerPath = path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts');
   const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const runtimeEventsApiPath = path.join(repoRoot, 'app', 'api', 'runtime_events.py');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const runtimeController = fs.readFileSync(runtimeControllerPath, 'utf8');
   const app = fs.readFileSync(appPath, 'utf8');
+  const runtimeEventsApi = fs.readFileSync(runtimeEventsApiPath, 'utf8');
   assert.ok(hook.includes("new EventSource('/api/runtime/events')"));
+  assert.ok(hook.includes('es.onopen = () => {'));
+  assert.ok(hook.includes('lastEventStreamOpenAt'));
+  assert.ok(hook.includes('lastEventStreamMessageAt'));
+  assert.ok(hook.includes('lastEventStreamErrorAt'));
+  assert.ok(hook.includes('lastEventStreamReadyState'));
+  assert.ok(hook.includes('lastEventStreamUrl'));
   assert.ok(hook.includes("new CustomEvent('runtime:event'"));
   assert.ok(hook.includes('__explorerRuntimeEventsOpen'));
   assert.ok(!app.includes("scheduleExplorerObservabilityRefresh(`sse:${event.type}`"));
@@ -457,6 +466,9 @@ test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   assert.ok(app.includes("new BroadcastChannel('thatdamtoolbox-ui')"));
   assert.ok(!app.includes('setInterval(() => {\n      const hasActiveLiveWork'));
   assert.ok(app.includes('useRuntimeController'));
+  assert.ok(runtimeEventsApi.includes('SSE_HEARTBEAT_INTERVAL_SECONDS = 5.0'));
+  assert.ok(runtimeEventsApi.includes('"Cache-Control": "no-cache, no-transform"'));
+  assert.ok(runtimeEventsApi.includes('"X-Accel-Buffering": "no"'));
 });
 
 test('live polling is visibility-gated and throttled', () => {

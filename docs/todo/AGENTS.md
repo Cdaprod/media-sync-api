@@ -1,3 +1,10 @@
+## 2026-05-01 — Stabilize runtime SSE keepalive and connection diagnostics
+- [x] Lowered runtime SSE heartbeat interval to 5s and kept valid comment heartbeat framing (`: heartbeat\\n\\n`) to prevent ~20s connection churn.
+- [x] Added SSE response keepalive headers (`no-cache, no-transform`, `keep-alive`, `X-Accel-Buffering: no`) for proxy/mobile stability.
+- [x] Expanded `useRuntimeEvents` diagnostics: `onopen`/message/error now publish connection state + timing + readyState/url into `__explorerPollingDebug`.
+- [x] Preserved EventSource reconnect behavior while keeping singleton guard from creating duplicate concurrent streams.
+- [ ] Follow-up: add runtime test coverage for reconnect semantics under forced transport interruption.
+
 ## 2026-05-01 — Remove remaining refresh triggers and idle polling after SSE adoption
 - [x] Added explicit refresh-trigger diagnostics (`[REFRESH TRIGGER]` / `[BLOCKED REFRESH]`) in Explorer refresh scheduler.
 - [x] Hard-blocked non-authorized refresh reasons so only `initial`, `manual`, and `sse-recovery` can perform full fanout refresh.

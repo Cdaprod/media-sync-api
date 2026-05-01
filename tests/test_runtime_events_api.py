@@ -23,7 +23,11 @@ def test_runtime_events_endpoint_sse_format(client):
     response = client.get("/api/runtime/events")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["cache-control"] == "no-cache, no-transform"
+    assert response.headers["connection"] == "keep-alive"
+    assert response.headers["x-accel-buffering"] == "no"
     assert ": connected" in response.text
+    assert ": heartbeat" in response.text
 
 
 def test_live_offer_publish_emits_runtime_event(client):

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 router = APIRouter(tags=["runtime-events"])
+SSE_HEARTBEAT_INTERVAL_SECONDS = 5.0
 
 
 @router.get("/api/runtime/events")
@@ -31,7 +32,7 @@ async def stream_runtime_events(request: Request) -> StreamingResponse:
             if await request.is_disconnected():
                 break
             try:
-                event = await asyncio.wait_for(subscription.__anext__(), timeout=20.0)
+                event = await asyncio.wait_for(subscription.__anext__(), timeout=SSE_HEARTBEAT_INTERVAL_SECONDS)
                 payload = json.dumps(event.get("payload", {}))
                 yield f"id: {event.get('id')}\n"
                 yield f"event: {event.get('type')}\n"
@@ -41,4 +42,12 @@ async def stream_runtime_events(request: Request) -> StreamingResponse:
             except StopAsyncIteration:
                 break
 
-    return StreamingResponse(_iter_sse(), media_type="text/event-stream")
+    return StreamingResponse(
+        _iter_sse(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
