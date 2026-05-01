@@ -1,3 +1,10 @@
+## 2026-05-01 — Remove remaining refresh triggers and idle polling after SSE adoption
+- [x] Added explicit refresh-trigger diagnostics (`[REFRESH TRIGGER]` / `[BLOCKED REFRESH]`) in Explorer refresh scheduler.
+- [x] Hard-blocked non-authorized refresh reasons so only `initial`, `manual`, and `sse-recovery` can perform full fanout refresh.
+- [x] Converted Explorer startup refresh to explicit `initial` scheduler path for consistent instrumentation + gating.
+- [x] Kept direct SSE event application as the normal update lane and preserved recovery-only full refresh behavior.
+- [ ] Follow-up: add focused runtime e2e network-idle assertion (single `/api/runtime/events`, no idle fanout requests) in browser automation suite.
+
 ## 2026-05-01 — Apply SSE events directly to Explorer state
 - [x] Replaced normal SSE -> full refresh fanout path with direct Explorer state application for node/source/live session/runtime asset/recording/ingest claim events.
 - [x] Added runtime event burst queue (`50ms` flush) to coalesce rapid SSE updates into single state-application lanes.

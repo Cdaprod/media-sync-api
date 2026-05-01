@@ -450,6 +450,9 @@ test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   assert.ok(app.includes("case 'missed_sequence'"));
   assert.ok(app.includes("case 'snapshot_required'"));
   assert.ok(app.includes("scheduleExplorerObservabilityRefresh('sse-recovery', 0);"));
+  assert.ok(app.includes("const allowed = reason === 'initial' || reason === 'manual' || reason === 'sse-recovery';"));
+  assert.ok(app.includes("console.warn(allowed ? '[REFRESH TRIGGER]' : '[BLOCKED REFRESH]', reason);"));
+  assert.ok(app.includes("scheduleExplorerObservabilityRefresh('initial', 0);"));
   assert.ok(app.includes("eventStreamConnected: true"));
   assert.ok(app.includes("new BroadcastChannel('thatdamtoolbox-ui')"));
   assert.ok(!app.includes('setInterval(() => {\n      const hasActiveLiveWork'));

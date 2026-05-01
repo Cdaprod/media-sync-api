@@ -862,6 +862,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     };
   }, []);
   const scheduleExplorerObservabilityRefresh = useCallback((reason: string, delayMs = 450) => {
+    const allowed = reason === 'initial' || reason === 'manual' || reason === 'sse-recovery';
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(allowed ? '[REFRESH TRIGGER]' : '[BLOCKED REFRESH]', reason);
+      publishExplorerPollingDebug({ lastRefreshReason: reason });
+    }
+    if (!allowed) return;
     if (controlPlaneRefreshDebounceRef.current != null) {
       window.clearTimeout(controlPlaneRefreshDebounceRef.current);
     }
@@ -897,8 +903,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [livePreview.activeLivePreview, scheduleExplorerObservabilityRefresh]);
 
   useEffect(() => {
-    void Promise.allSettled([refreshControlPlaneSurfaces(), reloadIngestClaims(), reloadLiveSessions()]);
-  }, [refreshControlPlaneSurfaces, reloadIngestClaims, reloadLiveSessions]);
+    scheduleExplorerObservabilityRefresh('initial', 0);
+  }, [scheduleExplorerObservabilityRefresh]);
 
   const applyRuntimeEvents = useCallback((events: RuntimeStreamEvent[]) => {
     if (!events.length) return;
