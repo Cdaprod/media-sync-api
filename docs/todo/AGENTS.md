@@ -1,3 +1,9 @@
+### Latest Implementation Notes (2026-05-01)
+- [x] Classified startup opaque browser noise in Explorer dev diagnostics: `window:error` now suppresses un-attributable cross-context `Script error.` events (`filename:null`, `lineno:0`) so console triage focuses on actionable app/runtime faults.
+- [x] Added explicit dev-only SSE lane tagging in `useRuntimeEvents` (`[runtime-events:error]` with `readyState` + normalized event type) while keeping `EventSource.onerror` side-effect-only (no throw/reject lanes).
+- [x] Expanded Explorer static contracts to lock opaque-script suppression and SSE error-tag diagnostics, plus the existing null-throw/reject guards.
+- [ ] Next pass: remove remaining non-authoritative fallback background fetch lanes so refresh authority is limited to `initial`, `manual`, and `sse-recovery` triggers.
+
 ## 2026-05-01 — Keep runtime SSE stream open through proxy buffering
 - [x] Ensured SSE emits immediate connected comment and heartbeat comments every 5s with double-newline framing.
 - [x] Added flush-friendly `await asyncio.sleep(0)` yield points after event/heartbeat frames.

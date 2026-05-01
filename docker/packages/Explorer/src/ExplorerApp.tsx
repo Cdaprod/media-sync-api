@@ -958,6 +958,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     if (typeof window === 'undefined') return;
 
     const onWindowErrorDiagnostic = (event: ErrorEvent) => {
+      const isOpaqueScriptError = event.message === 'Script error.' && !event.filename && event.lineno === 0;
+      if (isOpaqueScriptError) return;
       console.warn('[window:error]', {
         message: event.message || 'unknown-window-error',
         filename: event.filename || null,

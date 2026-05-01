@@ -3695,10 +3695,13 @@ test('startup null diagnostics guard against null throws/rejections and SSE oner
   assert.ok(app.includes("if (process.env.NODE_ENV === 'production') return;"));
   assert.ok(app.includes("window.addEventListener('error', onWindowErrorDiagnostic);"));
   assert.ok(app.includes("window.addEventListener('unhandledrejection', onWindowUnhandledRejectionDiagnostic);"));
+  assert.ok(app.includes("const isOpaqueScriptError = event.message === 'Script error.' && !event.filename && event.lineno === 0;"));
+  assert.ok(app.includes('if (isOpaqueScriptError) return;'));
   assert.ok(app.includes("console.warn('[window:error]'"));
   assert.ok(app.includes("console.warn('[window:unhandledrejection]'"));
 
   assert.ok(runtimeEvents.includes('es.onerror = (event) => {'));
   assert.ok(runtimeEvents.includes('lastEventStreamErrorReason'));
+  assert.ok(runtimeEvents.includes("console.warn('[runtime-events:error]'"));
   assert.ok(!runtimeEvents.includes('es.onerror = (event) => {\n      throw'));
 });

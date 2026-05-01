@@ -81,6 +81,12 @@ export function useRuntimeEvents({ enabled = true, onEvent }: { enabled?: boolea
         lastEventStreamUrl: '/api/runtime/events',
         lastEventStreamErrorReason: normalizeErrorReason((event as Event | null)?.type || 'eventsource-error'),
       });
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[runtime-events:error]', {
+          readyState: es.readyState,
+          type: normalizeErrorReason((event as Event | null)?.type || 'eventsource-error'),
+        });
+      }
     };
 
     return () => {
