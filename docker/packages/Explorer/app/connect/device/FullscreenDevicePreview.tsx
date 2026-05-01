@@ -109,7 +109,7 @@ export default function FullscreenDevicePreview({
   const { devices: hookLocalDevices, permission: localPermission, refresh: refreshLocal } = useLocalCameras();
   const localDevices = cameraState?.devices ?? hookLocalDevices;
   const safeLocalDevices = Array.isArray(localDevices) ? localDevices : [];
-  const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras();
+  const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras({ mode, remotePickerOpen: pickerOpen && mode === 'remote' });
 
   // Poll videoRef.srcObject for audio analyser (fix 2)
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);

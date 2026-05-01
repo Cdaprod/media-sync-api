@@ -1,3 +1,10 @@
+## 2026-05-01 — Stop device control-plane spam and restore registered device observability
+- [x] Prevented `/connect/device` Local mode from continuously polling `/api/nodes` by mode-aware polling guard in device monitor hooks.
+- [x] Kept remote-node polling for Remote mode or explicit remote picker use, throttled to 10s and visibility-gated.
+- [x] Added `/connect/device` bootstrap node sync (`listNodes` + conditional `registerNode` + heartbeat) so local identity is reconciled with backend authority.
+- [x] Preserved local camera preview flow independent of continuous node polling.
+- [ ] Follow-up: replace remaining control-plane polling with runtime event stream / BroadcastChannel fanout.
+
 ## 2026-05-01 — Throttle recording + node observability polling and toast noise
 - [x] Stopped `kind=live` runtime assets from mapping into pending recording overlay lane.
 - [x] Added recording intent-gated failure toasts so background/polling churn no longer emits global `Recording failed`.

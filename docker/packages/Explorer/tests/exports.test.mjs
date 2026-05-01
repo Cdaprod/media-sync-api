@@ -3464,6 +3464,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId ||'));
   assert.ok(page.includes('const handleUseSelectedLocalDevice = async () => {'));
   assert.ok(preview.includes('const { devices: hookLocalDevices'));
+  assert.ok(preview.includes("useRemoteCameras({ mode, remotePickerOpen: pickerOpen && mode === 'remote' })"));
   assert.ok(preview.includes('Array.isArray(localDevices) ? localDevices : []'));
   assert.ok(preview.includes('localDevices={safeLocalDevices}'));
   assert.ok(!liveSession.includes('Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.'));
@@ -3511,6 +3512,13 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const token = getStoredNodeToken(nodeId).token ?? readDeviceBearerToken(nodeId);'));
   assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
+  assert.ok(page.includes('const tokenInfo = getStoredNodeToken(nodeId);'));
+  assert.ok(page.includes('const nodes = await api.listNodes();'));
+  assert.ok(page.includes('await api.registerNode({'));
+  assert.ok(page.includes('await api.heartbeatNode({ nodeId, token: tokenInfo.token });'));
+  assert.ok(hooks.includes('shouldPollDeviceControlPlane'));
+  assert.ok(hooks.includes('if (!enabled || !shouldPollLiveSurface()) return;') || hooks.includes('if (!shouldPollLiveSurface()) return;'));
+  assert.ok(hooks.includes('}, 10000);'));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));
   assert.ok(liveSession.includes('return nextSession;'));
   assert.ok(liveSession.includes('return null;'));
