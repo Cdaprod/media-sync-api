@@ -1,4 +1,11 @@
 ### Latest Implementation Notes (2026-05-01)
+- [x] Fixed browser-device heartbeat auth path to prefer node-scoped stored tokens and send explicit `Authorization: Bearer` + `X-Media-Sync-Node-Id` headers for heartbeat requests.
+- [x] Added device-side auth diagnostics (`node-sync:auth-debug`) with source/length metadata only (never token value), and mapped heartbeat 401/403 to `auth_failed` status without tearing down camera/local identity.
+- [x] Hardened named-tab routing behavior with blocked-popup fallback navigation while preserving dedicated Explorer/Device window names.
+- [x] Reorganized sidebar runtime surfaces for mobile inspection: live device instances remain first, canonical/remote/runtime sections are collapsible, and live cards expose auth_failed/status/watch/open actions.
+- [ ] Next pass: validate offer/answer/ICE media path after auth/layout cleanup (this pass does not claim WebRTC media flow resolution).
+
+### Latest Implementation Notes (2026-05-01)
 - [x] Quieted SSE reconnect noise in `useRuntimeEvents`: `EventSource.CONNECTING` now updates reconnect diagnostics and returns early without warning/throw/event dispatch.
 - [x] Restricted `[runtime-events:error]` warnings to hard-closed streams (`EventSource.CLOSED`) with a 10-second throttle to prevent reconnect-loop log spam.
 - [x] Expanded Explorer static contracts to lock CONNECTING early-return behavior, CLOSED-gated warning policy, reconnect diagnostics, and no-throw onerror handling.

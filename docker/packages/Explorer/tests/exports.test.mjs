@@ -3567,7 +3567,8 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const existingStream = getUsableCameraStream();'))
   assert.ok(page.includes('let stream = existingStream;'));
   assert.ok(page.includes("if (!stream) throw new Error('camera_stream_not_ready');"));
-  assert.ok(page.includes('const token = getStoredNodeToken(nodeId).token ?? readDeviceBearerToken(nodeId);'));
+  assert.ok(page.includes('const tokenInfo = getStoredNodeToken(nodeId);'));
+  assert.ok(page.includes('const token = tokenInfo?.token;'));
   assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(page.includes('const tokenInfo = getStoredNodeToken(nodeId);'));
@@ -3619,6 +3620,10 @@ test('connect device route keeps canonical shim and deterministic broadcast wiri
   assert.ok(page.includes('watchLiveSession('));
   assert.ok(page.includes("startPreview('camera', { stream"));
   assert.ok(page.includes('await publishPeerOffer(nextSession, stream);'));
+  assert.ok(page.includes("traceDevice('node-sync:auth-debug'"));
+  assert.ok(page.includes('tokenLength: tokenInfo.token?.length || 0'));
+  assert.ok(page.includes("setHeartbeatState('auth_failed')"));
+  assert.ok(!page.includes("stopCamera(); setHeartbeatState('auth_failed')"));
   assert.ok(page.includes('const markLiveFlowStep = useCallback((patch: Record<string, unknown>) => {'));
   assert.ok(page.includes('deviceBroadcastRequestedAt'));
   assert.ok(page.includes('deviceCameraReadyAt'));
@@ -3690,11 +3695,20 @@ test('startup null diagnostics guard against null throws/rejections and SSE oner
   const webRtc = fs.readFileSync(webRtcPath, 'utf8');
   const liveSessions = fs.readFileSync(liveSessionsPath, 'utf8');
   const api = fs.readFileSync(apiPath, 'utf8');
+  const identityPath = path.join(packageRoot, 'src', 'lib', 'browserRuntimeIdentity.ts');
+  const identity = fs.readFileSync(identityPath, 'utf8');
 
   const corpus = [app, runtimeEvents, sourceControl, webRtc, liveSessions, api].join('\n');
   assert.ok(!corpus.includes('throw null'));
   assert.ok(!corpus.includes('Promise.reject(null)'));
   assert.ok(!corpus.includes('reject(null)'));
+  assert.ok(api.includes('Authorization: `Bearer ${token}`'));
+  assert.ok(api.includes("'X-Media-Sync-Node-Id': nodeId"));
+  assert.ok(api.includes('const tokenInfo = getStoredNodeToken(nodeId);'));
+  assert.ok(!api.includes('token_preview'));
+  assert.ok(identity.includes('window.open(url, windowName)'));
+  assert.ok(identity.includes('CONNECT_DEVICE_WINDOW_NAME'));
+  assert.ok(identity.includes('EXPLORER_WINDOW_NAME'));
 
   assert.ok(app.includes("if (process.env.NODE_ENV === 'production') return;"));
   assert.ok(app.includes("window.addEventListener('error', onWindowErrorDiagnostic);"));
@@ -3713,6 +3727,9 @@ test('startup null diagnostics guard against null throws/rejections and SSE oner
   assert.ok(runtimeEvents.includes('lastEventStreamErrorReason'));
   assert.ok(runtimeEvents.includes("console.warn('[runtime-events:error]'"));
   assert.ok(app.includes('__explorerLiveFlowDebug'));
+  assert.ok(app.includes('LIVE DEVICE INSTANCES'));
+  assert.ok(app.includes('auth_failed'));
+  assert.ok(app.includes('<details className=\"card runtime-surface-card\">'));
   assert.ok(app.includes('appliedLiveSessionUpdates'));
   assert.ok(!runtimeEvents.includes('es.onerror = (event) => {\n      throw'));
 });

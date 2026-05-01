@@ -95,6 +95,12 @@ export default function ConnectDevicePage() {
         tokenSource: tokenInfo.source,
         hasToken: !!tokenInfo.token,
       });
+      traceDevice('node-sync:auth-debug', {
+        nodeId,
+        hasToken: !!tokenInfo.token,
+        tokenSource: tokenInfo.source,
+        tokenLength: tokenInfo.token?.length || 0,
+      });
       try {
         const nodes = await api.listNodes();
         const exists = Array.isArray(nodes) && nodes.some((entry) => entry?.node_id === nodeId);
@@ -120,7 +126,13 @@ export default function ConnectDevicePage() {
           setHeartbeatState('skipped-no-token');
         }
       } catch (err) {
-        traceDevice('node-sync:error', { message: err instanceof Error ? err.message : String(err) });
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes('401')) {
+          if (!cancelled) setHeartbeatState('auth_failed');
+          traceDevice('node-sync:error', { message, nodeSyncStatus: 'auth_failed' });
+          return;
+        }
+        traceDevice('node-sync:error', { message });
       }
     };
     void syncNodeRegistration();
@@ -156,7 +168,7 @@ export default function ConnectDevicePage() {
   const [mode, setMode] = useState<'local' | 'remote'>('local');
   const [activeBroadcastSession, setActiveBroadcastSession] = useState<{ session_id: string } | null>(null);
   const [traceEvents, setTraceEvents] = useState<string[]>([]);
-  const [heartbeatState, setHeartbeatState] = useState<'ok' | 'skipped-no-token' | 'failed'>('skipped-no-token');
+  const [heartbeatState, setHeartbeatState] = useState<'ok' | 'skipped-no-token' | 'failed' | 'auth_failed'>('skipped-no-token');
   const [broadcast, setBroadcast] = useState<BroadcastSnapshot>({
     stage: 'idle', nodeId, selectedDeviceId: null, cameraLabel: null, sessionId: null, sourceKind: null,
     peerStatus: 'idle', waitingForAnswer: false, error: null, updatedAt: Date.now(),
@@ -405,7 +417,16 @@ export default function ConnectDevicePage() {
     clearNodeHeartbeatTimer();
     if (nodeId) {
       if (!nodeHeartbeatTimerRef.current) nodeHeartbeatTimerRef.current = window.setInterval(() => {
-        const token = getStoredNodeToken(nodeId).token ?? readDeviceBearerToken(nodeId);
+        const tokenInfo = getStoredNodeToken(nodeId);
+        const token = tokenInfo?.token;
+        if (process.env.NODE_ENV !== 'production') {
+          traceDevice('node-sync:auth-debug', {
+            nodeId,
+            hasToken: !!token,
+            tokenSource: tokenInfo?.source,
+            tokenLength: token?.length || 0,
+          });
+        }
         if (!token) {
           appendTrace('heartbeat:skipped-no-token');
           setHeartbeatState('skipped-no-token');
@@ -417,8 +438,8 @@ export default function ConnectDevicePage() {
         }).catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
           if (message.includes('401') || message.includes('403')) {
-            appendTrace('heartbeat:skipped-no-token');
-            setHeartbeatState('skipped-no-token');
+            appendTrace('heartbeat:auth-failed');
+            setHeartbeatState('auth_failed');
           } else {
             appendTrace('heartbeat:error');
             setHeartbeatState('failed');

@@ -60,6 +60,10 @@ const postUiMessage = (message: Record<string, unknown>): void => {
 const openNamedWindow = (url: string, windowName: string): Window | null => {
   if (typeof window === 'undefined') return null;
   const target = window.open(url, windowName);
+  if (!target) {
+    window.location.assign(url);
+    return null;
+  }
   if (target) target.focus?.();
   return target;
 };

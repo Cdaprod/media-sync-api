@@ -5517,25 +5517,27 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   </div>
 
                   {liveDeviceInstances.length > 0 ? (
-                    <div className="card">
+                    <div className="card runtime-surface-card runtime-live-instances-card">
                       <strong>LIVE DEVICE INSTANCES</strong>
                       <div className="small">Merged node/source/live/runtime lane visibility for device instances.</div>
                       <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
                         {liveDeviceInstances.map((instance) => (
-                          <div className="card" key={`live-instance-${instance.nodeId}`}>
+                          <div className="card runtime-live-instance-card" key={`live-instance-${instance.nodeId}`}>
                             <strong>{instance.label}</strong>
                             <div className="small">node_id: {instance.nodeId}</div>
                             {instance.sourceName ? <div className="small">source: {instance.sourceName} ({instance.sourceKind || 'unknown'})</div> : null}
                             {instance.status ? <div className="small">status: {instance.status}</div> : null}
+                            {instance.lastHeartbeatAt ? <div className="small">heartbeat: {instance.lastHeartbeatAt}</div> : null}
                             {instance.sessionId ? <div className="small">session: {instance.sessionId} ({instance.sessionState || 'unknown'})</div> : null}
                             <div className="tagrow">
+                              {(instance.status === 'auth_failed' || instance.status === 'offline') ? <span className="tag bad">auth_failed</span> : null}
                               <span className={`tag ${instance.hasOffer ? 'good' : ''}`}>offer:{instance.hasOffer ? 'yes' : 'no'}</span>
                               <span className={`tag ${instance.hasAnswer ? 'good' : ''}`}>answer:{instance.hasAnswer ? 'yes' : 'no'}</span>
                               {instance.runtimeState ? <span className="tag">{instance.runtimeState}</span> : null}
                             </div>
                             <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              <button className="btn" type="button" onClick={() => openDevice(instance.nodeId)}>Open Device</button>
-                              {instance.sessionId ? (
+                              {!instance.sessionId ? <button className="btn" type="button" onClick={() => openDevice(instance.nodeId)}>Open Device</button> : null}
+                              {instance.sessionId && instance.hasOffer && instance.hasAnswer ? (
                                 <button
                                   className="btn"
                                   type="button"
@@ -5544,7 +5546,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                                     if (session) void openLivePeerViewer(session);
                                   }}
                                 >
-                                  Open peer view / Watch live
+                                  Watch Live
                                 </button>
                               ) : null}
                             </div>
@@ -5555,7 +5557,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   ) : null}
 
                   {canonicalSources.length > 0 ? (
-                    <div className="card">
+                    <details className="card runtime-surface-card">
+                      <summary><strong>Canonical sources</strong></summary>
                       <strong>Canonical sources</strong>
                       <div className="small">Authority-local sources visible through the canonical source registry.</div>
                       <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
@@ -5587,11 +5590,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           );
                         })}
                       </div>
-                    </div>
+                    </details>
                   ) : null}
 
                   {remoteSources.length > 0 ? (
-                    <div className="card">
+                    <details className="card runtime-surface-card">
+                      <summary><strong>Remote source surfaces</strong></summary>
                       <strong>Remote source surfaces</strong>
                       <div className="small">
                         Source surfaces published through connect/control-plane registration and merged into source inventory.
@@ -5636,11 +5640,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           );
                         })}
                       </div>
-                    </div>
+                    </details>
                   ) : null}
 
                   {runtimeNodes.length > 0 ? (
-                    <div className="card">
+                    <details className="card runtime-surface-card">
+                      <summary><strong>Registered runtimes</strong></summary>
                       <strong>Registered runtimes</strong>
                       <div className="small">Control-plane view of registered runtime nodes.</div>
                       <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
@@ -5683,7 +5688,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           );
                         })}
                       </div>
-                    </div>
+                    </details>
                   ) : null}
                 </>
               )}

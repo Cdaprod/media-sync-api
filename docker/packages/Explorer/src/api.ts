@@ -188,9 +188,16 @@ export function createApiClient(baseUrl = ''): ApiClient {
     },
     async heartbeatNode(node: string | { nodeId: string; token?: string | null }): Promise<NodeControlRecord> {
       const nodeId = typeof node === 'string' ? node : node.nodeId;
-      const token = typeof node === 'string' ? getStoredNodeToken(nodeId).token : (node.token ?? getStoredNodeToken(nodeId).token);
+      const tokenInfo = getStoredNodeToken(nodeId);
+      const token = typeof node === 'string' ? tokenInfo.token : (node.token ?? tokenInfo.token);
       if (!token) throw new Error('missing_device_bearer_token');
-      const headers: HeadersInit = mergeHeaders({ Accept: 'application/json' }, requireNodeAuthHeaders(nodeId));
+      const headers: HeadersInit = mergeHeaders(
+        { Accept: 'application/json' },
+        {
+          Authorization: `Bearer ${token}`,
+          'X-Media-Sync-Node-Id': nodeId,
+        },
+      );
       const response = await fetch(buildUrl(`/api/nodes/${encodeURIComponent(nodeId)}/heartbeat`), {
         method: 'POST',
         headers,
