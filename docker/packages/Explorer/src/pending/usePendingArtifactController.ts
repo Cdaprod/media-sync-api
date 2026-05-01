@@ -1,11 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ComposeJobEnvelope, PendingComposeItem } from '../composeJobs';
 import { pendingComposeMatchesMediaItem, sortPendingComposeItemsForDisplay } from '../composeJobs';
 import { usePendingComposeJobs } from '../hooks/usePendingComposeJobs';
 import { useRecordingSessions } from '../hooks/useRecordingSessions';
+import { createApiClient } from '../api';
+import { shouldPollLiveSurface } from '../utils/polling';
 import type { PendingRecordingAsset } from '../liveRecordings';
 import { pendingRecordingMatchesMediaItem, sortPendingRecordingAssetsForDisplay } from '../liveRecordings';
 import type { MediaItem, Project, ToastMessage } from '../types';
@@ -23,6 +25,81 @@ type AddToast = (
   message: string,
   operationId?: string,
 ) => string;
+
+
+
+type RuntimeAssetRecord = {
+  id: string;
+  state: string;
+  kind: string;
+  project?: string | null;
+  source?: string | null;
+  target_dir?: string | null;
+  session_id?: string | null;
+  recording_id?: string | null;
+  node_id?: string | null;
+  asset_url?: string | null;
+  error?: string | null;
+  created_at?: string | null;
+};
+
+function runtimeAssetToPendingRecording(asset: RuntimeAssetRecord): PendingRecordingAsset | null {
+  if (asset.kind !== 'recording') return null;
+  const statusByState: Record<string, PendingRecordingAsset['status']> = {
+    recording: 'recording',
+    previewable: 'recording',
+    materializing: 'finalizing',
+    ready: 'saved',
+    failed: 'failed',
+  };
+  const status = statusByState[asset.state] || null;
+  if (!status) return null;
+  return {
+    recordingId: asset.recording_id || asset.id,
+    sessionId: asset.session_id || '',
+    nodeId: asset.node_id || 'runtime',
+    project: asset.project || 'Runtime',
+    source: asset.source || 'primary',
+    targetDir: asset.target_dir || 'ingest/live',
+    outputName: null,
+    createdAt: asset.created_at || new Date().toISOString(),
+    startedAt: asset.created_at || new Date().toISOString(),
+    status,
+    assetUrl: asset.asset_url || null,
+    error: asset.error || undefined,
+  };
+}
+
+
+function normalizeIdentityPath(path: string | null | undefined): string {
+  return String(path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
+function dedupePendingOverlayAssets(items: PendingRecordingAsset[]): PendingRecordingAsset[] {
+  const seen = new Map<string, PendingRecordingAsset>();
+  for (const item of items) {
+    const key = item.assetUrl
+      || normalizeIdentityPath(item.completedPath)
+      || normalizeIdentityPath(item.outputName)
+      || `${item.recordingId}:${item.sessionId}`;
+    if (!key) continue;
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, item);
+      continue;
+    }
+    const existingHasAssetUrl = !!existing.assetUrl;
+    const nextHasAssetUrl = !!item.assetUrl;
+    if (!existingHasAssetUrl && nextHasAssetUrl) {
+      seen.set(key, item);
+      continue;
+    }
+    if (!existingHasAssetUrl && !nextHasAssetUrl && existing.status !== 'saved' && item.status === 'saved') {
+      seen.set(key, item);
+    }
+  }
+  return Array.from(seen.values());
+}
 
 type UsePendingArtifactControllerArgs = {
   resolvedApiBase: string;
@@ -48,6 +125,28 @@ export function usePendingArtifactController({
   handleComposeCompletion,
 }: UsePendingArtifactControllerArgs) {
   const pendingStatusSnapshotRef = useRef<Map<string, PendingComposeItem['status']>>(new Map());
+  const [runtimeRecordingAssets, setRuntimeRecordingAssets] = useState<PendingRecordingAsset[]>([]);
+  const runtimeApiRef = useRef(createApiClient(''));
+  const activeRecordingIntentRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    let mounted = true;
+    const poll = async () => {
+      if (!shouldPollLiveSurface()) return;
+      const assets = await runtimeApiRef.current.listRuntimeAssets().catch(() => null);
+      if (!mounted || !assets) return;
+      const mapped = (assets as RuntimeAssetRecord[])
+        .map((asset) => runtimeAssetToPendingRecording(asset))
+        .filter((asset): asset is PendingRecordingAsset => !!asset);
+      setRuntimeRecordingAssets(mapped);
+    };
+    void poll();
+    const timer = window.setInterval(() => { void poll(); }, 3000);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const {
     pendingComposeItems,
@@ -67,12 +166,16 @@ export function usePendingArtifactController({
     dismissRecording: dismissLiveRecordingAsset,
   } = useRecordingSessions({
     apiBase: resolvedApiBase,
+    enabled: activeRecordingIntentRef.current.size > 0 || runtimeRecordingAssets.length > 0,
     onSaved: () => {
       addToast('good', 'Recording saved', 'Live recording was saved as a media asset.', 'live-recording-saved');
       void refreshLibrarySnapshot();
     },
     onError: (message) => {
-      addToast('bad', 'Recording failed', message, 'live-recording-failed');
+      const [recordingId = 'unknown', sessionId = 'unknown', nodeId = 'unknown', detail = 'Recording failed.'] = String(message || '').split('|');
+      const intentKey = `${sessionId}:${nodeId}`;
+      if (!activeRecordingIntentRef.current.has(intentKey)) return;
+      addToast('bad', 'Recording failed', detail, `live-recording-failed-${recordingId || sessionId || 'unknown'}`);
     },
   });
 
@@ -102,14 +205,15 @@ export function usePendingArtifactController({
     return sortPendingComposeItemsForDisplay(relevant);
   }, [activeProject, mediaScope, pendingComposeItems]);
 
+  // Runtime assets are an overlay, not a replacement for persisted media.
   const visiblePendingRecordingAssets = useMemo(() => (
-    sortPendingRecordingAssetsForDisplay(pendingRecordingAssets)
+    sortPendingRecordingAssetsForDisplay(dedupePendingOverlayAssets([...pendingRecordingAssets, ...runtimeRecordingAssets]))
       .filter((recording) => !media.some((item) => pendingRecordingMatchesMediaItem(recording, item)))
       .filter((recording) => {
         if (activeProject?.name && recording.project !== activeProject.name) return mediaScope === 'all';
         return true;
       })
-  ), [activeProject?.name, media, mediaScope, pendingRecordingAssets]);
+  ), [activeProject?.name, media, mediaScope, pendingRecordingAssets, runtimeRecordingAssets]);
 
   const pendingArtifacts = useMemo<PendingArtifact[]>(() => {
     const pendingComposeArtifacts = visiblePendingComposeItems
@@ -152,6 +256,8 @@ export function usePendingArtifactController({
     const source = activeProject?.source || 'primary';
 
     try {
+      const intentKey = `${session.session_id}:${session.node_id}`;
+      activeRecordingIntentRef.current.add(intentKey);
       await startLiveRecordingAsset({
         sessionId,
         nodeId: session.node_id,

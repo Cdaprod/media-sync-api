@@ -73,6 +73,10 @@ def test_upload_recording_persists_webm_and_returns_asset_url(client):
     assert output_path.read_bytes() == b"webm-payload"
     assert list(output_path.parent.glob("*.tmp")) == []
 
+    projects = client.get('/api/projects')
+    assert projects.status_code == 200
+    assert any(item.get('name') == 'recordings-project' for item in projects.json())
+
 
 def test_upload_recording_rejects_parent_target_dir(client):
     node_id, token = _register_node_auth(client, "runner-live-recording-invalid-dir")
