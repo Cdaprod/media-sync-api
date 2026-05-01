@@ -9,6 +9,7 @@ type UseWebRtcLiveSessionsArgs = {
   listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
   enabled?: boolean;
   poll?: boolean;
+  initialLoad?: boolean;
 };
 
 type UseWebRtcLiveSessionsResult = {
@@ -31,6 +32,7 @@ export function useWebRtcLiveSessions({
   listWebRtcLiveSessions,
   enabled = true,
   poll = false,
+  initialLoad = false,
 }: UseWebRtcLiveSessionsArgs): UseWebRtcLiveSessionsResult {
   const [sessions, setSessions] = useState<WebRtcLiveSession[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,9 +63,10 @@ export function useWebRtcLiveSessions({
   }, [enabled, listWebRtcLiveSessions]);
 
   useEffect(() => {
+    if (!initialLoad) return;
     if (!enabled) return;
     void reload();
-  }, [enabled, reload]);
+  }, [enabled, initialLoad, reload]);
 
   useEffect(() => {
     if (!enabled || !poll) return;

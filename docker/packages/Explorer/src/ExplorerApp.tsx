@@ -651,6 +651,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   } = useSourceControlData({
     listSources: api.listSources,
     listNodes: api.listNodes,
+    initialLoad: false,
   });
   const {
     sources,
@@ -797,7 +798,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   });
   const runtime = useRuntimeController({
     listWebRtcLiveSessions: api.listWebRtcLiveSessions,
-    poll: sidebarOpen || detailsModal !== null,
+    poll: false,
   });
   const {
     sessions: webRtcLiveSessions,
@@ -861,6 +862,9 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       eventApplyCount: eventApplyCountRef.current,
     };
   }, []);
+  const traceObservabilityFetch = useCallback((lane: string, reason: string) => {
+    if (process.env.NODE_ENV !== 'production') console.warn('[OBSERVABILITY FETCH]', lane, reason);
+  }, []);
   const scheduleExplorerObservabilityRefresh = useCallback((reason: string, delayMs = 450) => {
     const allowed = reason === 'initial' || reason === 'manual' || reason === 'sse-recovery';
     if (process.env.NODE_ENV !== 'production') {
@@ -876,11 +880,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       refreshCountRef.current += 1;
       void Promise.allSettled([
-        reloadSourceControl(),
-        reloadWebRtcLiveSessions(),
-        reloadLiveSessions(),
-        api.listRuntimeAssets().then((items) => setRuntimeAssets(Array.isArray(items) ? items : [])),
-        reloadIngestClaims(),
+        (traceObservabilityFetch('source-control', reason), reloadSourceControl()),
+        (traceObservabilityFetch('webrtc-live', reason), reloadWebRtcLiveSessions()),
+        (traceObservabilityFetch('live-sessions', reason), reloadLiveSessions()),
+        (traceObservabilityFetch('runtime-assets', reason), api.listRuntimeAssets().then((items) => setRuntimeAssets(Array.isArray(items) ? items : []))),
+        (traceObservabilityFetch('ingest-claims', reason), reloadIngestClaims()),
       ]);
       if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
         publishExplorerPollingDebug({
@@ -892,7 +896,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         setExplorerPollingDebugTick((x) => x + 1);
       }
     }, delayMs);
-  }, [api, publishExplorerPollingDebug, reloadIngestClaims, reloadLiveSessions, reloadSourceControl, reloadWebRtcLiveSessions]);
+  }, [api, publishExplorerPollingDebug, reloadIngestClaims, reloadLiveSessions, reloadSourceControl, reloadWebRtcLiveSessions, traceObservabilityFetch]);
 
   useEffect(() => {
     if (!livePreview.activeLivePreview) return;
@@ -3443,7 +3447,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     try {
       await api.heartbeatNode(nodeId);
       addToast('good', 'Runtime', 'Heartbeat sent');
-      await reloadSourceControl();
+      scheduleExplorerObservabilityRefresh('manual', 0);
     } catch (error) {
       addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Heartbeat failed');
     }
@@ -3457,7 +3461,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     try {
       await api.deleteNode(nodeId);
       addToast('good', 'Runtime', `Deleted node ${nodeId}`);
-      await reloadSourceControl();
+      scheduleExplorerObservabilityRefresh('manual', 0);
     } catch (error) {
       addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Delete node failed');
     }
@@ -5435,7 +5439,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <button type="button" className="btn" onClick={() => setIsRegisterNodeModalOpen(true)}>
                   + Register
                 </button>
-                <button type="button" className="btn" onClick={() => void reloadSourceControl()}>
+                <button type="button" className="btn" onClick={() => scheduleExplorerObservabilityRefresh('manual', 0)}>
                   Refresh
                 </button>
               </div>
@@ -6550,7 +6554,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 className="btn"
                 onClick={() => {
                   livePreview.closeLivePreview();
-                  void reloadWebRtcLiveSessions();
                 }}
               >
                 Close
@@ -6660,7 +6663,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         isOpen={isRegisterNodeModalOpen}
         onClose={() => setIsRegisterNodeModalOpen(false)}
         onSuccess={(_node, _response: RegisterNodeResponse) => {
-          void reloadSourceControl();
+          scheduleExplorerObservabilityRefresh('manual', 0);
         }}
         registerNode={api.registerNode}
         authorityBaseUrl={authorityBaseUrl}

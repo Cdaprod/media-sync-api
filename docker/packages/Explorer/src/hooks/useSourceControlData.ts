@@ -5,6 +5,7 @@ import type { NodeControlRecord, SourceControlRecord, SourceControlSnapshot } fr
 interface UseSourceControlDataOptions {
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
+  initialLoad?: boolean;
 }
 type IdRecord = Record<string, unknown>;
 const readRuntimeId = (record: IdRecord): string | null => String(record.node_id ?? record.name ?? '').trim() || null;
@@ -12,6 +13,7 @@ const readRuntimeId = (record: IdRecord): string | null => String(record.node_id
 export function useSourceControlData({
   listSources,
   listNodes,
+  initialLoad = false,
 }: UseSourceControlDataOptions) {
   const [sources, setSources] = useState<SourceControlRecord[]>([]);
   const [nodes, setNodes] = useState<NodeControlRecord[]>([]);
@@ -43,8 +45,9 @@ export function useSourceControlData({
   }, [listNodes, listSources]);
 
   useEffect(() => {
+    if (!initialLoad) return;
     void reload();
-  }, [reload]);
+  }, [initialLoad, reload]);
 
   const snapshot: SourceControlSnapshot = useMemo(() => ({
     sources,

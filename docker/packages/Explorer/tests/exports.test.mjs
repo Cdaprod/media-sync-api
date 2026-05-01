@@ -460,6 +460,7 @@ test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   assert.ok(app.includes("case 'snapshot_required'"));
   assert.ok(app.includes("scheduleExplorerObservabilityRefresh('sse-recovery', 0);"));
   assert.ok(app.includes("const allowed = reason === 'initial' || reason === 'manual' || reason === 'sse-recovery';"));
+  assert.ok(app.includes("console.warn('[OBSERVABILITY FETCH]', lane, reason);"));
   assert.ok(app.includes("console.warn(allowed ? '[REFRESH TRIGGER]' : '[BLOCKED REFRESH]', reason);"));
   assert.ok(app.includes("scheduleExplorerObservabilityRefresh('initial', 0);"));
   assert.ok(app.includes("eventStreamConnected: true"));
@@ -480,6 +481,8 @@ test('live polling is visibility-gated and throttled', () => {
   const recordingSessions = fs.readFileSync(recordingSessionsPath, 'utf8');
   const pendingController = fs.readFileSync(pendingControllerPath, 'utf8');
   const polling = fs.readFileSync(pollingPath, 'utf8');
+  const sourceControl = fs.readFileSync(path.join(packageRoot, 'src', 'hooks', 'useSourceControlData.ts'), 'utf8');
+  const webRtcSessions = fs.readFileSync(path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts'), 'utf8');
   assert.ok(polling.includes('document.visibilityState === \'visible\''));
   assert.ok(liveSessions.includes("document.visibilityState === 'hidden'"));
   assert.ok(liveSessions.includes('}, 5000);'));
@@ -488,6 +491,10 @@ test('live polling is visibility-gated and throttled', () => {
   assert.ok(pendingController.includes("document.visibilityState === 'hidden'"));
   assert.ok(pendingController.includes('activeRecordingIntentRef.current.size === 0'));
   assert.ok(pendingController.includes('window.setInterval(() => { void poll(); }, 3000);'));
+  assert.ok(sourceControl.includes('initialLoad = false'));
+  assert.ok(!sourceControl.includes('setInterval('));
+  assert.ok(webRtcSessions.includes('poll = false'));
+  assert.ok(webRtcSessions.includes('initialLoad = false'));
 });
 
 test('clipboard helper includes fallback copy behavior', () => {
@@ -1479,7 +1486,7 @@ test('runtime and ingest context menus expose operator delete actions with live-
   const content = fs.readFileSync(explorerPath, 'utf8');
   assert.ok(content.includes('const deleteNodeFromSidebar = useCallback(async (nodeId: string) => {'));
   assert.ok(content.includes('await api.deleteNode(nodeId);'));
-  assert.ok(content.includes('await reloadSourceControl();'));
+  assert.ok(content.includes("scheduleExplorerObservabilityRefresh('manual', 0);"));
   assert.ok(content.includes('Delete node'));
   assert.ok(content.includes('const canOpenDeviceForNode = useCallback((node: NodeControlRecord) => {'));
   assert.ok(content.includes('return webRtcSessionsByNodeId.has(node.node_id);'));

@@ -1,3 +1,10 @@
+## 2026-05-01 — Remove remaining direct Explorer observability fetch loops
+- [x] Made source-control and WebRTC hooks passive by default (`initialLoad: false`, `poll: false`) so they no longer self-bootstrap fetch loops outside scheduler ownership.
+- [x] Replaced direct sidebar/manual reload callsites with allowlisted scheduler refresh (`manual`) ownership.
+- [x] Added observability lane tracer logs (`[OBSERVABILITY FETCH] lane reason`) inside the scheduler-owned full refresh path for runtime diagnostics.
+- [x] Kept full observability fetches scoped to allowlisted reasons (`initial`, `manual`, `sse-recovery`).
+- [ ] Follow-up: add explicit browser-level assertion that `/api/sources` + `/api/nodes` + `/api/live` stay quiet during idle SSE steady state.
+
 ## 2026-05-01 — Remove shouldPollLiveSurface dependency after SSE transition
 - [x] Eliminated remaining runtime references to `shouldPollLiveSurface` across Explorer refresh and recording/pending hooks.
 - [x] Replaced legacy helper checks with local visibility guards (`document.visibilityState === 'hidden'`) plus explicit `enabled` gating.
