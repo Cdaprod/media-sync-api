@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 
+import { createApiClient } from '../api';
 import type { LiveSessionRecord } from '../types/liveSession';
 import { StreamHub } from '../runtime/StreamHub';
 
@@ -60,6 +61,7 @@ export function LiveSourceCard({
   const [peerError, setPeerError] = useState<string | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');
   const [peerRetryToken, setPeerRetryToken] = useState(0);
+  const api = createApiClient(apiBase);
 
   useEffect(() => {
     if (!imgRef.current || !previewUrl) return;
@@ -101,41 +103,20 @@ export function LiveSourceCard({
     };
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
-      void fetch(`${apiBase}/api/live_sessions/${encodeURIComponent(session.session_id)}/signal/ice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        cache: 'no-store',
-        body: JSON.stringify({ role: 'viewer', viewer_id: viewerId, candidate: event.candidate.toJSON() }),
-      }).catch(() => undefined);
+      void api.publishLiveSignalIce(session.session_id, 'viewer', viewerId, event.candidate.toJSON(), session.node_id).catch(() => undefined);
     };
     peer.addTransceiver('video', { direction: 'recvonly' });
     peer.addTransceiver('audio', { direction: 'recvonly' });
 
     const poll = window.setInterval(() => {
-      void fetch(`${apiBase}/api/live_sessions/${encodeURIComponent(session.session_id)}/signal?viewer_id=${encodeURIComponent(viewerId)}`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      })
-        .then((response) => response.ok ? response.json() : null)
+      void api.getLiveSignalState(session.session_id, viewerId)
         .then(async (signal) => {
           if (disposed || !signal || !peerConnRef.current) return;
           if (signal.offer?.sdp && !peerConnRef.current.currentRemoteDescription) {
             await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
             const answer = await peerConnRef.current.createAnswer();
             await peerConnRef.current.setLocalDescription(answer);
-            await fetch(`${apiBase}/api/live_sessions/${encodeURIComponent(session.session_id)}/signal/answer`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-              },
-              cache: 'no-store',
-              body: JSON.stringify({ viewer_id: viewerId, answer: { type: 'answer', sdp: answer.sdp || '' } }),
-            });
+            await api.publishLiveSignalAnswer(session.session_id, viewerId, { type: 'answer', sdp: answer.sdp || '' }, session.node_id);
           }
           for (const candidate of signal.ice_from_device || []) {
             const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
@@ -160,7 +141,7 @@ export function LiveSourceCard({
       setPeerStream(null);
       setPeerStatus('idle');
     };
-  }, [apiBase, isActive, onRemoteStream, peerEnabled, peerRetryToken, session, session.session_id]);
+  }, [api, isActive, onRemoteStream, peerEnabled, peerRetryToken, session, session.session_id]);
 
   const statusColor =
     session.status === 'recording' ? 'var(--red, #ff4444)'

@@ -223,3 +223,69 @@ def test_connect_device_renders_camera_shell_for_registered_node(client):
     assert "/api/live/" in response.text
     assert "/ice/device" in response.text
     assert "viewers/default/ice" in response.text
+
+def test_record_start_is_idempotent_and_visible_in_live_list(client):
+    session_id = "sess-live-rec-idem"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-rec", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+
+    started = client.post(f"/api/live/{session_id}/record/start", json={"project": "ProjA", "source": "primary"})
+    assert started.status_code == 200
+    first = started.json()["recording"]
+    assert first["state"] == "recording"
+
+    started_again = client.post(f"/api/live/{session_id}/record/start", json={"project": "ProjA", "source": "primary"})
+    assert started_again.status_code == 200
+    second = started_again.json()["recording"]
+    assert second["recording_id"] == first["recording_id"]
+    assert started_again.json()["idempotent"] is True
+
+    listed = client.get("/api/live")
+    session = next((entry for entry in listed.json()["sessions"] if entry["session_id"] == session_id), None)
+    assert session is not None
+    assert session["active_recording_id"] == first["recording_id"]
+    assert session["recording_state"] == "recording"
+
+
+def test_record_stop_transitions_honestly(client):
+    session_id = "sess-live-rec-stop"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-rec-stop", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+    started = client.post(f"/api/live/{session_id}/record/start", json={"project": "ProjA", "source": "primary"})
+    assert started.status_code == 200
+
+    stopped = client.post(f"/api/live/{session_id}/record/stop", json={})
+    assert stopped.status_code == 200
+    assert stopped.json()["recording"]["state"] == "failed"
+    assert stopped.json()["recording"]["error"] == "recording_not_materialized"
+
+def test_viewer_attach_does_not_overwrite_publisher_offer_and_supports_two_viewers(client):
+    session_id = "sess-live-viewer-iso"
+    offer_payload = {"type": "offer", "sdp": "v=0\r\no=publisher-offer"}
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-live-view", "offer": offer_payload},
+    )
+
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-a/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer-a"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-b/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer-b"}},
+    )
+
+    offer = client.get(f"/api/live/{session_id}/offer")
+    assert offer.status_code == 200
+    assert offer.json()["sdp"] == offer_payload["sdp"]
+
+    listed = client.get('/api/live')
+    match = next((s for s in listed.json()["sessions"] if s["session_id"] == session_id), None)
+    assert match is not None
+    assert match["viewer_count"] >= 2
+    assert match["has_offer"] is True

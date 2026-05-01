@@ -5,6 +5,13 @@ import type { RegisterNodeAuth, RegisterNodeRequest, RegisterNodeResponse } from
 import type { NodeControlRecord } from '../types/sourceControl';
 import { serializeMetadata } from '../utils/serializeMetadata';
 import { buildAuthorityUrl, resolveAuthorityOrigin } from '../config/authority';
+import {
+  getBrowserRuntimeIdentityDiagnostics,
+  getStoredNodeId,
+  getStoredNodeToken,
+  openDeviceTab,
+  setBrowserRuntimeIdentity,
+} from '../lib/browserRuntimeIdentity';
 
 interface RegisterNodeModalProps {
   isOpen: boolean;
@@ -161,6 +168,7 @@ export function RegisterNodeModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [issuedAuth, setIssuedAuth] = useState<RegisterNodeAuth | null>(null);
+  const [forceReregister, setForceReregister] = useState(false);
 
   const cameraApiLabel = useMemo(() => {
     if (!detectedContext) return 'unknown';
@@ -182,7 +190,8 @@ export function RegisterNodeModal({
     if (!isOpen) return;
 
     const nextContext = detectBrowserSourceContext();
-    const nextNodeId = buildDefaultNodeId(nextContext.deviceClass);
+    const existingNodeId = getStoredNodeId();
+    const nextNodeId = existingNodeId || buildDefaultNodeId(nextContext.deviceClass);
 
     setDetectedContext(nextContext);
     setNodeId(nextNodeId);
@@ -191,9 +200,13 @@ export function RegisterNodeModal({
     setShowAdvanced(false);
     setError(null);
     setIssuedAuth(null);
+    setForceReregister(false);
     setHasCamera(nextContext.hasCameraApi ? null : false);
 
     const likelyCapture = nextContext.isLikelyMobile && nextContext.hasCameraApi;
+    if (existingNodeId && getStoredNodeToken(existingNodeId)) {
+      setError('Existing capture node identity detected. Registration will reuse stored node unless you explicitly re-register.');
+    }
     if (likelyCapture) {
       setRoles(['runner', 'capture']);
       setCapabilities(['can_proxy_streams']);
@@ -391,9 +404,34 @@ export function RegisterNodeModal({
     setSubmitting(true);
     setError(null);
     try {
+      const existingNodeId = getStoredNodeId();
+      const existingToken = getStoredNodeToken(existingNodeId).token;
+      if (existingNodeId && existingToken && existingNodeId === payload.node_id && !forceReregister) {
+        console.debug('[register-node] reusing stored node identity', {
+          nodeId: existingNodeId,
+          diagnostics: getBrowserRuntimeIdentityDiagnostics(existingNodeId),
+        });
+        openDeviceTab(existingNodeId);
+        onClose();
+        return;
+      }
       const response = await registerNode(payload);
+      const authCandidate = response.auth as Record<string, unknown> | null | undefined;
+      const token = [
+        authCandidate?.token,
+        authCandidate?.auth_token,
+        authCandidate?.bearer_token,
+        authCandidate?.node_token,
+        authCandidate?.secret,
+      ].find((value) => typeof value === 'string' && value.trim().length > 0) as string | undefined;
+      if (!token) {
+        throw new Error('register response missing bearer token');
+      }
+      if (String(token) === String(authCandidate?.token_preview ?? '')) {
+        throw new Error('register response returned token_preview instead of bearer token');
+      }
       setIssuedAuth(response.auth ?? null);
-      window.localStorage.setItem('explorer_capture_node_id', payload.node_id);
+      setBrowserRuntimeIdentity(payload.node_id, token);
       onSuccess(response.registered_node ?? null, response);
       if (response.device_url) {
         const responseAuthority = typeof response.authority?.base_url === 'string' ? response.authority.base_url : null;
@@ -403,7 +441,10 @@ export function RegisterNodeModal({
           return;
         }
         try {
-          router.push(nextDeviceUrl);
+          window.open(nextDeviceUrl, '_blank', 'noopener,noreferrer');
+          openDeviceTab(existingNodeId);
+        onClose();
+          return;
         }
         catch {
           window.location.href = nextDeviceUrl;
@@ -419,7 +460,7 @@ export function RegisterNodeModal({
     finally {
       setSubmitting(false);
     }
-  }, [onClose, onSuccess, payload, registerNode, resolveResponseUrl, router]);
+  }, [forceReregister, onClose, onSuccess, payload, registerNode, resolveResponseUrl, router]);
 
   const handleConfigureAsCamera = useCallback(() => {
     applyCapturePreset({
@@ -466,6 +507,16 @@ export function RegisterNodeModal({
             <div className="small">Camera permission: {cameraPermission ?? 'unknown'}</div>
             <div className="small">Authority URL: {authorityOrigin}</div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {!forceReregister && getStoredNodeId() && getStoredNodeToken(getStoredNodeId()).token ? (
+                <>
+                  <button type="button" className="btn" onClick={() => openDeviceTab(getStoredNodeId())}>
+                    Open Device Tab
+                  </button>
+                  <button type="button" className="btn" onClick={() => setForceReregister(true)}>
+                    Re-register
+                  </button>
+                </>
+              ) : null}
               <button type="button" className="btn" onClick={handleConfigureAsCamera}>
                 Configure as camera device
               </button>

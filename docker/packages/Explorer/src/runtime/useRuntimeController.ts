@@ -1,6 +1,5 @@
 'use client';
 
-import { useRuntimeEvents } from '../hooks/useRuntimeEvents';
 import { useWebRtcLiveSessions } from '../hooks/useWebRtcLiveSessions';
 import type { WebRtcLiveSession } from '../api';
 
@@ -23,8 +22,6 @@ export function useRuntimeController({
     enabled: true,
     poll,
   });
-
-  useRuntimeEvents({ enabled: true });
 
   return {
     sessions,
