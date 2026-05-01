@@ -26,6 +26,7 @@ export function useRuntimeEvents({ enabled = true, onEvent }: { enabled?: boolea
     es.onopen = () => {
       publishDebug({
         eventStreamConnected: true,
+        eventStreamReconnecting: false,
         lastEventStreamOpenAt: Date.now(),
         lastEventStreamReadyState: es.readyState,
         lastEventStreamUrl: '/api/runtime/events',
@@ -37,6 +38,7 @@ export function useRuntimeEvents({ enabled = true, onEvent }: { enabled?: boolea
         const evt = { id: e.lastEventId, type: 'message', payload: parseData(e.data) };
         publishDebug({
           eventStreamConnected: true,
+          eventStreamReconnecting: false,
           lastEventStreamMessageAt: Date.now(),
           lastEventStreamReadyState: es.readyState,
           lastEventStreamUrl: '/api/runtime/events',
@@ -50,6 +52,7 @@ export function useRuntimeEvents({ enabled = true, onEvent }: { enabled?: boolea
     const wire = (type: string) => es.addEventListener(type, (e) => {
       publishDebug({
         eventStreamConnected: true,
+        eventStreamReconnecting: false,
         lastEventStreamMessageAt: Date.now(),
         lastEventStreamReadyState: es.readyState,
         lastEventStreamUrl: '/api/runtime/events',
@@ -59,8 +62,10 @@ export function useRuntimeEvents({ enabled = true, onEvent }: { enabled?: boolea
     ['node.updated', 'source.updated', 'live_session.updated', 'live_session.deleted', 'runtime_asset.updated', 'recording.updated', 'ingest_claim.updated', 'ingest_claim.deleted', 'reconnect', 'missed_sequence', 'snapshot_required'].forEach(wire);
     es.onerror = () => {
       if (typeof window !== 'undefined') {
+        const closed = es.readyState === EventSource.CLOSED;
         publishDebug({
-          eventStreamConnected: false,
+          eventStreamConnected: closed ? false : true,
+          eventStreamReconnecting: es.readyState === EventSource.CONNECTING,
           lastEventStreamErrorAt: Date.now(),
           lastEventStreamReadyState: es.readyState,
           lastEventStreamUrl: '/api/runtime/events',

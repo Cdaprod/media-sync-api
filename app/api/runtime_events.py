@@ -26,21 +26,27 @@ async def stream_runtime_events(request: Request) -> StreamingResponse:
         last_event_id = None
 
     async def _iter_sse():
-        yield ": connected\n\n"
-        subscription = runtime.events.subscribe(last_event_id=last_event_id)
-        while True:
-            if await request.is_disconnected():
-                break
-            try:
-                event = await asyncio.wait_for(subscription.__anext__(), timeout=SSE_HEARTBEAT_INTERVAL_SECONDS)
-                payload = json.dumps(event.get("payload", {}))
-                yield f"id: {event.get('id')}\n"
-                yield f"event: {event.get('type')}\n"
-                yield f"data: {payload}\n\n"
-            except asyncio.TimeoutError:
-                yield ": heartbeat\n\n"
-            except StopAsyncIteration:
-                break
+        try:
+            yield ": connected\n\n"
+            await asyncio.sleep(0)
+            subscription = runtime.events.subscribe(last_event_id=last_event_id)
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(subscription.__anext__(), timeout=SSE_HEARTBEAT_INTERVAL_SECONDS)
+                    payload = json.dumps(event.get("payload", {}))
+                    yield f"id: {event.get('id')}\n"
+                    yield f"event: {event.get('type')}\n"
+                    yield f"data: {payload}\n\n"
+                    await asyncio.sleep(0)
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+                    await asyncio.sleep(0)
+                except StopAsyncIteration:
+                    break
+        except asyncio.CancelledError:
+            return
 
     return StreamingResponse(
         _iter_sse(),

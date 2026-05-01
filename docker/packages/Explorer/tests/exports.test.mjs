@@ -442,6 +442,9 @@ test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   assert.ok(hook.includes('lastEventStreamErrorAt'));
   assert.ok(hook.includes('lastEventStreamReadyState'));
   assert.ok(hook.includes('lastEventStreamUrl'));
+  assert.ok(hook.includes('eventStreamReconnecting'));
+  assert.ok(hook.includes('EventSource.CLOSED'));
+  assert.ok(hook.includes('EventSource.CONNECTING'));
   assert.ok(hook.includes("new CustomEvent('runtime:event'"));
   assert.ok(hook.includes('__explorerRuntimeEventsOpen'));
   assert.ok(!app.includes("scheduleExplorerObservabilityRefresh(`sse:${event.type}`"));
@@ -468,6 +471,8 @@ test('runtime SSE hook exists and uses EventSource /api/runtime/events', () => {
   assert.ok(!app.includes('setInterval(() => {\n      const hasActiveLiveWork'));
   assert.ok(app.includes('useRuntimeController'));
   assert.ok(runtimeEventsApi.includes('SSE_HEARTBEAT_INTERVAL_SECONDS = 5.0'));
+  assert.ok(runtimeEventsApi.includes('await asyncio.sleep(0)'));
+  assert.ok(runtimeEventsApi.includes('except asyncio.CancelledError:'));
   assert.ok(runtimeEventsApi.includes('"Cache-Control": "no-cache, no-transform"'));
   assert.ok(runtimeEventsApi.includes('"X-Accel-Buffering": "no"'));
 });

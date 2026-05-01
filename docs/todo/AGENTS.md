@@ -1,3 +1,11 @@
+## 2026-05-01 — Keep runtime SSE stream open through proxy buffering
+- [x] Ensured SSE emits immediate connected comment and heartbeat comments every 5s with double-newline framing.
+- [x] Added flush-friendly `await asyncio.sleep(0)` yield points after event/heartbeat frames.
+- [x] Added clean `asyncio.CancelledError` handling in SSE generator to avoid noisy disconnect errors.
+- [x] Preserved proxy headers for streaming stability (`no-cache, no-transform`, `keep-alive`, `X-Accel-Buffering: no`).
+- [x] Updated frontend EventSource diagnostics so CONNECTING is tracked as reconnecting (not hard disconnected), CLOSED flips `eventStreamConnected=false`.
+- [ ] Follow-up: add browser-runtime integration test that asserts stable `eventStreamConnected` under 60s idle soak.
+
 ## 2026-05-01 — Remove remaining direct Explorer observability fetch loops
 - [x] Made source-control and WebRTC hooks passive by default (`initialLoad: false`, `poll: false`) so they no longer self-bootstrap fetch loops outside scheduler ownership.
 - [x] Replaced direct sidebar/manual reload callsites with allowlisted scheduler refresh (`manual`) ownership.

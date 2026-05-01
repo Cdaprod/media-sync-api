@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 
 def test_runtime_event_bus_publish_and_subscribe_replay(client):
@@ -40,3 +41,8 @@ def test_live_offer_publish_emits_runtime_event(client):
     assert response.status_code == 200
     after = len(list(runtime.events._history))  # type: ignore[attr-defined]
     assert after > before
+
+
+def test_runtime_events_heartbeat_interval_is_short():
+    content = Path("app/api/runtime_events.py").read_text(encoding="utf-8")
+    assert "SSE_HEARTBEAT_INTERVAL_SECONDS = 5.0" in content
