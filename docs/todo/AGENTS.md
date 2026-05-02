@@ -1,3 +1,10 @@
+## 2026-05-02 — Extract Explorer source-control sidebar panels
+- [x] Moved source-control sidebar rendering out of `ExplorerApp.tsx` into `src/source-control/` components.
+- [x] Moved live device merge logic into pure `buildLiveDeviceInstances(...)` helper.
+- [x] Preserved ExplorerApp ownership of data loading, SSE application, and scheduler paths.
+- [x] Kept sidebar behavior/placement unchanged with no new fetch paths.
+- [ ] Next: stabilize live device state + WebRTC session visibility.
+
 ### Latest Implementation Notes (2026-05-02)
 - [x] Completed `/connect/register` persistence event alignment: connect register now emits `node.updated` and `source.updated` after node/source persistence succeeds.
 - [x] Hardened runtime-events backend test to assert node/source event payload ownership (`node_id`, `owner_node_id`) instead of only checking history length growth.

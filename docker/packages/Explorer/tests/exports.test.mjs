@@ -314,9 +314,13 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   const hookPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
   const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
   const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const sourcePanelsPath = path.join(packageRoot, 'src', 'source-control', 'SourceControlPanels.tsx');
+  const livePanelPath = path.join(packageRoot, 'src', 'source-control', 'LiveDeviceInstancesPanel.tsx');
   const hook = fs.readFileSync(hookPath, 'utf8');
   const page = fs.readFileSync(pagePath, 'utf8');
   const app = fs.readFileSync(appPath, 'utf8');
+  const sourcePanels = fs.readFileSync(sourcePanelsPath, 'utf8');
+  const livePanel = fs.readFileSync(livePanelPath, 'utf8');
 
   assert.ok(hook.includes('const mediaDevices = typeof navigator !== \'undefined\' ? navigator.mediaDevices : undefined;'));
   assert.ok(hook.includes('Camera API is unavailable in this browser context. Use HTTPS or open this device page from a secure origin.'));
@@ -334,18 +338,17 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   assert.ok(page.includes('const shouldShowScreenAction = capability.hasGetDisplayMedia && !capability.isLikelyIOS;'));
   assert.ok(page.includes('Share Screen unavailable'));
 
-  assert.ok(app.includes('Remote source surfaces'));
-  assert.ok(app.includes('Registered runtimes'));
-  assert.ok(app.includes('type LiveDeviceInstance = {'));
-  assert.ok(app.includes('LIVE DEVICE INSTANCES'));
+  assert.ok(sourcePanels.includes('Remote source surfaces'));
+  assert.ok(sourcePanels.includes('Registered runtimes'));
+  assert.ok(livePanel.includes('LIVE DEVICE INSTANCES'));
   assert.ok(app.includes('listRuntimeAssets'));
   assert.ok(app.includes('listWebRtcLiveSessions'));
   assert.ok(app.includes('Promise.allSettled(['));
   assert.ok(app.includes('refreshControlPlaneSurfaces'));
   assert.ok(app.includes('scheduleExplorerObservabilityRefresh'));
-  assert.ok(app.includes('source.owner_node_id'));
-  assert.ok(app.includes('session.node_id'));
-  assert.ok(app.includes('openLivePeerViewer(session)'));
+  assert.ok(sourcePanels.includes('source.owner_node_id'));
+  assert.ok(sourcePanels.includes('session.node_id'));
+  assert.ok(sourcePanels.includes('onWatchLive(session)'));
 });
 
 test('live session signaling API and peer-viewer hooks are wired', () => {
@@ -3289,10 +3292,12 @@ test('thumbnail normalization preserves API port when remapping localhost urls',
 
 test('explorer runtime panel wires live WebRTC session hooks and chip normalization', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const sourcePanelsPath = path.join(packageRoot, 'src', 'source-control', 'SourceControlPanels.tsx');
   const chipsPath = path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts');
   const livePreviewPath = path.join(packageRoot, 'src', 'components', 'live', 'LivePreview.tsx');
   const apiPath = path.join(packageRoot, 'src', 'api.ts');
   const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const sourcePanels = fs.readFileSync(sourcePanelsPath, 'utf8');
   const chips = fs.readFileSync(chipsPath, 'utf8');
   const livePreview = fs.readFileSync(livePreviewPath, 'utf8');
   const api = fs.readFileSync(apiPath, 'utf8');
@@ -3300,7 +3305,7 @@ test('explorer runtime panel wires live WebRTC session hooks and chip normalizat
   assert.ok(explorer.includes('useRuntimeController'));
   assert.ok(explorer.includes('LivePreview'));
   assert.ok(explorer.includes('/connect/device?node_id='));
-  assert.ok(explorer.includes('buildRuntimeChips(node, liveSession)'));
+  assert.ok(sourcePanels.includes('buildRuntimeChips(node, webRtcSessionsByNodeId.get(node.node_id))'));
   assert.ok(api.includes('viewers/${encodeURIComponent(viewerId)}/answer'));
   assert.ok(api.includes('/ice/device'));
   assert.ok(api.includes('postLiveViewerState'));
@@ -3737,10 +3742,16 @@ test('startup null diagnostics guard against null throws/rejections and SSE oner
   assert.ok(runtimeEvents.includes('if (now - lastClosedErrorWarnAt < 10_000) return;'));
   assert.ok(runtimeEvents.includes('lastEventStreamErrorReason'));
   assert.ok(runtimeEvents.includes("console.warn('[runtime-events:error]'"));
+  const sourceControlPanelsPath = path.join(packageRoot, 'src', 'source-control', 'SourceControlPanels.tsx');
+  const livePanelPath = path.join(packageRoot, 'src', 'source-control', 'LiveDeviceInstancesPanel.tsx');
+  const liveCardPath = path.join(packageRoot, 'src', 'source-control', 'LiveDeviceInstanceCard.tsx');
+  const sourceControlPanels = fs.readFileSync(sourceControlPanelsPath, 'utf8');
+  const livePanel = fs.readFileSync(livePanelPath, 'utf8');
+  const liveCard = fs.readFileSync(liveCardPath, 'utf8');
   assert.ok(app.includes('__explorerLiveFlowDebug'));
-  assert.ok(app.includes('LIVE DEVICE INSTANCES'));
-  assert.ok(app.includes('auth_failed'));
-  assert.ok(app.includes('<details className=\"card runtime-surface-card\">'));
+  assert.ok(livePanel.includes('LIVE DEVICE INSTANCES'));
+  assert.ok(liveCard.includes('auth_failed'));
+  assert.ok(sourceControlPanels.includes('<details className=\"card runtime-surface-card\">'));
   assert.ok(app.includes('appliedLiveSessionUpdates'));
   assert.ok(!runtimeEvents.includes('es.onerror = (event) => {\n      throw'));
 });
@@ -3768,8 +3779,31 @@ test('browser runtime client + webrtc explorer-device contract remains centraliz
   assert.ok(!page.includes('Authorization: `Bearer'));
   assert.ok(!page.includes("window.localStorage.getItem('explorer_capture_node_token')"));
 
-  assert.ok(explorer.includes('LIVE DEVICE INSTANCES'));
-  assert.ok(explorer.includes('Watch Live'));
-  assert.ok(explorer.includes('Open Device'));
-  assert.ok(explorer.includes('instance.sessionId && instance.hasOffer && instance.hasAnswer'));
+  const sourceControlPanelsPath = path.join(packageRoot, 'src', 'source-control', 'SourceControlPanels.tsx');
+  const buildLiveDeviceInstancesPath = path.join(packageRoot, 'src', 'source-control', 'buildLiveDeviceInstances.ts');
+  const livePanelPath = path.join(packageRoot, 'src', 'source-control', 'LiveDeviceInstancesPanel.tsx');
+  const liveCardPath = path.join(packageRoot, 'src', 'source-control', 'LiveDeviceInstanceCard.tsx');
+  const canonicalCardPath = path.join(packageRoot, 'src', 'source-control', 'CanonicalSourceCard.tsx');
+  const remoteCardPath = path.join(packageRoot, 'src', 'source-control', 'RemoteSourceSurfaceCard.tsx');
+  const runtimeCardPath = path.join(packageRoot, 'src', 'source-control', 'RuntimeNodeCard.tsx');
+  const sourceControlPanels = fs.readFileSync(sourceControlPanelsPath, 'utf8');
+  const liveBuilder = fs.readFileSync(buildLiveDeviceInstancesPath, 'utf8');
+  const sourceFiles = [
+    sourceControlPanels,
+    liveBuilder,
+    fs.readFileSync(livePanelPath, 'utf8'),
+    fs.readFileSync(liveCardPath, 'utf8'),
+    fs.readFileSync(canonicalCardPath, 'utf8'),
+    fs.readFileSync(remoteCardPath, 'utf8'),
+    fs.readFileSync(runtimeCardPath, 'utf8'),
+  ].join('\n');
+
+  assert.ok(explorer.includes('SourceControlPanels'));
+  assert.ok(!explorer.includes('LIVE DEVICE INSTANCES'));
+  assert.ok(sourceControlPanels.includes('LiveDeviceInstancesPanel'));
+  assert.ok(liveBuilder.includes('export function buildLiveDeviceInstances'));
+  assert.ok(!sourceFiles.includes('fetch('));
+  assert.ok(!sourceFiles.includes('createApiClient('));
+  assert.ok(!sourceFiles.includes('localStorage'));
+  assert.ok(!sourceFiles.includes('sessionStorage'));
 });

@@ -92,9 +92,8 @@ import {
   getDeviceUrl,
   isSessionNode,
   isTestPayloadClaim,
-  isTestPayloadNode,
 } from './utils/runtimeLabels';
-import { buildRuntimeChips } from './utils/runtimeChips';
+import { SourceControlPanels } from './source-control/SourceControlPanels';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -147,19 +146,6 @@ type FocusMeasurementSnapshot = {
   cardRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
   viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
   transform: FocusWorldTransform | null;
-};
-type LiveDeviceInstance = {
-  nodeId: string;
-  label: string;
-  status?: string;
-  sourceName?: string;
-  sourceKind?: string;
-  sessionId?: string;
-  sessionState?: string;
-  hasOffer?: boolean;
-  hasAnswer?: boolean;
-  runtimeAssetId?: string;
-  runtimeState?: string;
 };
 type PreviewDebugEntry = {
   stage: string;
@@ -3385,52 +3371,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return webRtcSessionsByNodeId.has(node.node_id);
   }, [webRtcSessionsByNodeId]);
 
-  const liveDeviceInstances = useMemo<LiveDeviceInstance[]>(() => {
-    const instancesByNodeId = new Map<string, LiveDeviceInstance>();
-    for (const node of runtimeNodes) {
-      instancesByNodeId.set(node.node_id, {
-        nodeId: node.node_id,
-        label: node.label || node.node_id,
-        status: node.status,
-      });
-    }
-    for (const source of runtimeSources) {
-      const ownerNodeId = typeof source.owner_node_id === 'string' ? source.owner_node_id : '';
-      if (!ownerNodeId) continue;
-      const existing = instancesByNodeId.get(ownerNodeId) || { nodeId: ownerNodeId, label: ownerNodeId };
-      existing.sourceName = source.name;
-      existing.sourceKind = source.kind || source.type || undefined;
-      instancesByNodeId.set(ownerNodeId, existing);
-    }
-    for (const session of webRtcLiveSessions) {
-      const nodeId = typeof session.node_id === 'string' ? session.node_id : '';
-      if (!nodeId) continue;
-      const existing = instancesByNodeId.get(nodeId) || { nodeId, label: nodeId };
-      existing.sessionId = session.session_id;
-      existing.sessionState = session.state;
-      existing.hasOffer = Boolean(session.offer?.sdp);
-      existing.hasAnswer = Boolean(session.answer?.sdp);
-      instancesByNodeId.set(nodeId, existing);
-    }
-    for (const asset of runtimeAssets) {
-      const assetNodeId = typeof asset.node_id === 'string'
-        ? asset.node_id
-        : (typeof asset.owner_node_id === 'string' ? asset.owner_node_id : '');
-      const assetSessionId = typeof asset.session_id === 'string' ? asset.session_id : '';
-      const fallbackNodeId = assetSessionId
-        ? Array.from(instancesByNodeId.values()).find((entry) => entry.sessionId === assetSessionId)?.nodeId
-        : undefined;
-      const nodeId = assetNodeId || fallbackNodeId || '';
-      if (!nodeId) continue;
-      const existing = instancesByNodeId.get(nodeId) || { nodeId, label: nodeId };
-      existing.runtimeAssetId = typeof asset.asset_id === 'string' ? asset.asset_id : undefined;
-      existing.runtimeState = typeof asset.state === 'string' ? asset.state : undefined;
-      if (!existing.sessionId && assetSessionId) existing.sessionId = assetSessionId;
-      instancesByNodeId.set(nodeId, existing);
-    }
-    return Array.from(instancesByNodeId.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [runtimeAssets, runtimeNodes, runtimeSources, webRtcLiveSessions]);
-
   useEffect(() => {
     setTabRole('explorer');
     registerWindowName('explorer');
@@ -5486,212 +5426,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               </div>
             </div>
             <div className="sources">
-              {sourceControlLoading ? (
-                <div className="card">
-                  <strong>Loading sources…</strong>
-                  <div className="small">Fetching canonical and remote source-bearing participants.</div>
-                </div>
-              ) : sourceControlError ? (
-                <div className="card">
-                  <strong>Source control unavailable</strong>
-                  <div className="small">{sourceControlError}</div>
-                </div>
-              ) : runtimeSources.length === 0 ? (
-                <div className="card">
-                  <strong>No sources</strong>
-                  <div className="small">No canonical or remote source-bearing participants are currently visible.</div>
-                </div>
-              ) : (
-                <>
-                  <div className="card">
-                    <strong>Summary</strong>
-                    <div className="small">
-                      {canonicalSources.length} canonical · {remoteSources.length} remote · {runtimeNodes.length} nodes
-                    </div>
-                    <div className="small">
-                      {healthyNodes.length} healthy · {sourceControlSnapshot.sources.length} total sources
-                    </div>
-                    <div className="small">
-                      {webRtcLiveSessions.length} live WebRTC sessions
-                    </div>
-                  </div>
-
-                  {liveDeviceInstances.length > 0 ? (
-                    <div className="card runtime-surface-card runtime-live-instances-card">
-                      <strong>LIVE DEVICE INSTANCES</strong>
-                      <div className="small">Merged node/source/live/runtime lane visibility for device instances.</div>
-                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {liveDeviceInstances.map((instance) => (
-                          <div className="card runtime-live-instance-card" key={`live-instance-${instance.nodeId}`}>
-                            <strong>{instance.label}</strong>
-                            <div className="small">node_id: {instance.nodeId}</div>
-                            {instance.sourceName ? <div className="small">source: {instance.sourceName} ({instance.sourceKind || 'unknown'})</div> : null}
-                            {instance.status ? <div className="small">status: {instance.status}</div> : null}
-                            {instance.lastHeartbeatAt ? <div className="small">heartbeat: {instance.lastHeartbeatAt}</div> : null}
-                            {instance.sessionId ? <div className="small">session: {instance.sessionId} ({instance.sessionState || 'unknown'})</div> : null}
-                            <div className="tagrow">
-                              {(instance.status === 'auth_failed' || instance.status === 'offline') ? <span className="tag bad">auth_failed</span> : null}
-                              <span className={`tag ${instance.hasOffer ? 'good' : ''}`}>offer:{instance.hasOffer ? 'yes' : 'no'}</span>
-                              <span className={`tag ${instance.hasAnswer ? 'good' : ''}`}>answer:{instance.hasAnswer ? 'yes' : 'no'}</span>
-                              {instance.runtimeState ? <span className="tag">{instance.runtimeState}</span> : null}
-                            </div>
-                            <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              {!instance.sessionId ? <button className="btn" type="button" onClick={() => openDevice(instance.nodeId)}>Open Device</button> : null}
-                              {instance.sessionId && instance.hasOffer && instance.hasAnswer ? (
-                                <button
-                                  className="btn"
-                                  type="button"
-                                  onClick={() => {
-                                    const session = webRtcLiveSessions.find((entry) => entry.session_id === instance.sessionId);
-                                    if (session) void openLivePeerViewer(session);
-                                  }}
-                                >
-                                  Watch Live
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {canonicalSources.length > 0 ? (
-                    <details className="card runtime-surface-card">
-                      <summary><strong>Canonical sources</strong></summary>
-                      <strong>Canonical sources</strong>
-                      <div className="small">Authority-local sources visible through the canonical source registry.</div>
-                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {canonicalSources.map((source: SourceControlRecord, index: number) => {
-                          const authority = source.authority || 'canonical';
-                          return (
-                            <div className="card" key={`canonical-${source.name}-${index}`} onContextMenu={(event) => openSourceContextMenu(event, source)}>
-                              <strong>{source.name}</strong>
-                              <div className="small">{source.root || 'No root path'}</div>
-                              <div className="tagrow">
-                                <span className={`tag ${source.enabled ? 'good' : ''}`}>
-                                  {source.enabled ? 'enabled' : 'disabled'}
-                                </span>
-                                <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
-                                  {source.accessible ? 'reachable' : 'unreachable'}
-                                </span>
-                                <span className="tag">{source.kind || source.type || 'filesystem'}</span>
-                                <span className="tag">{authority}</span>
-                              </div>
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={(event) => openSourceContextMenu(event, source)}
-                                style={{ marginTop: 8 }}
-                              >
-                                ⋯
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  ) : null}
-
-                  {remoteSources.length > 0 ? (
-                    <details className="card runtime-surface-card">
-                      <summary><strong>Remote source surfaces</strong></summary>
-                      <strong>Remote source surfaces</strong>
-                      <div className="small">
-                        Source surfaces published through connect/control-plane registration and merged into source inventory.
-                      </div>
-                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {remoteSources.map((source: SourceControlRecord, index: number) => {
-                          const owner = runtimeNodes.find((node) => node.node_id === source.owner_node_id);
-                          const authority = source.authority || 'canonical';
-                          return (
-                            <div className="card" key={`remote-${source.owner_node_id || 'unknown'}-${source.name}-${index}`} onContextMenu={(event) => openSourceContextMenu(event, source)}>
-                              <strong>{source.name}</strong>
-                              <div className="small">owner: {source.owner_node_id || 'unknown'}</div>
-                              {owner?.label ? (
-                                <div className="small">{owner.label}</div>
-                              ) : null}
-                              {owner?.base_url ? (
-                                <div className="small">{owner.base_url}</div>
-                              ) : null}
-                              <div className="tagrow">
-                                <span className={`tag ${source.enabled ? 'good' : ''}`}>
-                                  {source.enabled ? 'enabled' : 'disabled'}
-                                </span>
-                                <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
-                                  {source.accessible ? 'reachable' : 'unreachable'}
-                                </span>
-                                <span className="tag">{source.kind || source.type || 'remote'}</span>
-                                <span className="tag">{authority}</span>
-                                {source.local_only ? <span className="tag">local-only</span> : null}
-                                {source.can_index ? <span className="tag">index</span> : null}
-                                {source.can_proxy ? <span className="tag">proxy</span> : null}
-                                {source.can_record ? <span className="tag">record</span> : null}
-                              </div>
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={(event) => openSourceContextMenu(event, source)}
-                                style={{ marginTop: 8 }}
-                              >
-                                ⋯
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  ) : null}
-
-                  {runtimeNodes.length > 0 ? (
-                    <details className="card runtime-surface-card">
-                      <summary><strong>Registered runtimes</strong></summary>
-                      <strong>Registered runtimes</strong>
-                      <div className="small">Control-plane view of registered runtime nodes.</div>
-                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {runtimeNodes.map((node: NodeControlRecord) => {
-                          const liveSession = webRtcSessionsByNodeId.get(node.node_id);
-                          const runtimeChips = buildRuntimeChips(node, liveSession);
-                          return (
-                            <div className="card" key={node.node_id} onContextMenu={(event) => openRuntimeContextMenu(event, node)}>
-                              <strong>{node.label}</strong>
-                              <div className="small">{node.node_id}</div>
-                              <div className="small">{node.base_url}</div>
-                              <div className="tagrow">
-                                {runtimeChips.map((chip) => (
-                                  <span className={`tag ${chip.tone}`} key={`${node.node_id}-chip-${chip.label}`}>
-                                    {chip.label}
-                                  </span>
-                                ))}
-                                {isTestPayloadNode(node) ? <span className="tag bad">test payload</span> : null}
-                              </div>
-
-                              {node.last_heartbeat_at ? (
-                                <div className="small">heartbeat: {node.last_heartbeat_at}</div>
-                              ) : null}
-
-                              {isTestPayloadNode(node) ? (
-                                <div className="small">
-                                  This node appears modified by Swagger example data. Re-register from Explorer.
-                                </div>
-                              ) : null}
-
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={(event) => openRuntimeContextMenu(event, node)}
-                                style={{ marginTop: 8 }}
-                              >
-                                ⋯
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  ) : null}
-                </>
-              )}
+              <SourceControlPanels
+                sourceControlLoading={sourceControlLoading}
+                sourceControlError={sourceControlError}
+                sourceControlSnapshot={sourceControlSnapshot}
+                canonicalSources={canonicalSources}
+                remoteSources={remoteSources}
+                runtimeNodes={runtimeNodes}
+                runtimeSources={runtimeSources}
+                webRtcLiveSessions={webRtcLiveSessions}
+                runtimeAssets={runtimeAssets}
+                healthyNodes={healthyNodes}
+                onOpenDevice={openDevice}
+                onWatchLive={(session) => { void openLivePeerViewer(session); }}
+                onOpenSourceContextMenu={openSourceContextMenu}
+                onOpenRuntimeContextMenu={openRuntimeContextMenu}
+              />
             </div>
 
             {ingestClaims.length > 0 ? (
