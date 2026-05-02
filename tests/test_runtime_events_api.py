@@ -46,3 +46,40 @@ def test_live_offer_publish_emits_runtime_event(client):
 def test_runtime_events_heartbeat_interval_is_short():
     content = Path("app/api/runtime_events.py").read_text(encoding="utf-8")
     assert "SSE_HEARTBEAT_INTERVAL_SECONDS = 5.0" in content
+
+
+def test_connect_register_persists_node_and_source_and_emits_events(client):
+    runtime = client.app.state.runtime
+    before = len(list(runtime.events._history))  # type: ignore[attr-defined]
+    node_id = "iphone-browser-runtime-01"
+    response = client.post(
+        "/connect/register",
+        json={
+            "node_id": node_id,
+            "label": "iPhone Browser Runtime",
+            "base_url": None,
+            "roles": ["runner", "capture"],
+            "capabilities": ["can_proxy_streams"],
+            "source_name": "camera-primary",
+            "source_kind": "capture",
+            "source_authority": "runner-local",
+            "advertised_source_kinds": ["capture"],
+            "ephemeral": True,
+            "metadata": {"session_node": "true", "browser_push": "true", "origin": "browser"},
+        },
+    )
+    assert response.status_code == 200
+
+    nodes = client.get("/api/nodes")
+    assert nodes.status_code == 200
+    assert any(entry.get("node_id") == node_id for entry in nodes.json())
+
+    sources = client.get("/api/sources")
+    assert sources.status_code == 200
+    assert any(entry.get("owner_node_id") == node_id for entry in sources.json())
+
+    after_history = list(runtime.events._history)  # type: ignore[attr-defined]
+    assert len(after_history) > before
+    types = [event["type"] for event in after_history[-8:]]
+    assert "node.updated" in types
+    assert "source.updated" in types

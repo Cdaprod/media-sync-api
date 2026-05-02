@@ -1,4 +1,10 @@
 ### Latest Implementation Notes (2026-05-02)
+- [x] Fixed BrowserRuntimeClient sync/register persistence path: sync now checks backend `/api/nodes`, registers missing node via `/connect/register`, then heartbeats.
+- [x] Added browser-runtime sync telemetry fields (`lastRegisterStatus`, `lastRegisterNodeId`, `lastSyncPhase`, `lastSyncError`) to `window.__browserRuntimeDebug`.
+- [x] Added backend event/persistence test for `/connect/register` ensuring `/api/nodes` + `/api/sources` creation and `node.updated`/`source.updated` event emission.
+- [ ] Next pass: add dedicated BrowserRuntimeClient unit tests around register retry/backoff behavior for transient network failures.
+
+### Latest Implementation Notes (2026-05-02)
 - [x] Added WebRTC Explorer/device contract tests to lock BrowserRuntimeClient authority, centralized auth/header seams, and live-instance action gating (`Watch Live` only when offer+answer).
 - [x] Added backend cohesion tests for live-session/runtime-asset alignment and live session serialization field compatibility (`viewer_count`, recording fields, session/node linkage).
 - [ ] Next pass: add focused sidecar unit tests for BrowserRuntimeClient edge-cases (token_preview rejection, node-specific-vs-generic precedence, unavailable network paths) without relying on static source assertions alone.

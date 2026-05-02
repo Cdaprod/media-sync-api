@@ -73,12 +73,42 @@ export const heartbeatBrowserRuntime = async (nodeId: string): Promise<BrowserRu
   }
 };
 export const registerBrowserRuntime = async (payload: Record<string, unknown>): Promise<{ nodeId: string; token?: string }> => {
-  const response = await fetch('/api/nodes/register', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(payload) });
+  const response = await fetch('/connect/register', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(payload) });
+  publishBrowserRuntimeDebug({ lastRegisterStatus: response.status, lastRegisterNodeId: String(payload.node_id || '') });
   if (!response.ok) throw new Error(`register failed:${response.status}`);
   const next = await response.json();
   return { nodeId: String(next?.node_id || payload.node_id || ''), token: typeof next?.token === 'string' ? next.token : undefined };
 };
-export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => heartbeatBrowserRuntime(nodeId);
+export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => {
+  publishBrowserRuntimeDebug({ lastSyncPhase: 'list-nodes', lastNodeId: nodeId });
+  try {
+    const listed = await fetch('/api/nodes', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const nodes = listed.ok ? await listed.json() : [];
+    const exists = Array.isArray(nodes) && nodes.some((entry) => entry?.node_id === nodeId);
+    if (!exists) {
+      publishBrowserRuntimeDebug({ lastSyncPhase: 'register-missing-node', lastNodeId: nodeId });
+      await registerBrowserRuntime({
+        node_id: nodeId,
+        label: `${nodeId} Capture Node`,
+        base_url: null,
+        roles: ['runner', 'capture'],
+        capabilities: ['can_proxy_streams'],
+        source_name: 'camera-primary',
+        source_kind: 'capture',
+        source_authority: 'runner-local',
+        advertised_source_kinds: ['capture'],
+        ephemeral: true,
+        metadata: { session_node: 'true', browser_push: 'true', origin: 'browser' },
+      });
+    }
+    publishBrowserRuntimeDebug({ lastSyncPhase: 'heartbeat', lastNodeId: nodeId });
+    return await heartbeatBrowserRuntime(nodeId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    publishBrowserRuntimeDebug({ lastSyncPhase: 'failed', lastSyncError: message, lastNodeId: nodeId });
+    return { ok: false, status: 'unavailable', message };
+  }
+};
 
 export const setTabRole = (role: BrowserRuntimeTabRole): void => { if (canUseSessionStorage()) window.sessionStorage.setItem(TAB_ROLE_KEY, role); };
 export const getTabRole = (): BrowserRuntimeTabRole => { if (!canUseSessionStorage()) return 'unknown'; const role = window.sessionStorage.getItem(TAB_ROLE_KEY); return role === 'explorer' || role === 'device' ? role : 'unknown'; };

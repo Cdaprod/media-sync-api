@@ -15,7 +15,6 @@ import { makeBroadcastFailure, type BroadcastSnapshot } from './broadcastSession
 import {
   getBrowserRuntimeIdentity,
   getBrowserRuntimeIdentityDiagnostics,
-  registerBrowserRuntime,
   importNodeAuthFromQuery,
   openExplorerTab,
   publishBrowserRuntimeTabActive,
@@ -91,23 +90,6 @@ export default function ConnectDevicePage() {
     const syncNodeRegistration = async () => {
       traceDevice('node-sync:begin', { nodeId });
       try {
-        const nodes = await api.listNodes();
-        const exists = Array.isArray(nodes) && nodes.some((entry) => entry?.node_id === nodeId);
-        if (!exists) {
-          await registerBrowserRuntime({
-            node_id: nodeId,
-            label: `${nodeId} Capture Node`,
-            base_url: null,
-            roles: ['runner', 'capture'],
-            capabilities: ['can_proxy_streams'],
-            source_name: 'camera-primary',
-            source_kind: 'capture',
-            source_authority: 'runner-local',
-            advertised_source_kinds: ['capture'],
-            ephemeral: true,
-            metadata: { session_node: 'true', browser_push: 'true', origin: 'browser' },
-          });
-        }
         const syncResult = await syncBrowserRuntimeNode(nodeId);
         if (!cancelled) setHeartbeatState(syncResult.ok ? 'ok' : syncResult.status === 'auth_failed' ? 'auth_failed' : 'skipped-no-token');
       } catch (err) {

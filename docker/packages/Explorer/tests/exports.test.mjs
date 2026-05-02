@@ -3574,7 +3574,8 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(page.includes('void syncBrowserRuntimeNode(nodeId).then((result) => {'));
   assert.ok(page.includes('const nodes = await api.listNodes();'));
-  assert.ok(page.includes('await registerBrowserRuntime({'));
+  assert.ok(!page.includes('await registerBrowserRuntime({'));
+  assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
   assert.ok(!page.includes('await api.heartbeatNode({ nodeId, token: tokenInfo.token });'));
   assert.ok(hooks.includes('shouldPollDeviceControlPlane'));
   assert.ok(hooks.includes('if (!shouldPollLiveSurface()) return;'));
@@ -3712,7 +3713,12 @@ test('startup null diagnostics guard against null throws/rejections and SSE oner
   assert.ok(identity.includes('export const buildNodeAuthHeaders = (auth: BrowserRuntimeAuth): Record<string, string> => ({'));
   assert.ok(identity.includes('export const heartbeatBrowserRuntime = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => {'));
   assert.ok(identity.includes('export const registerBrowserRuntime = async (payload: Record<string, unknown>): Promise<{ nodeId: string; token?: string }> => {'));
-  assert.ok(identity.includes('export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => heartbeatBrowserRuntime(nodeId);'));
+  assert.ok(identity.includes('export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => {'));
+  assert.ok(identity.includes("const listed = await fetch('/api/nodes'"));
+  assert.ok(identity.includes('if (!exists) {'));
+  assert.ok(identity.includes("await registerBrowserRuntime({"));
+  assert.ok(identity.includes("publishBrowserRuntimeDebug({ lastSyncPhase: 'heartbeat', lastNodeId: nodeId });"));
+  assert.ok(identity.includes("publishBrowserRuntimeDebug({ lastRegisterStatus: response.status"));
   assert.ok(identity.includes("if (!token || token.includes('preview')) return null;"));
 
   assert.ok(app.includes("if (process.env.NODE_ENV === 'production') return;"));
