@@ -86,15 +86,25 @@ export default function ConnectDevicePage() {
   }, [nodeId, queryNodeId]);
   useEffect(() => {
     if (!nodeId) return;
+    // Prevent concurrent double-registration from React StrictMode's double-invoke.
+    // We track by nodeId so a genuine node change still triggers a fresh sync.
+    if (syncCompletedForNodeRef.current === nodeId) return;
     let cancelled = false;
     const syncNodeRegistration = async () => {
       traceDevice('node-sync:begin', { nodeId });
       try {
         const syncResult = await syncBrowserRuntimeNode(nodeId);
-        if (!cancelled) setHeartbeatState(syncResult.ok ? 'ok' : syncResult.status === 'auth_failed' ? 'auth_failed' : 'skipped-no-token');
+        if (cancelled) return;
+        if (syncResult.ok) {
+          setHeartbeatState('ok');
+          syncCompletedForNodeRef.current = nodeId;
+        } else {
+          setHeartbeatState(syncResult.status === 'auth_failed' ? 'auth_failed' : 'skipped-no-token');
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (message.includes('401')) {
+          // Do NOT clear identity or stop camera on auth failure — just surface the state.
           if (!cancelled) setHeartbeatState('auth_failed');
           traceDevice('node-sync:error', { message, nodeSyncStatus: 'auth_failed' });
           return;
@@ -136,6 +146,9 @@ export default function ConnectDevicePage() {
   const [activeBroadcastSession, setActiveBroadcastSession] = useState<{ session_id: string } | null>(null);
   const [traceEvents, setTraceEvents] = useState<string[]>([]);
   const [heartbeatState, setHeartbeatState] = useState<'ok' | 'skipped-no-token' | 'failed' | 'auth_failed'>('skipped-no-token');
+  // Tracks the last nodeId that completed a successful sync to prevent duplicate
+  // registration races during React StrictMode's double-invoke of effects in dev.
+  const syncCompletedForNodeRef = useRef<string | null>(null);
   const [broadcast, setBroadcast] = useState<BroadcastSnapshot>({
     stage: 'idle', nodeId, selectedDeviceId: null, cameraLabel: null, sessionId: null, sourceKind: null,
     peerStatus: 'idle', waitingForAnswer: false, error: null, updatedAt: Date.now(),

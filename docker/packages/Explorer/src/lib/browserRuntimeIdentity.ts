@@ -77,7 +77,14 @@ export const registerBrowserRuntime = async (payload: Record<string, unknown>): 
   publishBrowserRuntimeDebug({ lastRegisterStatus: response.status, lastRegisterNodeId: String(payload.node_id || '') });
   if (!response.ok) throw new Error(`register failed:${response.status}`);
   const next = await response.json();
-  return { nodeId: String(next?.node_id || payload.node_id || ''), token: typeof next?.token === 'string' ? next.token : undefined };
+  // RegisterNodeResponse places the issued bearer token at `auth.token`; older callers
+  // also occasionally surface it at the top level, so fall back for compatibility.
+  const token = typeof next?.auth?.token === 'string'
+    ? next.auth.token
+    : typeof next?.token === 'string'
+      ? next.token
+      : undefined;
+  return { nodeId: String(next?.node_id || payload.node_id || ''), token };
 };
 export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => {
   publishBrowserRuntimeDebug({ lastSyncPhase: 'list-nodes', lastNodeId: nodeId });
@@ -87,7 +94,7 @@ export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRun
     const exists = Array.isArray(nodes) && nodes.some((entry) => entry?.node_id === nodeId);
     if (!exists) {
       publishBrowserRuntimeDebug({ lastSyncPhase: 'register-missing-node', lastNodeId: nodeId });
-      await registerBrowserRuntime({
+      const registration = await registerBrowserRuntime({
         node_id: nodeId,
         label: `${nodeId} Capture Node`,
         base_url: null,
@@ -100,6 +107,13 @@ export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRun
         ephemeral: true,
         metadata: { session_node: 'true', browser_push: 'true', origin: 'browser' },
       });
+      // Persist the issued bearer token so the subsequent heartbeat (and every later
+      // heartbeat/auth call) uses the node-scoped token instead of any stale value.
+      if (registration.token) {
+        setStoredNodeToken(nodeId, registration.token);
+        setBrowserRuntimeIdentity(nodeId, registration.token);
+        publishBrowserRuntimeDebug({ lastRegisterTokenSource: 'registration', lastRegisterTokenLength: registration.token.length });
+      }
     }
     publishBrowserRuntimeDebug({ lastSyncPhase: 'heartbeat', lastNodeId: nodeId });
     return await heartbeatBrowserRuntime(nodeId);
