@@ -203,6 +203,35 @@ def test_live_offer_is_visible_in_live_session_list(client):
     assert match["state"] == "waiting_for_answer"
 
 
+def test_live_session_contract_alignment_includes_webrtc_and_recording_fields(client):
+    session_id = "sess-live-contract-alignment"
+    node_id = "node-live-contract-alignment"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": node_id, "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-contract/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer"}},
+    )
+
+    listed = client.get("/api/live")
+    assert listed.status_code == 200
+    sessions = listed.json()["sessions"]
+    match = next((entry for entry in sessions if entry["session_id"] == session_id), None)
+    assert match is not None
+    assert match["node_id"] == node_id
+    assert match["has_offer"] is True
+    assert match["has_answer"] is True
+    assert match["state"] == "connected"
+    assert isinstance(match.get("viewer_ids"), list)
+    assert match.get("viewer_count") == len(match["viewer_ids"])
+    # Contract alignment for browser/runtime lanes.
+    assert "recording_count" in match
+    assert "active_recording_id" in match
+    assert "recording_state" in match
+
+
 def test_connect_device_renders_camera_shell_for_registered_node(client):
     registered = client.post(
         "/connect/register",

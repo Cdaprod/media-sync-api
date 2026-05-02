@@ -1,4 +1,9 @@
 ### Latest Implementation Notes (2026-05-02)
+- [x] Added WebRTC Explorer/device contract tests to lock BrowserRuntimeClient authority, centralized auth/header seams, and live-instance action gating (`Watch Live` only when offer+answer).
+- [x] Added backend cohesion tests for live-session/runtime-asset alignment and live session serialization field compatibility (`viewer_count`, recording fields, session/node linkage).
+- [ ] Next pass: add focused sidecar unit tests for BrowserRuntimeClient edge-cases (token_preview rejection, node-specific-vs-generic precedence, unavailable network paths) without relying on static source assertions alone.
+
+### Latest Implementation Notes (2026-05-02)
 - [x] Introduced BrowserRuntimeClient seam in `browserRuntimeIdentity.ts` (`resolveBrowserRuntimeAuth`, `buildNodeAuthHeaders`, `heartbeatBrowserRuntime`, `registerBrowserRuntime`, `syncBrowserRuntimeNode`) so auth/heartbeat behavior is centralized.
 - [x] Connect-device page now orchestrates via BrowserRuntimeClient sync/register calls and no longer reads stored tokens directly or assembles heartbeat auth headers.
 - [x] Added browser runtime diagnostics surface (`window.__browserRuntimeDebug`) without exposing bearer token values.

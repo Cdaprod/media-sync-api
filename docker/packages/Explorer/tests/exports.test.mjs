@@ -3738,3 +3738,31 @@ test('startup null diagnostics guard against null throws/rejections and SSE oner
   assert.ok(app.includes('appliedLiveSessionUpdates'));
   assert.ok(!runtimeEvents.includes('es.onerror = (event) => {\n      throw'));
 });
+
+test('browser runtime client + webrtc explorer-device contract remains centralized and cohesive', () => {
+  const identityPath = path.join(packageRoot, 'src', 'lib', 'browserRuntimeIdentity.ts');
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const identity = fs.readFileSync(identityPath, 'utf8');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+
+  assert.ok(identity.includes('__browserRuntimeDebug'));
+  assert.ok(identity.includes('lastHeartbeatStatus'));
+  assert.ok(identity.includes('lastHeartbeatAt'));
+  assert.ok(identity.includes('buildNodeAuthHeaders(auth)'));
+  assert.ok(identity.includes("status: 'auth_failed' | 'unavailable'"));
+  assert.ok(identity.includes("const status = res.status === 401 || res.status === 403 ? 'auth_failed' : 'unavailable';"));
+
+  assert.ok(page.includes('await registerBrowserRuntime({'));
+  assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
+  assert.ok(page.includes('void syncBrowserRuntimeNode(nodeId).then((result) => {'));
+  assert.ok(!page.includes('getStoredNodeToken(nodeId)'));
+  assert.ok(!page.includes('Authorization: `Bearer'));
+  assert.ok(!page.includes("window.localStorage.getItem('explorer_capture_node_token')"));
+
+  assert.ok(explorer.includes('LIVE DEVICE INSTANCES'));
+  assert.ok(explorer.includes('Watch Live'));
+  assert.ok(explorer.includes('Open Device'));
+  assert.ok(explorer.includes('instance.sessionId && instance.hasOffer && instance.hasAnswer'));
+});
