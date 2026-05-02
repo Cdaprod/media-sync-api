@@ -36,6 +36,21 @@ export function buildLiveDeviceInstances({
   liveSessions: LiveSession[];
   runtimeAssets?: RuntimeAssetLike[];
 }): LiveDeviceInstance[] {
+  const readSessionHasOffer = (session: LiveSession): boolean => {
+    const typed = session as LiveSession & { has_offer?: boolean; hasOffer?: boolean; offer?: { sdp?: string | null } | null };
+    return Boolean(typed.has_offer || typed.hasOffer || typed.offer?.sdp);
+  };
+
+  const readSessionHasAnswer = (session: LiveSession): boolean => {
+    const typed = session as LiveSession & { has_answer?: boolean; hasAnswer?: boolean; answer?: { sdp?: string | null } | null };
+    return Boolean(typed.has_answer || typed.hasAnswer || typed.answer?.sdp);
+  };
+
+  const readSessionState = (session: LiveSession): string | undefined => {
+    const typed = session as LiveSession & { state?: string; status?: string };
+    return typed.state || typed.status;
+  };
+
   const byNodeId = new Map<string, LiveDeviceInstance>();
   for (const node of nodes) {
     byNodeId.set(node.node_id, {
@@ -71,9 +86,12 @@ export function buildLiveDeviceInstances({
       watchLiveAvailable: false,
     };
     existing.sessionId = session.session_id;
-    existing.sessionState = session.state;
-    existing.hasOffer = Boolean(session.offer?.sdp);
-    existing.hasAnswer = Boolean(session.answer?.sdp);
+    existing.sessionState = readSessionState(session);
+    existing.hasOffer = readSessionHasOffer(session);
+    existing.hasAnswer = readSessionHasAnswer(session);
+    if (!existing.status) {
+      existing.status = existing.sessionState;
+    }
     existing.watchLiveAvailable = Boolean(existing.sessionId && existing.hasOffer && existing.hasAnswer);
     byNodeId.set(nodeId, existing);
   }
@@ -97,6 +115,9 @@ export function buildLiveDeviceInstances({
     existing.runtimeAssetId = typeof asset.asset_id === 'string' ? asset.asset_id : undefined;
     existing.runtimeState = typeof asset.state === 'string' ? asset.state : undefined;
     if (!existing.sessionId && assetSessionId) existing.sessionId = assetSessionId;
+    if (!existing.status && existing.runtimeState === 'failed') {
+      existing.status = 'failed';
+    }
     existing.watchLiveAvailable = Boolean(existing.sessionId && existing.hasOffer && existing.hasAnswer);
     byNodeId.set(nodeId, existing);
   }

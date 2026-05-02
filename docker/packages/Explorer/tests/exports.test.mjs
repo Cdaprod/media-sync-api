@@ -3807,3 +3807,13 @@ test('browser runtime client + webrtc explorer-device contract remains centraliz
   assert.ok(!sourceFiles.includes('localStorage'));
   assert.ok(!sourceFiles.includes('sessionStorage'));
 });
+
+test('live device builder supports offer/answer visibility from both signal payload and boolean flags', () => {
+  const builderPath = path.join(packageRoot, 'src', 'source-control', 'buildLiveDeviceInstances.ts');
+  const builder = fs.readFileSync(builderPath, 'utf8');
+  assert.ok(builder.includes('has_offer'));
+  assert.ok(builder.includes('has_answer'));
+  assert.ok(builder.includes('offer?.sdp'));
+  assert.ok(builder.includes('answer?.sdp'));
+  assert.ok(builder.includes('watchLiveAvailable'));
+});

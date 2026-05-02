@@ -1,3 +1,10 @@
+## 2026-05-02 — Stabilize live device session visibility contracts
+- [x] Hardened `buildLiveDeviceInstances` session-state parsing to accept both `has_offer`/`has_answer` booleans and `offer/answer.sdp` payloads.
+- [x] Preserved watch-live gating on merged instance visibility using normalized session signal fields.
+- [x] Added static contract coverage for mixed live-session signal field compatibility.
+- [x] Added visual verification note for future UI/layout patches: capture Playwright screenshots for Explorer sidebar, Connect Device page, Live Device Instance cards, and Live Preview panel when available.
+- [ ] Next: wire Watch Live visibility to explicit viewer attach state diagnostics in source-control cards.
+
 ## 2026-05-02 — Extract Explorer source-control sidebar panels
 - [x] Moved source-control sidebar rendering out of `ExplorerApp.tsx` into `src/source-control/` components.
 - [x] Moved live device merge logic into pure `buildLiveDeviceInstances(...)` helper.
