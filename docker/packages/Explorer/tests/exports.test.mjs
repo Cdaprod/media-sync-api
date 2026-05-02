@@ -3573,7 +3573,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(page.includes('void syncBrowserRuntimeNode(nodeId).then((result) => {'));
-  assert.ok(page.includes('const nodes = await api.listNodes();'));
+  assert.ok(!page.includes('const nodes = await api.listNodes();'));
   assert.ok(!page.includes('await registerBrowserRuntime({'));
   assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
   assert.ok(!page.includes('await api.heartbeatNode({ nodeId, token: tokenInfo.token });'));
@@ -3760,9 +3760,10 @@ test('browser runtime client + webrtc explorer-device contract remains centraliz
   assert.ok(identity.includes("status: 'auth_failed' | 'unavailable'"));
   assert.ok(identity.includes("const status = res.status === 401 || res.status === 403 ? 'auth_failed' : 'unavailable';"));
 
-  assert.ok(page.includes('await registerBrowserRuntime({'));
+  assert.ok(!page.includes('await registerBrowserRuntime({'));
   assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
   assert.ok(page.includes('void syncBrowserRuntimeNode(nodeId).then((result) => {'));
+  assert.ok(!page.includes('api.listNodes()'));
   assert.ok(!page.includes('getStoredNodeToken(nodeId)'));
   assert.ok(!page.includes('Authorization: `Bearer'));
   assert.ok(!page.includes("window.localStorage.getItem('explorer_capture_node_token')"));

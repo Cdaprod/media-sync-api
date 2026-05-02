@@ -79,7 +79,17 @@ def test_connect_register_persists_node_and_source_and_emits_events(client):
     assert any(entry.get("owner_node_id") == node_id for entry in sources.json())
 
     after_history = list(runtime.events._history)  # type: ignore[attr-defined]
-    assert len(after_history) > before
-    types = [event["type"] for event in after_history[-8:]]
-    assert "node.updated" in types
-    assert "source.updated" in types
+    node_events = [
+        event
+        for event in after_history[before:]
+        if event.type == "node.updated"
+        and str(event.payload.get("node_id") or "") == node_id
+    ]
+    source_events = [
+        event
+        for event in after_history[before:]
+        if event.type == "source.updated"
+        and str(event.payload.get("owner_node_id") or "") == node_id
+    ]
+    assert node_events
+    assert source_events
