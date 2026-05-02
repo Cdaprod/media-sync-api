@@ -1,3 +1,9 @@
+## 2026-05-02 — Fix Connect Device render after sidebar extraction
+- [x] Restored `/connect/device` runtime render by re-adding missing `useCallback` import in `app/connect/device/page.tsx`.
+- [x] Verified route static contracts pass with connect-device stack intact.
+- [x] Visual verification note carried forward: capture Playwright screenshots for Explorer sidebar / Connect Device / Live Device cards / Live Preview when available.
+- [ ] Next: stabilize live device card session visibility against real viewer attach lifecycle.
+
 ## 2026-05-02 — Stabilize live device session visibility contracts
 - [x] Hardened `buildLiveDeviceInstances` session-state parsing to accept both `has_offer`/`has_answer` booleans and `offer/answer.sdp` payloads.
 - [x] Preserved watch-live gating on merged instance visibility using normalized session signal fields.
