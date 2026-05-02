@@ -112,10 +112,15 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     try {
       traceLive('startPreview:begin', { kind: sourceKind, hasExternalStream: !!options?.stream });
       const old = videoRef.current?.srcObject;
-      if (old instanceof MediaStream && sourceKind === 'camera') {
+      const hasExternalStream = !!options?.stream;
+      if (old instanceof MediaStream && sourceKind === 'camera' && !hasExternalStream) {
         old.getTracks().forEach((t) => t.stop());
       }
-      stopTracks();
+      if (!hasExternalStream) {
+        stopTracks();
+      } else {
+        streamRef.current = options.stream || null;
+      }
       const cameraConstraints = options?.deviceId
         ? { deviceId: { exact: options.deviceId } }
         : options?.facingMode

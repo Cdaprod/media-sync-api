@@ -3133,3 +3133,11 @@ body.confirm-open{
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+
+.runtime-live-instance-card { padding: 10px; }
+.runtime-live-instance-card .small { line-height: 1.2; }
+.runtime-surface-card summary { cursor: pointer; margin-bottom: 8px; }
+@media (max-width: 900px) {
+  .runtime-live-instances-card { gap: 8px; }
+  .runtime-live-instance-card { padding: 8px; }
+}

@@ -1,3 +1,298 @@
+## 2026-05-02 — Fix Connect Device render after sidebar extraction
+- [x] Restored `/connect/device` runtime render by re-adding missing `useCallback` import in `app/connect/device/page.tsx`.
+- [x] Verified route static contracts pass with connect-device stack intact.
+- [x] Visual verification note carried forward: capture Playwright screenshots for Explorer sidebar / Connect Device / Live Device cards / Live Preview when available.
+- [ ] Next: stabilize live device card session visibility against real viewer attach lifecycle.
+
+## 2026-05-02 — Stabilize live device session visibility contracts
+- [x] Hardened `buildLiveDeviceInstances` session-state parsing to accept both `has_offer`/`has_answer` booleans and `offer/answer.sdp` payloads.
+- [x] Preserved watch-live gating on merged instance visibility using normalized session signal fields.
+- [x] Added static contract coverage for mixed live-session signal field compatibility.
+- [x] Added visual verification note for future UI/layout patches: capture Playwright screenshots for Explorer sidebar, Connect Device page, Live Device Instance cards, and Live Preview panel when available.
+- [ ] Next: wire Watch Live visibility to explicit viewer attach state diagnostics in source-control cards.
+
+## 2026-05-02 — Extract Explorer source-control sidebar panels
+- [x] Moved source-control sidebar rendering out of `ExplorerApp.tsx` into `src/source-control/` components.
+- [x] Moved live device merge logic into pure `buildLiveDeviceInstances(...)` helper.
+- [x] Preserved ExplorerApp ownership of data loading, SSE application, and scheduler paths.
+- [x] Kept sidebar behavior/placement unchanged with no new fetch paths.
+- [ ] Next: stabilize live device state + WebRTC session visibility.
+
+### Latest Implementation Notes (2026-05-02)
+- [x] Completed `/connect/register` persistence event alignment: connect register now emits `node.updated` and `source.updated` after node/source persistence succeeds.
+- [x] Hardened runtime-events backend test to assert node/source event payload ownership (`node_id`, `owner_node_id`) instead of only checking history length growth.
+- [x] Updated Explorer static contracts to enforce orchestration-only connect-device page (no direct `api.listNodes()` and no direct `registerBrowserRuntime(...)` call).
+- [ ] Next pass: add a narrow unit test around `syncBrowserRuntimeNode(...)` error-path marker transitions (`list-nodes` -> `failed`) under fetch exceptions.
+
+### Latest Implementation Notes (2026-05-02)
+- [x] Fixed BrowserRuntimeClient sync/register persistence path: sync now checks backend `/api/nodes`, registers missing node via `/connect/register`, then heartbeats.
+- [x] Added browser-runtime sync telemetry fields (`lastRegisterStatus`, `lastRegisterNodeId`, `lastSyncPhase`, `lastSyncError`) to `window.__browserRuntimeDebug`.
+- [x] Added backend event/persistence test for `/connect/register` ensuring `/api/nodes` + `/api/sources` creation and `node.updated`/`source.updated` event emission.
+- [ ] Next pass: add dedicated BrowserRuntimeClient unit tests around register retry/backoff behavior for transient network failures.
+
+### Latest Implementation Notes (2026-05-02)
+- [x] Added WebRTC Explorer/device contract tests to lock BrowserRuntimeClient authority, centralized auth/header seams, and live-instance action gating (`Watch Live` only when offer+answer).
+- [x] Added backend cohesion tests for live-session/runtime-asset alignment and live session serialization field compatibility (`viewer_count`, recording fields, session/node linkage).
+- [ ] Next pass: add focused sidecar unit tests for BrowserRuntimeClient edge-cases (token_preview rejection, node-specific-vs-generic precedence, unavailable network paths) without relying on static source assertions alone.
+
+### Latest Implementation Notes (2026-05-02)
+- [x] Introduced BrowserRuntimeClient seam in `browserRuntimeIdentity.ts` (`resolveBrowserRuntimeAuth`, `buildNodeAuthHeaders`, `heartbeatBrowserRuntime`, `registerBrowserRuntime`, `syncBrowserRuntimeNode`) so auth/heartbeat behavior is centralized.
+- [x] Connect-device page now orchestrates via BrowserRuntimeClient sync/register calls and no longer reads stored tokens directly or assembles heartbeat auth headers.
+- [x] Added browser runtime diagnostics surface (`window.__browserRuntimeDebug`) without exposing bearer token values.
+- [ ] Next pass: extract Explorer source-control sidebar panels into dedicated view-model/components after this auth seam stabilizes.
+
+### Latest Implementation Notes (2026-05-02)
+- [x] Removed fallback heartbeat token lane from connect-device (`readDeviceBearerToken`) so heartbeat auth now remains strictly node-scoped via `getStoredNodeToken(nodeId)`.
+- [x] Added static contract guard to prevent reintroduction of credential-fallback bearer sourcing in connect-device heartbeat path.
+- [ ] Next pass: capture one browser verification trace that heartbeat auth uses node-scoped token only across tab refresh + reconnect.
+
+### Latest Implementation Notes (2026-05-01)
+- [x] Fixed browser-device heartbeat auth path to prefer node-scoped stored tokens and send explicit `Authorization: Bearer` + `X-Media-Sync-Node-Id` headers for heartbeat requests.
+- [x] Added device-side auth diagnostics (`node-sync:auth-debug`) with source/length metadata only (never token value), and mapped heartbeat 401/403 to `auth_failed` status without tearing down camera/local identity.
+- [x] Hardened named-tab routing behavior with blocked-popup fallback navigation while preserving dedicated Explorer/Device window names.
+- [x] Reorganized sidebar runtime surfaces for mobile inspection: live device instances remain first, canonical/remote/runtime sections are collapsible, and live cards expose auth_failed/status/watch/open actions.
+- [ ] Next pass: validate offer/answer/ICE media path after auth/layout cleanup (this pass does not claim WebRTC media flow resolution).
+
+### Latest Implementation Notes (2026-05-01)
+- [x] Quieted SSE reconnect noise in `useRuntimeEvents`: `EventSource.CONNECTING` now updates reconnect diagnostics and returns early without warning/throw/event dispatch.
+- [x] Restricted `[runtime-events:error]` warnings to hard-closed streams (`EventSource.CLOSED`) with a 10-second throttle to prevent reconnect-loop log spam.
+- [x] Expanded Explorer static contracts to lock CONNECTING early-return behavior, CLOSED-gated warning policy, reconnect diagnostics, and no-throw onerror handling.
+- [ ] Next pass: add browser-run assertion capture proving CONNECTING churn preserves `eventStreamConnected:true` + `eventStreamReconnecting:true` without repeated console warnings.
+
+### Latest Implementation Notes (2026-05-01)
+- [x] Added live-flow milestone diagnostics across Connect Device + Explorer runtime apply path via shared `window.__explorerLiveFlowDebug` markers (`deviceBroadcastRequestedAt`, `deviceCameraReadyAt`, `deviceBroadcastPublishedAt`, `lastLiveSessionUpdatedAt`, `appliedLiveSessionUpdates`).
+- [x] Preserved event-driven authority: live session sidebar state still updates directly from `live_session.updated` application path while now exposing explicit milestone timestamps for runtime triage.
+- [x] Extended Explorer static contracts to lock live-flow marker wiring in both connect-device broadcast start and Explorer SSE apply lanes.
+- [ ] Next pass: add runtime UI assertion that sidebar live instance card renders when `appliedLiveSessionUpdates > 0` and a matching session payload includes `has_offer`.
+
+### Latest Implementation Notes (2026-05-01)
+- [x] Classified startup opaque browser noise in Explorer dev diagnostics: `window:error` now suppresses un-attributable cross-context `Script error.` events (`filename:null`, `lineno:0`) so console triage focuses on actionable app/runtime faults.
+- [x] Added explicit dev-only SSE lane tagging in `useRuntimeEvents` (`[runtime-events:error]` with `readyState` + normalized event type) while keeping `EventSource.onerror` side-effect-only (no throw/reject lanes).
+- [x] Expanded Explorer static contracts to lock opaque-script suppression and SSE error-tag diagnostics, plus the existing null-throw/reject guards.
+- [ ] Next pass: remove remaining non-authoritative fallback background fetch lanes so refresh authority is limited to `initial`, `manual`, and `sse-recovery` triggers.
+
+## 2026-05-01 — Keep runtime SSE stream open through proxy buffering
+- [x] Ensured SSE emits immediate connected comment and heartbeat comments every 5s with double-newline framing.
+- [x] Added flush-friendly `await asyncio.sleep(0)` yield points after event/heartbeat frames.
+- [x] Added clean `asyncio.CancelledError` handling in SSE generator to avoid noisy disconnect errors.
+- [x] Preserved proxy headers for streaming stability (`no-cache, no-transform`, `keep-alive`, `X-Accel-Buffering: no`).
+- [x] Updated frontend EventSource diagnostics so CONNECTING is tracked as reconnecting (not hard disconnected), CLOSED flips `eventStreamConnected=false`.
+- [ ] Follow-up: add browser-runtime integration test that asserts stable `eventStreamConnected` under 60s idle soak.
+
+## 2026-05-01 — Remove remaining direct Explorer observability fetch loops
+- [x] Made source-control and WebRTC hooks passive by default (`initialLoad: false`, `poll: false`) so they no longer self-bootstrap fetch loops outside scheduler ownership.
+- [x] Replaced direct sidebar/manual reload callsites with allowlisted scheduler refresh (`manual`) ownership.
+- [x] Added observability lane tracer logs (`[OBSERVABILITY FETCH] lane reason`) inside the scheduler-owned full refresh path for runtime diagnostics.
+- [x] Kept full observability fetches scoped to allowlisted reasons (`initial`, `manual`, `sse-recovery`).
+- [ ] Follow-up: add explicit browser-level assertion that `/api/sources` + `/api/nodes` + `/api/live` stay quiet during idle SSE steady state.
+
+## 2026-05-01 — Remove shouldPollLiveSurface dependency after SSE transition
+- [x] Eliminated remaining runtime references to `shouldPollLiveSurface` across Explorer refresh and recording/pending hooks.
+- [x] Replaced legacy helper checks with local visibility guards (`document.visibilityState === 'hidden'`) plus explicit `enabled` gating.
+- [x] Fixed runtime crash path (`ReferenceError: shouldPollLiveSurface`) that prevented SSE diagnostics from stabilizing.
+- [x] Updated static contracts to assert visibility-guard behavior instead of legacy polling helper usage.
+- [ ] Follow-up: remove redundant legacy polling helper modules once no external imports remain.
+
+## 2026-05-01 — Stabilize runtime SSE keepalive and connection diagnostics
+- [x] Lowered runtime SSE heartbeat interval to 5s and kept valid comment heartbeat framing (`: heartbeat\\n\\n`) to prevent ~20s connection churn.
+- [x] Added SSE response keepalive headers (`no-cache, no-transform`, `keep-alive`, `X-Accel-Buffering: no`) for proxy/mobile stability.
+- [x] Expanded `useRuntimeEvents` diagnostics: `onopen`/message/error now publish connection state + timing + readyState/url into `__explorerPollingDebug`.
+- [x] Preserved EventSource reconnect behavior while keeping singleton guard from creating duplicate concurrent streams.
+- [ ] Follow-up: add runtime test coverage for reconnect semantics under forced transport interruption.
+
+## 2026-05-01 — Remove remaining refresh triggers and idle polling after SSE adoption
+- [x] Added explicit refresh-trigger diagnostics (`[REFRESH TRIGGER]` / `[BLOCKED REFRESH]`) in Explorer refresh scheduler.
+- [x] Hard-blocked non-authorized refresh reasons so only `initial`, `manual`, and `sse-recovery` can perform full fanout refresh.
+- [x] Converted Explorer startup refresh to explicit `initial` scheduler path for consistent instrumentation + gating.
+- [x] Kept direct SSE event application as the normal update lane and preserved recovery-only full refresh behavior.
+- [ ] Follow-up: add focused runtime e2e network-idle assertion (single `/api/runtime/events`, no idle fanout requests) in browser automation suite.
+
+## 2026-05-01 — Apply SSE events directly to Explorer state
+- [x] Replaced normal SSE -> full refresh fanout path with direct Explorer state application for node/source/live session/runtime asset/recording/ingest claim events.
+- [x] Added runtime event burst queue (`50ms` flush) to coalesce rapid SSE updates into single state-application lanes.
+- [x] Kept full refresh restricted to initial/manual/recovery (`reconnect`, `missed_sequence`, `snapshot_required`) paths only.
+- [x] Preserved BroadcastChannel runtime event fanout and expanded debug counters (`refreshCount`, `eventApplyCount`) without reintroducing idle loops.
+- [ ] Follow-up: map runtime-asset/recording event payloads into richer typed pending placeholder reducers (less generic record merge).
+
+## 2026-05-01 — Replace Explorer observability polling with runtime event stream
+- [x] Added runtime-owned SSE event stream endpoint (`/api/runtime/events`) backed by `RuntimeEventBus` replay + heartbeat support.
+- [x] Published node/source/live-session/runtime-asset/recording update events from existing mutation paths.
+- [x] Wired Explorer to a single EventSource connection and guarded against duplicate stream opens per tab.
+- [x] Converted idle observability polling to fallback-only refresh triggers (initial load + event-triggered refresh).
+- [x] Added BroadcastChannel runtime event fanout (`thatdamtoolbox-ui`) from Explorer to satellite tabs.
+- [ ] Follow-up: apply events directly into normalized frontend stores instead of triggering refresh fetches.
+
+## 2026-05-01 — Enforce single Explorer and Connect Device tab ownership
+- [x] Reused stable named window targets for Explorer and Connect Device tabs (`thatdamtoolbox-explorer`, `thatdamtoolbox-connect-device`) and routed open/focus flows through shared identity helpers.
+- [x] Added explicit `window.name` self-registration on Explorer and Connect Device mount to lock tab identity.
+- [x] Extended BroadcastChannel coordination on `thatdamtoolbox-ui` with `tab-active` and `request-refresh` messages.
+- [x] Connect Device now emits mount/focus activity (`tab-active`) and requests Explorer refresh (`request-refresh`) without adding polling loops.
+- [x] Explorer channel listener now handles device refresh requests via `scheduleExplorerObservabilityRefresh(reason, 0)` and records dev debug markers (`lastTabSeen`, `lastTabInteraction`).
+- [x] Kept polling ownership centralized in Explorer; no new intervals added in device tab.
+- [ ] Follow-up: lock device tab into fully event-driven mode for control-plane updates (remove residual passive poll dependencies).
+
+## 2026-05-01 — Fix FullscreenDevicePreview maximum update depth loop
+- [x] Guarded mode/camera-derived controls updates with idempotent `setControlsOpen` callback (`current === next` short-circuit).
+- [x] Removed unstable object dependency usage from controls effect and replaced with scalar state markers.
+- [x] Preserved Local preview controls auto-hide/open behavior without repeated render-loop state churn.
+- [x] Preserved Remote mode controls availability without uncontrolled setState loops.
+- [ ] Follow-up: continue device control-plane registration/polling hardening after render-loop stability is verified on-device.
+
+## 2026-05-01 — Stop device control-plane spam and restore registered device observability
+- [x] Prevented `/connect/device` Local mode from continuously polling `/api/nodes` by mode-aware polling guard in device monitor hooks.
+- [x] Kept remote-node polling for Remote mode or explicit remote picker use, throttled to 10s and visibility-gated.
+- [x] Added `/connect/device` bootstrap node sync (`listNodes` + conditional `registerNode` + heartbeat) so local identity is reconciled with backend authority.
+- [x] Preserved local camera preview flow independent of continuous node polling.
+- [ ] Follow-up: replace remaining control-plane polling with runtime event stream / BroadcastChannel fanout.
+
+## 2026-05-01 — Throttle recording + node observability polling and toast noise
+- [x] Stopped `kind=live` runtime assets from mapping into pending recording overlay lane.
+- [x] Added recording intent-gated failure toasts so background/polling churn no longer emits global `Recording failed`.
+- [x] Added `enabled` gate to `useRecordingSessions` polling and silenced polling/load failures from user-facing recording error toast path.
+- [x] Replaced overlapping control-plane refresh triggers with debounced `scheduleControlPlaneRefresh(...)` and raised interval floor to 10s.
+- [ ] Follow-up: add dedicated live-preview placeholder lane for `RuntimeAsset.kind=live` separate from recording UX.
+
+## 2026-04-30 — Restore live device instance cards in Explorer sidebar
+- [x] Added combined `LiveDeviceInstance` view model in `ExplorerApp`.
+- [x] Merged node/source/live/runtime lanes by `node_id` and `session_id` overlays.
+- [x] Rendered `LIVE DEVICE INSTANCES` cards without replacing existing Canonical/Remote/Registered runtime sections.
+- [x] Preserved persisted library/snapshot assets and existing sidebar ownership lanes.
+- [ ] Follow-up: wire Watch Live card action into full viewer attach flow parity path.
+
+## 2026-04-30 — External-stream continuity hardening for live-session bootstrap
+- [x] Prevented `useLiveSession.startPreview` from stopping existing camera tracks when an external stream is provided by connect-device flow.
+- [x] Added explicit `hasExternalStream` guard so camera-track stop and `stopTracks()` cleanup run only for internally-owned stream acquisition lanes.
+- [x] Preserved stream-ref continuity for externally-provided stream reuse to keep local preview alive through broadcast/session bootstrap.
+- [ ] Follow-up: add focused browser runtime test that simulates `startLiveSession` failure while asserting external preview stream remains active.
+
+## 2026-04-30 — Connect-device last-mile correctness + control-plane resilience
+- [x] Removed remaining connect-device broadcast stream null fallback ambiguity by hard-failing with `camera_stream_not_ready` after enable/reacquire.
+- [x] Kept all broadcast continuation lanes scoped to local `stream` binding after `existingStream` capture.
+- [x] Heartbeat token resolution now prefers shared browser-runtime identity token lookup (`getStoredNodeToken`) with legacy credential fallback.
+- [x] Local monitor overlay now hides live-broadcast CTA in Local mode so camera-preview-first UX is not blocked by remote controls.
+- [x] Source-control refresh now uses `Promise.allSettled` and preserves last good nodes/sources data on partial failures.
+- [ ] Follow-up: add a focused runtime integration test for connect-device heartbeat token continuity across fresh-tab open + stripped query auth.
+- [ ] Follow-up: add an Explorer side-panel failure-banner contract test to ensure partial refresh errors never clear healthy prior rows.
+
+## 2026-04-30 — Split local camera preview from live broadcast startup
+- [x] Made local camera preview a first-class state before live broadcast.
+- [x] Added explicit `handleEnableCamera` and `bindPreviewStream` flow.
+- [x] Start broadcast now reuses existing camera stream and only enables camera when needed.
+- [x] Broadcast failure no longer implies camera failure state in overlay copy.
+- [ ] Follow-up: add local MediaRecorder recording/download path from camera.stream.
+
+## 2026-04-30 — Register launcher UX and legacy identity pruning
+- [x] Register modal now exposes explicit launcher actions (`Open Device Tab`, `Re-register`) when identity already exists.
+- [x] Existing-identity register path now opens device tab directly instead of silently no-op closing.
+- [x] Added legacy scoped-token pruning helper to reduce stale multi-node storage drift across tabs.
+- [ ] Follow-up: add explicit `Refresh registration` control tied to source/node reload callback for immediate side-panel reconciliation.
+
+## 2026-04-30 — Browser runtime identity and tab role model
+- [x] Added browser runtime identity helper backed by localStorage.
+- [x] Added per-tab role/session state backed by sessionStorage.
+- [x] Added BroadcastChannel coordination seam for Explorer/device tabs.
+- [x] Kept query token handoff as bootstrap fallback only.
+- [x] Stripped bearer token from URL after import.
+- [x] Routed protected live/device API calls through owner-node auth headers.
+- [x] Reused existing CameraSession stream before acquiring another camera stream.
+- [x] Added polling visibility/throttle helpers to reduce node/recording request storms.
+- [ ] Follow-up: replace live polling loops with runtime event stream / BroadcastChannel fanout.
+- [ ] Follow-up: complete viewer offer/answer/ICE diagnostics if video still fails after auth stabilization.
+
+### Latest Implementation Notes (2026-04-30)
+- [x] Stabilize connect-device broadcast stream ownership with reusable CameraSession stream preference (`getUsableCameraStream`) and explicit stream-source tracing.
+- [x] Stabilize connect-device node identity resolution ordering (query -> localStorage) with node/token diagnostics to reduce multi-node drift.
+- [x] Throttle live polling surfaces with visibility gating helper (`shouldPollLiveSurface`) and slower runtime/live recording poll cadence.
+- [ ] Follow-up: move remaining per-card live preview polling to a shared surface poller if on-device traces still show request bursts.
+
+## 2026-04-30 — Duplicate camera acquisition guard in broadcast start
+- [x] Added `getUsableCameraStream()` guard so broadcast start reuses existing live camera stream.
+- [x] Added explicit stream-source trace marker (`existing-camera-session` vs `new-camera-session`).
+- [x] Prevented redundant `videoRef.srcObject` rebinding when stream is unchanged.
+- [ ] Follow-up: gate any remaining auto-start camera path with one-shot ref in fullscreen preview flow.
+
+## 2026-04-30 — Cross-tab device token handoff follow-up
+- [x] Device-open links now include node-scoped token query handoff when available.
+- [x] Connect-device route now persists query token into shared node-auth storage for publisher tab continuity.
+- [x] Added static contracts for token query handoff + connect-device token import seam.
+- [ ] Follow-up: add automated browser test for explorer-tab open-device handoff ensuring no offer 401 on fresh publisher tab.
+
+## 2026-04-30 — Live control bearer ownership + unhandled offer error containment
+- [x] Added shared frontend node-auth helper (`nodeAuth`) with scoped token lookup, header synthesis, and diagnostics.
+- [x] Updated register flow to require/persist a real bearer token (never token preview), and fail fast when missing.
+- [x] Wired protected live signaling APIs to require bearer headers and fail with `missing_device_bearer_token` before fetch.
+- [x] Contained connect-device offer publish failures in UI state to prevent unhandled runtime error overlays.
+- [ ] Follow-up: unify all remaining live control endpoints on `nodeAuth` and add runtime-level integration test for owner-node token mismatch.
+
+## 2026-04-30 — Node auth propagation fix for connect-device live start
+- [x] Added API-client node auth header synthesis for live session start (`Authorization` + `X-Media-Sync-Node-Id`).
+- [x] Persisted issued registration bearer token into connect-device local-storage keys on register success.
+- [x] Expanded Explorer static contracts to lock auth header injection + token persistence seams.
+- [ ] Follow-up: add runtime integration test that simulates empty-token vs token-present connect-device start outcomes.
+
+## 2026-04-30 — Runtime/API layer alignment follow-up
+- [x] Routed remaining live-offer and signal polling fetches through `createApiClient` contract methods.
+- [x] Removed direct compose-job JSON fetch from `ExplorerApp` in favor of API client ownership.
+- [ ] Follow-up: finish migrating remaining `fetch('/api/...')` usage in connect-device compatibility hooks to explicit service seams.
+
+## 2026-04-30 — Connect device heartbeat ref safety hotfix
+- [x] Locked `nodeHeartbeatTimerRef` declaration to stable component scope ref type.
+- [x] Centralized heartbeat interval cleanup via `clearNodeHeartbeatTimer()`.
+- [x] Added static contracts to prevent dangling heartbeat ref regressions.
+- [ ] Follow-up: add browser runtime smoke test for connect-device mount/unmount heartbeat churn.
+
+## 2026-04-30 — Runtime/persisted identity dedupe seam
+- [x] Added pending overlay dedupe helper keyed by asset_url/path/fallback recording identity.
+- [x] Overlay dedupe now prefers asset-url-backed entries over transient duplicates.
+- [x] Added static contracts locking dedupe helper usage in pending merge lane.
+- [ ] Follow-up: add explicit persisted-vs-runtime identity regression tests with fixture payloads.
+
+## 2026-04-29 — Runtime overlay safety lock (persisted + runtime merge discipline)
+- [x] Locked runtime asset overlay comment/contract in pending artifact controller.
+- [x] Runtime asset polling failures now preserve existing UI state (no destructive clear-to-empty fallback).
+- [x] Added static contract assertions for overlay semantics and graceful runtime-fetch failure handling.
+- [ ] Follow-up: add runtime-vs-persisted dedupe identity helper tests by asset_url/content hash.
+
+## 2026-04-29 — Runtime live preview asset visibility follow-up
+- [x] Live WebRTC offer now creates `RuntimeAsset(kind=live, state=previewable)`.
+- [x] Explorer runtime-asset placeholder mapping now includes `previewable` live state.
+- [x] Added backend test proving live offer creates previewable runtime asset.
+- [ ] Follow-up: dedicated live-card rendering polish beyond pending-recording visual reuse.
+
+## 2026-04-29 — Explorer runtime asset merge visibility wiring
+- [x] Explorer pending artifact controller now polls `/api/runtime/assets`.
+- [x] Runtime recording assets are mapped into pending recording placeholder cards.
+- [x] Runtime recording states map to visible statuses (`recording`, `finalizing`, `saved`, `failed`).
+- [ ] Follow-up: migrate runtime-asset polling to SSE stream consumption.
+
+## 2026-04-29 — Implement RuntimeAsset representation plane
+- [x] Added authority-owned RuntimeAsset registry.
+- [x] Added runtime asset API surface.
+- [x] Recording start now creates visible runtime asset immediately.
+- [x] Recording stop transitions runtime asset to materializing/ready/failed.
+- [x] Added backend tests for runtime recording asset transitions.
+- [ ] Follow-up: replace polling with SSE push updates if not fully implemented.
+
+## 2026-04-29 — Recording materialization truth gate follow-up
+- [x] Stop-recording now fails honestly when no asset materialization exists (`recording_not_materialized`).
+- [x] Stop-recording can mark completed only when a real `asset_url` exists on the recording session.
+- [x] Added test coverage proving uploaded live recording appears in source library media listing.
+- [ ] Follow-up: wire stop-record path to invoke upload/finalization automatically in device UI flow.
+
+## 2026-04-29 — Add remote viewer attach for live sessions
+- [x] Backend recording lifecycle endpoints
+- [x] Live session → recording linkage
+- [x] Viewer attach WebRTC flow implemented
+- [x] Multiple viewers supported per live session
+- [ ] Follow-up: UI polish + latency optimization
+
+## 2026-04-29 — Live WebRTC recording lifecycle ownership follow-up
+- [x] Added /api/live recording lifecycle routes (`record/start`, `record/stop`, session-scoped recording list).
+- [x] Enforced idempotent record start for the same active live session.
+- [x] Surfaced recording linkage on `/api/live` session list (`recording_count`, `active_recording_id`, `recording_state`, `asset_url`).
+- [x] Added backend tests for idempotent start, honest stop transition, and live-list recording linkage.
+- [ ] Follow-up: wire full remote viewer attach/track playback handshake in connect device UI beyond stub watch entrypoint.
+
 ## 2026-04-29 — Complete connect device deterministic broadcast path
 - [x] Made useLiveSession.startPreview return the created live session.
 - [x] Replaced reactive WebRTC offer publishing with deterministic Start Broadcast chain.

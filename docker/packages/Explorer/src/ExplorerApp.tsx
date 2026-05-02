@@ -40,6 +40,7 @@ import { LivePreview } from './components/live/LivePreview';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
+import { openDeviceTab, pruneLegacyNodeIdentityKeys, registerWindowName, setTabRole, subscribeBrowserRuntimeChannel } from './lib/browserRuntimeIdentity';
 import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl } from './utils/mediaUrls';
 import {
   absolutizeNonAssetUrl,
@@ -54,6 +55,7 @@ import { useLiveSessions } from './hooks/useLiveSessions';
 import { useRuntimeController } from './runtime/useRuntimeController';
 import { useLivePreviewState } from './runtime/useLivePreviewState';
 import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
+import { useRuntimeEvents, type RuntimeStreamEvent } from './hooks/useRuntimeEvents';
 import { usePendingArtifactController } from './pending/usePendingArtifactController';
 import type { PendingComposeRenderedEntry, PendingRecordingRenderedEntry } from './render/renderedEntries';
 import { useExplorerRenderController } from './render/useExplorerRenderController';
@@ -90,9 +92,8 @@ import {
   getDeviceUrl,
   isSessionNode,
   isTestPayloadClaim,
-  isTestPayloadNode,
 } from './utils/runtimeLabels';
-import { buildRuntimeChips } from './utils/runtimeChips';
+import { SourceControlPanels } from './source-control/SourceControlPanels';
 
 interface ExplorerAppProps {
   apiBaseUrl?: string;
@@ -294,6 +295,24 @@ const LEGACY_FILTER_PREFS_KEY = 'media-sync-explorer-filters-v1';
 const LEGACY_OVERLAY_VIS_PREFS_KEY = 'media-sync-explorer-overlay-enabled-v1';
 const ORIENT_CACHE_KEY = 'media-sync-orient-cache-v1';
 const HIDDEN_INGEST_CLAIMS_KEY = 'explorer_hidden_ingest_claim_ids';
+type IdRecord = Record<string, unknown>;
+const readRecordId = (record: IdRecord): string | null => String(record.id ?? record.node_id ?? record.source ?? record.name ?? record.session_id ?? record.claim_id ?? record.asset_id ?? record.recording_id ?? '').trim() || null;
+const upsertByRuntimeId = <T extends IdRecord>(prev: T[], payload: IdRecord): T[] => {
+  const id = readRecordId(payload);
+  if (!id) return prev;
+  let found = false;
+  const next = prev.map((entry) => {
+    if (readRecordId(entry) !== id) return entry;
+    found = true;
+    return { ...entry, ...payload } as T;
+  });
+  return found ? next : [...next, payload as T];
+};
+const removeByRuntimeId = <T extends IdRecord>(prev: T[], payload: IdRecord): T[] => {
+  const id = readRecordId(payload);
+  if (!id) return prev;
+  return prev.filter((entry) => readRecordId(entry) !== id);
+};
 const clampLayoutColumns = (value: number) => (
   Math.max(MIN_COLUMNS_MOBILE, Math.min(MAX_COLUMNS_MOBILE, Math.round(value)))
 );
@@ -597,8 +616,11 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const {
     sessions: liveSessions,
     reload: reloadLiveSessions,
+    applyLiveSessionUpdate,
+    removeLiveSession,
   } = useLiveSessions({
     listLiveSessions: api.listLiveSessions,
+    enabled: false,
   });
   const {
     snapshot: sourceControlSnapshot,
@@ -610,9 +632,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     loading: sourceControlLoading,
     error: sourceControlError,
     reload: reloadSourceControl,
+    applySourceUpdate,
+    applyNodeUpdate,
   } = useSourceControlData({
     listSources: api.listSources,
     listNodes: api.listNodes,
+    initialLoad: false,
   });
   const {
     sources,
@@ -674,6 +699,8 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
+  const [runtimeAssets, setRuntimeAssets] = useState<Array<Record<string, unknown>>>([]);
+  const controlPlaneRefreshDebounceRef = useRef<number | null>(null);
 
   // ---------------------------------------------------------------------------
   // UI/runtime authority seam.
@@ -757,7 +784,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   });
   const runtime = useRuntimeController({
     listWebRtcLiveSessions: api.listWebRtcLiveSessions,
-    poll: sidebarOpen || detailsModal !== null,
+    poll: false,
   });
   const {
     sessions: webRtcLiveSessions,
@@ -771,6 +798,26 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       reloadWebRtcLiveSessions(),
     ]);
   }, [reloadLiveSessions, reloadWebRtcLiveSessions]);
+  const refreshControlPlaneSurfaces = useCallback(async () => {
+    const laneResults = await Promise.allSettled([
+      reloadSourceControl(),
+      reloadWebRtcLiveSessions(),
+      api.listRuntimeAssets(),
+    ]);
+    const runtimeAssetsLane = laneResults[2];
+    if (runtimeAssetsLane.status === 'fulfilled') {
+      setRuntimeAssets(Array.isArray(runtimeAssetsLane.value) ? runtimeAssetsLane.value : []);
+    }
+  }, [api, reloadSourceControl, reloadWebRtcLiveSessions]);
+  const scheduleControlPlaneRefresh = useCallback((delayMs = 600) => {
+    if (controlPlaneRefreshDebounceRef.current != null) {
+      window.clearTimeout(controlPlaneRefreshDebounceRef.current);
+    }
+    controlPlaneRefreshDebounceRef.current = window.setTimeout(() => {
+      controlPlaneRefreshDebounceRef.current = null;
+      void refreshControlPlaneSurfaces();
+    }, delayMs);
+  }, [refreshControlPlaneSurfaces]);
 
   useRuntimeEventReactions({
     reloadLibrarySnapshot: refreshLibrarySnapshot,
@@ -787,20 +834,151 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
   }, [api]);
 
-  useEffect(() => {
-    void reloadIngestClaims();
-    const interval = window.setInterval(() => void reloadIngestClaims(), 5000);
-    return () => window.clearInterval(interval);
-  }, [reloadIngestClaims]);
+  const [explorerPollingDebugTick, setExplorerPollingDebugTick] = useState(0);
+  const pendingRuntimeEventsRef = useRef<RuntimeStreamEvent[]>([]);
+  const flushRuntimeEventsTimerRef = useRef<number | null>(null);
+  const eventApplyCountRef = useRef(0);
+  const refreshCountRef = useRef(0);
+  const publishExplorerPollingDebug = useCallback((patch: Record<string, unknown> = {}) => {
+    if (typeof window === 'undefined') return;
+    (window as any).__explorerPollingDebug = {
+      ...((window as any).__explorerPollingDebug || {}),
+      ...patch,
+      refreshCount: refreshCountRef.current,
+      eventApplyCount: eventApplyCountRef.current,
+    };
+  }, []);
+  const traceObservabilityFetch = useCallback((lane: string, reason: string) => {
+    if (process.env.NODE_ENV !== 'production') console.warn('[OBSERVABILITY FETCH]', lane, reason);
+  }, []);
+  const scheduleExplorerObservabilityRefresh = useCallback((reason: string, delayMs = 450) => {
+    const allowed = reason === 'initial' || reason === 'manual' || reason === 'sse-recovery';
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(allowed ? '[REFRESH TRIGGER]' : '[BLOCKED REFRESH]', reason);
+      publishExplorerPollingDebug({ lastRefreshReason: reason });
+    }
+    if (!allowed) return;
+    if (controlPlaneRefreshDebounceRef.current != null) {
+      window.clearTimeout(controlPlaneRefreshDebounceRef.current);
+    }
+    controlPlaneRefreshDebounceRef.current = window.setTimeout(() => {
+      controlPlaneRefreshDebounceRef.current = null;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      refreshCountRef.current += 1;
+      void Promise.allSettled([
+        (traceObservabilityFetch('source-control', reason), reloadSourceControl()),
+        (traceObservabilityFetch('webrtc-live', reason), reloadWebRtcLiveSessions()),
+        (traceObservabilityFetch('live-sessions', reason), reloadLiveSessions()),
+        (traceObservabilityFetch('runtime-assets', reason), api.listRuntimeAssets().then((items) => setRuntimeAssets(Array.isArray(items) ? items : []))),
+        (traceObservabilityFetch('ingest-claims', reason), reloadIngestClaims()),
+      ]);
+      if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+        publishExplorerPollingDebug({
+          activeTimers: controlPlaneRefreshDebounceRef.current ? 1 : 0,
+          lastRefreshReason: reason,
+          requestCountsByLane: ((window as any).__explorerPollingDebug?.requestCountsByLane || {}),
+          lastRefreshAt: Date.now(),
+        });
+        setExplorerPollingDebugTick((x) => x + 1);
+      }
+    }, delayMs);
+  }, [api, publishExplorerPollingDebug, reloadIngestClaims, reloadLiveSessions, reloadSourceControl, reloadWebRtcLiveSessions, traceObservabilityFetch]);
 
   useEffect(() => {
     if (!livePreview.activeLivePreview) return;
     const timeout = window.setTimeout(() => {
-      void reloadWebRtcLiveSessions();
+      scheduleExplorerObservabilityRefresh('live-preview-active', 400);
     }, 1200);
     return () => window.clearTimeout(timeout);
-  }, [livePreview.activeLivePreview, reloadWebRtcLiveSessions]);
+  }, [livePreview.activeLivePreview, scheduleExplorerObservabilityRefresh]);
 
+  useEffect(() => {
+    scheduleExplorerObservabilityRefresh('initial', 0);
+  }, [scheduleExplorerObservabilityRefresh]);
+
+  const applyRuntimeEvents = useCallback((events: RuntimeStreamEvent[]) => {
+    if (!events.length) return;
+    eventApplyCountRef.current += events.length;
+    for (const event of events) {
+      const payload = (event.payload || {}) as IdRecord;
+      switch (event.type) {
+        case 'node.updated': applyNodeUpdate(payload); break;
+        case 'source.updated': applySourceUpdate(payload); break;
+        case 'live_session.updated': applyLiveSessionUpdate(payload); break;
+        case 'runtime_asset.updated':
+        case 'recording.updated': setRuntimeAssets((prev) => upsertByRuntimeId(prev, payload)); break;
+        case 'ingest_claim.updated': setIngestClaims((prev) => upsertByRuntimeId(prev as unknown as IdRecord[], payload) as IngestClaimRecord[]); break;
+        case 'live_session.deleted': removeLiveSession(payload); break;
+        case 'ingest_claim.deleted': setIngestClaims((prev) => removeByRuntimeId(prev as unknown as IdRecord[], payload) as IngestClaimRecord[]); break;
+        case 'reconnect':
+        case 'missed_sequence':
+        case 'snapshot_required':
+          scheduleExplorerObservabilityRefresh('sse-recovery', 0);
+          break;
+      }
+      if (event.type === 'live_session.updated' && typeof window !== 'undefined') {
+        const current = ((window as any).__explorerLiveFlowDebug || {}) as Record<string, unknown>;
+        (window as any).__explorerLiveFlowDebug = {
+          ...current,
+          lastLiveSessionUpdatedAt: Date.now(),
+          lastLiveSessionPayload: payload,
+          appliedLiveSessionUpdates: Number(current.appliedLiveSessionUpdates || 0) + 1,
+        };
+      }
+      publishExplorerPollingDebug({ eventStreamConnected: true, lastEventType: event.type, lastEventId: event.id || null, lastEventAt: Date.now() });
+      if (typeof window !== 'undefined' && typeof window.BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('thatdamtoolbox-ui');
+        channel.postMessage({ type: 'runtime-event', event });
+        channel.close();
+      }
+    }
+  }, [applyLiveSessionUpdate, applyNodeUpdate, applySourceUpdate, publishExplorerPollingDebug, removeLiveSession, scheduleExplorerObservabilityRefresh]);
+  const queueRuntimeEvent = useCallback((event: RuntimeStreamEvent) => {
+    pendingRuntimeEventsRef.current.push(event);
+    if (flushRuntimeEventsTimerRef.current !== null) return;
+    flushRuntimeEventsTimerRef.current = window.setTimeout(() => {
+      flushRuntimeEventsTimerRef.current = null;
+      const events = pendingRuntimeEventsRef.current.splice(0);
+      applyRuntimeEvents(events);
+    }, 50);
+  }, [applyRuntimeEvents]);
+  useRuntimeEvents({ enabled: true, onEvent: queueRuntimeEvent });
+  useEffect(() => () => {
+    if (flushRuntimeEventsTimerRef.current != null) window.clearTimeout(flushRuntimeEventsTimerRef.current);
+  }, []);
+
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (typeof window === 'undefined') return;
+
+    const onWindowErrorDiagnostic = (event: ErrorEvent) => {
+      const isOpaqueScriptError = event.message === 'Script error.' && !event.filename && event.lineno === 0;
+      if (isOpaqueScriptError) return;
+      console.warn('[window:error]', {
+        message: event.message || 'unknown-window-error',
+        filename: event.filename || null,
+        lineno: Number.isFinite(event.lineno) ? event.lineno : null,
+        colno: Number.isFinite(event.colno) ? event.colno : null,
+        error: event.error ? String(event.error) : 'null-error',
+      });
+    };
+
+    const onWindowUnhandledRejectionDiagnostic = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      console.warn('[window:unhandledrejection]', {
+        reason: reason ? String(reason) : 'null-reason',
+        reasonType: typeof reason,
+      });
+    };
+
+    window.addEventListener('error', onWindowErrorDiagnostic);
+    window.addEventListener('unhandledrejection', onWindowUnhandledRejectionDiagnostic);
+    return () => {
+      window.removeEventListener('error', onWindowErrorDiagnostic);
+      window.removeEventListener('unhandledrejection', onWindowUnhandledRejectionDiagnostic);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1939,9 +2117,12 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         // ignore malformed storage value
       }
     };
+    const onStorage = (evt: StorageEvent) => {
+      if (evt.key === 'explorer_live_claim_event') handleClaimEvent();
+    };
     handleClaimEvent();
-    const timer = window.setInterval(handleClaimEvent, 2500);
-    return () => window.clearInterval(timer);
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, [activeProject, addToast, loadAllMedia, loadMedia, mediaScope]);
 
   const refreshMediaForScope = useCallback(async (
@@ -1991,12 +2172,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [activeProject, hydrateProjectMediaItems, mediaScope, projects, refreshLibrarySnapshot]);
 
   const fetchComposeJobJson = useCallback(async (url: string) => {
-    const response = await fetch(api.buildUrl(url));
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(String(payload?.detail || payload?.message || 'Failed to poll compose job'));
-    }
-    return payload;
+    return api.getJson(url);
   }, [api]);
 
   const refreshAll = useCallback(async () => {
@@ -3195,9 +3371,33 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     return webRtcSessionsByNodeId.has(node.node_id);
   }, [webRtcSessionsByNodeId]);
 
+  useEffect(() => {
+    setTabRole('explorer');
+    registerWindowName('explorer');
+    pruneLegacyNodeIdentityKeys();
+    return subscribeBrowserRuntimeChannel((message) => {
+      console.debug('[browser-runtime] channel', message);
+      if (message?.type === 'session' || message?.type === 'identity') {
+        scheduleExplorerObservabilityRefresh('runtime-channel', 900);
+      }
+      if (message?.type === 'tab-active' && process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+        (window as any).__explorerPollingDebug = {
+          ...((window as any).__explorerPollingDebug || {}),
+          lastTabSeen: message?.role || 'unknown',
+          lastTabInteraction: Number(message?.at || Date.now()),
+        };
+        setExplorerPollingDebugTick((x) => x + 1);
+      }
+      if (message?.type === 'request-refresh') {
+        const reason = typeof message?.reason === 'string' ? message.reason : 'device-focus';
+        scheduleExplorerObservabilityRefresh(reason, 0);
+      }
+    });
+  }, [scheduleExplorerObservabilityRefresh, explorerPollingDebugTick]);
+
   const openDeviceForNode = useCallback((node: NodeControlRecord) => {
     if (canOpenDeviceForNode(node)) {
-      window.open(`/connect/device?node_id=${encodeURIComponent(node.node_id)}`, '_blank', 'noopener,noreferrer');
+      openDeviceTab(node.node_id);
       return;
     }
     if (isSessionNode(node)) {
@@ -3228,7 +3428,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     try {
       await api.heartbeatNode(nodeId);
       addToast('good', 'Runtime', 'Heartbeat sent');
-      await reloadSourceControl();
+      scheduleExplorerObservabilityRefresh('manual', 0);
     } catch (error) {
       addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Heartbeat failed');
     }
@@ -3242,7 +3442,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     try {
       await api.deleteNode(nodeId);
       addToast('good', 'Runtime', `Deleted node ${nodeId}`);
-      await reloadSourceControl();
+      scheduleExplorerObservabilityRefresh('manual', 0);
     } catch (error) {
       addToast('bad', 'Runtime', error instanceof Error ? error.message : 'Delete node failed');
     }
@@ -5220,175 +5420,28 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 <button type="button" className="btn" onClick={() => setIsRegisterNodeModalOpen(true)}>
                   + Register
                 </button>
-                <button type="button" className="btn" onClick={() => void reloadSourceControl()}>
+                <button type="button" className="btn" onClick={() => scheduleExplorerObservabilityRefresh('manual', 0)}>
                   Refresh
                 </button>
               </div>
             </div>
             <div className="sources">
-              {sourceControlLoading ? (
-                <div className="card">
-                  <strong>Loading sources…</strong>
-                  <div className="small">Fetching canonical and remote source-bearing participants.</div>
-                </div>
-              ) : sourceControlError ? (
-                <div className="card">
-                  <strong>Source control unavailable</strong>
-                  <div className="small">{sourceControlError}</div>
-                </div>
-              ) : runtimeSources.length === 0 ? (
-                <div className="card">
-                  <strong>No sources</strong>
-                  <div className="small">No canonical or remote source-bearing participants are currently visible.</div>
-                </div>
-              ) : (
-                <>
-                  <div className="card">
-                    <strong>Summary</strong>
-                    <div className="small">
-                      {canonicalSources.length} canonical · {remoteSources.length} remote · {runtimeNodes.length} nodes
-                    </div>
-                    <div className="small">
-                      {healthyNodes.length} healthy · {sourceControlSnapshot.sources.length} total sources
-                    </div>
-                    <div className="small">
-                      {webRtcLiveSessions.length} live WebRTC sessions
-                    </div>
-                  </div>
-
-                  {canonicalSources.length > 0 ? (
-                    <div className="card">
-                      <strong>Canonical sources</strong>
-                      <div className="small">Authority-local sources visible through the canonical source registry.</div>
-                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {canonicalSources.map((source: SourceControlRecord, index: number) => {
-                          const authority = source.authority || 'canonical';
-                          return (
-                            <div className="card" key={`canonical-${source.name}-${index}`} onContextMenu={(event) => openSourceContextMenu(event, source)}>
-                              <strong>{source.name}</strong>
-                              <div className="small">{source.root || 'No root path'}</div>
-                              <div className="tagrow">
-                                <span className={`tag ${source.enabled ? 'good' : ''}`}>
-                                  {source.enabled ? 'enabled' : 'disabled'}
-                                </span>
-                                <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
-                                  {source.accessible ? 'reachable' : 'unreachable'}
-                                </span>
-                                <span className="tag">{source.kind || source.type || 'filesystem'}</span>
-                                <span className="tag">{authority}</span>
-                              </div>
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={(event) => openSourceContextMenu(event, source)}
-                                style={{ marginTop: 8 }}
-                              >
-                                ⋯
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {remoteSources.length > 0 ? (
-                    <div className="card">
-                      <strong>Remote source surfaces</strong>
-                      <div className="small">
-                        Source surfaces published through connect/control-plane registration and merged into source inventory.
-                      </div>
-                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {remoteSources.map((source: SourceControlRecord, index: number) => {
-                          const owner = runtimeNodes.find((node) => node.node_id === source.owner_node_id);
-                          const authority = source.authority || 'canonical';
-                          return (
-                            <div className="card" key={`remote-${source.owner_node_id || 'unknown'}-${source.name}-${index}`} onContextMenu={(event) => openSourceContextMenu(event, source)}>
-                              <strong>{source.name}</strong>
-                              <div className="small">owner: {source.owner_node_id || 'unknown'}</div>
-                              {owner?.label ? (
-                                <div className="small">{owner.label}</div>
-                              ) : null}
-                              {owner?.base_url ? (
-                                <div className="small">{owner.base_url}</div>
-                              ) : null}
-                              <div className="tagrow">
-                                <span className={`tag ${source.enabled ? 'good' : ''}`}>
-                                  {source.enabled ? 'enabled' : 'disabled'}
-                                </span>
-                                <span className={`tag ${source.accessible ? 'good' : 'bad'}`}>
-                                  {source.accessible ? 'reachable' : 'unreachable'}
-                                </span>
-                                <span className="tag">{source.kind || source.type || 'remote'}</span>
-                                <span className="tag">{authority}</span>
-                                {source.local_only ? <span className="tag">local-only</span> : null}
-                                {source.can_index ? <span className="tag">index</span> : null}
-                                {source.can_proxy ? <span className="tag">proxy</span> : null}
-                                {source.can_record ? <span className="tag">record</span> : null}
-                              </div>
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={(event) => openSourceContextMenu(event, source)}
-                                style={{ marginTop: 8 }}
-                              >
-                                ⋯
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {runtimeNodes.length > 0 ? (
-                    <div className="card">
-                      <strong>Registered runtimes</strong>
-                      <div className="small">Control-plane view of registered runtime nodes.</div>
-                      <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
-                        {runtimeNodes.map((node: NodeControlRecord) => {
-                          const liveSession = webRtcSessionsByNodeId.get(node.node_id);
-                          const runtimeChips = buildRuntimeChips(node, liveSession);
-                          return (
-                            <div className="card" key={node.node_id} onContextMenu={(event) => openRuntimeContextMenu(event, node)}>
-                              <strong>{node.label}</strong>
-                              <div className="small">{node.node_id}</div>
-                              <div className="small">{node.base_url}</div>
-                              <div className="tagrow">
-                                {runtimeChips.map((chip) => (
-                                  <span className={`tag ${chip.tone}`} key={`${node.node_id}-chip-${chip.label}`}>
-                                    {chip.label}
-                                  </span>
-                                ))}
-                                {isTestPayloadNode(node) ? <span className="tag bad">test payload</span> : null}
-                              </div>
-
-                              {node.last_heartbeat_at ? (
-                                <div className="small">heartbeat: {node.last_heartbeat_at}</div>
-                              ) : null}
-
-                              {isTestPayloadNode(node) ? (
-                                <div className="small">
-                                  This node appears modified by Swagger example data. Re-register from Explorer.
-                                </div>
-                              ) : null}
-
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={(event) => openRuntimeContextMenu(event, node)}
-                                style={{ marginTop: 8 }}
-                              >
-                                ⋯
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
-                </>
-              )}
+              <SourceControlPanels
+                sourceControlLoading={sourceControlLoading}
+                sourceControlError={sourceControlError}
+                sourceControlSnapshot={sourceControlSnapshot}
+                canonicalSources={canonicalSources}
+                remoteSources={remoteSources}
+                runtimeNodes={runtimeNodes}
+                runtimeSources={runtimeSources}
+                webRtcLiveSessions={webRtcLiveSessions}
+                runtimeAssets={runtimeAssets}
+                healthyNodes={healthyNodes}
+                onOpenDevice={openDevice}
+                onWatchLive={(session) => { void openLivePeerViewer(session); }}
+                onOpenSourceContextMenu={openSourceContextMenu}
+                onOpenRuntimeContextMenu={openRuntimeContextMenu}
+              />
             </div>
 
             {ingestClaims.length > 0 ? (
@@ -6297,7 +6350,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                 className="btn"
                 onClick={() => {
                   livePreview.closeLivePreview();
-                  void reloadWebRtcLiveSessions();
                 }}
               >
                 Close
@@ -6407,7 +6459,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         isOpen={isRegisterNodeModalOpen}
         onClose={() => setIsRegisterNodeModalOpen(false)}
         onSuccess={(_node, _response: RegisterNodeResponse) => {
-          void reloadSourceControl();
+          scheduleExplorerObservabilityRefresh('manual', 0);
         }}
         registerNode={api.registerNode}
         authorityBaseUrl={authorityBaseUrl}

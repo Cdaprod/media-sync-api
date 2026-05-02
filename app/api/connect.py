@@ -28,6 +28,19 @@ router = APIRouter(prefix="/connect", tags=["connect"])
 ConnectResponseKind = Literal["html", "json", "text"]
 
 
+def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
+    bus = getattr(runtime, "events", None)
+    if bus is None:
+        return
+    publish = getattr(bus, "publish", None)
+    if callable(publish):
+        publish(event_type, payload)
+        return
+    emit = getattr(bus, "emit", None)
+    if callable(emit):
+        emit(event_type, payload)
+
+
 class ConnectRegisterRequest(BaseModel):
     """Public-facing connection/bootstrap registration payload."""
 
@@ -366,6 +379,26 @@ async def register_connected_source(
         },
     )
     merge_remote_source_record(runtime, source_record)
+    _emit_event(
+        runtime,
+        "node.updated",
+        {
+            "node_id": registered.node_id,
+            "status": registered.status,
+            "action": "registered",
+        },
+    )
+    _emit_event(
+        runtime,
+        "source.updated",
+        {
+            "name": source_record.name,
+            "kind": source_record.kind,
+            "owner_node_id": source_record.owner_node_id,
+            "enabled": source_record.enabled,
+            "action": "registered",
+        },
+    )
     base_url = _preferred_authority_base_url(request)
 
     return ConnectRegisterResponse(

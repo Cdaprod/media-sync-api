@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
 
 import type { WebRtcLiveSession } from '../api';
 
@@ -8,6 +9,7 @@ type UseWebRtcLiveSessionsArgs = {
   listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
   enabled?: boolean;
   poll?: boolean;
+  initialLoad?: boolean;
 };
 
 type UseWebRtcLiveSessionsResult = {
@@ -17,6 +19,9 @@ type UseWebRtcLiveSessionsResult = {
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
+  setSessions: React.Dispatch<React.SetStateAction<WebRtcLiveSession[]>>;
+  applyLiveSessionUpdate: (payload: Record<string, unknown>) => void;
+  removeLiveSession: (payload: Record<string, unknown>) => void;
 };
 
 function pollIntervalMs(sessions: WebRtcLiveSession[]): number {
@@ -27,6 +32,7 @@ export function useWebRtcLiveSessions({
   listWebRtcLiveSessions,
   enabled = true,
   poll = false,
+  initialLoad = false,
 }: UseWebRtcLiveSessionsArgs): UseWebRtcLiveSessionsResult {
   const [sessions, setSessions] = useState<WebRtcLiveSession[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,9 +63,10 @@ export function useWebRtcLiveSessions({
   }, [enabled, listWebRtcLiveSessions]);
 
   useEffect(() => {
+    if (!initialLoad) return;
     if (!enabled) return;
     void reload();
-  }, [enabled, reload]);
+  }, [enabled, initialLoad, reload]);
 
   useEffect(() => {
     if (!enabled || !poll) return;
@@ -119,6 +126,25 @@ export function useWebRtcLiveSessions({
     }
     return entries;
   }, [sessions]);
+  const applyLiveSessionUpdate = useCallback((payload: Record<string, unknown>) => {
+    setSessions((prev) => {
+      const id = String(payload.session_id ?? payload.id ?? '').trim();
+      if (!id) return prev;
+      let seen = false;
+      const next = prev.map((entry) => {
+        const entryId = String((entry as any).session_id ?? '').trim();
+        if (entryId !== id) return entry;
+        seen = true;
+        return { ...entry, ...payload } as WebRtcLiveSession;
+      });
+      return seen ? next : [...next, payload as WebRtcLiveSession];
+    });
+  }, []);
+  const removeLiveSession = useCallback((payload: Record<string, unknown>) => {
+    const id = String(payload.session_id ?? payload.id ?? '').trim();
+    if (!id) return;
+    setSessions((prev) => prev.filter((entry) => String((entry as any).session_id ?? '').trim() !== id));
+  }, []);
 
   return {
     sessions,
@@ -127,5 +153,8 @@ export function useWebRtcLiveSessions({
     loading,
     error,
     reload,
+    setSessions,
+    applyLiveSessionUpdate,
+    removeLiveSession,
   };
 }

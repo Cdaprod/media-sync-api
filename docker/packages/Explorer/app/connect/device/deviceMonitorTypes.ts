@@ -16,3 +16,11 @@ export interface OverlayState {
   falseColor: boolean;
   scopeHud: boolean;
 }
+
+export type DeviceMonitorMode = 'local' | 'remote';
+
+export type DeviceControlPlanePollArgs = {
+  mode: DeviceMonitorMode;
+  visible: boolean;
+  remotePickerOpen?: boolean;
+};
