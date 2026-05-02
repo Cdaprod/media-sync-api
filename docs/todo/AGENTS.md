@@ -1,3 +1,8 @@
+### Latest Implementation Notes (2026-05-02)
+- [x] Removed fallback heartbeat token lane from connect-device (`readDeviceBearerToken`) so heartbeat auth now remains strictly node-scoped via `getStoredNodeToken(nodeId)`.
+- [x] Added static contract guard to prevent reintroduction of credential-fallback bearer sourcing in connect-device heartbeat path.
+- [ ] Next pass: capture one browser verification trace that heartbeat auth uses node-scoped token only across tab refresh + reconnect.
+
 ### Latest Implementation Notes (2026-05-01)
 - [x] Fixed browser-device heartbeat auth path to prefer node-scoped stored tokens and send explicit `Authorization: Bearer` + `X-Media-Sync-Node-Id` headers for heartbeat requests.
 - [x] Added device-side auth diagnostics (`node-sync:auth-debug`) with source/length metadata only (never token value), and mapped heartbeat 401/403 to `auth_failed` status without tearing down camera/local identity.

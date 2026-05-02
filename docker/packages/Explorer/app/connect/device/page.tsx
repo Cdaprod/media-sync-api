@@ -12,7 +12,6 @@ import DeviceMonitorShell from './DeviceMonitorShell';
 import { useCameraSession } from './useCameraSession';
 import { ensureLiveBroadcastAlignment } from './liveBroadcastAlignment';
 import { makeBroadcastFailure, type BroadcastSnapshot } from './broadcastSession';
-import { readDeviceBearerToken } from './deviceCredentials';
 import {
   getBrowserRuntimeIdentity,
   getBrowserRuntimeIdentityDiagnostics,
