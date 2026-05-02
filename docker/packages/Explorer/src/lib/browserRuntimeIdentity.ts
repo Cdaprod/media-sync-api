@@ -1,6 +1,10 @@
 export type BrowserRuntimeTabRole = 'explorer' | 'device' | 'unknown';
 export type NodeIdentityTokenSource = 'node-specific' | 'capture' | 'generic' | 'query' | 'none';
 export type BrowserRuntimeUiMessageType = 'identity' | 'session' | 'tab-active' | 'request-refresh';
+export type BrowserRuntimeAuth = { nodeId: string; token: string; tokenSource: string };
+export type BrowserRuntimeHeartbeatResult =
+  | { ok: true; status: 'online' }
+  | { ok: false; status: 'auth_failed' | 'unavailable'; message: string };
 
 const CAPTURE_NODE_ID_KEY = 'explorer_capture_node_id';
 const GENERIC_NODE_ID_KEY = 'explorer_node_id';
@@ -32,6 +36,49 @@ export const getBrowserRuntimeIdentity = (nodeIdOverride?: string | null) => { c
 export const setBrowserRuntimeIdentity = (nodeId: string, token?: string | null): void => { setStoredNodeId(nodeId); if (token) setStoredNodeToken(nodeId, token); publishBrowserRuntimeIdentity(); };
 export const getNodeAuthHeaders = (nodeIdOverride?: string | null): Record<string, string> => { const identity = getBrowserRuntimeIdentity(nodeIdOverride); if (!identity.nodeId || !identity.token) return {}; return { Authorization: `Bearer ${identity.token}`, 'X-Media-Sync-Node-Id': identity.nodeId }; };
 export const requireNodeAuthHeaders = (nodeIdOverride?: string | null): Record<string, string> => { const headers = getNodeAuthHeaders(nodeIdOverride); if (!headers.Authorization || !headers['X-Media-Sync-Node-Id']) throw new Error('missing_device_bearer_token'); return headers; };
+export const resolveBrowserRuntimeAuth = (nodeId: string): BrowserRuntimeAuth | null => {
+  const tokenInfo = getStoredNodeToken(nodeId);
+  const token = tokenInfo.token;
+  if (!token || token.includes('preview')) return null;
+  return { nodeId, token, tokenSource: tokenInfo.source };
+};
+export const buildNodeAuthHeaders = (auth: BrowserRuntimeAuth): Record<string, string> => ({
+  Authorization: `Bearer ${auth.token}`,
+  'X-Media-Sync-Node-Id': auth.nodeId,
+});
+const publishBrowserRuntimeDebug = (patch: Record<string, unknown>) => {
+  if (typeof window === 'undefined') return;
+  (window as any).__browserRuntimeDebug = {
+    ...((window as any).__browserRuntimeDebug || {}),
+    ...patch,
+  };
+};
+export const heartbeatBrowserRuntime = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => {
+  const auth = resolveBrowserRuntimeAuth(nodeId);
+  publishBrowserRuntimeDebug({ lastNodeId: nodeId, lastTokenSource: auth?.tokenSource || 'none', lastTokenLength: auth?.token.length || 0 });
+  if (!auth) return { ok: false, status: 'unavailable', message: 'missing_device_bearer_token' };
+  try {
+    const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}/heartbeat`, { method: 'POST', headers: { Accept: 'application/json', ...buildNodeAuthHeaders(auth) }, cache: 'no-store' });
+    if (res.ok) {
+      publishBrowserRuntimeDebug({ lastHeartbeatStatus: 'online', lastHeartbeatAt: Date.now(), lastHeartbeatMessage: '' });
+      return { ok: true, status: 'online' };
+    }
+    const status = res.status === 401 || res.status === 403 ? 'auth_failed' : 'unavailable';
+    publishBrowserRuntimeDebug({ lastHeartbeatStatus: status, lastHeartbeatAt: Date.now(), lastHeartbeatMessage: `heartbeat:${res.status}` });
+    return { ok: false, status, message: `heartbeat:${res.status}` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    publishBrowserRuntimeDebug({ lastHeartbeatStatus: 'unavailable', lastHeartbeatAt: Date.now(), lastHeartbeatMessage: message });
+    return { ok: false, status: 'unavailable', message };
+  }
+};
+export const registerBrowserRuntime = async (payload: Record<string, unknown>): Promise<{ nodeId: string; token?: string }> => {
+  const response = await fetch('/api/nodes/register', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(payload) });
+  if (!response.ok) throw new Error(`register failed:${response.status}`);
+  const next = await response.json();
+  return { nodeId: String(next?.node_id || payload.node_id || ''), token: typeof next?.token === 'string' ? next.token : undefined };
+};
+export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => heartbeatBrowserRuntime(nodeId);
 
 export const setTabRole = (role: BrowserRuntimeTabRole): void => { if (canUseSessionStorage()) window.sessionStorage.setItem(TAB_ROLE_KEY, role); };
 export const getTabRole = (): BrowserRuntimeTabRole => { if (!canUseSessionStorage()) return 'unknown'; const role = window.sessionStorage.getItem(TAB_ROLE_KEY); return role === 'explorer' || role === 'device' ? role : 'unknown'; };

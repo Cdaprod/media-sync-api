@@ -15,7 +15,7 @@ import { makeBroadcastFailure, type BroadcastSnapshot } from './broadcastSession
 import {
   getBrowserRuntimeIdentity,
   getBrowserRuntimeIdentityDiagnostics,
-  getStoredNodeToken,
+  registerBrowserRuntime,
   importNodeAuthFromQuery,
   openExplorerTab,
   publishBrowserRuntimeTabActive,
@@ -23,6 +23,7 @@ import {
   pruneLegacyNodeIdentityKeys,
   registerWindowName,
   requestExplorerRefresh,
+  syncBrowserRuntimeNode,
   setActiveRuntimeSession,
   setBrowserRuntimeIdentity,
   setTabRole,
@@ -88,23 +89,12 @@ export default function ConnectDevicePage() {
     if (!nodeId) return;
     let cancelled = false;
     const syncNodeRegistration = async () => {
-      const tokenInfo = getStoredNodeToken(nodeId);
-      traceDevice('node-sync:begin', {
-        nodeId,
-        tokenSource: tokenInfo.source,
-        hasToken: !!tokenInfo.token,
-      });
-      traceDevice('node-sync:auth-debug', {
-        nodeId,
-        hasToken: !!tokenInfo.token,
-        tokenSource: tokenInfo.source,
-        tokenLength: tokenInfo.token?.length || 0,
-      });
+      traceDevice('node-sync:begin', { nodeId });
       try {
         const nodes = await api.listNodes();
         const exists = Array.isArray(nodes) && nodes.some((entry) => entry?.node_id === nodeId);
         if (!exists) {
-          await api.registerNode({
+          await registerBrowserRuntime({
             node_id: nodeId,
             label: `${nodeId} Capture Node`,
             base_url: null,
@@ -118,12 +108,8 @@ export default function ConnectDevicePage() {
             metadata: { session_node: 'true', browser_push: 'true', origin: 'browser' },
           });
         }
-        if (tokenInfo.token) {
-          await api.heartbeatNode({ nodeId, token: tokenInfo.token });
-          if (!cancelled) setHeartbeatState('ok');
-        } else if (!cancelled) {
-          setHeartbeatState('skipped-no-token');
-        }
+        const syncResult = await syncBrowserRuntimeNode(nodeId);
+        if (!cancelled) setHeartbeatState(syncResult.ok ? 'ok' : syncResult.status === 'auth_failed' ? 'auth_failed' : 'skipped-no-token');
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (message.includes('401')) {
@@ -416,33 +402,19 @@ export default function ConnectDevicePage() {
     clearNodeHeartbeatTimer();
     if (nodeId) {
       if (!nodeHeartbeatTimerRef.current) nodeHeartbeatTimerRef.current = window.setInterval(() => {
-        const tokenInfo = getStoredNodeToken(nodeId);
-        const token = tokenInfo?.token;
-        if (process.env.NODE_ENV !== 'production') {
-          traceDevice('node-sync:auth-debug', {
-            nodeId,
-            hasToken: !!token,
-            tokenSource: tokenInfo?.source,
-            tokenLength: token?.length || 0,
-          });
-        }
-        if (!token) {
-          appendTrace('heartbeat:skipped-no-token');
-          setHeartbeatState('skipped-no-token');
-          return;
-        }
-        void api.heartbeatNode({ nodeId, token }).then(() => {
-          appendTrace('heartbeat:ok');
-          setHeartbeatState('ok');
-        }).catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
-          if (message.includes('401') || message.includes('403')) {
+        void syncBrowserRuntimeNode(nodeId).then((result) => {
+          if (result.ok) {
+            appendTrace('heartbeat:ok');
+            setHeartbeatState('ok');
+            return;
+          }
+          if (result.status === 'auth_failed') {
             appendTrace('heartbeat:auth-failed');
             setHeartbeatState('auth_failed');
-          } else {
-            appendTrace('heartbeat:error');
-            setHeartbeatState('failed');
+            return;
           }
+          appendTrace('heartbeat:error');
+          setHeartbeatState('failed');
         });
       }, 20000);
     } else {

@@ -5,6 +5,11 @@ export {
   setStoredNodeToken,
   getNodeAuthHeaders,
   requireNodeAuthHeaders,
+  resolveBrowserRuntimeAuth,
+  buildNodeAuthHeaders,
+  heartbeatBrowserRuntime,
+  registerBrowserRuntime,
+  syncBrowserRuntimeNode,
   getBrowserRuntimeIdentityDiagnostics as getNodeAuthDiagnostics,
   setBrowserRuntimeIdentity,
 } from './lib/browserRuntimeIdentity';

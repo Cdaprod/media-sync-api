@@ -3567,15 +3567,15 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const existingStream = getUsableCameraStream();'))
   assert.ok(page.includes('let stream = existingStream;'));
   assert.ok(page.includes("if (!stream) throw new Error('camera_stream_not_ready');"));
-  assert.ok(page.includes('const tokenInfo = getStoredNodeToken(nodeId);'));
-  assert.ok(page.includes('const token = tokenInfo?.token;'));
-  assert.ok(!page.includes('readDeviceBearerToken(nodeId)'));
+  assert.ok(!page.includes('getStoredNodeToken(nodeId)'));
+  assert.ok(!page.includes('Authorization: `Bearer'));
+  assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
   assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
-  assert.ok(page.includes('const tokenInfo = getStoredNodeToken(nodeId);'));
+  assert.ok(page.includes('void syncBrowserRuntimeNode(nodeId).then((result) => {'));
   assert.ok(page.includes('const nodes = await api.listNodes();'));
-  assert.ok(page.includes('await api.registerNode({'));
-  assert.ok(page.includes('await api.heartbeatNode({ nodeId, token: tokenInfo.token });'));
+  assert.ok(page.includes('await registerBrowserRuntime({'));
+  assert.ok(!page.includes('await api.heartbeatNode({ nodeId, token: tokenInfo.token });'));
   assert.ok(hooks.includes('shouldPollDeviceControlPlane'));
   assert.ok(hooks.includes('if (!shouldPollLiveSurface()) return;'));
   assert.ok(hooks.includes('}, 10000);'));
@@ -3621,8 +3621,7 @@ test('connect device route keeps canonical shim and deterministic broadcast wiri
   assert.ok(page.includes('watchLiveSession('));
   assert.ok(page.includes("startPreview('camera', { stream"));
   assert.ok(page.includes('await publishPeerOffer(nextSession, stream);'));
-  assert.ok(page.includes("traceDevice('node-sync:auth-debug'"));
-  assert.ok(page.includes('tokenLength: tokenInfo.token?.length || 0'));
+  assert.ok(page.includes('syncBrowserRuntimeNode(nodeId)'));
   assert.ok(page.includes("setHeartbeatState('auth_failed')"));
   assert.ok(!page.includes("stopCamera(); setHeartbeatState('auth_failed')"));
   assert.ok(page.includes('const markLiveFlowStep = useCallback((patch: Record<string, unknown>) => {'));
@@ -3703,13 +3702,18 @@ test('startup null diagnostics guard against null throws/rejections and SSE oner
   assert.ok(!corpus.includes('throw null'));
   assert.ok(!corpus.includes('Promise.reject(null)'));
   assert.ok(!corpus.includes('reject(null)'));
-  assert.ok(api.includes('Authorization: `Bearer ${token}`'));
-  assert.ok(api.includes("'X-Media-Sync-Node-Id': nodeId"));
-  assert.ok(api.includes('const tokenInfo = getStoredNodeToken(nodeId);'));
+  assert.ok(api.includes('buildNodeAuthHeaders({ nodeId, token'));
+  assert.ok(api.includes('buildNodeAuthHeaders({ nodeId, token'));
   assert.ok(!api.includes('token_preview'));
   assert.ok(identity.includes('window.open(url, windowName)'));
   assert.ok(identity.includes('CONNECT_DEVICE_WINDOW_NAME'));
   assert.ok(identity.includes('EXPLORER_WINDOW_NAME'));
+  assert.ok(identity.includes('export const resolveBrowserRuntimeAuth = (nodeId: string): BrowserRuntimeAuth | null => {'));
+  assert.ok(identity.includes('export const buildNodeAuthHeaders = (auth: BrowserRuntimeAuth): Record<string, string> => ({'));
+  assert.ok(identity.includes('export const heartbeatBrowserRuntime = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => {'));
+  assert.ok(identity.includes('export const registerBrowserRuntime = async (payload: Record<string, unknown>): Promise<{ nodeId: string; token?: string }> => {'));
+  assert.ok(identity.includes('export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => heartbeatBrowserRuntime(nodeId);'));
+  assert.ok(identity.includes("if (!token || token.includes('preview')) return null;"));
 
   assert.ok(app.includes("if (process.env.NODE_ENV === 'production') return;"));
   assert.ok(app.includes("window.addEventListener('error', onWindowErrorDiagnostic);"));

@@ -1,4 +1,10 @@
 ### Latest Implementation Notes (2026-05-02)
+- [x] Introduced BrowserRuntimeClient seam in `browserRuntimeIdentity.ts` (`resolveBrowserRuntimeAuth`, `buildNodeAuthHeaders`, `heartbeatBrowserRuntime`, `registerBrowserRuntime`, `syncBrowserRuntimeNode`) so auth/heartbeat behavior is centralized.
+- [x] Connect-device page now orchestrates via BrowserRuntimeClient sync/register calls and no longer reads stored tokens directly or assembles heartbeat auth headers.
+- [x] Added browser runtime diagnostics surface (`window.__browserRuntimeDebug`) without exposing bearer token values.
+- [ ] Next pass: extract Explorer source-control sidebar panels into dedicated view-model/components after this auth seam stabilizes.
+
+### Latest Implementation Notes (2026-05-02)
 - [x] Removed fallback heartbeat token lane from connect-device (`readDeviceBearerToken`) so heartbeat auth now remains strictly node-scoped via `getStoredNodeToken(nodeId)`.
 - [x] Added static contract guard to prevent reintroduction of credential-fallback bearer sourcing in connect-device heartbeat path.
 - [ ] Next pass: capture one browser verification trace that heartbeat auth uses node-scoped token only across tab refresh + reconnect.
