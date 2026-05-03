@@ -3571,7 +3571,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const getUsableCameraStream = () => {'));
   assert.ok(page.includes('const existingStream = getUsableCameraStream();'))
   assert.ok(page.includes('let stream = existingStream;'));
-  assert.ok(page.includes("if (!stream) throw new Error('camera_stream_not_ready');"));
+  assert.ok(page.includes("throw new Error('camera_stream_not_ready')"));
   assert.ok(!page.includes('getStoredNodeToken(nodeId)'));
   assert.ok(!page.includes('Authorization: `Bearer'));
   assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
@@ -3816,4 +3816,35 @@ test('live device builder supports offer/answer visibility from both signal payl
   assert.ok(builder.includes('offer?.sdp'));
   assert.ok(builder.includes('answer?.sdp'));
   assert.ok(builder.includes('watchLiveAvailable'));
+});
+
+test('watchLiveAvailable requires offer but not answer (viewer creates answer after clicking Watch Live)', () => {
+  const builderPath = path.join(packageRoot, 'src', 'source-control', 'buildLiveDeviceInstances.ts');
+  const builder = fs.readFileSync(builderPath, 'utf8');
+  // Must not gate watchLiveAvailable on hasAnswer — the answer comes from the viewer after Watch Live is clicked
+  assert.ok(!builder.includes('watchLiveAvailable = Boolean(existing.sessionId && existing.hasOffer && existing.hasAnswer)'),
+    'watchLiveAvailable must not require hasAnswer');
+  assert.ok(builder.includes('watchLiveAvailable') && builder.includes('hasOffer'),
+    'watchLiveAvailable must still depend on hasOffer');
+  // Must expose unavailableReason for diagnostic display
+  assert.ok(builder.includes('unavailableReason'), 'builder must emit unavailableReason for UI feedback');
+});
+
+test('LiveDeviceInstanceCard shows session tag and unavailableReason when watch live not available', () => {
+  const cardPath = path.join(packageRoot, 'src', 'source-control', 'LiveDeviceInstanceCard.tsx');
+  const card = fs.readFileSync(cardPath, 'utf8');
+  assert.ok(card.includes('session:'), 'card must show session:yes/no tag');
+  assert.ok(card.includes('offer:'), 'card must show offer:yes/no tag');
+  assert.ok(card.includes('answer:'), 'card must show answer:yes/no tag');
+  assert.ok(card.includes('unavailableReason'), 'card must surface unavailableReason for diagnostic display');
+});
+
+test('connect/device page.tsx emits structured broadcast diagnostics on window.__connectDeviceBroadcastDebug', () => {
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  assert.ok(page.includes('__connectDeviceBroadcastDebug'), 'page must write structured broadcast diagnostics');
+  assert.ok(page.includes('markBroadcastDebug'), 'page must call markBroadcastDebug helper');
+  assert.ok(page.includes('offerCreated'), 'diagnostics must include offerCreated');
+  assert.ok(page.includes('offerPosted'), 'diagnostics must include offerPosted');
+  assert.ok(page.includes('videoTrackCount'), 'diagnostics must include videoTrackCount');
 });

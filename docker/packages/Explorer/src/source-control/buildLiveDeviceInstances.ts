@@ -23,6 +23,7 @@ export type LiveDeviceInstance = {
   runtimeState?: string;
   watchLiveAvailable: boolean;
   openDeviceAvailable: boolean;
+  unavailableReason?: 'no_session' | 'no_offer' | 'auth_failed' | null;
 };
 
 export function buildLiveDeviceInstances({
@@ -51,15 +52,32 @@ export function buildLiveDeviceInstances({
     return typed.state || typed.status;
   };
 
+  const computeWatchLive = (entry: LiveDeviceInstance) => {
+    // Watch Live requires session + offer. The viewer creates the answer AFTER clicking
+    // Watch Live, so requiring hasAnswer would make the button never appear.
+    entry.watchLiveAvailable = Boolean(entry.sessionId && entry.hasOffer);
+    if (entry.status === 'auth_failed' || entry.status === 'offline') {
+      entry.unavailableReason = 'auth_failed';
+    } else if (!entry.sessionId) {
+      entry.unavailableReason = 'no_session';
+    } else if (!entry.hasOffer) {
+      entry.unavailableReason = 'no_offer';
+    } else {
+      entry.unavailableReason = null;
+    }
+  };
+
   const byNodeId = new Map<string, LiveDeviceInstance>();
   for (const node of nodes) {
-    byNodeId.set(node.node_id, {
+    const entry: LiveDeviceInstance = {
       nodeId: node.node_id,
       label: node.label || node.node_id,
       status: node.status,
       openDeviceAvailable: true,
       watchLiveAvailable: false,
-    });
+    };
+    computeWatchLive(entry);
+    byNodeId.set(node.node_id, entry);
   }
 
   for (const source of sources) {
@@ -73,6 +91,7 @@ export function buildLiveDeviceInstances({
     };
     existing.sourceName = source.name;
     existing.sourceKind = source.kind || source.type || undefined;
+    computeWatchLive(existing);
     byNodeId.set(ownerNodeId, existing);
   }
 
@@ -92,7 +111,7 @@ export function buildLiveDeviceInstances({
     if (!existing.status) {
       existing.status = existing.sessionState;
     }
-    existing.watchLiveAvailable = Boolean(existing.sessionId && existing.hasOffer && existing.hasAnswer);
+    computeWatchLive(existing);
     byNodeId.set(nodeId, existing);
   }
 
@@ -118,7 +137,7 @@ export function buildLiveDeviceInstances({
     if (!existing.status && existing.runtimeState === 'failed') {
       existing.status = 'failed';
     }
-    existing.watchLiveAvailable = Boolean(existing.sessionId && existing.hasOffer && existing.hasAnswer);
+    computeWatchLive(existing);
     byNodeId.set(nodeId, existing);
   }
 

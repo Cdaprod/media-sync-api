@@ -318,3 +318,95 @@ def test_viewer_attach_does_not_overwrite_publisher_offer_and_supports_two_viewe
     assert match is not None
     assert match["viewer_count"] >= 2
     assert match["has_offer"] is True
+
+
+def _register_node_auth_webrtc(client, node_id: str) -> tuple[str, str]:
+    response = client.post(
+        "/connect/register",
+        json={
+            "node_id": node_id,
+            "label": f"{node_id} label",
+            "base_url": "http://127.0.0.1:9001",
+            "roles": ["runner", "capture"],
+            "capabilities": ["can_proxy_streams"],
+            "source_name": "camera-primary",
+            "source_kind": "capture",
+            "source_authority": "runner-local",
+            "advertised_source_kinds": ["capture"],
+            "status": "healthy",
+            "metadata": {"transport_hint": "session"},
+        },
+    )
+    assert response.status_code == 200
+    return node_id, response.json()["auth"]["token"]
+
+
+def _auth_headers_webrtc(node_id: str, token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-Media-Sync-Node-Id": node_id,
+    }
+
+
+def test_signal_offer_via_live_sessions_is_visible_in_api_live(client):
+    """POST /api/live_sessions/{id}/signal/offer must bridge into WebRtcLiveSessionRegistry.
+
+    Device posts the WebRTC offer via the durable /api/live_sessions signal route;
+    Explorer reads /api/live to derive has_offer for Watch Live visibility and
+    ensureLiveBroadcastAlignment checks this too. Without the bridge these two stores
+    are decoupled and alignment always fails with offer_missing / session_not_listed.
+    """
+    node_id, token = _register_node_auth_webrtc(client, "node-bridge-signal-test")
+    started = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=_auth_headers_webrtc(node_id, token),
+    )
+    assert started.status_code == 200
+    session_id = started.json()["session_id"]
+
+    offer_res = client.post(
+        f"/api/live_sessions/{session_id}/signal/offer",
+        json={"offer": {"type": "offer", "sdp": "v=0\r\no=bridged-offer"}},
+        headers=_auth_headers_webrtc(node_id, token),
+    )
+    assert offer_res.status_code == 200
+
+    listed = client.get("/api/live")
+    assert listed.status_code == 200
+    sessions = listed.json().get("sessions", listed.json() if isinstance(listed.json(), list) else [])
+    match = next((s for s in sessions if s["session_id"] == session_id), None)
+    assert match is not None, f"session {session_id} not found in /api/live after signal/offer post"
+    assert match["has_offer"] is True, "has_offer must be True after signal/offer is posted"
+    assert match["node_id"] == node_id
+
+
+def test_signal_answer_via_live_sessions_is_visible_in_api_live(client):
+    """POST /api/live_sessions/{id}/signal/answer must bridge into WebRtcLiveSessionRegistry."""
+    node_id, token = _register_node_auth_webrtc(client, "node-bridge-answer-test")
+    started = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=_auth_headers_webrtc(node_id, token),
+    )
+    session_id = started.json()["session_id"]
+
+    client.post(
+        f"/api/live_sessions/{session_id}/signal/offer",
+        json={"offer": {"type": "offer", "sdp": "v=0\r\no=bridged-offer"}},
+        headers=_auth_headers_webrtc(node_id, token),
+    )
+    answer_res = client.post(
+        f"/api/live_sessions/{session_id}/signal/answer",
+        json={"viewer_id": "viewer-bridge-a", "answer": {"type": "answer", "sdp": "v=0\r\no=viewer-answer"}},
+    )
+    assert answer_res.status_code == 200
+
+    listed = client.get("/api/live")
+    sessions = listed.json().get("sessions", [])
+    match = next((s for s in sessions if s["session_id"] == session_id), None)
+    assert match is not None
+    assert match["has_offer"] is True
+    assert match["has_answer"] is True
+    assert match["state"] == "connected"
+    assert match["has_offer"] is True

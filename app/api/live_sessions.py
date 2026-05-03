@@ -149,6 +149,77 @@ def _require_session_owner(runtime: AppRuntime, session_id: str, node_id: str) -
         raise HTTPException(status_code=403, detail="session_not_owned_by_node")
 
 
+def _emit_runtime_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
+    bus = getattr(runtime, "events", None)
+    if bus is None:
+        return
+    if hasattr(bus, "publish"):
+        bus.publish(event_type, payload)
+        return
+    if hasattr(bus, "emit"):
+        bus.emit(event_type, payload)
+
+
+def _bridge_signal_offer(runtime: AppRuntime, session_id: str, node_id: str, offer: dict[str, Any]) -> None:
+    """Mirror the durable signal offer into runtime.live_sessions so /api/live reflects it.
+
+    /api/live_sessions/{id}/signal/offer writes to LiveSessionService.signal_state_by_session,
+    but Explorer/device alignment reads /api/live (WebRtcLiveSessionRegistry). Without this
+    bridge has_offer stays false on /api/live and ensureLiveBroadcastAlignment fails.
+    """
+    registry = getattr(runtime, "live_sessions", None)
+    if registry is None:
+        return
+    session = registry.get(session_id)
+    if session is None:
+        registry.create(session_id=session_id, node_id=node_id)
+    registry.set_offer(session_id, offer)
+    assets = getattr(runtime, "assets", None)
+    if assets is not None:
+        try:
+            from app.runtime.assets import RuntimeAsset
+
+            assets.upsert(RuntimeAsset(
+                id=f"runtime-live-{session_id}",
+                kind="live",
+                state="previewable",
+                session_id=session_id,
+                node_id=node_id,
+                source_kind="camera",
+                project="Live",
+                source="primary",
+                metadata={"session_id": session_id, "node_id": node_id},
+            ))
+            _emit_runtime_event(runtime, "runtime_asset.updated", {"asset_id": f"runtime-live-{session_id}", "state": "previewable"})
+        except Exception:
+            pass
+    _emit_runtime_event(runtime, "live_session.updated", {"session_id": session_id, "node_id": node_id, "action": "offer_published"})
+
+
+def _bridge_signal_answer(runtime: AppRuntime, session_id: str, viewer_id: str, answer: dict[str, Any]) -> None:
+    registry = getattr(runtime, "live_sessions", None)
+    if registry is None:
+        return
+    if registry.get(session_id) is None:
+        return
+    registry.set_answer(session_id, answer, viewer_id)
+    _emit_runtime_event(runtime, "live_session.updated", {"session_id": session_id, "viewer_id": viewer_id, "action": "viewer_answer"})
+
+
+def _bridge_signal_ice(runtime: AppRuntime, session_id: str, role: str, viewer_id: str, candidate: dict[str, Any]) -> None:
+    registry = getattr(runtime, "live_sessions", None)
+    if registry is None:
+        return
+    if registry.get(session_id) is None:
+        return
+    if role == "device":
+        registry.add_device_ice(session_id, candidate)
+        _emit_runtime_event(runtime, "live_session.updated", {"session_id": session_id, "action": "device_ice"})
+    else:
+        registry.add_viewer_ice(session_id, viewer_id, candidate)
+        _emit_runtime_event(runtime, "live_session.updated", {"session_id": session_id, "viewer_id": viewer_id, "action": "viewer_ice"})
+
+
 def _resolve_source_record(registry: Any, source: str) -> Any:
     for method_name in ("require", "get", "get_source", "resolve"):
         method = getattr(registry, method_name, None)
@@ -419,10 +490,12 @@ async def publish_live_signal_offer(
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
     _require_session_owner(runtime, session_id, ctx.node_id)
+    offer_payload = payload.offer.model_dump(mode="python")
     try:
-        state = _session_service(runtime).publish_signal_offer(session_id, payload.offer.model_dump(mode="python"))
+        state = _session_service(runtime).publish_signal_offer(session_id, offer_payload)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _bridge_signal_offer(runtime, session_id, ctx.node_id, offer_payload)
     return LiveSignalStateResponse(**state)
 
 
@@ -432,14 +505,17 @@ async def publish_live_signal_answer(
     payload: LiveSignalAnswerRequest,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
+    answer_payload = payload.answer.model_dump(mode="python")
+    viewer_key = (payload.viewer_id or "viewer-default").strip() or "viewer-default"
     try:
         state = _session_service(runtime).publish_signal_answer(
             session_id,
-            payload.viewer_id,
-            payload.answer.model_dump(mode="python"),
+            viewer_key,
+            answer_payload,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _bridge_signal_answer(runtime, session_id, viewer_key, answer_payload)
     return LiveSignalStateResponse(**state)
 
 
@@ -461,15 +537,18 @@ async def publish_live_signal_ice(
         if not ctx.can("live:write"):
             raise HTTPException(status_code=403, detail="insufficient_device_scope")
         _require_session_owner(runtime, session_id, ctx.node_id)
+    candidate_payload = payload.candidate.model_dump(mode="python")
+    viewer_key = (payload.viewer_id or "viewer-default").strip() or "viewer-default"
     try:
         state = _session_service(runtime).publish_signal_ice(
             session_id,
             payload.role,
-            payload.viewer_id,
-            payload.candidate.model_dump(mode="python"),
+            viewer_key,
+            candidate_payload,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _bridge_signal_ice(runtime, session_id, payload.role, viewer_key, candidate_payload)
     return LiveSignalStateResponse(**state)
 
 

@@ -163,6 +163,15 @@ export default function ConnectDevicePage() {
       lastUpdatedAt: Date.now(),
     };
   }, []);
+  const markBroadcastDebug = useCallback((patch: Record<string, unknown>) => {
+    if (typeof window === 'undefined') return;
+    const current = ((window as any).__connectDeviceBroadcastDebug || {}) as Record<string, unknown>;
+    (window as any).__connectDeviceBroadcastDebug = {
+      ...current,
+      ...patch,
+      lastUpdatedAt: Date.now(),
+    };
+  }, []);
 
 
 
@@ -286,8 +295,18 @@ export default function ConnectDevicePage() {
     const sessionId = sessionRecord.session_id;
     appendTrace(`peer:create ${sessionId}`);
     traceDevice('peer:create', { sessionId, trackCount: stream.getTracks().length });
+    const videoTrackCount = stream.getVideoTracks().length;
+    const audioTrackCount = stream.getAudioTracks().length;
+    markBroadcastDebug({ nodeId, sessionId, hasStream: true, videoTrackCount, audioTrackCount, offerCreated: false, offerPosted: false });
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
+      markBroadcastDebug({ lastPeerError: 'rtc_unavailable' });
       setPeerStatus('failed');
+      return;
+    }
+    if (videoTrackCount === 0) {
+      markBroadcastDebug({ lastPeerError: 'no_video_tracks' });
+      setPeerStatus('failed');
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('missing_media_stream', 'no_video_tracks'), updatedAt: Date.now() }));
       return;
     }
     peerConnectionRef.current?.close();
@@ -298,6 +317,7 @@ export default function ConnectDevicePage() {
     activeViewerIdRef.current = 'viewer-broadcast';
     peer.onconnectionstatechange = () => {
       traceDevice('peer:connection-state', { state: peer.connectionState });
+      markBroadcastDebug({ peerConnectionState: peer.connectionState });
       if (peer.connectionState === 'connected') setPeerStatus('connected');
       if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') setPeerStatus('failed');
     };
@@ -308,12 +328,23 @@ export default function ConnectDevicePage() {
     };
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
+    markBroadcastDebug({ offerCreated: true });
+    try {
+      await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
+      markBroadcastDebug({ offerPosted: true, offerPostStatus: 'ok' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      markBroadcastDebug({ offerPosted: false, offerPostStatus: message, lastBroadcastError: message });
+      setPeerStatus('failed');
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('offer_publish_failed', err), updatedAt: Date.now() }));
+      throw err;
+    }
     appendTrace(`peer:offer-published ${sessionId}`);
     setPeerStatus('offer-published');
     const live = await ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId || '' });
     if (!live.ok) {
       appendTrace(`peer:api-live-mismatch ${live.reason}`);
+      markBroadcastDebug({ lastBroadcastError: `live_registry_mismatch:${live.reason}` });
       setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('live_registry_mismatch', live.reason), updatedAt: Date.now() }));
       if (live.reason === 'session_not_listed' || live.reason === 'node_mismatch') {
         peer.close();
@@ -375,7 +406,17 @@ export default function ConnectDevicePage() {
         enabled: track.enabled,
       })) ?? [],
     });
-    if (!stream) throw new Error('camera_stream_not_ready');
+    if (!stream) {
+      markBroadcastDebug({ cameraReady: false, hasStream: false, lastBroadcastError: 'camera_stream_not_ready' });
+      throw new Error('camera_stream_not_ready');
+    }
+    markBroadcastDebug({
+      nodeId,
+      cameraReady: true,
+      hasStream: true,
+      videoTrackCount: stream.getVideoTracks().length,
+      audioTrackCount: stream.getAudioTracks().length,
+    });
     markLiveFlowStep({ deviceCameraReadyAt: Date.now() });
     setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
     await bindPreviewStream(stream);
@@ -419,8 +460,9 @@ export default function ConnectDevicePage() {
       await publishPeerOffer(nextSession, stream);
     } catch (err) {
       appendTrace('peer:offer-failed');
+      markBroadcastDebug({ lastBroadcastError: err instanceof Error ? err.message : String(err) });
       setPeerStatus('failed');
-      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('peer_offer_failed', err instanceof Error ? err.message : String(err)), updatedAt: Date.now() }));
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('peer_connection_failed', err instanceof Error ? err.message : String(err)), updatedAt: Date.now() }));
       return false;
     }
     return true;
