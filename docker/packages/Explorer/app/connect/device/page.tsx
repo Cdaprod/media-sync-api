@@ -22,10 +22,10 @@ import {
   pruneLegacyNodeIdentityKeys,
   registerWindowName,
   requestExplorerRefresh,
+  subscribeBrowserRuntimeChannel,
   syncBrowserRuntimeNode,
   setActiveRuntimeSession,
   setBrowserRuntimeIdentity,
-  setTabRole,
   stripNodeAuthQueryParams,
 } from '../../../src/lib/browserRuntimeIdentity';
 // CSS import removed – now in layout.tsx
@@ -45,10 +45,9 @@ export default function ConnectDevicePage() {
   const nodeId = queryNodeId || storedNodeId;
   const queryToken = searchParams.get('token');
   useEffect(() => {
-    setTabRole('device');
     registerWindowName('device');
     publishBrowserRuntimeTabActive('device');
-    requestExplorerRefresh('device-mount');
+    requestExplorerRefresh('device-mounted');
     const imported = importNodeAuthFromQuery();
     stripNodeAuthQueryParams();
     const identity = getBrowserRuntimeIdentity(imported.nodeId);
@@ -60,14 +59,21 @@ export default function ConnectDevicePage() {
       tokenSource: imported.tokenSource || identity.tokenSource,
       diagnostics: getBrowserRuntimeIdentityDiagnostics(imported.nodeId || identity.nodeId),
     });
-  }, []);
-  useEffect(() => {
+    const unsubscribe = subscribeBrowserRuntimeChannel((message) => {
+      if (message.type === 'open-request' && message.targetRole === 'device') {
+        publishBrowserRuntimeTabActive('device');
+      }
+    });
     const onFocus = () => {
+      registerWindowName('device');
       publishBrowserRuntimeTabActive('device');
       requestExplorerRefresh('device-focus');
     };
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   useEffect(() => {

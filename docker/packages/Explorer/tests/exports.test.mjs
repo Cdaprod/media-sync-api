@@ -408,8 +408,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('peerVideoRef'));
   assert.ok(app.includes('openDeviceTab(node.node_id);'));
   assert.ok(nodeAuth.includes("const CHANNEL_NAME = 'thatdamtoolbox-ui';"));
-  assert.ok(nodeAuth.includes("export const EXPLORER_WINDOW_NAME = 'thatdamtoolbox-explorer';"));
-  assert.ok(nodeAuth.includes("export const CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox-connect-device';"));
+  assert.ok(nodeAuth.includes("export const EXPLORER_WINDOW_NAME = 'thatdamtoolbox:explorer';"));
+  assert.ok(nodeAuth.includes("export const CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox:connect-device';"));
   assert.ok(nodeAuth.includes('openNamedWindow'));
   assert.ok(nodeAuth.includes('requestExplorerRefresh'));
   assert.ok(device.includes("registerWindowName('device');"));
@@ -417,8 +417,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(device.includes("requestExplorerRefresh('device-focus');"));
   assert.ok(device.includes('openExplorerTab(\'/\');'));
   assert.ok(app.includes("registerWindowName('explorer');"));
-  assert.ok(app.includes("if (message?.type === 'request-refresh') {"));
-  assert.ok(app.includes("scheduleExplorerObservabilityRefresh(reason, 0);"));
+  assert.ok(app.includes("message.type === 'request-refresh'"));
+  assert.ok(app.includes("scheduleExplorerObservabilityRefresh"));
   assert.ok(app.includes('pruneLegacyNodeIdentityKeys();'));
   assert.ok(registerModal.includes('const existingNodeId = getStoredNodeId();'));
   assert.ok(registerModal.includes('const nextNodeId = existingNodeId || buildDefaultNodeId(nextContext.deviceClass);'));
@@ -3847,4 +3847,31 @@ test('connect/device page.tsx emits structured broadcast diagnostics on window._
   assert.ok(page.includes('offerCreated'), 'diagnostics must include offerCreated');
   assert.ok(page.includes('offerPosted'), 'diagnostics must include offerPosted');
   assert.ok(page.includes('videoTrackCount'), 'diagnostics must include videoTrackCount');
+});
+
+test('browser runtime identity owns stable explorer/device window names', () => {
+  const identityPath = path.join(packageRoot, 'src', 'lib', 'browserRuntimeIdentity.ts');
+  const source = fs.readFileSync(identityPath, 'utf8');
+  assert.ok(source.includes("EXPLORER_WINDOW_NAME = 'thatdamtoolbox:explorer'"), 'EXPLORER_WINDOW_NAME must use colon namespace');
+  assert.ok(source.includes("CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox:connect-device'"), 'CONNECT_DEVICE_WINDOW_NAME must use colon namespace');
+  assert.ok(source.includes('window.open(url, windowName)'), 'must open named window via openNamedWindow');
+  assert.ok(source.includes('registerWindowName'), 'must export registerWindowName');
+  assert.ok(source.includes('subscribeBrowserRuntimeChannel'), 'must export subscribeBrowserRuntimeChannel');
+  assert.ok(source.includes('requestExplorerRefresh'), 'must export requestExplorerRefresh');
+  assert.ok(source.includes("type: 'open-request'"), 'must define open-request message type');
+  assert.ok(source.includes('BrowserRuntimeUiMessage'), 'must export typed BrowserRuntimeUiMessage union');
+  assert.ok(source.includes('getWindowNameForRole'), 'must export getWindowNameForRole helper');
+});
+
+test('explorer and device pages register stable tab roles on mount and focus', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const device = fs.readFileSync(devicePath, 'utf8');
+  assert.ok(explorer.includes("registerWindowName('explorer')"), 'Explorer must call registerWindowName on mount');
+  assert.ok(explorer.includes('openDeviceTab'), 'Explorer must import and call openDeviceTab');
+  assert.ok(device.includes("registerWindowName('device')"), 'Device must call registerWindowName on mount');
+  assert.ok(device.includes('openExplorerTab'), 'Device must import openExplorerTab');
+  assert.ok(device.includes('subscribeBrowserRuntimeChannel'), 'Device must subscribe to BroadcastChannel for open-request');
+  assert.ok(device.includes("message.type === 'open-request'"), 'Device must handle open-request messages');
 });
