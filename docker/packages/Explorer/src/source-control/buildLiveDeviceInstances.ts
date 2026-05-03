@@ -1,4 +1,4 @@
-import type { LiveSession } from '../types/liveSession';
+import type { WebRtcLiveSession } from '../contracts/live';
 import type { NodeControlRecord, SourceControlRecord } from '../types/sourceControl';
 
 export type RuntimeAssetLike = {
@@ -34,23 +34,17 @@ export function buildLiveDeviceInstances({
 }: {
   nodes: NodeControlRecord[];
   sources: SourceControlRecord[];
-  liveSessions: LiveSession[];
+  liveSessions: WebRtcLiveSession[];
   runtimeAssets?: RuntimeAssetLike[];
 }): LiveDeviceInstance[] {
-  const readSessionHasOffer = (session: LiveSession): boolean => {
-    const typed = session as LiveSession & { has_offer?: boolean; hasOffer?: boolean; offer?: { sdp?: string | null } | null };
-    return Boolean(typed.has_offer || typed.hasOffer || typed.offer?.sdp);
-  };
+  const readSessionHasOffer = (session: WebRtcLiveSession): boolean =>
+    Boolean(session.has_offer);
 
-  const readSessionHasAnswer = (session: LiveSession): boolean => {
-    const typed = session as LiveSession & { has_answer?: boolean; hasAnswer?: boolean; answer?: { sdp?: string | null } | null };
-    return Boolean(typed.has_answer || typed.hasAnswer || typed.answer?.sdp);
-  };
+  const readSessionHasAnswer = (session: WebRtcLiveSession): boolean =>
+    Boolean(session.has_answer);
 
-  const readSessionState = (session: LiveSession): string | undefined => {
-    const typed = session as LiveSession & { state?: string; status?: string };
-    return typed.state || typed.status;
-  };
+  const readSessionState = (session: WebRtcLiveSession): string | undefined =>
+    session.state;
 
   const computeWatchLive = (entry: LiveDeviceInstance) => {
     // Watch Live requires session + offer. The viewer creates the answer AFTER clicking

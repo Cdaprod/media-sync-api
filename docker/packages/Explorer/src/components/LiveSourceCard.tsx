@@ -33,6 +33,7 @@ function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
 interface LiveSourceCardProps {
   session: LiveSessionRecord;
   apiBase?: string;
+  autoStartPeer?: boolean;
   onOpen?: (session: LiveSessionRecord) => void;
   onStartRecording?: (session: LiveSessionRecord) => void;
   onStopRecording?: (session: LiveSessionRecord) => void;
@@ -43,6 +44,7 @@ interface LiveSourceCardProps {
 export function LiveSourceCard({
   session,
   apiBase = '',
+  autoStartPeer = false,
   onOpen,
   onStartRecording,
   onStopRecording,
@@ -56,7 +58,8 @@ export function LiveSourceCard({
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
   const deviceIceSeenRef = useRef<Set<string>>(new Set());
   const viewerIdRef = useRef(`viewer-${Math.random().toString(36).slice(2, 10)}`);
-  const [peerEnabled, setPeerEnabled] = useState(false);
+  const [peerEnabled, setPeerEnabled] = useState(autoStartPeer);
+  useEffect(() => { if (autoStartPeer) setPeerEnabled(true); }, [autoStartPeer]);
   const [peerStream, setPeerStream] = useState<MediaStream | null>(null);
   const [peerError, setPeerError] = useState<string | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');

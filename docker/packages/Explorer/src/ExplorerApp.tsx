@@ -52,6 +52,8 @@ import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
+import type { LiveSession } from './types/liveSession';
+import type { WebRtcLiveSession } from './contracts/live';
 import { useRuntimeController } from './runtime/useRuntimeController';
 import { useLivePreviewState } from './runtime/useLivePreviewState';
 import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
@@ -700,6 +702,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
   const [runtimeAssets, setRuntimeAssets] = useState<Array<Record<string, unknown>>>([]);
+  const [peerEnabledSessions, setPeerEnabledSessions] = useState<ReadonlySet<string>>(new Set());
   const controlPlaneRefreshDebounceRef = useRef<number | null>(null);
 
   // ---------------------------------------------------------------------------
@@ -3436,6 +3439,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     window.location.href = getDeviceUrl(nodeId);
   }, [openDeviceForNode, resolveNodeRecord]);
 
+  const openLivePeerViewer = useCallback((session: WebRtcLiveSession) => {
+    setPeerEnabledSessions((prev) => {
+      if (prev.has(session.session_id)) return prev;
+      const next = new Set(prev);
+      next.add(session.session_id);
+      return next;
+    });
+    if (!liveSessions.some((s) => s.session_id === session.session_id)) {
+      void reloadLiveSessions();
+    }
+  }, [liveSessions, reloadLiveSessions]);
+
   const heartbeatNodeNow = useCallback(async (nodeId: string) => {
     try {
       await api.heartbeatNode(nodeId);
@@ -5393,6 +5408,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           <LiveSourceCard
                             session={session}
                             apiBase={resolvedApiBase}
+                            autoStartPeer={peerEnabledSessions.has(session.session_id)}
                             onRecordPeerSession={(recordingSessionId) => {
                               void recordPeerSession(session, recordingSessionId);
                             }}

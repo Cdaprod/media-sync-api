@@ -495,7 +495,12 @@ export default function ConnectDevicePage() {
       return;
     }
 
-    const offer = await api.getLiveOffer(sessionId).catch(() => null);
+    let offer: RTCSessionDescriptionInit | null = null;
+    for (let attempt = 0; attempt < 10 && !offer?.sdp; attempt++) {
+      if (viewerSessionIdRef.current !== sessionId) return;
+      offer = await api.getLiveOffer(sessionId).catch(() => null);
+      if (!offer?.sdp && attempt < 9) await new Promise<void>((res) => setTimeout(res, 500));
+    }
     if (!offer?.sdp) {
       setPeerStatus('failed');
       return;
