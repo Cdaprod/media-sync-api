@@ -3446,10 +3446,10 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       next.add(session.session_id);
       return next;
     });
-    if (!liveSessions.some((s) => s.session_id === session.session_id)) {
-      void reloadLiveSessions();
-    }
-  }, [liveSessions, reloadLiveSessions]);
+    // Always reload: SSE payloads are partial and may lack `status`, leaving
+    // LiveSourceCard.isActive false and blocking peer viewer startup.
+    void reloadLiveSessions();
+  }, [reloadLiveSessions]);
 
   const heartbeatNodeNow = useCallback(async (nodeId: string) => {
     try {

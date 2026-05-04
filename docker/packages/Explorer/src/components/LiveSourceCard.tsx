@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { createApiClient } from '../api';
 import type { LiveSessionRecord } from '../types/liveSession';
@@ -64,7 +64,8 @@ export function LiveSourceCard({
   const [peerError, setPeerError] = useState<string | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');
   const [peerRetryToken, setPeerRetryToken] = useState(0);
-  const api = createApiClient(apiBase);
+  const answerPostedRef = useRef(false);
+  const api = useMemo(() => createApiClient(apiBase), [apiBase]);
 
   useEffect(() => {
     if (!imgRef.current || !previewUrl) return;
@@ -83,6 +84,8 @@ export function LiveSourceCard({
       return undefined;
     }
     let disposed = false;
+    let consecutiveFails = 0;
+    answerPostedRef.current = false;
     const peer = new RTCPeerConnection();
     peerConnRef.current = peer;
     deviceIceSeenRef.current.clear();
@@ -115,11 +118,22 @@ export function LiveSourceCard({
       void api.getLiveSignalState(session.session_id, viewerId)
         .then(async (signal) => {
           if (disposed || !signal || !peerConnRef.current) return;
-          if (signal.offer?.sdp && !peerConnRef.current.currentRemoteDescription) {
-            await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
-            const answer = await peerConnRef.current.createAnswer();
-            await peerConnRef.current.setLocalDescription(answer);
-            await api.publishLiveSignalAnswer(session.session_id, viewerId, { type: 'answer', sdp: answer.sdp || '' }, session.node_id);
+          consecutiveFails = 0;
+          const alreadySetRemote = !!peerConnRef.current.currentRemoteDescription;
+          if (signal.offer?.sdp && (!alreadySetRemote || !answerPostedRef.current)) {
+            let sdpToSend: string | undefined;
+            if (!alreadySetRemote) {
+              await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
+              const answer = await peerConnRef.current.createAnswer();
+              await peerConnRef.current.setLocalDescription(answer);
+              sdpToSend = answer.sdp || '';
+            } else if (peerConnRef.current.localDescription?.sdp) {
+              sdpToSend = peerConnRef.current.localDescription.sdp;
+            }
+            if (sdpToSend !== undefined) {
+              await api.publishLiveSignalAnswer(session.session_id, viewerId, { type: 'answer', sdp: sdpToSend }, session.node_id);
+              answerPostedRef.current = true;
+            }
           }
           for (const candidate of signal.ice_from_device || []) {
             const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
@@ -129,7 +143,8 @@ export function LiveSourceCard({
           }
         })
         .catch(() => {
-          setPeerStatus('failed');
+          consecutiveFails++;
+          if (consecutiveFails >= 5) setPeerStatus('failed');
         });
     }, 1000);
 
@@ -139,6 +154,7 @@ export function LiveSourceCard({
       peerConnRef.current?.close();
       peerConnRef.current = null;
       deviceIceSeenRef.current.clear();
+      answerPostedRef.current = false;
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
       StreamHub.delete(session.session_id);
       setPeerStream(null);
