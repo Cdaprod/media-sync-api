@@ -147,6 +147,7 @@ export default function ConnectDevicePage() {
   const viewerPollTimerRef = useRef<number | null>(null);
   const viewerSessionIdRef = useRef<string | null>(null);
   const viewerIdRef = useRef<string>('viewer-default');
+  const viewerAttachingRef = useRef<string | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
   const [mode, setMode] = useState<'local' | 'remote'>('local');
   const [activeBroadcastSession, setActiveBroadcastSession] = useState<{ session_id: string } | null>(null);
@@ -480,6 +481,9 @@ export default function ConnectDevicePage() {
 
   async function watchLiveSession(sessionRecord: { session_id: string }): Promise<void> {
     const sessionId = sessionRecord.session_id;
+    if (viewerAttachingRef.current === sessionId) return;
+    if (viewerSessionIdRef.current === sessionId && viewerPeerRef.current) return;
+    viewerAttachingRef.current = sessionId;
     appendTrace(`viewer:watch ${sessionId}`);
     setMode('remote');
     if (viewerPollTimerRef.current != null) {
@@ -492,17 +496,19 @@ export default function ConnectDevicePage() {
     viewerIdRef.current = `viewer-${Date.now().toString(36)}`;
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
       setPeerStatus('failed');
+      viewerAttachingRef.current = null;
       return;
     }
 
     let offer: RTCSessionDescriptionInit | null = null;
     for (let attempt = 0; attempt < 10 && !offer?.sdp; attempt++) {
-      if (viewerSessionIdRef.current !== sessionId) return;
+      if (viewerSessionIdRef.current !== sessionId) { viewerAttachingRef.current = null; return; }
       offer = await api.getLiveOffer(sessionId).catch(() => null);
       if (!offer?.sdp && attempt < 9) await new Promise<void>((res) => setTimeout(res, 500));
     }
     if (!offer?.sdp) {
       setPeerStatus('failed');
+      viewerAttachingRef.current = null;
       return;
     }
 
@@ -543,6 +549,7 @@ export default function ConnectDevicePage() {
         }
       }).catch(() => undefined);
     }, 1000);
+    viewerAttachingRef.current = null;
   }
 
   const handleUseSelectedLocalDevice = async () => {

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from app.auth.runtime_device_auth import RuntimeDeviceAuthContext, require_device_scope, require_registered_node
@@ -569,8 +569,11 @@ async def get_live_signal_state(
 async def preview_latest_chunk(
     session_id: str,
     runtime: AppRuntime = Depends(get_runtime),
-) -> FileResponse:
+) -> Response:
     """Return latest chunk bytes for low-fi live preview polling.
+
+    Returns 204 when the session exists but no recorded chunk is available yet
+    (e.g. session is previewing but recording has not started).
 
     Example:
         curl -v http://localhost:8787/api/live_sessions/sess-123/preview/latest
@@ -585,7 +588,7 @@ async def preview_latest_chunk(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     chunk_path = session.latest_chunk_path
     if not chunk_path or not Path(chunk_path).exists():
-        raise HTTPException(status_code=404, detail="No preview available")
+        return Response(status_code=204)
 
     return FileResponse(
         chunk_path,
