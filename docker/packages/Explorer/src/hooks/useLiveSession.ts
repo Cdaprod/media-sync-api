@@ -1,3 +1,4 @@
+// /docker/packages/Explorer/src/hooks/useLiveSession.ts
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -45,6 +46,9 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const heartbeatTimerRef = useRef<number | null>(null);
   const controlPollBusyRef = useRef(false);
+  const startRecordingRef = useRef<() => Promise<boolean>>(async () => false);
+  const stopRecordingRef = useRef<() => Promise<boolean>>(async () => false);
+  const stateRef = useRef<LiveSessionUiState>('idle');
 
   const clearHeartbeat = useCallback(() => {
     if (heartbeatTimerRef.current != null) {
@@ -250,6 +254,12 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     }
   }, [api, clearHeartbeat, session, stopTracks]);
 
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+    stopRecordingRef.current = stopRecording;
+    stateRef.current = state;
+  }, [startRecording, stopRecording, state]);
+ 
   const stopPreview = useCallback(async () => {
     cleanup();
     setSession(null);
@@ -262,22 +272,37 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
 
   useEffect(() => {
     if (!session?.session_id) return undefined;
+
+    const sessionId = session.session_id;
+
     const interval = window.setInterval(() => {
       if (controlPollBusyRef.current) return;
       controlPollBusyRef.current = true;
-      void api.getLiveSession(session.session_id)
+
+      void api.getLiveSession(sessionId)
         .then((latest) => {
           setSession(latest);
-          if (latest.desired_action === 'start_recording' && state !== 'recording' && state !== 'ending') {
-            void startRecording().then((started) => {
+
+          const currentState = stateRef.current;
+
+          if (
+            latest.desired_action === 'start_recording' &&
+            currentState !== 'recording' &&
+            currentState !== 'ending'
+          ) {
+            void startRecordingRef.current().then((started) => {
               if (!started) return;
               return api.acknowledgeLiveSessionControl(latest.session_id, 'start_recording')
                 .then(setSession)
                 .catch(() => undefined);
             });
           }
-          if (latest.desired_action === 'stop_recording' && state === 'recording') {
-            void stopRecording().then((stopped) => {
+
+          if (
+            latest.desired_action === 'stop_recording' &&
+            currentState === 'recording'
+          ) {
+            void stopRecordingRef.current().then((stopped) => {
               if (!stopped) return;
               return api.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')
                 .then(setSession)
@@ -290,8 +315,9 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
           controlPollBusyRef.current = false;
         });
     }, 1000);
+
     return () => window.clearInterval(interval);
-  }, [api, session?.session_id, startRecording, state, stopRecording]);
+  }, [api, session?.session_id]);
 
   return {
     state,

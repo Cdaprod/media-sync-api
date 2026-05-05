@@ -1,0 +1,571 @@
+Summary
+No files changed.
+No commit was created.
+Testing
+pytest -q tests/test_runtime_events_api.py
+PASS
+Exact output:
+.....                                                                    [100%]
+5 passed in 7.28s
+node --test docker/packages/Explorer/tests/exports.test.mjs
+PASS
+Exact output:
+TAP version 13
+# Subtest: package exports include entrypoints
+ok 1 - package exports include entrypoints
+  ---
+  duration_ms: 3.473837
+  ...
+# Subtest: standalone app entry exists
+ok 2 - standalone app entry exists
+  ---
+  duration_ms: 0.270119
+  ...
+# Subtest: package app layout owns default App Router not-found fonts and wiring
+ok 3 - package app layout owns default App Router not-found fonts and wiring
+  ---
+  duration_ms: 0.783202
+  ...
+# Subtest: explorer resolves media urls against api base
+ok 4 - explorer resolves media urls against api base
+  ---
+  duration_ms: 6.884714
+  ...
+# Subtest: explorer exposes per-lane raf debug breakdown and idle blockers
+ok 5 - explorer exposes per-lane raf debug breakdown and idle blockers
+  ---
+  duration_ms: 9.598593
+  ...
+# Subtest: focus transition orchestrator interruption kills tweens and marks continuity event
+ok 6 - focus transition orchestrator interruption kills tweens and marks continuity event
+  ---
+  duration_ms: 0.365629
+  ...
+# Subtest: preview adapter and panel keep drawer-based preview contract
+ok 7 - preview adapter and panel keep drawer-based preview contract
+  ---
+  duration_ms: 1.350805
+  ...
+# Subtest: package preview overlay wires semantic action callbacks from ExplorerApp
+ok 8 - package preview overlay wires semantic action callbacks from ExplorerApp
+  ---
+  duration_ms: 7.039813
+  ...
+# Subtest: normalized preview asset declaration is placed after resolveAssetUrl callback
+ok 9 - normalized preview asset declaration is placed after resolveAssetUrl callback
+  ---
+  duration_ms: 6.97893
+  ...
+# Subtest: explorer api client includes bulk media action endpoints
+ok 10 - explorer api client includes bulk media action endpoints
+  ---
+  duration_ms: 0.633393
+  ...
+# Subtest: contract normalizers keep compatibility payload support
+ok 11 - contract normalizers keep compatibility payload support
+  ---
+  duration_ms: 0.374257
+  ...
+# Subtest: api base inference uses centralized Explorer URL policy
+ok 12 - api base inference uses centralized Explorer URL policy
+  ---
+  duration_ms: 0.396801
+  ...
+# Subtest: media item type supports optional CAS metadata fields
+ok 13 - media item type supports optional CAS metadata fields
+  ---
+  duration_ms: 0.237287
+  ...
+# Subtest: register modal redirects directly to device activation and keeps session-node payload contract
+ok 14 - register modal redirects directly to device activation and keeps session-node payload contract
+  ---
+  duration_ms: 0.52291
+  ...
+# Subtest: connect device page and live-session hook guard media APIs for insecure iOS contexts
+ok 15 - connect device page and live-session hook guard media APIs for insecure iOS contexts
+  ---
+  duration_ms: 8.625929
+  ...
+# Subtest: live session signaling API and peer-viewer hooks are wired
+ok 16 - live session signaling API and peer-viewer hooks are wired
+  ---
+  duration_ms: 7.413875
+  ...
+# Subtest: runtime SSE hook exists and uses EventSource /api/runtime/events
+ok 17 - runtime SSE hook exists and uses EventSource /api/runtime/events
+  ---
+  duration_ms: 6.812656
+  ...
+# Subtest: live polling is visibility-gated and throttled
+ok 18 - live polling is visibility-gated and throttled
+  ---
+  duration_ms: 0.644554
+  ...
+# Subtest: clipboard helper includes fallback copy behavior
+ok 19 - clipboard helper includes fallback copy behavior
+  ---
+  duration_ms: 0.382837
+  ...
+# Subtest: media sorting helper orders by recent timestamps
+ok 20 - media sorting helper orders by recent timestamps
+  ---
+  duration_ms: 0.421142
+  ...
+# Subtest: explorer supports all-project media view
+ok 21 - explorer supports all-project media view
+  ---
+  duration_ms: 7.36688
+  ...
+# Subtest: library snapshot hook owns authoritative snapshot state and single-flight refresh
+ok 22 - library snapshot hook owns authoritative snapshot state and single-flight refresh
+  ---
+  duration_ms: 0.263055
+  ...
+# Subtest: explorer boot + refresh use one aggregate snapshot authority path
+ok 23 - explorer boot + refresh use one aggregate snapshot authority path
+  ---
+  duration_ms: 6.520466
+  ...
+# Subtest: explorer command extraction exists and scoped aggregate refresh is wired
+ok 24 - explorer command extraction exists and scoped aggregate refresh is wired
+  ---
+  duration_ms: 10.526049
+  ...
+# Subtest: explorer ui-state seam owns root-local modal/surface/runtime state cluster
+ok 25 - explorer ui-state seam owns root-local modal/surface/runtime state cluster
+  ---
+  duration_ms: 12.286701
+  ...
+# Subtest: asset tile preview open path requires second tap intent and keeps focus separate from selection
+ok 26 - asset tile preview open path requires second tap intent and keeps focus separate from selection
+  ---
+  duration_ms: 12.910035
+  ...
+# Subtest: topbar interaction boundaries protect header controls and nearby asset selectors
+ok 27 - topbar interaction boundaries protect header controls and nearby asset selectors
+  ---
+  duration_ms: 9.618697
+  ...
+# Subtest: pending compose recovery reconciles stale restored jobs and prefers real assets over zombie placeholders
+ok 28 - pending compose recovery reconciles stale restored jobs and prefers real assets over zombie placeholders
+  ---
+  duration_ms: 0.301614
+  ...
+# Subtest: compose action filters selected assets to videos
+ok 29 - compose action filters selected assets to videos
+  ---
+  duration_ms: 8.99386
+  ...
+# Subtest: pending compose modules and render wiring are present
+ok 30 - pending compose modules and render wiring are present
+  ---
+  duration_ms: 7.021558
+  ...
+# Subtest: package explorer delete actions route through custom confirmation modal
+ok 31 - package explorer delete actions route through custom confirmation modal
+  ---
+  duration_ms: 8.11306
+  ...
+# Subtest: package explorer compose modal styles are present
+ok 32 - package explorer compose modal styles are present
+  ---
+  duration_ms: 0.51107
+  ...
+# Subtest: topbar dropdown and sidebar scroll contracts avoid clipping and preserve pane-owned scrolling
+ok 33 - topbar dropdown and sidebar scroll contracts avoid clipping and preserve pane-owned scrolling
+  ---
+  duration_ms: 7.234432
+  ...
+# Subtest: brand area still toggles the project panel and is not blocked by reveal layers
+ok 34 - brand area still toggles the project panel and is not blocked by reveal layers
+  ---
+  duration_ms: 6.790721
+  ...
+# Subtest: static explorer uses OBS push helper
+ok 35 - static explorer uses OBS push helper
+  ---
+  duration_ms: 5.457527
+  ...
+# Subtest: static OBS player page exists
+ok 36 - static OBS player page exists
+  ---
+  duration_ms: 0.34286
+  ...
+# Subtest: OBS websocket helper includes browser source defaults
+ok 37 - OBS websocket helper includes browser source defaults
+  ---
+  duration_ms: 0.220745
+  ...
+# Subtest: explorer queues thumbnail loads from server urls
+ok 38 - explorer queues thumbnail loads from server urls
+  ---
+  duration_ms: 8.494903
+  ...
+# Subtest: package explorer interaction handlers do not trigger loading overlay state
+ok 39 - package explorer interaction handlers do not trigger loading overlay state
+  ---
+  duration_ms: 0.45948
+  ...
+# Subtest: package explorer context menu opens only on deliberate long press or context click
+ok 40 - package explorer context menu opens only on deliberate long press or context click
+  ---
+  duration_ms: 6.299862
+  ...
+# Subtest: package explorer grid capture suppresses native context menu in asset zones
+ok 41 - package explorer grid capture suppresses native context menu in asset zones
+  ---
+  duration_ms: 6.493589
+  ...
+# Subtest: package explorer keeps form controls usable while suppressing native selection on custom surfaces
+ok 42 - package explorer keeps form controls usable while suppressing native selection on custom surfaces
+  ---
+  duration_ms: 7.166222
+  ...
+# Subtest: package explorer context menu styles are explicit and stable
+ok 43 - package explorer context menu styles are explicit and stable
+  ---
+  duration_ms: 0.469347
+  ...
+# Subtest: runtime and ingest context menus expose operator delete actions with live-aware device guards
+ok 44 - runtime and ingest context menus expose operator delete actions with live-aware device guards
+  ---
+  duration_ms: 7.518416
+  ...
+# Subtest: package explorer data load paths explicitly request loading overlay ownership
+ok 45 - package explorer data load paths explicitly request loading overlay ownership
+  ---
+  duration_ms: 5.750102
+  ...
+# Subtest: package explorer uses static-parity asset interaction semantics
+ok 46 - package explorer uses static-parity asset interaction semantics
+  ---
+  duration_ms: 7.275166
+  ...
+# Subtest: package explorer suppresses default context menu in tile preview zone
+ok 47 - package explorer suppresses default context menu in tile preview zone
+  ---
+  duration_ms: 0.316887
+  ...
+# Subtest: package explorer styles include static-parity selected glow and order badge
+ok 48 - package explorer styles include static-parity selected glow and order badge
+  ---
+  duration_ms: 0.567391
+  ...
+# Subtest: package explorer topbar layout follows static two-row structure
+ok 49 - package explorer topbar layout follows static two-row structure
+  ---
+  duration_ms: 9.346912
+  ...
+# Subtest: package explorer project chips toggle selected project off to restore all-projects scope
+ok 50 - package explorer project chips toggle selected project off to restore all-projects scope
+  ---
+  duration_ms: 6.603112
+  ...
+# Subtest: package explorer sidebar scroll keeps touch scrolling enabled for project panel
+ok 51 - package explorer sidebar scroll keeps touch scrolling enabled for project panel
+  ---
+  duration_ms: 0.583831
+  ...
+# Subtest: package explorer conditionally mounts confirm and compose modals with exit presence
+ok 52 - package explorer conditionally mounts confirm and compose modals with exit presence
+  ---
+  duration_ms: 7.71667
+  ...
+# Subtest: package explorer toast layer stays above the fixed topbar stack
+ok 53 - package explorer toast layer stays above the fixed topbar stack
+  ---
+  duration_ms: 0.644101
+  ...
+# Subtest: motion architecture keeps density, drawer, toast, and topbar contracts explicit
+ok 54 - motion architecture keeps density, drawer, toast, and topbar contracts explicit
+  ---
+  duration_ms: 16.998212
+  ...
+# Subtest: local density/context/preview interactions stay network-quiet and do not invoke boot loaders
+ok 55 - local density/context/preview interactions stay network-quiet and do not invoke boot loaders
+  ---
+  duration_ms: 6.318746
+  ...
+# Subtest: density setup rebinds on grid surface availability and hidden topbar refreshes on height changes
+ok 56 - density setup rebinds on grid surface availability and hidden topbar refreshes on height changes
+  ---
+  duration_ms: 7.643237
+  ...
+# Subtest: persistent-node masonry layout engine exists and uses deterministic shortest-column packing
+ok 57 - persistent-node masonry layout engine exists and uses deterministic shortest-column packing
+  ---
+  duration_ms: 0.363427
+  ...
+# Subtest: asset grid uses persistent flat-list positioned masonry stage instead of per-column subtree buckets
+ok 58 - asset grid uses persistent flat-list positioned masonry stage instead of per-column subtree buckets
+  ---
+  duration_ms: 6.76305
+  ...
+# Subtest: asset grid host width measurement is explicitly tied to positioned masonry lifecycle
+ok 59 - asset grid host width measurement is explicitly tied to positioned masonry lifecycle
+  ---
+  duration_ms: 0.272653
+  ...
+# Subtest: density flip pipeline is continuity-safe for persistent masonry cards
+ok 60 - density flip pipeline is continuity-safe for persistent masonry cards
+  ---
+  duration_ms: 0.404271
+  ...
+# Subtest: density controller keeps committed columns as single truth and mobile clamp stays 1..6
+ok 61 - density controller keeps committed columns as single truth and mobile clamp stays 1..6
+  ---
+  duration_ms: 6.102088
+  ...
+# Subtest: density-related local interactions remain layout-only and do not trigger boot/data loaders
+ok 62 - density-related local interactions remain layout-only and do not trigger boot/data loaders
+  ---
+  duration_ms: 6.882605
+  ...
+# Subtest: preview drawer and inspector backdrop maintain explicit ownership contract
+ok 63 - preview drawer and inspector backdrop maintain explicit ownership contract
+  ---
+  duration_ms: 6.715494
+  ...
+# Subtest: topbar hidden offset refresh and density setup rebinding remain explicitly guarded
+ok 64 - topbar hidden offset refresh and density setup rebinding remain explicitly guarded
+  ---
+  duration_ms: 5.922224
+  ...
+# Subtest: masonry stage and scroll container explicitly suppress horizontal overflow
+ok 65 - masonry stage and scroll container explicitly suppress horizontal overflow
+  ---
+  duration_ms: 0.54108
+  ...
+# Subtest: masonry cards do not keep baseline CSS transform transitions that conflict with density flip ownership
+ok 66 - masonry cards do not keep baseline CSS transform transitions that conflict with density flip ownership
+  ---
+  duration_ms: 0.327654
+  ...
+# Subtest: computeMasonryLayout unit contracts are present for deterministic geometry output
+ok 67 - computeMasonryLayout unit contracts are present for deterministic geometry output
+  ---
+  duration_ms: 0.236738
+  ...
+# Subtest: computeMasonryLayout uses stable identity and aspect-driven height math
+ok 68 - computeMasonryLayout uses stable identity and aspect-driven height math
+  ---
+  duration_ms: 0.154307
+  ...
+# Subtest: computeMasonryLayout shortest-column packing and stage height aggregation remain explicit
+ok 69 - computeMasonryLayout shortest-column packing and stage height aggregation remain explicit
+  ---
+  duration_ms: 0.356668
+  ...
+# Subtest: positioned masonry renderer keeps card geometry in data attributes for continuity/debugging
+ok 70 - positioned masonry renderer keeps card geometry in data attributes for continuity/debugging
+  ---
+  duration_ms: 0.298796
+  ...
+# Subtest: positioned masonry renderer no longer depends on per-column React bucket regrouping
+ok 71 - positioned masonry renderer no longer depends on per-column React bucket regrouping
+  ---
+  duration_ms: 0.202285
+  ...
+# Subtest: density animation pipeline avoids ordinary-card enter-fade behavior and opacity cleanup
+ok 72 - density animation pipeline avoids ordinary-card enter-fade behavior and opacity cleanup
+  ---
+  duration_ms: 0.338656
+  ...
+# Subtest: density animation pipeline interrupts stale transitions before new layout animation
+ok 73 - density animation pipeline interrupts stale transitions before new layout animation
+  ---
+  duration_ms: 0.275832
+  ...
+# Subtest: density settle callbacks explicitly report no queued replay in immediate retarget mode
+ok 74 - density settle callbacks explicitly report no queued replay in immediate retarget mode
+  ---
+  duration_ms: 0.217192
+  ...
+# Subtest: density animation targets are reduced to visible/near-visible cards while keeping global layout commits
+ok 75 - density animation targets are reduced to visible/near-visible cards while keeping global layout commits
+  ---
+  duration_ms: 0.221527
+  ...
+# Subtest: density animation sequencing explicitly captures old state before commit and starts animation after commit path
+ok 76 - density animation sequencing explicitly captures old state before commit and starts animation after commit path
+  ---
+  duration_ms: 0.190947
+  ...
+# Subtest: density controls preserve slider UI and do not regress to mobile stepper-only control
+ok 77 - density controls preserve slider UI and do not regress to mobile stepper-only control
+  ---
+  duration_ms: 7.418827
+  ...
+# Subtest: committed density value is mirrored consistently into layout UI attributes and readout
+ok 78 - committed density value is mirrored consistently into layout UI attributes and readout
+  ---
+  duration_ms: 6.238681
+  ...
+# Subtest: pinch density path is discrete and supports repeated notch snaps within one gesture
+ok 79 - pinch density path is discrete and supports repeated notch snaps within one gesture
+  ---
+  duration_ms: 0.336183
+  ...
+# Subtest: preview/backdrop styles and ownership markers remain explicit enough to prevent dimmer-only state
+ok 80 - preview/backdrop styles and ownership markers remain explicit enough to prevent dimmer-only state
+  ---
+  duration_ms: 6.503696
+  ...
+# Subtest: asset cards apply thumbnail error fallback without retry-loop spam
+ok 81 - asset cards apply thumbnail error fallback without retry-loop spam
+  ---
+  duration_ms: 0.390594
+  ...
+# Subtest: no generic load-failure console spam contract should remain in explorer-facing source
+ok 82 - no generic load-failure console spam contract should remain in explorer-facing source
+  ---
+  duration_ms: 9.804031
+  ...
+# Subtest: layout interactions do not require grid-list view toggle as part of intended recompute path
+ok 83 - layout interactions do not require grid-list view toggle as part of intended recompute path
+  ---
+  duration_ms: 6.022954
+  ...
+# Subtest: host width + layout recompute path remains coupled to density and entry-count changes
+ok 84 - host width + layout recompute path remains coupled to density and entry-count changes
+  ---
+  duration_ms: 0.246866
+  ...
+# Subtest: positioned masonry stage exposes enough hooks for future real runtime tests
+ok 85 - positioned masonry stage exposes enough hooks for future real runtime tests
+  ---
+  duration_ms: 1.151965
+  ...
+# Subtest: density motion debug hook exposes target-reduction and viewport bounds
+ok 86 - density motion debug hook exposes target-reduction and viewport bounds
+  ---
+  duration_ms: 0.380378
+  ...
+# Subtest: density flip cleanup path re-queries current masonry nodes to prevent stale transforms after repeated commits
+ok 87 - density flip cleanup path re-queries current masonry nodes to prevent stale transforms after repeated commits
+  ---
+  duration_ms: 0.319325
+  ...
+# Subtest: density flip no-item and stale-frame paths still enforce single settled layout truth
+ok 88 - density flip no-item and stale-frame paths still enforce single settled layout truth
+  ---
+  duration_ms: 0.259373
+  ...
+# Subtest: density flip clear path explicitly forces transform/transition reset on live cards
+ok 89 - density flip clear path explicitly forces transform/transition reset on live cards
+  ---
+  duration_ms: 0.20965
+  ...
+# Subtest: asset grid does not run global post-render transform reset that conflicts with flip motion ownership
+ok 90 - asset grid does not run global post-render transform reset that conflicts with flip motion ownership
+  ---
+  duration_ms: 0.256341
+  ...
+# Subtest: density controller/flip tuning keeps jump-distance-aware motion timing under animation-layer ownership
+ok 91 - density controller/flip tuning keeps jump-distance-aware motion timing under animation-layer ownership
+  ---
+  duration_ms: 0.30809
+  ...
+# Subtest: pinch shader overlay mounts as a visual-only layer and exposes safe pulse/release lifecycle
+ok 92 - pinch shader overlay mounts as a visual-only layer and exposes safe pulse/release lifecycle
+  ---
+  duration_ms: 11.689873
+  ...
+# Subtest: mobile keyboard resilience contracts keep visual viewport + input font safeguards wired
+ok 93 - mobile keyboard resilience contracts keep visual viewport + input font safeguards wired
+  ---
+  duration_ms: 9.350649
+  ...
+# Subtest: media URL helpers delegate normalization to centralized URL policy
+ok 94 - media URL helpers delegate normalization to centralized URL policy
+  ---
+  duration_ms: 0.392434
+  ...
+# Subtest: thumbnail normalization preserves API port when remapping localhost urls
+ok 95 - thumbnail normalization preserves API port when remapping localhost urls
+  ---
+  duration_ms: 0.178467
+  ...
+# Subtest: explorer runtime panel wires live WebRTC session hooks and chip normalization
+ok 96 - explorer runtime panel wires live WebRTC session hooks and chip normalization
+  ---
+  duration_ms: 6.821954
+  ...
+# Subtest: explorer runtime orchestration decomposition wiring remains intact
+ok 97 - explorer runtime orchestration decomposition wiring remains intact
+  ---
+  duration_ms: 8.142673
+  ...
+# Subtest: pending artifact controller extraction wiring remains intact
+ok 98 - pending artifact controller extraction wiring remains intact
+  ---
+  duration_ms: 6.570445
+  ...
+# Subtest: asset render orchestration extraction wiring remains intact
+ok 99 - asset render orchestration extraction wiring remains intact
+  ---
+  duration_ms: 6.658387
+  ...
+# Subtest: selection and preview controller extraction wiring remains intact
+ok 100 - selection and preview controller extraction wiring remains intact
+  ---
+  duration_ms: 8.162889
+  ...
+# Subtest: live recorder pipeline wiring captures peer stream and records durable assets
+ok 101 - live recorder pipeline wiring captures peer stream and records durable assets
+  ---
+  duration_ms: 0.509322
+  ...
+# Subtest: live recording provisional asset grid contract exists
+ok 102 - live recording provisional asset grid contract exists
+  ---
+  duration_ms: 7.184431
+  ...
+# Subtest: connect device monitor shell wiring and contracts
+ok 103 - connect device monitor shell wiring and contracts
+  ---
+  duration_ms: 1.396492
+  ...
+# Subtest: connect device route keeps canonical shim and deterministic broadcast wiring
+ok 104 - connect device route keeps canonical shim and deterministic broadcast wiring
+  ---
+  duration_ms: 0.516178
+  ...
+# Subtest: connect device viewer attach path stays remote-only and avoids local camera reacquire
+ok 105 - connect device viewer attach path stays remote-only and avoids local camera reacquire
+  ---
+  duration_ms: 0.475193
+  ...
+# Subtest: explorer pending artifact controller merges runtime assets into pending recording placeholders
+ok 106 - explorer pending artifact controller merges runtime assets into pending recording placeholders
+  ---
+  duration_ms: 0.309407
+  ...
+# Subtest: startup null diagnostics guard against null throws/rejections and SSE onerror remains non-throwing
+ok 107 - startup null diagnostics guard against null throws/rejections and SSE onerror remains non-throwing
+  ---
+  duration_ms: 11.755671
+  ...
+# Subtest: browser runtime client + webrtc explorer-device contract remains centralized and cohesive
+ok 108 - browser runtime client + webrtc explorer-device contract remains centralized and cohesive
+  ---
+  duration_ms: 6.898061
+  ...
+1..108
+# tests 108
+# suites 0
+# pass 108
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 805.671773
+pytest -q tests/test_live_webrtc_api.py tests/test_runtime_assets_api.py
+PASS
+Exact output:
+.................                                                        [100%]
+17 passed in 7.32s
+Next
+Ready to proceed to sidebar extraction.
+Output
+No code changes required.

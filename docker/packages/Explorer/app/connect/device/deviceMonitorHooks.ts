@@ -1,6 +1,6 @@
 // docker/packages/Explorer/app/connect/device/deviceMonitorHooks.ts
 
-import { useEffect, useRef, useState, useCallback, RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, RefObject } from 'react';
 import { RemoteCameraNode } from './deviceMonitorTypes';
 import { createApiClient } from '../../../src/api';
 import { shouldPollDeviceControlPlane, shouldPollLiveSurface } from '../../../src/utils/polling';
@@ -58,7 +58,7 @@ export function useLocalCameras() {
 export function useRemoteCameras(options?: { mode?: 'local' | 'remote'; remotePickerOpen?: boolean }) {
   const [nodes, setNodes] = useState<RemoteCameraNode[]>([]);
   const [loading, setLoading] = useState(false);
-  const api = createApiClient('');
+  const api = useMemo(() => createApiClient(''), []);
   const mode = options?.mode || 'local';
   const remotePickerOpen = !!options?.remotePickerOpen;
 

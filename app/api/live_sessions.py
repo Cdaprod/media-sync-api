@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from app.auth.runtime_device_auth import RuntimeDeviceAuthContext, require_device_scope, require_registered_node
@@ -585,7 +585,8 @@ async def preview_latest_chunk(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     chunk_path = session.latest_chunk_path
     if not chunk_path or not Path(chunk_path).exists():
-        raise HTTPException(status_code=404, detail="No preview available")
+        from fastapi.responses import Response as _Response
+        return _Response(status_code=204)
 
     return FileResponse(
         chunk_path,
