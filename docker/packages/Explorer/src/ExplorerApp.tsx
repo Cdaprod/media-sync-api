@@ -54,6 +54,11 @@ import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
 import type { LiveSession } from './types/liveSession';
 import type { WebRtcLiveSession } from './contracts/live';
+import {
+  isDurableLiveSessionRecord,
+  isLiveRuntimeEventPayload,
+  type LiveRuntimeEventPayload,
+} from './contracts/liveSessions';
 import { useRuntimeController } from './runtime/useRuntimeController';
 import { useLivePreviewState } from './runtime/useLivePreviewState';
 import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
@@ -144,6 +149,41 @@ function isWebRtcLivePreviewable(session: WebRtcLiveSession): boolean {
         || (session.state && session.state !== 'inactive')
       ),
   );
+}
+
+function getLiveSessionSourceKind(session: LiveSession): string {
+  return String((session as LiveSession & { sourceKind?: string }).source_kind || (session as LiveSession & { sourceKind?: string }).sourceKind || '').trim();
+}
+
+function liveSessionActivityRank(status: unknown): number {
+  switch (String(status || '').trim()) {
+    case 'recording': return 4;
+    case 'previewing': return 3;
+    case 'idle': return 2;
+    case 'ended': return 1;
+    default: return 0;
+  }
+}
+
+function liveSessionTimestamp(session: LiveSession): number {
+  const raw = session.last_heartbeat_at || session.started_at || '';
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function preferLiveSessionForNodeSource(
+  current: LiveSession | undefined,
+  next: LiveSession,
+  signalBySessionId: Map<string, WebRtcLiveSession>,
+): LiveSession {
+  if (!current) return next;
+  const currentRank = liveSessionActivityRank(current.status);
+  const nextRank = liveSessionActivityRank(next.status);
+  if (nextRank !== currentRank) return nextRank > currentRank ? next : current;
+  const currentHasAnswer = Boolean(signalBySessionId.get(current.session_id)?.has_answer);
+  const nextHasAnswer = Boolean(signalBySessionId.get(next.session_id)?.has_answer);
+  if (nextHasAnswer !== currentHasAnswer) return nextHasAnswer ? next : current;
+  return liveSessionTimestamp(next) >= liveSessionTimestamp(current) ? next : current;
 }
 
 type FocusMeasurementSnapshot = {
@@ -708,9 +748,13 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     title: string;
     subtitle?: string;
     payload: unknown;
+    kind?: 'live_session';
+    sessionId?: string;
+    runtimeActivity?: unknown[];
   } | null>(null);
   const livePreview = useLivePreviewState();
   const [ingestClaims, setIngestClaims] = useState<IngestClaimRecord[]>([]);
+  const [liveRuntimeEventsBySessionId, setLiveRuntimeEventsBySessionId] = useState<Record<string, LiveRuntimeEventPayload[]>>({});
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
   const [runtimeAssets, setRuntimeAssets] = useState<Array<Record<string, unknown>>>([]);
@@ -807,34 +851,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     waitingByNodeId: waitingWebRtcByNodeId,
     reload: reloadWebRtcLiveSessions,
   } = runtime;
-  const livePanelSessions = useMemo<LiveSession[]>(() => {
-    const bySessionId = new Map<string, LiveSession>();
-    for (const session of liveSessions) {
-      bySessionId.set(session.session_id, session);
-    }
-    for (const session of webRtcLiveSessions) {
-      if (!session.session_id || bySessionId.has(session.session_id)) continue;
-      bySessionId.set(session.session_id, {
-        session_id: session.session_id,
-        node_id: session.node_id || 'unknown-live-node',
-        source_kind: 'camera',
-        status: 'previewing',
-        started_at: session.created_at || session.updated_at || new Date(0).toISOString(),
-        last_heartbeat_at: session.updated_at || session.created_at || new Date(0).toISOString(),
-        chunk_count: 0,
-        claim_id: null,
-        latest_chunk_path: null,
-        metadata: {
-          origin: 'webrtc-live-session',
-          has_offer: Boolean(session.has_offer),
-          has_answer: Boolean(session.has_answer),
-          viewer_count: session.viewer_count || 0,
-          state: session.state || 'inactive',
-        },
-      });
-    }
-    return Array.from(bySessionId.values()).sort((a, b) => a.session_id.localeCompare(b.session_id));
-  }, [liveSessions, webRtcLiveSessions]);
   const livePanelSignalBySessionId = useMemo(() => {
     const entries = new Map<string, WebRtcLiveSession>();
     for (const session of webRtcLiveSessions) {
@@ -842,12 +858,59 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     return entries;
   }, [webRtcLiveSessions]);
+  const canonicalLiveSessions = useMemo<LiveSession[]>(() => {
+    const bySessionId = new Map<string, LiveSession>();
+    for (const session of liveSessions) {
+      if (!isDurableLiveSessionRecord(session)) continue;
+      bySessionId.set(session.session_id, session);
+    }
+    return Array.from(bySessionId.values());
+  }, [liveSessions]);
+  const preferredSessionByNodeSource = useMemo(() => {
+    const preferred = new Map<string, LiveSession>();
+    for (const session of canonicalLiveSessions) {
+      const sourceKind = getLiveSessionSourceKind(session);
+      if (!session.node_id || !sourceKind) continue;
+      const key = `${session.node_id}::${sourceKind}`;
+      preferred.set(key, preferLiveSessionForNodeSource(preferred.get(key), session, livePanelSignalBySessionId));
+    }
+    return preferred;
+  }, [canonicalLiveSessions, livePanelSignalBySessionId]);
+  const livePanelSessions = useMemo<LiveSession[]>(() => (
+    Array.from(preferredSessionByNodeSource.values())
+      .sort((a, b) => b.session_id.localeCompare(a.session_id))
+  ), [preferredSessionByNodeSource]);
+  const runtimeEventSessionIds = useMemo(
+    () => Object.keys(liveRuntimeEventsBySessionId).filter((sessionId) => liveRuntimeEventsBySessionId[sessionId]?.length),
+    [liveRuntimeEventsBySessionId],
+  );
+  const rejectedRuntimeEventAsSessionIds = useMemo(
+    () => runtimeEventSessionIds,
+    [runtimeEventSessionIds],
+  );
+  const viewerStateBySessionViewer = useMemo(() => {
+    const states: Record<string, Record<string, string>> = {};
+    for (const [sessionId, events] of Object.entries(liveRuntimeEventsBySessionId)) {
+      for (const event of events) {
+        if (event.action !== 'viewer_state' || !event.viewer_id || typeof event.state !== 'string') continue;
+        states[sessionId] = states[sessionId] || {};
+        states[sessionId][event.viewer_id] = event.state;
+      }
+    }
+    return states;
+  }, [liveRuntimeEventsBySessionId]);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const selectedSessionId = Array.from(peerEnabledSessions)[0] || null;
+    const renderedSessionIds = livePanelSessions.map((session) => session.session_id);
+    const duplicateRenderedSessionIds = renderedSessionIds.filter((sessionId, index) => renderedSessionIds.indexOf(sessionId) !== index);
+    const canonicalSessionIds = canonicalLiveSessions.map((session) => session.session_id);
+    const preferredSessionByNodeSourceDebug = Object.fromEntries(
+      Array.from(preferredSessionByNodeSource.entries()).map(([key, session]) => [key, session.session_id]),
+    );
     (window as any).__explorerLivePanelDebug = {
       liveSessionCount: livePanelSessions.length,
-      renderedSessionIds: livePanelSessions.map((session) => session.session_id),
+      renderedSessionIds,
       hiddenReason: livePanelSessions.length > 0 ? null : 'no_live_sessions',
       selectedSessionId,
       hasLiveDeviceInstances: webRtcLiveSessions.length > 0,
@@ -857,7 +920,20 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         .filter(isWebRtcLivePreviewable)
         .map((session) => session.session_id),
     };
-  }, [livePanelSessions, peerEnabledSessions, webRtcLiveSessions]);
+    (window as any).__explorerLiveMergeDebug = {
+      canonicalSessionIds,
+      renderedSessionIds,
+      runtimeEventSessionIds,
+      rejectedRuntimeEventAsSessionIds,
+      duplicateRenderedSessionIds,
+      selectedSessionId,
+      selectedSessionIsCanonical: selectedSessionId ? canonicalSessionIds.includes(selectedSessionId) : false,
+      runtimeEventsBySessionId: liveRuntimeEventsBySessionId,
+      preferredSessionByNodeSource: preferredSessionByNodeSourceDebug,
+      viewerStateBySessionViewer,
+    };
+  }, [canonicalLiveSessions, livePanelSessions, liveRuntimeEventsBySessionId, peerEnabledSessions, preferredSessionByNodeSource, rejectedRuntimeEventAsSessionIds, runtimeEventSessionIds, viewerStateBySessionViewer, webRtcLiveSessions]);
+
 
   const reloadRuntimeLiveSessions = useCallback(async () => {
     await Promise.all([
@@ -971,7 +1047,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       switch (event.type) {
         case 'node.updated': applyNodeUpdate(payload); break;
         case 'source.updated': applySourceUpdate(payload); break;
-        case 'live_session.updated': applyLiveSessionUpdate(payload); break;
+        case 'live_session.updated':
+          if (isLiveRuntimeEventPayload(payload)) {
+            setLiveRuntimeEventsBySessionId((prev) => {
+              const sessionId = payload.session_id;
+              const events = [...(prev[sessionId] || []), payload].slice(-12);
+              return { ...prev, [sessionId]: events };
+            });
+            void reloadLiveSessions();
+            void reloadWebRtcLiveSessions();
+          } else if (isDurableLiveSessionRecord(payload)) {
+            applyLiveSessionUpdate(payload);
+          }
+          break;
         case 'runtime_asset.updated':
         case 'recording.updated': setRuntimeAssets((prev) => upsertByRuntimeId(prev, payload)); break;
         case 'ingest_claim.updated': setIngestClaims((prev) => upsertByRuntimeId(prev as unknown as IdRecord[], payload) as IngestClaimRecord[]); break;
@@ -999,7 +1087,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         channel.close();
       }
     }
-  }, [applyLiveSessionUpdate, applyNodeUpdate, applySourceUpdate, publishExplorerPollingDebug, removeLiveSession, scheduleExplorerObservabilityRefresh]);
+  }, [applyLiveSessionUpdate, applyNodeUpdate, applySourceUpdate, publishExplorerPollingDebug, reloadLiveSessions, reloadWebRtcLiveSessions, removeLiveSession, scheduleExplorerObservabilityRefresh]);
   const queueRuntimeEvent = useCallback((event: RuntimeStreamEvent) => {
     pendingRuntimeEventsRef.current.push(event);
     if (flushRuntimeEventsTimerRef.current !== null) return;
@@ -3424,6 +3512,48 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     setDetailsModal({ title, subtitle, payload });
     setContextMenu(null);
   }, [setContextMenu]);
+
+  const openLiveSessionDetails = useCallback((session: LiveSession) => {
+    const canonicalSession = canonicalLiveSessions.find((entry) => entry.session_id === session.session_id);
+    if (!canonicalSession) {
+      setDetailsModal({
+        title: 'Live session details',
+        subtitle: session.session_id,
+        payload: { session_id: session.session_id, stale: true },
+        kind: 'live_session',
+        sessionId: session.session_id,
+        runtimeActivity: liveRuntimeEventsBySessionId[session.session_id] || [],
+      });
+      setContextMenu(null);
+      return;
+    }
+    setDetailsModal({
+      title: 'Live session details',
+      subtitle: canonicalSession.session_id,
+      payload: canonicalSession,
+      kind: 'live_session',
+      sessionId: canonicalSession.session_id,
+      runtimeActivity: liveRuntimeEventsBySessionId[canonicalSession.session_id] || [],
+    });
+    setContextMenu(null);
+  }, [canonicalLiveSessions, liveRuntimeEventsBySessionId, setContextMenu]);
+
+  useEffect(() => {
+    if (detailsModal?.kind !== 'live_session' || !detailsModal.sessionId) return;
+    const canonicalSession = canonicalLiveSessions.find((session) => session.session_id === detailsModal.sessionId);
+    if (!canonicalSession) {
+      setDetailsModal(null);
+      return;
+    }
+    setDetailsModal((current) => {
+      if (current?.kind !== 'live_session' || current.sessionId !== canonicalSession.session_id) return current;
+      return {
+        ...current,
+        payload: canonicalSession,
+        runtimeActivity: liveRuntimeEventsBySessionId[canonicalSession.session_id] || [],
+      };
+    });
+  }, [canonicalLiveSessions, detailsModal?.kind, detailsModal?.sessionId, liveRuntimeEventsBySessionId]);
 
   const resolveNodeRecord = useCallback((nodeId: string): NodeControlRecord | null => {
     if (!nodeId) return null;
@@ -6419,7 +6549,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
           className="context-menu open custom-ui-surface"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button type="button" onClick={() => runContextAction(() => openPayloadDetails('Live session details', contextMenu.session.session_id, contextMenu.session))}>
+          <button type="button" onClick={() => runContextAction(() => openLiveSessionDetails(contextMenu.session))}>
             Details
           </button>
           <button type="button" onClick={() => runContextAction(() => copyText(contextMenu.session.session_id))}>
@@ -6470,6 +6600,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
         title={detailsModal?.title ?? ''}
         subtitle={detailsModal?.subtitle}
         payload={detailsModal?.payload}
+        runtimeActivity={detailsModal?.runtimeActivity}
         onClose={() => setDetailsModal(null)}
       />
 

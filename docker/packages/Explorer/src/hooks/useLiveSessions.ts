@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { isDurableLiveSessionRecord } from '../contracts/liveSessions';
 import type { LiveSessionRecord } from '../types/liveSession';
 
 interface UseLiveSessionsOptions {
@@ -21,7 +22,7 @@ export function useLiveSessions({ listLiveSessions, enabled = false }: UseLiveSe
     setError(null);
     try {
       const next = await listLiveSessions();
-      setSessions(Array.isArray(next) ? next : []);
+      setSessions(Array.isArray(next) ? next.filter(isDurableLiveSessionRecord) : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load live sessions');
     } finally {
@@ -40,6 +41,7 @@ export function useLiveSessions({ listLiveSessions, enabled = false }: UseLiveSe
   }, [enabled, reload]);
 
   const applyLiveSessionUpdate = useCallback((payload: IdRecord) => {
+    if (!isDurableLiveSessionRecord(payload)) return;
     setSessions((prev) => {
       const id = readRuntimeId(payload);
       if (!id) return prev;

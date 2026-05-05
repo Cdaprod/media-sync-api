@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 
 import type { WebRtcLiveSession } from '../api';
+import { isLiveRuntimeEventPayload } from '../contracts/liveSessions';
 
 type UseWebRtcLiveSessionsArgs = {
   listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
@@ -127,6 +128,7 @@ export function useWebRtcLiveSessions({
     return entries;
   }, [sessions]);
   const applyLiveSessionUpdate = useCallback((payload: Record<string, unknown>) => {
+    if (isLiveRuntimeEventPayload(payload)) return;
     setSessions((prev) => {
       const id = String(payload.session_id ?? payload.id ?? '').trim();
       if (!id) return prev;

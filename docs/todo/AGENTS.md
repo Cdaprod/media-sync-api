@@ -1,3 +1,11 @@
+## 2026-05-05 — Separate live sessions from viewer runtime events (new)
+- [x] Added strict Explorer live-session guards so `viewer_answer`, `viewer_state`, ICE, and other runtime event payloads cannot be accepted as durable `LiveSessionRecord` data.
+- [x] Changed the Explorer live panel to render only canonical durable `/api/live_sessions` records, with runtime viewer events stored as per-session diagnostics/activity only.
+- [x] Added `window.__explorerLiveMergeDebug` diagnostics for canonical/rendered/runtime-event session ids, rejected event payloads, preferred node/source sessions, and viewer state by session/viewer.
+- [x] Updated live-session details to use the canonical durable session payload and show runtime activity separately instead of replacing details with latest viewer events.
+- [x] Added static Explorer contracts locking runtime-event rejection, dedupe/preference behavior, diagnostics, and canonical details ownership.
+- [ ] Validate real iPhone flow: one current Capture Node live card remains while viewer disconnected/reconnect events appear only in runtime activity diagnostics.
+
 ## 2026-05-05 — Explorer live panel rendering and previewability fix (new)
 - [x] Restored Explorer live panel rendering from the merged durable `/api/live_sessions` + WebRTC signal-session lanes so active offer sessions render even when durable preview chunks are absent.
 - [x] Changed live panel/card previewability indicators to use session/offer/answer/viewer signal availability instead of `latest_chunk_path` or `/preview/latest` success.

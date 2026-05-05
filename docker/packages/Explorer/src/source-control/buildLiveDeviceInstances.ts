@@ -46,6 +46,47 @@ export function buildLiveDeviceInstances({
   const readSessionState = (session: WebRtcLiveSession): string | undefined =>
     session.state;
 
+  const readSessionSourceKind = (session: WebRtcLiveSession): string | undefined =>
+    typeof (session as WebRtcLiveSession & { source_kind?: string; sourceKind?: string }).source_kind === 'string'
+      ? (session as WebRtcLiveSession & { source_kind?: string }).source_kind
+      : (typeof (session as WebRtcLiveSession & { sourceKind?: string }).sourceKind === 'string'
+        ? (session as WebRtcLiveSession & { sourceKind?: string }).sourceKind
+        : undefined);
+
+  const sessionStateRank = (session: WebRtcLiveSession): number => {
+    const state = readSessionState(session);
+    if (state === 'connected') return 4;
+    if (state === 'waiting_for_answer') return 3;
+    if (state === 'previewing' || state === 'recording') return 2;
+    if (state === 'inactive' || state === 'disconnected' || state === 'ended' || state === 'failed') return 0;
+    return state ? 1 : 0;
+  };
+
+  const sessionTimestamp = (session: WebRtcLiveSession): number => {
+    const parsed = Date.parse(session.updated_at || session.created_at || '');
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const preferWebRtcSession = (current: WebRtcLiveSession | undefined, next: WebRtcLiveSession): WebRtcLiveSession => {
+    if (!current) return next;
+    const currentRank = sessionStateRank(current);
+    const nextRank = sessionStateRank(next);
+    if (nextRank !== currentRank) return nextRank > currentRank ? next : current;
+    const currentHasAnswer = readSessionHasAnswer(current);
+    const nextHasAnswer = readSessionHasAnswer(next);
+    if (nextHasAnswer !== currentHasAnswer) return nextHasAnswer ? next : current;
+    return sessionTimestamp(next) >= sessionTimestamp(current) ? next : current;
+  };
+
+  const preferredLiveSessions = new Map<string, WebRtcLiveSession>();
+  for (const session of liveSessions) {
+    const nodeId = typeof session.node_id === 'string' ? session.node_id : '';
+    if (!nodeId) continue;
+    const sourceKind = readSessionSourceKind(session) || 'camera';
+    const key = `${nodeId}::${sourceKind}`;
+    preferredLiveSessions.set(key, preferWebRtcSession(preferredLiveSessions.get(key), session));
+  }
+
   const computeWatchLive = (entry: LiveDeviceInstance) => {
     // Watch Live requires session + offer. The viewer creates the answer AFTER clicking
     // Watch Live, so requiring hasAnswer would make the button never appear.
@@ -89,7 +130,7 @@ export function buildLiveDeviceInstances({
     byNodeId.set(ownerNodeId, existing);
   }
 
-  for (const session of liveSessions) {
+  for (const session of preferredLiveSessions.values()) {
     const nodeId = typeof session.node_id === 'string' ? session.node_id : '';
     if (!nodeId) continue;
     const existing = byNodeId.get(nodeId) || {

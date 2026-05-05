@@ -488,13 +488,12 @@ test('explorer live sessions panel renders durable and webrtc sessions independe
   const app = fs.readFileSync(appPath, 'utf8');
   const card = fs.readFileSync(cardPath, 'utf8');
   assert.ok(app.includes('const livePanelSessions = useMemo<LiveSession[]>'));
-  assert.ok(app.includes('for (const session of webRtcLiveSessions)'));
-  assert.ok(app.includes("origin: 'webrtc-live-session'"));
+  assert.ok(app.includes('const canonicalLiveSessions = useMemo<LiveSession[]>'));
+  assert.ok(app.includes('const preferredSessionByNodeSource = useMemo(() =>'));
   assert.ok(app.includes('{livePanelSessions.length > 0 ? ('));
   assert.ok(app.includes('{livePanelSessions.map((session) => ('));
   assert.ok(app.includes('liveSignalSession={livePanelSignalBySessionId.get(session.session_id) ?? null}'));
   assert.ok(app.includes('__explorerLivePanelDebug'));
-  assert.ok(app.includes('latest_chunk_path: null'));
   assert.ok(app.includes('latestPreviewStatus'));
   assert.ok(app.includes('webRtcPreviewAvailable'));
   assert.ok(app.includes('webRtcPreviewableSessionIds'));
@@ -507,6 +506,65 @@ test('explorer live sessions panel renders durable and webrtc sessions independe
   assert.ok(card.includes('viewers:{signalViewerCount}'));
   assert.ok(card.includes('previewable:yes'));
   assert.ok(card.includes("webRtcPreviewAvailable ? 'yes' : 'pending'"));
+});
+
+test('explorer separates durable live sessions from runtime viewer events', () => {
+  const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const liveSessionsContractPath = path.join(packageRoot, 'src', 'contracts', 'liveSessions.ts');
+  const liveSessionsHookPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSessions.ts');
+  const webRtcContractPath = path.join(packageRoot, 'src', 'contracts', 'live.ts');
+  const webRtcHookPath = path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts');
+  const detailsModalPath = path.join(packageRoot, 'src', 'components', 'RuntimeDetailsModal.tsx');
+  const liveDeviceBuilderPath = path.join(packageRoot, 'src', 'source-control', 'buildLiveDeviceInstances.ts');
+  const app = fs.readFileSync(appPath, 'utf8');
+  const contract = fs.readFileSync(liveSessionsContractPath, 'utf8');
+  const liveHook = fs.readFileSync(liveSessionsHookPath, 'utf8');
+  const webRtcContract = fs.readFileSync(webRtcContractPath, 'utf8');
+  const webRtcHook = fs.readFileSync(webRtcHookPath, 'utf8');
+  const detailsModal = fs.readFileSync(detailsModalPath, 'utf8');
+  const liveDeviceBuilder = fs.readFileSync(liveDeviceBuilderPath, 'utf8');
+
+  assert.ok(contract.includes('export function isDurableLiveSessionRecord'));
+  assert.ok(contract.includes('export function isLiveRuntimeEventPayload'));
+  assert.ok(contract.includes('export function isLiveSignalOverlay'));
+  assert.ok(contract.includes('if (isLiveRuntimeEventPayload(record)) return false'));
+  assert.ok(contract.includes('const sourceKind = readString(record.source_kind) || readString(record.sourceKind)'));
+  assert.ok(contract.includes('return Boolean(sessionId && nodeId && sourceKind && status)'));
+  assert.ok(contract.includes("const action = readString(record.action)"));
+  assert.ok(contract.includes("const viewerId = readString(record.viewer_id)"));
+  assert.ok(contract.includes("const state = readString(record.state)"));
+  assert.ok(liveHook.includes('if (!isDurableLiveSessionRecord(payload)) return;'));
+  assert.ok(liveHook.includes('next.filter(isDurableLiveSessionRecord)'));
+  assert.ok(webRtcContract.includes('!isLiveRuntimeEventPayload(entry)'));
+  assert.ok(webRtcHook.includes('if (isLiveRuntimeEventPayload(payload)) return;'));
+
+  assert.ok(app.includes('const canonicalLiveSessions = useMemo<LiveSession[]>'));
+  assert.ok(app.includes('if (!isDurableLiveSessionRecord(session)) continue;'));
+  assert.ok(!app.includes("origin: 'webrtc-live-session'"), 'WebRTC overlays must not synthesize durable LiveSession records');
+  assert.ok(app.includes('setLiveRuntimeEventsBySessionId'));
+  assert.ok(app.includes('if (isLiveRuntimeEventPayload(payload))'));
+  assert.ok(app.includes('} else if (isDurableLiveSessionRecord(payload))'));
+  assert.ok(app.includes('applyLiveSessionUpdate(payload)'));
+  assert.ok(app.includes('__explorerLiveMergeDebug'));
+  assert.ok(app.includes('runtimeEventsBySessionId: liveRuntimeEventsBySessionId'));
+  assert.ok(app.includes('rejectedRuntimeEventAsSessionIds'));
+  assert.ok(app.includes('duplicateRenderedSessionIds'));
+  assert.ok(app.includes('viewerStateBySessionViewer'));
+  assert.ok(app.includes("event.action !== 'viewer_state'"));
+  assert.ok(!app.includes("status: 'disconnected'"), 'viewer_state disconnected must not become durable session status');
+
+  assert.ok(app.includes('openLiveSessionDetails(contextMenu.session)'));
+  assert.ok(app.includes('const canonicalSession = canonicalLiveSessions.find'));
+  assert.ok(app.includes('payload: canonicalSession'));
+  assert.ok(app.includes('runtimeActivity: liveRuntimeEventsBySessionId[canonicalSession.session_id] || []'));
+  assert.ok(detailsModal.includes('runtimeActivity?: unknown[]'));
+  assert.ok(detailsModal.includes('Runtime activity'));
+
+  assert.ok(liveDeviceBuilder.includes('const preferredLiveSessions = new Map<string, WebRtcLiveSession>()'));
+  assert.ok(liveDeviceBuilder.includes('preferWebRtcSession'));
+  assert.ok(liveDeviceBuilder.includes("const key = `${nodeId}::${sourceKind}`"));
+  assert.ok(liveDeviceBuilder.includes('return nextRank > currentRank ? next : current'));
+  assert.ok(liveDeviceBuilder.includes('return nextHasAnswer ? next : current'));
 });
 
 test('explorer viewer attach uses signal lane only and exposes precise diagnostics', () => {

@@ -4,6 +4,7 @@ interface RuntimeDetailsModalProps {
   title: string;
   subtitle?: string;
   payload: unknown;
+  runtimeActivity?: unknown[];
   isOpen: boolean;
   onClose: () => void;
 }
@@ -12,6 +13,7 @@ export function RuntimeDetailsModal({
   title,
   subtitle,
   payload,
+  runtimeActivity = [],
   isOpen,
   onClose,
 }: RuntimeDetailsModalProps) {
@@ -68,6 +70,29 @@ export function RuntimeDetailsModal({
         >
           {json}
         </pre>
+
+        {runtimeActivity.length > 0 ? (
+          <section style={{ marginTop: 14 }}>
+            <h4 className="confirm-title" style={{ fontSize: 14 }}>Runtime activity</h4>
+            <pre
+              style={{
+                marginTop: 8,
+                padding: 14,
+                borderRadius: 14,
+                background: 'rgba(0,0,0,0.28)',
+                border: '1px solid var(--border)',
+                color: 'var(--text)',
+                fontSize: 12,
+                lineHeight: 1.45,
+                overflowX: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {JSON.stringify(runtimeActivity, null, 2)}
+            </pre>
+          </section>
+        ) : null}
       </div>
     </div>
   );
